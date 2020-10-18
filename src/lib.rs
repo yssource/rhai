@@ -85,7 +85,7 @@ mod utils;
 pub use any::Dynamic;
 pub use engine::{Engine, EvalContext};
 pub use error::{ParseError, ParseErrorType};
-pub use fn_native::FnPtr;
+pub use fn_native::{FnPtr, NativeCallContext};
 pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::Module;
 pub use parser::{ImmutableString, AST, INT};

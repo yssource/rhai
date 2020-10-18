@@ -1747,7 +1747,7 @@ pub fn lex<'a, 'e>(
         engine,
         state: TokenizeState {
             #[cfg(not(feature = "unchecked"))]
-            max_string_size: engine.limits.max_string_size,
+            max_string_size: engine.limits_set.max_string_size,
             #[cfg(feature = "unchecked")]
             max_string_size: 0,
             non_unary: false,

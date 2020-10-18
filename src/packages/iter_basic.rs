@@ -1,11 +1,11 @@
 use crate::any::Variant;
 use crate::def_package;
-use crate::module::FuncReturn;
 use crate::parser::INT;
+use crate::result::EvalAltResult;
 
 use crate::stdlib::ops::{Add, Range};
 
-fn get_range<T: Variant + Clone>(from: T, to: T) -> FuncReturn<Range<T>> {
+fn get_range<T: Variant + Clone>(from: T, to: T) -> Result<Range<T>, Box<EvalAltResult>> {
     Ok(from..to)
 }
 
@@ -34,7 +34,7 @@ where
     }
 }
 
-fn get_step_range<T>(from: T, to: T, step: T) -> FuncReturn<StepRange<T>>
+fn get_step_range<T>(from: T, to: T, step: T) -> Result<StepRange<T>, Box<EvalAltResult>>
 where
     for<'a> &'a T: Add<&'a T, Output = T>,
     T: Variant + Clone + PartialOrd,

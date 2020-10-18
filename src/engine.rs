@@ -1,12 +1,12 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::any::{map_std_type_name, Dynamic, Union};
+use crate::any::{map_std_type_name, Dynamic, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{Callback, FnPtr, OnVarCallback};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
-use crate::parser::{Expr, ReturnType, Stmt, INT};
+use crate::parser::{Expr, ReturnType, Stmt};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -14,8 +14,8 @@ use crate::syntax::CustomSyntax;
 use crate::token::Position;
 use crate::{calc_fn_hash, StaticVec};
 
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-use crate::any::Variant;
+#[cfg(not(feature = "no_index"))]
+use crate::parser::INT;
 
 #[cfg(not(feature = "no_module"))]
 use crate::module::ModuleResolver;
@@ -80,6 +80,7 @@ pub const MAX_CALL_STACK_DEPTH: usize = 12;
 #[cfg(debug_assertions)]
 pub const MAX_EXPR_DEPTH: usize = 32;
 #[cfg(not(feature = "unchecked"))]
+#[cfg(not(feature = "no_function"))]
 #[cfg(debug_assertions)]
 pub const MAX_FUNCTION_EXPR_DEPTH: usize = 16;
 
@@ -90,6 +91,7 @@ pub const MAX_CALL_STACK_DEPTH: usize = 128;
 #[cfg(not(debug_assertions))]
 pub const MAX_EXPR_DEPTH: usize = 128;
 #[cfg(not(feature = "unchecked"))]
+#[cfg(not(feature = "no_function"))]
 #[cfg(not(debug_assertions))]
 pub const MAX_FUNCTION_EXPR_DEPTH: usize = 32;
 
@@ -144,6 +146,7 @@ impl IndexChainValue {
     /// # Panics
     ///
     /// Panics if not `IndexChainValue::Value`.
+    #[cfg(not(feature = "no_index"))]
     pub fn as_value(self) -> Dynamic {
         match self {
             Self::None | Self::FnCallArgs(_) => panic!("expecting IndexChainValue::Value"),
@@ -155,6 +158,7 @@ impl IndexChainValue {
     /// # Panics
     ///
     /// Panics if not `IndexChainValue::FnCallArgs`.
+    #[cfg(not(feature = "no_object"))]
     pub fn as_fn_call_args(self) -> StaticVec<Dynamic> {
         match self {
             Self::None | Self::Value(_) => panic!("expecting IndexChainValue::FnCallArgs"),
@@ -178,7 +182,6 @@ impl From<Dynamic> for IndexChainValue {
 }
 
 /// A type that encapsulates a mutation target for an expression with side effects.
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 #[derive(Debug)]
 pub enum Target<'a> {
     /// The target is a mutable reference to a `Dynamic` value somewhere.
@@ -196,7 +199,6 @@ pub enum Target<'a> {
     StringChar(&'a mut Dynamic, usize, Dynamic),
 }
 
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl<'a> Target<'a> {
     /// Is the `Target` a reference pointing to other data?
     #[allow(dead_code)]
@@ -306,6 +308,7 @@ impl<'a> Target<'a> {
         }
     }
     /// Update the value of the `Target`.
+    #[cfg(any(not(feature = "no_object"), not(feature = "no_index")))]
     pub fn set_value(
         &mut self,
         new_val: (Dynamic, Position),
@@ -348,7 +351,6 @@ impl<'a> Target<'a> {
     }
 }
 
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl<'a> From<&'a mut Dynamic> for Target<'a> {
     #[inline(always)]
     fn from(value: &'a mut Dynamic) -> Self {
@@ -364,7 +366,6 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
     }
 }
 
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl<T: Into<Dynamic>> From<T> for Target<'_> {
     #[inline(always)]
     fn from(value: T) -> Self {
@@ -414,35 +415,44 @@ pub struct Limits {
     ///
     /// Defaults to 16 for debug builds and 128 for non-debug builds.
     pub max_call_stack_depth: usize,
-    /// Maximum depth of statements/expressions at global level.
+    /// Maximum depth of statements/expressions at global level (0 = unlimited).
     pub max_expr_depth: usize,
-    /// Maximum depth of statements/expressions in functions.
+    /// Maximum depth of statements/expressions in functions (0 = unlimited).
+    /// Not available under `no_function`.
+    #[cfg(not(feature = "no_function"))]
     pub max_function_expr_depth: usize,
-    /// Maximum number of operations allowed to run.
+    /// Maximum number of operations allowed to run (0 = unlimited).
     pub max_operations: u64,
     /// Maximum number of modules allowed to load.
+    /// Not available under `no_module`.
+    #[cfg(not(feature = "no_modules"))]
     pub max_modules: usize,
-    /// Maximum length of a string.
+    /// Maximum length of a string (0 = unlimited).
     pub max_string_size: usize,
-    /// Maximum length of an array.
+    /// Maximum length of an array (0 = unlimited).
+    /// Not available under `no_index`.
+    #[cfg(not(feature = "no_index"))]
     pub max_array_size: usize,
-    /// Maximum number of properties in a map.
+    /// Maximum number of properties in a map (0 = unlimited).
+    /// Not available under `no_object`.
+    #[cfg(not(feature = "no_object"))]
     pub max_map_size: usize,
 }
 
 /// Context of a script evaluation process.
 #[derive(Debug)]
 pub struct EvalContext<'e, 'a, 's, 'm, 't, 'd: 't> {
-    pub(crate) engine: &'e Engine,
+    engine: &'e Engine,
     pub(crate) mods: &'a mut Imports,
     pub(crate) state: &'s mut State,
-    pub(crate) lib: &'m Module,
+    lib: &'m Module,
     pub(crate) this_ptr: &'t mut Option<&'d mut Dynamic>,
-    pub(crate) level: usize,
+    level: usize,
 }
 
 impl<'e, 'a, 's, 'm, 't, 'd> EvalContext<'e, 'a, 's, 'm, 't, 'd> {
     /// The current `Engine`.
+    #[inline(always)]
     pub fn engine(&self) -> &'e Engine {
         self.engine
     }
@@ -450,14 +460,17 @@ impl<'e, 'a, 's, 'm, 't, 'd> EvalContext<'e, 'a, 's, 'm, 't, 'd> {
     /// Available under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_modules"))]
+    #[inline(always)]
     pub fn imports(&self) -> &'a Imports {
         self.mods
     }
     /// The global namespace containing definition of all script-defined functions.
+    #[inline(always)]
     pub fn namespace(&self) -> &'m Module {
         self.lib
     }
     /// The current nesting level of function calls.
+    #[inline(always)]
     pub fn call_level(&self) -> usize {
         self.level
     }
@@ -516,7 +529,7 @@ pub struct Engine {
 
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
-    pub(crate) limits: Limits,
+    pub(crate) limits_set: Limits,
 }
 
 impl fmt::Debug for Engine {
@@ -662,14 +675,18 @@ impl Engine {
             },
 
             #[cfg(not(feature = "unchecked"))]
-            limits: Limits {
+            limits_set: Limits {
                 max_call_stack_depth: MAX_CALL_STACK_DEPTH,
                 max_expr_depth: MAX_EXPR_DEPTH,
+                #[cfg(not(feature = "no_function"))]
                 max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
                 max_operations: 0,
+                #[cfg(not(feature = "no_module"))]
                 max_modules: usize::MAX,
                 max_string_size: 0,
+                #[cfg(not(feature = "no_index"))]
                 max_array_size: 0,
+                #[cfg(not(feature = "no_object"))]
                 max_map_size: 0,
             },
         };
@@ -710,14 +727,18 @@ impl Engine {
             },
 
             #[cfg(not(feature = "unchecked"))]
-            limits: Limits {
+            limits_set: Limits {
                 max_call_stack_depth: MAX_CALL_STACK_DEPTH,
                 max_expr_depth: MAX_EXPR_DEPTH,
+                #[cfg(not(feature = "no_function"))]
                 max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
                 max_operations: 0,
+                #[cfg(not(feature = "no_module"))]
                 max_modules: usize::MAX,
                 max_string_size: 0,
+                #[cfg(not(feature = "no_index"))]
                 max_array_size: 0,
+                #[cfg(not(feature = "no_object"))]
                 max_map_size: 0,
             },
         }
@@ -1285,7 +1306,7 @@ impl Engine {
     ) -> Result<Target<'a>, Box<EvalAltResult>> {
         self.inc_operations(state)?;
 
-        #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+        #[cfg(not(feature = "no_index"))]
         let is_ref = target.is_ref();
 
         let val = target.as_mut();
@@ -1542,7 +1563,7 @@ impl Engine {
                                 if func.is_plugin_fn() {
                                     func.get_plugin_fn().call(args)?;
                                 } else {
-                                    func.get_native_fn()(self, lib, args)?;
+                                    func.get_native_fn()((self, lib).into(), args)?;
                                 }
                             }
                             // Built-in op-assignment function
@@ -1954,7 +1975,7 @@ impl Engine {
 
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
-                if state.modules >= self.limits.max_modules {
+                if state.modules >= self.max_modules() {
                     return EvalAltResult::ErrorTooManyModules(*_pos).into();
                 }
 
@@ -2042,8 +2063,19 @@ impl Engine {
         result: Result<Dynamic, Box<EvalAltResult>>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         // If no data size limits, just return
-        if self.limits.max_string_size + self.limits.max_array_size + self.limits.max_map_size == 0
+        let mut total = 0;
+
+        total += self.max_string_size();
+        #[cfg(not(feature = "no_index"))]
         {
+            total += self.max_array_size();
+        }
+        #[cfg(not(feature = "no_object"))]
+        {
+            total += self.max_map_size();
+        }
+
+        if total == 0 {
             return result;
         }
 
@@ -2103,46 +2135,52 @@ impl Engine {
             // Simply return all errors
             Err(_) => return result,
             // String with limit
-            Ok(Dynamic(Union::Str(_))) if self.limits.max_string_size > 0 => (),
+            Ok(Dynamic(Union::Str(_))) if self.max_string_size() > 0 => (),
             // Array with limit
             #[cfg(not(feature = "no_index"))]
-            Ok(Dynamic(Union::Array(_))) if self.limits.max_array_size > 0 => (),
+            Ok(Dynamic(Union::Array(_))) if self.max_array_size() > 0 => (),
             // Map with limit
             #[cfg(not(feature = "no_object"))]
-            Ok(Dynamic(Union::Map(_))) if self.limits.max_map_size > 0 => (),
+            Ok(Dynamic(Union::Map(_))) if self.max_map_size() > 0 => (),
             // Everything else is simply returned
             Ok(_) => return result,
         };
 
-        let (arr, map, s) = calc_size(result.as_ref().unwrap());
+        let (_arr, _map, s) = calc_size(result.as_ref().unwrap());
 
-        if s > self.limits.max_string_size {
-            EvalAltResult::ErrorDataTooLarge(
+        if s > self.max_string_size() {
+            return EvalAltResult::ErrorDataTooLarge(
                 "Length of string".to_string(),
-                self.limits.max_string_size,
+                self.max_string_size(),
                 s,
                 Position::none(),
             )
-            .into()
-        } else if arr > self.limits.max_array_size {
-            EvalAltResult::ErrorDataTooLarge(
-                "Size of array".to_string(),
-                self.limits.max_array_size,
-                arr,
-                Position::none(),
-            )
-            .into()
-        } else if map > self.limits.max_map_size {
-            EvalAltResult::ErrorDataTooLarge(
-                "Number of properties in object map".to_string(),
-                self.limits.max_map_size,
-                map,
-                Position::none(),
-            )
-            .into()
-        } else {
-            result
+            .into();
         }
+
+        #[cfg(not(feature = "no_index"))]
+        if _arr > self.max_array_size() {
+            return EvalAltResult::ErrorDataTooLarge(
+                "Size of array".to_string(),
+                self.max_array_size(),
+                _arr,
+                Position::none(),
+            )
+            .into();
+        }
+
+        #[cfg(not(feature = "no_object"))]
+        if _map > self.max_map_size() {
+            return EvalAltResult::ErrorDataTooLarge(
+                "Number of properties in object map".to_string(),
+                self.max_map_size(),
+                _map,
+                Position::none(),
+            )
+            .into();
+        }
+
+        result
     }
 
     /// Check if the number of operations stay within limit.
@@ -2152,7 +2190,7 @@ impl Engine {
 
         #[cfg(not(feature = "unchecked"))]
         // Guard against too many operations
-        if self.limits.max_operations > 0 && state.operations > self.limits.max_operations {
+        if self.max_operations() > 0 && state.operations > self.max_operations() {
             return EvalAltResult::ErrorTooManyOperations(Position::none()).into();
         }
 

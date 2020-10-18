@@ -3,8 +3,7 @@
 use crate::any::{Dynamic, Variant};
 use crate::engine::{Engine, EvalContext, Imports, State};
 use crate::error::ParseError;
-use crate::fn_native::SendSync;
-use crate::module::{FuncReturn, Module};
+use crate::fn_native::{NativeCallContext, SendSync};
 use crate::optimize::OptimizationLevel;
 use crate::parser::AST;
 use crate::result::EvalAltResult;
@@ -28,7 +27,7 @@ use crate::{
 use crate::fn_register::{RegisterFn, RegisterResultFn};
 
 #[cfg(not(feature = "no_function"))]
-use crate::{fn_args::FuncArgs, fn_call::ensure_no_data_race, StaticVec};
+use crate::{fn_args::FuncArgs, fn_call::ensure_no_data_race, module::Module, StaticVec};
 
 #[cfg(not(feature = "no_optimize"))]
 use crate::optimize::optimize_into_ast;
@@ -69,7 +68,9 @@ impl Engine {
         &mut self,
         name: &str,
         arg_types: &[TypeId],
-        func: impl Fn(&Engine, &Module, &mut [&mut Dynamic]) -> FuncReturn<T> + SendSync + 'static,
+        func: impl Fn(NativeCallContext, &mut [&mut Dynamic]) -> Result<T, Box<EvalAltResult>>
+            + SendSync
+            + 'static,
     ) -> &mut Self {
         self.global_module.set_raw_fn(name, arg_types, func);
         self
@@ -1622,7 +1623,7 @@ impl Engine {
         name: &str,
         mut this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
-    ) -> FuncReturn<Dynamic> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
         self.call_fn_dynamic_raw(scope, lib.as_ref(), name, &mut this_ptr, args.as_mut())
@@ -1645,7 +1646,7 @@ impl Engine {
         name: &str,
         this_ptr: &mut Option<&mut Dynamic>,
         args: &mut [&mut Dynamic],
-    ) -> FuncReturn<Dynamic> {
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         let fn_def = lib
             .get_script_fn(name, args.len(), true)
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::none()))?;

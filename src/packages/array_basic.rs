@@ -3,8 +3,8 @@
 
 use crate::any::{Dynamic, Variant};
 use crate::def_package;
-use crate::engine::{Array, Engine};
-use crate::fn_native::FnPtr;
+use crate::engine::Array;
+use crate::fn_native::{FnPtr, NativeCallContext};
 use crate::parser::{ImmutableString, INT};
 use crate::plugin::*;
 use crate::result::EvalAltResult;
@@ -239,21 +239,20 @@ mod array_functions {
 }
 
 fn pad<T: Variant + Clone>(
-    _engine: &Engine,
-    _: &Module,
+    _context: NativeCallContext,
     args: &mut [&mut Dynamic],
 ) -> Result<(), Box<EvalAltResult>> {
     let len = *args[1].read_lock::<INT>().unwrap();
 
     // Check if array will be over max size limit
     #[cfg(not(feature = "unchecked"))]
-    if _engine.limits.max_array_size > 0
+    if _context.engine().max_array_size() > 0
         && len > 0
-        && (len as usize) > _engine.limits.max_array_size
+        && (len as usize) > _context.engine().max_array_size()
     {
         return EvalAltResult::ErrorDataTooLarge(
             "Size of array".to_string(),
-            _engine.limits.max_array_size,
+            _context.engine().max_array_size(),
             len as usize,
             Position::none(),
         )
@@ -271,11 +270,7 @@ fn pad<T: Variant + Clone>(
     Ok(())
 }
 
-fn map(
-    engine: &Engine,
-    lib: &Module,
-    args: &mut [&mut Dynamic],
-) -> Result<Array, Box<EvalAltResult>> {
+fn map(context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Array, Box<EvalAltResult>> {
     let list = args[0].read_lock::<Array>().unwrap();
     let mapper = args[1].read_lock::<FnPtr>().unwrap();
 
@@ -284,10 +279,10 @@ fn map(
     for (i, item) in list.iter().enumerate() {
         array.push(
             mapper
-                .call_dynamic(engine, lib, None, [item.clone()])
+                .call_dynamic(context, None, [item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(_, _) => {
-                        mapper.call_dynamic(engine, lib, None, [item.clone(), (i as INT).into()])
+                        mapper.call_dynamic(context, None, [item.clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -305,8 +300,7 @@ fn map(
 }
 
 fn filter(
-    engine: &Engine,
-    lib: &Module,
+    context: NativeCallContext,
     args: &mut [&mut Dynamic],
 ) -> Result<Array, Box<EvalAltResult>> {
     let list = args[0].read_lock::<Array>().unwrap();
@@ -316,10 +310,10 @@ fn filter(
 
     for (i, item) in list.iter().enumerate() {
         if filter
-            .call_dynamic(engine, lib, None, [item.clone()])
+            .call_dynamic(context, None, [item.clone()])
             .or_else(|err| match *err {
                 EvalAltResult::ErrorFunctionNotFound(_, _) => {
-                    filter.call_dynamic(engine, lib, None, [item.clone(), (i as INT).into()])
+                    filter.call_dynamic(context, None, [item.clone(), (i as INT).into()])
                 }
                 _ => Err(err),
             })
@@ -340,20 +334,16 @@ fn filter(
     Ok(array)
 }
 
-fn some(
-    engine: &Engine,
-    lib: &Module,
-    args: &mut [&mut Dynamic],
-) -> Result<bool, Box<EvalAltResult>> {
+fn some(context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<bool, Box<EvalAltResult>> {
     let list = args[0].read_lock::<Array>().unwrap();
     let filter = args[1].read_lock::<FnPtr>().unwrap();
 
     for (i, item) in list.iter().enumerate() {
         if filter
-            .call_dynamic(engine, lib, None, [item.clone()])
+            .call_dynamic(context, None, [item.clone()])
             .or_else(|err| match *err {
                 EvalAltResult::ErrorFunctionNotFound(_, _) => {
-                    filter.call_dynamic(engine, lib, None, [item.clone(), (i as INT).into()])
+                    filter.call_dynamic(context, None, [item.clone(), (i as INT).into()])
                 }
                 _ => Err(err),
             })
@@ -374,20 +364,16 @@ fn some(
     Ok(false.into())
 }
 
-fn all(
-    engine: &Engine,
-    lib: &Module,
-    args: &mut [&mut Dynamic],
-) -> Result<bool, Box<EvalAltResult>> {
+fn all(context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<bool, Box<EvalAltResult>> {
     let list = args[0].read_lock::<Array>().unwrap();
     let filter = args[1].read_lock::<FnPtr>().unwrap();
 
     for (i, item) in list.iter().enumerate() {
         if !filter
-            .call_dynamic(engine, lib, None, [item.clone()])
+            .call_dynamic(context, None, [item.clone()])
             .or_else(|err| match *err {
                 EvalAltResult::ErrorFunctionNotFound(_, _) => {
-                    filter.call_dynamic(engine, lib, None, [item.clone(), (i as INT).into()])
+                    filter.call_dynamic(context, None, [item.clone(), (i as INT).into()])
                 }
                 _ => Err(err),
             })
@@ -409,8 +395,7 @@ fn all(
 }
 
 fn reduce(
-    engine: &Engine,
-    lib: &Module,
+    context: NativeCallContext,
     args: &mut [&mut Dynamic],
 ) -> Result<Dynamic, Box<EvalAltResult>> {
     let list = args[0].read_lock::<Array>().unwrap();
@@ -420,14 +405,11 @@ fn reduce(
 
     for (i, item) in list.iter().enumerate() {
         result = reducer
-            .call_dynamic(engine, lib, None, [result.clone(), item.clone()])
+            .call_dynamic(context, None, [result.clone(), item.clone()])
             .or_else(|err| match *err {
-                EvalAltResult::ErrorFunctionNotFound(_, _) => reducer.call_dynamic(
-                    engine,
-                    lib,
-                    None,
-                    [result, item.clone(), (i as INT).into()],
-                ),
+                EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                    reducer.call_dynamic(context, None, [result, item.clone(), (i as INT).into()])
+                }
                 _ => Err(err),
             })
             .map_err(|err| {
@@ -443,15 +425,14 @@ fn reduce(
 }
 
 fn reduce_with_initial(
-    engine: &Engine,
-    lib: &Module,
+    context: NativeCallContext,
     args: &mut [&mut Dynamic],
 ) -> Result<Dynamic, Box<EvalAltResult>> {
     let list = args[0].read_lock::<Array>().unwrap();
     let reducer = args[1].read_lock::<FnPtr>().unwrap();
     let initial = args[2].read_lock::<FnPtr>().unwrap();
 
-    let mut result = initial.call_dynamic(engine, lib, None, []).map_err(|err| {
+    let mut result = initial.call_dynamic(context, None, []).map_err(|err| {
         Box::new(EvalAltResult::ErrorInFunctionCall(
             "reduce".to_string(),
             err,
@@ -461,14 +442,11 @@ fn reduce_with_initial(
 
     for (i, item) in list.iter().enumerate() {
         result = reducer
-            .call_dynamic(engine, lib, None, [result.clone(), item.clone()])
+            .call_dynamic(context, None, [result.clone(), item.clone()])
             .or_else(|err| match *err {
-                EvalAltResult::ErrorFunctionNotFound(_, _) => reducer.call_dynamic(
-                    engine,
-                    lib,
-                    None,
-                    [result, item.clone(), (i as INT).into()],
-                ),
+                EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                    reducer.call_dynamic(context, None, [result, item.clone(), (i as INT).into()])
+                }
                 _ => Err(err),
             })
             .map_err(|err| {
@@ -484,8 +462,7 @@ fn reduce_with_initial(
 }
 
 fn reduce_rev(
-    engine: &Engine,
-    lib: &Module,
+    context: NativeCallContext,
     args: &mut [&mut Dynamic],
 ) -> Result<Dynamic, Box<EvalAltResult>> {
     let list = args[0].read_lock::<Array>().unwrap();
@@ -495,14 +472,11 @@ fn reduce_rev(
 
     for (i, item) in list.iter().enumerate().rev() {
         result = reducer
-            .call_dynamic(engine, lib, None, [result.clone(), item.clone()])
+            .call_dynamic(context, None, [result.clone(), item.clone()])
             .or_else(|err| match *err {
-                EvalAltResult::ErrorFunctionNotFound(_, _) => reducer.call_dynamic(
-                    engine,
-                    lib,
-                    None,
-                    [result, item.clone(), (i as INT).into()],
-                ),
+                EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                    reducer.call_dynamic(context, None, [result, item.clone(), (i as INT).into()])
+                }
                 _ => Err(err),
             })
             .map_err(|err| {
@@ -518,15 +492,14 @@ fn reduce_rev(
 }
 
 fn reduce_rev_with_initial(
-    engine: &Engine,
-    lib: &Module,
+    context: NativeCallContext,
     args: &mut [&mut Dynamic],
 ) -> Result<Dynamic, Box<EvalAltResult>> {
     let list = args[0].read_lock::<Array>().unwrap();
     let reducer = args[1].read_lock::<FnPtr>().unwrap();
     let initial = args[2].read_lock::<FnPtr>().unwrap();
 
-    let mut result = initial.call_dynamic(engine, lib, None, []).map_err(|err| {
+    let mut result = initial.call_dynamic(context, None, []).map_err(|err| {
         Box::new(EvalAltResult::ErrorInFunctionCall(
             "reduce".to_string(),
             err,
@@ -536,14 +509,11 @@ fn reduce_rev_with_initial(
 
     for (i, item) in list.iter().enumerate().rev() {
         result = reducer
-            .call_dynamic(engine, lib, None, [result.clone(), item.clone()])
+            .call_dynamic(context, None, [result.clone(), item.clone()])
             .or_else(|err| match *err {
-                EvalAltResult::ErrorFunctionNotFound(_, _) => reducer.call_dynamic(
-                    engine,
-                    lib,
-                    None,
-                    [result, item.clone(), (i as INT).into()],
-                ),
+                EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                    reducer.call_dynamic(context, None, [result, item.clone(), (i as INT).into()])
+                }
                 _ => Err(err),
             })
             .map_err(|err| {
@@ -559,8 +529,7 @@ fn reduce_rev_with_initial(
 }
 
 fn sort(
-    engine: &Engine,
-    lib: &Module,
+    context: NativeCallContext,
     args: &mut [&mut Dynamic],
 ) -> Result<Dynamic, Box<EvalAltResult>> {
     let comparer = args[1].read_lock::<FnPtr>().unwrap().clone();
@@ -568,7 +537,7 @@ fn sort(
 
     list.sort_by(|x, y| {
         comparer
-            .call_dynamic(engine, lib, None, [x.clone(), y.clone()])
+            .call_dynamic(context, None, [x.clone(), y.clone()])
             .ok()
             .and_then(|v| v.as_int().ok())
             .map(|v| {
@@ -598,8 +567,7 @@ fn sort(
 }
 
 fn drain(
-    engine: &Engine,
-    lib: &Module,
+    context: NativeCallContext,
     args: &mut [&mut Dynamic],
 ) -> Result<Array, Box<EvalAltResult>> {
     let filter = args[1].read_lock::<FnPtr>().unwrap().clone();
@@ -613,10 +581,10 @@ fn drain(
         i -= 1;
 
         if filter
-            .call_dynamic(engine, lib, None, [list[i].clone()])
+            .call_dynamic(context, None, [list[i].clone()])
             .or_else(|err| match *err {
                 EvalAltResult::ErrorFunctionNotFound(_, _) => {
-                    filter.call_dynamic(engine, lib, None, [list[i].clone(), (i as INT).into()])
+                    filter.call_dynamic(context, None, [list[i].clone(), (i as INT).into()])
                 }
                 _ => Err(err),
             })
@@ -638,8 +606,7 @@ fn drain(
 }
 
 fn retain(
-    engine: &Engine,
-    lib: &Module,
+    context: NativeCallContext,
     args: &mut [&mut Dynamic],
 ) -> Result<Array, Box<EvalAltResult>> {
     let filter = args[1].read_lock::<FnPtr>().unwrap().clone();
@@ -653,10 +620,10 @@ fn retain(
         i -= 1;
 
         if !filter
-            .call_dynamic(engine, lib, None, [list[i].clone()])
+            .call_dynamic(context, None, [list[i].clone()])
             .or_else(|err| match *err {
                 EvalAltResult::ErrorFunctionNotFound(_, _) => {
-                    filter.call_dynamic(engine, lib, None, [list[i].clone(), (i as INT).into()])
+                    filter.call_dynamic(context, None, [list[i].clone(), (i as INT).into()])
                 }
                 _ => Err(err),
             })

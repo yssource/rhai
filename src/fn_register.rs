@@ -4,8 +4,7 @@
 
 use crate::any::{Dynamic, DynamicWriteLock, Variant};
 use crate::engine::Engine;
-use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
-use crate::module::Module;
+use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, NativeCallContext, SendSync};
 use crate::parser::FnAccess;
 use crate::r#unsafe::unsafe_cast_box;
 use crate::result::EvalAltResult;
@@ -127,7 +126,7 @@ macro_rules! make_func {
 //                                                       ^ dereferencing function
 //                                                                         ^ argument reference expression(like A, *B, &mut C etc)
 
-		Box::new(move |_: &Engine, _: &Module, args: &mut FnCallArgs| {
+		Box::new(move |_: NativeCallContext, args: &mut FnCallArgs| {
             // The arguments are assumed to be of the correct number and types!
 
 			let mut _drain = args.iter_mut();

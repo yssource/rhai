@@ -2,7 +2,6 @@
 
 use crate::any::Dynamic;
 use crate::def_package;
-use crate::engine::Engine;
 use crate::fn_native::FnPtr;
 use crate::parser::{ImmutableString, INT};
 use crate::plugin::*;
@@ -62,15 +61,17 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     lib.set_raw_fn(
         "pad",
         &[TypeId::of::<ImmutableString>(), TypeId::of::<INT>(), TypeId::of::<char>()],
-        |_engine: &Engine, _: &Module, args: &mut [&mut Dynamic]| {
+        |_context, args| {
             let len = *args[1].read_lock::<INT>().unwrap();
 
             // Check if string will be over max size limit
             #[cfg(not(feature = "unchecked"))]
-            if _engine.limits.max_string_size > 0 && len > 0 && (len as usize) > _engine.limits.max_string_size {
+            if _context.engine().max_string_size() > 0 && len > 0
+                && (len as usize) > _context.engine().max_string_size()
+            {
                 return EvalAltResult::ErrorDataTooLarge(
                     "Length of string".to_string(),
-                    _engine.limits.max_string_size,
+                    _context.engine().max_string_size(),
                     len as usize,
                     Position::none(),
                 ).into();
@@ -90,10 +91,10 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
                     }
 
                     #[cfg(not(feature = "unchecked"))]
-                    if _engine.limits.max_string_size > 0 && s.len() > _engine.limits.max_string_size {
+                    if _context.engine().max_string_size() > 0 && s.len() > _context.engine().max_string_size() {
                         return EvalAltResult::ErrorDataTooLarge(
                             "Length of string".to_string(),
-                            _engine.limits.max_string_size,
+                            _context.engine().max_string_size(),
                             s.len(),
                             Position::none(),
                         ).into();

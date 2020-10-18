@@ -208,7 +208,7 @@ impl Engine {
             let result = if func.is_plugin_fn() {
                 func.get_plugin_fn().call(args)
             } else {
-                func.get_native_fn()(self, lib, args)
+                func.get_native_fn()((self, lib).into(), args)
             };
 
             // Restore the original reference
@@ -356,7 +356,7 @@ impl Engine {
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
-        if level > self.limits.max_call_stack_depth {
+        if level > self.max_call_levels() {
             return Err(Box::new(
                 EvalAltResult::ErrorStackOverflow(Position::none()),
             ));
@@ -648,7 +648,7 @@ impl Engine {
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
-        if _level > self.limits.max_call_stack_depth {
+        if _level > self.max_call_levels() {
             return Err(Box::new(
                 EvalAltResult::ErrorStackOverflow(Position::none()),
             ));
@@ -1196,7 +1196,7 @@ impl Engine {
                     }
                 }
 
-                f.get_native_fn()(self, lib, args.as_mut())
+                f.get_native_fn()((self, lib).into(), args.as_mut())
             }
             Some(_) => unreachable!(),
             None if def_val.is_some() => Ok(def_val.unwrap().into()),

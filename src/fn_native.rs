@@ -1,7 +1,7 @@
 //! Module defining interfaces to native-Rust functions.
 
 use crate::any::Dynamic;
-use crate::engine::{Engine, EvalContext};
+use crate::engine::{Engine, EvalContext, FN_ANONYMOUS};
 use crate::module::Module;
 use crate::parser::{FnAccess, ScriptFnDef};
 use crate::plugin::PluginFunction;
@@ -45,6 +45,35 @@ pub type Locked<T> = RefCell<T>;
 /// Synchronized shared object.
 #[cfg(feature = "sync")]
 pub type Locked<T> = RwLock<T>;
+
+/// Context of a script evaluation process.
+#[derive(Debug, Copy, Clone)]
+pub struct NativeCallContext<'e, 'm> {
+    engine: &'e Engine,
+    lib: &'m Module,
+}
+
+impl<'e, 'm> From<(&'e Engine, &'m Module)> for NativeCallContext<'e, 'm> {
+    fn from(value: (&'e Engine, &'m Module)) -> Self {
+        Self {
+            engine: value.0,
+            lib: value.1,
+        }
+    }
+}
+
+impl<'e, 'm> NativeCallContext<'e, 'm> {
+    /// The current `Engine`.
+    #[inline(always)]
+    pub fn engine(&self) -> &'e Engine {
+        self.engine
+    }
+    /// The global namespace containing definition of all script-defined functions.
+    #[inline(always)]
+    pub fn namespace(&self) -> &'m Module {
+        self.lib
+    }
+}
 
 /// Consume a `Shared` resource and return a mutable reference to the wrapped value.
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
@@ -108,6 +137,11 @@ impl FnPtr {
     pub fn curry(&self) -> &[Dynamic] {
         self.1.as_ref()
     }
+    /// Does this function pointer refer to an anonymous function?
+    #[inline(always)]
+    pub fn is_anonymous(&self) -> bool {
+        self.0.starts_with(FN_ANONYMOUS)
+    }
 
     /// Call the function pointer with curried arguments (if any).
     ///
@@ -121,8 +155,7 @@ impl FnPtr {
     /// clone them _before_ calling this function.
     pub fn call_dynamic(
         &self,
-        engine: &Engine,
-        lib: impl AsRef<Module>,
+        context: NativeCallContext,
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -144,10 +177,11 @@ impl FnPtr {
             args.insert(0, obj);
         }
 
-        engine
+        context
+            .engine()
             .exec_fn_call(
                 &mut Default::default(),
-                lib.as_ref(),
+                context.namespace(),
                 fn_name,
                 hash_script,
                 args.as_mut(),
@@ -204,11 +238,11 @@ impl TryFrom<&str> for FnPtr {
 
 /// A general function trail object.
 #[cfg(not(feature = "sync"))]
-pub type FnAny = dyn Fn(&Engine, &Module, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
+pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
 /// A general function trail object.
 #[cfg(feature = "sync")]
 pub type FnAny =
-    dyn Fn(&Engine, &Module, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
+    dyn Fn(NativeCallContext, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
 
 /// A standard function that gets an iterator from a type.
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;

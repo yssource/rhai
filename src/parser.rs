@@ -1,9 +1,7 @@
 //! Main module defining the lexer and parser.
 
 use crate::any::{Dynamic, Union};
-use crate::engine::{
-    Engine, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT,
-};
+use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::error::{LexError, ParseError, ParseErrorType};
 use crate::fn_native::{FnPtr, Shared};
 use crate::module::{Module, ModuleRef};
@@ -18,7 +16,7 @@ use crate::{calc_fn_hash, StaticVec};
 use crate::engine::Array;
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::{make_getter, make_setter, Map};
+use crate::engine::{make_getter, make_setter, Map, KEYWORD_EVAL, KEYWORD_FN_PTR};
 
 #[cfg(not(feature = "no_function"))]
 use crate::engine::{FN_ANONYMOUS, KEYWORD_FN_PTR_CURRY};
@@ -603,13 +601,15 @@ struct ParseState<'e> {
     /// All consequent calls to `access_var` will not be affected
     #[cfg(not(feature = "no_closure"))]
     allow_capture: bool,
-    /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
+    /// Encapsulates a local stack with imported module names.
+    #[cfg(not(feature = "no_module"))]
     modules: Vec<String>,
     /// Maximum levels of expression nesting.
     #[cfg(not(feature = "unchecked"))]
     max_expr_depth: usize,
     /// Maximum levels of expression nesting in functions.
     #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_function"))]
     max_function_expr_depth: usize,
 }
 
@@ -619,19 +619,23 @@ impl<'e> ParseState<'e> {
     pub fn new(
         engine: &'e Engine,
         #[cfg(not(feature = "unchecked"))] max_expr_depth: usize,
-        #[cfg(not(feature = "unchecked"))] max_function_expr_depth: usize,
+        #[cfg(not(feature = "unchecked"))]
+        #[cfg(not(feature = "no_function"))]
+        max_function_expr_depth: usize,
     ) -> Self {
         Self {
             engine,
             #[cfg(not(feature = "unchecked"))]
             max_expr_depth,
             #[cfg(not(feature = "unchecked"))]
+            #[cfg(not(feature = "no_function"))]
             max_function_expr_depth,
             #[cfg(not(feature = "no_closure"))]
             externals: Default::default(),
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
             stack: Default::default(),
+            #[cfg(not(feature = "no_module"))]
             modules: Default::default(),
         }
     }
@@ -1696,11 +1700,10 @@ fn parse_array_literal(
 
     while !input.peek().unwrap().0.is_eof() {
         #[cfg(not(feature = "unchecked"))]
-        if state.engine.limits.max_array_size > 0 && arr.len() >= state.engine.limits.max_array_size
-        {
+        if state.engine.max_array_size() > 0 && arr.len() >= state.engine.max_array_size() {
             return Err(PERR::LiteralTooLarge(
                 "Size of array literal".to_string(),
-                state.engine.limits.max_array_size,
+                state.engine.max_array_size(),
             )
             .into_err(input.peek().unwrap().1));
         }
@@ -1804,10 +1807,10 @@ fn parse_map_literal(
         };
 
         #[cfg(not(feature = "unchecked"))]
-        if state.engine.limits.max_map_size > 0 && map.len() >= state.engine.limits.max_map_size {
+        if state.engine.max_map_size() > 0 && map.len() >= state.engine.max_map_size() {
             return Err(PERR::LiteralTooLarge(
                 "Number of properties in object map literal".to_string(),
-                state.engine.limits.max_map_size,
+                state.engine.max_map_size(),
             )
             .into_err(input.peek().unwrap().1));
         }
@@ -3599,9 +3602,10 @@ impl Engine {
         let mut state = ParseState::new(
             self,
             #[cfg(not(feature = "unchecked"))]
-            self.limits.max_expr_depth,
+            self.max_expr_depth(),
             #[cfg(not(feature = "unchecked"))]
-            self.limits.max_function_expr_depth,
+            #[cfg(not(feature = "no_function"))]
+            self.max_function_expr_depth(),
         );
 
         let settings = ParseSettings {
@@ -3646,9 +3650,10 @@ impl Engine {
         let mut state = ParseState::new(
             self,
             #[cfg(not(feature = "unchecked"))]
-            self.limits.max_expr_depth,
+            self.max_expr_depth(),
             #[cfg(not(feature = "unchecked"))]
-            self.limits.max_function_expr_depth,
+            #[cfg(not(feature = "no_function"))]
+            self.max_function_expr_depth(),
         );
 
         while !input.peek().unwrap().0.is_eof() {

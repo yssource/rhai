@@ -10,6 +10,7 @@ Breaking changes
 
 * `EvalAltResult::ErrorReadingScriptFile` is removed in favor of the new `EvalAltResult::ErrorSystem`.
 * `EvalAltResult::ErrorLoopBreak` is renamed to `EvalAltResult::LoopBreak`.
+* `Engine::register_raw_fn` function signature has changed.
 
 Enhancements
 

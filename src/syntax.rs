@@ -67,14 +67,14 @@ impl EvalContext<'_, '_, '_, '_, '_, '_> {
         scope: &mut Scope,
         expr: &Expression,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.engine.eval_expr(
+        self.engine().eval_expr(
             scope,
             self.mods,
             self.state,
-            self.lib,
+            self.namespace(),
             self.this_ptr,
             expr.expr(),
-            self.level,
+            self.call_level(),
         )
     }
 }
