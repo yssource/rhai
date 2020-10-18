@@ -670,17 +670,28 @@ impl<'e> ParseState<'e> {
     }
 
     /// Find a module by name in the `ParseState`, searching in reverse.
-    /// The return value is the offset to be deducted from `Stack::len`,
+    ///
+    /// Returns the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
-    /// Return `None` when the variable name is not found in the `ParseState`.
+    ///
+    /// Returns `None` when the variable name is not found in the `ParseState`.
+    ///
+    /// # Panics
+    ///
+    /// Panics when called under `no_module`.
     #[inline(always)]
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
-        self.modules
+        #[cfg(feature = "no_module")]
+        unreachable!();
+
+        #[cfg(not(feature = "no_module"))]
+        return self
+            .modules
             .iter()
             .rev()
             .enumerate()
             .find(|(_, n)| *n == name)
-            .and_then(|(i, _)| NonZeroUsize::new(i + 1))
+            .and_then(|(i, _)| NonZeroUsize::new(i + 1));
     }
 }
 

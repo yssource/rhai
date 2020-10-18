@@ -1,7 +1,7 @@
 //! Module defining interfaces to native-Rust functions.
 
 use crate::any::Dynamic;
-use crate::engine::{Engine, EvalContext, FN_ANONYMOUS};
+use crate::engine::{Engine, EvalContext};
 use crate::module::Module;
 use crate::parser::{FnAccess, ScriptFnDef};
 use crate::plugin::PluginFunction;
@@ -10,6 +10,9 @@ use crate::scope::Scope;
 use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
 use crate::{calc_fn_hash, StaticVec};
+
+#[cfg(not(feature = "no_function"))]
+use crate::engine::FN_ANONYMOUS;
 
 use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, iter::empty, mem, string::String};
 
@@ -138,6 +141,7 @@ impl FnPtr {
         self.1.as_ref()
     }
     /// Does this function pointer refer to an anonymous function?
+    #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn is_anonymous(&self) -> bool {
         self.0.starts_with(FN_ANONYMOUS)
