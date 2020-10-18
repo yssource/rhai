@@ -324,8 +324,13 @@ mod string_functions {
                 let p = s.make_mut();
 
                 while str_len < len as usize {
-                    p.push_str(padding);
-                    str_len += padding_len;
+                    if str_len + padding_len <= len as usize {
+                        p.push_str(padding);
+                        str_len += padding_len;
+                    } else {
+                        p.extend(padding.chars().take(len as usize - str_len));
+                        str_len = len as usize;
+                    }
                 }
 
                 #[cfg(not(feature = "unchecked"))]

@@ -49,7 +49,7 @@ pub type Locked<T> = RefCell<T>;
 #[cfg(feature = "sync")]
 pub type Locked<T> = RwLock<T>;
 
-/// Context of a script evaluation process.
+/// Context of native Rust function call.
 #[derive(Debug, Copy, Clone)]
 pub struct NativeCallContext<'e, 'm> {
     engine: &'e Engine,
