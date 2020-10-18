@@ -3,7 +3,10 @@ use crate::def_package;
 use crate::parser::INT;
 use crate::result::EvalAltResult;
 
-use crate::stdlib::ops::{Add, Range};
+use crate::stdlib::{
+    boxed::Box,
+    ops::{Add, Range},
+};
 
 fn get_range<T: Variant + Clone>(from: T, to: T) -> Result<Range<T>, Box<EvalAltResult>> {
     Ok(from..to)

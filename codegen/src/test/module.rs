@@ -302,9 +302,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct get_mystic_number_token();
                 impl PluginFunction for get_mystic_number_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 0usize,
                                             "wrong arg count: {} != {}", args.len(), 0usize);
                         Ok(Dynamic::from(get_mystic_number()))
@@ -364,9 +362,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct add_one_to_token();
                 impl PluginFunction for add_one_to_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).cast::<INT>();
@@ -441,9 +437,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct add_one_to_token();
                 impl PluginFunction for add_one_to_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).cast::<INT>();
@@ -469,9 +463,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct add_n_to_token();
                 impl PluginFunction for add_n_to_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg0 = mem::take(args[0usize]).cast::<INT>();
@@ -535,9 +527,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct add_together_token();
                 impl PluginFunction for add_together_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg0 = mem::take(args[0usize]).cast::<INT>();
@@ -608,9 +598,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct add_together_token();
                 impl PluginFunction for add_together_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg0 = mem::take(args[0usize]).cast::<INT>();
@@ -850,9 +838,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct get_mystic_number_token();
                 impl PluginFunction for get_mystic_number_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 0usize,
                                             "wrong arg count: {} != {}", args.len(), 0usize);
                         Ok(Dynamic::from(get_mystic_number()))
@@ -943,9 +929,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct print_out_to_token();
                 impl PluginFunction for print_out_to_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).take_immutable_string().unwrap();
@@ -1007,9 +991,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct print_out_to_token();
                 impl PluginFunction for print_out_to_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).take_string().unwrap();
@@ -1071,9 +1053,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct increment_token();
                 impl PluginFunction for increment_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = &mut args[0usize].write_lock::<FLOAT>().unwrap();
@@ -1138,9 +1118,7 @@ mod generate_tests {
                     #[allow(non_camel_case_types)]
                     struct increment_token();
                     impl PluginFunction for increment_token {
-                        fn call(&self,
-                                args: &mut [&mut Dynamic]
-                        ) -> Result<Dynamic, Box<EvalAltResult>> {
+                        fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                             debug_assert_eq!(args.len(), 1usize,
                                                 "wrong arg count: {} != {}", args.len(), 1usize);
                             let arg0 = &mut args[0usize].write_lock::<FLOAT>().unwrap();
@@ -1225,9 +1203,7 @@ mod generate_tests {
                     #[allow(non_camel_case_types)]
                     struct increment_token();
                     impl PluginFunction for increment_token {
-                        fn call(&self,
-                                args: &mut [&mut Dynamic]
-                        ) -> Result<Dynamic, Box<EvalAltResult>> {
+                        fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                             debug_assert_eq!(args.len(), 1usize,
                                                 "wrong arg count: {} != {}", args.len(), 1usize);
                             let arg0 = &mut args[0usize].write_lock::<FLOAT>().unwrap();
@@ -1310,9 +1286,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct int_foo_token();
                 impl PluginFunction for int_foo_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = &mut args[0usize].write_lock::<u64>().unwrap();
@@ -1376,9 +1350,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct int_foo_token();
                 impl PluginFunction for int_foo_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = &mut args[0usize].write_lock::<u64>().unwrap();
@@ -1442,9 +1414,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct int_foo_token();
                 impl PluginFunction for int_foo_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
@@ -1513,9 +1483,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct int_foo_token();
                 impl PluginFunction for int_foo_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
@@ -1580,9 +1548,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct get_by_index_token();
                 impl PluginFunction for get_by_index_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
@@ -1652,9 +1618,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct get_by_index_token();
                 impl PluginFunction for get_by_index_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
@@ -1721,9 +1685,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct set_by_index_token();
                 impl PluginFunction for set_by_index_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 3usize,
                                             "wrong arg count: {} != {}", args.len(), 3usize);
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
@@ -1797,9 +1759,7 @@ mod generate_tests {
                 #[allow(non_camel_case_types)]
                 struct set_by_index_token();
                 impl PluginFunction for set_by_index_token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 3usize,
                                             "wrong arg count: {} != {}", args.len(), 3usize);
                         let arg1 = mem::take(args[1usize]).cast::<u64>();

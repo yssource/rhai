@@ -277,9 +277,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 0usize,
                                          "wrong arg count: {} != {}", args.len(), 0usize);
                         Ok(Dynamic::from(do_nothing()))
@@ -320,9 +318,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                     "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).cast::<usize>();
@@ -353,6 +349,49 @@ mod generate_tests {
     }
 
     #[test]
+    fn one_arg_fn_with_context() {
+        let input_tokens: TokenStream = quote! {
+            pub fn do_something(context: NativeCallContext, x: usize) {}
+        };
+
+        let expected_tokens = quote! {
+            #[allow(unused)]
+            pub mod rhai_fn_do_something {
+                use super::*;
+                struct Token();
+                impl PluginFunction for Token {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
+                        debug_assert_eq!(args.len(), 1usize,
+                                    "wrong arg count: {} != {}", args.len(), 1usize);
+                        let arg0 = mem::take(args[0usize]).cast::<usize>();
+                        Ok(Dynamic::from(do_something(context, arg0)))
+                    }
+
+                    fn is_method_call(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<usize>()].into_boxed_slice()
+                    }
+                }
+                pub fn token_callable() -> CallableFunction {
+                    Token().into()
+                }
+                pub fn token_input_types() -> Box<[TypeId]> {
+                    Token().input_types()
+                }
+                pub fn dynamic_result_fn(context: NativeCallContext, x: usize) -> Result<Dynamic, Box<EvalAltResult> > {
+                    Ok(Dynamic::from(super::do_something(context, x)))
+                }
+            }
+        };
+
+        let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
+        assert!(item_fn.pass_context());
+        assert_streams_eq(item_fn.generate(), expected_tokens);
+    }
+
+    #[test]
     fn return_dynamic() {
         let input_tokens: TokenStream = quote! {
             pub fn return_dynamic() -> (((rhai::Dynamic))) {
@@ -366,9 +405,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 0usize,
                                          "wrong arg count: {} != {}", args.len(), 0usize);
                         Ok(return_dynamic())
@@ -405,9 +442,7 @@ mod generate_tests {
 
         let expected_tokens = quote! {
             impl PluginFunction for MyType {
-                fn call(&self,
-                        args: &mut [&mut Dynamic]
-                ) -> Result<Dynamic, Box<EvalAltResult>> {
+                fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                     debug_assert_eq!(args.len(), 1usize,
                                 "wrong arg count: {} != {}", args.len(), 1usize);
                     let arg0 = mem::take(args[0usize]).cast::<usize>();
@@ -439,9 +474,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                     "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg0 = mem::take(args[0usize]).cast::<usize>();
@@ -485,9 +518,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                     "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg1 = mem::take(args[1usize]).cast::<usize>();
@@ -532,9 +563,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
-                    fn call(&self,
-                            args: &mut [&mut Dynamic]
-                    ) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                     "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).take_immutable_string().unwrap();

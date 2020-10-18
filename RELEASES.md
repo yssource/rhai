@@ -12,7 +12,13 @@ Breaking changes
 * `EvalAltResult::ErrorLoopBreak` is renamed to `EvalAltResult::LoopBreak`.
 * `Engine::register_raw_fn` function signature has changed.
 
+New features
+------------
+
+* The plugins system is enhanced to support functions taking a `NativeCallContext` as the first parameter.
+
 Enhancements
+------------
 
 * Calling `eval` or `Fn` in method-call style, which is an error, is now caught during parsing.
 

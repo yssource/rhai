@@ -70,7 +70,7 @@ where:
 
   * `context.engine(): &Engine` - the current [`Engine`], with all configurations and settings.
     This is sometimes useful for calling a script-defined function within the same evaluation context
-    using [`Engine::call_fn`][`call_fn`].
+    using [`Engine::call_fn`][`call_fn`], or calling a [function pointer].
 
   * `context.namespace(): &Module` - the global namespace of script-defined functions, as a [`Module`].
 

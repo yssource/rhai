@@ -222,6 +222,7 @@ pub(crate) struct ExportedFn {
     entire_span: proc_macro2::Span,
     signature: syn::Signature,
     is_public: bool,
+    pass_context: bool,
     return_dynamic: bool,
     mut_receiver: bool,
     params: ExportedFnParams,
@@ -237,15 +238,36 @@ impl Parse for ExportedFn {
         let dynamic_type_path2 = syn::parse2::<syn::Path>(quote! { rhai::Dynamic }).unwrap();
         let mut return_dynamic = false;
 
+        let context_type_path1 = syn::parse2::<syn::Path>(quote! { NativeCallContext }).unwrap();
+        let context_type_path2 =
+            syn::parse2::<syn::Path>(quote! { rhai::NativeCallContext }).unwrap();
+        let mut pass_context = false;
+
         // #[cfg] attributes are not allowed on functions due to what is generated for them
         crate::attrs::deny_cfg_attr(&fn_all.attrs)?;
 
         // Determine if the function is public.
         let is_public = matches!(fn_all.vis, syn::Visibility::Public(_));
-        // Determine whether function generates a special calling convention for a mutable
-        // reciever.
+
+        // Determine if the function requires a call context
+        if let Some(first_arg) = fn_all.sig.inputs.first() {
+            if let syn::FnArg::Typed(syn::PatType { ref ty, .. }) = first_arg {
+                match flatten_type_groups(ty.as_ref()) {
+                    syn::Type::Path(p)
+                        if p.path == context_type_path1 || p.path == context_type_path2 =>
+                    {
+                        pass_context = true;
+                    }
+                    _ => (),
+                }
+            }
+        }
+
+        let skip_slots = if pass_context { 1 } else { 0 };
+
+        // Determine whether function generates a special calling convention for a mutable receiver.
         let mut_receiver = {
-            if let Some(first_arg) = fn_all.sig.inputs.first() {
+            if let Some(first_arg) = fn_all.sig.inputs.iter().skip(skip_slots).next() {
                 match first_arg {
                     syn::FnArg::Receiver(syn::Receiver {
                         reference: Some(_), ..
@@ -265,8 +287,7 @@ impl Parse for ExportedFn {
                                 _ => {
                                     return Err(syn::Error::new(
                                         ty.span(),
-                                        "references from Rhai in this position \
-                                            must be mutable",
+                                        "references from Rhai in this position must be mutable",
                                     ))
                                 }
                             },
@@ -281,7 +302,7 @@ impl Parse for ExportedFn {
         };
 
         // All arguments after the first must be moved except for &str.
-        for arg in fn_all.sig.inputs.iter().skip(1) {
+        for arg in fn_all.sig.inputs.iter().skip(skip_slots + 1) {
             let ty = match arg {
                 syn::FnArg::Typed(syn::PatType { ref ty, .. }) => ty,
                 _ => panic!("internal error: receiver argument outside of first position!?"),
@@ -304,8 +325,7 @@ impl Parse for ExportedFn {
             if !is_ok {
                 return Err(syn::Error::new(
                     ty.span(),
-                    "this type in this position passes from \
-                                                        Rhai by value",
+                    "this type in this position passes from Rhai by value",
                 ));
             }
         }
@@ -337,6 +357,7 @@ impl Parse for ExportedFn {
             entire_span,
             signature: fn_all.sig,
             is_public,
+            pass_context,
             return_dynamic,
             mut_receiver,
             params: ExportedFnParams::default(),
@@ -361,6 +382,10 @@ impl ExportedFn {
 
     pub(crate) fn skipped(&self) -> bool {
         self.params.skip
+    }
+
+    pub(crate) fn pass_context(&self) -> bool {
+        self.pass_context
     }
 
     pub(crate) fn signature(&self) -> &syn::Signature {
@@ -418,11 +443,13 @@ impl ExportedFn {
     }
 
     pub(crate) fn arg_list(&self) -> impl Iterator<Item = &syn::FnArg> {
-        self.signature.inputs.iter()
+        let skip = if self.pass_context { 1 } else { 0 };
+        self.signature.inputs.iter().skip(skip)
     }
 
     pub(crate) fn arg_count(&self) -> usize {
-        self.signature.inputs.len()
+        let skip = if self.pass_context { 1 } else { 0 };
+        self.signature.inputs.len() - skip
     }
 
     pub(crate) fn return_type(&self) -> Option<&syn::Type> {
@@ -625,6 +652,10 @@ impl ExportedFn {
         let mut input_type_exprs: Vec<syn::Expr> = Vec::new();
         let skip_first_arg;
 
+        if self.pass_context {
+            unpack_exprs.push(syn::parse2::<syn::Expr>(quote! { context }).unwrap());
+        }
+
         // Handle the first argument separately if the function has a "method like" receiver
         if is_method_call {
             skip_first_arg = true;
@@ -764,9 +795,7 @@ impl ExportedFn {
         let type_name = syn::Ident::new(on_type_name, proc_macro2::Span::call_site());
         quote! {
             impl PluginFunction for #type_name {
-                fn call(&self,
-                        args: &mut [&mut Dynamic]
-                ) -> Result<Dynamic, Box<EvalAltResult>> {
+                fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                     debug_assert_eq!(args.len(), #arg_count,
                                      "wrong arg count: {} != {}",
                                      args.len(), #arg_count);

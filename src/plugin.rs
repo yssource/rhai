@@ -2,7 +2,7 @@
 
 pub use crate::any::Dynamic;
 pub use crate::engine::Engine;
-pub use crate::fn_native::CallableFunction;
+pub use crate::fn_native::{CallableFunction, NativeCallContext};
 pub use crate::fn_register::{RegisterFn, RegisterResultFn};
 pub use crate::module::Module;
 pub use crate::parser::FnAccess;
@@ -22,7 +22,11 @@ pub use rhai_codegen::{export_fn, register_exported_fn};
 /// Use the `#[export_module]` and `#[export_fn]` procedural attributes instead.
 pub trait PluginFunction {
     /// Call the plugin function with the arguments provided.
-    fn call(&self, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>>;
+    fn call(
+        &self,
+        context: NativeCallContext,
+        args: &mut [&mut Dynamic],
+    ) -> Result<Dynamic, Box<EvalAltResult>>;
 
     /// Is this plugin function a method?
     fn is_method_call(&self) -> bool;

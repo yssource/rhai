@@ -1,7 +1,6 @@
 //! Module defining external-loaded modules for Rhai.
 
 use crate::any::{Dynamic, Variant};
-use crate::engine::Engine;
 use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, NativeCallContext, SendSync};
 use crate::fn_register::by_value as cast_arg;
 use crate::parser::FnAccess;
@@ -15,7 +14,7 @@ use crate::{fn_native::Shared, parser::ScriptFnDef};
 
 #[cfg(not(feature = "no_module"))]
 use crate::{
-    engine::Imports,
+    engine::{Engine, Imports},
     parser::AST,
     scope::{Entry as ScopeEntry, Scope},
 };

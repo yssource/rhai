@@ -68,7 +68,7 @@ pub(crate) fn generate_body(
         );
     }
 
-    // NB: these are token streams, because reparsing messes up "> >" vs ">>"
+    // NB: these are token streams, because re-parsing messes up "> >" vs ">>"
     let mut gen_fn_tokens: Vec<proc_macro2::TokenStream> = Vec::new();
     for function in fns {
         function.update_scope(&parent_scope);

@@ -17,11 +17,11 @@ Built-in methods
 The following standard methods (mostly defined in the [`BasicFnPackage`][packages] but excluded if
 using a [raw `Engine`]) operate on function pointers:
 
-| Function                           | Parameter(s) | Description                                                                  |
-| ---------------------------------- | ------------ | ---------------------------------------------------------------------------- |
-| `name` method and property         | _none_       | returns the name of the function encapsulated by the function pointer        |
-| `is_anonymous` method and property | _none_       | does the function pointer refer to an [anonymous function]?                  |
-| `call`                             | _arguments_  | calls the function matching the function pointer's name with the _arguments_ |
+| Function                           | Parameter(s) | Description                                                                                      |
+| ---------------------------------- | ------------ | ------------------------------------------------------------------------------------------------ |
+| `name` method and property         | _none_       | returns the name of the function encapsulated by the function pointer                            |
+| `is_anonymous` method and property | _none_       | does the function pointer refer to an [anonymous function]? Not available under [`no_function`]. |
+| `call`                             | _arguments_  | calls the function matching the function pointer's name with the _arguments_                     |
 
 
 Examples

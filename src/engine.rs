@@ -1561,7 +1561,7 @@ impl Engine {
 
                                 // Overriding exact implementation
                                 if func.is_plugin_fn() {
-                                    func.get_plugin_fn().call(args)?;
+                                    func.get_plugin_fn().call((self, lib).into(), args)?;
                                 } else {
                                     func.get_native_fn()((self, lib).into(), args)?;
                                 }
