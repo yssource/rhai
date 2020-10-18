@@ -42,7 +42,7 @@ fn test_stack_overflow_parsing() -> Result<(), Box<EvalAltResult>> {
 
     engine.set_max_expr_depths(
         100,
-        #[cfg(not(feature = "no_module"))]
+        #[cfg(not(feature = "no_function"))]
         6,
     );
 
