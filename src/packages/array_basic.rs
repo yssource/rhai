@@ -73,6 +73,8 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
 
     lib.set_raw_fn("map", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], map);
     lib.set_raw_fn("filter", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], filter);
+    lib.set_raw_fn("drain", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], drain);
+    lib.set_raw_fn("retain", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], retain);
     lib.set_raw_fn("reduce", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], reduce);
     lib.set_raw_fn("reduce", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>(), TypeId::of::<FnPtr>()], reduce_with_initial);
     lib.set_raw_fn("reduce_rev", &[TypeId::of::<Array>(), TypeId::of::<FnPtr>()], reduce_rev);
@@ -190,6 +192,49 @@ mod array_functions {
         };
 
         list[start..].iter().cloned().collect()
+    }
+    #[rhai_fn(name = "drain")]
+    pub fn drain_range(list: &mut Array, start: INT, len: INT) -> Array {
+        let start = if start < 0 {
+            0
+        } else if start as usize >= list.len() {
+            list.len() - 1
+        } else {
+            start as usize
+        };
+
+        let len = if len < 0 {
+            0
+        } else if len as usize > list.len() - start {
+            list.len() - start
+        } else {
+            len as usize
+        };
+
+        list.drain(start..start + len - 1).collect()
+    }
+    #[rhai_fn(name = "retain")]
+    pub fn retain_range(list: &mut Array, start: INT, len: INT) -> Array {
+        let start = if start < 0 {
+            0
+        } else if start as usize >= list.len() {
+            list.len() - 1
+        } else {
+            start as usize
+        };
+
+        let len = if len < 0 {
+            0
+        } else if len as usize > list.len() - start {
+            list.len() - start
+        } else {
+            len as usize
+        };
+
+        let mut drained = list.drain(start + len..).collect::<Array>();
+        drained.extend(list.drain(..start));
+
+        drained
     }
 }
 
@@ -550,6 +595,86 @@ fn sort(
     });
 
     Ok(().into())
+}
+
+fn drain(
+    engine: &Engine,
+    lib: &Module,
+    args: &mut [&mut Dynamic],
+) -> Result<Array, Box<EvalAltResult>> {
+    let filter = args[1].read_lock::<FnPtr>().unwrap().clone();
+    let mut list = args[0].write_lock::<Array>().unwrap();
+
+    let mut drained = Array::with_capacity(list.len());
+
+    let mut i = list.len();
+
+    while i > 0 {
+        i -= 1;
+
+        if filter
+            .call_dynamic(engine, lib, None, [list[i].clone()])
+            .or_else(|err| match *err {
+                EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                    filter.call_dynamic(engine, lib, None, [list[i].clone(), (i as INT).into()])
+                }
+                _ => Err(err),
+            })
+            .map_err(|err| {
+                Box::new(EvalAltResult::ErrorInFunctionCall(
+                    "filter".to_string(),
+                    err,
+                    Position::none(),
+                ))
+            })?
+            .as_bool()
+            .unwrap_or(false)
+        {
+            drained.push(list.remove(i));
+        }
+    }
+
+    Ok(drained)
+}
+
+fn retain(
+    engine: &Engine,
+    lib: &Module,
+    args: &mut [&mut Dynamic],
+) -> Result<Array, Box<EvalAltResult>> {
+    let filter = args[1].read_lock::<FnPtr>().unwrap().clone();
+    let mut list = args[0].write_lock::<Array>().unwrap();
+
+    let mut drained = Array::with_capacity(list.len());
+
+    let mut i = list.len();
+
+    while i > 0 {
+        i -= 1;
+
+        if !filter
+            .call_dynamic(engine, lib, None, [list[i].clone()])
+            .or_else(|err| match *err {
+                EvalAltResult::ErrorFunctionNotFound(_, _) => {
+                    filter.call_dynamic(engine, lib, None, [list[i].clone(), (i as INT).into()])
+                }
+                _ => Err(err),
+            })
+            .map_err(|err| {
+                Box::new(EvalAltResult::ErrorInFunctionCall(
+                    "filter".to_string(),
+                    err,
+                    Position::none(),
+                ))
+            })?
+            .as_bool()
+            .unwrap_or(false)
+        {
+            drained.push(list.remove(i));
+        }
+    }
+
+    Ok(drained)
 }
 
 gen_array_functions!(basic => INT, bool, char, ImmutableString, FnPtr, Array, Unit);
