@@ -511,7 +511,7 @@ impl Module {
     ///                 // Pass parameter types via a slice with TypeId's
     ///                 &[std::any::TypeId::of::<i64>(), std::any::TypeId::of::<bool>()],
     ///                 // Fixed closure signature
-    ///                 |engine, lib, args| {
+    ///                 |context, args| {
     ///                     // 'args' is guaranteed to be the right length and of the correct types
     ///
     ///                     // Get the second parameter by 'consuming' it
