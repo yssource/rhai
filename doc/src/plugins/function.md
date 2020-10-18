@@ -102,9 +102,10 @@ as a parameter to the function, thereby implementing a _callback_:
 use rhai::{Dynamic, FnPtr, NativeCallContext, EvalAltResult};
 use rhai::plugin::*;        // a "prelude" import for macros
 
-#[export_fn(return_raw)]
+#[export_fn]
+#[rhai_fn(return_raw)]
 pub fn greet(context: NativeCallContext, callback: FnPtr)
-    -> Result<Dynamic, Box<EvalAltResult>>
+                            -> Result<Dynamic, Box<EvalAltResult>>
 {
     // Call the callback closure with the current context
     // to obtain the name to greet!
@@ -116,15 +117,16 @@ pub fn greet(context: NativeCallContext, callback: FnPtr)
 The native call context is also useful in another scenario: protecting a function from malicious scripts.
 
 ```rust
-use rhai::{Dynamic, INT, Array, NativeCallContext, EvalAltResult, Position};
+use rhai::{Dynamic, Array, NativeCallContext, EvalAltResult, Position};
 use rhai::plugin::*;        // a "prelude" import for macros
 
 // This function builds an array of arbitrary size, but is protected
 // against attacks by first checking with the allowed limit set
 // into the 'Engine'.
-#[export_fn(return_raw)]
-pub fn grow(context: NativeCallContext, size: INT)
-    -> Result<Dynamic, Box<EvalAltResult>>
+#[export_fn]
+#[rhai_fn(return_raw)]
+pub fn grow(context: NativeCallContext, size: i64)
+                            -> Result<Dynamic, Box<EvalAltResult>>
 {
     // Make sure the function does not generate a
     // data structure larger than the allowed limit

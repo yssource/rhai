@@ -58,54 +58,6 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
 
     combine_with_exported_module!(lib, "string", string_functions);
 
-    lib.set_raw_fn(
-        "pad",
-        &[TypeId::of::<ImmutableString>(), TypeId::of::<INT>(), TypeId::of::<char>()],
-        |_context, args| {
-            let len = *args[1].read_lock::<INT>().unwrap();
-
-            // Check if string will be over max size limit
-            #[cfg(not(feature = "unchecked"))]
-            if _context.engine().max_string_size() > 0 && len > 0
-                && (len as usize) > _context.engine().max_string_size()
-            {
-                return EvalAltResult::ErrorDataTooLarge(
-                    "Length of string".to_string(),
-                    _context.engine().max_string_size(),
-                    len as usize,
-                    Position::none(),
-                ).into();
-            }
-
-            if len > 0 {
-                let ch = mem::take(args[2]).cast::<char>();
-                let mut s = args[0].write_lock::<ImmutableString>().unwrap();
-
-                let orig_len = s.chars().count();
-
-                if len as usize > orig_len  {
-                    let p = s.make_mut();
-
-                    for _ in 0..(len as usize - orig_len) {
-                        p.push(ch);
-                    }
-
-                    #[cfg(not(feature = "unchecked"))]
-                    if _context.engine().max_string_size() > 0 && s.len() > _context.engine().max_string_size() {
-                        return EvalAltResult::ErrorDataTooLarge(
-                            "Length of string".to_string(),
-                            _context.engine().max_string_size(),
-                            s.len(),
-                            Position::none(),
-                        ).into();
-                    }
-                }
-            }
-
-            Ok(())
-        },
-    );
-
     // Register string iterator
     lib.set_iter(
         TypeId::of::<ImmutableString>(),
@@ -176,7 +128,7 @@ mod string_functions {
     pub fn index_of_char_starting_from(s: &str, ch: char, start: INT) -> INT {
         let start = if start < 0 {
             0
-        } else if (start as usize) >= s.chars().count() {
+        } else if start as usize >= s.chars().count() {
             return -1 as INT;
         } else {
             s.chars().take(start as usize).collect::<String>().len()
@@ -197,7 +149,7 @@ mod string_functions {
     pub fn index_of_string_starting_from(s: &str, find: ImmutableString, start: INT) -> INT {
         let start = if start < 0 {
             0
-        } else if (start as usize) >= s.chars().count() {
+        } else if start as usize >= s.chars().count() {
             return -1 as INT;
         } else {
             s.chars().take(start as usize).collect::<String>().len()
@@ -220,7 +172,7 @@ mod string_functions {
             return "".to_string().into();
         } else if start < 0 {
             0
-        } else if (start as usize) >= s.chars().count() {
+        } else if start as usize >= s.chars().count() {
             return "".to_string().into();
         } else {
             start as usize
@@ -228,7 +180,7 @@ mod string_functions {
 
         let chars: StaticVec<_> = s.chars().collect();
 
-        let len = if offset + (len as usize) > chars.len() {
+        let len = if offset + len as usize > chars.len() {
             chars.len() - offset
         } else {
             len as usize
@@ -255,7 +207,7 @@ mod string_functions {
             return;
         } else if start < 0 {
             0
-        } else if (start as usize) >= s.chars().count() {
+        } else if start as usize >= s.chars().count() {
             s.make_mut().clear();
             return;
         } else {
@@ -264,7 +216,7 @@ mod string_functions {
 
         let chars: StaticVec<_> = s.chars().collect();
 
-        let len = if offset + (len as usize) > chars.len() {
+        let len = if offset + len as usize > chars.len() {
             chars.len() - offset
         } else {
             len as usize
@@ -294,6 +246,104 @@ mod string_functions {
     #[rhai_fn(name = "replace")]
     pub fn replace_char(s: &mut ImmutableString, find: char, sub: char) {
         *s = s.replace(&find.to_string(), &sub.to_string()).into();
+    }
+    #[rhai_fn(return_raw)]
+    pub fn pad(
+        _context: NativeCallContext,
+        s: &mut ImmutableString,
+        len: INT,
+        ch: char,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        // Check if string will be over max size limit
+        #[cfg(not(feature = "unchecked"))]
+        if _context.engine().max_string_size() > 0
+            && len as usize > _context.engine().max_string_size()
+        {
+            return EvalAltResult::ErrorDataTooLarge(
+                "Length of string".to_string(),
+                _context.engine().max_string_size(),
+                len as usize,
+                Position::none(),
+            )
+            .into();
+        }
+
+        if len > 0 {
+            let orig_len = s.chars().count();
+
+            if len as usize > orig_len {
+                let p = s.make_mut();
+
+                for _ in 0..(len as usize - orig_len) {
+                    p.push(ch);
+                }
+
+                #[cfg(not(feature = "unchecked"))]
+                if _context.engine().max_string_size() > 0
+                    && s.len() > _context.engine().max_string_size()
+                {
+                    return EvalAltResult::ErrorDataTooLarge(
+                        "Length of string".to_string(),
+                        _context.engine().max_string_size(),
+                        s.len(),
+                        Position::none(),
+                    )
+                    .into();
+                }
+            }
+        }
+
+        Ok(().into())
+    }
+    #[rhai_fn(name = "pad", return_raw)]
+    pub fn pad_with_string(
+        _context: NativeCallContext,
+        s: &mut ImmutableString,
+        len: INT,
+        padding: &str,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        // Check if string will be over max size limit
+        #[cfg(not(feature = "unchecked"))]
+        if _context.engine().max_string_size() > 0
+            && len as usize > _context.engine().max_string_size()
+        {
+            return EvalAltResult::ErrorDataTooLarge(
+                "Length of string".to_string(),
+                _context.engine().max_string_size(),
+                len as usize,
+                Position::none(),
+            )
+            .into();
+        }
+
+        if len > 0 {
+            let mut str_len = s.chars().count();
+            let padding_len = padding.chars().count();
+
+            if len as usize > str_len {
+                let p = s.make_mut();
+
+                while str_len < len as usize {
+                    p.push_str(padding);
+                    str_len += padding_len;
+                }
+
+                #[cfg(not(feature = "unchecked"))]
+                if _context.engine().max_string_size() > 0
+                    && s.len() > _context.engine().max_string_size()
+                {
+                    return EvalAltResult::ErrorDataTooLarge(
+                        "Length of string".to_string(),
+                        _context.engine().max_string_size(),
+                        s.len(),
+                        Position::none(),
+                    )
+                    .into();
+                }
+            }
+        }
+
+        Ok(().into())
     }
 
     #[cfg(not(feature = "no_index"))]

@@ -363,7 +363,7 @@ use rhai::plugin::*;        // a "prelude" import for macros
 mod my_module {
     #[rhai_fn(return_raw)]
     pub fn greet(context: NativeCallContext, callback: FnPtr)
-        -> Result<Dynamic, Box<EvalAltResult>>
+                                -> Result<Dynamic, Box<EvalAltResult>>
     {
         // Call the callback closure with the current context
         // to obtain the name to greet!
@@ -376,7 +376,7 @@ mod my_module {
 The native call context is also useful in another scenario: protecting a function from malicious scripts.
 
 ```rust
-use rhai::{Dynamic, INT, Array, NativeCallContext, EvalAltResult, Position};
+use rhai::{Dynamic, Array, NativeCallContext, EvalAltResult, Position};
 use rhai::plugin::*;        // a "prelude" import for macros
 
 #[export_module]
@@ -385,8 +385,8 @@ mod my_module {
     // against attacks by first checking with the allowed limit set
     // into the 'Engine'.
     #[rhai_fn(return_raw)]
-    pub fn grow(context: NativeCallContext, size: INT)
-        -> Result<Dynamic, Box<EvalAltResult>>
+    pub fn grow(context: NativeCallContext, size: i64)
+                                -> Result<Dynamic, Box<EvalAltResult>>
     {
         // Make sure the function does not generate a
         // data structure larger than the allowed limit

@@ -226,7 +226,7 @@ engine.register_raw_fn("super_call",
 `FnPtr::call_dynamic` takes a parameter of type `NativeCallContext` which holds the _native call context_
 of the particular call to a registered Rust function.
 
-This type is normally provided by the [`Engine`] (e.g. when using `Engine::register_fn_raw`(../rust/register-raw.md)).
+This type is normally provided by the [`Engine`] (e.g. when using [`Engine::register_fn_raw`](../rust/register-raw.md)).
 However, it may also be manually constructed from a tuple:
 
 ```rust
