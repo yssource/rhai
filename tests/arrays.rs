@@ -84,7 +84,7 @@ fn test_array_with_structs() -> Result<(), Box<EvalAltResult>> {
         }
 
         fn new() -> Self {
-            TestStruct { x: 1 }
+            Self { x: 1 }
         }
     }
 

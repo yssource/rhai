@@ -1,29 +1,32 @@
-Custom Type Getters and Setters
-==============================
+Custom Type Property Getters and Setters
+=======================================
 
 {{#include ../links.md}}
 
-A custom type can also expose members by registering `get` and/or `set` functions.
+A [custom type] can also expose properties by registering `get` and/or `set` functions.
 
 Getters and setters each take a `&mut` reference to the first parameter.
 
 Getters and setters are disabled when the [`no_object`] feature is used.
 
-| `Engine` API          | Description                                       |       Return Value of Function        |
-| --------------------- | ------------------------------------------------- | :-----------------------------------: |
-| `register_get`        | register a getter                                 |           _any_ `T: Clone`            |
-| `register_set`        | register a setter                                 |                _none_                 |
-| `register_get_set`    | short-hand to register both a getter and a setter |                _none_                 |
-| `register_get_result` | register a getter                                 | `Result<Dynamic, Box<EvalAltResult>>` |
-| `register_set_result` | register a setter                                 |   `Result<(), Box<EvalAltResult>>`    |
+| `Engine` API          | Function signature(s)<br/>(`T: Clone` = custom type,<br/>`V: Clone` = data type) |        Can mutate `T`?         |
+| --------------------- | -------------------------------------------------------------------------------- | :----------------------------: |
+| `register_get`        | `Fn(&mut T) -> V`                                                                |      yes, but not advised      |
+| `register_set`        | `Fn(&mut T, V)`                                                                  |              yes               |
+| `register_get_set`    | getter: `Fn(&mut T) -> V`</br>setter: `Fn(&mut T, V)`                            | yes, but not advised in getter |
+| `register_get_result` | `Fn(&mut T) -> Result<Dynamic, Box<EvalAltResult>>`                              |      yes, but not advised      |
+| `register_set_result` | `Fn(&mut T, V) -> Result<(), Box<EvalAltResult>>`                                |              yes               |
+
+By convention, property getters are not supposed to mutate the [custom type], although there is nothing
+that prevents this mutation.
 
 
 Cannot Override Object Maps
 --------------------------
 
-Getters and setters are only intended for [custom types].
+Property getters and setters are mainly intended for [custom types].
 
-Any getter or setter function registered for [object maps] is simply ignored because
+Any getter or setter function registered for [object maps] is simply _ignored_ because
 the get/set calls will be interpreted as properties on the [object maps].
 
 
@@ -47,7 +50,7 @@ impl TestStruct {
     }
 
     fn new() -> Self {
-        TestStruct { field: "hello" }
+        Self { field: "hello" }
     }
 }
 

@@ -51,7 +51,7 @@ fn test_struct_with_float() -> Result<(), Box<EvalAltResult>> {
         }
 
         fn new() -> Self {
-            TestStruct { x: 1.0 }
+            Self { x: 1.0 }
         }
     }
 

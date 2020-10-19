@@ -8,7 +8,7 @@ Prelude
 -------
 
 When using the plugins system, the entire `rhai::plugin` module must be imported as a prelude
-because code generated will these imports.
+because code generated will need these imports.
 
 ```rust
 use rhai::plugin::*;
