@@ -919,6 +919,19 @@ impl Hash for CustomExpr {
     }
 }
 
+impl CustomExpr {
+    /// Get the keywords for this `CustomExpr`.
+    #[inline(always)]
+    pub fn keywords(&self) -> &[Expr] {
+        &self.0
+    }
+    /// Get the implementation function for this `CustomExpr`.
+    #[inline(always)]
+    pub fn func(&self) -> &FnCustomSyntaxEval {
+        self.1.as_ref()
+    }
+}
+
 /// _[INTERNALS]_ A type wrapping a floating-point number.
 /// Exported under the `internals` feature only.
 ///
@@ -2670,7 +2683,10 @@ fn parse_expr(
                 // Adjust the variables stack
                 match syntax.scope_delta {
                     delta if delta > 0 => {
-                        state.stack.push(("".to_string(), ScopeEntryType::Normal))
+                        state.stack.resize(
+                            state.stack.len() + delta as usize,
+                            ("".to_string(), ScopeEntryType::Normal),
+                        );
                     }
                     delta if delta < 0 && state.stack.len() <= delta.abs() as usize => {
                         state.stack.clear()

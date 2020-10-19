@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, EvalContext, Expression, ParseErrorType, Scope, INT};
+use rhai::{Engine, EvalAltResult, EvalContext, Expression, ParseErrorType, INT};
 
 #[test]
 fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
@@ -22,18 +22,18 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
             "do", "|", "$ident$", "|", "->", "$block$", "while", "$expr$",
         ],
         1,
-        |scope: &mut Scope, context: &mut EvalContext, inputs: &[Expression]| {
+        |context: &mut EvalContext, inputs: &[Expression]| {
             let var_name = inputs[0].get_variable_name().unwrap().to_string();
             let stmt = inputs.get(1).unwrap();
             let condition = inputs.get(2).unwrap();
 
-            scope.push(var_name, 0 as INT);
+            context.scope.push(var_name, 0 as INT);
 
             loop {
-                context.eval_expression_tree(scope, stmt)?;
+                context.eval_expression_tree(stmt)?;
 
                 let stop = !context
-                    .eval_expression_tree(scope, condition)?
+                    .eval_expression_tree(condition)?
                     .as_bool()
                     .map_err(|err| {
                         Box::new(EvalAltResult::ErrorMismatchDataType(
@@ -68,7 +68,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
     // The first symbol must be an identifier
     assert_eq!(
         *engine
-            .register_custom_syntax(&["!"], 0, |_, _, _| Ok(().into()))
+            .register_custom_syntax(&["!"], 0, |_, _| Ok(().into()))
             .expect_err("should error")
             .0,
         ParseErrorType::BadInput("Improper symbol for custom syntax: '!'".to_string())

@@ -114,24 +114,18 @@ Any custom syntax must include an _implementation_ of it.
 
 The function signature of an implementation is:
 
-> `Fn(scope: &mut Scope, context: &mut EvalContext, inputs: &[Expression])`  
-> `-> Result<Dynamic, Box<EvalAltResult>>`
+> `Fn(context: &mut EvalContext, inputs: &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>`
 
 where:
 
-* `scope: &mut Scope` - mutable reference to the current [`Scope`]; variables can be added to it.
-
-* `context: &mut EvalContext` - mutable reference to the current evaluation _context_ (**do not touch**) which exposes the following fields:
+* `context: &mut EvalContext` - mutable reference to the current evaluation _context_, exposing the following:
+  * `context.scope: &mut Scope` - mutable reference to the current [`Scope`]; variables can be added to/removed from it.
   * `context.engine(): &Engine` - reference to the current [`Engine`].
   * `context.namespace(): &Module` - reference to the current _global namespace_ (as a [module]) containing all script-defined functions.
+  * `context.this_ptr(): Option<&Dynamic>` - reference to the current bound [`this`] pointer, if any.
   * `context.call_level(): usize` - the current nesting level of function calls.
 
 * `inputs: &[Expression]` - a list of input expression trees.
-
-#### WARNING - Lark's Vomit
-
-The `context` parameter contains the evaluation _context_ and should not be touched or Bad Things Happen™.
-It should simply be passed straight-through the the [`Engine`].
 
 ### Access Arguments
 
@@ -152,8 +146,8 @@ Use the `EvalContext::eval_expression_tree` method to evaluate an arbitrary expr
 within the current evaluation context.
 
 ```rust
-let expr = inputs.get(0).unwrap();
-let result = context.eval_expression_tree(scope, expr)?;
+let expression = inputs.get(0).unwrap();
+let result = context.eval_expression_tree(expression)?;
 ```
 
 ### Declare Variables
@@ -163,15 +157,16 @@ New variables maybe declared (usually with a variable name that is passed in via
 It can simply be pushed into the [`Scope`].
 
 However, beware that all new variables must be declared _prior_ to evaluating any expression tree.
-In other words, any `Scope::push` calls must come _before_ any `EvalContext::eval_expression_tree` calls.
+In other words, any [`Scope`] calls that change the list of must come _before_ any
+`EvalContext::eval_expression_tree` calls.
 
 ```rust
-let var_name = inputs[0].get_variable_name().unwrap().to_string();
-let expr = inputs.get(1).unwrap();
+let var_name = inputs[0].get_variable_name().unwrap();
+let expression = inputs.get(1).unwrap();
 
-scope.push(var_name, 0 as INT);     // do this BEFORE 'context.eval_expression_tree'!
+context.scope.push(var_name, 0 as INT);     // do this BEFORE 'context.eval_expression_tree'!
 
-let result = context.eval_expression_tree(context, scope, expr)?;
+let result = context.eval_expression_tree(expression)?;
 ```
 
 
@@ -188,7 +183,6 @@ The syntax is passed simply as a slice of `&str`.
 ```rust
 // Custom syntax implementation
 fn implementation_func(
-    scope: &mut Scope,
     context: &mut EvalContext,
     inputs: &[Expression]
 ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -196,15 +190,15 @@ fn implementation_func(
     let stmt = inputs.get(1).unwrap();
     let condition = inputs.get(2).unwrap();
 
-    // Push one new variable into the 'scope' BEFORE 'context.eval_expression_tree'
-    scope.push(var_name, 0 as INT);
+    // Push one new variable into the scope BEFORE 'context.eval_expression_tree'
+    context.scope.push(var_name, 0 as INT);
 
     loop {
         // Evaluate the statement block
-        context.eval_expression_tree(scope, stmt)?;
+        context.eval_expression_tree(stmt)?;
 
         // Evaluate the condition expression
-        let stop = !context.eval_expression_tree(scope, condition)?
+        let stop = !context.eval_expression_tree(condition)?
                             .as_bool().map_err(|err| Box::new(
                                 EvalAltResult::ErrorMismatchDataType(
                                     "bool".to_string(),

@@ -536,11 +536,11 @@ impl Module {
         &mut self,
         name: impl Into<String>,
         arg_types: &[TypeId],
-        func: impl Fn(NativeCallContext, &mut [&mut Dynamic]) -> Result<T, Box<EvalAltResult>>
+        func: impl Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
             + SendSync
             + 'static,
     ) -> u64 {
-        let f = move |context: NativeCallContext, args: &mut [&mut Dynamic]| {
+        let f = move |context: NativeCallContext, args: &mut FnCallArgs| {
             func(context, args).map(Dynamic::from)
         };
         self.set_fn(

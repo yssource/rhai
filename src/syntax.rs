@@ -6,7 +6,6 @@ use crate::error::{LexError, ParseError};
 use crate::fn_native::{SendSync, Shared};
 use crate::parser::Expr;
 use crate::result::EvalAltResult;
-use crate::scope::Scope;
 use crate::token::{is_valid_identifier, Position, Token};
 use crate::StaticVec;
 
@@ -19,12 +18,11 @@ use crate::stdlib::{
 /// A general expression evaluation trait object.
 #[cfg(not(feature = "sync"))]
 pub type FnCustomSyntaxEval =
-    dyn Fn(&mut Scope, &mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>;
+    dyn Fn(&mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>;
 /// A general expression evaluation trait object.
 #[cfg(feature = "sync")]
-pub type FnCustomSyntaxEval = dyn Fn(&mut Scope, &mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
-    + Send
-    + Sync;
+pub type FnCustomSyntaxEval =
+    dyn Fn(&mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
 
 /// An expression sub-tree in an AST.
 #[derive(Debug, Clone, Hash)]
@@ -55,7 +53,7 @@ impl Expression<'_> {
     }
 }
 
-impl EvalContext<'_, '_, '_, '_, '_, '_> {
+impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_> {
     /// Evaluate an expression tree.
     ///
     /// ## WARNING - Low Level API
@@ -64,11 +62,10 @@ impl EvalContext<'_, '_, '_, '_, '_, '_> {
     #[inline(always)]
     pub fn eval_expression_tree(
         &mut self,
-        scope: &mut Scope,
         expr: &Expression,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         self.engine().eval_expr(
-            scope,
+            self.scope,
             self.mods,
             self.state,
             self.namespace(),
@@ -101,12 +98,14 @@ impl Engine {
     /// * `func` is the implementation function.
     pub fn register_custom_syntax<S: AsRef<str> + ToString>(
         &mut self,
-        keywords: &[S],
+        keywords: impl AsRef<[S]>,
         new_vars: isize,
-        func: impl Fn(&mut Scope, &mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
+        func: impl Fn(&mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
             + SendSync
             + 'static,
     ) -> Result<&mut Self, ParseError> {
+        let keywords = keywords.as_ref();
+
         let mut segments: StaticVec<_> = Default::default();
 
         for s in keywords {

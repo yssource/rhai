@@ -441,16 +441,17 @@ pub struct Limits {
 
 /// Context of a script evaluation process.
 #[derive(Debug)]
-pub struct EvalContext<'e, 'a, 's, 'm, 't, 'd: 't> {
+pub struct EvalContext<'e, 'x, 'px: 'x, 'a, 's, 'm, 't, 'pt: 't> {
     engine: &'e Engine,
+    pub scope: &'x mut Scope<'px>,
     pub(crate) mods: &'a mut Imports,
     pub(crate) state: &'s mut State,
     lib: &'m Module,
-    pub(crate) this_ptr: &'t mut Option<&'d mut Dynamic>,
+    pub(crate) this_ptr: &'t mut Option<&'pt mut Dynamic>,
     level: usize,
 }
 
-impl<'e, 'a, 's, 'm, 't, 'd> EvalContext<'e, 'a, 's, 'm, 't, 'd> {
+impl<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> {
     /// The current `Engine`.
     #[inline(always)]
     pub fn engine(&self) -> &'e Engine {
@@ -468,6 +469,11 @@ impl<'e, 'a, 's, 'm, 't, 'd> EvalContext<'e, 'a, 's, 'm, 't, 'd> {
     #[inline(always)]
     pub fn namespace(&self) -> &'m Module {
         self.lib
+    }
+    /// The current bound `this` pointer, if any.
+    #[inline(always)]
+    pub fn this_ptr(&self) -> Option<&Dynamic> {
+        self.this_ptr.as_ref().map(|v| &**v)
     }
     /// The current nesting level of function calls.
     #[inline(always)]
@@ -815,6 +821,7 @@ impl Engine {
         if let Some(ref resolve_var) = self.resolve_var {
             let context = EvalContext {
                 engine: self,
+                scope,
                 mods,
                 state,
                 lib,
@@ -822,7 +829,7 @@ impl Engine {
                 level: 0,
             };
             if let Some(result) =
-                resolve_var(name, index, scope, &context).map_err(|err| err.fill_position(*pos))?
+                resolve_var(name, index, &context).map_err(|err| err.fill_position(*pos))?
             {
                 return Ok((result.into(), name, ScopeEntryType::Constant, *pos));
             }
@@ -1742,17 +1749,22 @@ impl Engine {
             Expr::Unit(_) => Ok(().into()),
 
             Expr::Custom(x) => {
-                let func = (x.0).1.as_ref();
-                let ep = (x.0).0.iter().map(|e| e.into()).collect::<StaticVec<_>>();
+                let func = (x.0).func();
+                let expressions = (x.0)
+                    .keywords()
+                    .iter()
+                    .map(Into::into)
+                    .collect::<StaticVec<_>>();
                 let mut context = EvalContext {
                     engine: self,
+                    scope,
                     mods,
                     state,
                     lib,
                     this_ptr,
                     level,
                 };
-                func(scope, &mut context, ep.as_ref())
+                func(&mut context, &expressions)
             }
 
             _ => unreachable!(),

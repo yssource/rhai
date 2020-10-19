@@ -62,7 +62,7 @@ fn test_var_resolver() -> Result<(), Box<EvalAltResult>> {
     scope.push("chameleon", 123 as INT);
     scope.push("DO_NOT_USE", 999 as INT);
 
-    engine.on_var(|name, _, scope, _| {
+    engine.on_var(|name, _, context| {
         match name {
             "MYSTIC_NUMBER" => Ok(Some((42 as INT).into())),
             // Override a variable - make it not found even if it exists!
@@ -70,9 +70,13 @@ fn test_var_resolver() -> Result<(), Box<EvalAltResult>> {
                 Err(EvalAltResult::ErrorVariableNotFound(name.to_string(), Position::none()).into())
             }
             // Silently maps 'chameleon' into 'innocent'.
-            "chameleon" => scope.get_value("innocent").map(Some).ok_or_else(|| {
-                EvalAltResult::ErrorVariableNotFound(name.to_string(), Position::none()).into()
-            }),
+            "chameleon" => context
+                .scope
+                .get_value("innocent")
+                .map(Some)
+                .ok_or_else(|| {
+                    EvalAltResult::ErrorVariableNotFound(name.to_string(), Position::none()).into()
+                }),
             // Return Ok(None) to continue with the normal variable resolution process.
             _ => Ok(None),
         }

@@ -1,7 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{
-    Dynamic, Engine, EvalAltResult, FnPtr, Func, Module, ParseErrorType, RegisterFn, Scope, INT,
-};
+use rhai::{Engine, EvalAltResult, FnPtr, Func, ParseErrorType, RegisterFn, Scope, INT};
 use std::any::TypeId;
 
 #[test]
