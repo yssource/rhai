@@ -7,7 +7,7 @@ use crate::fn_native::{FnPtr, Shared};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::syntax::FnCustomSyntaxEval;
+use crate::syntax::{CustomSyntax, FnCustomSyntaxEval};
 use crate::token::{is_keyword_function, is_valid_identifier, Position, Token, TokenStream};
 use crate::utils::StraightHasherBuilder;
 use crate::{calc_fn_hash, StaticVec};
@@ -2654,6 +2654,74 @@ fn parse_binary_op(
     }
 }
 
+/// Parse a custom syntax.
+fn parse_custom(
+    input: &mut TokenStream,
+    state: &mut ParseState,
+    lib: &mut FunctionsLib,
+    mut settings: ParseSettings,
+    key: &str,
+    syntax: &CustomSyntax,
+    pos: Position,
+) -> Result<Expr, ParseError> {
+    let mut exprs: StaticVec<Expr> = Default::default();
+
+    // Adjust the variables stack
+    match syntax.scope_delta {
+        delta if delta > 0 => {
+            state.stack.resize(
+                state.stack.len() + delta as usize,
+                ("".to_string(), ScopeEntryType::Normal),
+            );
+        }
+        delta if delta < 0 && state.stack.len() <= delta.abs() as usize => state.stack.clear(),
+        delta if delta < 0 => state
+            .stack
+            .truncate(state.stack.len() - delta.abs() as usize),
+        _ => (),
+    }
+
+    for segment in syntax.segments.iter() {
+        settings.pos = input.peek().unwrap().1;
+        let settings = settings.level_up();
+
+        match segment.as_str() {
+            MARKER_IDENT => match input.next().unwrap() {
+                (Token::Identifier(s), pos) => {
+                    exprs.push(Expr::Variable(Box::new(((s, pos), None, 0, None))));
+                }
+                (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
+                    return Err(PERR::Reserved(s).into_err(pos));
+                }
+                (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
+            },
+            MARKER_EXPR => exprs.push(parse_expr(input, state, lib, settings)?),
+            MARKER_BLOCK => {
+                let stmt = parse_block(input, state, lib, settings)?;
+                let pos = stmt.position();
+                exprs.push(Expr::Stmt(Box::new((stmt, pos))))
+            }
+            s => match input.peek().unwrap() {
+                (t, _) if t.syntax().as_ref() == s => {
+                    input.next().unwrap();
+                }
+                (_, pos) => {
+                    return Err(PERR::MissingToken(
+                        s.to_string(),
+                        format!("for '{}' expression", key),
+                    )
+                    .into_err(*pos))
+                }
+            },
+        }
+    }
+
+    Ok(Expr::Custom(Box::new((
+        CustomExpr(exprs, syntax.func.clone()),
+        pos,
+    ))))
+}
+
 /// Parse an expression.
 fn parse_expr(
     input: &mut TokenStream,
@@ -2675,67 +2743,8 @@ fn parse_expr(
             Token::Custom(key) if custom.contains_key(key) => {
                 let custom = custom.get_key_value(key).unwrap();
                 let (key, syntax) = custom;
-
                 input.next().unwrap();
-
-                let mut exprs: StaticVec<Expr> = Default::default();
-
-                // Adjust the variables stack
-                match syntax.scope_delta {
-                    delta if delta > 0 => {
-                        state.stack.resize(
-                            state.stack.len() + delta as usize,
-                            ("".to_string(), ScopeEntryType::Normal),
-                        );
-                    }
-                    delta if delta < 0 && state.stack.len() <= delta.abs() as usize => {
-                        state.stack.clear()
-                    }
-                    delta if delta < 0 => state
-                        .stack
-                        .truncate(state.stack.len() - delta.abs() as usize),
-                    _ => (),
-                }
-
-                for segment in syntax.segments.iter() {
-                    settings.pos = input.peek().unwrap().1;
-                    let settings = settings.level_up();
-
-                    match segment.as_str() {
-                        MARKER_IDENT => match input.next().unwrap() {
-                            (Token::Identifier(s), pos) => {
-                                exprs.push(Expr::Variable(Box::new(((s, pos), None, 0, None))));
-                            }
-                            (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
-                                return Err(PERR::Reserved(s).into_err(pos));
-                            }
-                            (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
-                        },
-                        MARKER_EXPR => exprs.push(parse_expr(input, state, lib, settings)?),
-                        MARKER_BLOCK => {
-                            let stmt = parse_block(input, state, lib, settings)?;
-                            let pos = stmt.position();
-                            exprs.push(Expr::Stmt(Box::new((stmt, pos))))
-                        }
-                        s => match input.peek().unwrap() {
-                            (t, _) if t.syntax().as_ref() == s => {
-                                input.next().unwrap();
-                            }
-                            (_, pos) => {
-                                return Err(PERR::MissingToken(
-                                    s.to_string(),
-                                    format!("for '{}' expression", key),
-                                )
-                                .into_err(*pos))
-                            }
-                        },
-                    }
-                }
-
-                return Ok(Expr::Custom(Box::new((
-                    CustomExpr(exprs, syntax.func.clone()),
-                    token_pos,
-                ))));
+                return parse_custom(input, state, lib, settings, key, syntax, token_pos);
             }
             _ => (),
         }
