@@ -435,9 +435,11 @@ impl Engine {
         &self,
         lib: &Module,
         name: &str,
-        arg_types: &[TypeId],
+        arg_types: impl AsRef<[TypeId]>,
         pub_only: bool,
     ) -> bool {
+        let arg_types = arg_types.as_ref();
+
         let arg_len = if arg_types.is_empty() {
             usize::MAX
         } else {
@@ -840,7 +842,7 @@ impl Engine {
         lib: &Module,
         this_ptr: &mut Option<&mut Dynamic>,
         name: &str,
-        args_expr: &[Expr],
+        args_expr: impl AsRef<[Expr]>,
         def_val: &Option<Dynamic>,
         mut hash_script: u64,
         native: bool,
@@ -848,6 +850,8 @@ impl Engine {
         capture: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let args_expr = args_expr.as_ref();
+
         // Handle Fn()
         if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
             let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
@@ -1085,11 +1089,13 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         modules: &Option<Box<ModuleRef>>,
         name: &str,
-        args_expr: &[Expr],
+        args_expr: impl AsRef<[Expr]>,
         def_val: Option<bool>,
         hash_script: u64,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let args_expr = args_expr.as_ref();
+
         let modules = modules.as_ref().unwrap();
         let mut arg_values: StaticVec<_>;
         let mut first_arg_value = None;

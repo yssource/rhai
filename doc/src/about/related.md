@@ -3,7 +3,9 @@ Related Resources
 
 {{#include ../links.md}}
 
-Other online documentation resources for Rhai:
+
+Other Online Resources for Rhai
+------------------------------
 
 * [`crates.io`](https://crates.io/crates/rhai) - Rhai crate
 
@@ -13,7 +15,13 @@ Other online documentation resources for Rhai:
 
 * [Online Playground][playground] - Run scripts directly from editor
 
-Other cool projects to check out:
+* [Discord Chat](https://discord.gg/yZMKAQ) - Rhai channel
+
+* [Reddit](https://www.reddit.com/r/Rhai) - Rhai community
+
+
+Other Cool Projects
+-------------------
 
 * [ChaiScript](http://chaiscript.com) - A strong inspiration for Rhai.  An embedded scripting language for C++.
 

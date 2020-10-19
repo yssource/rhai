@@ -3,12 +3,12 @@
 use crate::any::{Dynamic, Variant};
 use crate::engine::{Engine, EvalContext, Imports, State};
 use crate::error::ParseError;
-use crate::fn_native::{NativeCallContext, SendSync};
+use crate::fn_native::{FnCallArgs, NativeCallContext, SendSync};
 use crate::optimize::OptimizationLevel;
 use crate::parser::AST;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
-use crate::token::{lex, Position};
+use crate::token::Position;
 
 #[cfg(not(feature = "no_index"))]
 use crate::{
@@ -68,7 +68,7 @@ impl Engine {
         &mut self,
         name: &str,
         arg_types: &[TypeId],
-        func: impl Fn(NativeCallContext, &mut [&mut Dynamic]) -> Result<T, Box<EvalAltResult>>
+        func: impl Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
             + SendSync
             + 'static,
     ) -> &mut Self {
@@ -88,7 +88,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                    { TestStruct { field: 1 } }
+    ///     fn new() -> Self                    { Self { field: 1 } }
     ///     fn update(&mut self, offset: i64)   { self.field += offset; }
     /// }
     ///
@@ -130,7 +130,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { TestStruct { field: 1 } }
+    ///     fn new() -> Self { Self { field: 1 } }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -200,7 +200,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                { TestStruct { field: 1 } }
+    ///     fn new() -> Self                { Self { field: 1 } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> i64  { self.field }
     /// }
@@ -252,7 +252,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { TestStruct { field: 1 } }
+    ///     fn new() -> Self { Self { field: 1 } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> Result<Dynamic, Box<EvalAltResult>> {
     ///         Ok(self.field.into())
@@ -295,7 +295,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                        { TestStruct { field: 1 } }
+    ///     fn new() -> Self                        { Self { field: 1 } }
     ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
     /// }
     ///
@@ -348,7 +348,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { TestStruct { field: 1 } }
+    ///     fn new() -> Self { Self { field: 1 } }
     ///     fn set_field(&mut self, new_val: i64) -> Result<(), Box<EvalAltResult>> {
     ///         self.field = new_val;
     ///         Ok(())
@@ -386,8 +386,7 @@ impl Engine {
         U: Variant + Clone,
     {
         self.register_result_fn(&make_setter(name), move |obj: &mut T, value: U| {
-            callback(obj, value)?;
-            Ok(().into())
+            callback(obj, value).map(Into::into)
         })
     }
 
@@ -405,7 +404,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                        { TestStruct { field: 1 } }
+    ///     fn new() -> Self                        { Self { field: 1 } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> i64          { self.field }
     ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
@@ -462,7 +461,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> i64 { self.fields[index as usize] }
     /// }
@@ -534,7 +533,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> Result<Dynamic, Box<EvalAltResult>> {
     ///         Ok(self.fields[index as usize].into())
@@ -600,7 +599,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
     ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
     /// }
     ///
@@ -672,7 +671,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
     ///     fn set_field(&mut self, index: i64, value: i64) -> Result<(), Box<EvalAltResult>> {
     ///         self.fields[index as usize] = value;
     ///         Ok(())
@@ -724,8 +723,7 @@ impl Engine {
         }
 
         self.register_result_fn(FN_IDX_SET, move |obj: &mut T, index: X, value: U| {
-            callback(obj, index, value)?;
-            Ok(().into())
+            callback(obj, index, value).map(Into::into)
         })
     }
 
@@ -745,7 +743,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                                { TestStruct { fields: vec![1, 2, 3, 4, 5] } }
+    ///     fn new() -> Self                                { Self { fields: vec![1, 2, 3, 4, 5] } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> i64      { self.fields[index as usize] }
     ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
@@ -915,7 +913,7 @@ impl Engine {
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let stream = lex(scripts, None, self);
+        let stream = self.lex(scripts, None);
         self.parse(&mut stream.peekable(), scope, optimization_level)
     }
 
@@ -1069,7 +1067,7 @@ impl Engine {
             .into());
         };
 
-        let stream = lex(
+        let stream = self.lex(
             &scripts,
             if has_null {
                 Some(Box::new(|token| match token {
@@ -1080,7 +1078,6 @@ impl Engine {
             } else {
                 None
             },
-            self,
         );
         let ast =
             self.parse_global_expr(&mut stream.peekable(), &scope, OptimizationLevel::None)?;
@@ -1164,7 +1161,7 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
-        let stream = lex(&scripts, None, self);
+        let stream = self.lex(&scripts, None);
         {
             let mut peekable = stream.peekable();
             self.parse_global_expr(&mut peekable, scope, self.optimization_level)
@@ -1325,7 +1322,7 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts, None, self);
+        let stream = self.lex(&scripts, None);
 
         // No need to optimize a lone expression
         let ast = self.parse_global_expr(&mut stream.peekable(), scope, OptimizationLevel::None)?;
@@ -1423,6 +1420,7 @@ impl Engine {
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
+                EvalAltResult::LoopBreak(_, _) => unreachable!(),
                 _ => Err(err),
             })
             .map(|v| (v, state.operations))
@@ -1466,7 +1464,7 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = lex(&scripts, None, self);
+        let stream = self.lex(&scripts, None);
         let ast = self.parse(&mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }
@@ -1497,7 +1495,8 @@ impl Engine {
             .map_or_else(
                 |err| match *err {
                     EvalAltResult::Return(_, _) => Ok(()),
-                    err => Err(Box::new(err)),
+                    EvalAltResult::LoopBreak(_, _) => unreachable!(),
+                    _ => Err(err),
                 },
                 |_| Ok(()),
             )
@@ -1645,7 +1644,7 @@ impl Engine {
         lib: &Module,
         name: &str,
         this_ptr: &mut Option<&mut Dynamic>,
-        args: &mut [&mut Dynamic],
+        args: &mut FnCallArgs,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let fn_def = lib
             .get_script_fn(name, args.len(), true)
@@ -1715,7 +1714,7 @@ impl Engine {
     /// let mut engine = Engine::new();
     ///
     /// // Register a variable resolver.
-    /// engine.on_var(|name, _, _, _| {
+    /// engine.on_var(|name, _, _| {
     ///     match name {
     ///         "MYSTIC_NUMBER" => Ok(Some(42_i64.into())),
     ///         _ => Ok(None)
@@ -1730,7 +1729,7 @@ impl Engine {
     #[inline(always)]
     pub fn on_var(
         &mut self,
-        callback: impl Fn(&str, usize, &Scope, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
+        callback: impl Fn(&str, usize, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
             + SendSync
             + 'static,
     ) -> &mut Self {

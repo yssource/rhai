@@ -6,7 +6,6 @@ use crate::module::Module;
 use crate::parser::{FnAccess, ScriptFnDef};
 use crate::plugin::PluginFunction;
 use crate::result::EvalAltResult;
-use crate::scope::Scope;
 use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
 use crate::{calc_fn_hash, StaticVec};
@@ -265,14 +264,12 @@ pub type Callback<T, R> = Box<dyn Fn(&T) -> R + Send + Sync + 'static>;
 
 /// A standard callback function.
 #[cfg(not(feature = "sync"))]
-pub type OnVarCallback = Box<
-    dyn Fn(&str, usize, &Scope, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
-        + 'static,
->;
+pub type OnVarCallback =
+    Box<dyn Fn(&str, usize, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>> + 'static>;
 /// A standard callback function.
 #[cfg(feature = "sync")]
 pub type OnVarCallback = Box<
-    dyn Fn(&str, usize, &Scope, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
+    dyn Fn(&str, usize, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>
         + Send
         + Sync
         + 'static,

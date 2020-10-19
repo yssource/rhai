@@ -25,7 +25,7 @@ fn test_get_set() -> Result<(), Box<EvalAltResult>> {
         }
 
         fn new() -> Self {
-            TestStruct {
+            Self {
                 x: 1,
                 y: 0,
                 array: vec![1, 2, 3, 4, 5],

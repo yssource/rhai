@@ -1,15 +1,18 @@
 Rhai - Embedded Scripting for Rust
 =================================
 
-![GitHub last commit](https://img.shields.io/github/last-commit/jonathandturner/rhai)
+![GitHub last commit](https://img.shields.io/github/last-commit/jonathandturner/rhai?logo=github)
 [![Build Status](https://github.com/jonathandturner/rhai/workflows/Build/badge.svg)](https://github.com/jonathandturner/rhai/actions)
-[![license](https://img.shields.io/github/license/jonathandturner/rhai)](https://github.com/license/jonathandturner/rhai)
-[![crates.io](https://img.shields.io/crates/v/rhai.svg)](https://crates.io/crates/rhai/)
-[![crates.io](https://img.shields.io/crates/d/rhai)](https://crates.io/crates/rhai/)
-[![API Docs](https://docs.rs/rhai/badge.svg)](https://docs.rs/rhai/)
+[![license](https://img.shields.io/crates/l/rhai)](https://github.com/license/jonathandturner/rhai)
+[![crates.io](https://img.shields.io/crates/v/rhai?logo=rust)](https://crates.io/crates/rhai/)
+[![crates.io](https://img.shields.io/crates/d/rhai?logo=rust)](https://crates.io/crates/rhai/)
+[![API Docs](https://docs.rs/rhai/badge.svg?logo=docs.rs)](https://docs.rs/rhai/)
+[![chat](https://img.shields.io/discord/767611025456889857.svg?logo=discord)](https://discord.gg/yZMKAQ)
+[![Reddit](https://img.shields.io/reddit/subreddit-subscribers/Rhai?logo=reddit)](https://www.reddit.com/r/Rhai)
 
 Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way
 to add scripting to any application.
+
 
 Supported targets and builds
 ---------------------------
@@ -18,6 +21,7 @@ Supported targets and builds
 * WebAssembly (WASM)
 * `no-std`
 * Minimum Rust version 1.45
+
 
 Standard features
 -----------------
@@ -41,12 +45,14 @@ Standard features
 * Serialization/deserialization support via [serde](https://crates.io/crates/serde) (requires the `serde` feature).
 * Support for [minimal builds](https://schungx.github.io/rhai/start/builds/minimal.html) by excluding unneeded language [features](https://schungx.github.io/rhai/start/features.html).
 
-Protection against attacks
---------------------------
+
+Protected against attacks
+-------------------------
 
 * Sand-boxed - the scripting engine, if declared immutable, cannot mutate the containing environment unless [explicitly permitted](https://schungx.github.io/rhai/patterns/control.html).
 * Rugged - protected against malicious attacks (such as [stack-overflow](https://schungx.github.io/rhai/safety/max-call-stack.html), [over-sized data](https://schungx.github.io/rhai/safety/max-string-size.html), and [runaway scripts](https://schungx.github.io/rhai/safety/max-operations.html) etc.) that may come from untrusted third-party user-land scripts.
 * Track script evaluation [progress](https://schungx.github.io/rhai/safety/progress.html) and manually terminate a script run.
+
 
 For those who actually want their own language
 ---------------------------------------------
@@ -55,6 +61,7 @@ For those who actually want their own language
 * Restrict the language by surgically [disabling keywords and operators](https://schungx.github.io/rhai/engine/disable.html).
 * Define [custom operators](https://schungx.github.io/rhai/engine/custom-op.html).
 * Extend the language with [custom syntax](https://schungx.github.io/rhai/engine/custom-syntax.html).
+
 
 Documentation
 -------------
@@ -65,11 +72,13 @@ To build _The Book_, first install [`mdbook`](https://github.com/rust-lang/mdBoo
 and [`mdbook-tera`](https://github.com/avitex/mdbook-tera) (for templating).
 Running `mdbook build` builds it.
 
+
 Playground
 ----------
 
 An [Online Playground](https://alvinhochun.github.io/rhai-demo/) is available with syntax-highlighting editor.
 Scripts can be evaluated directly from the editor.
+
 
 License
 -------

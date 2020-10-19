@@ -11,6 +11,7 @@ Breaking changes
 * `EvalAltResult::ErrorReadingScriptFile` is removed in favor of the new `EvalAltResult::ErrorSystem`.
 * `EvalAltResult::ErrorLoopBreak` is renamed to `EvalAltResult::LoopBreak`.
 * `Engine::register_raw_fn` and `FnPtr::call_dynamic` function signatures have changed.
+* Callback signatures to `Engine::on_var` and `Engine::register_custom_syntax` have changed.
 
 New features
 ------------

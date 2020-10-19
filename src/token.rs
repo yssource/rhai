@@ -1736,31 +1736,33 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
     }
 }
 
-/// Tokenize an input text stream.
-#[inline]
-pub fn lex<'a, 'e>(
-    input: &'a [&'a str],
-    map: Option<Box<dyn Fn(Token) -> Token>>,
-    engine: &'e Engine,
-) -> TokenIterator<'a, 'e> {
-    TokenIterator {
-        engine,
-        state: TokenizeState {
-            #[cfg(not(feature = "unchecked"))]
-            max_string_size: engine.limits_set.max_string_size,
-            #[cfg(feature = "unchecked")]
-            max_string_size: 0,
-            non_unary: false,
-            comment_level: 0,
-            end_with_none: false,
-            include_comments: false,
-        },
-        pos: Position::new(1, 0),
-        stream: MultiInputsStream {
-            buf: None,
-            streams: input.iter().map(|s| s.chars().peekable()).collect(),
-            index: 0,
-        },
-        map,
+impl Engine {
+    /// Tokenize an input text stream.
+    #[inline]
+    pub fn lex<'a, 'e>(
+        &'e self,
+        input: impl IntoIterator<Item = &'a &'a str>,
+        map: Option<Box<dyn Fn(Token) -> Token>>,
+    ) -> TokenIterator<'a, 'e> {
+        TokenIterator {
+            engine: self,
+            state: TokenizeState {
+                #[cfg(not(feature = "unchecked"))]
+                max_string_size: self.limits_set.max_string_size,
+                #[cfg(feature = "unchecked")]
+                max_string_size: 0,
+                non_unary: false,
+                comment_level: 0,
+                end_with_none: false,
+                include_comments: false,
+            },
+            pos: Position::new(1, 0),
+            stream: MultiInputsStream {
+                buf: None,
+                streams: input.into_iter().map(|s| s.chars().peekable()).collect(),
+                index: 0,
+            },
+            map,
+        }
     }
 }

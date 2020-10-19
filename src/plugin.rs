@@ -2,7 +2,7 @@
 
 pub use crate::any::Dynamic;
 pub use crate::engine::Engine;
-pub use crate::fn_native::{CallableFunction, NativeCallContext};
+pub use crate::fn_native::{CallableFunction, FnCallArgs, NativeCallContext};
 pub use crate::fn_register::{RegisterFn, RegisterResultFn};
 pub use crate::module::Module;
 pub use crate::parser::FnAccess;
@@ -25,7 +25,7 @@ pub trait PluginFunction {
     fn call(
         &self,
         context: NativeCallContext,
-        args: &mut [&mut Dynamic],
+        args: &mut FnCallArgs,
     ) -> Result<Dynamic, Box<EvalAltResult>>;
 
     /// Is this plugin function a method?

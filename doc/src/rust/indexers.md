@@ -3,23 +3,30 @@ Custom Type Indexers
 
 {{#include ../links.md}}
 
-A custom type can also expose an _indexer_ by registering an indexer function.
+A [custom type] can also expose an _indexer_ by registering an indexer function.
 
-A custom type with an indexer function defined can use the bracket notation to get a property value:
+A [custom type] with an indexer function defined can use the bracket notation to get a property value:
 
 > _object_ `[` _index_ `]`
 
-Like getters and setters, indexers take a `&mut` reference to the first parameter.
+Like property [getters/setters], indexers take a `&mut` reference to the first parameter.
+
+They also take an additional parameter of any type that serves as the _index_ within brackets.
 
 Indexers are disabled when the [`no_index`] feature is used.
 
-| `Engine` API                  | Description                                              |       Return Value of Function        |
-| ----------------------------- | -------------------------------------------------------- | :-----------------------------------: |
-| `register_indexer_get`        | register an index getter                                 |           _any_ `T: Clone`            |
-| `register_indexer_set`        | register an index setter                                 |                _none_                 |
-| `register_indexer_get_set`    | short-hand to register both an index getter and a setter |                _none_                 |
-| `register_indexer_get_result` | register an index getter                                 | `Result<Dynamic, Box<EvalAltResult>>` |
-| `register_indexer_set_result` | register an index setter                                 |   `Result<(), Box<EvalAltResult>>`    |
+| `Engine` API                  | Function signature(s)<br/>(`T: Clone` = custom type,<br/>`X: Clone` = index type,<br/>`V: Clone` = data type) |        Can mutate `T`?         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------- | :----------------------------: |
+| `register_indexer_get`        | `Fn(&mut T, X) -> V`                                                                                          |      yes, but not advised      |
+| `register_indexer_set`        | `Fn(&mut T, X, V)`                                                                                            |              yes               |
+| `register_indexer_get_set`    | getter: `Fn(&mut T, X) -> V`<br/>setter: `Fn(&mut T, X, V)`                                                   | yes, but not advised in getter |
+| `register_indexer_get_result` | `Fn(&mut T, X) -> Result<Dynamic, Box<EvalAltResult>>`                                                        |      yes, but not advised      |
+| `register_indexer_set_result` | `Fn(&mut T, X, V) -> Result<(), Box<EvalAltResult>>`                                                          |              yes               |
+
+By convention, index getters are not supposed to mutate the [custom type], although there is nothing
+that prevents this mutation.
+
+**IMPORTANT: Rhai does NOT support normal references (i.e. `&T`) as parameters.**
 
 
 Cannot Override Arrays, Object Maps and Strings
@@ -42,15 +49,15 @@ struct TestStruct {
 
 impl TestStruct {
     // Remember &mut must be used even for getters
-    fn get_field(&mut self, index: i64) -> i64 {
-        self.fields[index as usize]
+    fn get_field(&mut self, index: String) -> i64 {
+        self.fields[index.len()]
     }
-    fn set_field(&mut self, index: i64, value: i64) {
-        self.fields[index as usize] = value
+    fn set_field(&mut self, index: String, value: i64) {
+        self.fields[index.len()] = value
     }
 
     fn new() -> Self {
-        TestStruct { fields: vec![1, 2, 3, 4, 5] }
+        Self { fields: vec![1, 2, 3, 4, 5] }
     }
 }
 
@@ -63,9 +70,13 @@ engine
     .register_indexer_get(TestStruct::get_field)
     .register_indexer_set(TestStruct::set_field);
 
-let result = engine.eval::<i64>("let a = new_ts(); a[2] = 42; a[2]")?;
+let result = engine.eval::<i64>(
+                r#"
+                    let a = new_ts();
+                    a["xyz"] = 42;                  // these indexers use strings
+                    a["xyz"]                        // as the index type
+                "#
+)?;
 
 println!("Answer: {}", result);                     // prints 42
 ```
-
-**IMPORTANT: Rhai does NOT support normal references (i.e. `&T`) as parameters.**

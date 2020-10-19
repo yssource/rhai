@@ -65,7 +65,7 @@ The function signature passed to `Engine::register_raw_fn` takes the following f
 
 where:
 
-* `T: Variant + Clone` - return type of the function.
+* `T: Clone` - return type of the function.
 
 * `context: NativeCallContext` - the current _native call context_, which exposes the following:
 

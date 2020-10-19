@@ -62,7 +62,7 @@ Function Signature
 
 The function signature passed to `Engine::on_var` takes the following form:
 
-> `Fn(name: &str, index: usize, scope: &Scope, context: &EvalContext)`  
+> `Fn(name: &str, index: usize, context: &EvalContext)`  
 > `-> Result<Option<Dynamic>, Box<EvalAltResult>> + 'static`
 
 where:
@@ -74,11 +74,11 @@ where:
 
   If `index` is zero, then there is no pre-calculated offset position and a search through the current [`Scope`] must be performed.
 
-* `scope: &Scope` - reference to the current [`Scope`] containing all variables up to the current evaluation position.
-
 * `context: &EvalContext` - reference to the current evaluation _context_, which exposes the following fields:
+  * `context.scope: &Scope` - reference to the current [`Scope`] containing all variables up to the current evaluation position.
   * `context.engine(): &Engine` - reference to the current [`Engine`].
   * `context.namespace(): &Module` - reference to the current _global namespace_ (as a [module]) containing all script-defined functions.
+  * `context.this_ptr(): Option<&Dynamic>` - reference to the current bound [`this`] pointer, if any.
   * `context.call_level(): usize` - the current nesting level of function calls.
 
 ### Return Value

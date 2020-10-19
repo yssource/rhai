@@ -20,7 +20,7 @@ fn test_mismatched_op_custom_type() {
 
     impl TestStruct {
         fn new() -> Self {
-            TestStruct { x: 1 }
+            Self { x: 1 }
         }
     }
 
