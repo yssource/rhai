@@ -1383,7 +1383,7 @@ impl Engine {
                 )
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _) if fn_sig.ends_with("]") => {
+                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _) if fn_sig.ends_with(']') => {
                         Box::new(EvalAltResult::ErrorIndexingType(
                             type_name.into(),
                             Position::none(),

@@ -1,14 +1,14 @@
 Rhai - Embedded Scripting for Rust
 =================================
 
-![GitHub last commit](https://img.shields.io/github/last-commit/jonathandturner/rhai)
+![GitHub last commit](https://img.shields.io/github/last-commit/jonathandturner/rhai?logo=github)
 [![Build Status](https://github.com/jonathandturner/rhai/workflows/Build/badge.svg)](https://github.com/jonathandturner/rhai/actions)
-[![license](https://img.shields.io/github/license/jonathandturner/rhai)](https://github.com/license/jonathandturner/rhai)
-[![crates.io](https://img.shields.io/crates/v/rhai.svg)](https://crates.io/crates/rhai/)
-[![crates.io](https://img.shields.io/crates/d/rhai)](https://crates.io/crates/rhai/)
-[![API Docs](https://docs.rs/rhai/badge.svg)](https://docs.rs/rhai/)
+[![license](https://img.shields.io/crates/l/rhai)](https://github.com/license/jonathandturner/rhai)
+[![crates.io](https://img.shields.io/crates/v/rhai?logo=rust)](https://crates.io/crates/rhai/)
+[![crates.io](https://img.shields.io/crates/d/rhai?logo=rust)](https://crates.io/crates/rhai/)
+[![API Docs](https://docs.rs/rhai/badge.svg?logo=docs.rs)](https://docs.rs/rhai/)
 [![chat](https://img.shields.io/discord/767611025456889857.svg?logo=discord)](https://discord.gg/yZMKAQ)
-[![Reddit](https://img.shields.io/reddit/subreddit-subscribers/Rhai)](https://www.reddit.com/r/Rhai)
+[![Reddit](https://img.shields.io/reddit/subreddit-subscribers/Rhai?logo=reddit)](https://www.reddit.com/r/Rhai)
 
 Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way
 to add scripting to any application.
