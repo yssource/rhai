@@ -45,6 +45,20 @@ macro_rules! reg_functions {
 }
 
 def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
+    // Integer functions
+    combine_with_exported_module!(lib, "int", int_functions);
+
+    reg_functions!(lib += basic_to_int::to_int(char));
+
+    #[cfg(not(feature = "only_i32"))]
+    #[cfg(not(feature = "only_i64"))]
+    {
+        reg_functions!(lib += numbers_to_int::to_int(i8, u8, i16, u16, i32, u32, i64, u64));
+
+        #[cfg(not(target_arch = "wasm32"))]
+        reg_functions!(lib += num_128_to_int::to_int(i128, u128));
+    }
+
     #[cfg(not(feature = "no_float"))]
     {
         // Floating point functions
@@ -64,21 +78,35 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
             reg_functions!(lib += num_128_to_float::to_float(i128, u128));
         }
     }
-
-    reg_functions!(lib += basic_to_int::to_int(char));
-
-    set_exported_fn!(lib, "parse_int", parse_int);
-    set_exported_fn!(lib, "parse_int", parse_int_radix);
-
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
-        reg_functions!(lib += numbers_to_int::to_int(i8, u8, i16, u16, i32, u32, i64, u64));
-
-        #[cfg(not(target_arch = "wasm32"))]
-        reg_functions!(lib += num_128_to_int::to_int(i128, u128));
-    }
 });
+
+#[export_module]
+mod int_functions {
+    #[rhai_fn(name = "parse_int", return_raw)]
+    pub fn parse_int_radix(s: &str, radix: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        if radix < 2 || radix > 36 {
+            return EvalAltResult::ErrorArithmetic(
+                format!("Invalid radix: '{}'", radix),
+                Position::none(),
+            )
+            .into();
+        }
+
+        INT::from_str_radix(s.trim(), radix as u32)
+            .map(Into::<Dynamic>::into)
+            .map_err(|err| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Error parsing integer number '{}': {}", s, err),
+                    Position::none(),
+                )
+                .into()
+            })
+    }
+    #[rhai_fn(name = "parse_int", return_raw)]
+    pub fn parse_int(s: &str) -> Result<Dynamic, Box<EvalAltResult>> {
+        parse_int_radix(s, 10)
+    }
+}
 
 #[cfg(not(feature = "no_float"))]
 #[export_module]
@@ -199,7 +227,6 @@ mod float_functions {
             Ok((x.trunc() as INT).into())
         }
     }
-
     #[rhai_fn(return_raw)]
     pub fn parse_float(s: &str) -> Result<Dynamic, Box<EvalAltResult>> {
         s.trim()
@@ -239,29 +266,3 @@ gen_conversion_functions!(numbers_to_int => to_int (i8, u8, i16, u16, i32, u32, 
 #[cfg(not(feature = "only_i64"))]
 #[cfg(not(target_arch = "wasm32"))]
 gen_conversion_functions!(num_128_to_int => to_int (i128, u128) -> INT);
-
-#[export_fn(return_raw)]
-fn parse_int_radix(s: &str, radix: INT) -> Result<Dynamic, Box<EvalAltResult>> {
-    if radix < 2 || radix > 36 {
-        return EvalAltResult::ErrorArithmetic(
-            format!("Invalid radix: '{}'", radix),
-            Position::none(),
-        )
-        .into();
-    }
-
-    INT::from_str_radix(s.trim(), radix as u32)
-        .map(Into::<Dynamic>::into)
-        .map_err(|err| {
-            EvalAltResult::ErrorArithmetic(
-                format!("Error parsing integer number '{}': {}", s, err),
-                Position::none(),
-            )
-            .into()
-        })
-}
-
-#[export_fn(return_raw)]
-fn parse_int(s: &str) -> Result<Dynamic, Box<EvalAltResult>> {
-    parse_int_radix(s, 10)
-}
