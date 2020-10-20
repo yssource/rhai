@@ -77,7 +77,7 @@ where:
 * `context: &EvalContext` - reference to the current evaluation _context_, which exposes the following fields:
   * `context.scope: &Scope` - reference to the current [`Scope`] containing all variables up to the current evaluation position.
   * `context.engine(): &Engine` - reference to the current [`Engine`].
-  * `context.namespace(): &Module` - reference to the current _global namespace_ (as a [module]) containing all script-defined functions.
+  * `context.namespaces(): &[&Module]` - reference to the chain of namespaces (as a slice of [modules]) containing all script-defined functions.
   * `context.this_ptr(): Option<&Dynamic>` - reference to the current bound [`this`] pointer, if any.
   * `context.call_level(): usize` - the current nesting level of function calls.
 

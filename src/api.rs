@@ -804,7 +804,7 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn compile(&self, script: &str) -> Result<AST, ParseError> {
-        self.compile_with_scope(&Scope::new(), script)
+        self.compile_with_scope(&Default::default(), script)
     }
 
     /// Compile a string into an `AST` using own scope, which can be used later for evaluation.
@@ -965,7 +965,7 @@ impl Engine {
     #[cfg(not(target_arch = "wasm32"))]
     #[inline(always)]
     pub fn compile_file(&self, path: PathBuf) -> Result<AST, Box<EvalAltResult>> {
-        self.compile_file_with_scope(&Scope::new(), path)
+        self.compile_file_with_scope(&Default::default(), path)
     }
 
     /// Compile a script file into an `AST` using own scope, which can be used later for evaluation.
@@ -1050,7 +1050,7 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     pub fn parse_json(&self, json: &str, has_null: bool) -> Result<Map, Box<EvalAltResult>> {
-        let mut scope = Scope::new();
+        let mut scope = Default::default();
 
         // Trims the JSON string and add a '#' in front
         let json_text = json.trim_start();
@@ -1112,7 +1112,7 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn compile_expression(&self, script: &str) -> Result<AST, ParseError> {
-        self.compile_expression_with_scope(&Scope::new(), script)
+        self.compile_expression_with_scope(&Default::default(), script)
     }
 
     /// Compile a string containing an expression into an `AST` using own scope,
@@ -1236,7 +1236,7 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn eval<T: Variant + Clone>(&self, script: &str) -> Result<T, Box<EvalAltResult>> {
-        self.eval_with_scope(&mut Scope::new(), script)
+        self.eval_with_scope(&mut Default::default(), script)
     }
 
     /// Evaluate a string with own scope.
@@ -1294,7 +1294,7 @@ impl Engine {
         &self,
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
-        self.eval_expression_with_scope(&mut Scope::new(), script)
+        self.eval_expression_with_scope(&mut Default::default(), script)
     }
 
     /// Evaluate a string containing an expression with own scope.
@@ -1350,7 +1350,7 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn eval_ast<T: Variant + Clone>(&self, ast: &AST) -> Result<T, Box<EvalAltResult>> {
-        self.eval_ast_with_scope(&mut Scope::new(), ast)
+        self.eval_ast_with_scope(&mut Default::default(), ast)
     }
 
     /// Evaluate an `AST` with own scope.
@@ -1388,7 +1388,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, Box<EvalAltResult>> {
-        let mut mods = Imports::new();
+        let mut mods = Default::default();
         let (result, _) = self.eval_ast_with_scope_raw(scope, &mut mods, ast)?;
 
         let typ = self.map_type_name(result.type_name());
@@ -1404,26 +1404,14 @@ impl Engine {
     }
 
     /// Evaluate an `AST` with own scope.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn eval_ast_with_scope_raw<'a>(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
         ast: &'a AST,
     ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
-        let mut state = State::new();
-
-        ast.statements()
-            .iter()
-            .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, mods, &mut state, ast.lib(), &mut None, stmt, 0)
-            })
-            .or_else(|err| match *err {
-                EvalAltResult::Return(out, _) => Ok(out),
-                EvalAltResult::LoopBreak(_, _) => unreachable!(),
-                _ => Err(err),
-            })
-            .map(|v| (v, state.operations))
+        self.eval_statements(scope, mods, ast.statements(), &[ast.lib()])
     }
 
     /// Evaluate a file, but throw away the result and only return error (if any).
@@ -1452,7 +1440,7 @@ impl Engine {
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[inline(always)]
     pub fn consume(&self, script: &str) -> Result<(), Box<EvalAltResult>> {
-        self.consume_with_scope(&mut Scope::new(), script)
+        self.consume_with_scope(&mut Default::default(), script)
     }
 
     /// Evaluate a string with own scope, but throw away the result and only return error (if any).
@@ -1473,33 +1461,20 @@ impl Engine {
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[inline(always)]
     pub fn consume_ast(&self, ast: &AST) -> Result<(), Box<EvalAltResult>> {
-        self.consume_ast_with_scope(&mut Scope::new(), ast)
+        self.consume_ast_with_scope(&mut Default::default(), ast)
     }
 
     /// Evaluate an `AST` with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    #[inline]
+    #[inline(always)]
     pub fn consume_ast_with_scope(
         &self,
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
-        let mut state = State::new();
         let mut mods = Default::default();
-
-        ast.statements()
-            .iter()
-            .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, &mut mods, &mut state, ast.lib(), &mut None, stmt, 0)
-            })
-            .map_or_else(
-                |err| match *err {
-                    EvalAltResult::Return(_, _) => Ok(()),
-                    EvalAltResult::LoopBreak(_, _) => unreachable!(),
-                    _ => Err(err),
-                },
-                |_| Ok(()),
-            )
+        self.eval_statements(scope, &mut mods, ast.statements(), &[ast.lib()])
+            .map(|_| ())
     }
 
     /// Call a script function defined in an `AST` with multiple arguments.
@@ -1651,14 +1626,23 @@ impl Engine {
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::none()))?;
 
         let mut state = State::new();
-        let mut mods = Imports::new();
+        let mut mods = Default::default();
 
         // Check for data race.
         if cfg!(not(feature = "no_closure")) {
             ensure_no_data_race(name, args, false)?;
         }
 
-        self.call_script_fn(scope, &mut mods, &mut state, lib, this_ptr, fn_def, args, 0)
+        self.call_script_fn(
+            scope,
+            &mut mods,
+            &mut state,
+            &[lib],
+            this_ptr,
+            fn_def,
+            args,
+            0,
+        )
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.

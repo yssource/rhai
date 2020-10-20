@@ -249,8 +249,8 @@ let fn_ptr = engine.eval_ast::<FnPtr>(&ast)?;
 ast.retain_functions(|_, _, _| true);
 
 // Create native call context via a tuple containing the Engine and the
-// set of script-defined functions (within the AST)
-let context = (&engine, ast.as_ref()).into();
+// set of script-defined functions (within the AST) in form of a slice.
+let context = (&engine, &[ast.as_ref()]).into();
 
 // 'f' captures: the engine, the AST, and the closure
 let f = move |x: i64| fn_ptr.call_dynamic(context, None, [x.into()]);

@@ -53,7 +53,7 @@ impl Expression<'_> {
     }
 }
 
-impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_> {
+impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_, '_> {
     /// Evaluate an expression tree.
     ///
     /// ## WARNING - Low Level API
@@ -68,7 +68,7 @@ impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_> {
             self.scope,
             self.mods,
             self.state,
-            self.namespace(),
+            self.namespaces(),
             self.this_ptr,
             expr.expr(),
             self.call_level(),

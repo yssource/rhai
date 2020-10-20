@@ -441,17 +441,17 @@ pub struct Limits {
 
 /// Context of a script evaluation process.
 #[derive(Debug)]
-pub struct EvalContext<'e, 'x, 'px: 'x, 'a, 's, 'm, 't, 'pt: 't> {
+pub struct EvalContext<'e, 'x, 'px: 'x, 'a, 's, 'm, 'pm: 'm, 't, 'pt: 't> {
     engine: &'e Engine,
     pub scope: &'x mut Scope<'px>,
     pub(crate) mods: &'a mut Imports,
     pub(crate) state: &'s mut State,
-    lib: &'m Module,
+    lib: &'m [&'pm Module],
     pub(crate) this_ptr: &'t mut Option<&'pt mut Dynamic>,
     level: usize,
 }
 
-impl<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> {
+impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> {
     /// The current `Engine`.
     #[inline(always)]
     pub fn engine(&self) -> &'e Engine {
@@ -465,9 +465,9 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 't, 
     pub fn imports(&self) -> &'a Imports {
         self.mods
     }
-    /// The global namespace containing definition of all script-defined functions.
+    /// The chain of namespaces containing definition of all script-defined functions.
     #[inline(always)]
-    pub fn namespace(&self) -> &'m Module {
+    pub fn namespaces(&self) -> &'m [&'pm Module] {
         self.lib
     }
     /// The current bound `this` pointer, if any.
@@ -757,7 +757,7 @@ impl Engine {
         scope: &'s mut Scope,
         mods: &'s mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &'a Expr,
     ) -> Result<(Target<'s>, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
@@ -792,7 +792,7 @@ impl Engine {
         scope: &'s mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &'a Expr,
     ) -> Result<(Target<'s>, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
@@ -862,7 +862,7 @@ impl Engine {
     fn eval_dot_index_chain_helper(
         &self,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         target: &mut Target,
         rhs: &Expr,
@@ -1155,7 +1155,7 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         level: usize,
@@ -1234,7 +1234,7 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         chain_type: ChainType,
@@ -1305,7 +1305,7 @@ impl Engine {
     fn get_indexed_mut<'a>(
         &self,
         state: &mut State,
-        _lib: &Module,
+        _lib: &[&Module],
         target: &'a mut Target,
         idx: Dynamic,
         idx_pos: Position,
@@ -1414,7 +1414,7 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         lhs: &Expr,
         rhs: &Expr,
@@ -1477,7 +1477,7 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         level: usize,
@@ -1786,7 +1786,7 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         stmt: &Stmt,
         level: usize,

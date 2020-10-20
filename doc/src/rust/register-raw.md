@@ -72,8 +72,7 @@ where:
   * `context.engine(): &Engine` - the current [`Engine`], with all configurations and settings.
     This is sometimes useful for calling a script-defined function within the same evaluation context
     using [`Engine::call_fn`][`call_fn`], or calling a [function pointer].
-
-  * `context.namespace(): &Module` - the global namespace of script-defined functions, as a [`Module`].
+  * `context.namespaces(): &[&Module]` - reference to the chain of namespaces (as a slice of [modules]) containing all script-defined functions.
 
 * `args: &mut [&mut Dynamic]` - a slice containing `&mut` references to [`Dynamic`] values.
   The slice is guaranteed to contain enough arguments _of the correct types_.
