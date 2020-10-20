@@ -5,6 +5,9 @@ Rhai Release Notes
 Version 0.19.3
 ==============
 
+This version streamlines some of the advanced API's, and adds the `try` ... `catch` statement
+to catch exceptions.
+
 Breaking changes
 ----------------
 
@@ -17,7 +20,8 @@ New features
 ------------
 
 * The plugins system is enhanced to support functions taking a `NativeCallContext` as the first parameter.
-* `throw` statement can throw any value instead of just text strings.
+* `throw` statement can now throw any value instead of just text strings.
+* New `try` ... `catch` statement to catch exceptions.
 
 Enhancements
 ------------

@@ -89,6 +89,8 @@
 [function overloading]: {{rootUrl}}/rust/functions.md#function-overloading
 [fallible function]: {{rootUrl}}/rust/fallible.md
 [fallible functions]: {{rootUrl}}/rust/fallible.md
+[exception]: {{rootUrl}}/language/throw.md
+[exceptions]: {{rootUrl}}/language/throw.md
 [function pointer]: {{rootUrl}}/language/fn-ptr.md
 [function pointers]: {{rootUrl}}/language/fn-ptr.md
 [currying]: {{rootUrl}}/language/fn-curry.md

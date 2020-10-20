@@ -1932,6 +1932,63 @@ impl Engine {
             // Break statement
             Stmt::Break(pos) => EvalAltResult::LoopBreak(true, *pos).into(),
 
+            // Try/Catch statement
+            Stmt::TryCatch(x) => {
+                let ((body, _), var_def, (catch_body, _)) = x.as_ref();
+
+                let result = self
+                    .eval_stmt(scope, mods, state, lib, this_ptr, body, level)
+                    .map(|_| ().into());
+
+                if let Err(err) = result {
+                    match *err {
+                        mut err @ EvalAltResult::ErrorRuntime(_, _) | mut err
+                            if err.catchable() =>
+                        {
+                            let value = match err {
+                                EvalAltResult::ErrorRuntime(ref x, _) => x.clone(),
+                                _ => {
+                                    err.set_position(Position::none());
+                                    err.to_string().into()
+                                }
+                            };
+                            let has_var = if let Some((var_name, _)) = var_def {
+                                let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
+                                scope.push(var_name, value);
+                                state.scope_level += 1;
+                                true
+                            } else {
+                                false
+                            };
+
+                            let mut result = self
+                                .eval_stmt(scope, mods, state, lib, this_ptr, catch_body, level)
+                                .map(|_| ().into());
+
+                            if let Some(result_err) = result.as_ref().err() {
+                                match result_err.as_ref() {
+                                    EvalAltResult::ErrorRuntime(x, pos) if x.is::<()>() => {
+                                        err.set_position(*pos);
+                                        result = Err(Box::new(err));
+                                    }
+                                    _ => (),
+                                }
+                            }
+
+                            if has_var {
+                                scope.rewind(scope.len() - 1);
+                                state.scope_level -= 1;
+                            }
+
+                            result
+                        }
+                        _ => Err(err),
+                    }
+                } else {
+                    result
+                }
+            }
+
             // Return value
             Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Return => {
                 let expr = x.1.as_ref().unwrap();

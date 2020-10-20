@@ -282,6 +282,10 @@ pub enum Token {
     Return,
     /// `throw`
     Throw,
+    /// `try`
+    Try,
+    /// `catch`
+    Catch,
     /// `+=`
     PlusAssign,
     /// `-=`
@@ -397,6 +401,8 @@ impl Token {
                 Break => "break",
                 Return => "return",
                 Throw => "throw",
+                Try => "try",
+                Catch => "catch",
                 PlusAssign => "+=",
                 MinusAssign => "-=",
                 MultiplyAssign => "*=",
@@ -479,6 +485,8 @@ impl Token {
             "break" => Break,
             "return" => Return,
             "throw" => Throw,
+            "try" => Try,
+            "catch" => Catch,
             "+=" => PlusAssign,
             "-=" => MinusAssign,
             "*=" => MultiplyAssign,
@@ -516,9 +524,9 @@ impl Token {
 
             "===" | "!==" | "->" | "<-" | "=>" | ":=" | "::<" | "(*" | "*)" | "#" | "public"
             | "new" | "use" | "module" | "package" | "var" | "static" | "shared" | "with"
-            | "do" | "each" | "then" | "goto" | "exit" | "switch" | "match" | "case" | "try"
-            | "catch" | "default" | "void" | "null" | "nil" | "spawn" | "go" | "sync" | "async"
-            | "await" | "yield" => Reserved(syntax.into()),
+            | "do" | "each" | "then" | "goto" | "exit" | "switch" | "match" | "case"
+            | "default" | "void" | "null" | "nil" | "spawn" | "go" | "sync" | "async" | "await"
+            | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
             | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_DEF_VAR

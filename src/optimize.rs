@@ -268,7 +268,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
         ))),
         // let id;
         stmt @ Stmt::Let(_) => stmt,
-        // import expr as id;
+        // import expr as var;
         #[cfg(not(feature = "no_module"))]
         Stmt::Import(x) => Stmt::Import(Box::new((optimize_expr(x.0, state), x.1, x.2))),
         // { block }
@@ -389,6 +389,22 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 _ => Stmt::Block(Box::new((result.into(), pos))),
             }
         }
+        // try { block } catch ( var ) { block }
+        Stmt::TryCatch(x) if (x.0).0.is_pure() => {
+            // If try block is pure, there will never be any exceptions
+            state.set_dirty();
+            let pos = (x.0).0.position();
+            let mut statements: StaticVec<_> = Default::default();
+            statements.push(optimize_stmt((x.0).0, state, preserve_result));
+            statements.push(Stmt::Noop(pos));
+            Stmt::Block(Box::new((statements, pos)))
+        }
+        // try { block } catch ( var ) { block }
+        Stmt::TryCatch(x) => Stmt::TryCatch(Box::new((
+            (optimize_stmt((x.0).0, state, false), (x.0).1),
+            x.1,
+            (optimize_stmt((x.2).0, state, false), (x.2).1),
+        ))),
         // expr;
         Stmt::Expr(expr) => Stmt::Expr(Box::new(optimize_expr(*expr, state))),
         // return expr;

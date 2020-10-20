@@ -29,5 +29,24 @@ let result = engine.eval::<i64>(r#"
     }
 "#);
 
-println!(result);   // prints "Runtime error: 42 (line 5, position 15)"
+println!("{}", result);     // prints "Runtime error: 42 (line 5, position 15)"
+```
+
+
+Catch a Thrown Exception
+------------------------
+
+It is possible to _catch_ an exception instead of having it abort the evaluation
+of the entire script via the [`try` ... `catch`]({{rootUrl}}/language/try-catch.md)
+statement common to many C-like languages.
+
+```rust
+try
+{
+    throw 42;
+}
+catch (err)         // 'err' captures the thrown exception value
+{
+    print(err);     // prints 42
+}
 ```

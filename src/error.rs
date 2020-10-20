@@ -104,7 +104,7 @@ pub enum ParseErrorType {
     ///
     /// Never appears under the `no_object` feature.
     PropertyExpected,
-    /// Missing a variable name after the `let`, `const` or `for` keywords.
+    /// Missing a variable name after the `let`, `const`, `for` or `catch` keywords.
     VariableExpected,
     /// An identifier is a reserved keyword.
     Reserved(String),

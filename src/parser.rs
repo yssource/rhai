@@ -758,6 +758,14 @@ pub enum Stmt {
     Const(Box<((String, Position), Option<Expr>, Position)>),
     /// { stmt; ... }
     Block(Box<(StaticVec<Stmt>, Position)>),
+    /// try { stmt; ... } catch ( var ) { stmt; ... }
+    TryCatch(
+        Box<(
+            (Stmt, Position),
+            Option<(String, Position)>,
+            (Stmt, Position),
+        )>,
+    ),
     /// expr
     Expr(Box<Expr>),
     /// continue
@@ -766,10 +774,10 @@ pub enum Stmt {
     Break(Position),
     /// return/throw
     ReturnWithVal(Box<((ReturnType, Position), Option<Expr>, Position)>),
-    /// import expr as module
+    /// import expr as var
     #[cfg(not(feature = "no_module"))]
     Import(Box<(Expr, Option<(ImmutableString, Position)>, Position)>),
-    /// expr id as name, ...
+    /// export var as var, ...
     #[cfg(not(feature = "no_module"))]
     Export(
         Box<(
@@ -796,13 +804,14 @@ impl Stmt {
             Stmt::Noop(pos) | Stmt::Continue(pos) | Stmt::Break(pos) => *pos,
             Stmt::Let(x) => (x.0).1,
             Stmt::Const(x) => (x.0).1,
-            Stmt::ReturnWithVal(x) => (x.0).1,
             Stmt::Block(x) => x.1,
             Stmt::IfThenElse(x) => x.3,
             Stmt::Expr(x) => x.position(),
             Stmt::While(x) => x.2,
             Stmt::Loop(x) => x.1,
             Stmt::For(x) => x.3,
+            Stmt::ReturnWithVal(x) => (x.0).1,
+            Stmt::TryCatch(x) => (x.0).1,
 
             #[cfg(not(feature = "no_module"))]
             Stmt::Import(x) => x.2,
@@ -820,7 +829,6 @@ impl Stmt {
             Stmt::Noop(pos) | Stmt::Continue(pos) | Stmt::Break(pos) => *pos = new_pos,
             Stmt::Let(x) => (x.0).1 = new_pos,
             Stmt::Const(x) => (x.0).1 = new_pos,
-            Stmt::ReturnWithVal(x) => (x.0).1 = new_pos,
             Stmt::Block(x) => x.1 = new_pos,
             Stmt::IfThenElse(x) => x.3 = new_pos,
             Stmt::Expr(x) => {
@@ -829,6 +837,8 @@ impl Stmt {
             Stmt::While(x) => x.2 = new_pos,
             Stmt::Loop(x) => x.1 = new_pos,
             Stmt::For(x) => x.3 = new_pos,
+            Stmt::ReturnWithVal(x) => (x.0).1 = new_pos,
+            Stmt::TryCatch(x) => (x.0).1 = new_pos,
 
             #[cfg(not(feature = "no_module"))]
             Stmt::Import(x) => x.2 = new_pos,
@@ -849,7 +859,8 @@ impl Stmt {
             | Stmt::While(_)
             | Stmt::Loop(_)
             | Stmt::For(_)
-            | Stmt::Block(_) => true,
+            | Stmt::Block(_)
+            | Stmt::TryCatch(_) => true,
 
             // A No-op requires a semicolon in order to know it is an empty statement!
             Stmt::Noop(_) => false,
@@ -884,6 +895,7 @@ impl Stmt {
             Stmt::Let(_) | Stmt::Const(_) => false,
             Stmt::Block(x) => x.0.iter().all(Stmt::is_pure),
             Stmt::Continue(_) | Stmt::Break(_) | Stmt::ReturnWithVal(_) => false,
+            Stmt::TryCatch(x) => (x.0).0.is_pure() && (x.2).0.is_pure(),
 
             #[cfg(not(feature = "no_module"))]
             Stmt::Import(_) => false,
@@ -1358,13 +1370,12 @@ fn eat_token(input: &mut TokenStream, token: Token) -> Position {
 }
 
 /// Match a particular token, consuming it if matched.
-fn match_token(input: &mut TokenStream, token: Token) -> Result<bool, ParseError> {
-    let (t, _) = input.peek().unwrap();
+fn match_token(input: &mut TokenStream, token: Token) -> (bool, Position) {
+    let (t, pos) = input.peek().unwrap();
     if *t == token {
-        eat_token(input, token);
-        Ok(true)
+        (true, eat_token(input, token))
     } else {
-        Ok(false)
+        (false, *pos)
     }
 }
 
@@ -1378,7 +1389,7 @@ fn parse_paren_expr(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    if match_token(input, Token::RightParen)? {
+    if match_token(input, Token::RightParen).0 {
         return Ok(Expr::Unit(settings.pos));
     }
 
@@ -1989,7 +2000,7 @@ fn parse_primary(
             // Qualified function call with !
             #[cfg(not(feature = "no_closure"))]
             (Expr::Variable(x), Token::Bang) if x.1.is_some() => {
-                return Err(if !match_token(input, Token::LeftParen)? {
+                return Err(if !match_token(input, Token::LeftParen).0 {
                     LexError::UnexpectedInput(Token::Bang.syntax().to_string()).into_err(token_pos)
                 } else {
                     PERR::BadInput("'!' cannot be used to call module functions".to_string())
@@ -1999,12 +2010,13 @@ fn parse_primary(
             // Function call with !
             #[cfg(not(feature = "no_closure"))]
             (Expr::Variable(x), Token::Bang) => {
-                if !match_token(input, Token::LeftParen)? {
+                let (matched, pos) = match_token(input, Token::LeftParen);
+                if !matched {
                     return Err(PERR::MissingToken(
                         Token::LeftParen.syntax().into(),
                         "to start arguments list of function call".into(),
                     )
-                    .into_err(input.peek().unwrap().1));
+                    .into_err(pos));
                 }
 
                 let ((name, pos), modules, _, _) = *x;
@@ -2813,7 +2825,7 @@ fn parse_if(
     let if_body = parse_block(input, state, lib, settings.level_up())?;
 
     // if guard { if_body } else ...
-    let else_body = if match_token(input, Token::Else).unwrap_or(false) {
+    let else_body = if match_token(input, Token::Else).0 {
         Some(if let (Token::If, _) = input.peek().unwrap() {
             // if guard { if_body } else if ...
             parse_if(input, state, lib, settings.level_up())?
@@ -2957,7 +2969,7 @@ fn parse_let(
     };
 
     // let name = ...
-    let init_value = if match_token(input, Token::Equals)? {
+    let init_value = if match_token(input, Token::Equals).0 {
         // let name = expr
         Some(parse_expr(input, state, lib, settings.level_up())?)
     } else {
@@ -2997,7 +3009,7 @@ fn parse_import(
     let expr = parse_expr(input, state, lib, settings.level_up())?;
 
     // import expr as ...
-    if !match_token(input, Token::As)? {
+    if !match_token(input, Token::As).0 {
         return Ok(Stmt::Import(Box::new((expr, None, token_pos))));
     }
 
@@ -3046,7 +3058,7 @@ fn parse_export(
             (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
         };
 
-        let rename = if match_token(input, Token::As)? {
+        let rename = if match_token(input, Token::As).0 {
             match input.next().unwrap() {
                 (Token::Identifier(s), pos) => Some((s.clone(), pos)),
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
@@ -3121,7 +3133,7 @@ fn parse_block(
     #[cfg(not(feature = "no_module"))]
     let prev_mods_len = state.modules.len();
 
-    while !match_token(input, Token::RightBrace)? {
+    while !match_token(input, Token::RightBrace).0 {
         // Parse statements inside the block
         settings.is_global = false;
 
@@ -3320,6 +3332,8 @@ fn parse_stmt(
             }
         }
 
+        Token::Try => parse_try_catch(input, state, lib, settings.level_up()).map(Some),
+
         Token::Let => parse_let(input, state, lib, Normal, settings.level_up()).map(Some),
         Token::Const => parse_let(input, state, lib, Constant, settings.level_up()).map(Some),
 
@@ -3334,6 +3348,65 @@ fn parse_stmt(
 
         _ => parse_expr_stmt(input, state, lib, settings.level_up()).map(Some),
     }
+}
+
+/// Parse a try/catch statement.
+fn parse_try_catch(
+    input: &mut TokenStream,
+    state: &mut ParseState,
+    lib: &mut FunctionsLib,
+    mut settings: ParseSettings,
+) -> Result<Stmt, ParseError> {
+    // try ...
+    let token_pos = eat_token(input, Token::Try);
+    settings.pos = token_pos;
+
+    #[cfg(not(feature = "unchecked"))]
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    // try { body }
+    let body = parse_block(input, state, lib, settings.level_up())?;
+
+    // try { body } catch
+    let (matched, catch_pos) = match_token(input, Token::Catch);
+
+    if !matched {
+        return Err(
+            PERR::MissingToken(Token::Catch.into(), "for the 'try' statement".into())
+                .into_err(catch_pos),
+        );
+    }
+
+    // try { body } catch (
+    let var_def = if match_token(input, Token::LeftParen).0 {
+        let id = match input.next().unwrap() {
+            (Token::Identifier(s), pos) => (s, pos),
+            (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
+        };
+
+        let (matched, pos) = match_token(input, Token::RightParen);
+
+        if !matched {
+            return Err(PERR::MissingToken(
+                Token::RightParen.into(),
+                "to enclose the catch variable".into(),
+            )
+            .into_err(pos));
+        }
+
+        Some(id)
+    } else {
+        None
+    };
+
+    // try { body } catch ( var ) { catch_block }
+    let catch_body = parse_block(input, state, lib, settings.level_up())?;
+
+    Ok(Stmt::TryCatch(Box::new((
+        (body, token_pos),
+        var_def,
+        (catch_body, catch_pos),
+    ))))
 }
 
 /// Parse a function definition.
@@ -3364,7 +3437,7 @@ fn parse_fn(
 
     let mut params = Vec::new();
 
-    if !match_token(input, Token::RightParen)? {
+    if !match_token(input, Token::RightParen).0 {
         let sep_err = format!("to separate the parameters of function '{}'", name);
 
         loop {
@@ -3514,7 +3587,7 @@ fn parse_anon_fn(
     let mut params = Vec::new();
 
     if input.next().unwrap().0 != Token::Or {
-        if !match_token(input, Token::Pipe)? {
+        if !match_token(input, Token::Pipe).0 {
             loop {
                 match input.next().unwrap() {
                     (Token::Pipe, _) => break,
