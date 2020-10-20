@@ -29,6 +29,7 @@ fn test_try_catch() -> Result<(), Box<EvalAltResult>> {
         123
     );
 
+    #[cfg(not(feature = "unchecked"))]
     assert!(matches!(
         *engine
             .eval::<()>("try { 42/0; } catch { throw; }")
