@@ -64,14 +64,14 @@ impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_, '_> {
         &mut self,
         expr: &Expression,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.engine().eval_expr(
+        self.engine.eval_expr(
             self.scope,
             self.mods,
             self.state,
-            self.namespaces(),
+            self.lib,
             self.this_ptr,
             expr.expr(),
-            self.call_level(),
+            self.level,
         )
     }
 }

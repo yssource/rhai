@@ -29,18 +29,11 @@ fn print_error(input: &str, err: EvalAltResult) {
         // Specific position
         println!("{}{}", line_no, lines[pos.line().unwrap() - 1]);
 
-        let err_text = match err {
-            EvalAltResult::ErrorRuntime(err, _) if !err.is_empty() => {
-                format!("Runtime error: {}", err)
-            }
-            err => err.to_string(),
-        };
-
         println!(
             "{0:>1$} {2}",
             "^",
             line_no.len() + pos.position().unwrap(),
-            err_text.replace(&pos_text, "")
+            err.to_string().replace(&pos_text, "")
         );
     }
 }

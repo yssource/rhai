@@ -72,10 +72,10 @@ impl<'e, 'm, 'pm> NativeCallContext<'e, 'm, 'pm> {
     pub fn engine(&self) -> &'e Engine {
         self.engine
     }
-    /// The chain of namespaces containing definition of all script-defined functions.
+    /// Get an iterator over the namespaces containing definition of all script-defined functions.
     #[inline(always)]
-    pub fn namespaces(&self) -> &'m [&'pm Module] {
-        self.lib
+    pub fn iter_namespaces(&self) -> impl Iterator<Item = &'pm Module> + 'm {
+        self.lib.iter().cloned()
     }
 }
 
@@ -186,7 +186,7 @@ impl FnPtr {
             .engine()
             .exec_fn_call(
                 &mut Default::default(),
-                context.namespaces(),
+                context.lib,
                 fn_name,
                 hash_script,
                 args.as_mut(),

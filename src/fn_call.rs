@@ -533,7 +533,8 @@ impl Engine {
                     format!(
                         "'{}' should not be called in method style. Try {}(...);",
                         fn_name, fn_name
-                    ),
+                    )
+                    .into(),
                     Position::none(),
                 )
                 .into()

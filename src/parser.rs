@@ -3297,25 +3297,24 @@ fn parse_stmt(
             match input.peek().unwrap() {
                 // `return`/`throw` at <EOF>
                 (Token::EOF, pos) => Ok(Some(Stmt::ReturnWithVal(Box::new((
-                    (return_type, *pos),
+                    (return_type, token_pos),
                     None,
-                    token_pos,
+                    *pos,
                 ))))),
                 // `return;` or `throw;`
                 (Token::SemiColon, _) => Ok(Some(Stmt::ReturnWithVal(Box::new((
-                    (return_type, settings.pos),
+                    (return_type, token_pos),
                     None,
-                    token_pos,
+                    settings.pos,
                 ))))),
                 // `return` or `throw` with expression
                 (_, _) => {
                     let expr = parse_expr(input, state, lib, settings.level_up())?;
                     let pos = expr.position();
-
                     Ok(Some(Stmt::ReturnWithVal(Box::new((
-                        (return_type, pos),
+                        (return_type, token_pos),
                         Some(expr),
-                        token_pos,
+                        pos,
                     )))))
                 }
             }

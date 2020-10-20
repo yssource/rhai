@@ -32,14 +32,7 @@ fn eprint_error(input: &str, err: EvalAltResult) {
         eprintln!("{}", err);
     } else {
         // Specific position
-        let err_text = match err {
-            EvalAltResult::ErrorRuntime(err, _) if !err.is_empty() => {
-                format!("Runtime error: {}", err)
-            }
-            err => err.to_string(),
-        };
-
-        eprint_line(&lines, pos, &err_text)
+        eprint_line(&lines, pos, &err.to_string())
     }
 }
 

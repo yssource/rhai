@@ -199,9 +199,9 @@ fn call_fn_ptr_with_value(context: NativeCallContext, args: &mut [&mut Dynamic])
     -> Result<Dynamic, Box<EvalAltResult>>
 {
     // 'args' is guaranteed to contain enough arguments of the correct types
-    let fp = std::mem::take(args[1]).cast::<FnPtr>();       // 2nd argument - function pointer
-    let value = args[2].clone();                            // 3rd argument - function argument
-    let this_ptr = args.get_mut(0).unwrap();                // 1st argument - this pointer
+    let fp = std::mem::take(args[1]).cast::<FnPtr>();   // 2nd argument - function pointer
+    let value = args[2].clone();                        // 3rd argument - function argument
+    let this_ptr = args.get_mut(0).unwrap();            // 1st argument - this pointer
 
     // Use 'FnPtr::call_dynamic' to call the function pointer.
     // Beware, private script-defined functions will not be found.
@@ -238,7 +238,7 @@ let engine = Engine::new();
 let mut ast = engine.compile(
     r#"
         let test = "hello";
-        |x| test + x                // this creates an closure
+        |x| test + x            // this creates an closure
     "#,
 )?;
 
@@ -248,9 +248,13 @@ let fn_ptr = engine.eval_ast::<FnPtr>(&ast)?;
 // Get rid of the script, retaining only functions
 ast.retain_functions(|_, _, _| true);
 
-// Create native call context via a tuple containing the Engine and the
-// set of script-defined functions (within the AST) in form of a slice.
-let context = (&engine, &[ast.as_ref()]).into();
+// Create native call context via a tuple
+let context =
+        (
+            &engine,            // the 'Engine'
+            &[ast.as_ref()]     // function namespace from the 'AST'
+                                // as a one-element slice
+        ).into();
 
 // 'f' captures: the engine, the AST, and the closure
 let f = move |x: i64| fn_ptr.call_dynamic(context, None, [x.into()]);

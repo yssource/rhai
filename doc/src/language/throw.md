@@ -10,24 +10,24 @@ To deliberately return an error during an evaluation, use the `throw` keyword.
 
 ```rust
 if some_bad_condition_has_happened {
-    throw error;    // 'throw' takes a string as the exception text
+    throw error;    // 'throw' any value as the exception
 }
 
-throw;              // defaults to empty exception text: ""
+throw;              // defaults to '()'
 ```
 
 Exceptions thrown via `throw` in the script can be captured in Rust by matching
-`Err(Box<EvalAltResult::ErrorRuntime(reason, position)>)` with the exception text
-captured by `reason`.
+`Err(Box<EvalAltResult::ErrorRuntime(value, position)>)` with the exception value
+captured by `value`.
 
 ```rust
 let result = engine.eval::<i64>(r#"
     let x = 42;
 
     if x > 0 {
-        throw x + " is too large!";
+        throw x;
     }
 "#);
 
-println!(result);   // prints "Runtime error: 42 is too large! (line 5, position 15)"
+println!(result);   // prints "Runtime error: 42 (line 5, position 15)"
 ```

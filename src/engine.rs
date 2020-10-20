@@ -442,13 +442,13 @@ pub struct Limits {
 /// Context of a script evaluation process.
 #[derive(Debug)]
 pub struct EvalContext<'e, 'x, 'px: 'x, 'a, 's, 'm, 'pm: 'm, 't, 'pt: 't> {
-    engine: &'e Engine,
+    pub(crate) engine: &'e Engine,
     pub scope: &'x mut Scope<'px>,
     pub(crate) mods: &'a mut Imports,
     pub(crate) state: &'s mut State,
-    lib: &'m [&'pm Module],
+    pub(crate) lib: &'m [&'pm Module],
     pub(crate) this_ptr: &'t mut Option<&'pt mut Dynamic>,
-    level: usize,
+    pub(crate) level: usize,
 }
 
 impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> {
@@ -465,10 +465,10 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
     pub fn imports(&self) -> &'a Imports {
         self.mods
     }
-    /// The chain of namespaces containing definition of all script-defined functions.
+    /// Get an iterator over the namespaces containing definition of all script-defined functions.
     #[inline(always)]
-    pub fn namespaces(&self) -> &'m [&'pm Module] {
-        self.lib
+    pub fn iter_namespaces(&self) -> impl Iterator<Item = &'pm Module> + 'm {
+        self.lib.iter().cloned()
     }
     /// The current bound `this` pointer, if any.
     #[inline(always)]
@@ -1951,16 +1951,12 @@ impl Engine {
             Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Exception => {
                 let expr = x.1.as_ref().unwrap();
                 let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-                EvalAltResult::ErrorRuntime(
-                    val.take_string().unwrap_or_else(|_| "".into()),
-                    (x.0).1,
-                )
-                .into()
+                EvalAltResult::ErrorRuntime(val, (x.0).1).into()
             }
 
             // Empty throw
             Stmt::ReturnWithVal(x) if (x.0).0 == ReturnType::Exception => {
-                EvalAltResult::ErrorRuntime("".into(), (x.0).1).into()
+                EvalAltResult::ErrorRuntime(().into(), (x.0).1).into()
             }
 
             Stmt::ReturnWithVal(_) => unreachable!(),

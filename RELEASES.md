@@ -17,6 +17,7 @@ New features
 ------------
 
 * The plugins system is enhanced to support functions taking a `NativeCallContext` as the first parameter.
+* `throw` statement can throw any value instead of just text strings.
 
 Enhancements
 ------------
