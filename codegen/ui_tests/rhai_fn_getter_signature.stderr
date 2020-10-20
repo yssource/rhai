@@ -1,4 +1,4 @@
-error: property getter requires exactly 1 argument
+error: property getter requires exactly 1 parameter
   --> $DIR/rhai_fn_getter_signature.rs:13:9
    |
 13 |     pub fn test_fn(input: Point, value: bool) -> bool {

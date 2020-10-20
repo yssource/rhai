@@ -1,4 +1,7 @@
-use syn::{parse::ParseStream, parse::Parser, spanned::Spanned};
+use syn::{
+    parse::{ParseStream, Parser},
+    spanned::Spanned,
+};
 
 #[derive(Debug)]
 pub enum ExportScope {

@@ -297,7 +297,7 @@ mod generate_tests {
                     Token().input_types()
                 }
                 pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
-                    Ok(Dynamic::from(super::do_nothing()))
+                    Ok(Dynamic::from(do_nothing()))
                 }
             }
         };
@@ -339,7 +339,7 @@ mod generate_tests {
                     Token().input_types()
                 }
                 pub fn dynamic_result_fn(x: usize) -> Result<Dynamic, Box<EvalAltResult> > {
-                    Ok(Dynamic::from(super::do_something(x)))
+                    Ok(Dynamic::from(do_something(x)))
                 }
             }
         };
@@ -381,7 +381,7 @@ mod generate_tests {
                     Token().input_types()
                 }
                 pub fn dynamic_result_fn(context: NativeCallContext, x: usize) -> Result<Dynamic, Box<EvalAltResult> > {
-                    Ok(Dynamic::from(super::do_something(context, x)))
+                    Ok(Dynamic::from(do_something(context, x)))
                 }
             }
         };
@@ -425,7 +425,7 @@ mod generate_tests {
                     Token().input_types()
                 }
                 pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
-                    Ok(super::return_dynamic())
+                    Ok(return_dynamic())
                 }
             }
         };
@@ -497,7 +497,7 @@ mod generate_tests {
                     Token().input_types()
                 }
                 pub fn dynamic_result_fn(x: usize, y: usize) -> Result<Dynamic, Box<EvalAltResult> > {
-                    Ok(Dynamic::from(super::add_together(x, y)))
+                    Ok(Dynamic::from(add_together(x, y)))
                 }
             }
         };
@@ -541,7 +541,7 @@ mod generate_tests {
                     Token().input_types()
                 }
                 pub fn dynamic_result_fn(x: &mut usize, y: usize) -> Result<Dynamic, Box<EvalAltResult> > {
-                    Ok(Dynamic::from(super::increment(x, y)))
+                    Ok(Dynamic::from(increment(x, y)))
                 }
             }
         };
@@ -584,7 +584,7 @@ mod generate_tests {
                     Token().input_types()
                 }
                 pub fn dynamic_result_fn(message: &str) -> Result<Dynamic, Box<EvalAltResult> > {
-                    Ok(Dynamic::from(super::special_print(message)))
+                    Ok(Dynamic::from(special_print(message)))
                 }
             }
         };

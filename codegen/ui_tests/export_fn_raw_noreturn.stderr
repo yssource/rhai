@@ -1,4 +1,4 @@
-error: return_raw functions must return Result<T, Box<EvalAltResult>>
+error: functions marked with 'return_raw' must return Result<Dynamic, Box<EvalAltResult>>
   --> $DIR/export_fn_raw_noreturn.rs:10:5
    |
 10 | pub fn test_fn(input: &mut Point) {
