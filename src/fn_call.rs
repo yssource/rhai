@@ -10,7 +10,7 @@ use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, FnPtr};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
-use crate::parser::{Expr, ImmutableString, AST, INT};
+use crate::parser::{Expr, ImmutableString, Stmt, INT};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::stdlib::ops::Deref;
@@ -180,7 +180,7 @@ impl Engine {
     pub(crate) fn call_native_fn(
         &self,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         fn_name: &str,
         hash_fn: u64,
         args: &mut FnCallArgs,
@@ -345,7 +345,7 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         fn_def: &ScriptFnDef,
         args: &mut FnCallArgs,
@@ -382,17 +382,15 @@ impl Engine {
         );
 
         // Merge in encapsulated environment, if any
-        let mut lib_merged;
+        let mut lib_merged: StaticVec<_>;
 
         let unified_lib = if let Some(ref env_lib) = fn_def.lib {
-            if lib.is_empty() {
-                // In the special case of the main script not defining any function
-                env_lib
-            } else {
-                lib_merged = lib.clone();
-                lib_merged.merge(env_lib);
-                &lib_merged
+            lib_merged = Default::default();
+            lib_merged.push(env_lib.as_ref());
+            if !lib.is_empty() {
+                lib_merged.extend(lib.iter().cloned());
             }
+            lib_merged.as_ref()
         } else {
             lib
         };
@@ -433,7 +431,7 @@ impl Engine {
     #[inline]
     pub(crate) fn has_override_by_name_and_arguments(
         &self,
-        lib: &Module,
+        lib: &[&Module],
         name: &str,
         arg_types: impl AsRef<[TypeId]>,
         pub_only: bool,
@@ -456,7 +454,7 @@ impl Engine {
     #[inline(always)]
     pub(crate) fn has_override(
         &self,
-        lib: &Module,
+        lib: &[&Module],
         hash_fn: u64,
         hash_script: u64,
         pub_only: bool,
@@ -464,8 +462,8 @@ impl Engine {
         // NOTE: We skip script functions for global_module and packages, and native functions for lib
 
         // First check script-defined functions
-        lib.contains_fn(hash_script, pub_only)
-            //|| lib.contains_fn(hash_fn, pub_only)
+        lib.iter().any(|&m| m.contains_fn(hash_script, pub_only))
+            //|| lib.iter().any(|&m| m.contains_fn(hash_fn, pub_only))
             // Then check registered functions
             //|| self.global_module.contains_fn(hash_script, pub_only)
             || self.global_module.contains_fn(hash_fn, pub_only)
@@ -485,7 +483,7 @@ impl Engine {
     pub(crate) fn exec_fn_call(
         &self,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         fn_name: &str,
         hash_script: u64,
         args: &mut FnCallArgs,
@@ -535,7 +533,8 @@ impl Engine {
                     format!(
                         "'{}' should not be called in method style. Try {}(...);",
                         fn_name, fn_name
-                    ),
+                    )
+                    .into(),
                     Position::none(),
                 )
                 .into()
@@ -543,13 +542,14 @@ impl Engine {
 
             // Script-like function found
             #[cfg(not(feature = "no_function"))]
-            _ if lib.contains_fn(hash_script, pub_only)
+            _ if lib.iter().any(|&m| m.contains_fn(hash_script, pub_only))
                 //|| self.global_module.contains_fn(hash_script, pub_only)
                 || self.packages.contains_fn(hash_script, pub_only) =>
             {
                 // Get function
                 let func = lib
-                    .get_fn(hash_script, pub_only)
+                    .iter()
+                    .find_map(|&m| m.get_fn(hash_script, pub_only))
                     //.or_else(|| self.global_module.get_fn(hash_script, pub_only))
                     .or_else(|| self.packages.get_fn(hash_script, pub_only))
                     .unwrap();
@@ -557,8 +557,8 @@ impl Engine {
                 if func.is_script() {
                     let func = func.get_fn_def();
 
-                    let scope = &mut Scope::new();
-                    let mods = &mut Imports::new();
+                    let scope: &mut Scope = &mut Default::default();
+                    let mods = &mut Default::default();
 
                     // Move captured variables into scope
                     #[cfg(not(feature = "no_closure"))]
@@ -634,6 +634,30 @@ impl Engine {
         }
     }
 
+    /// Evaluate a list of statements.
+    #[inline]
+    pub(crate) fn eval_statements<'a>(
+        &self,
+        scope: &mut Scope,
+        mods: &mut Imports,
+        statements: impl IntoIterator<Item = &'a Stmt>,
+        lib: &[&Module],
+    ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
+        let mut state = State::new();
+
+        statements
+            .into_iter()
+            .try_fold(().into(), |_, stmt| {
+                self.eval_stmt(scope, mods, &mut state, lib, &mut None, stmt, 0)
+            })
+            .or_else(|err| match *err {
+                EvalAltResult::Return(out, _) => Ok(out),
+                EvalAltResult::LoopBreak(_, _) => unreachable!(),
+                _ => Err(err),
+            })
+            .map(|v| (v, state.operations))
+    }
+
     /// Evaluate a text string as a script - used primarily for 'eval'.
     /// Position in `EvalAltResult` is `None` and must be set afterwards.
     fn eval_script_expr(
@@ -641,7 +665,7 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         script: &str,
         _level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -658,8 +682,8 @@ impl Engine {
 
         // Compile the script text
         // No optimizations because we only run it once
-        let mut ast = self.compile_with_scope_and_optimization_level(
-            &Scope::new(),
+        let ast = self.compile_with_scope_and_optimization_level(
+            &Default::default(),
             &[script],
             OptimizationLevel::None,
         )?;
@@ -669,11 +693,8 @@ impl Engine {
             return Err(ParseErrorType::WrongFnDefinition.into());
         }
 
-        let statements = mem::take(ast.statements_mut());
-        let ast = AST::new(statements, lib.clone());
-
         // Evaluate the AST
-        let (result, operations) = self.eval_ast_with_scope_raw(scope, mods, &ast)?;
+        let (result, operations) = self.eval_statements(scope, mods, ast.statements(), lib)?;
 
         state.operations += operations;
         self.inc_operations(state)?;
@@ -687,7 +708,7 @@ impl Engine {
     pub(crate) fn make_method_call(
         &self,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         name: &str,
         hash_script: u64,
         target: &mut Target,
@@ -839,7 +860,7 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         name: &str,
         args_expr: impl AsRef<[Expr]>,
@@ -984,7 +1005,7 @@ impl Engine {
                     return Ok(false.into());
                 } else {
                     let hash = calc_fn_hash(empty(), fn_name, num_params as usize, empty());
-                    return Ok(lib.contains_fn(hash, false).into());
+                    return Ok(lib.iter().any(|&m| m.contains_fn(hash, false)).into());
                 }
             }
         }
@@ -1085,7 +1106,7 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         modules: &Option<Box<ModuleRef>>,
         name: &str,
@@ -1186,8 +1207,8 @@ impl Engine {
                 let args = args.as_mut();
                 let fn_def = f.get_fn_def();
 
-                let new_scope = &mut Scope::new();
-                let mods = &mut Imports::new();
+                let new_scope = &mut Default::default();
+                let mods = &mut Default::default();
 
                 self.call_script_fn(new_scope, mods, state, lib, &mut None, fn_def, args, level)
             }

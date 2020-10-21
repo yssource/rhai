@@ -50,30 +50,32 @@ pub type Locked<T> = RwLock<T>;
 
 /// Context of native Rust function call.
 #[derive(Debug, Copy, Clone)]
-pub struct NativeCallContext<'e, 'm> {
+pub struct NativeCallContext<'e, 'm, 'pm: 'm> {
     engine: &'e Engine,
-    lib: &'m Module,
+    lib: &'m [&'pm Module],
 }
 
-impl<'e, 'm> From<(&'e Engine, &'m Module)> for NativeCallContext<'e, 'm> {
-    fn from(value: (&'e Engine, &'m Module)) -> Self {
+impl<'e, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized> From<(&'e Engine, &'m M)>
+    for NativeCallContext<'e, 'm, 'pm>
+{
+    fn from(value: (&'e Engine, &'m M)) -> Self {
         Self {
             engine: value.0,
-            lib: value.1,
+            lib: value.1.as_ref(),
         }
     }
 }
 
-impl<'e, 'm> NativeCallContext<'e, 'm> {
+impl<'e, 'm, 'pm> NativeCallContext<'e, 'm, 'pm> {
     /// The current `Engine`.
     #[inline(always)]
     pub fn engine(&self) -> &'e Engine {
         self.engine
     }
-    /// The global namespace containing definition of all script-defined functions.
+    /// Get an iterator over the namespaces containing definition of all script-defined functions.
     #[inline(always)]
-    pub fn namespace(&self) -> &'m Module {
-        self.lib
+    pub fn iter_namespaces(&self) -> impl Iterator<Item = &'pm Module> + 'm {
+        self.lib.iter().cloned()
     }
 }
 
@@ -184,7 +186,7 @@ impl FnPtr {
             .engine()
             .exec_fn_call(
                 &mut Default::default(),
-                context.namespace(),
+                context.lib,
                 fn_name,
                 hash_script,
                 args.as_mut(),

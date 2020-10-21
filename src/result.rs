@@ -4,6 +4,7 @@ use crate::any::Dynamic;
 use crate::error::ParseErrorType;
 use crate::parser::INT;
 use crate::token::Position;
+use crate::utils::ImmutableString;
 
 #[cfg(not(feature = "no_function"))]
 use crate::engine::is_anonymous_fn;
@@ -82,8 +83,8 @@ pub enum EvalAltResult {
     ErrorDataTooLarge(String, usize, usize, Position),
     /// The script is prematurely terminated.
     ErrorTerminated(Position),
-    /// Run-time error encountered. Wrapped value is the error message.
-    ErrorRuntime(String, Position),
+    /// Run-time error encountered. Wrapped value is the error.
+    ErrorRuntime(Dynamic, Position),
 
     /// Breaking out of loops - not an error if within a loop.
     /// The wrapped value, if true, means breaking clean out of the loop (i.e. a `break` statement).
@@ -186,7 +187,12 @@ impl fmt::Display for EvalAltResult {
             | Self::ErrorStackOverflow(_)
             | Self::ErrorTerminated(_) => f.write_str(desc)?,
 
-            Self::ErrorRuntime(s, _) => f.write_str(if s.is_empty() { desc } else { s })?,
+            Self::ErrorRuntime(d, _) if d.is::<ImmutableString>() => {
+                let s = d.as_str().unwrap();
+                write!(f, "{}: {}", desc, if s.is_empty() { desc } else { s })?
+            }
+            Self::ErrorRuntime(d, _) if d.is::<()>() => f.write_str(desc)?,
+            Self::ErrorRuntime(d, _) => write!(f, "{}: {}", desc, d)?,
 
             Self::ErrorAssignmentToConstant(s, _) => write!(f, "{}: '{}'", desc, s)?,
             Self::ErrorMismatchOutputType(r, s, _) => {
@@ -248,7 +254,7 @@ impl fmt::Display for EvalAltResult {
 impl<T: AsRef<str>> From<T> for EvalAltResult {
     #[inline(always)]
     fn from(err: T) -> Self {
-        Self::ErrorRuntime(err.as_ref().to_string(), Position::none())
+        Self::ErrorRuntime(err.as_ref().to_string().into(), Position::none())
     }
 }
 
@@ -256,13 +262,49 @@ impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
     #[inline(always)]
     fn from(err: T) -> Self {
         Box::new(EvalAltResult::ErrorRuntime(
-            err.as_ref().to_string(),
+            err.as_ref().to_string().into(),
             Position::none(),
         ))
     }
 }
 
 impl EvalAltResult {
+    /// Can this error be caught?
+    pub fn catchable(&self) -> bool {
+        match self {
+            Self::ErrorSystem(_, _) => false,
+            Self::ErrorParsing(_, _) => false,
+
+            Self::ErrorFunctionNotFound(_, _)
+            | Self::ErrorInFunctionCall(_, _, _)
+            | Self::ErrorInModule(_, _, _)
+            | Self::ErrorUnboundThis(_)
+            | Self::ErrorMismatchDataType(_, _, _)
+            | Self::ErrorArrayBounds(_, _, _)
+            | Self::ErrorStringBounds(_, _, _)
+            | Self::ErrorIndexingType(_, _)
+            | Self::ErrorFor(_)
+            | Self::ErrorVariableNotFound(_, _)
+            | Self::ErrorModuleNotFound(_, _)
+            | Self::ErrorDataRace(_, _)
+            | Self::ErrorAssignmentToUnknownLHS(_)
+            | Self::ErrorAssignmentToConstant(_, _)
+            | Self::ErrorMismatchOutputType(_, _, _)
+            | Self::ErrorInExpr(_)
+            | Self::ErrorDotExpr(_, _)
+            | Self::ErrorArithmetic(_, _)
+            | Self::ErrorRuntime(_, _) => true,
+
+            Self::ErrorTooManyOperations(_)
+            | Self::ErrorTooManyModules(_)
+            | Self::ErrorStackOverflow(_)
+            | Self::ErrorDataTooLarge(_, _, _, _)
+            | Self::ErrorTerminated(_)
+            | Self::LoopBreak(_, _)
+            | Self::Return(_, _) => false,
+        }
+    }
+
     /// Get the `Position` of this error.
     pub fn position(&self) -> Position {
         match self {

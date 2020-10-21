@@ -75,7 +75,7 @@ pub type Imports = Vec<(ImmutableString, Module)>;
 
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
-pub const MAX_CALL_STACK_DEPTH: usize = 12;
+pub const MAX_CALL_STACK_DEPTH: usize = 8;
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
 pub const MAX_EXPR_DEPTH: usize = 32;
@@ -441,17 +441,17 @@ pub struct Limits {
 
 /// Context of a script evaluation process.
 #[derive(Debug)]
-pub struct EvalContext<'e, 'x, 'px: 'x, 'a, 's, 'm, 't, 'pt: 't> {
-    engine: &'e Engine,
+pub struct EvalContext<'e, 'x, 'px: 'x, 'a, 's, 'm, 'pm: 'm, 't, 'pt: 't> {
+    pub(crate) engine: &'e Engine,
     pub scope: &'x mut Scope<'px>,
     pub(crate) mods: &'a mut Imports,
     pub(crate) state: &'s mut State,
-    lib: &'m Module,
+    pub(crate) lib: &'m [&'pm Module],
     pub(crate) this_ptr: &'t mut Option<&'pt mut Dynamic>,
-    level: usize,
+    pub(crate) level: usize,
 }
 
-impl<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> {
+impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> {
     /// The current `Engine`.
     #[inline(always)]
     pub fn engine(&self) -> &'e Engine {
@@ -465,10 +465,10 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 't, 
     pub fn imports(&self) -> &'a Imports {
         self.mods
     }
-    /// The global namespace containing definition of all script-defined functions.
+    /// Get an iterator over the namespaces containing definition of all script-defined functions.
     #[inline(always)]
-    pub fn namespace(&self) -> &'m Module {
-        self.lib
+    pub fn iter_namespaces(&self) -> impl Iterator<Item = &'pm Module> + 'm {
+        self.lib.iter().cloned()
     }
     /// The current bound `this` pointer, if any.
     #[inline(always)]
@@ -757,7 +757,7 @@ impl Engine {
         scope: &'s mut Scope,
         mods: &'s mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &'a Expr,
     ) -> Result<(Target<'s>, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
@@ -792,7 +792,7 @@ impl Engine {
         scope: &'s mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &'a Expr,
     ) -> Result<(Target<'s>, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
@@ -862,7 +862,7 @@ impl Engine {
     fn eval_dot_index_chain_helper(
         &self,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         target: &mut Target,
         rhs: &Expr,
@@ -1155,7 +1155,7 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         level: usize,
@@ -1234,7 +1234,7 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         chain_type: ChainType,
@@ -1305,7 +1305,7 @@ impl Engine {
     fn get_indexed_mut<'a>(
         &self,
         state: &mut State,
-        _lib: &Module,
+        _lib: &[&Module],
         target: &'a mut Target,
         idx: Dynamic,
         idx_pos: Position,
@@ -1414,7 +1414,7 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         lhs: &Expr,
         rhs: &Expr,
@@ -1477,7 +1477,7 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         level: usize,
@@ -1786,7 +1786,7 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        lib: &Module,
+        lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         stmt: &Stmt,
         level: usize,
@@ -1932,6 +1932,63 @@ impl Engine {
             // Break statement
             Stmt::Break(pos) => EvalAltResult::LoopBreak(true, *pos).into(),
 
+            // Try/Catch statement
+            Stmt::TryCatch(x) => {
+                let ((body, _), var_def, (catch_body, _)) = x.as_ref();
+
+                let result = self
+                    .eval_stmt(scope, mods, state, lib, this_ptr, body, level)
+                    .map(|_| ().into());
+
+                if let Err(err) = result {
+                    match *err {
+                        mut err @ EvalAltResult::ErrorRuntime(_, _) | mut err
+                            if err.catchable() =>
+                        {
+                            let value = match err {
+                                EvalAltResult::ErrorRuntime(ref x, _) => x.clone(),
+                                _ => {
+                                    err.set_position(Position::none());
+                                    err.to_string().into()
+                                }
+                            };
+                            let has_var = if let Some((var_name, _)) = var_def {
+                                let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
+                                scope.push(var_name, value);
+                                state.scope_level += 1;
+                                true
+                            } else {
+                                false
+                            };
+
+                            let mut result = self
+                                .eval_stmt(scope, mods, state, lib, this_ptr, catch_body, level)
+                                .map(|_| ().into());
+
+                            if let Some(result_err) = result.as_ref().err() {
+                                match result_err.as_ref() {
+                                    EvalAltResult::ErrorRuntime(x, pos) if x.is::<()>() => {
+                                        err.set_position(*pos);
+                                        result = Err(Box::new(err));
+                                    }
+                                    _ => (),
+                                }
+                            }
+
+                            if has_var {
+                                scope.rewind(scope.len() - 1);
+                                state.scope_level -= 1;
+                            }
+
+                            result
+                        }
+                        _ => Err(err),
+                    }
+                } else {
+                    result
+                }
+            }
+
             // Return value
             Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Return => {
                 let expr = x.1.as_ref().unwrap();
@@ -1951,16 +2008,12 @@ impl Engine {
             Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Exception => {
                 let expr = x.1.as_ref().unwrap();
                 let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-                EvalAltResult::ErrorRuntime(
-                    val.take_string().unwrap_or_else(|_| "".into()),
-                    (x.0).1,
-                )
-                .into()
+                EvalAltResult::ErrorRuntime(val, (x.0).1).into()
             }
 
             // Empty throw
             Stmt::ReturnWithVal(x) if (x.0).0 == ReturnType::Exception => {
-                EvalAltResult::ErrorRuntime("".into(), (x.0).1).into()
+                EvalAltResult::ErrorRuntime(().into(), (x.0).1).into()
             }
 
             Stmt::ReturnWithVal(_) => unreachable!(),

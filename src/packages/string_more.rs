@@ -247,6 +247,7 @@ mod string_functions {
     pub fn replace_char(s: &mut ImmutableString, find: char, sub: char) {
         *s = s.replace(&find.to_string(), &sub.to_string()).into();
     }
+
     #[rhai_fn(return_raw)]
     pub fn pad(
         _context: NativeCallContext,
@@ -363,7 +364,6 @@ mod string_functions {
         pub fn prepend(x: &mut Array, y: &str) -> String {
             format!("{:?}{}", x, y)
         }
-
         pub fn split(s: &str, delimiter: ImmutableString) -> Array {
             s.split(delimiter.as_str())
                 .map(Into::<Dynamic>::into)

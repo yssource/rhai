@@ -21,6 +21,8 @@ Keywords List
 |        `break`        | break out of loop iteration                 |                 |      no      |              |
 |       `return`        | return value                                |                 |      no      |              |
 |        `throw`        | throw exception                             |                 |      no      |              |
+|         `try`         | trap exception                              |                 |      no      |              |
+|        `catch`        | catch exception                             |                 |      no      |              |
 |       `import`        | import module                               |  [`no_module`]  |      no      |              |
 |       `export`        | export variable                             |  [`no_module`]  |      no      |              |
 |         `as`          | alias for variable export                   |  [`no_module`]  |      no      |              |
@@ -55,8 +57,6 @@ Reserved Keywords
 | `case`    | matching              |
 | `public`  | function/field access |
 | `new`     | constructor           |
-| `try`     | trap exception        |
-| `catch`   | catch exception       |
 | `use`     | import namespace      |
 | `with`    | scope                 |
 | `module`  | module                |

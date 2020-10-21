@@ -99,7 +99,7 @@ pub fn to_dynamic<T: Serialize>(value: T) -> Result<Dynamic, Box<EvalAltResult>>
 
 impl Error for Box<EvalAltResult> {
     fn custom<T: fmt::Display>(err: T) -> Self {
-        EvalAltResult::ErrorRuntime(err.to_string(), Position::none()).into()
+        EvalAltResult::ErrorRuntime(err.to_string().into(), Position::none()).into()
     }
 }
 

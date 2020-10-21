@@ -13,7 +13,10 @@ use std::format;
 use std::borrow::Cow;
 
 use quote::{quote, quote_spanned};
-use syn::{parse::Parse, parse::ParseStream, parse::Parser, spanned::Spanned};
+use syn::{
+    parse::{Parse, ParseStream, Parser},
+    spanned::Spanned,
+};
 
 use crate::attrs::{ExportInfo, ExportScope, ExportedParams};
 
@@ -360,7 +363,7 @@ impl Parse for ExportedFn {
             pass_context,
             return_dynamic,
             mut_receiver,
-            params: ExportedFnParams::default(),
+            params: Default::default(),
         })
     }
 }
@@ -466,13 +469,10 @@ impl ExportedFn {
         //
         // 1. Do not allow non-returning raw functions.
         //
-        if params.return_raw
-            && mem::discriminant(&self.signature.output)
-                == mem::discriminant(&syn::ReturnType::Default)
-        {
+        if params.return_raw && self.return_type().is_none() {
             return Err(syn::Error::new(
                 self.signature.span(),
-                "return_raw functions must return Result<T, Box<EvalAltResult>>",
+                "functions marked with 'return_raw' must return Result<Dynamic, Box<EvalAltResult>>",
             ));
         }
 
@@ -481,7 +481,7 @@ impl ExportedFn {
             FnSpecialAccess::Property(Property::Get(_)) if self.arg_count() != 1 => {
                 return Err(syn::Error::new(
                     self.signature.span(),
-                    "property getter requires exactly 1 argument",
+                    "property getter requires exactly 1 parameter",
                 ))
             }
             // 2b. Property getters must return a value.
@@ -495,7 +495,7 @@ impl ExportedFn {
             FnSpecialAccess::Property(Property::Set(_)) if self.arg_count() != 2 => {
                 return Err(syn::Error::new(
                     self.signature.span(),
-                    "property setter requires exactly 2 arguments",
+                    "property setter requires exactly 2 parameters",
                 ))
             }
             // 3b. Property setters must return nothing.
@@ -509,7 +509,7 @@ impl ExportedFn {
             FnSpecialAccess::Index(Index::Get) if self.arg_count() != 2 => {
                 return Err(syn::Error::new(
                     self.signature.span(),
-                    "index getter requires exactly 2 arguments",
+                    "index getter requires exactly 2 parameters",
                 ))
             }
             // 4b. Index getters must return a value.
@@ -523,7 +523,7 @@ impl ExportedFn {
             FnSpecialAccess::Index(Index::Set) if self.arg_count() != 3 => {
                 return Err(syn::Error::new(
                     self.signature.span(),
-                    "index setter requires exactly 3 arguments",
+                    "index setter requires exactly 3 parameters",
                 ))
             }
             // 5b. Index setters must return nothing.
@@ -593,19 +593,19 @@ impl ExportedFn {
         if self.params.return_raw {
             quote_spanned! { return_span=>
                 pub #dynamic_signature {
-                    super::#name(#(#arguments),*)
+                    #name(#(#arguments),*)
                 }
             }
         } else if self.return_dynamic {
             quote_spanned! { return_span=>
                 pub #dynamic_signature {
-                    Ok(super::#name(#(#arguments),*))
+                    Ok(#name(#(#arguments),*))
                 }
             }
         } else {
             quote_spanned! { return_span=>
                 pub #dynamic_signature {
-                    Ok(Dynamic::from(super::#name(#(#arguments),*)))
+                    Ok(Dynamic::from(#name(#(#arguments),*)))
                 }
             }
         }

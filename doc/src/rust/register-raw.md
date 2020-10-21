@@ -70,10 +70,8 @@ where:
 * `context: NativeCallContext` - the current _native call context_, which exposes the following:
 
   * `context.engine(): &Engine` - the current [`Engine`], with all configurations and settings.
-    This is sometimes useful for calling a script-defined function within the same evaluation context
-    using [`Engine::call_fn`][`call_fn`], or calling a [function pointer].
-
-  * `context.namespace(): &Module` - the global namespace of script-defined functions, as a [`Module`].
+    This is sometimes useful for calling a script-defined function within the same evaluation context using [`Engine::call_fn`][`call_fn`], or calling a [function pointer].
+  * `context.iter_namespaces(): impl Iterator<Item = &Module>` - iterator of the namespaces (as [modules]) containing all script-defined functions.
 
 * `args: &mut [&mut Dynamic]` - a slice containing `&mut` references to [`Dynamic`] values.
   The slice is guaranteed to contain enough arguments _of the correct types_.

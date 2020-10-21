@@ -70,7 +70,7 @@ struct State<'a> {
     /// An `Engine` instance for eager function evaluation.
     engine: &'a Engine,
     /// Library of script-defined functions.
-    lib: &'a Module,
+    lib: &'a [&'a Module],
     /// Optimization level.
     optimization_level: OptimizationLevel,
 }
@@ -78,7 +78,7 @@ struct State<'a> {
 impl<'a> State<'a> {
     /// Create a new State.
     #[inline(always)]
-    pub fn new(engine: &'a Engine, lib: &'a Module, level: OptimizationLevel) -> Self {
+    pub fn new(engine: &'a Engine, lib: &'a [&'a Module], level: OptimizationLevel) -> Self {
         Self {
             changed: false,
             constants: vec![],
@@ -268,7 +268,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
         ))),
         // let id;
         stmt @ Stmt::Let(_) => stmt,
-        // import expr as id;
+        // import expr as var;
         #[cfg(not(feature = "no_module"))]
         Stmt::Import(x) => Stmt::Import(Box::new((optimize_expr(x.0, state), x.1, x.2))),
         // { block }
@@ -389,6 +389,22 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 _ => Stmt::Block(Box::new((result.into(), pos))),
             }
         }
+        // try { block } catch ( var ) { block }
+        Stmt::TryCatch(x) if (x.0).0.is_pure() => {
+            // If try block is pure, there will never be any exceptions
+            state.set_dirty();
+            let pos = (x.0).0.position();
+            let mut statements: StaticVec<_> = Default::default();
+            statements.push(optimize_stmt((x.0).0, state, preserve_result));
+            statements.push(Stmt::Noop(pos));
+            Stmt::Block(Box::new((statements, pos)))
+        }
+        // try { block } catch ( var ) { block }
+        Stmt::TryCatch(x) => Stmt::TryCatch(Box::new((
+            (optimize_stmt((x.0).0, state, false), (x.0).1),
+            x.1,
+            (optimize_stmt((x.2).0, state, false), (x.2).1),
+        ))),
         // expr;
         Stmt::Expr(expr) => Stmt::Expr(Box::new(optimize_expr(*expr, state))),
         // return expr;
@@ -615,7 +631,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
 
             // First search for script-defined functions (can override built-in)
             #[cfg(not(feature = "no_function"))]
-            let has_script_fn = state.lib.get_script_fn(name, args.len(), false).is_some();
+            let has_script_fn = state.lib.iter().any(|&m| m.get_script_fn(name, args.len(), false).is_some());
             #[cfg(feature = "no_function")]
             let has_script_fn = false;
 
@@ -686,7 +702,7 @@ fn optimize(
     statements: Vec<Stmt>,
     engine: &Engine,
     scope: &Scope,
-    lib: &Module,
+    lib: &[&Module],
     level: OptimizationLevel,
 ) -> Vec<Stmt> {
     // If optimization level is None then skip optimizing
@@ -837,7 +853,8 @@ pub fn optimize_into_ast(
                     let pos = fn_def.body.position();
 
                     // Optimize the function body
-                    let mut body = optimize(vec![fn_def.body], engine, &Scope::new(), &lib2, level);
+                    let mut body =
+                        optimize(vec![fn_def.body], engine, &Scope::new(), &[&lib2], level);
 
                     // {} -> Noop
                     fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
@@ -877,7 +894,7 @@ pub fn optimize_into_ast(
         match level {
             OptimizationLevel::None => statements,
             OptimizationLevel::Simple | OptimizationLevel::Full => {
-                optimize(statements, engine, &scope, &lib, level)
+                optimize(statements, engine, &scope, &[&lib], level)
             }
         },
         lib,

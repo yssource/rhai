@@ -47,16 +47,10 @@ macro_rules! reg_debug_functions {
 }
 
 def_package!(crate:BasicStringPackage:"Basic string utilities, including printing.", lib, {
-    reg_print_functions!(lib += print_basic; INT, bool, char, FnPtr);
-    set_exported_fn!(lib, KEYWORD_PRINT, print_empty_string);
-    set_exported_fn!(lib, KEYWORD_PRINT, print_unit);
-    set_exported_fn!(lib, FN_TO_STRING, print_unit);
-    set_exported_fn!(lib, KEYWORD_PRINT, print_string);
-    set_exported_fn!(lib, FN_TO_STRING, print_string);
+    combine_with_exported_module!(lib, "print_debug", print_debug_functions);
 
+    reg_print_functions!(lib += print_basic; INT, bool, char, FnPtr);
     reg_debug_functions!(lib += debug_basic; INT, bool, Unit, char, ImmutableString);
-    set_exported_fn!(lib, KEYWORD_DEBUG, print_empty_string);
-    set_exported_fn!(lib, KEYWORD_DEBUG, debug_fn_ptr);
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
@@ -82,14 +76,14 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
         reg_print_functions!(lib += print_array; Array);
         reg_debug_functions!(lib += print_array; Array);
     }
-
-    #[cfg(not(feature = "no_object"))]
-    {
-        set_exported_fn!(lib, KEYWORD_PRINT, format_map::format_map);
-        set_exported_fn!(lib, FN_TO_STRING, format_map::format_map);
-        set_exported_fn!(lib, KEYWORD_DEBUG, format_map::format_map);
-    }
 });
+
+fn to_string<T: Display>(x: &mut T) -> ImmutableString {
+    x.to_string().into()
+}
+fn to_debug<T: Debug>(x: &mut T) -> ImmutableString {
+    format!("{:?}", x).into()
+}
 
 gen_functions!(print_basic => to_string(INT, bool, char, FnPtr));
 gen_functions!(debug_basic => to_debug(INT, bool, Unit, char, ImmutableString));
@@ -122,35 +116,32 @@ gen_functions!(debug_float => to_debug(f32, f64));
 gen_functions!(print_array => to_debug(Array));
 
 // Register print and debug
-#[export_fn]
-fn print_empty_string() -> ImmutableString {
-    "".to_string().into()
-}
-#[export_fn]
-fn print_unit(_x: ()) -> ImmutableString {
-    "".to_string().into()
-}
-#[export_fn]
-fn print_string(s: ImmutableString) -> ImmutableString {
-    s
-}
-#[export_fn]
-fn debug_fn_ptr(f: &mut FnPtr) -> ImmutableString {
-    to_string(f)
-}
-fn to_string<T: Display>(x: &mut T) -> ImmutableString {
-    x.to_string().into()
-}
-fn to_debug<T: Debug>(x: &mut T) -> ImmutableString {
-    format!("{:?}", x).into()
-}
+#[export_module]
+mod print_debug_functions {
+    #[rhai_fn(name = "print", name = "debug")]
+    pub fn print_empty_string() -> ImmutableString {
+        "".to_string().into()
+    }
+    #[rhai_fn(name = "print", name = "to_string")]
+    pub fn print_unit(_x: ()) -> ImmutableString {
+        "".to_string().into()
+    }
+    #[rhai_fn(name = "print", name = "to_string")]
+    pub fn print_string(s: ImmutableString) -> ImmutableString {
+        s
+    }
+    #[rhai_fn(name = "debug")]
+    pub fn debug_fn_ptr(f: &mut FnPtr) -> ImmutableString {
+        to_string(f)
+    }
 
-#[cfg(not(feature = "no_object"))]
-mod format_map {
-    use super::*;
+    #[cfg(not(feature = "no_object"))]
+    pub mod map_functions {
+        use super::*;
 
-    #[export_fn]
-    pub fn format_map(x: &mut Map) -> ImmutableString {
-        format!("#{:?}", x).into()
+        #[rhai_fn(name = "print", name = "debug", name = "to_string")]
+        pub fn format_map(x: &mut Map) -> ImmutableString {
+            format!("#{:?}", x).into()
+        }
     }
 }

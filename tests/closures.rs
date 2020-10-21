@@ -270,7 +270,7 @@ fn test_closures_external() -> Result<(), Box<EvalAltResult>> {
     ast.retain_functions(|_, _, _| true);
 
     // Closure 'f' captures: the engine, the AST, and the curried function pointer
-    let f = move |x: INT| fn_ptr.call_dynamic((&engine, ast.as_ref()).into(), None, [x.into()]);
+    let f = move |x: INT| fn_ptr.call_dynamic((&engine, &[ast.as_ref()]).into(), None, [x.into()]);
 
     assert_eq!(f(42)?.as_str(), Ok("hello42"));
 
