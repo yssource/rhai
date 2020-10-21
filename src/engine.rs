@@ -1918,8 +1918,8 @@ impl Engine {
                         }
                     }
 
-                    scope.rewind(scope.len() - 1);
                     state.scope_level -= 1;
+                    scope.rewind(scope.len() - 1);
                     Ok(Default::default())
                 } else {
                     EvalAltResult::ErrorFor(x.1.position()).into()
@@ -1940,52 +1940,47 @@ impl Engine {
                     .eval_stmt(scope, mods, state, lib, this_ptr, body, level)
                     .map(|_| ().into());
 
-                if let Err(err) = result {
-                    match *err {
+                match result {
+                    Ok(_) => result,
+                    Err(err) => match *err {
                         mut err @ EvalAltResult::ErrorRuntime(_, _) | mut err
                             if err.catchable() =>
                         {
-                            let value = match err {
-                                EvalAltResult::ErrorRuntime(ref x, _) => x.clone(),
-                                _ => {
-                                    err.set_position(Position::none());
-                                    err.to_string().into()
-                                }
+                            let value = if let EvalAltResult::ErrorRuntime(ref x, _) = err {
+                                x.clone()
+                            } else {
+                                err.set_position(Position::none());
+                                err.to_string().into()
                             };
-                            let has_var = if let Some((var_name, _)) = var_def {
+
+                            let orig_scope_len = scope.len();
+                            state.scope_level += 1;
+
+                            if let Some((var_name, _)) = var_def {
                                 let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
                                 scope.push(var_name, value);
-                                state.scope_level += 1;
-                                true
-                            } else {
-                                false
-                            };
+                            }
 
                             let mut result = self
                                 .eval_stmt(scope, mods, state, lib, this_ptr, catch_body, level)
                                 .map(|_| ().into());
 
                             if let Some(result_err) = result.as_ref().err() {
-                                match result_err.as_ref() {
-                                    EvalAltResult::ErrorRuntime(x, pos) if x.is::<()>() => {
-                                        err.set_position(*pos);
-                                        result = Err(Box::new(err));
-                                    }
-                                    _ => (),
+                                if let EvalAltResult::ErrorRuntime(Dynamic(Union::Unit(_)), pos) =
+                                    result_err.as_ref()
+                                {
+                                    err.set_position(*pos);
+                                    result = Err(Box::new(err));
                                 }
                             }
 
-                            if has_var {
-                                scope.rewind(scope.len() - 1);
-                                state.scope_level -= 1;
-                            }
+                            state.scope_level -= 1;
+                            scope.rewind(orig_scope_len);
 
                             result
                         }
                         _ => Err(err),
-                    }
-                } else {
-                    result
+                    },
                 }
             }
 
