@@ -1695,11 +1695,11 @@ impl Engine {
 
             // Normal function call
             Expr::FnCall(x) if x.1.is_none() => {
-                let ((name, native, capture, pos), _, hash, args_expr, def_val) = x.as_ref();
+                let ((name, native, cap_scope, pos), _, hash, args_expr, def_val) = x.as_ref();
                 let def_val = def_val.map(Into::<Dynamic>::into);
                 self.make_function_call(
                     scope, mods, state, lib, this_ptr, name, args_expr, &def_val, *hash, *native,
-                    false, *capture, level,
+                    false, *cap_scope, level,
                 )
                 .map_err(|err| err.fill_position(*pos))
             }

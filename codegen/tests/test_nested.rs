@@ -21,7 +21,7 @@ fn one_fn_module_nested_attr_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::one_fn_module_nested_attr::advanced_math);
     let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced".to_string(), m);
+    r.insert("Math::Advanced", m);
     engine.set_module_resolver(Some(r));
 
     assert_eq!(
@@ -57,7 +57,7 @@ fn one_fn_submodule_nested_attr_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::one_fn_submodule_nested_attr::advanced_math);
     let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced".to_string(), m);
+    r.insert("Math::Advanced", m);
     engine.set_module_resolver(Some(r));
 
     assert_eq!(
@@ -132,7 +132,7 @@ fn export_nested_by_prefix_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::export_nested_by_prefix::my_adds);
     let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced".to_string(), m);
+    r.insert("Math::Advanced", m);
     engine.set_module_resolver(Some(r));
 
     let output_array = engine.eval::<Array>(

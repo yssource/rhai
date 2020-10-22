@@ -9,27 +9,27 @@
 //!
 //! #[export_module]
 //! mod advanced_math {
-//!     pub const MYSTIC_NUMBER: FLOAT = 42.0 as FLOAT;
+//!     pub const MYSTIC_NUMBER: FLOAT = 42.0;
 //!
 //!     pub fn euclidean_distance(x1: FLOAT, y1: FLOAT, x2: FLOAT, y2: FLOAT) -> FLOAT {
 //!         ((y2 - y1).abs().powf(2.0) + (x2 -x1).abs().powf(2.0)).sqrt()
 //!     }
 //! }
 //!
-//! fn main() -> Result<(), Box<EvalAltResult>> {
-//!     let mut engine = Engine::new();
-//!     let m = rhai::exported_module!(advanced_math);
-//!     let mut r = StaticModuleResolver::new();
-//!     r.insert("Math::Advanced".to_string(), m);
-//!     engine.set_module_resolver(Some(r));
+//! # fn main() -> Result<(), Box<EvalAltResult>> {
+//! let mut engine = Engine::new();
+//! let m = exported_module!(advanced_math);
+//! let mut r = StaticModuleResolver::new();
+//! r.insert("Math::Advanced", m);
+//! engine.set_module_resolver(Some(r));
 //!
-//!     assert_eq!(engine.eval::<FLOAT>(
-//!         r#"import "Math::Advanced" as math;
-//!            let m = math::MYSTIC_NUMBER;
-//!            let x = math::euclidean_distance(0.0, 1.0, 0.0, m);
-//!            x"#)?, 41.0);
-//!     Ok(())
-//! }
+//! assert_eq!(engine.eval::<FLOAT>(
+//!     r#"
+//!         import "Math::Advanced" as math;
+//!         math::euclidean_distance(0.0, 1.0, 0.0, math::MYSTIC_NUMBER)
+//!     "#)?, 41.0);
+//! #   Ok(())
+//! # }
 //! ```
 //!
 //! # Register a Rust Function with a Rhai `Module`
@@ -44,23 +44,22 @@
 //!     ((y2 - y1).abs().powf(2.0) + (x2 -x1).abs().powf(2.0)).sqrt()
 //! }
 //!
-//! fn main() -> Result<(), Box<EvalAltResult>> {
+//! # fn main() -> Result<(), Box<EvalAltResult>> {
+//! let mut engine = Engine::new();
+//! engine.register_fn("get_mystic_number", || 42.0 as FLOAT);
+//! let mut m = Module::new();
+//! set_exported_fn!(m, "euclidean_distance", distance_function);
+//! let mut r = StaticModuleResolver::new();
+//! r.insert("Math::Advanced", m);
+//! engine.set_module_resolver(Some(r));
 //!
-//!     let mut engine = Engine::new();
-//!     engine.register_fn("get_mystic_number", || { 42 as FLOAT });
-//!     let mut m = Module::new();
-//!     rhai::set_exported_fn!(m, "euclidean_distance", distance_function);
-//!     let mut r = StaticModuleResolver::new();
-//!     r.insert("Math::Advanced".to_string(), m);
-//!     engine.set_module_resolver(Some(r));
-//!
-//!     assert_eq!(engine.eval::<FLOAT>(
-//!         r#"import "Math::Advanced" as math;
-//!            let m = get_mystic_number();
-//!            let x = math::euclidean_distance(0.0, 1.0, 0.0, m);
-//!            x"#)?, 41.0);
-//!     Ok(())
-//! }
+//! assert_eq!(engine.eval::<FLOAT>(
+//!     r#"
+//!         import "Math::Advanced" as math;
+//!         math::euclidean_distance(0.0, 1.0, 0.0, get_mystic_number())
+//!     "#)?, 41.0);
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! # Register a Plugin Function with an `Engine`
@@ -70,23 +69,21 @@
 //! use rhai::plugin::*;
 //! use rhai::module_resolvers::*;
 //!
-//! #[rhai::export_fn]
+//! #[export_fn]
 //! pub fn distance_function(x1: FLOAT, y1: FLOAT, x2: FLOAT, y2: FLOAT) -> FLOAT {
 //!     ((y2 - y1).abs().powf(2.0) + (x2 -x1).abs().powf(2.0)).sqrt()
 //! }
 //!
-//! fn main() -> Result<(), Box<EvalAltResult>> {
+//! # fn main() -> Result<(), Box<EvalAltResult>> {
+//! let mut engine = Engine::new();
+//! engine.register_fn("get_mystic_number", || { 42 as FLOAT });
+//! register_exported_fn!(engine, "euclidean_distance", distance_function);
 //!
-//!     let mut engine = Engine::new();
-//!     engine.register_fn("get_mystic_number", || { 42 as FLOAT });
-//!     rhai::register_exported_fn!(engine, "euclidean_distance", distance_function);
-//!
-//!     assert_eq!(engine.eval::<FLOAT>(
-//!         r#"let m = get_mystic_number();
-//!            let x = euclidean_distance(0.0, 1.0, 0.0, m);
-//!            x"#)?, 41.0);
-//!     Ok(())
-//! }
+//! assert_eq!(engine.eval::<FLOAT>(
+//!         "euclidean_distance(0.0, 1.0, 0.0, get_mystic_number())"
+//!     )?, 41.0);
+//! # Ok(())
+//! # }
 //! ```
 //!
 
