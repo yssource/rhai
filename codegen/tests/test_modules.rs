@@ -13,7 +13,7 @@ fn empty_module_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::empty_module::EmptyModule);
     let mut r = StaticModuleResolver::new();
-    r.insert("Module::Empty".to_string(), m);
+    r.insert("Module::Empty", m);
     engine.set_module_resolver(Some(r));
 
     assert_eq!(
@@ -40,7 +40,7 @@ fn one_fn_module_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::one_fn_module::advanced_math);
     let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced".to_string(), m);
+    r.insert("Math::Advanced", m);
     engine.set_module_resolver(Some(r));
 
     assert_eq!(
@@ -74,7 +74,7 @@ fn one_fn_and_const_module_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::one_fn_and_const_module::advanced_math);
     let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced".to_string(), m);
+    r.insert("Math::Advanced", m);
     engine.set_module_resolver(Some(r));
 
     assert_eq!(
@@ -106,7 +106,7 @@ fn raw_fn_str_module_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::raw_fn_str_module::host_io);
     let mut r = StaticModuleResolver::new();
-    r.insert("Host::IO".to_string(), m);
+    r.insert("Host::IO", m);
     engine.set_module_resolver(Some(r));
 
     assert_eq!(
@@ -163,7 +163,7 @@ fn mut_opaque_ref_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::mut_opaque_ref_module::host_msg);
     let mut r = StaticModuleResolver::new();
-    r.insert("Host::Msg".to_string(), m);
+    r.insert("Host::Msg", m);
     engine.set_module_resolver(Some(r));
 
     assert_eq!(
@@ -205,7 +205,7 @@ fn duplicate_fn_rename_test() -> Result<(), Box<EvalAltResult>> {
     engine.register_fn("get_mystic_number", || 42 as FLOAT);
     let m = rhai::exported_module!(crate::duplicate_fn_rename::my_adds);
     let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced".to_string(), m);
+    r.insert("Math::Advanced", m);
     engine.set_module_resolver(Some(r));
 
     let output_array = engine.eval::<Array>(
@@ -329,7 +329,7 @@ fn export_by_prefix_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::export_by_prefix::my_adds);
     let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced".to_string(), m);
+    r.insert("Math::Advanced", m);
     engine.set_module_resolver(Some(r));
 
     let output_array = engine.eval::<Array>(
@@ -412,7 +412,7 @@ fn export_all_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::export_all::my_adds);
     let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced".to_string(), m);
+    r.insert("Math::Advanced", m);
     engine.set_module_resolver(Some(r));
 
     let output_array = engine.eval::<Array>(

@@ -17,13 +17,9 @@ fn raw_fn_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.register_fn("get_mystic_number", || 42 as FLOAT);
     let mut m = Module::new();
-    rhai::set_exported_fn!(
-        m,
-        "euclidean_distance".to_string(),
-        raw_fn::distance_function
-    );
+    rhai::set_exported_fn!(m, "euclidean_distance", raw_fn::distance_function);
     let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced".to_string(), m);
+    r.insert("Math::Advanced", m);
     engine.set_module_resolver(Some(r));
 
     assert_eq!(
@@ -53,7 +49,7 @@ fn raw_fn_mut_test() -> Result<(), Box<EvalAltResult>> {
     let mut m = Module::new();
     rhai::set_exported_fn!(m, "add_in_place", raw_fn_mut::add_in_place);
     let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced".to_string(), m);
+    r.insert("Math::Advanced", m);
     engine.set_module_resolver(Some(r));
 
     assert_eq!(
@@ -85,7 +81,7 @@ fn raw_fn_str_test() -> Result<(), Box<EvalAltResult>> {
     let mut m = Module::new();
     rhai::set_exported_fn!(m, "write_out_str", raw_fn_str::write_out_str);
     let mut r = StaticModuleResolver::new();
-    r.insert("Host::IO".to_string(), m);
+    r.insert("Host::IO", m);
     engine.set_module_resolver(Some(r));
 
     assert_eq!(
@@ -143,7 +139,7 @@ fn mut_opaque_ref_test() -> Result<(), Box<EvalAltResult>> {
     rhai::set_exported_fn!(m, "new_os_message", mut_opaque_ref::new_os_message);
     rhai::set_exported_fn!(m, "write_out_message", mut_opaque_ref::write_out_message);
     let mut r = StaticModuleResolver::new();
-    r.insert("Host::Msg".to_string(), m);
+    r.insert("Host::Msg", m);
     engine.set_module_resolver(Some(r));
 
     assert_eq!(
@@ -182,13 +178,9 @@ fn raw_returning_fn_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.register_fn("get_mystic_number", || 42 as FLOAT);
     let mut m = Module::new();
-    rhai::set_exported_fn!(
-        m,
-        "euclidean_distance".to_string(),
-        raw_returning_fn::distance_function
-    );
+    rhai::set_exported_fn!(m, "euclidean_distance", raw_returning_fn::distance_function);
     let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced".to_string(), m);
+    r.insert("Math::Advanced", m);
     engine.set_module_resolver(Some(r));
 
     assert_eq!(

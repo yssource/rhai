@@ -16,8 +16,6 @@ it raises an evaluation error.
 It is possible, through a special syntax, to capture the calling scope - i.e. the scope
 that makes the function call - and access variables defined there.
 
-Capturing can be disabled via the [`no_closure`] feature.
-
 ```rust
 fn foo(y) {             // function accesses 'x' and 'y', but 'x' is not defined
     x += y;             // 'x' is modified in this function

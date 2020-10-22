@@ -158,13 +158,13 @@ fn test_function_captures() -> Result<(), Box<EvalAltResult>> {
         *engine
             .compile(
                 r#"
-                fn foo() { this += x; }
+                    fn foo() { this += x; }
 
-                let x = 41;
-                let y = 999;
+                    let x = 41;
+                    let y = 999;
 
-                y.foo!();
-            "#
+                    y.foo!();
+                "#
             )
             .expect_err("should error")
             .0,

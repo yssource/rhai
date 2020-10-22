@@ -61,6 +61,7 @@ Reserved Keywords
 | `with`    | scope                 |
 | `module`  | module                |
 | `package` | package               |
+| `thread`  | threading             |
 | `spawn`   | threading             |
 | `go`      | threading             |
 | `await`   | async                 |

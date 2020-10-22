@@ -1998,7 +1998,6 @@ fn parse_primary(
 
         root_expr = match (root_expr, token) {
             // Qualified function call with !
-            #[cfg(not(feature = "no_closure"))]
             (Expr::Variable(x), Token::Bang) if x.1.is_some() => {
                 return Err(if !match_token(input, Token::LeftParen).0 {
                     LexError::UnexpectedInput(Token::Bang.syntax().to_string()).into_err(token_pos)
@@ -2008,7 +2007,6 @@ fn parse_primary(
                 });
             }
             // Function call with !
-            #[cfg(not(feature = "no_closure"))]
             (Expr::Variable(x), Token::Bang) => {
                 let (matched, pos) = match_token(input, Token::LeftParen);
                 if !matched {

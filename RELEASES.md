@@ -15,6 +15,9 @@ Breaking changes
 * `EvalAltResult::ErrorLoopBreak` is renamed to `EvalAltResult::LoopBreak`.
 * `Engine::register_raw_fn` and `FnPtr::call_dynamic` function signatures have changed.
 * Callback signatures to `Engine::on_var` and `Engine::register_custom_syntax` have changed.
+* `EvalAltResult::ErrorRuntime` now wraps a `Dynamic` instead of a string.
+* Default call stack depth for `debug` builds is reduced to 8 (from 12) because it keeps overflowing the stack in GitHub CI!
+* Keyword `thread` is reserved.
 
 New features
 ------------
@@ -27,6 +30,7 @@ Enhancements
 ------------
 
 * Calling `eval` or `Fn` in method-call style, which is an error, is now caught during parsing.
+* `func!()` call style is valid even under `no_closure` feature.
 
 
 Version 0.19.2

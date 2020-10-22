@@ -33,3 +33,13 @@ The most important resources to watch out for are:
 
 * **Data**: A malicious script may attempt to read from and/or write to data that it does not own. If this happens,
   it is a severe security breach and may put the entire system at risk.
+
+
+`unchecked`
+-----------
+
+All these safe-guards can be turned off via the [`unchecked`] feature, which disables all
+safety checks (even fatal errors such as arithmetic overflows and division-by-zero).
+
+This will increase script evaluation performance, at the expense of having an erroneous
+script able to panic the entire system.

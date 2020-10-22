@@ -490,7 +490,7 @@ impl Engine {
         is_ref: bool,
         _is_method: bool,
         pub_only: bool,
-        _capture: Option<Scope>,
+        _capture_scope: Option<Scope>,
         def_val: &Option<Dynamic>,
         _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
@@ -562,7 +562,7 @@ impl Engine {
 
                     // Move captured variables into scope
                     #[cfg(not(feature = "no_closure"))]
-                    if let Some(captured) = _capture {
+                    if let Some(captured) = _capture_scope {
                         captured
                             .into_iter()
                             .filter(|ScopeEntry { name, .. }| {
@@ -868,7 +868,7 @@ impl Engine {
         mut hash_script: u64,
         native: bool,
         pub_only: bool,
-        capture: bool,
+        capture_scope: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let args_expr = args_expr.as_ref();
@@ -1043,7 +1043,7 @@ impl Engine {
         let mut arg_values: StaticVec<_>;
         let mut args: StaticVec<_>;
         let mut is_ref = false;
-        let capture = if cfg!(not(feature = "no_closure")) && capture && !scope.is_empty() {
+        let capture = if capture_scope && !scope.is_empty() {
             Some(scope.clone_visible())
         } else {
             None

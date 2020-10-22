@@ -16,7 +16,7 @@ use crate::stdlib::{boxed::Box, collections::HashMap, ops::AddAssign, string::St
 /// let mut resolver = StaticModuleResolver::new();
 ///
 /// let module = Module::new();
-/// resolver.insert("hello".to_string(), module);
+/// resolver.insert("hello", module);
 ///
 /// let mut engine = Engine::new();
 ///
