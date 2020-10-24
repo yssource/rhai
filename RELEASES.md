@@ -2,6 +2,15 @@ Rhai Release Notes
 ==================
 
 
+Version 0.19.4
+==============
+
+New features
+------------
+
+* `Module::fill_with` to poly-fill a module with another.
+
+
 Version 0.19.3
 ==============
 
