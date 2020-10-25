@@ -10,7 +10,11 @@ use crate::token::{is_valid_identifier, Position, Token};
 use crate::utils::ImmutableString;
 use crate::StaticVec;
 
-use crate::stdlib::{boxed::Box, format, string::ToString};
+use crate::stdlib::{
+    boxed::Box,
+    format,
+    string::{String, ToString},
+};
 
 /// A general expression evaluation trait object.
 #[cfg(not(feature = "sync"))]
