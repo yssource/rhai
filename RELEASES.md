@@ -5,6 +5,11 @@ Rhai Release Notes
 Version 0.19.4
 ==============
 
+Bug fixes
+---------
+
+* Fixes `Send + Sync` for `EvalAltResult` under the `sync` feature. Bug introduced with `0.19.3`.
+  
 New features
 ------------
 

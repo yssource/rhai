@@ -25,7 +25,11 @@ use crate::stdlib::{
 #[non_exhaustive]
 pub enum EvalAltResult {
     /// System error. Wrapped values are the error message and the internal error.
+    #[cfg(not(feature = "sync"))]
     ErrorSystem(String, Box<dyn Error>),
+    /// System error. Wrapped values are the error message and the internal error.
+    #[cfg(feature = "sync")]
+    ErrorSystem(String, Box<dyn Error + Send + Sync>),
 
     /// Syntax error.
     ErrorParsing(ParseErrorType, Position),
