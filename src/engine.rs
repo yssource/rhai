@@ -512,14 +512,14 @@ pub struct Engine {
     pub(crate) module_resolver: Option<Box<dyn ModuleResolver>>,
 
     /// A hashmap mapping type names to pretty-print names.
-    pub(crate) type_names: Option<HashMap<String, String>>,
+    pub(crate) type_names: HashMap<String, String>,
 
     /// A hashset containing symbols to disable.
-    pub(crate) disabled_symbols: Option<HashSet<String>>,
+    pub(crate) disabled_symbols: HashSet<String>,
     /// A hashset containing custom keywords and precedence to recognize.
-    pub(crate) custom_keywords: Option<HashMap<String, u8>>,
+    pub(crate) custom_keywords: HashMap<String, Option<u8>>,
     /// Custom syntax.
-    pub(crate) custom_syntax: Option<HashMap<String, CustomSyntax>>,
+    pub(crate) custom_syntax: HashMap<ImmutableString, CustomSyntax>,
     /// Callback closure for resolving variable access.
     pub(crate) resolve_var: Option<OnVarCallback>,
 
@@ -658,10 +658,10 @@ impl Engine {
             #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
             module_resolver: None,
 
-            type_names: None,
-            disabled_symbols: None,
-            custom_keywords: None,
-            custom_syntax: None,
+            type_names: Default::default(),
+            disabled_symbols: Default::default(),
+            custom_keywords: Default::default(),
+            custom_syntax: Default::default(),
 
             // variable resolver
             resolve_var: None,
@@ -715,10 +715,10 @@ impl Engine {
             #[cfg(not(feature = "no_module"))]
             module_resolver: None,
 
-            type_names: None,
-            disabled_symbols: None,
-            custom_keywords: None,
-            custom_syntax: None,
+            type_names: Default::default(),
+            disabled_symbols: Default::default(),
+            custom_keywords: Default::default(),
+            custom_syntax: Default::default(),
 
             resolve_var: None,
 
@@ -2274,8 +2274,8 @@ impl Engine {
     #[inline(always)]
     pub(crate) fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
-            .as_ref()
-            .and_then(|t| t.get(name).map(String::as_str))
+            .get(name)
+            .map(String::as_str)
             .unwrap_or_else(|| map_std_type_name(name))
     }
 

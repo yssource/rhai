@@ -2549,9 +2549,17 @@ fn parse_binary_op(
     let mut root = lhs;
 
     loop {
-        let (current_op, _) = input.peek().unwrap();
-        let custom = state.engine.custom_keywords.as_ref();
-        let precedence = current_op.precedence(custom);
+        let (current_op, current_pos) = input.peek().unwrap();
+        let precedence = if let Token::Custom(c) = current_op {
+            // Custom operators
+            if let Some(Some(p)) = state.engine.custom_keywords.get(c) {
+                *p
+            } else {
+                return Err(PERR::Reserved(c.clone()).into_err(*current_pos));
+            }
+        } else {
+            current_op.precedence()
+        };
         let bind_right = current_op.is_bind_right();
 
         // Bind left to the parent lhs expression if precedence is higher
@@ -2574,7 +2582,17 @@ fn parse_binary_op(
 
         let rhs = parse_unary(input, state, lib, settings)?;
 
-        let next_precedence = input.peek().unwrap().0.precedence(custom);
+        let (next_op, next_pos) = input.peek().unwrap();
+        let next_precedence = if let Token::Custom(c) = next_op {
+            // Custom operators
+            if let Some(Some(p)) = state.engine.custom_keywords.get(c) {
+                *p
+            } else {
+                return Err(PERR::Reserved(c.clone()).into_err(*next_pos));
+            }
+        } else {
+            next_op.precedence()
+        };
 
         // Bind to right if the next operator has higher precedence
         // If same precedence, then check if the operator binds right
@@ -2646,14 +2664,7 @@ fn parse_binary_op(
                 make_dot_expr(current_lhs, rhs, pos)?
             }
 
-            Token::Custom(s)
-                if state
-                    .engine
-                    .custom_keywords
-                    .as_ref()
-                    .map(|c| c.contains_key(&s))
-                    .unwrap_or(false) =>
-            {
+            Token::Custom(s) if state.engine.custom_keywords.contains_key(&s) => {
                 // Accept non-native functions for custom operators
                 let op = (op.0, false, op.2, op.3);
                 Expr::FnCall(Box::new((op, None, hash, args, None)))
@@ -2665,12 +2676,12 @@ fn parse_binary_op(
 }
 
 /// Parse a custom syntax.
-fn parse_custom(
+fn parse_custom_syntax(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
-    key: &str,
+    key: String,
     syntax: &CustomSyntax,
     pos: Position,
 ) -> Result<Expr, ParseError> {
@@ -2691,13 +2702,26 @@ fn parse_custom(
         _ => (),
     }
 
-    for segment in syntax.segments.iter() {
+    let mut segments: StaticVec<_> = Default::default();
+    segments.push(key);
+
+    loop {
         settings.pos = input.peek().unwrap().1;
+
+        let token = if let Some(seg) = (syntax.parse)(&segments.iter().collect::<StaticVec<_>>())
+            .map_err(|err| err.0.into_err(settings.pos))?
+        {
+            seg
+        } else {
+            break;
+        };
+
         let settings = settings.level_up();
 
-        match segment.as_str() {
+        match token.as_str() {
             MARKER_IDENT => match input.next().unwrap() {
                 (Token::Identifier(s), pos) => {
+                    segments.push(s.to_string());
                     exprs.push(Expr::Variable(Box::new(((s, pos), None, 0, None))));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
@@ -2705,20 +2729,25 @@ fn parse_custom(
                 }
                 (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
             },
-            MARKER_EXPR => exprs.push(parse_expr(input, state, lib, settings)?),
+            MARKER_EXPR => {
+                exprs.push(parse_expr(input, state, lib, settings)?);
+                segments.push(MARKER_EXPR.to_string());
+            }
             MARKER_BLOCK => {
                 let stmt = parse_block(input, state, lib, settings)?;
                 let pos = stmt.position();
-                exprs.push(Expr::Stmt(Box::new((stmt, pos))))
+                exprs.push(Expr::Stmt(Box::new((stmt, pos))));
+                segments.push(MARKER_BLOCK.to_string());
             }
             s => match input.peek().unwrap() {
+                (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
                 (t, _) if t.syntax().as_ref() == s => {
-                    input.next().unwrap();
+                    segments.push(input.next().unwrap().0.syntax().into_owned());
                 }
                 (_, pos) => {
                     return Err(PERR::MissingToken(
                         s.to_string(),
-                        format!("for '{}' expression", key),
+                        format!("for '{}' expression", segments[0]),
                     )
                     .into_err(*pos))
                 }
@@ -2745,16 +2774,22 @@ fn parse_expr(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // Check if it is a custom syntax.
-    if let Some(ref custom) = state.engine.custom_syntax {
+    if !state.engine.custom_syntax.is_empty() {
         let (token, pos) = input.peek().unwrap();
         let token_pos = *pos;
 
         match token {
-            Token::Custom(key) if custom.contains_key(key) => {
-                let custom = custom.get_key_value(key).unwrap();
-                let (key, syntax) = custom;
-                input.next().unwrap();
-                return parse_custom(input, state, lib, settings, key, syntax, token_pos);
+            Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key) => {
+                match state.engine.custom_syntax.get_key_value(key) {
+                    Some((key, syntax)) => {
+                        let key = key.to_string();
+                        input.next().unwrap();
+                        return parse_custom_syntax(
+                            input, state, lib, settings, key, syntax, token_pos,
+                        );
+                    }
+                    _ => (),
+                }
             }
             _ => (),
         }

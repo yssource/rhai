@@ -16,7 +16,7 @@ To do so, provide a closure to the [`Engine`] via the `Engine::on_var` method:
 let mut engine = Engine::new();
 
 // Register a variable resolver.
-engine.on_var(|name, index, scope, context| {
+engine.on_var(|name, index, context| {
     match name {
         "MYSTIC_NUMBER" => Ok(Some((42 as INT).into())),
         // Override a variable - make it not found even if it exists!
@@ -24,7 +24,7 @@ engine.on_var(|name, index, scope, context| {
             EvalAltResult::ErrorVariableNotFound(name.to_string(), Position::none())
         )),
         // Silently maps 'chameleon' into 'innocent'.
-        "chameleon" => scope.get_value("innocent").map(Some).ok_or_else(|| Box::new(
+        "chameleon" => context.scope.get_value("innocent").map(Some).ok_or_else(|| Box::new(
             EvalAltResult::ErrorVariableNotFound(name.to_string(), Position::none())
         )),
         // Return Ok(None) to continue with the normal variable resolution process.

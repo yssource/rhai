@@ -76,6 +76,8 @@ where:
 * `args: &mut [&mut Dynamic]` - a slice containing `&mut` references to [`Dynamic`] values.
   The slice is guaranteed to contain enough arguments _of the correct types_.
 
+* Return value - result of the function call.
+
 Remember, in Rhai, all arguments _except_ the _first_ one are always passed by _value_ (i.e. cloned).
 Therefore, it is unnecessary to ever mutate any argument except the first one, as all mutations
 will be on the cloned copy.

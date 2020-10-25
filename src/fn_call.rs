@@ -1055,7 +1055,7 @@ impl Engine {
         } else {
             // If the first argument is a variable, and there is no curried arguments, convert to method-call style
             // in order to leverage potential &mut first argument and avoid cloning the value
-            if args_expr[0].get_variable_access(false).is_some() && curry.is_empty() {
+            if curry.is_empty() && args_expr[0].get_variable_access(false).is_some()  {
                 // func(x, ...) -> x.func(...)
                 arg_values = args_expr
                     .iter()

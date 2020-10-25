@@ -7,13 +7,10 @@ use crate::fn_native::{SendSync, Shared};
 use crate::parser::Expr;
 use crate::result::EvalAltResult;
 use crate::token::{is_valid_identifier, Position, Token};
+use crate::utils::ImmutableString;
 use crate::StaticVec;
 
-use crate::stdlib::{
-    boxed::Box,
-    fmt, format,
-    string::{String, ToString},
-};
+use crate::stdlib::{boxed::Box, format, string::ToString};
 
 /// A general expression evaluation trait object.
 #[cfg(not(feature = "sync"))]
@@ -23,6 +20,14 @@ pub type FnCustomSyntaxEval =
 #[cfg(feature = "sync")]
 pub type FnCustomSyntaxEval =
     dyn Fn(&mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
+
+/// A general expression parsing trait object.
+#[cfg(not(feature = "sync"))]
+pub type FnCustomSyntaxParse = dyn Fn(&[&String]) -> Result<Option<ImmutableString>, ParseError>;
+/// A general expression parsing trait object.
+#[cfg(feature = "sync")]
+pub type FnCustomSyntaxParse =
+    dyn Fn(&[&String]) -> Result<Option<ImmutableString>, ParseError> + Send + Sync;
 
 /// An expression sub-tree in an AST.
 #[derive(Debug, Clone, Hash)]
@@ -76,18 +81,10 @@ impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_, '_> {
     }
 }
 
-#[derive(Clone)]
 pub struct CustomSyntax {
-    pub segments: StaticVec<String>,
+    pub parse: Box<FnCustomSyntaxParse>,
     pub func: Shared<FnCustomSyntaxEval>,
     pub scope_delta: isize,
-}
-
-impl fmt::Debug for CustomSyntax {
-    #[inline(always)]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.segments, f)
-    }
 }
 
 impl Engine {
@@ -106,7 +103,7 @@ impl Engine {
     ) -> Result<&mut Self, ParseError> {
         let keywords = keywords.as_ref();
 
-        let mut segments: StaticVec<_> = Default::default();
+        let mut segments: StaticVec<ImmutableString> = Default::default();
 
         for s in keywords {
             let s = s.as_ref().trim();
@@ -119,47 +116,40 @@ impl Engine {
             let seg = match s {
                 // Markers not in first position
                 MARKER_EXPR | MARKER_BLOCK | MARKER_IDENT if !segments.is_empty() => s.to_string(),
-                // Standard symbols not in first position
+                // Standard or reserved keyword/symbol not in first position
                 s if !segments.is_empty() && Token::lookup_from_syntax(s).is_some() => {
-                    // Make it a custom keyword/operator if it is a disabled standard keyword/operator
-                    // or a reserved keyword/operator.
-                    if self
-                        .disabled_symbols
-                        .as_ref()
-                        .map(|d| d.contains(s))
-                        .unwrap_or(false)
-                        || Token::lookup_from_syntax(s)
-                            .map(|token| token.is_reserved())
-                            .unwrap_or(false)
-                    {
-                        // If symbol is disabled, make it a custom keyword
-                        if self.custom_keywords.is_none() {
-                            self.custom_keywords = Some(Default::default());
-                        }
-
-                        if !self.custom_keywords.as_ref().unwrap().contains_key(s) {
-                            self.custom_keywords.as_mut().unwrap().insert(s.into(), 0);
-                        }
+                    // Make it a custom keyword/symbol
+                    if !self.custom_keywords.contains_key(s) {
+                        self.custom_keywords.insert(s.into(), None);
                     }
-
                     s.into()
                 }
-                // Identifier
-                s if is_valid_identifier(s.chars()) => {
-                    if self.custom_keywords.is_none() {
-                        self.custom_keywords = Some(Default::default());
+                // Standard keyword in first position
+                s if segments.is_empty()
+                    && Token::lookup_from_syntax(s)
+                        .map(|v| v.is_keyword() || v.is_reserved())
+                        .unwrap_or(false) =>
+                {
+                    return Err(LexError::ImproperSymbol(format!(
+                        "Improper symbol for custom syntax at position #{}: '{}'",
+                        segments.len() + 1,
+                        s
+                    ))
+                    .into_err(Position::none())
+                    .into());
+                }
+                // Identifier in first position
+                s if segments.is_empty() && is_valid_identifier(s.chars()) => {
+                    if !self.custom_keywords.contains_key(s) {
+                        self.custom_keywords.insert(s.into(), None);
                     }
-
-                    if !self.custom_keywords.as_ref().unwrap().contains_key(s) {
-                        self.custom_keywords.as_mut().unwrap().insert(s.into(), 0);
-                    }
-
                     s.into()
                 }
                 // Anything else is an error
                 _ => {
                     return Err(LexError::ImproperSymbol(format!(
-                        "Improper symbol for custom syntax: '{}'",
+                        "Improper symbol for custom syntax at position #{}: '{}'",
+                        segments.len() + 1,
                         s
                     ))
                     .into_err(Position::none())
@@ -167,7 +157,7 @@ impl Engine {
                 }
             };
 
-            segments.push(seg);
+            segments.push(seg.into());
         }
 
         // If the syntax has no keywords, just ignore the registration
@@ -175,24 +165,54 @@ impl Engine {
             return Ok(self);
         }
 
-        // Remove the first keyword as the discriminator
-        let key = segments.remove(0);
+        // The first keyword is the discriminator
+        let key = segments[0].clone();
 
+        self.register_custom_syntax_raw(
+            key,
+            // Construct the parsing function
+            move |stream| {
+                if stream.len() >= segments.len() {
+                    Ok(None)
+                } else {
+                    Ok(Some(segments[stream.len()].clone()))
+                }
+            },
+            new_vars,
+            func,
+        );
+
+        Ok(self)
+    }
+
+    /// Register a custom syntax with the `Engine`.
+    ///
+    /// ## WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    ///
+    /// * `new_vars` is the number of new variables declared by this custom syntax, or the number of variables removed (if negative).  
+    /// * `parse` is the parsing function.
+    /// * `func` is the implementation function.
+    ///
+    /// All custom keywords must be manually registered via `Engine::register_custom_operator`.
+    /// Otherwise, custom keywords won't be recognized.
+    pub fn register_custom_syntax_raw(
+        &mut self,
+        key: impl Into<ImmutableString>,
+        parse: impl Fn(&[&String]) -> Result<Option<ImmutableString>, ParseError> + SendSync + 'static,
+        new_vars: isize,
+        func: impl Fn(&mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
+            + SendSync
+            + 'static,
+    ) -> &mut Self {
         let syntax = CustomSyntax {
-            segments,
+            parse: Box::new(parse),
             func: (Box::new(func) as Box<FnCustomSyntaxEval>).into(),
             scope_delta: new_vars,
         };
 
-        if self.custom_syntax.is_none() {
-            self.custom_syntax = Some(Default::default());
-        }
-
-        self.custom_syntax
-            .as_mut()
-            .unwrap()
-            .insert(key, syntax.into());
-
-        Ok(self)
+        self.custom_syntax.insert(key.into(), syntax);
+        self
     }
 }

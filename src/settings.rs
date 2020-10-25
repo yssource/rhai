@@ -240,15 +240,7 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn disable_symbol(&mut self, symbol: &str) -> &mut Self {
-        if self.disabled_symbols.is_none() {
-            self.disabled_symbols = Some(Default::default());
-        }
-
-        self.disabled_symbols
-            .as_mut()
-            .unwrap()
-            .insert(symbol.into());
-
+        self.disabled_symbols.insert(symbol.into());
         self
     }
 
@@ -291,28 +283,14 @@ impl Engine {
             // Standard identifiers, reserved keywords and custom keywords are OK
             None | Some(Token::Reserved(_)) | Some(Token::Custom(_)) => (),
             // Disabled keywords are also OK
-            Some(token)
-                if !self
-                    .disabled_symbols
-                    .as_ref()
-                    .map(|d| d.contains(token.syntax().as_ref()))
-                    .unwrap_or(false) =>
-            {
-                ()
-            }
+            Some(token) if !self.disabled_symbols.contains(token.syntax().as_ref()) => (),
             // Active standard keywords cannot be made custom
             Some(_) => return Err(format!("'{}' is a reserved keyword", keyword).into()),
         }
 
         // Add to custom keywords
-        if self.custom_keywords.is_none() {
-            self.custom_keywords = Some(Default::default());
-        }
-
         self.custom_keywords
-            .as_mut()
-            .unwrap()
-            .insert(keyword.into(), precedence);
+            .insert(keyword.into(), Some(precedence));
 
         Ok(self)
     }

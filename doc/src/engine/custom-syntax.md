@@ -54,16 +54,14 @@ These symbol types can be used:
 
 * `$ident$` - any [variable] name.
 
-### The First Symbol Must be a Keyword
+### The First Symbol Must be an Identifier
 
 There is no specific limit on the combination and sequencing of each symbol type,
 except the _first_ symbol which must be a custom keyword that follows the naming rules
 of [variables].
 
-The first symbol also cannot be a reserved [keyword], unless that keyword
-has been [disabled][disable keywords and operators].
-
-In other words, any valid identifier that is not an active [keyword] will work fine.
+The first symbol also cannot be a normal or reserved [keyword].
+In other words, any valid identifier that is not a [keyword] will work fine.
 
 ### The First Symbol Must be Unique
 
@@ -126,6 +124,8 @@ where:
   * `context.call_level(): usize` - the current nesting level of function calls.
 
 * `inputs: &[Expression]` - a list of input expression trees.
+
+* Return value - result of evaluating the custom syntax expression.
 
 ### Access Arguments
 
@@ -215,9 +215,9 @@ fn implementation_func(
     Ok(().into())
 }
 
-// Register the custom syntax (sample): do |x| -> { x += 1 } while x < 0;
+// Register the custom syntax (sample): exec |x| -> { x += 1 } while x < 0;
 engine.register_custom_syntax(
-    &[ "do", "|", "$ident$", "|", "->", "$block$", "while", "$expr$" ], // the custom syntax
+    &[ "exec", "|", "$ident$", "|", "->", "$block$", "while", "$expr$" ], // the custom syntax
     1,  // the number of new variables declared within this custom syntax
     implementation_func
 )?;
@@ -252,3 +252,70 @@ Make sure there are _lots_ of examples for users to follow.
 
 Step Six - Profit!
 ------------------
+
+
+Really Advanced - Low Level Custom Syntax API
+--------------------------------------------
+
+Sometimes it is desirable to have multiple custom syntax starting with the
+same symbol.  This is especially common for _command-style_ syntax where the
+second symbol calls a particular command:
+
+```rust
+// The following simulates a command-style syntax, all starting with 'perform'.
+perform action 42;          // Perform a system action with a parameter
+perform update system;      // Update the system
+perform check all;          // Check all system settings
+perform cleanup;            // Clean up the system
+perform add something;      // Add something to the system
+perform remove something;   // Delete something from the system
+```
+
+For even more flexibility, there is a _low level_ API for custom syntax that
+allows the registration of an entire mini-parser.
+
+Use `Engine::register_custom_syntax_raw` to register a custom syntax _parser_
+together with the implementation function:
+
+```rust
+// Register the custom syntax (sample): exec |x| -> { x += 1 } while x < 0;
+engine.register_custom_syntax_raw(
+    "exec",
+    |stream| match stream.len() {
+        1 => Ok(Some("|".into())),
+        2 => Ok(Some("$ident$".into())),
+        3 => Ok(Some("|".into())),
+        4 => Ok(Some("->".into())),
+        5 => Ok(Some("$block$".into())),
+        6 => Ok(Some("while".into())),
+        7 => Ok(Some("$expr$".into())),
+        8 => Ok(None)
+        _ => unreachable!(),
+    }
+    1,  // the number of new variables declared within this custom syntax
+    implementation_func     // implementation function as above
+)?;
+```
+
+### Function Signature
+
+The custom syntax parser has the following signature:
+
+> `Fn(stream: &[&String]) -> Result<Option<ImmutableString>, ParseError>`
+
+where:
+
+* `stream: &[&String]` - a slice of symbols that have been parsed so far, perhaps containing the following:
+  * `$expr$` - an expression
+  * `$block$` - a statement block
+
+### Return Value
+
+The return value is `Result<Option<ImmutableString>, ParseError>` where:
+
+* `Ok(None)` - parsing complete and there are no more symbols to match.
+
+* `Ok(Some(symbol))` - next symbol to match.
+
+* `Err(ParseError)` - error is reflected back to the [`Engine`].
+  Normally this is `ParseErrorType::ImproperSymbol` to indicate that there is a syntax error, but it can be any error.
