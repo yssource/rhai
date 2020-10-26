@@ -52,9 +52,6 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
         },
     )?;
 
-    // 'while' is now a custom keyword so this it can no longer be a variable
-    engine.consume("let while = 0").expect_err("should error");
-
     assert_eq!(
         engine.eval::<INT>(
             r"

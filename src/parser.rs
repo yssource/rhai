@@ -2702,6 +2702,8 @@ fn parse_custom_syntax(
         _ => (),
     }
 
+    let parse_func = &syntax.parse;
+
     let mut segments: StaticVec<_> = Default::default();
     segments.push(key.to_string());
 
@@ -2709,7 +2711,6 @@ fn parse_custom_syntax(
         settings.pos = input.peek().unwrap().1;
         let settings = settings.level_up();
 
-        let parse_func = &syntax.parse;
         let token =
             if let Some(seg) = parse_func(&segments).map_err(|err| err.0.into_err(settings.pos))? {
                 seg
@@ -2738,8 +2739,8 @@ fn parse_custom_syntax(
                 exprs.push(Expr::Stmt(Box::new((stmt, pos))));
                 segments.push(MARKER_BLOCK.into());
             }
-            s => match input.peek().unwrap() {
-                (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
+            s => match input.next().unwrap() {
+                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                 (t, _) if t.syntax().as_ref() == s => {
                     segments.push(t.syntax().into_owned());
                 }
@@ -2748,7 +2749,7 @@ fn parse_custom_syntax(
                         s.to_string(),
                         format!("for '{}' expression", segments[0]),
                     )
-                    .into_err(*pos))
+                    .into_err(pos))
                 }
             },
         }
