@@ -2681,7 +2681,7 @@ fn parse_custom_syntax(
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
-    key: String,
+    key: &str,
     syntax: &CustomSyntax,
     pos: Position,
 ) -> Result<Expr, ParseError> {
@@ -2703,25 +2703,24 @@ fn parse_custom_syntax(
     }
 
     let mut segments: StaticVec<_> = Default::default();
-    segments.push(key);
+    segments.push(key.to_string());
 
     loop {
         settings.pos = input.peek().unwrap().1;
-
-        let token = if let Some(seg) = (syntax.parse)(&segments.iter().collect::<StaticVec<_>>())
-            .map_err(|err| err.0.into_err(settings.pos))?
-        {
-            seg
-        } else {
-            break;
-        };
-
         let settings = settings.level_up();
+
+        let parse_func = &syntax.parse;
+        let token =
+            if let Some(seg) = parse_func(&segments).map_err(|err| err.0.into_err(settings.pos))? {
+                seg
+            } else {
+                break;
+            };
 
         match token.as_str() {
             MARKER_IDENT => match input.next().unwrap() {
                 (Token::Identifier(s), pos) => {
-                    segments.push(s.to_string());
+                    segments.push(s.clone());
                     exprs.push(Expr::Variable(Box::new(((s, pos), None, 0, None))));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
@@ -2731,18 +2730,18 @@ fn parse_custom_syntax(
             },
             MARKER_EXPR => {
                 exprs.push(parse_expr(input, state, lib, settings)?);
-                segments.push(MARKER_EXPR.to_string());
+                segments.push(MARKER_EXPR.into());
             }
             MARKER_BLOCK => {
                 let stmt = parse_block(input, state, lib, settings)?;
                 let pos = stmt.position();
                 exprs.push(Expr::Stmt(Box::new((stmt, pos))));
-                segments.push(MARKER_BLOCK.to_string());
+                segments.push(MARKER_BLOCK.into());
             }
             s => match input.peek().unwrap() {
                 (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
                 (t, _) if t.syntax().as_ref() == s => {
-                    segments.push(input.next().unwrap().0.syntax().into_owned());
+                    segments.push(t.syntax().into_owned());
                 }
                 (_, pos) => {
                     return Err(PERR::MissingToken(
@@ -2782,7 +2781,6 @@ fn parse_expr(
             Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key) => {
                 match state.engine.custom_syntax.get_key_value(key) {
                     Some((key, syntax)) => {
-                        let key = key.to_string();
                         input.next().unwrap();
                         return parse_custom_syntax(
                             input, state, lib, settings, key, syntax, token_pos,

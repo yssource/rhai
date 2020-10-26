@@ -263,6 +263,7 @@ second symbol calls a particular command:
 
 ```rust
 // The following simulates a command-style syntax, all starting with 'perform'.
+perform hello world;        // A fixed sequence of symbols
 perform action 42;          // Perform a system action with a parameter
 perform update system;      // Update the system
 perform check all;          // Check all system settings
@@ -278,34 +279,52 @@ Use `Engine::register_custom_syntax_raw` to register a custom syntax _parser_
 together with the implementation function:
 
 ```rust
-// Register the custom syntax (sample): exec |x| -> { x += 1 } while x < 0;
 engine.register_custom_syntax_raw(
-    "exec",
+    "perform",
     |stream| match stream.len() {
-        1 => Ok(Some("|".into())),
-        2 => Ok(Some("$ident$".into())),
-        3 => Ok(Some("|".into())),
-        4 => Ok(Some("->".into())),
-        5 => Ok(Some("$block$".into())),
-        6 => Ok(Some("while".into())),
-        7 => Ok(Some("$expr$".into())),
-        8 => Ok(None)
+        // perform ...
+        1 => Ok(Some("$ident$".into())),
+        // perform command ...
+        2 => match stream[1].as_str() {
+            "action" => Ok(Some("$expr$".into())),
+            "hello" => Ok(Some("world".into())),
+            "update" | "check" | "add" | "remove" => Ok(Some("$ident$".into())),
+            "cleanup" => Ok(None),
+            cmd => Err(ParseError(Box::new(ParseErrorType::BadInput(
+                format!("Improper command: {}", cmd))),
+                Position::none(),
+            )),
+        },
+        // perform command arg ...
+        3 => match (stream[1].as_str(), stream[2].as_str()) {
+            ("action", _) => Ok(None),
+            ("hello", "world") => Ok(None),
+            ("update", arg) if arg == "system" => Ok(None),
+            ("update", arg) if arg == "client" => Ok(None),
+            ("check", arg) => Ok(None),
+            ("add", arg) => Ok(None),
+            ("remove", arg) => Ok(None),
+            (cmd, arg) => Err(ParseError(Box::new(ParseErrorType::BadInput(
+                format!("Invalid argument for command {}: {}", cmd, arg))),
+                Position::none(),
+            )),
+        },
         _ => unreachable!(),
-    }
-    1,  // the number of new variables declared within this custom syntax
-    implementation_func     // implementation function as above
-)?;
+    },
+    0, // the number of new variables declared within this custom syntax
+    implementation_func
+);
 ```
 
 ### Function Signature
 
 The custom syntax parser has the following signature:
 
-> `Fn(stream: &[&String]) -> Result<Option<ImmutableString>, ParseError>`
+> `Fn(stream: &[String]) -> Result<Option<ImmutableString>, ParseError>`
 
 where:
 
-* `stream: &[&String]` - a slice of symbols that have been parsed so far, perhaps containing the following:
+* `stream: &[String]` - a slice of symbols that have been parsed so far, perhaps containing the following:
   * `$expr$` - an expression
   * `$block$` - a statement block
 
@@ -318,4 +337,4 @@ The return value is `Result<Option<ImmutableString>, ParseError>` where:
 * `Ok(Some(symbol))` - next symbol to match.
 
 * `Err(ParseError)` - error is reflected back to the [`Engine`].
-  Normally this is `ParseErrorType::ImproperSymbol` to indicate that there is a syntax error, but it can be any error.
+  Normally this is `ParseErrorType::BadInput` to indicate that there is a syntax error, but it can be any error.

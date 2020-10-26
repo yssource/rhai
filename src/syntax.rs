@@ -27,11 +27,11 @@ pub type FnCustomSyntaxEval =
 
 /// A general expression parsing trait object.
 #[cfg(not(feature = "sync"))]
-pub type FnCustomSyntaxParse = dyn Fn(&[&String]) -> Result<Option<ImmutableString>, ParseError>;
+pub type FnCustomSyntaxParse = dyn Fn(&[String]) -> Result<Option<ImmutableString>, ParseError>;
 /// A general expression parsing trait object.
 #[cfg(feature = "sync")]
 pub type FnCustomSyntaxParse =
-    dyn Fn(&[&String]) -> Result<Option<ImmutableString>, ParseError> + Send + Sync;
+    dyn Fn(&[String]) -> Result<Option<ImmutableString>, ParseError> + Send + Sync;
 
 /// An expression sub-tree in an AST.
 #[derive(Debug, Clone, Hash)]
@@ -204,7 +204,7 @@ impl Engine {
     pub fn register_custom_syntax_raw(
         &mut self,
         key: impl Into<ImmutableString>,
-        parse: impl Fn(&[&String]) -> Result<Option<ImmutableString>, ParseError> + SendSync + 'static,
+        parse: impl Fn(&[String]) -> Result<Option<ImmutableString>, ParseError> + SendSync + 'static,
         new_vars: isize,
         func: impl Fn(&mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
             + SendSync
