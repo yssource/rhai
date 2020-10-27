@@ -109,6 +109,7 @@ impl AST {
     }
 
     /// Get a mutable reference to the statements.
+    #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
     pub(crate) fn statements_mut(&mut self) -> &mut Vec<Stmt> {
         &mut self.0
