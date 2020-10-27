@@ -94,7 +94,7 @@ impl PackagesCollection {
 /// Functions can be added to the package using the standard module methods such as
 /// `set_fn_2`, `set_fn_3_mut`, `set_fn_0` etc.
 ///
-/// # Examples
+/// # Example
 ///
 /// ```
 /// use rhai::{Dynamic, EvalAltResult};

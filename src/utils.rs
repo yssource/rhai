@@ -96,7 +96,7 @@ pub fn calc_fn_hash<'a>(
 /// An `ImmutableString` wraps an `Rc<String>` (or `Arc<String>` under the `sync` feature)
 /// so that it can be simply shared and not cloned.
 ///
-/// # Examples
+/// # Example
 ///
 /// ```
 /// use rhai::ImmutableString;

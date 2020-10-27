@@ -125,7 +125,7 @@ impl AsRef<Module> for Module {
 impl Module {
     /// Create a new module.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -141,7 +141,7 @@ impl Module {
 
     /// Create a new module with a specified capacity for native Rust functions.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -160,7 +160,7 @@ impl Module {
 
     /// Is the module empty?
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -199,7 +199,7 @@ impl Module {
 
     /// Does a variable exist in the module?
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -215,7 +215,7 @@ impl Module {
 
     /// Get the value of a module variable.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -231,7 +231,7 @@ impl Module {
 
     /// Get a module variable as a `Dynamic`.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -249,7 +249,7 @@ impl Module {
     ///
     /// If there is an existing variable of the same name, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -327,7 +327,7 @@ impl Module {
 
     /// Does a sub-module exist in the module?
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -344,7 +344,7 @@ impl Module {
 
     /// Get a sub-module.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -361,7 +361,7 @@ impl Module {
 
     /// Get a mutable reference to a sub-module.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -380,7 +380,7 @@ impl Module {
     ///
     /// If there is an existing sub-module of the same name, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -402,7 +402,7 @@ impl Module {
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
     /// It is also returned by the `set_fn_XXX` calls.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -500,7 +500,7 @@ impl Module {
     ///
     /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -555,7 +555,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -584,7 +584,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -615,7 +615,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -646,7 +646,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust getter function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -669,7 +669,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -706,7 +706,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -743,7 +743,7 @@ impl Module {
     ///
     /// If there is a similar existing setter Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -775,7 +775,7 @@ impl Module {
     /// Panics if the type is `Array` or `Map`.
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -813,7 +813,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -856,7 +856,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -904,7 +904,7 @@ impl Module {
     /// Panics if the type is `Array` or `Map`.
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -962,7 +962,7 @@ impl Module {
     /// Panics if the type is `Array` or `Map`.
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -997,7 +997,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -1047,7 +1047,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -1327,7 +1327,7 @@ impl Module {
     /// defined in the module, are _merged_ into a _unified_ namespace before each call.
     /// Therefore, all functions will be found.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {

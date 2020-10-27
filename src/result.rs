@@ -20,6 +20,8 @@ use crate::stdlib::{
 ///
 /// All wrapped `Position` values represent the location in the script where the error occurs.
 ///
+/// # Thread Safety
+///
 /// Currently, `EvalAltResult` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug)]
 #[non_exhaustive]

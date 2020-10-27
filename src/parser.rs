@@ -74,6 +74,8 @@ type FunctionsLib = HashMap<u64, ScriptFnDef, StraightHasherBuilder>;
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 ///
+/// # Thread Safety
+///
 /// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug, Clone, Default)]
 pub struct AST(
@@ -398,13 +400,8 @@ impl AST {
         mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
         let Self(ref mut statements, ref mut functions) = self;
-
-        if !other.0.is_empty() {
-            statements.extend(other.0.into_iter());
-        }
-
+        statements.extend(other.0.into_iter());
         functions.merge_filtered(&other.1, &mut filter);
-
         self
     }
 
@@ -798,55 +795,63 @@ impl Default for Stmt {
 }
 
 impl Stmt {
+    /// Is this statement `Noop`?
+    pub fn is_noop(&self) -> bool {
+        match self {
+            Self::Noop(_) => true,
+            _ => false,
+        }
+    }
+
     /// Get the `Position` of this statement.
     pub fn position(&self) -> Position {
         match self {
-            Stmt::Noop(pos) | Stmt::Continue(pos) | Stmt::Break(pos) => *pos,
-            Stmt::Let(x) => (x.0).1,
-            Stmt::Const(x) => (x.0).1,
-            Stmt::Block(x) => x.1,
-            Stmt::IfThenElse(x) => x.3,
-            Stmt::Expr(x) => x.position(),
-            Stmt::While(x) => x.2,
-            Stmt::Loop(x) => x.1,
-            Stmt::For(x) => x.3,
-            Stmt::ReturnWithVal(x) => (x.0).1,
-            Stmt::TryCatch(x) => (x.0).1,
+            Self::Noop(pos) | Self::Continue(pos) | Self::Break(pos) => *pos,
+            Self::Let(x) => (x.0).1,
+            Self::Const(x) => (x.0).1,
+            Self::Block(x) => x.1,
+            Self::IfThenElse(x) => x.3,
+            Self::Expr(x) => x.position(),
+            Self::While(x) => x.2,
+            Self::Loop(x) => x.1,
+            Self::For(x) => x.3,
+            Self::ReturnWithVal(x) => (x.0).1,
+            Self::TryCatch(x) => (x.0).1,
 
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(x) => x.2,
+            Self::Import(x) => x.2,
             #[cfg(not(feature = "no_module"))]
-            Stmt::Export(x) => x.1,
+            Self::Export(x) => x.1,
 
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(x) => x.1,
+            Self::Share(x) => x.1,
         }
     }
 
     /// Override the `Position` of this statement.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
-            Stmt::Noop(pos) | Stmt::Continue(pos) | Stmt::Break(pos) => *pos = new_pos,
-            Stmt::Let(x) => (x.0).1 = new_pos,
-            Stmt::Const(x) => (x.0).1 = new_pos,
-            Stmt::Block(x) => x.1 = new_pos,
-            Stmt::IfThenElse(x) => x.3 = new_pos,
-            Stmt::Expr(x) => {
+            Self::Noop(pos) | Self::Continue(pos) | Self::Break(pos) => *pos = new_pos,
+            Self::Let(x) => (x.0).1 = new_pos,
+            Self::Const(x) => (x.0).1 = new_pos,
+            Self::Block(x) => x.1 = new_pos,
+            Self::IfThenElse(x) => x.3 = new_pos,
+            Self::Expr(x) => {
                 x.set_position(new_pos);
             }
-            Stmt::While(x) => x.2 = new_pos,
-            Stmt::Loop(x) => x.1 = new_pos,
-            Stmt::For(x) => x.3 = new_pos,
-            Stmt::ReturnWithVal(x) => (x.0).1 = new_pos,
-            Stmt::TryCatch(x) => (x.0).1 = new_pos,
+            Self::While(x) => x.2 = new_pos,
+            Self::Loop(x) => x.1 = new_pos,
+            Self::For(x) => x.3 = new_pos,
+            Self::ReturnWithVal(x) => (x.0).1 = new_pos,
+            Self::TryCatch(x) => (x.0).1 = new_pos,
 
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(x) => x.2 = new_pos,
+            Self::Import(x) => x.2 = new_pos,
             #[cfg(not(feature = "no_module"))]
-            Stmt::Export(x) => x.1 = new_pos,
+            Self::Export(x) => x.1 = new_pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(x) => x.1 = new_pos,
+            Self::Share(x) => x.1 = new_pos,
         }
 
         self
@@ -855,55 +860,55 @@ impl Stmt {
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     pub fn is_self_terminated(&self) -> bool {
         match self {
-            Stmt::IfThenElse(_)
-            | Stmt::While(_)
-            | Stmt::Loop(_)
-            | Stmt::For(_)
-            | Stmt::Block(_)
-            | Stmt::TryCatch(_) => true,
+            Self::IfThenElse(_)
+            | Self::While(_)
+            | Self::Loop(_)
+            | Self::For(_)
+            | Self::Block(_)
+            | Self::TryCatch(_) => true,
 
             // A No-op requires a semicolon in order to know it is an empty statement!
-            Stmt::Noop(_) => false,
+            Self::Noop(_) => false,
 
-            Stmt::Let(_)
-            | Stmt::Const(_)
-            | Stmt::Expr(_)
-            | Stmt::Continue(_)
-            | Stmt::Break(_)
-            | Stmt::ReturnWithVal(_) => false,
+            Self::Let(_)
+            | Self::Const(_)
+            | Self::Expr(_)
+            | Self::Continue(_)
+            | Self::Break(_)
+            | Self::ReturnWithVal(_) => false,
 
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(_) | Stmt::Export(_) => false,
+            Self::Import(_) | Self::Export(_) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(_) => false,
+            Self::Share(_) => false,
         }
     }
 
     /// Is this statement _pure_?
     pub fn is_pure(&self) -> bool {
         match self {
-            Stmt::Noop(_) => true,
-            Stmt::Expr(expr) => expr.is_pure(),
-            Stmt::IfThenElse(x) if x.2.is_some() => {
+            Self::Noop(_) => true,
+            Self::Expr(expr) => expr.is_pure(),
+            Self::IfThenElse(x) if x.2.is_some() => {
                 x.0.is_pure() && x.1.is_pure() && x.2.as_ref().unwrap().is_pure()
             }
-            Stmt::IfThenElse(x) => x.1.is_pure(),
-            Stmt::While(x) => x.0.is_pure() && x.1.is_pure(),
-            Stmt::Loop(x) => x.0.is_pure(),
-            Stmt::For(x) => x.1.is_pure() && x.2.is_pure(),
-            Stmt::Let(_) | Stmt::Const(_) => false,
-            Stmt::Block(x) => x.0.iter().all(Stmt::is_pure),
-            Stmt::Continue(_) | Stmt::Break(_) | Stmt::ReturnWithVal(_) => false,
-            Stmt::TryCatch(x) => (x.0).0.is_pure() && (x.2).0.is_pure(),
+            Self::IfThenElse(x) => x.1.is_pure(),
+            Self::While(x) => x.0.is_pure() && x.1.is_pure(),
+            Self::Loop(x) => x.0.is_pure(),
+            Self::For(x) => x.1.is_pure() && x.2.is_pure(),
+            Self::Let(_) | Self::Const(_) => false,
+            Self::Block(x) => x.0.iter().all(Self::is_pure),
+            Self::Continue(_) | Self::Break(_) | Self::ReturnWithVal(_) => false,
+            Self::TryCatch(x) => (x.0).0.is_pure() && (x.2).0.is_pure(),
 
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(_) => false,
+            Self::Import(_) => false,
             #[cfg(not(feature = "no_module"))]
-            Stmt::Export(_) => false,
+            Self::Export(_) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(_) => false,
+            Self::Share(_) => false,
         }
     }
 }

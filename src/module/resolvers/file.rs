@@ -22,7 +22,7 @@ use crate::stdlib::{boxed::Box, collections::HashMap, path::PathBuf, string::Str
 /// plus all those defined within the same module are _merged_ into a _unified_ namespace before
 /// the call.  Therefore, functions in a module script can cross-call each other.
 ///
-/// # Examples
+/// # Example
 ///
 /// ```
 /// use rhai::Engine;
@@ -53,7 +53,7 @@ impl Default for FileModuleResolver {
 impl FileModuleResolver {
     /// Create a new `FileModuleResolver` with a specific base path.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Engine;
@@ -75,7 +75,7 @@ impl FileModuleResolver {
     ///
     /// The default extension is `.rhai`.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Engine;
@@ -102,7 +102,7 @@ impl FileModuleResolver {
 
     /// Create a new `FileModuleResolver` with the current directory as base path.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Engine;

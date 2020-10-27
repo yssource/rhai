@@ -7,7 +7,7 @@ use crate::stdlib::{boxed::Box, collections::HashMap, ops::AddAssign, string::St
 
 /// Module resolution service that serves modules added into it.
 ///
-/// # Examples
+/// # Example
 ///
 /// ```
 /// use rhai::{Engine, Module};
@@ -28,7 +28,7 @@ pub struct StaticModuleResolver(HashMap<String, Module>);
 impl StaticModuleResolver {
     /// Create a new `StaticModuleResolver`.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Engine, Module};

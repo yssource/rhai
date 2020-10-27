@@ -84,7 +84,7 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
         "hello",
         |stream| match stream.len() {
             0 => unreachable!(),
-            1 => Ok(Some("$ident$".into())),
+            1 => Ok(Some("$ident$".to_string())),
             2 => match stream[1].as_str() {
                 "world" | "kitty" => Ok(None),
                 s => Err(ParseError(

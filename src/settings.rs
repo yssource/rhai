@@ -248,7 +248,7 @@ impl Engine {
     ///
     /// The operator must be a valid identifier (i.e. it cannot be a symbol).
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```rust
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {

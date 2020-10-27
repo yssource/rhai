@@ -70,7 +70,7 @@ impl<'de> DynamicDeserializer<'de> {
 
 /// Deserialize a `Dynamic` value into a Rust type that implements `serde::Deserialize`.
 ///
-/// # Examples
+/// # Example
 ///
 /// ```
 /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {

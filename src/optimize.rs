@@ -798,7 +798,7 @@ fn optimize(
 
     // Add back the last statement unless it is a lone No-op
     if let Some(stmt) = last_stmt {
-        if !result.is_empty() || !matches!(stmt, Stmt::Noop(_)) {
+        if !result.is_empty() || !stmt.is_noop() {
             result.push(stmt);
         }
     }

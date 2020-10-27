@@ -484,6 +484,14 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
 
 /// Rhai main scripting engine.
 ///
+/// # Thread Safety
+///
+/// `Engine` is re-entrant.
+///
+/// Currently, `Engine` is neither `Send` nor `Sync`. Use the `sync` feature to make it `Send + Sync`.
+///
+/// # Example
+///
 /// ```
 /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
 /// use rhai::Engine;
@@ -496,11 +504,9 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
 /// # Ok(())
 /// # }
 /// ```
-///
-/// Currently, `Engine` is neither `Send` nor `Sync`. Use the `sync` feature to make it `Send + Sync`.
 pub struct Engine {
     /// A unique ID identifying this scripting `Engine`.
-    pub id: Option<String>,
+    pub id: String,
 
     /// A module containing all functions directly loaded into the Engine.
     pub(crate) global_module: Module,
@@ -541,9 +547,10 @@ pub struct Engine {
 impl fmt::Debug for Engine {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.id.as_ref() {
-            Some(id) => write!(f, "Engine({})", id),
-            None => f.write_str("Engine"),
+        if !self.id.is_empty() {
+            write!(f, "Engine({})", self.id)
+        } else {
+            f.write_str("Engine")
         }
     }
 }
@@ -645,7 +652,7 @@ impl Engine {
     pub fn new() -> Self {
         // Create the new scripting Engine
         let mut engine = Self {
-            id: None,
+            id: Default::default(),
 
             packages: Default::default(),
             global_module: Default::default(),
@@ -707,7 +714,7 @@ impl Engine {
     #[inline(always)]
     pub fn new_raw() -> Self {
         Self {
-            id: None,
+            id: Default::default(),
 
             packages: Default::default(),
             global_module: Default::default(),
@@ -2281,7 +2288,7 @@ impl Engine {
 
     /// Make a Box<EvalAltResult<ErrorMismatchDataType>>.
     #[inline(always)]
-    pub fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
+    pub(crate) fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
         EvalAltResult::ErrorMismatchDataType(
             typ.into(),
             self.map_type_name(type_name::<T>()).into(),

@@ -387,9 +387,7 @@ impl Engine {
         let unified_lib = if let Some(ref env_lib) = fn_def.lib {
             lib_merged = Default::default();
             lib_merged.push(env_lib.as_ref());
-            if !lib.is_empty() {
-                lib_merged.extend(lib.iter().cloned());
-            }
+            lib_merged.extend(lib.iter().cloned());
             lib_merged.as_ref()
         } else {
             lib
@@ -670,6 +668,11 @@ impl Engine {
         _level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         self.inc_operations(state)?;
+
+        let script = script.trim();
+        if script.is_empty() {
+            return Ok(().into());
+        }
 
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
@@ -969,11 +972,7 @@ impl Engine {
                 let var_name = var_name.as_str().map_err(|err| {
                     self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
                 })?;
-                if var_name.is_empty() {
-                    return Ok(false.into());
-                } else {
-                    return Ok(scope.contains(var_name).into());
-                }
+                return Ok(scope.contains(var_name).into());
             }
         }
 
@@ -1001,12 +1000,13 @@ impl Engine {
                     self.make_type_mismatch_err::<INT>(err, args_expr[1].position())
                 })?;
 
-                if fn_name.is_empty() || num_params < 0 {
-                    return Ok(false.into());
+                return Ok(if num_params < 0 {
+                    false
                 } else {
                     let hash = calc_fn_hash(empty(), fn_name, num_params as usize, empty());
-                    return Ok(lib.iter().any(|&m| m.contains_fn(hash, false)).into());
+                    lib.iter().any(|&m| m.contains_fn(hash, false))
                 }
+                .into());
             }
         }
 
@@ -1022,12 +1022,9 @@ impl Engine {
                 let script = script.as_str().map_err(|typ| {
                     self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
                 })?;
-                let result = if !script.is_empty() {
-                    self.eval_script_expr(scope, mods, state, lib, script, level + 1)
-                        .map_err(|err| err.fill_position(args_expr[0].position()))
-                } else {
-                    Ok(().into())
-                };
+                let result = self
+                    .eval_script_expr(scope, mods, state, lib, script, level + 1)
+                    .map_err(|err| err.fill_position(args_expr[0].position()));
 
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
