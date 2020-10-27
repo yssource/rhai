@@ -924,19 +924,23 @@ impl Stmt {
 ///
 /// This type is volatile and may change.
 #[derive(Clone)]
-pub struct CustomExpr(pub StaticVec<Expr>, pub Shared<FnCustomSyntaxEval>);
+pub struct CustomExpr {
+    keywords: StaticVec<Expr>,
+    func: Shared<FnCustomSyntaxEval>,
+    pos: Position,
+}
 
 impl fmt::Debug for CustomExpr {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, f)
+        fmt::Debug::fmt(&self.keywords, f)
     }
 }
 
 impl Hash for CustomExpr {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
+        self.keywords.hash(state);
     }
 }
 
@@ -944,12 +948,17 @@ impl CustomExpr {
     /// Get the keywords for this `CustomExpr`.
     #[inline(always)]
     pub fn keywords(&self) -> &[Expr] {
-        &self.0
+        &self.keywords
     }
     /// Get the implementation function for this `CustomExpr`.
     #[inline(always)]
     pub fn func(&self) -> &FnCustomSyntaxEval {
-        self.1.as_ref()
+        self.func.as_ref()
+    }
+    /// Get the position of this `CustomExpr`.
+    #[inline(always)]
+    pub fn position(&self) -> Position {
+        self.pos
     }
 }
 
@@ -973,6 +982,13 @@ impl Hash for FloatWrapper {
         state.write(&self.0.to_le_bytes());
         self.1.hash(state);
     }
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct BinaryExpr {
+    pub lhs: Expr,
+    pub rhs: Expr,
+    pub pos: Position,
 }
 
 /// _[INTERNALS]_ An expression sub-tree.
@@ -1027,19 +1043,19 @@ pub enum Expr {
     /// expr op= expr
     Assignment(Box<(Expr, Cow<'static, str>, Expr, Position)>),
     /// lhs.rhs
-    Dot(Box<(Expr, Expr, Position)>),
+    Dot(Box<BinaryExpr>),
     /// expr[expr]
-    Index(Box<(Expr, Expr, Position)>),
+    Index(Box<BinaryExpr>),
     /// [ expr, ... ]
     Array(Box<(StaticVec<Expr>, Position)>),
     /// #{ name:expr, ... }
     Map(Box<(StaticVec<((ImmutableString, Position), Expr)>, Position)>),
     /// lhs in rhs
-    In(Box<(Expr, Expr, Position)>),
+    In(Box<BinaryExpr>),
     /// lhs && rhs
-    And(Box<(Expr, Expr, Position)>),
+    And(Box<BinaryExpr>),
     /// lhs || rhs
-    Or(Box<(Expr, Expr, Position)>),
+    Or(Box<BinaryExpr>),
     /// true
     True(Position),
     /// false
@@ -1047,7 +1063,7 @@ pub enum Expr {
     /// ()
     Unit(Position),
     /// Custom syntax
-    Custom(Box<(CustomExpr, Position)>),
+    Custom(Box<CustomExpr>),
 }
 
 impl Default for Expr {
@@ -1154,13 +1170,13 @@ impl Expr {
             Self::FnCall(x) => (x.0).3,
             Self::Assignment(x) => x.0.position(),
 
-            Self::And(x) | Self::Or(x) | Self::In(x) => x.2,
+            Self::And(x) | Self::Or(x) | Self::In(x) => x.pos,
 
             Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos,
 
-            Self::Dot(x) | Self::Index(x) => x.0.position(),
+            Self::Dot(x) | Self::Index(x) => x.lhs.position(),
 
-            Self::Custom(x) => x.1,
+            Self::Custom(x) => x.pos,
         }
     }
 
@@ -1184,16 +1200,11 @@ impl Expr {
             Self::Property(x) => x.1 = new_pos,
             Self::Stmt(x) => x.1 = new_pos,
             Self::FnCall(x) => (x.0).3 = new_pos,
-            Self::And(x) => x.2 = new_pos,
-            Self::Or(x) => x.2 = new_pos,
-            Self::In(x) => x.2 = new_pos,
-            Self::True(pos) => *pos = new_pos,
-            Self::False(pos) => *pos = new_pos,
-            Self::Unit(pos) => *pos = new_pos,
+            Self::And(x) | Self::Or(x) | Self::In(x) => x.pos = new_pos,
+            Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos = new_pos,
             Self::Assignment(x) => x.3 = new_pos,
-            Self::Dot(x) => x.2 = new_pos,
-            Self::Index(x) => x.2 = new_pos,
-            Self::Custom(x) => x.1 = new_pos,
+            Self::Dot(x) | Self::Index(x) => x.pos = new_pos,
+            Self::Custom(x) => x.pos = new_pos,
         }
 
         self
@@ -1209,8 +1220,7 @@ impl Expr {
             Self::Array(x) => x.0.iter().all(Self::is_pure),
 
             Self::Index(x) | Self::And(x) | Self::Or(x) | Self::In(x) => {
-                let (lhs, rhs, _) = x.as_ref();
-                lhs.is_pure() && rhs.is_pure()
+                x.lhs.is_pure() && x.rhs.is_pure()
             }
 
             Self::Stmt(x) => x.0.is_pure(),
@@ -1253,7 +1263,7 @@ impl Expr {
             Self::Map(x) => x.0.iter().map(|(_, expr)| expr).all(Self::is_literal),
 
             // Check in expression
-            Self::In(x) => match (&x.0, &x.1) {
+            Self::In(x) => match (&x.lhs, &x.rhs) {
                 (Self::StringConstant(_), Self::StringConstant(_))
                 | (Self::CharConstant(_), Self::StringConstant(_)) => true,
                 _ => false,
@@ -1286,7 +1296,7 @@ impl Expr {
             Self::Map(x) => x.0.iter().map(|(_, expr)| expr).all(Self::is_constant),
 
             // Check in expression
-            Self::In(x) => match (&x.0, &x.1) {
+            Self::In(x) => match (&x.lhs, &x.rhs) {
                 (Self::StringConstant(_), Self::StringConstant(_))
                 | (Self::CharConstant(_), Self::StringConstant(_)) => true,
                 _ => false,
@@ -1702,7 +1712,11 @@ fn parse_index_chain(
                     let idx_expr =
                         parse_index_chain(input, state, lib, idx_expr, settings.level_up())?;
                     // Indexing binds to right
-                    Ok(Expr::Index(Box::new((lhs, idx_expr, prev_pos))))
+                    Ok(Expr::Index(Box::new(BinaryExpr {
+                        lhs,
+                        rhs: idx_expr,
+                        pos: prev_pos,
+                    })))
                 }
                 // Otherwise terminate the indexing chain
                 _ => {
@@ -1710,10 +1724,18 @@ fn parse_index_chain(
                         // Terminate with an `Expr::Expr` wrapper to prevent the last index expression
                         // inside brackets to be mis-parsed as another level of indexing, or a
                         // dot expression/function call to be mis-parsed as following the indexing chain.
-                        Expr::Index(_) | Expr::Dot(_) | Expr::FnCall(_) => Ok(Expr::Index(
-                            Box::new((lhs, Expr::Expr(Box::new(idx_expr)), settings.pos)),
-                        )),
-                        _ => Ok(Expr::Index(Box::new((lhs, idx_expr, settings.pos)))),
+                        Expr::Index(_) | Expr::Dot(_) | Expr::FnCall(_) => {
+                            Ok(Expr::Index(Box::new(BinaryExpr {
+                                lhs,
+                                rhs: Expr::Expr(Box::new(idx_expr)),
+                                pos: settings.pos,
+                            })))
+                        }
+                        _ => Ok(Expr::Index(Box::new(BinaryExpr {
+                            lhs,
+                            rhs: idx_expr,
+                            pos: settings.pos,
+                        }))),
                     }
                 }
             }
@@ -2247,7 +2269,7 @@ fn make_assignment_stmt<'a>(
             }
         }
         // xxx[???] = rhs, xxx.??? = rhs
-        Expr::Index(x) | Expr::Dot(x) => match &x.0 {
+        Expr::Index(x) | Expr::Dot(x) => match &x.lhs {
             // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
             Expr::Variable(x) if x.3.is_none() => {
                 Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
@@ -2266,7 +2288,7 @@ fn make_assignment_stmt<'a>(
                 }
             }
             // expr[???] = rhs, expr.??? = rhs
-            _ => Err(PERR::AssignmentToCopy.into_err(x.0.position())),
+            _ => Err(PERR::AssignmentToCopy.into_err(x.lhs.position())),
         },
         // const_expr = rhs
         expr if expr.is_constant() => {
@@ -2324,13 +2346,9 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
     Ok(match (lhs, rhs) {
         // idx_lhs[idx_expr].rhs
         // Attach dot chain to the bottom level of indexing chain
-        (Expr::Index(x), rhs) => {
-            let (idx_lhs, idx_expr, pos) = *x;
-            Expr::Index(Box::new((
-                idx_lhs,
-                make_dot_expr(idx_expr, rhs, op_pos)?,
-                pos,
-            )))
+        (Expr::Index(mut x), rhs) => {
+            x.rhs = make_dot_expr(x.rhs, rhs, op_pos)?;
+            Expr::Index(x)
         }
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
@@ -2340,31 +2358,47 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
             let setter = make_setter(&name);
             let rhs = Expr::Property(Box::new(((name.into(), getter, setter), pos)));
 
-            Expr::Dot(Box::new((lhs, rhs, op_pos)))
+            Expr::Dot(Box::new(BinaryExpr {
+                lhs,
+                rhs,
+                pos: op_pos,
+            }))
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(x)) if x.1.is_some() => {
             return Err(PERR::PropertyExpected.into_err(x.1.unwrap()[0].1));
         }
         // lhs.prop
-        (lhs, prop @ Expr::Property(_)) => Expr::Dot(Box::new((lhs, prop, op_pos))),
+        (lhs, prop @ Expr::Property(_)) => Expr::Dot(Box::new(BinaryExpr {
+            lhs,
+            rhs: prop,
+            pos: op_pos,
+        })),
         // lhs.dot_lhs.dot_rhs
         (lhs, Expr::Dot(x)) => {
-            let (dot_lhs, dot_rhs, pos) = *x;
-            Expr::Dot(Box::new((
+            let rhs = Expr::Dot(Box::new(BinaryExpr {
+                lhs: x.lhs.into_property(),
+                rhs: x.rhs,
+                pos: x.pos,
+            }));
+            Expr::Dot(Box::new(BinaryExpr {
                 lhs,
-                Expr::Dot(Box::new((dot_lhs.into_property(), dot_rhs, pos))),
-                op_pos,
-            )))
+                rhs,
+                pos: op_pos,
+            }))
         }
         // lhs.idx_lhs[idx_rhs]
         (lhs, Expr::Index(x)) => {
-            let (dot_lhs, dot_rhs, pos) = *x;
-            Expr::Dot(Box::new((
+            let rhs = Expr::Index(Box::new(BinaryExpr {
+                lhs: x.lhs.into_property(),
+                rhs: x.rhs,
+                pos: x.pos,
+            }));
+            Expr::Dot(Box::new(BinaryExpr {
                 lhs,
-                Expr::Index(Box::new((dot_lhs.into_property(), dot_rhs, pos))),
-                op_pos,
-            )))
+                rhs,
+                pos: op_pos,
+            }))
         }
         // lhs.Fn() or lhs.eval()
         (_, Expr::FnCall(x))
@@ -2385,7 +2419,11 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
             .into_err((x.0).3))
         }
         // lhs.func(...)
-        (lhs, func @ Expr::FnCall(_)) => Expr::Dot(Box::new((lhs, func, op_pos))),
+        (lhs, func @ Expr::FnCall(_)) => Expr::Dot(Box::new(BinaryExpr {
+            lhs,
+            rhs: func,
+            pos: op_pos,
+        })),
         // lhs.rhs
         (_, rhs) => return Err(PERR::PropertyExpected.into_err(rhs.position())),
     })
@@ -2538,7 +2576,11 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
         _ => (),
     }
 
-    Ok(Expr::In(Box::new((lhs, rhs, op_pos))))
+    Ok(Expr::In(Box::new(BinaryExpr {
+        lhs,
+        rhs,
+        pos: op_pos,
+    })))
 }
 
 /// Parse a binary expression.
@@ -2653,12 +2695,20 @@ fn parse_binary_op(
             Token::Or => {
                 let rhs = args.pop().unwrap();
                 let current_lhs = args.pop().unwrap();
-                Expr::Or(Box::new((current_lhs, rhs, pos)))
+                Expr::Or(Box::new(BinaryExpr {
+                    lhs: current_lhs,
+                    rhs,
+                    pos,
+                }))
             }
             Token::And => {
                 let rhs = args.pop().unwrap();
                 let current_lhs = args.pop().unwrap();
-                Expr::And(Box::new((current_lhs, rhs, pos)))
+                Expr::And(Box::new(BinaryExpr {
+                    lhs: current_lhs,
+                    rhs,
+                    pos,
+                }))
             }
             Token::In => {
                 let rhs = args.pop().unwrap();
@@ -2764,10 +2814,11 @@ fn parse_custom_syntax(
         }
     }
 
-    Ok(Expr::Custom(Box::new((
-        CustomExpr(exprs, syntax.func.clone()),
+    Ok(Expr::Custom(Box::new(CustomExpr {
+        keywords: exprs,
+        func: syntax.func.clone(),
         pos,
-    ))))
+    })))
 }
 
 /// Parse an expression.

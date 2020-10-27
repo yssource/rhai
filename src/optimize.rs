@@ -7,7 +7,7 @@ use crate::engine::{
 };
 use crate::fn_call::run_builtin_binary_op;
 use crate::module::Module;
-use crate::parser::{map_dynamic_to_expr, Expr, ScriptFnDef, Stmt, AST};
+use crate::parser::{map_dynamic_to_expr, BinaryExpr, Expr, ScriptFnDef, Stmt, AST};
 use crate::scope::{Entry as ScopeEntry, Scope};
 use crate::token::{is_valid_identifier, Position};
 use crate::{calc_fn_hash, StaticVec};
@@ -447,7 +447,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
 
         // lhs.rhs
         #[cfg(not(feature = "no_object"))]
-        Expr::Dot(x) => match (x.0, x.1) {
+        Expr::Dot(x) => match (x.lhs, x.rhs) {
             // map.string
             (Expr::Map(m), Expr::Property(p)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
                 let ((prop, _, _), _) = p.as_ref();
@@ -460,12 +460,16 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
             // lhs.rhs
-            (lhs, rhs) => Expr::Dot(Box::new((optimize_expr(lhs, state), optimize_expr(rhs, state), x.2)))
+            (lhs, rhs) => Expr::Dot(Box::new(BinaryExpr {
+                lhs: optimize_expr(lhs, state),
+                rhs: optimize_expr(rhs, state),
+                pos: x.pos
+            }))
         }
 
         // lhs[rhs]
         #[cfg(not(feature = "no_index"))]
-        Expr::Index(x) => match (x.0, x.1) {
+        Expr::Index(x) => match (x.lhs, x.rhs) {
             // array[int]
             (Expr::Array(mut a), Expr::IntegerConstant(i))
                 if i.0 >= 0 && (i.0 as usize) < a.0.len() && a.0.iter().all(Expr::is_pure) =>
@@ -494,7 +498,11 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 Expr::CharConstant(Box::new((s.0.chars().nth(i.0 as usize).unwrap(), s.1)))
             }
             // lhs[rhs]
-            (lhs, rhs) => Expr::Index(Box::new((optimize_expr(lhs, state), optimize_expr(rhs, state), x.2))),
+            (lhs, rhs) => Expr::Index(Box::new(BinaryExpr {
+                lhs: optimize_expr(lhs, state),
+                rhs: optimize_expr(rhs, state),
+                pos: x.pos
+            })),
         },
         // [ items .. ]
         #[cfg(not(feature = "no_index"))]
@@ -507,7 +515,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                             .into_iter().map(|((key, pos), expr)| ((key, pos), optimize_expr(expr, state)))
                             .collect(), m.1))),
         // lhs in rhs
-        Expr::In(x) => match (x.0, x.1) {
+        Expr::In(x) => match (x.lhs, x.rhs) {
             // "xxx" in "xxxxx"
             (Expr::StringConstant(a), Expr::StringConstant(b)) => {
                 state.set_dirty();
@@ -539,10 +547,14 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 }
             }
             // lhs in rhs
-            (lhs, rhs) => Expr::In(Box::new((optimize_expr(lhs, state), optimize_expr(rhs, state), x.2))),
+            (lhs, rhs) => Expr::In(Box::new(BinaryExpr {
+                lhs: optimize_expr(lhs, state),
+                rhs: optimize_expr(rhs, state),
+                pos: x.pos
+            })),
         },
         // lhs && rhs
-        Expr::And(x) => match (x.0, x.1) {
+        Expr::And(x) => match (x.lhs, x.rhs) {
             // true && rhs -> rhs
             (Expr::True(_), rhs) => {
                 state.set_dirty();
@@ -559,10 +571,14 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 optimize_expr(lhs, state)
             }
             // lhs && rhs
-            (lhs, rhs) => Expr::And(Box::new((optimize_expr(lhs, state), optimize_expr(rhs, state), x.2))),
+            (lhs, rhs) => Expr::And(Box::new(BinaryExpr {
+                lhs: optimize_expr(lhs, state),
+                rhs: optimize_expr(rhs, state),
+                pos: x.pos
+            })),
         },
         // lhs || rhs
-        Expr::Or(x) => match (x.0, x.1) {
+        Expr::Or(x) => match (x.lhs, x.rhs) {
             // false || rhs -> rhs
             (Expr::False(_), rhs) => {
                 state.set_dirty();
@@ -579,7 +595,11 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 optimize_expr(lhs, state)
             }
             // lhs || rhs
-            (lhs, rhs) => Expr::Or(Box::new((optimize_expr(lhs, state), optimize_expr(rhs, state), x.2))),
+            (lhs, rhs) => Expr::Or(Box::new(BinaryExpr {
+                lhs: optimize_expr(lhs, state),
+                rhs: optimize_expr(rhs, state),
+                pos: x.pos
+            })),
         },
 
         // Do not call some special keywords

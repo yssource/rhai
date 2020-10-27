@@ -6,7 +6,7 @@ use crate::fn_native::{Callback, FnPtr, OnVarCallback};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
-use crate::parser::{Expr, ReturnType, Stmt};
+use crate::parser::{BinaryExpr, Expr, ReturnType, Stmt};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -901,18 +901,17 @@ impl Engine {
                 match rhs {
                     // xxx[idx].expr... | xxx[idx][expr]...
                     Expr::Dot(x) | Expr::Index(x) => {
-                        let (idx, expr, pos) = x.as_ref();
-                        let idx_pos = idx.position();
+                        let idx_pos = x.lhs.position();
                         let idx_val = idx_val.as_value();
                         let obj_ptr = &mut self.get_indexed_mut(
                             state, lib, target, idx_val, idx_pos, false, true, level,
                         )?;
 
                         self.eval_dot_index_chain_helper(
-                            state, lib, this_ptr, obj_ptr, expr, idx_values, next_chain, level,
+                            state, lib, this_ptr, obj_ptr, &x.rhs, idx_values, next_chain, level,
                             new_val,
                         )
-                        .map_err(|err| err.fill_position(*pos))
+                        .map_err(|err| err.fill_position(x.pos))
                     }
                     // xxx[rhs] = new_val
                     _ if new_val.is_some() => {
@@ -1031,9 +1030,7 @@ impl Engine {
                     }
                     // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
                     Expr::Index(x) | Expr::Dot(x) if target.is::<Map>() => {
-                        let (sub_lhs, expr, pos) = x.as_ref();
-
-                        let mut val = match sub_lhs {
+                        let mut val = match &x.lhs {
                             Expr::Property(p) => {
                                 let ((prop, _, _), pos) = p.as_ref();
                                 let index = prop.clone().into();
@@ -1061,16 +1058,14 @@ impl Engine {
                         };
 
                         self.eval_dot_index_chain_helper(
-                            state, lib, this_ptr, &mut val, expr, idx_values, next_chain, level,
+                            state, lib, this_ptr, &mut val, &x.rhs, idx_values, next_chain, level,
                             new_val,
                         )
-                        .map_err(|err| err.fill_position(*pos))
+                        .map_err(|err| err.fill_position(x.pos))
                     }
                     // xxx.sub_lhs[expr] | xxx.sub_lhs.expr
                     Expr::Index(x) | Expr::Dot(x) => {
-                        let (sub_lhs, expr, _) = x.as_ref();
-
-                        match sub_lhs {
+                        match &x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
                                 let ((_, getter, setter), pos) = p.as_ref();
@@ -1091,13 +1086,13 @@ impl Engine {
                                         lib,
                                         this_ptr,
                                         &mut val.into(),
-                                        expr,
+                                        &x.rhs,
                                         idx_values,
                                         next_chain,
                                         level,
                                         new_val,
                                     )
-                                    .map_err(|err| err.fill_position(*pos))?;
+                                    .map_err(|err| err.fill_position(x.pos))?;
 
                                 // Feed the value back via a setter just in case it has been updated
                                 if updated || may_be_changed {
@@ -1113,7 +1108,7 @@ impl Engine {
                                             EvalAltResult::ErrorDotExpr(_, _) => {
                                                 Ok(Default::default())
                                             }
-                                            _ => Err(err.fill_position(*pos)),
+                                            _ => Err(err.fill_position(x.pos)),
                                         },
                                     )?;
                                 }
@@ -1121,8 +1116,8 @@ impl Engine {
                                 Ok((result, may_be_changed))
                             }
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
-                            Expr::FnCall(x) if x.1.is_none() => {
-                                let ((name, native, _, pos), _, hash, _, def_val) = x.as_ref();
+                            Expr::FnCall(f) if f.1.is_none() => {
+                                let ((name, native, _, pos), _, hash, _, def_val) = f.as_ref();
                                 let def_val = def_val.map(Into::<Dynamic>::into);
                                 let args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self
@@ -1135,7 +1130,7 @@ impl Engine {
                                 let target = &mut val.into();
 
                                 self.eval_dot_index_chain_helper(
-                                    state, lib, this_ptr, target, expr, idx_values, next_chain,
+                                    state, lib, this_ptr, target, &x.rhs, idx_values, next_chain,
                                     level, new_val,
                                 )
                                 .map_err(|err| err.fill_position(*pos))
@@ -1168,7 +1163,14 @@ impl Engine {
         level: usize,
         new_val: Option<(Dynamic, Position)>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let ((dot_lhs, dot_rhs, op_pos), chain_type) = match expr {
+        let (
+            BinaryExpr {
+                lhs: dot_lhs,
+                rhs: dot_rhs,
+                pos: op_pos,
+            },
+            chain_type,
+        ) = match expr {
             Expr::Index(x) => (x.as_ref(), ChainType::Index),
             Expr::Dot(x) => (x.as_ref(), ChainType::Dot),
             _ => unreachable!(),
@@ -1266,7 +1268,7 @@ impl Engine {
             Expr::FnCall(_) => unreachable!(),
             Expr::Property(_) => idx_values.push(IndexChainValue::None),
             Expr::Index(x) | Expr::Dot(x) => {
-                let (lhs, rhs, _) = x.as_ref();
+                let BinaryExpr { lhs, rhs, .. } = x.as_ref();
 
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
@@ -1721,33 +1723,33 @@ impl Engine {
                 .map_err(|err| err.fill_position(*pos))
             }
 
-            Expr::In(x) => self.eval_in_expr(scope, mods, state, lib, this_ptr, &x.0, &x.1, level),
+            Expr::In(x) => {
+                self.eval_in_expr(scope, mods, state, lib, this_ptr, &x.lhs, &x.rhs, level)
+            }
 
             Expr::And(x) => {
-                let (lhs, rhs, _) = x.as_ref();
                 Ok((self
-                    .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?
+                    .eval_expr(scope, mods, state, lib, this_ptr, &x.lhs, level)?
                     .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, lhs.position()))?
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, x.lhs.position()))?
                     && // Short-circuit using &&
                 self
-                    .eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?
+                    .eval_expr(scope, mods, state, lib, this_ptr, &x.rhs, level)?
                     .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, rhs.position()))?)
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, x.rhs.position()))?)
                 .into())
             }
 
             Expr::Or(x) => {
-                let (lhs, rhs, _) = x.as_ref();
                 Ok((self
-                    .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?
+                    .eval_expr(scope, mods, state, lib, this_ptr, &x.lhs, level)?
                     .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, lhs.position()))?
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, x.lhs.position()))?
                     || // Short-circuit using ||
                 self
-                    .eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?
+                    .eval_expr(scope, mods, state, lib, this_ptr, &x.rhs, level)?
                     .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, rhs.position()))?)
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, x.rhs.position()))?)
                 .into())
             }
 
@@ -1755,9 +1757,9 @@ impl Engine {
             Expr::False(_) => Ok(false.into()),
             Expr::Unit(_) => Ok(().into()),
 
-            Expr::Custom(x) => {
-                let func = (x.0).func();
-                let expressions = (x.0)
+            Expr::Custom(custom) => {
+                let func = custom.func();
+                let expressions = custom
                     .keywords()
                     .iter()
                     .map(Into::into)
