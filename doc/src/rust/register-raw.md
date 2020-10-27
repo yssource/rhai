@@ -65,18 +65,17 @@ The function signature passed to `Engine::register_raw_fn` takes the following f
 
 where:
 
-* `T: Clone` - return type of the function.
+| Parameter                     |              Type               | Description                                                                                                                                                                                                                                |
+| ----------------------------- | :-----------------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `T`                           |          `impl Clone`           | return type of the function                                                                                                                                                                                                                |
+| `context`                     |       `NativeCallContext`       | the current _native call context_                                                                                                                                                                                                          |
+| - `context.engine()`          |            `&Engine`            | the current [`Engine`], with all configurations and settings.<br/>This is sometimes useful for calling a script-defined function within the same evaluation context using [`Engine::call_fn`][`call_fn`], or calling a [function pointer]. |
+| - `context.iter_namespaces()` | `impl Iterator<Item = &Module>` | iterator of the namespaces (as [modules]) containing all script-defined functions                                                                                                                                                          |
+| `args`                        |      `&mut [&mut Dynamic]`      | a slice containing `&mut` references to [`Dynamic`] values.<br/>The slice is guaranteed to contain enough arguments _of the correct types_.                                                                                                |
 
-* `context: NativeCallContext` - the current _native call context_, which exposes the following:
+### Return value
 
-  * `context.engine(): &Engine` - the current [`Engine`], with all configurations and settings.
-    This is sometimes useful for calling a script-defined function within the same evaluation context using [`Engine::call_fn`][`call_fn`], or calling a [function pointer].
-  * `context.iter_namespaces(): impl Iterator<Item = &Module>` - iterator of the namespaces (as [modules]) containing all script-defined functions.
-
-* `args: &mut [&mut Dynamic]` - a slice containing `&mut` references to [`Dynamic`] values.
-  The slice is guaranteed to contain enough arguments _of the correct types_.
-
-* Return value - result of the function call.
+The return value is the result of the function call.
 
 Remember, in Rhai, all arguments _except_ the _first_ one are always passed by _value_ (i.e. cloned).
 Therefore, it is unnecessary to ever mutate any argument except the first one, as all mutations
@@ -118,16 +117,16 @@ let mut engine = Engine::new();
 engine.register_raw_fn(
     "bar",
     &[
-        std::any::TypeId::of::<i64>(),                          // parameter types
+        std::any::TypeId::of::<i64>(),                      // parameter types
         std::any::TypeId::of::<FnPtr>(),
         std::any::TypeId::of::<i64>(),
     ],
     |context, args| {
         // 'args' is guaranteed to contain enough arguments of the correct types
 
-        let fp = std::mem::take(args[1]).cast::<FnPtr>();       // 2nd argument - function pointer
-        let value = args[2].clone();                            // 3rd argument - function argument
-        let this_ptr = args.get_mut(0).unwrap();                // 1st argument - this pointer
+        let fp = std::mem::take(args[1]).cast::<FnPtr>();   // 2nd argument - function pointer
+        let value = args[2].clone();                        // 3rd argument - function argument
+        let this_ptr = args.get_mut(0).unwrap();            // 1st argument - this pointer
 
         // Use 'FnPtr::call_dynamic' to call the function pointer.
         // Beware, private script-defined functions will not be found.
@@ -135,13 +134,14 @@ engine.register_raw_fn(
     },
 );
 
-let result = engine.eval::<i64>(r#"
+let result = engine.eval::<i64>(
+          r#"
                 fn foo(x) { this += x; }    // script-defined function 'foo'
 
                 let x = 41;                 // object
                 x.bar(Fn("foo"), 1);        // pass 'foo' as function pointer
                 x
-"#)?;
+          "#)?;
 ```
 
 
@@ -158,7 +158,8 @@ Shared values are implemented as `Rc<RefCell<Dynamic>>` (`Arc<RwLock<Dynamic>>` 
 
 If the value is _not_ a shared value, or if running under [`no_closure`] where there is
 no [capturing][automatic currying], this API de-sugars to a simple `Dynamic::downcast_ref` and
-`Dynamic::downcast_mut`.
+`Dynamic::downcast_mut`.  In other words, there is no locking and reference counting overhead
+for the vast majority of non-shared values.
 
 If the value is a shared value, then it is first locked and the returned lock guard
 then allows access to the underlying value in the specified type.

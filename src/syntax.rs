@@ -27,11 +27,11 @@ pub type FnCustomSyntaxEval =
 
 /// A general expression parsing trait object.
 #[cfg(not(feature = "sync"))]
-pub type FnCustomSyntaxParse = dyn Fn(&[String]) -> Result<Option<ImmutableString>, ParseError>;
+pub type FnCustomSyntaxParse = dyn Fn(&[String]) -> Result<Option<String>, ParseError>;
 /// A general expression parsing trait object.
 #[cfg(feature = "sync")]
 pub type FnCustomSyntaxParse =
-    dyn Fn(&[String]) -> Result<Option<ImmutableString>, ParseError> + Send + Sync;
+    dyn Fn(&[String]) -> Result<Option<String>, ParseError> + Send + Sync;
 
 /// An expression sub-tree in an AST.
 #[derive(Debug, Clone, Hash)]
@@ -107,7 +107,7 @@ impl Engine {
     ) -> Result<&mut Self, ParseError> {
         let keywords = keywords.as_ref();
 
-        let mut segments: StaticVec<ImmutableString> = Default::default();
+        let mut segments: StaticVec<_> = Default::default();
 
         for s in keywords {
             let s = s.as_ref().trim();
@@ -161,7 +161,7 @@ impl Engine {
                 }
             };
 
-            segments.push(seg.into());
+            segments.push(seg);
         }
 
         // If the syntax has no keywords, just ignore the registration
@@ -204,7 +204,7 @@ impl Engine {
     pub fn register_custom_syntax_raw(
         &mut self,
         key: impl Into<ImmutableString>,
-        parse: impl Fn(&[String]) -> Result<Option<ImmutableString>, ParseError> + SendSync + 'static,
+        parse: impl Fn(&[String]) -> Result<Option<String>, ParseError> + SendSync + 'static,
         new_vars: isize,
         func: impl Fn(&mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
             + SendSync

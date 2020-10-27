@@ -116,16 +116,19 @@ The function signature of an implementation is:
 
 where:
 
-* `context: &mut EvalContext` - mutable reference to the current evaluation _context_, exposing the following:
-  * `context.scope: &mut Scope` - mutable reference to the current [`Scope`]; variables can be added to/removed from it.
-  * `context.engine(): &Engine` - reference to the current [`Engine`].
-  * `context.iter_namespaces(): impl Iterator<Item = &Module>` - iterator of the namespaces (as [modules]) containing all script-defined functions.
-  * `context.this_ptr(): Option<&Dynamic>` - reference to the current bound [`this`] pointer, if any.
-  * `context.call_level(): usize` - the current nesting level of function calls.
+| Parameter                     |              Type               | Description                                                                           |
+| ----------------------------- | :-----------------------------: | ------------------------------------------------------------------------------------- |
+| `context`                     |       `&mut EvalContext`        | mutable reference to the current evaluation _context_                                 |
+| - `context.scope`             |          `&mut Scope`           | mutable reference to the current [`Scope`]; variables can be added to/removed from it |
+| - `context.engine()`          |            `&Engine`            | reference to the current [`Engine`]                                                   |
+| - `context.iter_namespaces()` | `impl Iterator<Item = &Module>` | iterator of the namespaces (as [modules]) containing all script-defined functions     |
+| - `context.this_ptr()`        |       `Option<&Dynamic>`        | reference to the current bound [`this`] pointer, if any                               |
+| - `context.call_level()`      |             `usize`             | the current nesting level of function calls                                           |
+| `inputs`                      |         `&[Expression]`         | a list of input expression trees                                                      |
 
-* `inputs: &[Expression]` - a list of input expression trees.
+### Return Value
 
-* Return value - result of evaluating the custom syntax expression.
+Return value is the result of evaluating the custom syntax expression.
 
 ### Access Arguments
 
@@ -283,12 +286,12 @@ engine.register_custom_syntax_raw(
     "perform",
     |stream| match stream.len() {
         // perform ...
-        1 => Ok(Some("$ident$".into())),
+        1 => Ok(Some("$ident$".to_string())),
         // perform command ...
         2 => match stream[1].as_str() {
-            "action" => Ok(Some("$expr$".into())),
-            "hello" => Ok(Some("world".into())),
-            "update" | "check" | "add" | "remove" => Ok(Some("$ident$".into())),
+            "action" => Ok(Some("$expr$".to_string())),
+            "hello" => Ok(Some("world".to_string())),
+            "update" | "check" | "add" | "remove" => Ok(Some("$ident$".to_string())),
             "cleanup" => Ok(None),
             cmd => Err(ParseError(Box::new(ParseErrorType::BadInput(
                 format!("Improper command: {}", cmd))),
@@ -320,21 +323,20 @@ engine.register_custom_syntax_raw(
 
 The custom syntax parser has the following signature:
 
-> `Fn(stream: &[String]) -> Result<Option<ImmutableString>, ParseError>`
+> `Fn(stream: &[String]) -> Result<Option<String>, ParseError>`
 
 where:
 
-* `stream: &[String]` - a slice of symbols that have been parsed so far, perhaps containing the following:
-  * `$expr$` - an expression
-  * `$block$` - a statement block
+| Parameter |    Type     | Description                                                                                        |
+| --------- | :---------: | -------------------------------------------------------------------------------------------------- |
+| `stream`  | `&[String]` | a slice of symbols that have been parsed so far, possibly containing `"$expr$"` and/or `"$block$"` |
 
 ### Return Value
 
-The return value is `Result<Option<ImmutableString>, ParseError>` where:
+The return value is `Result<Option<String>, ParseError>` where:
 
-* `Ok(None)` - parsing complete and there are no more symbols to match.
-
-* `Ok(Some(symbol))` - next symbol to match.
-
-* `Err(ParseError)` - error is reflected back to the [`Engine`].
-  Normally this is `ParseErrorType::BadInput` to indicate that there is a syntax error, but it can be any error.
+| Value              | Description                                                                                                                                                                                                      |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Ok(None)`         | parsing complete and there are no more symbols to match                                                                                                                                                          |
+| `Ok(Some(symbol))` | next symbol to match, which can also be `"$expr$"`, `"$ident$"` or `"$block$"`                                                                                                                                   |
+| `Err(ParseError)`  | error that is reflected back to the [`Engine`].<br/>Normally this is `ParseError(ParseErrorType::BadInput(message), Position::none())` to indicate that there is a syntax error, but it can be any `ParseError`. |
