@@ -742,13 +742,13 @@ pub enum Stmt {
     /// No-op.
     Noop(Position),
     /// if expr { stmt } else { stmt }
-    IfThenElse(Expr, Box<Stmt>, Option<Box<Stmt>>, Position),
+    IfThenElse(Expr, Box<(Stmt, Option<Stmt>)>, Position),
     /// while expr { stmt }
     While(Expr, Box<Stmt>, Position),
     /// loop { stmt }
     Loop(Box<Stmt>, Position),
     /// for id in expr { stmt }
-    For(Box<String>, Expr, Box<Stmt>, Position),
+    For(Expr, Box<(String, Stmt)>, Position),
     /// let id = expr
     Let(Box<(String, Position)>, Option<Expr>, Position),
     /// const id = expr
@@ -773,7 +773,7 @@ pub enum Stmt {
     ReturnWithVal((ReturnType, Position), Option<Expr>, Position),
     /// import expr as var
     #[cfg(not(feature = "no_module"))]
-    Import(Expr, Option<(ImmutableString, Position)>, Position),
+    Import(Expr, Option<Box<(ImmutableString, Position)>>, Position),
     /// export var as var, ...
     #[cfg(not(feature = "no_module"))]
     Export(
@@ -808,10 +808,10 @@ impl Stmt {
             | Self::Continue(pos)
             | Self::Break(pos)
             | Self::Block(_, pos)
-            | Self::IfThenElse(_, _, _, pos)
+            | Self::IfThenElse(_, _, pos)
             | Self::While(_, _, pos)
             | Self::Loop(_, pos)
-            | Self::For(_, _, _, pos)
+            | Self::For(_, _, pos)
             | Self::ReturnWithVal((_, pos), _, _) => *pos,
 
             Self::Let(x, _, _) | Self::Const(x, _, _) => x.1,
@@ -836,10 +836,10 @@ impl Stmt {
             | Self::Continue(pos)
             | Self::Break(pos)
             | Self::Block(_, pos)
-            | Self::IfThenElse(_, _, _, pos)
+            | Self::IfThenElse(_, _, pos)
             | Self::While(_, _, pos)
             | Self::Loop(_, pos)
-            | Self::For(_, _, _, pos)
+            | Self::For(_, _, pos)
             | Self::ReturnWithVal((_, pos), _, _) => *pos = new_pos,
 
             Self::Let(x, _, _) | Self::Const(x, _, _) => x.1 = new_pos,
@@ -864,10 +864,10 @@ impl Stmt {
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     pub fn is_self_terminated(&self) -> bool {
         match self {
-            Self::IfThenElse(_, _, _, _)
+            Self::IfThenElse(_, _, _)
             | Self::While(_, _, _)
             | Self::Loop(_, _)
-            | Self::For(_, _, _, _)
+            | Self::For(_, _, _)
             | Self::Block(_, _)
             | Self::TryCatch(_) => true,
 
@@ -894,15 +894,13 @@ impl Stmt {
         match self {
             Self::Noop(_) => true,
             Self::Expr(expr) => expr.is_pure(),
-            Self::IfThenElse(condition, if_block, Some(else_block), _) => {
-                condition.is_pure() && if_block.is_pure() && else_block.is_pure()
+            Self::IfThenElse(condition, x, _) if x.1.is_some() => {
+                condition.is_pure() && x.0.is_pure() && x.1.as_ref().unwrap().is_pure()
             }
-            Self::IfThenElse(condition, if_block, None, _) => {
-                condition.is_pure() && if_block.is_pure()
-            }
+            Self::IfThenElse(condition, x, _) => condition.is_pure() && x.0.is_pure(),
             Self::While(condition, block, _) => condition.is_pure() && block.is_pure(),
             Self::Loop(block, _) => block.is_pure(),
-            Self::For(_, iterable, block, _) => iterable.is_pure() && block.is_pure(),
+            Self::For(iterable, x, _) => iterable.is_pure() && x.1.is_pure(),
             Self::Let(_, _, _) | Self::Const(_, _, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::ReturnWithVal(_, _, _) => false,
@@ -2865,22 +2863,26 @@ fn parse_if(
     ensure_not_statement_expr(input, "a boolean")?;
     let guard = parse_expr(input, state, lib, settings.level_up())?;
     ensure_not_assignment(input)?;
-    let if_body = Box::new(parse_block(input, state, lib, settings.level_up())?);
+    let if_body = parse_block(input, state, lib, settings.level_up())?;
 
     // if guard { if_body } else ...
     let else_body = if match_token(input, Token::Else).0 {
-        Some(Box::new(if let (Token::If, _) = input.peek().unwrap() {
+        Some(if let (Token::If, _) = input.peek().unwrap() {
             // if guard { if_body } else if ...
             parse_if(input, state, lib, settings.level_up())?
         } else {
             // if guard { if_body } else { else-body }
             parse_block(input, state, lib, settings.level_up())?
-        }))
+        })
     } else {
         None
     };
 
-    Ok(Stmt::IfThenElse(guard, if_body, else_body, token_pos))
+    Ok(Stmt::IfThenElse(
+        guard,
+        Box::new((if_body, else_body)),
+        token_pos,
+    ))
 }
 
 /// Parse a while loop.
@@ -2977,11 +2979,11 @@ fn parse_for(
     state.stack.push((name.clone(), ScopeEntryType::Normal));
 
     settings.is_breakable = true;
-    let body = Box::new(parse_block(input, state, lib, settings.level_up())?);
+    let body = parse_block(input, state, lib, settings.level_up())?;
 
     state.stack.truncate(prev_stack_len);
 
-    Ok(Stmt::For(Box::new(name), expr, body, token_pos))
+    Ok(Stmt::For(expr, Box::new((name, body)), token_pos))
 }
 
 /// Parse a variable definition statement.
@@ -3068,7 +3070,7 @@ fn parse_import(
 
     Ok(Stmt::Import(
         expr,
-        Some((name.into(), settings.pos)),
+        Some(Box::new((name.into(), settings.pos))),
         token_pos,
     ))
 }
@@ -3931,11 +3933,4 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
 
         _ => None,
     }
-}
-
-#[test]
-fn test() {
-    println!("{}", std::mem::size_of::<Position>());
-    println!("{}", std::mem::size_of::<Expr>());
-    println!("{}", std::mem::size_of::<Stmt>());
 }

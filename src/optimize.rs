@@ -164,16 +164,14 @@ fn call_fn_with_constant_arguments(
 fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
     match stmt {
         // if false { if_block } -> Noop
-        Stmt::IfThenElse(Expr::False(pos), _, None, _) => {
+        Stmt::IfThenElse(Expr::False(pos), x, _) if x.1.is_none() => {
             state.set_dirty();
             Stmt::Noop(pos)
         }
         // if true { if_block } -> if_block
-        Stmt::IfThenElse(Expr::True(_), if_block, None, _) => optimize_stmt(*if_block, state, true),
+        Stmt::IfThenElse(Expr::True(_), x, _) if x.1.is_none() => optimize_stmt(x.0, state, true),
         // if expr { Noop }
-        Stmt::IfThenElse(condition, if_block, None, _)
-            if matches!(if_block.as_ref(), Stmt::Noop(_)) =>
-        {
+        Stmt::IfThenElse(condition, x, _) if x.1.is_none() && matches!(x.0, Stmt::Noop(_)) => {
             state.set_dirty();
 
             let pos = condition.position();
@@ -183,7 +181,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 // -> { expr, Noop }
                 let mut statements = Vec::new();
                 statements.push(Stmt::Expr(expr));
-                statements.push(*if_block);
+                statements.push(x.0);
 
                 Stmt::Block(statements, pos)
             } else {
@@ -192,26 +190,27 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
             }
         }
         // if expr { if_block }
-        Stmt::IfThenElse(condition, if_block, None, pos) => Stmt::IfThenElse(
+        Stmt::IfThenElse(condition, x, pos) if x.1.is_none() => Stmt::IfThenElse(
             optimize_expr(condition, state),
-            Box::new(optimize_stmt(*if_block, state, true)),
-            None,
+            Box::new((optimize_stmt(x.0, state, true), None)),
             pos,
         ),
         // if false { if_block } else { else_block } -> else_block
-        Stmt::IfThenElse(Expr::False(_), _, Some(else_block), _) => {
-            optimize_stmt(*else_block, state, true)
+        Stmt::IfThenElse(Expr::False(_), x, _) if x.1.is_some() => {
+            optimize_stmt(x.1.unwrap(), state, true)
         }
         // if true { if_block } else { else_block } -> if_block
-        Stmt::IfThenElse(Expr::True(_), if_block, _, _) => optimize_stmt(*if_block, state, true),
+        Stmt::IfThenElse(Expr::True(_), x, _) => optimize_stmt(x.0, state, true),
         // if expr { if_block } else { else_block }
-        Stmt::IfThenElse(condition, if_block, Some(else_block), pos) => Stmt::IfThenElse(
+        Stmt::IfThenElse(condition, x, pos) => Stmt::IfThenElse(
             optimize_expr(condition, state),
-            Box::new(optimize_stmt(*if_block, state, true)),
-            match optimize_stmt(*else_block, state, true) {
-                Stmt::Noop(_) => None, // Noop -> no else block
-                stmt => Some(Box::new(stmt)),
-            },
+            Box::new((
+                optimize_stmt(x.0, state, true),
+                match optimize_stmt(x.1.unwrap(), state, true) {
+                    Stmt::Noop(_) => None, // Noop -> no else block
+                    stmt => Some(stmt),
+                },
+            )),
             pos,
         ),
 
@@ -254,12 +253,14 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
             stmt => Stmt::Loop(Box::new(stmt), pos),
         },
         // for id in expr { block }
-        Stmt::For(var_name, iterable, block, pos) => Stmt::For(
-            var_name,
-            optimize_expr(iterable, state),
-            Box::new(optimize_stmt(*block, state, false)),
-            pos,
-        ),
+        Stmt::For(iterable, x, pos) => {
+            let (var_name, block) = *x;
+            Stmt::For(
+                optimize_expr(iterable, state),
+                Box::new((var_name, optimize_stmt(block, state, false))),
+                pos,
+            )
+        }
         // let id = expr;
         Stmt::Let(name, Some(expr), pos) => Stmt::Let(name, Some(optimize_expr(expr, state)), pos),
         // let id;

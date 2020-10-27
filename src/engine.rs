@@ -1830,19 +1830,21 @@ impl Engine {
             }
 
             // If-else statement
-            Stmt::IfThenElse(expr, if_block, else_block, _) => self
-                .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                .as_bool()
-                .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))
-                .and_then(|guard_val| {
-                    if guard_val {
-                        self.eval_stmt(scope, mods, state, lib, this_ptr, if_block, level)
-                    } else if let Some(stmt) = else_block {
-                        self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
-                    } else {
-                        Ok(Default::default())
-                    }
-                }),
+            Stmt::IfThenElse(expr, x, _) => {
+                let (if_block, else_block) = x.as_ref();
+                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .as_bool()
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))
+                    .and_then(|guard_val| {
+                        if guard_val {
+                            self.eval_stmt(scope, mods, state, lib, this_ptr, if_block, level)
+                        } else if let Some(stmt) = else_block {
+                            self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
+                        } else {
+                            Ok(Default::default())
+                        }
+                    })
+            }
 
             // While loop
             Stmt::While(expr, body, _) => loop {
@@ -1880,7 +1882,8 @@ impl Engine {
             },
 
             // For loop
-            Stmt::For(name, expr, stmt, _) => {
+            Stmt::For(expr, x, _) => {
+                let (name, stmt) = x.as_ref();
                 let iter_obj = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let iter_type = iter_obj.type_id();
 
@@ -2043,9 +2046,9 @@ impl Engine {
                     if let Some(resolver) = &self.module_resolver {
                         let mut module = resolver.resolve(self, &path, expr.position())?;
 
-                        if let Some((name, _)) = alias {
+                        if let Some(name_def) = alias {
                             module.index_all_sub_modules();
-                            mods.push((name.clone(), module));
+                            mods.push((name_def.0.clone(), module));
                         }
 
                         state.modules += 1;
