@@ -1809,12 +1809,12 @@ impl Engine {
             Stmt::Expr(expr) => self.eval_expr(scope, mods, state, lib, this_ptr, expr, level),
 
             // Block scope
-            Stmt::Block(x) => {
+            Stmt::Block(statements, _) => {
                 let prev_scope_len = scope.len();
                 let prev_mods_len = mods.len();
                 state.scope_level += 1;
 
-                let result = x.0.iter().try_fold(Default::default(), |_, stmt| {
+                let result = statements.iter().try_fold(Default::default(), |_, stmt| {
                     self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
                 });
 
@@ -1830,27 +1830,22 @@ impl Engine {
             }
 
             // If-else statement
-            Stmt::IfThenElse(x) => {
-                let (expr, if_block, else_block, _) = x.as_ref();
-
-                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))
-                    .and_then(|guard_val| {
-                        if guard_val {
-                            self.eval_stmt(scope, mods, state, lib, this_ptr, if_block, level)
-                        } else if let Some(stmt) = else_block {
-                            self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
-                        } else {
-                            Ok(Default::default())
-                        }
-                    })
-            }
+            Stmt::IfThenElse(expr, if_block, else_block, _) => self
+                .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                .as_bool()
+                .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))
+                .and_then(|guard_val| {
+                    if guard_val {
+                        self.eval_stmt(scope, mods, state, lib, this_ptr, if_block, level)
+                    } else if let Some(stmt) = else_block {
+                        self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
+                    } else {
+                        Ok(Default::default())
+                    }
+                }),
 
             // While loop
-            Stmt::While(x) => loop {
-                let (expr, body, _) = x.as_ref();
-
+            Stmt::While(expr, body, _) => loop {
                 match self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
@@ -1873,8 +1868,8 @@ impl Engine {
             },
 
             // Loop statement
-            Stmt::Loop(x) => loop {
-                match self.eval_stmt(scope, mods, state, lib, this_ptr, &x.0, level) {
+            Stmt::Loop(block, _) => loop {
+                match self.eval_stmt(scope, mods, state, lib, this_ptr, block, level) {
                     Ok(_) => (),
                     Err(err) => match *err {
                         EvalAltResult::LoopBreak(false, _) => (),
@@ -1885,8 +1880,7 @@ impl Engine {
             },
 
             // For loop
-            Stmt::For(x) => {
-                let (name, expr, stmt, _) = x.as_ref();
+            Stmt::For(name, expr, stmt, _) => {
                 let iter_obj = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let iter_type = iter_obj.type_id();
 
@@ -1929,7 +1923,7 @@ impl Engine {
                     scope.rewind(scope.len() - 1);
                     Ok(Default::default())
                 } else {
-                    EvalAltResult::ErrorFor(x.1.position()).into()
+                    EvalAltResult::ErrorFor(expr.position()).into()
                 }
             }
 
@@ -1941,10 +1935,10 @@ impl Engine {
 
             // Try/Catch statement
             Stmt::TryCatch(x) => {
-                let ((body, _), var_def, (catch_body, _)) = x.as_ref();
+                let ((try_body, _), var_def, (catch_body, _)) = x.as_ref();
 
                 let result = self
-                    .eval_stmt(scope, mods, state, lib, this_ptr, body, level)
+                    .eval_stmt(scope, mods, state, lib, this_ptr, try_body, level)
                     .map(|_| ().into());
 
                 match result {
@@ -1992,40 +1986,33 @@ impl Engine {
             }
 
             // Return value
-            Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Return => {
-                let expr = x.1.as_ref().unwrap();
-                EvalAltResult::Return(
-                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
-                    (x.0).1,
-                )
-                .into()
-            }
+            Stmt::ReturnWithVal((ReturnType::Return, pos), Some(expr), _) => EvalAltResult::Return(
+                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
+                *pos,
+            )
+            .into(),
 
             // Empty return
-            Stmt::ReturnWithVal(x) if (x.0).0 == ReturnType::Return => {
-                EvalAltResult::Return(Default::default(), (x.0).1).into()
+            Stmt::ReturnWithVal((ReturnType::Return, pos), None, _) => {
+                EvalAltResult::Return(Default::default(), *pos).into()
             }
 
             // Throw value
-            Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Exception => {
-                let expr = x.1.as_ref().unwrap();
+            Stmt::ReturnWithVal((ReturnType::Exception, pos), Some(expr), _) => {
                 let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-                EvalAltResult::ErrorRuntime(val, (x.0).1).into()
+                EvalAltResult::ErrorRuntime(val, *pos).into()
             }
 
             // Empty throw
-            Stmt::ReturnWithVal(x) if (x.0).0 == ReturnType::Exception => {
-                EvalAltResult::ErrorRuntime(().into(), (x.0).1).into()
+            Stmt::ReturnWithVal((ReturnType::Exception, pos), None, _) => {
+                EvalAltResult::ErrorRuntime(().into(), *pos).into()
             }
 
-            Stmt::ReturnWithVal(_) => unreachable!(),
-
             // Let/const statement
-            Stmt::Let(x) | Stmt::Const(x) => {
-                let ((var_name, _), expr, _) = x.as_ref();
+            Stmt::Let(var_def, expr, _) | Stmt::Const(var_def, expr, _) => {
                 let entry_type = match stmt {
-                    Stmt::Let(_) => ScopeEntryType::Normal,
-                    Stmt::Const(_) => ScopeEntryType::Constant,
+                    Stmt::Let(_, _, _) => ScopeEntryType::Normal,
+                    Stmt::Const(_, _, _) => ScopeEntryType::Constant,
                     _ => unreachable!(),
                 };
 
@@ -2035,16 +2022,14 @@ impl Engine {
                 } else {
                     ().into()
                 };
-                let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
+                let var_name = unsafe_cast_var_name_to_lifetime(&var_def.0, &state);
                 scope.push_dynamic_value(var_name, entry_type, val, false);
                 Ok(Default::default())
             }
 
             // Import statement
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(x) => {
-                let (expr, alias, _pos) = x.as_ref();
-
+            Stmt::Import(expr, alias, _pos) => {
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
                 if state.modules >= self.max_modules() {
@@ -2079,8 +2064,8 @@ impl Engine {
 
             // Export statement
             #[cfg(not(feature = "no_module"))]
-            Stmt::Export(x) => {
-                for ((id, id_pos), rename) in x.0.iter() {
+            Stmt::Export(list, _) => {
+                for ((id, id_pos), rename) in list.iter() {
                     // Mark scope variables as public
                     if let Some(index) = scope.get_index(id).map(|(i, _)| i) {
                         let alias = rename.as_ref().map(|(n, _)| n).unwrap_or_else(|| id);
@@ -2094,9 +2079,7 @@ impl Engine {
 
             // Share statement
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(x) => {
-                let (var_name, _) = x.as_ref();
-
+            Stmt::Share(var_name, _) => {
                 match scope.get_index(var_name) {
                     Some((index, ScopeEntryType::Normal)) => {
                         let (val, _) = scope.get_mut(index);

@@ -742,19 +742,19 @@ pub enum Stmt {
     /// No-op.
     Noop(Position),
     /// if expr { stmt } else { stmt }
-    IfThenElse(Box<(Expr, Stmt, Option<Stmt>, Position)>),
+    IfThenElse(Expr, Box<Stmt>, Option<Box<Stmt>>, Position),
     /// while expr { stmt }
-    While(Box<(Expr, Stmt, Position)>),
+    While(Expr, Box<Stmt>, Position),
     /// loop { stmt }
-    Loop(Box<(Stmt, Position)>),
+    Loop(Box<Stmt>, Position),
     /// for id in expr { stmt }
-    For(Box<(String, Expr, Stmt, Position)>),
+    For(Box<String>, Expr, Box<Stmt>, Position),
     /// let id = expr
-    Let(Box<((String, Position), Option<Expr>, Position)>),
+    Let(Box<(String, Position)>, Option<Expr>, Position),
     /// const id = expr
-    Const(Box<((String, Position), Option<Expr>, Position)>),
+    Const(Box<(String, Position)>, Option<Expr>, Position),
     /// { stmt; ... }
-    Block(Box<(StaticVec<Stmt>, Position)>),
+    Block(Vec<Stmt>, Position),
     /// try { stmt; ... } catch ( var ) { stmt; ... }
     TryCatch(
         Box<(
@@ -764,27 +764,25 @@ pub enum Stmt {
         )>,
     ),
     /// expr
-    Expr(Box<Expr>),
+    Expr(Expr),
     /// continue
     Continue(Position),
     /// break
     Break(Position),
     /// return/throw
-    ReturnWithVal(Box<((ReturnType, Position), Option<Expr>, Position)>),
+    ReturnWithVal((ReturnType, Position), Option<Expr>, Position),
     /// import expr as var
     #[cfg(not(feature = "no_module"))]
-    Import(Box<(Expr, Option<(ImmutableString, Position)>, Position)>),
+    Import(Expr, Option<(ImmutableString, Position)>, Position),
     /// export var as var, ...
     #[cfg(not(feature = "no_module"))]
     Export(
-        Box<(
-            StaticVec<((String, Position), Option<(String, Position)>)>,
-            Position,
-        )>,
+        Vec<((String, Position), Option<(String, Position)>)>,
+        Position,
     ),
     /// Convert a variable to shared.
     #[cfg(not(feature = "no_closure"))]
-    Share(Box<(String, Position)>),
+    Share(String, Position),
 }
 
 impl Default for Stmt {
@@ -806,52 +804,58 @@ impl Stmt {
     /// Get the `Position` of this statement.
     pub fn position(&self) -> Position {
         match self {
-            Self::Noop(pos) | Self::Continue(pos) | Self::Break(pos) => *pos,
-            Self::Let(x) => (x.0).1,
-            Self::Const(x) => (x.0).1,
-            Self::Block(x) => x.1,
-            Self::IfThenElse(x) => x.3,
-            Self::Expr(x) => x.position(),
-            Self::While(x) => x.2,
-            Self::Loop(x) => x.1,
-            Self::For(x) => x.3,
-            Self::ReturnWithVal(x) => (x.0).1,
+            Self::Noop(pos)
+            | Self::Continue(pos)
+            | Self::Break(pos)
+            | Self::Block(_, pos)
+            | Self::IfThenElse(_, _, _, pos)
+            | Self::While(_, _, pos)
+            | Self::Loop(_, pos)
+            | Self::For(_, _, _, pos)
+            | Self::ReturnWithVal((_, pos), _, _) => *pos,
+
+            Self::Let(x, _, _) | Self::Const(x, _, _) => x.1,
             Self::TryCatch(x) => (x.0).1,
 
+            Self::Expr(x) => x.position(),
+
             #[cfg(not(feature = "no_module"))]
-            Self::Import(x) => x.2,
+            Self::Import(_, _, pos) => *pos,
             #[cfg(not(feature = "no_module"))]
-            Self::Export(x) => x.1,
+            Self::Export(_, pos) => *pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(x) => x.1,
+            Self::Share(_, pos) => *pos,
         }
     }
 
     /// Override the `Position` of this statement.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
-            Self::Noop(pos) | Self::Continue(pos) | Self::Break(pos) => *pos = new_pos,
-            Self::Let(x) => (x.0).1 = new_pos,
-            Self::Const(x) => (x.0).1 = new_pos,
-            Self::Block(x) => x.1 = new_pos,
-            Self::IfThenElse(x) => x.3 = new_pos,
+            Self::Noop(pos)
+            | Self::Continue(pos)
+            | Self::Break(pos)
+            | Self::Block(_, pos)
+            | Self::IfThenElse(_, _, _, pos)
+            | Self::While(_, _, pos)
+            | Self::Loop(_, pos)
+            | Self::For(_, _, _, pos)
+            | Self::ReturnWithVal((_, pos), _, _) => *pos = new_pos,
+
+            Self::Let(x, _, _) | Self::Const(x, _, _) => x.1 = new_pos,
+            Self::TryCatch(x) => (x.0).1 = new_pos,
+
             Self::Expr(x) => {
                 x.set_position(new_pos);
             }
-            Self::While(x) => x.2 = new_pos,
-            Self::Loop(x) => x.1 = new_pos,
-            Self::For(x) => x.3 = new_pos,
-            Self::ReturnWithVal(x) => (x.0).1 = new_pos,
-            Self::TryCatch(x) => (x.0).1 = new_pos,
 
             #[cfg(not(feature = "no_module"))]
-            Self::Import(x) => x.2 = new_pos,
+            Self::Import(_, _, pos) => *pos = new_pos,
             #[cfg(not(feature = "no_module"))]
-            Self::Export(x) => x.1 = new_pos,
+            Self::Export(_, pos) => *pos = new_pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(x) => x.1 = new_pos,
+            Self::Share(_, pos) => *pos = new_pos,
         }
 
         self
@@ -860,28 +864,28 @@ impl Stmt {
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     pub fn is_self_terminated(&self) -> bool {
         match self {
-            Self::IfThenElse(_)
-            | Self::While(_)
-            | Self::Loop(_)
-            | Self::For(_)
-            | Self::Block(_)
+            Self::IfThenElse(_, _, _, _)
+            | Self::While(_, _, _)
+            | Self::Loop(_, _)
+            | Self::For(_, _, _, _)
+            | Self::Block(_, _)
             | Self::TryCatch(_) => true,
 
             // A No-op requires a semicolon in order to know it is an empty statement!
             Self::Noop(_) => false,
 
-            Self::Let(_)
-            | Self::Const(_)
+            Self::Let(_, _, _)
+            | Self::Const(_, _, _)
             | Self::Expr(_)
             | Self::Continue(_)
             | Self::Break(_)
-            | Self::ReturnWithVal(_) => false,
+            | Self::ReturnWithVal(_, _, _) => false,
 
             #[cfg(not(feature = "no_module"))]
-            Self::Import(_) | Self::Export(_) => false,
+            Self::Import(_, _, _) | Self::Export(_, _) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => false,
+            Self::Share(_, _) => false,
         }
     }
 
@@ -890,25 +894,27 @@ impl Stmt {
         match self {
             Self::Noop(_) => true,
             Self::Expr(expr) => expr.is_pure(),
-            Self::IfThenElse(x) if x.2.is_some() => {
-                x.0.is_pure() && x.1.is_pure() && x.2.as_ref().unwrap().is_pure()
+            Self::IfThenElse(condition, if_block, Some(else_block), _) => {
+                condition.is_pure() && if_block.is_pure() && else_block.is_pure()
             }
-            Self::IfThenElse(x) => x.1.is_pure(),
-            Self::While(x) => x.0.is_pure() && x.1.is_pure(),
-            Self::Loop(x) => x.0.is_pure(),
-            Self::For(x) => x.1.is_pure() && x.2.is_pure(),
-            Self::Let(_) | Self::Const(_) => false,
-            Self::Block(x) => x.0.iter().all(Self::is_pure),
-            Self::Continue(_) | Self::Break(_) | Self::ReturnWithVal(_) => false,
+            Self::IfThenElse(condition, if_block, None, _) => {
+                condition.is_pure() && if_block.is_pure()
+            }
+            Self::While(condition, block, _) => condition.is_pure() && block.is_pure(),
+            Self::Loop(block, _) => block.is_pure(),
+            Self::For(_, iterable, block, _) => iterable.is_pure() && block.is_pure(),
+            Self::Let(_, _, _) | Self::Const(_, _, _) => false,
+            Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
+            Self::Continue(_) | Self::Break(_) | Self::ReturnWithVal(_, _, _) => false,
             Self::TryCatch(x) => (x.0).0.is_pure() && (x.2).0.is_pure(),
 
             #[cfg(not(feature = "no_module"))]
-            Self::Import(_) => false,
+            Self::Import(_, _, _) => false,
             #[cfg(not(feature = "no_module"))]
-            Self::Export(_) => false,
+            Self::Export(_, _) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => false,
+            Self::Share(_, _) => false,
         }
     }
 }
@@ -2859,24 +2865,22 @@ fn parse_if(
     ensure_not_statement_expr(input, "a boolean")?;
     let guard = parse_expr(input, state, lib, settings.level_up())?;
     ensure_not_assignment(input)?;
-    let if_body = parse_block(input, state, lib, settings.level_up())?;
+    let if_body = Box::new(parse_block(input, state, lib, settings.level_up())?);
 
     // if guard { if_body } else ...
     let else_body = if match_token(input, Token::Else).0 {
-        Some(if let (Token::If, _) = input.peek().unwrap() {
+        Some(Box::new(if let (Token::If, _) = input.peek().unwrap() {
             // if guard { if_body } else if ...
             parse_if(input, state, lib, settings.level_up())?
         } else {
             // if guard { if_body } else { else-body }
             parse_block(input, state, lib, settings.level_up())?
-        })
+        }))
     } else {
         None
     };
 
-    Ok(Stmt::IfThenElse(Box::new((
-        guard, if_body, else_body, token_pos,
-    ))))
+    Ok(Stmt::IfThenElse(guard, if_body, else_body, token_pos))
 }
 
 /// Parse a while loop.
@@ -2899,9 +2903,9 @@ fn parse_while(
     ensure_not_assignment(input)?;
 
     settings.is_breakable = true;
-    let body = parse_block(input, state, lib, settings.level_up())?;
+    let body = Box::new(parse_block(input, state, lib, settings.level_up())?);
 
-    Ok(Stmt::While(Box::new((guard, body, token_pos))))
+    Ok(Stmt::While(guard, body, token_pos))
 }
 
 /// Parse a loop statement.
@@ -2920,9 +2924,9 @@ fn parse_loop(
 
     // loop { body }
     settings.is_breakable = true;
-    let body = parse_block(input, state, lib, settings.level_up())?;
+    let body = Box::new(parse_block(input, state, lib, settings.level_up())?);
 
-    Ok(Stmt::Loop(Box::new((body, token_pos))))
+    Ok(Stmt::Loop(body, token_pos))
 }
 
 /// Parse a for loop.
@@ -2973,11 +2977,11 @@ fn parse_for(
     state.stack.push((name.clone(), ScopeEntryType::Normal));
 
     settings.is_breakable = true;
-    let body = parse_block(input, state, lib, settings.level_up())?;
+    let body = Box::new(parse_block(input, state, lib, settings.level_up())?);
 
     state.stack.truncate(prev_stack_len);
 
-    Ok(Stmt::For(Box::new((name, expr, body, token_pos))))
+    Ok(Stmt::For(Box::new(name), expr, body, token_pos))
 }
 
 /// Parse a variable definition statement.
@@ -3017,12 +3021,12 @@ fn parse_let(
         // let name = expr
         ScopeEntryType::Normal => {
             state.stack.push((name.clone(), ScopeEntryType::Normal));
-            Ok(Stmt::Let(Box::new(((name, pos), init_value, token_pos))))
+            Ok(Stmt::Let(Box::new((name, pos)), init_value, token_pos))
         }
         // const name = { expr:constant }
         ScopeEntryType::Constant => {
             state.stack.push((name.clone(), ScopeEntryType::Constant));
-            Ok(Stmt::Const(Box::new(((name, pos), init_value, token_pos))))
+            Ok(Stmt::Const(Box::new((name, pos)), init_value, token_pos))
         }
     }
 }
@@ -3047,7 +3051,7 @@ fn parse_import(
 
     // import expr as ...
     if !match_token(input, Token::As).0 {
-        return Ok(Stmt::Import(Box::new((expr, None, token_pos))));
+        return Ok(Stmt::Import(expr, None, token_pos));
     }
 
     // import expr as name ...
@@ -3062,11 +3066,11 @@ fn parse_import(
 
     state.modules.push(name.clone());
 
-    Ok(Stmt::Import(Box::new((
+    Ok(Stmt::Import(
         expr,
         Some((name.into(), settings.pos)),
         token_pos,
-    ))))
+    ))
 }
 
 /// Parse an export statement.
@@ -3083,7 +3087,7 @@ fn parse_export(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(_state.max_expr_depth)?;
 
-    let mut exports = StaticVec::new();
+    let mut exports = Vec::new();
 
     loop {
         let (id, id_pos) = match input.next().unwrap() {
@@ -3138,7 +3142,7 @@ fn parse_export(
         })
         .map_err(|(id2, pos)| PERR::DuplicatedExport(id2.to_string()).into_err(pos))?;
 
-    Ok(Stmt::Export(Box::new((exports, token_pos))))
+    Ok(Stmt::Export(exports, token_pos))
 }
 
 /// Parse a statement block.
@@ -3164,7 +3168,7 @@ fn parse_block(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let mut statements = StaticVec::new();
+    let mut statements = Vec::new();
     let prev_stack_len = state.stack.len();
 
     #[cfg(not(feature = "no_module"))]
@@ -3217,7 +3221,7 @@ fn parse_block(
     #[cfg(not(feature = "no_module"))]
     state.modules.truncate(prev_mods_len);
 
-    Ok(Stmt::Block(Box::new((statements, settings.pos))))
+    Ok(Stmt::Block(statements, settings.pos))
 }
 
 /// Parse an expression as a statement.
@@ -3234,7 +3238,7 @@ fn parse_expr_stmt(
 
     let expr = parse_expr(input, state, lib, settings.level_up())?;
     let expr = parse_op_assignment_stmt(input, state, lib, expr, settings.level_up())?;
-    Ok(Stmt::Expr(Box::new(expr)))
+    Ok(Stmt::Expr(expr))
 }
 
 /// Parse a single statement.
@@ -3345,26 +3349,26 @@ fn parse_stmt(
 
             match input.peek().unwrap() {
                 // `return`/`throw` at <EOF>
-                (Token::EOF, pos) => Ok(Some(Stmt::ReturnWithVal(Box::new((
+                (Token::EOF, pos) => Ok(Some(Stmt::ReturnWithVal(
                     (return_type, token_pos),
                     None,
                     *pos,
-                ))))),
+                ))),
                 // `return;` or `throw;`
-                (Token::SemiColon, _) => Ok(Some(Stmt::ReturnWithVal(Box::new((
+                (Token::SemiColon, _) => Ok(Some(Stmt::ReturnWithVal(
                     (return_type, token_pos),
                     None,
                     settings.pos,
-                ))))),
+                ))),
                 // `return` or `throw` with expression
                 (_, _) => {
                     let expr = parse_expr(input, state, lib, settings.level_up())?;
                     let pos = expr.position();
-                    Ok(Some(Stmt::ReturnWithVal(Box::new((
+                    Ok(Some(Stmt::ReturnWithVal(
                         (return_type, token_pos),
                         Some(expr),
                         pos,
-                    )))))
+                    )))
                 }
             }
         }
@@ -3598,12 +3602,16 @@ fn make_curry_from_externals(
     #[cfg(not(feature = "no_closure"))]
     {
         // Statement block
-        let mut statements: StaticVec<_> = Default::default();
+        let mut statements: Vec<_> = Default::default();
         // Insert `Share` statements
-        statements.extend(externals.into_iter().map(|x| Stmt::Share(Box::new(x))));
+        statements.extend(
+            externals
+                .into_iter()
+                .map(|(var_name, pos)| Stmt::Share(var_name, pos)),
+        );
         // Final expression
-        statements.push(Stmt::Expr(Box::new(expr)));
-        Expr::Stmt(Box::new((Stmt::Block(Box::new((statements, pos))), pos)))
+        statements.push(Stmt::Expr(expr));
+        Expr::Stmt(Box::new((Stmt::Block(statements, pos), pos)))
     }
 
     #[cfg(feature = "no_closure")]
@@ -3781,7 +3789,7 @@ impl Engine {
             }
         }
 
-        let expr = vec![Stmt::Expr(Box::new(expr))];
+        let expr = vec![Stmt::Expr(expr)];
 
         Ok(
             // Optimize AST
@@ -3923,4 +3931,11 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
 
         _ => None,
     }
+}
+
+#[test]
+fn test() {
+    println!("{}", std::mem::size_of::<Position>());
+    println!("{}", std::mem::size_of::<Expr>());
+    println!("{}", std::mem::size_of::<Stmt>());
 }
