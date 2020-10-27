@@ -120,16 +120,17 @@ fn main() {
                             *value.read_lock::<Dynamic>().unwrap(),
                         )
                     });
+                println!();
                 continue;
             }
             "astu" => {
                 // print the last un-optimized AST
-                println!("{:#?}", &ast_u);
+                println!("{:#?}\n", &ast_u);
                 continue;
             }
             "ast" => {
                 // print the last AST
-                println!("{:#?}", &ast);
+                println!("{:#?}\n", &ast);
                 continue;
             }
             _ => (),
