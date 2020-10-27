@@ -163,6 +163,11 @@ fn call_fn_with_constant_arguments(
 /// Optimize a statement.
 fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
     match stmt {
+        // id op= expr
+        Stmt::Assignment(x, pos) => Stmt::Assignment(
+            Box::new((optimize_expr(x.0, state), x.1, optimize_expr(x.2, state))),
+            pos,
+        ),
         // if false { if_block } -> Noop
         Stmt::IfThenElse(Expr::False(pos), x, _) if x.1.is_none() => {
             state.set_dirty();
@@ -442,8 +447,6 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             // ( stmt )
             stmt => Expr::Stmt(Box::new((stmt, x.1))),
         },
-        // id op= expr
-        Expr::Assignment(x) => Expr::Assignment(Box::new((x.0, x.1, optimize_expr(x.2, state), x.3))),
 
         // lhs.rhs
         #[cfg(not(feature = "no_object"))]

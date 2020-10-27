@@ -753,6 +753,8 @@ pub enum Stmt {
     Let(Box<(String, Position)>, Option<Expr>, Position),
     /// const id = expr
     Const(Box<(String, Position)>, Option<Expr>, Position),
+    /// expr op= expr
+    Assignment(Box<(Expr, Cow<'static, str>, Expr)>, Position),
     /// { stmt; ... }
     Block(Vec<Stmt>, Position),
     /// try { stmt; ... } catch ( var ) { stmt; ... }
@@ -808,6 +810,7 @@ impl Stmt {
             | Self::Continue(pos)
             | Self::Break(pos)
             | Self::Block(_, pos)
+            | Self::Assignment(_, pos)
             | Self::IfThenElse(_, _, pos)
             | Self::While(_, _, pos)
             | Self::Loop(_, pos)
@@ -836,6 +839,7 @@ impl Stmt {
             | Self::Continue(pos)
             | Self::Break(pos)
             | Self::Block(_, pos)
+            | Self::Assignment(_, pos)
             | Self::IfThenElse(_, _, pos)
             | Self::While(_, _, pos)
             | Self::Loop(_, pos)
@@ -876,6 +880,7 @@ impl Stmt {
 
             Self::Let(_, _, _)
             | Self::Const(_, _, _)
+            | Self::Assignment(_, _)
             | Self::Expr(_)
             | Self::Continue(_)
             | Self::Break(_)
@@ -901,7 +906,7 @@ impl Stmt {
             Self::While(condition, block, _) => condition.is_pure() && block.is_pure(),
             Self::Loop(block, _) => block.is_pure(),
             Self::For(iterable, x, _) => iterable.is_pure() && x.1.is_pure(),
-            Self::Let(_, _, _) | Self::Const(_, _, _) => false,
+            Self::Let(_, _, _) | Self::Const(_, _, _) | Self::Assignment(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::ReturnWithVal(_, _, _) => false,
             Self::TryCatch(x) => (x.0).0.is_pure() && (x.2).0.is_pure(),
@@ -1040,8 +1045,6 @@ pub enum Expr {
             Option<bool>, // Default value is `bool` in order for `Expr` to be `Hash`.
         )>,
     ),
-    /// expr op= expr
-    Assignment(Box<(Expr, Cow<'static, str>, Expr, Position)>),
     /// lhs.rhs
     Dot(Box<BinaryExpr>),
     /// expr[expr]
@@ -1168,7 +1171,6 @@ impl Expr {
             Self::Stmt(x) => x.1,
             Self::Variable(x) => (x.0).1,
             Self::FnCall(x) => (x.0).3,
-            Self::Assignment(x) => x.0.position(),
 
             Self::And(x) | Self::Or(x) | Self::In(x) => x.pos,
 
@@ -1202,7 +1204,6 @@ impl Expr {
             Self::FnCall(x) => (x.0).3 = new_pos,
             Self::And(x) | Self::Or(x) | Self::In(x) => x.pos = new_pos,
             Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos = new_pos,
-            Self::Assignment(x) => x.3 = new_pos,
             Self::Dot(x) | Self::Index(x) => x.pos = new_pos,
             Self::Custom(x) => x.pos = new_pos,
         }
@@ -1322,8 +1323,7 @@ impl Expr {
             | Self::Or(_)
             | Self::True(_)
             | Self::False(_)
-            | Self::Unit(_)
-            | Self::Assignment(_) => false,
+            | Self::Unit(_) => false,
 
             Self::StringConstant(_)
             | Self::Stmt(_)
@@ -1598,7 +1598,6 @@ fn parse_index_chain(
             }
 
             Expr::CharConstant(_)
-            | Expr::Assignment(_)
             | Expr::And(_)
             | Expr::Or(_)
             | Expr::In(_)
@@ -1634,7 +1633,6 @@ fn parse_index_chain(
             }
 
             Expr::CharConstant(_)
-            | Expr::Assignment(_)
             | Expr::And(_)
             | Expr::Or(_)
             | Expr::In(_)
@@ -1662,13 +1660,6 @@ fn parse_index_chain(
         x @ Expr::CharConstant(_) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a character".into(),
-            )
-            .into_err(x.position()))
-        }
-        // lhs[??? = ??? ]
-        x @ Expr::Assignment(_) => {
-            return Err(PERR::MalformedIndexExpr(
-                "Array access expects integer index, not an assignment".into(),
             )
             .into_err(x.position()))
         }
@@ -2249,18 +2240,18 @@ fn make_assignment_stmt<'a>(
     lhs: Expr,
     rhs: Expr,
     pos: Position,
-) -> Result<Expr, ParseError> {
+) -> Result<Stmt, ParseError> {
     match &lhs {
         // var (non-indexed) = rhs
         Expr::Variable(x) if x.3.is_none() => {
-            Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
+            Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
         }
         // var (indexed) = rhs
         Expr::Variable(x) => {
             let ((name, name_pos), _, _, index) = x.as_ref();
             match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                 ScopeEntryType::Normal => {
-                    Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
+                    Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
                 }
                 // Constant values cannot be assigned to
                 ScopeEntryType::Constant => {
@@ -2272,14 +2263,14 @@ fn make_assignment_stmt<'a>(
         Expr::Index(x) | Expr::Dot(x) => match &x.lhs {
             // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
             Expr::Variable(x) if x.3.is_none() => {
-                Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
+                Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
             }
             // var[???] (indexed) = rhs, var.??? (indexed) = rhs
             Expr::Variable(x) => {
                 let ((name, name_pos), _, _, index) = x.as_ref();
                 match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                     ScopeEntryType::Normal => {
-                        Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
+                        Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
                     }
                     // Constant values cannot be assigned to
                     ScopeEntryType::Constant => {
@@ -2310,7 +2301,7 @@ fn parse_op_assignment_stmt(
     lib: &mut FunctionsLib,
     lhs: Expr,
     mut settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> Result<Stmt, ParseError> {
     let (token, token_pos) = input.peek().unwrap();
     settings.pos = *token_pos;
 
@@ -2332,7 +2323,7 @@ fn parse_op_assignment_stmt(
         | Token::OrAssign
         | Token::XOrAssign => token.syntax(),
 
-        _ => return Ok(lhs),
+        _ => return Ok(Stmt::Expr(lhs)),
     };
 
     let (_, pos) = input.next().unwrap();
@@ -2436,7 +2427,6 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
         | (_, x @ Expr::And(_))
         | (_, x @ Expr::Or(_))
         | (_, x @ Expr::In(_))
-        | (_, x @ Expr::Assignment(_))
         | (_, x @ Expr::True(_))
         | (_, x @ Expr::False(_))
         | (_, x @ Expr::Unit(_)) => {
@@ -2499,13 +2489,6 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
             )
             .into_err(x.position()))
         }
-        // (??? = ???) in "xxxx"
-        (x @ Expr::Assignment(_), Expr::StringConstant(_)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for a string expects a string, not an assignment".into(),
-            )
-            .into_err(x.position()))
-        }
         // () in "xxxx"
         (x @ Expr::Unit(_), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
@@ -2555,13 +2538,6 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
         (x @ Expr::Map(_), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not an object map".into(),
-            )
-            .into_err(x.position()))
-        }
-        // (??? = ???) in #{...}
-        (x @ Expr::Assignment(_), Expr::Map(_)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for an object map expects a string, not an assignment".into(),
             )
             .into_err(x.position()))
         }
@@ -3290,8 +3266,8 @@ fn parse_expr_stmt(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let expr = parse_expr(input, state, lib, settings.level_up())?;
-    let expr = parse_op_assignment_stmt(input, state, lib, expr, settings.level_up())?;
-    Ok(Stmt::Expr(expr))
+    let stmt = parse_op_assignment_stmt(input, state, lib, expr, settings.level_up())?;
+    Ok(stmt)
 }
 
 /// Parse a single statement.

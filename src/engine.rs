@@ -1520,159 +1520,6 @@ impl Engine {
             // Statement block
             Expr::Stmt(x) => self.eval_stmt(scope, mods, state, lib, this_ptr, &x.0, level),
 
-            // var op= rhs
-            Expr::Assignment(x) if x.0.get_variable_access(false).is_some() => {
-                let (lhs_expr, op, rhs_expr, op_pos) = x.as_ref();
-                let mut rhs_val = self
-                    .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
-                    .flatten();
-                let (mut lhs_ptr, name, typ, pos) =
-                    self.search_namespace(scope, mods, state, lib, this_ptr, lhs_expr)?;
-
-                if !lhs_ptr.is_ref() {
-                    return EvalAltResult::ErrorAssignmentToConstant(name.to_string(), pos).into();
-                }
-
-                self.inc_operations(state)
-                    .map_err(|err| err.fill_position(pos))?;
-
-                match typ {
-                    // Assignment to constant variable
-                    ScopeEntryType::Constant => Err(Box::new(
-                        EvalAltResult::ErrorAssignmentToConstant(name.to_string(), pos),
-                    )),
-                    // Normal assignment
-                    ScopeEntryType::Normal if op.is_empty() => {
-                        if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
-                            *lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap() = rhs_val;
-                        } else {
-                            *lhs_ptr.as_mut() = rhs_val;
-                        }
-                        Ok(Default::default())
-                    }
-                    // Op-assignment - in order of precedence:
-                    ScopeEntryType::Normal => {
-                        // 1) Native registered overriding function
-                        // 2) Built-in implementation
-                        // 3) Map to `var = var op rhs`
-
-                        // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
-                        let arg_types =
-                            once(lhs_ptr.as_mut().type_id()).chain(once(rhs_val.type_id()));
-                        let hash_fn = calc_fn_hash(empty(), op, 2, arg_types);
-
-                        match self
-                            .global_module
-                            .get_fn(hash_fn, false)
-                            .or_else(|| self.packages.get_fn(hash_fn, false))
-                        {
-                            // op= function registered as method
-                            Some(func) if func.is_method() => {
-                                let mut lock_guard;
-                                let lhs_ptr_inner;
-
-                                if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
-                                    lock_guard = lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap();
-                                    lhs_ptr_inner = lock_guard.deref_mut();
-                                } else {
-                                    lhs_ptr_inner = lhs_ptr.as_mut();
-                                }
-
-                                let args = &mut [lhs_ptr_inner, &mut rhs_val];
-
-                                // Overriding exact implementation
-                                if func.is_plugin_fn() {
-                                    func.get_plugin_fn().call((self, lib).into(), args)?;
-                                } else {
-                                    func.get_native_fn()((self, lib).into(), args)?;
-                                }
-                            }
-                            // Built-in op-assignment function
-                            _ if run_builtin_op_assignment(op, lhs_ptr.as_mut(), &rhs_val)?
-                                .is_some() => {}
-                            // Not built-in: expand to `var = var op rhs`
-                            _ => {
-                                let op = &op[..op.len() - 1]; // extract operator without =
-
-                                // Clone the LHS value
-                                let args = &mut [&mut lhs_ptr.as_mut().clone(), &mut rhs_val];
-
-                                // Run function
-                                let (value, _) = self
-                                    .exec_fn_call(
-                                        state, lib, op, 0, args, false, false, false, None, &None,
-                                        level,
-                                    )
-                                    .map_err(|err| err.fill_position(*op_pos))?;
-
-                                let value = value.flatten();
-
-                                if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
-                                    *lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap() = value;
-                                } else {
-                                    *lhs_ptr.as_mut() = value;
-                                }
-                            }
-                        }
-                        Ok(Default::default())
-                    }
-                }
-            }
-
-            // lhs op= rhs
-            Expr::Assignment(x) => {
-                let (lhs_expr, op, rhs_expr, op_pos) = x.as_ref();
-                let mut rhs_val =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?;
-
-                let _new_val = if op.is_empty() {
-                    // Normal assignment
-                    Some((rhs_val, rhs_expr.position()))
-                } else {
-                    // Op-assignment - always map to `lhs = lhs op rhs`
-                    let op = &op[..op.len() - 1]; // extract operator without =
-                    let args = &mut [
-                        &mut self.eval_expr(scope, mods, state, lib, this_ptr, lhs_expr, level)?,
-                        &mut rhs_val,
-                    ];
-
-                    let result = self
-                        .exec_fn_call(
-                            state, lib, op, 0, args, false, false, false, None, &None, level,
-                        )
-                        .map(|(v, _)| v)
-                        .map_err(|err| err.fill_position(*op_pos))?;
-
-                    Some((result, rhs_expr.position()))
-                };
-
-                // Must be either `var[index] op= val` or `var.prop op= val`
-                match lhs_expr {
-                    // name op= rhs (handled above)
-                    Expr::Variable(_) => unreachable!(),
-                    // idx_lhs[idx_expr] op= rhs
-                    #[cfg(not(feature = "no_index"))]
-                    Expr::Index(_) => {
-                        self.eval_dot_index_chain(
-                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
-                        )?;
-                        Ok(Default::default())
-                    }
-                    // dot_lhs.dot_rhs op= rhs
-                    #[cfg(not(feature = "no_object"))]
-                    Expr::Dot(_) => {
-                        self.eval_dot_index_chain(
-                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
-                        )?;
-                        Ok(Default::default())
-                    }
-                    // Constant expression (should be caught during parsing)
-                    expr if expr.is_constant() => unreachable!(),
-                    // Syntax error
-                    expr => EvalAltResult::ErrorAssignmentToUnknownLHS(expr.position()).into(),
-                }
-            }
-
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
             Expr::Index(_) => {
@@ -1809,6 +1656,159 @@ impl Engine {
 
             // Expression as statement
             Stmt::Expr(expr) => self.eval_expr(scope, mods, state, lib, this_ptr, expr, level),
+
+            // var op= rhs
+            Stmt::Assignment(x, op_pos) if x.0.get_variable_access(false).is_some() => {
+                let (lhs_expr, op, rhs_expr) = x.as_ref();
+                let mut rhs_val = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
+                    .flatten();
+                let (mut lhs_ptr, name, typ, pos) =
+                    self.search_namespace(scope, mods, state, lib, this_ptr, lhs_expr)?;
+
+                if !lhs_ptr.is_ref() {
+                    return EvalAltResult::ErrorAssignmentToConstant(name.to_string(), pos).into();
+                }
+
+                self.inc_operations(state)
+                    .map_err(|err| err.fill_position(pos))?;
+
+                match typ {
+                    // Assignment to constant variable
+                    ScopeEntryType::Constant => Err(Box::new(
+                        EvalAltResult::ErrorAssignmentToConstant(name.to_string(), pos),
+                    )),
+                    // Normal assignment
+                    ScopeEntryType::Normal if op.is_empty() => {
+                        if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
+                            *lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap() = rhs_val;
+                        } else {
+                            *lhs_ptr.as_mut() = rhs_val;
+                        }
+                        Ok(Default::default())
+                    }
+                    // Op-assignment - in order of precedence:
+                    ScopeEntryType::Normal => {
+                        // 1) Native registered overriding function
+                        // 2) Built-in implementation
+                        // 3) Map to `var = var op rhs`
+
+                        // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
+                        let arg_types =
+                            once(lhs_ptr.as_mut().type_id()).chain(once(rhs_val.type_id()));
+                        let hash_fn = calc_fn_hash(empty(), op, 2, arg_types);
+
+                        match self
+                            .global_module
+                            .get_fn(hash_fn, false)
+                            .or_else(|| self.packages.get_fn(hash_fn, false))
+                        {
+                            // op= function registered as method
+                            Some(func) if func.is_method() => {
+                                let mut lock_guard;
+                                let lhs_ptr_inner;
+
+                                if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
+                                    lock_guard = lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap();
+                                    lhs_ptr_inner = lock_guard.deref_mut();
+                                } else {
+                                    lhs_ptr_inner = lhs_ptr.as_mut();
+                                }
+
+                                let args = &mut [lhs_ptr_inner, &mut rhs_val];
+
+                                // Overriding exact implementation
+                                if func.is_plugin_fn() {
+                                    func.get_plugin_fn().call((self, lib).into(), args)?;
+                                } else {
+                                    func.get_native_fn()((self, lib).into(), args)?;
+                                }
+                            }
+                            // Built-in op-assignment function
+                            _ if run_builtin_op_assignment(op, lhs_ptr.as_mut(), &rhs_val)?
+                                .is_some() => {}
+                            // Not built-in: expand to `var = var op rhs`
+                            _ => {
+                                let op = &op[..op.len() - 1]; // extract operator without =
+
+                                // Clone the LHS value
+                                let args = &mut [&mut lhs_ptr.as_mut().clone(), &mut rhs_val];
+
+                                // Run function
+                                let (value, _) = self
+                                    .exec_fn_call(
+                                        state, lib, op, 0, args, false, false, false, None, &None,
+                                        level,
+                                    )
+                                    .map_err(|err| err.fill_position(*op_pos))?;
+
+                                let value = value.flatten();
+
+                                if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
+                                    *lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap() = value;
+                                } else {
+                                    *lhs_ptr.as_mut() = value;
+                                }
+                            }
+                        }
+                        Ok(Default::default())
+                    }
+                }
+            }
+
+            // lhs op= rhs
+            Stmt::Assignment(x, op_pos) => {
+                let (lhs_expr, op, rhs_expr) = x.as_ref();
+                let mut rhs_val =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?;
+
+                let _new_val = if op.is_empty() {
+                    // Normal assignment
+                    Some((rhs_val, rhs_expr.position()))
+                } else {
+                    // Op-assignment - always map to `lhs = lhs op rhs`
+                    let op = &op[..op.len() - 1]; // extract operator without =
+                    let args = &mut [
+                        &mut self.eval_expr(scope, mods, state, lib, this_ptr, lhs_expr, level)?,
+                        &mut rhs_val,
+                    ];
+
+                    let result = self
+                        .exec_fn_call(
+                            state, lib, op, 0, args, false, false, false, None, &None, level,
+                        )
+                        .map(|(v, _)| v)
+                        .map_err(|err| err.fill_position(*op_pos))?;
+
+                    Some((result, rhs_expr.position()))
+                };
+
+                // Must be either `var[index] op= val` or `var.prop op= val`
+                match lhs_expr {
+                    // name op= rhs (handled above)
+                    Expr::Variable(_) => unreachable!(),
+                    // idx_lhs[idx_expr] op= rhs
+                    #[cfg(not(feature = "no_index"))]
+                    Expr::Index(_) => {
+                        self.eval_dot_index_chain(
+                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
+                        )?;
+                        Ok(Default::default())
+                    }
+                    // dot_lhs.dot_rhs op= rhs
+                    #[cfg(not(feature = "no_object"))]
+                    Expr::Dot(_) => {
+                        self.eval_dot_index_chain(
+                            scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
+                        )?;
+                        Ok(Default::default())
+                    }
+                    // Constant expression (should be caught during parsing)
+                    expr if expr.is_constant() => unreachable!(),
+                    // Syntax error
+                    expr => EvalAltResult::ErrorAssignmentToUnknownLHS(expr.position()).into(),
+                }
+            }
 
             // Block scope
             Stmt::Block(statements, _) => {
