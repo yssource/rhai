@@ -3,10 +3,10 @@
 #![cfg(not(feature = "no_function"))]
 #![allow(non_snake_case)]
 
-use crate::any::Variant;
+use crate::ast::AST;
+use crate::dynamic::Variant;
 use crate::engine::Engine;
-use crate::error::ParseError;
-use crate::parser::AST;
+use crate::parse_error::ParseError;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 

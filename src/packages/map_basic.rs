@@ -1,7 +1,7 @@
 #![cfg(not(feature = "no_object"))]
 
-use crate::any::Dynamic;
 use crate::def_package;
+use crate::dynamic::Dynamic;
 use crate::engine::Map;
 use crate::parser::{ImmutableString, INT};
 use crate::plugin::*;

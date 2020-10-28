@@ -1,6 +1,6 @@
 //! Module defining interfaces to native-Rust functions.
 
-use crate::any::Dynamic;
+use crate::dynamic::Dynamic;
 use crate::engine::{Engine, EvalContext};
 use crate::module::Module;
 use crate::parser::{FnAccess, ScriptFnDef};
@@ -8,7 +8,7 @@ use crate::plugin::PluginFunction;
 use crate::result::EvalAltResult;
 use crate::token::{is_valid_identifier, Position};
 use crate::utils::ImmutableString;
-use crate::{calc_fn_hash, StaticVec};
+use crate::{calc_script_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_function"))]
 use crate::engine::FN_ANONYMOUS;
@@ -176,7 +176,7 @@ impl FnPtr {
 
         let has_this = this_ptr.is_some();
         let mut args = args_data.iter_mut().collect::<StaticVec<_>>();
-        let hash_script = calc_fn_hash(empty(), fn_name, args.len(), empty());
+        let hash_script = calc_script_fn_hash(empty(), fn_name, args.len());
 
         if let Some(obj) = this_ptr {
             args.insert(0, obj);

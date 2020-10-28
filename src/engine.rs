@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::any::{map_std_type_name, Dynamic, Union, Variant};
+use crate::dynamic::{map_std_type_name, Dynamic, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{Callback, FnPtr, OnVarCallback};
 use crate::module::{Module, ModuleRef};
@@ -12,7 +12,7 @@ use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::CustomSyntax;
 use crate::token::Position;
-use crate::{calc_fn_hash, StaticVec};
+use crate::{calc_native_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_index"))]
 use crate::parser::INT;
@@ -29,7 +29,7 @@ use crate::utils::ImmutableString;
 
 #[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "no_object"))]
-use crate::any::DynamicWriteLock;
+use crate::dynamic::DynamicWriteLock;
 
 use crate::stdlib::{
     any::type_name,
@@ -462,7 +462,7 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub fn imports(&self) -> &'a Imports {
-        self.mods
+        self.mods.as_ref()
     }
     /// Get an iterator over the namespaces containing definition of all script-defined functions.
     #[inline(always)]
@@ -1447,8 +1447,7 @@ impl Engine {
                     let args = &mut [&mut lhs_value.clone(), value];
 
                     // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
-                    let hash =
-                        calc_fn_hash(empty(), op, args.len(), args.iter().map(|a| a.type_id()));
+                    let hash = calc_native_fn_hash(empty(), op, args.iter().map(|a| a.type_id()));
 
                     if self
                         .call_native_fn(state, lib, op, hash, args, false, false, &def_value)
@@ -1698,7 +1697,7 @@ impl Engine {
                         // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
                         let arg_types =
                             once(lhs_ptr.as_mut().type_id()).chain(once(rhs_val.type_id()));
-                        let hash_fn = calc_fn_hash(empty(), op, 2, arg_types);
+                        let hash_fn = calc_native_fn_hash(empty(), op, arg_types);
 
                         match self
                             .global_module

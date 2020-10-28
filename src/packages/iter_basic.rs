@@ -1,4 +1,4 @@
-use crate::any::Variant;
+use crate::dynamic::Variant;
 use crate::def_package;
 use crate::parser::INT;
 use crate::result::EvalAltResult;

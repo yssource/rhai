@@ -1,16 +1,17 @@
 //! Module implementing the AST optimizer.
 
-use crate::any::Dynamic;
+use crate::ast::AST;
+use crate::dynamic::Dynamic;
 use crate::engine::{
     Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT,
     KEYWORD_TYPE_OF,
 };
 use crate::fn_call::run_builtin_binary_op;
 use crate::module::Module;
-use crate::parser::{map_dynamic_to_expr, BinaryExpr, CustomExpr, Expr, ScriptFnDef, Stmt, AST};
+use crate::parser::{map_dynamic_to_expr, BinaryExpr, CustomExpr, Expr, ScriptFnDef, Stmt};
 use crate::scope::{Entry as ScopeEntry, Scope};
 use crate::token::{is_valid_identifier, Position};
-use crate::{calc_fn_hash, StaticVec};
+use crate::{calc_native_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_function"))]
 use crate::parser::ReturnType;
@@ -134,12 +135,7 @@ fn call_fn_with_constant_arguments(
     arg_values: &mut [Dynamic],
 ) -> Option<Dynamic> {
     // Search built-in's and external functions
-    let hash_fn = calc_fn_hash(
-        empty(),
-        fn_name,
-        arg_values.len(),
-        arg_values.iter().map(|a| a.type_id()),
-    );
+    let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_values.iter().map(|a| a.type_id()));
 
     state
         .engine

@@ -1,4 +1,4 @@
-use crate::any::Dynamic;
+use crate::dynamic::Dynamic;
 use crate::def_package;
 use crate::parser::ImmutableString;
 use crate::plugin::*;

@@ -8,7 +8,7 @@ use crate::engine::{
 #[cfg(not(feature = "no_closure"))]
 use crate::engine::KEYWORD_IS_SHARED;
 
-use crate::error::LexError;
+use crate::parse_error::LexError;
 use crate::parser::INT;
 use crate::StaticVec;
 

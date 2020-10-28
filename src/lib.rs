@@ -57,10 +57,11 @@
 #[cfg(feature = "no_std")]
 extern crate alloc;
 
-mod any;
-mod api;
+mod ast;
+mod dynamic;
 mod engine;
-mod error;
+mod engine_api;
+mod engine_settings;
 mod fn_args;
 mod fn_call;
 mod fn_func;
@@ -69,36 +70,37 @@ mod fn_register;
 mod module;
 mod optimize;
 pub mod packages;
+mod parse_error;
 mod parser;
 pub mod plugin;
 mod result;
 mod scope;
 #[cfg(feature = "serde")]
 mod serde_impl;
-mod settings;
 mod stdlib;
 mod syntax;
 mod token;
 mod r#unsafe;
 mod utils;
 
-pub use any::Dynamic;
+pub use ast::AST;
+pub use dynamic::Dynamic;
 pub use engine::{Engine, EvalContext};
-pub use error::{ParseError, ParseErrorType};
 pub use fn_native::{FnPtr, NativeCallContext};
 pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::Module;
-pub use parser::{ImmutableString, AST, INT};
+pub use parse_error::{ParseError, ParseErrorType};
+pub use parser::{ImmutableString, INT};
 pub use result::EvalAltResult;
 pub use scope::Scope;
 pub use syntax::Expression;
 pub use token::Position;
 
 #[cfg(feature = "internals")]
-pub use utils::calc_fn_hash;
+pub use utils::{calc_native_fn_hash, calc_script_fn_hash};
 
 #[cfg(not(feature = "internals"))]
-pub(crate) use utils::calc_fn_hash;
+pub(crate) use utils::{calc_native_fn_hash, calc_script_fn_hash};
 
 pub use rhai_codegen::*;
 
@@ -141,7 +143,7 @@ pub use optimize::OptimizationLevel;
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
-pub use error::LexError;
+pub use parse_error::LexError;
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]

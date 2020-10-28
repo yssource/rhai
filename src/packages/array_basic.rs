@@ -1,7 +1,7 @@
 #![cfg(not(feature = "no_index"))]
 #![allow(non_snake_case)]
 
-use crate::any::Dynamic;
+use crate::dynamic::Dynamic;
 use crate::def_package;
 use crate::engine::Array;
 use crate::fn_native::{FnPtr, NativeCallContext};

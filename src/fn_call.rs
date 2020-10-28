@@ -1,21 +1,21 @@
 //! Implement function-calling mechanism for `Engine`.
 
-use crate::any::Dynamic;
+use crate::dynamic::Dynamic;
 use crate::engine::{
     search_imports, Engine, Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
     KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR,
     KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
-use crate::error::ParseErrorType;
 use crate::fn_native::{FnCallArgs, FnPtr};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
+use crate::parse_error::ParseErrorType;
 use crate::parser::{Expr, ImmutableString, Stmt, INT};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::stdlib::ops::Deref;
 use crate::token::Position;
-use crate::{calc_fn_hash, StaticVec};
+use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_function"))]
 use crate::{
@@ -439,15 +439,8 @@ impl Engine {
         pub_only: bool,
     ) -> bool {
         let arg_types = arg_types.as_ref();
-
-        let arg_len = if arg_types.is_empty() {
-            usize::MAX
-        } else {
-            arg_types.len()
-        };
-
-        let hash_fn = calc_fn_hash(empty(), name, arg_len, arg_types.iter().cloned());
-        let hash_script = calc_fn_hash(empty(), name, arg_types.len(), empty());
+        let hash_fn = calc_native_fn_hash(empty(), name, arg_types.iter().cloned());
+        let hash_script = calc_script_fn_hash(empty(), name, arg_types.len());
 
         self.has_override(lib, hash_fn, hash_script, pub_only)
     }
@@ -503,17 +496,7 @@ impl Engine {
 
         // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
         let arg_types = args.iter().map(|a| a.type_id());
-        let hash_fn = calc_fn_hash(
-            empty(),
-            fn_name,
-            if args.is_empty() {
-                // Distinguish between a script function and a native function with no parameters
-                usize::MAX
-            } else {
-                args.len()
-            },
-            arg_types,
-        );
+        let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_types);
 
         match fn_name {
             // type_of
@@ -741,7 +724,7 @@ impl Engine {
             let hash = if native {
                 0
             } else {
-                calc_fn_hash(empty(), fn_name, args_len, empty())
+                calc_script_fn_hash(empty(), fn_name, args_len)
             };
             // Arguments are passed as-is, adding the curried arguments
             let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
@@ -768,7 +751,7 @@ impl Engine {
             let hash = if native {
                 0
             } else {
-                calc_fn_hash(empty(), fn_name, args_len, empty())
+                calc_script_fn_hash(empty(), fn_name, args_len)
             };
             // Replace the first argument with the object pointer, adding the curried arguments
             let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
@@ -831,7 +814,7 @@ impl Engine {
                         hash = if native {
                             0
                         } else {
-                            calc_fn_hash(empty(), _fn_name, call_args.len(), empty())
+                            calc_script_fn_hash(empty(), _fn_name, call_args.len())
                         };
                     }
                 }
@@ -882,7 +865,7 @@ impl Engine {
 
         // Handle Fn()
         if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
-            let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
+            let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
 
             if !self.has_override(lib, hash_fn, hash_script, pub_only) {
                 // Fn - only in function call style
@@ -963,12 +946,12 @@ impl Engine {
 
             // Recalculate hash
             let args_len = args_expr.len() + curry.len();
-            hash_script = calc_fn_hash(empty(), name, args_len, empty());
+            hash_script = calc_script_fn_hash(empty(), name, args_len);
         }
 
         // Handle is_def_var()
         if name == KEYWORD_IS_DEF_VAR && args_expr.len() == 1 {
-            let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
+            let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
 
             if !self.has_override(lib, hash_fn, hash_script, pub_only) {
                 let var_name =
@@ -982,10 +965,9 @@ impl Engine {
 
         // Handle is_def_fn()
         if name == KEYWORD_IS_DEF_FN && args_expr.len() == 2 {
-            let hash_fn = calc_fn_hash(
+            let hash_fn = calc_native_fn_hash(
                 empty(),
                 name,
-                2,
                 [TypeId::of::<ImmutableString>(), TypeId::of::<INT>()]
                     .iter()
                     .cloned(),
@@ -1007,7 +989,7 @@ impl Engine {
                 return Ok(if num_params < 0 {
                     false
                 } else {
-                    let hash = calc_fn_hash(empty(), fn_name, num_params as usize, empty());
+                    let hash = calc_script_fn_hash(empty(), fn_name, num_params as usize);
                     lib.iter().any(|&m| m.contains_fn(hash, false))
                 }
                 .into());
@@ -1016,7 +998,7 @@ impl Engine {
 
         // Handle eval()
         if name == KEYWORD_EVAL && args_expr.len() == 1 {
-            let hash_fn = calc_fn_hash(empty(), name, 1, once(TypeId::of::<ImmutableString>()));
+            let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
 
             if !self.has_override(lib, hash_fn, hash_script, pub_only) {
                 // eval - only in function call style
@@ -1185,8 +1167,9 @@ impl Engine {
                 // 1) Calculate a hash in a similar manner to script-defined functions,
                 //    i.e. qualifiers + function name + number of arguments.
                 // 2) Calculate a second hash with no qualifiers, empty function name,
-                //    zero number of arguments, and the actual list of argument `TypeId`'.s
-                let hash_fn_args = calc_fn_hash(empty(), "", 0, args.iter().map(|a| a.type_id()));
+                //    and the actual list of argument `TypeId`'.s
+                let hash_fn_args =
+                    calc_native_fn_hash(empty(), "", args.iter().map(|a| a.type_id()));
                 // 3) The final hash is the XOR of the two hashes.
                 let hash_qualified_fn = hash_script ^ hash_fn_args;
 

@@ -2,7 +2,7 @@
 
 #![allow(non_snake_case)]
 
-use crate::any::{Dynamic, DynamicWriteLock, Variant};
+use crate::dynamic::{Dynamic, DynamicWriteLock, Variant};
 use crate::engine::Engine;
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, NativeCallContext, SendSync};
 use crate::parser::FnAccess;

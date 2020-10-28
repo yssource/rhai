@@ -1,6 +1,6 @@
 //! A helper module containing unsafe utility functions.
 
-use crate::any::Variant;
+use crate::dynamic::Variant;
 
 use crate::stdlib::{
     any::{Any, TypeId},

@@ -1,7 +1,7 @@
 //! Module containing error definitions for the evaluation process.
 
-use crate::any::Dynamic;
-use crate::error::ParseErrorType;
+use crate::dynamic::Dynamic;
+use crate::parse_error::ParseErrorType;
 use crate::parser::INT;
 use crate::token::Position;
 use crate::utils::ImmutableString;
