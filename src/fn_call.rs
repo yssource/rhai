@@ -41,6 +41,7 @@ use crate::scope::Entry as ScopeEntry;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
+    borrow::Cow,
     boxed::Box,
     convert::TryFrom,
     format,
@@ -376,7 +377,7 @@ impl Engine {
                 .iter()
                 .zip(args.iter_mut().map(|v| mem::take(*v)))
                 .map(|(name, value)| {
-                    let var_name = unsafe_cast_var_name_to_lifetime(name.as_str(), state);
+                    let var_name: Cow<'_, str> = unsafe_cast_var_name_to_lifetime(name).into();
                     (var_name, ScopeEntryType::Normal, value)
                 }),
         );

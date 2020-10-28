@@ -1,14 +1,11 @@
 //! A helper module containing unsafe utility functions.
 
 use crate::any::Variant;
-use crate::engine::State;
 
 use crate::stdlib::{
     any::{Any, TypeId},
-    borrow::Cow,
     boxed::Box,
     mem, ptr,
-    string::ToString,
 };
 
 /// Cast a type into another type.
@@ -46,7 +43,7 @@ pub fn unsafe_cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<Box<T>, B
 
 /// # DANGEROUS!!!
 ///
-/// A dangerous function that blindly casts a `&str` from one lifetime to a `Cow<str>` of
+/// A dangerous function that blindly casts a `&str` from one lifetime to a `&str` of
 /// another lifetime.  This is mainly used to let us push a block-local variable into the
 /// current `Scope` without cloning the variable name.  Doing this is safe because all local
 /// variables in the `Scope` are cleared out before existing the block.
@@ -54,15 +51,8 @@ pub fn unsafe_cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<Box<T>, B
 /// Force-casting a local variable's lifetime to the current `Scope`'s larger lifetime saves
 /// on allocations and string cloning, thus avoids us having to maintain a chain of `Scope`'s.
 #[inline]
-pub fn unsafe_cast_var_name_to_lifetime<'s>(name: &str, state: &State) -> Cow<'s, str> {
-    // If not at global level, we can force-cast
-    if state.scope_level > 0 {
-        // WARNING - force-cast the variable name into the scope's lifetime to avoid cloning it
-        //           this is safe because all local variables are cleared at the end of the block
-        unsafe { mem::transmute::<_, &'s str>(name) }.into()
-    } else {
-        // The variable is introduced at global (top) level and may persist after the script run.
-        // Therefore, clone the variable name.
-        name.to_string().into()
-    }
+pub fn unsafe_cast_var_name_to_lifetime<'s>(name: &str) -> &'s str {
+    // WARNING - force-cast the variable name into the scope's lifetime to avoid cloning it
+    //           this is safe because all local variables are cleared at the end of the block
+    unsafe { mem::transmute(name) }
 }

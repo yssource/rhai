@@ -733,6 +733,37 @@ impl ParseSettings {
     }
 }
 
+/// An identifier containing a string name and a position.
+#[derive(Debug, Clone, Hash)]
+pub struct Ident {
+    pub name: String,
+    pub pos: Position,
+}
+
+impl Ident {
+    /// Create a new `Identifier`.
+    pub fn new(name: String, pos: Position) -> Self {
+        Self { name, pos }
+    }
+}
+
+/// An identifier containing an immutable name and a position.
+#[derive(Debug, Clone, Hash)]
+pub struct IdentX {
+    pub name: ImmutableString,
+    pub pos: Position,
+}
+
+impl IdentX {
+    /// Create a new `Identifier`.
+    pub fn new(name: impl Into<ImmutableString>, pos: Position) -> Self {
+        Self {
+            name: name.into(),
+            pos,
+        }
+    }
+}
+
 /// _[INTERNALS]_ A Rhai statement.
 /// Exported under the `internals` feature only.
 ///
@@ -751,21 +782,15 @@ pub enum Stmt {
     /// for id in expr { stmt }
     For(Expr, Box<(String, Stmt)>, Position),
     /// let id = expr
-    Let(Box<(String, Position)>, Option<Expr>, Position),
+    Let(Box<Ident>, Option<Expr>, Position),
     /// const id = expr
-    Const(Box<(String, Position)>, Option<Expr>, Position),
+    Const(Box<Ident>, Option<Expr>, Position),
     /// expr op= expr
     Assignment(Box<(Expr, Cow<'static, str>, Expr)>, Position),
     /// { stmt; ... }
     Block(Vec<Stmt>, Position),
     /// try { stmt; ... } catch ( var ) { stmt; ... }
-    TryCatch(
-        Box<(
-            (Stmt, Position),
-            Option<(String, Position)>,
-            (Stmt, Position),
-        )>,
-    ),
+    TryCatch(Box<(Stmt, Option<Ident>, Stmt, (Position, Position))>),
     /// expr
     Expr(Expr),
     /// continue
@@ -776,16 +801,13 @@ pub enum Stmt {
     ReturnWithVal((ReturnType, Position), Option<Expr>, Position),
     /// import expr as var
     #[cfg(not(feature = "no_module"))]
-    Import(Expr, Option<Box<(ImmutableString, Position)>>, Position),
+    Import(Expr, Option<Box<IdentX>>, Position),
     /// export var as var, ...
     #[cfg(not(feature = "no_module"))]
-    Export(
-        Vec<((String, Position), Option<(String, Position)>)>,
-        Position,
-    ),
+    Export(Vec<(Ident, Option<Ident>)>, Position),
     /// Convert a variable to shared.
     #[cfg(not(feature = "no_closure"))]
-    Share(String, Position),
+    Share(Ident),
 }
 
 impl Default for Stmt {
@@ -818,8 +840,8 @@ impl Stmt {
             | Self::For(_, _, pos)
             | Self::ReturnWithVal((_, pos), _, _) => *pos,
 
-            Self::Let(x, _, _) | Self::Const(x, _, _) => x.1,
-            Self::TryCatch(x) => (x.0).1,
+            Self::Let(x, _, _) | Self::Const(x, _, _) => x.pos,
+            Self::TryCatch(x) => (x.3).0,
 
             Self::Expr(x) => x.position(),
 
@@ -829,7 +851,7 @@ impl Stmt {
             Self::Export(_, pos) => *pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_, pos) => *pos,
+            Self::Share(Ident { pos, .. }) => *pos,
         }
     }
 
@@ -847,8 +869,8 @@ impl Stmt {
             | Self::For(_, _, pos)
             | Self::ReturnWithVal((_, pos), _, _) => *pos = new_pos,
 
-            Self::Let(x, _, _) | Self::Const(x, _, _) => x.1 = new_pos,
-            Self::TryCatch(x) => (x.0).1 = new_pos,
+            Self::Let(x, _, _) | Self::Const(x, _, _) => x.pos = new_pos,
+            Self::TryCatch(x) => (x.3).0 = new_pos,
 
             Self::Expr(x) => {
                 x.set_position(new_pos);
@@ -860,7 +882,7 @@ impl Stmt {
             Self::Export(_, pos) => *pos = new_pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_, pos) => *pos = new_pos,
+            Self::Share(Ident { pos, .. }) => *pos = new_pos,
         }
 
         self
@@ -891,7 +913,7 @@ impl Stmt {
             Self::Import(_, _, _) | Self::Export(_, _) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_, _) => false,
+            Self::Share(_) => false,
         }
     }
 
@@ -910,7 +932,7 @@ impl Stmt {
             Self::Let(_, _, _) | Self::Const(_, _, _) | Self::Assignment(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::ReturnWithVal(_, _, _) => false,
-            Self::TryCatch(x) => (x.0).0.is_pure() && (x.2).0.is_pure(),
+            Self::TryCatch(x) => x.0.is_pure() && x.2.is_pure(),
 
             #[cfg(not(feature = "no_module"))]
             Self::Import(_, _, _) => false,
@@ -918,7 +940,7 @@ impl Stmt {
             Self::Export(_, _) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_, _) => false,
+            Self::Share(_) => false,
         }
     }
 }
@@ -931,9 +953,9 @@ impl Stmt {
 /// This type is volatile and may change.
 #[derive(Clone)]
 pub struct CustomExpr {
-    keywords: StaticVec<Expr>,
-    func: Shared<FnCustomSyntaxEval>,
-    pos: Position,
+    pub(crate) keywords: StaticVec<Expr>,
+    pub(crate) func: Shared<FnCustomSyntaxEval>,
+    pub(crate) pos: Position,
 }
 
 impl fmt::Debug for CustomExpr {
@@ -990,6 +1012,7 @@ impl Hash for FloatWrapper {
     }
 }
 
+/// A binary expression structure.
 #[derive(Debug, Clone, Hash)]
 pub struct BinaryExpr {
     pub lhs: Expr,
@@ -1016,18 +1039,11 @@ pub enum Expr {
     /// Character constant.
     CharConstant(Box<(char, Position)>),
     /// String constant.
-    StringConstant(Box<(ImmutableString, Position)>),
+    StringConstant(Box<IdentX>),
     /// FnPtr constant.
-    FnPointer(Box<(ImmutableString, Position)>),
+    FnPointer(Box<IdentX>),
     /// Variable access - ((variable name, position), optional modules, hash, optional index)
-    Variable(
-        Box<(
-            (String, Position),
-            Option<Box<ModuleRef>>,
-            u64,
-            Option<NonZeroUsize>,
-        )>,
-    ),
+    Variable(Box<(Ident, Option<Box<ModuleRef>>, u64, Option<NonZeroUsize>)>),
     /// Property access.
     Property(Box<((ImmutableString, String, String), Position)>),
     /// { stmt }
@@ -1053,7 +1069,7 @@ pub enum Expr {
     /// [ expr, ... ]
     Array(Box<(StaticVec<Expr>, Position)>),
     /// #{ name:expr, ... }
-    Map(Box<(StaticVec<((ImmutableString, Position), Expr)>, Position)>),
+    Map(Box<(StaticVec<(IdentX, Expr)>, Position)>),
     /// lhs in rhs
     In(Box<BinaryExpr>),
     /// lhs && rhs
@@ -1117,9 +1133,9 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(x) => x.0.into(),
             Self::CharConstant(x) => x.0.into(),
-            Self::StringConstant(x) => x.0.clone().into(),
+            Self::StringConstant(x) => x.name.clone().into(),
             Self::FnPointer(x) => Dynamic(Union::FnPtr(Box::new(FnPtr::new_unchecked(
-                x.0.clone(),
+                x.name.clone(),
                 Default::default(),
             )))),
             Self::True(_) => true.into(),
@@ -1137,7 +1153,7 @@ impl Expr {
             Self::Map(x) if x.0.iter().all(|(_, v)| v.is_constant()) => {
                 Dynamic(Union::Map(Box::new(
                     x.0.iter()
-                        .map(|((k, _), v)| (k.clone(), v.get_constant_value().unwrap()))
+                        .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap()))
                         .collect(),
                 )))
             }
@@ -1149,7 +1165,7 @@ impl Expr {
     /// Is the expression a simple variable access?
     pub(crate) fn get_variable_access(&self, non_qualified: bool) -> Option<&str> {
         match self {
-            Self::Variable(x) if !non_qualified || x.1.is_none() => Some((x.0).0.as_str()),
+            Self::Variable(x) if !non_qualified || x.1.is_none() => Some((x.0).name.as_str()),
             _ => None,
         }
     }
@@ -1164,13 +1180,13 @@ impl Expr {
 
             Self::IntegerConstant(x) => x.1,
             Self::CharConstant(x) => x.1,
-            Self::StringConstant(x) => x.1,
-            Self::FnPointer(x) => x.1,
+            Self::StringConstant(x) => x.pos,
+            Self::FnPointer(x) => x.pos,
             Self::Array(x) => x.1,
             Self::Map(x) => x.1,
             Self::Property(x) => x.1,
             Self::Stmt(x) => x.1,
-            Self::Variable(x) => (x.0).1,
+            Self::Variable(x) => (x.0).pos,
             Self::FnCall(x) => (x.0).3,
 
             Self::And(x) | Self::Or(x) | Self::In(x) => x.pos,
@@ -1195,11 +1211,11 @@ impl Expr {
 
             Self::IntegerConstant(x) => x.1 = new_pos,
             Self::CharConstant(x) => x.1 = new_pos,
-            Self::StringConstant(x) => x.1 = new_pos,
-            Self::FnPointer(x) => x.1 = new_pos,
+            Self::StringConstant(x) => x.pos = new_pos,
+            Self::FnPointer(x) => x.pos = new_pos,
             Self::Array(x) => x.1 = new_pos,
             Self::Map(x) => x.1 = new_pos,
-            Self::Variable(x) => (x.0).1 = new_pos,
+            Self::Variable(x) => (x.0).pos = new_pos,
             Self::Property(x) => x.1 = new_pos,
             Self::Stmt(x) => x.1 = new_pos,
             Self::FnCall(x) => (x.0).3 = new_pos,
@@ -1364,7 +1380,7 @@ impl Expr {
     pub(crate) fn into_property(self) -> Self {
         match self {
             Self::Variable(x) if x.1.is_none() => {
-                let (name, pos) = x.0;
+                let Ident { name, pos } = x.0;
                 let getter = make_getter(&name);
                 let setter = make_setter(&name);
                 Self::Property(Box::new(((name.into(), getter, setter), pos)))
@@ -1622,7 +1638,7 @@ fn parse_index_chain(
                 return Err(PERR::MalformedIndexExpr(
                     "Array or string expects numeric index, not a string".into(),
                 )
-                .into_err(x.1))
+                .into_err(x.pos))
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -1872,7 +1888,7 @@ fn parse_map_literal(
         }
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
-        map.push(((Into::<ImmutableString>::into(name), pos), expr));
+        map.push((IdentX::new(name, pos), expr));
 
         match input.peek().unwrap() {
             (Token::Comma, _) => {
@@ -1899,11 +1915,11 @@ fn parse_map_literal(
     // Check for duplicating properties
     map.iter()
         .enumerate()
-        .try_for_each(|(i, ((k1, _), _))| {
+        .try_for_each(|(i, (IdentX { name: k1, .. }, _))| {
             map.iter()
                 .skip(i + 1)
-                .find(|((k2, _), _)| k2 == k1)
-                .map_or_else(|| Ok(()), |((k2, pos), _)| Err((k2, *pos)))
+                .find(|(IdentX { name: k2, .. }, _)| k2 == k1)
+                .map_or_else(|| Ok(()), |(IdentX { name: k2, pos }, _)| Err((k2, *pos)))
         })
         .map_err(|(key, pos)| PERR::DuplicatedProperty(key.to_string()).into_err(pos))?;
 
@@ -1940,7 +1956,7 @@ fn parse_primary(
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => Expr::FloatConstant(Box::new(FloatWrapper(x, settings.pos))),
         Token::CharConstant(c) => Expr::CharConstant(Box::new((c, settings.pos))),
-        Token::StringConstant(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
+        Token::StringConstant(s) => Expr::StringConstant(Box::new(IdentX::new(s, settings.pos))),
 
         // Function call
         Token::Identifier(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
@@ -1949,7 +1965,7 @@ fn parse_primary(
             {
                 state.allow_capture = true;
             }
-            Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+            Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, None)))
         }
         // Module qualification
         #[cfg(not(feature = "no_module"))]
@@ -1959,18 +1975,18 @@ fn parse_primary(
             {
                 state.allow_capture = true;
             }
-            Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+            Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, None)))
         }
         // Normal variable access
         Token::Identifier(s) => {
             let index = state.access_var(&s, settings.pos);
-            Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
+            Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, index)))
         }
 
         // Function call is allowed to have reserved keyword
         Token::Reserved(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
             if is_keyword_function(&s) {
-                Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+                Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, None)))
             } else {
                 return Err(PERR::Reserved(s).into_err(settings.pos));
             }
@@ -1984,7 +2000,7 @@ fn parse_primary(
                         .into_err(settings.pos),
                 );
             } else {
-                Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+                Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, None)))
             }
         }
 
@@ -2040,13 +2056,13 @@ fn parse_primary(
                     .into_err(pos));
                 }
 
-                let ((name, pos), modules, _, _) = *x;
+                let (Ident { name, pos }, modules, _, _) = *x;
                 settings.pos = pos;
                 parse_fn_call(input, state, lib, name, true, modules, settings.level_up())?
             }
             // Function call
             (Expr::Variable(x), Token::LeftParen) => {
-                let ((name, pos), modules, _, _) = *x;
+                let (Ident { name, pos }, modules, _, _) = *x;
                 settings.pos = pos;
                 parse_fn_call(input, state, lib, name, false, modules, settings.level_up())?
             }
@@ -2054,7 +2070,7 @@ fn parse_primary(
             // module access
             (Expr::Variable(x), Token::DoubleColon) => match input.next().unwrap() {
                 (Token::Identifier(id2), pos2) => {
-                    let ((name, pos), mut modules, _, index) = *x;
+                    let (Ident { name, pos }, mut modules, _, index) = *x;
 
                     if let Some(ref mut modules) = modules {
                         modules.push((name, pos));
@@ -2064,7 +2080,7 @@ fn parse_primary(
                         modules = Some(Box::new(m));
                     }
 
-                    Expr::Variable(Box::new(((id2, pos2), modules, 0, index)))
+                    Expr::Variable(Box::new((Ident::new(id2, pos2), modules, 0, index)))
                 }
                 (Token::Reserved(id2), pos2) if is_valid_identifier(id2.chars()) => {
                     return Err(PERR::Reserved(id2).into_err(pos2));
@@ -2088,7 +2104,7 @@ fn parse_primary(
     match &mut root_expr {
         // Cache the hash key for module-qualified variables
         Expr::Variable(x) if x.1.is_some() => {
-            let ((name, _), modules, hash, _) = x.as_mut();
+            let (Ident { name, .. }, modules, hash, _) = x.as_mut();
             let modules = modules.as_mut().unwrap();
 
             // Qualifiers + variable name
@@ -2249,7 +2265,15 @@ fn make_assignment_stmt<'a>(
         }
         // var (indexed) = rhs
         Expr::Variable(x) => {
-            let ((name, name_pos), _, _, index) = x.as_ref();
+            let (
+                Ident {
+                    name,
+                    pos: name_pos,
+                },
+                _,
+                _,
+                index,
+            ) = x.as_ref();
             match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                 ScopeEntryType::Normal => {
                     Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
@@ -2268,7 +2292,15 @@ fn make_assignment_stmt<'a>(
             }
             // var[???] (indexed) = rhs, var.??? (indexed) = rhs
             Expr::Variable(x) => {
-                let ((name, name_pos), _, _, index) = x.as_ref();
+                let (
+                    Ident {
+                        name,
+                        pos: name_pos,
+                    },
+                    _,
+                    _,
+                    index,
+                ) = x.as_ref();
                 match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                     ScopeEntryType::Normal => {
                         Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
@@ -2344,7 +2376,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         }
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
-            let (name, pos) = x.0;
+            let Ident { name, pos } = x.0;
 
             let getter = make_getter(&name);
             let setter = make_setter(&name);
@@ -2758,7 +2790,12 @@ fn parse_custom_syntax(
             MARKER_IDENT => match input.next().unwrap() {
                 (Token::Identifier(s), pos) => {
                     segments.push(s.clone());
-                    exprs.push(Expr::Variable(Box::new(((s, pos), None, 0, None))));
+                    exprs.push(Expr::Variable(Box::new((
+                        Ident::new(s, pos),
+                        None,
+                        0,
+                        None,
+                    ))));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
@@ -3051,12 +3088,20 @@ fn parse_let(
         // let name = expr
         ScopeEntryType::Normal => {
             state.stack.push((name.clone(), ScopeEntryType::Normal));
-            Ok(Stmt::Let(Box::new((name, pos)), init_value, token_pos))
+            Ok(Stmt::Let(
+                Box::new(Ident::new(name, pos)),
+                init_value,
+                token_pos,
+            ))
         }
         // const name = { expr:constant }
         ScopeEntryType::Constant => {
             state.stack.push((name.clone(), ScopeEntryType::Constant));
-            Ok(Stmt::Const(Box::new((name, pos)), init_value, token_pos))
+            Ok(Stmt::Const(
+                Box::new(Ident::new(name, pos)),
+                init_value,
+                token_pos,
+            ))
         }
     }
 }
@@ -3098,7 +3143,7 @@ fn parse_import(
 
     Ok(Stmt::Import(
         expr,
-        Some(Box::new((name.into(), settings.pos))),
+        Some(Box::new(IdentX::new(name, settings.pos))),
         token_pos,
     ))
 }
@@ -3131,7 +3176,7 @@ fn parse_export(
 
         let rename = if match_token(input, Token::As).0 {
             match input.next().unwrap() {
-                (Token::Identifier(s), pos) => Some((s.clone(), pos)),
+                (Token::Identifier(s), pos) => Some(Ident::new(s.clone(), pos)),
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
                 }
@@ -3142,7 +3187,7 @@ fn parse_export(
             None
         };
 
-        exports.push(((id, id_pos), rename));
+        exports.push((Ident::new(id, id_pos), rename));
 
         match input.peek().unwrap() {
             (Token::Comma, _) => {
@@ -3163,12 +3208,12 @@ fn parse_export(
     exports
         .iter()
         .enumerate()
-        .try_for_each(|(i, ((id1, _), _))| {
+        .try_for_each(|(i, (Ident { name: id1, .. }, _))| {
             exports
                 .iter()
                 .skip(i + 1)
-                .find(|((id2, _), _)| id2 == id1)
-                .map_or_else(|| Ok(()), |((id2, pos), _)| Err((id2, *pos)))
+                .find(|(Ident { name: id2, .. }, _)| id2 == id1)
+                .map_or_else(|| Ok(()), |(Ident { name: id2, pos }, _)| Err((id2, *pos)))
         })
         .map_err(|(id2, pos)| PERR::DuplicatedExport(id2.to_string()).into_err(pos))?;
 
@@ -3451,7 +3496,7 @@ fn parse_try_catch(
     // try { body } catch (
     let var_def = if match_token(input, Token::LeftParen).0 {
         let id = match input.next().unwrap() {
-            (Token::Identifier(s), pos) => (s, pos),
+            (Token::Identifier(s), pos) => Ident::new(s, pos),
             (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
         };
 
@@ -3474,9 +3519,10 @@ fn parse_try_catch(
     let catch_body = parse_block(input, state, lib, settings.level_up())?;
 
     Ok(Stmt::TryCatch(Box::new((
-        (body, token_pos),
+        body,
         var_def,
-        (catch_body, catch_pos),
+        catch_body,
+        (token_pos, catch_pos),
     ))))
 }
 
@@ -3588,11 +3634,7 @@ fn parse_fn(
 
 /// Creates a curried expression from a list of external variables
 #[cfg(not(feature = "no_function"))]
-fn make_curry_from_externals(
-    fn_expr: Expr,
-    externals: StaticVec<(String, Position)>,
-    pos: Position,
-) -> Expr {
+fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Position) -> Expr {
     if externals.is_empty() {
         return fn_expr;
     }
@@ -3603,13 +3645,8 @@ fn make_curry_from_externals(
     args.push(fn_expr);
 
     #[cfg(not(feature = "no_closure"))]
-    externals.iter().for_each(|(var_name, pos)| {
-        args.push(Expr::Variable(Box::new((
-            (var_name.into(), *pos),
-            None,
-            0,
-            None,
-        ))));
+    externals.iter().for_each(|x| {
+        args.push(Expr::Variable(Box::new((x.clone(), None, 0, None))));
     });
 
     #[cfg(feature = "no_closure")]
@@ -3634,11 +3671,7 @@ fn make_curry_from_externals(
         // Statement block
         let mut statements: Vec<_> = Default::default();
         // Insert `Share` statements
-        statements.extend(
-            externals
-                .into_iter()
-                .map(|(var_name, pos)| Stmt::Share(var_name, pos)),
-        );
+        statements.extend(externals.into_iter().map(Stmt::Share));
         // Final expression
         statements.push(Stmt::Expr(expr));
         Expr::Stmt(Box::new((Stmt::Block(statements, pos), pos)))
@@ -3723,7 +3756,7 @@ fn parse_anon_fn(
             state
                 .externals
                 .iter()
-                .map(|(k, &v)| (k.clone(), v))
+                .map(|(k, &v)| Ident::new(k.clone(), v))
                 .collect()
         }
         #[cfg(feature = "no_closure")]
@@ -3733,8 +3766,7 @@ fn parse_anon_fn(
     let params: StaticVec<_> = if cfg!(not(feature = "no_closure")) {
         externals
             .iter()
-            .map(|(k, _)| k)
-            .cloned()
+            .map(|k| k.name.clone())
             .chain(params.into_iter().map(|(v, _)| v))
             .collect()
     } else {
@@ -3767,7 +3799,7 @@ fn parse_anon_fn(
         lib: None,
     };
 
-    let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));
+    let expr = Expr::FnPointer(Box::new(IdentX::new(fn_name, settings.pos)));
 
     let expr = if cfg!(not(feature = "no_closure")) {
         make_curry_from_externals(expr, externals, settings.pos)
@@ -3920,7 +3952,7 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         Union::Unit(_) => Some(Expr::Unit(pos)),
         Union::Int(value) => Some(Expr::IntegerConstant(Box::new((value, pos)))),
         Union::Char(value) => Some(Expr::CharConstant(Box::new((value, pos)))),
-        Union::Str(value) => Some(Expr::StringConstant(Box::new((value, pos)))),
+        Union::Str(value) => Some(Expr::StringConstant(Box::new(IdentX::new(value, pos)))),
         Union::Bool(true) => Some(Expr::True(pos)),
         Union::Bool(false) => Some(Expr::False(pos)),
         #[cfg(not(feature = "no_index"))]
@@ -3943,14 +3975,14 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         Union::Map(map) => {
             let items: Vec<_> = map
                 .into_iter()
-                .map(|(k, v)| ((k, pos), map_dynamic_to_expr(v, pos)))
+                .map(|(k, v)| (IdentX::new(k, pos), map_dynamic_to_expr(v, pos)))
                 .collect();
 
             if items.iter().all(|(_, expr)| expr.is_some()) {
                 Some(Expr::Map(Box::new((
                     items
                         .into_iter()
-                        .map(|((k, pos), expr)| ((k, pos), expr.unwrap()))
+                        .map(|(k, expr)| (k, expr.unwrap()))
                         .collect(),
                     pos,
                 ))))
