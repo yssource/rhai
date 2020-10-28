@@ -3650,8 +3650,8 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
     });
 
     #[cfg(feature = "no_closure")]
-    externals.into_iter().for_each(|(var_name, pos)| {
-        args.push(Expr::Variable(Box::new(((var_name, pos), None, 0, None))));
+    externals.into_iter().for_each(|x| {
+        args.push(Expr::Variable(Box::new((x.clone(), None, 0, None))));
     });
 
     let hash = calc_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals + 1, empty());
@@ -3750,7 +3750,7 @@ fn parse_anon_fn(
 
     // External variables may need to be processed in a consistent order,
     // so extract them into a list.
-    let externals: StaticVec<_> = {
+    let externals: StaticVec<Ident> = {
         #[cfg(not(feature = "no_closure"))]
         {
             state
