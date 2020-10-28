@@ -72,7 +72,7 @@ fn test_max_operations_functions() -> Result<(), Box<EvalAltResult>> {
                     fn inc(x) { x + 1 }
                     let x = 0;
 
-                    while x < 30 {
+                    while x < 28 {
                         print(x);
                         x = inc(x);
                     }

@@ -409,6 +409,9 @@ impl Engine {
                     )
                     .into()
                 }
+                // System errors are passed straight-through
+                err if err.is_system_exception() => Err(Box::new(err)),
+                // Other errors are wrapped in `ErrorInFunctionCall`
                 _ => EvalAltResult::ErrorInFunctionCall(
                     fn_def.name.to_string(),
                     err,

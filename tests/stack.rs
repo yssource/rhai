@@ -18,12 +18,15 @@ fn test_stack_overflow_fn_calls() -> Result<(), Box<EvalAltResult>> {
 
     #[cfg(not(feature = "unchecked"))]
     assert!(matches!(
-        *engine.eval::<()>(
-        r"
+        *engine
+            .eval::<()>(
+                r"
             fn foo(n) { if n == 0 { 0 } else { n + foo(n-1) } }
             foo(1000)
-    ").expect_err("should error"),
-        EvalAltResult::ErrorInFunctionCall(name, _, _) if name.starts_with("foo > foo > foo")
+    "
+            )
+            .expect_err("should error"),
+        EvalAltResult::ErrorStackOverflow(_)
     ));
 
     Ok(())

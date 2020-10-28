@@ -1939,7 +1939,7 @@ impl Engine {
                     Ok(_) => result,
                     Err(err) => match *err {
                         mut err @ EvalAltResult::ErrorRuntime(_, _) | mut err
-                            if err.catchable() =>
+                            if err.is_catchable() =>
                         {
                             let value = if let EvalAltResult::ErrorRuntime(ref x, _) = err {
                                 x.clone()

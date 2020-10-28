@@ -270,10 +270,10 @@ impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
 
 impl EvalAltResult {
     /// Can this error be caught?
-    pub fn catchable(&self) -> bool {
+    pub fn is_catchable(&self) -> bool {
         match self {
             Self::ErrorSystem(_, _) => false,
-            Self::ErrorParsing(_, _) => false,
+            Self::ErrorParsing(_, _) => unreachable!(),
 
             Self::ErrorFunctionNotFound(_, _)
             | Self::ErrorInFunctionCall(_, _, _)
@@ -298,9 +298,28 @@ impl EvalAltResult {
             | Self::ErrorTooManyModules(_)
             | Self::ErrorStackOverflow(_)
             | Self::ErrorDataTooLarge(_, _, _, _)
-            | Self::ErrorTerminated(_)
-            | Self::LoopBreak(_, _)
-            | Self::Return(_, _) => false,
+            | Self::ErrorTerminated(_) => false,
+
+            Self::LoopBreak(_, _) | Self::Return(_, _) => unreachable!(),
+        }
+    }
+
+    /// Is this error a system exception?
+    pub fn is_system_exception(&self) -> bool {
+        match self {
+            Self::ErrorSystem(_, _) => true,
+            Self::ErrorParsing(_, _) => unreachable!(),
+
+            Self::ErrorTooManyOperations(_)
+            | Self::ErrorTooManyModules(_)
+            | Self::ErrorStackOverflow(_)
+            | Self::ErrorDataTooLarge(_, _, _, _) => true,
+
+            Self::ErrorTerminated(_) => true,
+
+            Self::LoopBreak(_, _) | Self::Return(_, _) => unreachable!(),
+
+            _ => false,
         }
     }
 
