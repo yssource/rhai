@@ -408,6 +408,11 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
             )))
         }
         // expr;
+        Stmt::Expr(Expr::Stmt(x)) if matches!(x.0, Stmt::Expr(_)) => {
+            state.set_dirty();
+            optimize_stmt(x.0, state, preserve_result)
+        }
+        // expr;
         Stmt::Expr(expr) => Stmt::Expr(optimize_expr(expr, state)),
         // return expr;
         Stmt::ReturnWithVal(ret, Some(expr), pos) => {
@@ -432,20 +437,20 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
     match expr {
         // expr - do not promote because there is a reason it is wrapped in an `Expr::Expr`
         Expr::Expr(x) => Expr::Expr(Box::new(optimize_expr(*x, state))),
-        // ( stmt )
-        Expr::Stmt(x) => match optimize_stmt(x.0, state, true) {
-            // ( Noop ) -> ()
+        // { stmt }
+        Expr::Stmt(x) => match x.0 {
+            // {} -> ()
             Stmt::Noop(_) => {
                 state.set_dirty();
                 Expr::Unit(x.1)
             }
-            // ( expr ) -> expr
+            // { expr } -> expr
             Stmt::Expr(expr) => {
                 state.set_dirty();
-                expr
+                optimize_expr(expr, state)
             }
-            // ( stmt )
-            stmt => Expr::Stmt(Box::new((stmt, x.1))),
+            // { stmt }
+            stmt => Expr::Stmt(Box::new((optimize_stmt(stmt, state, true), x.1))),
         },
 
         // lhs.rhs
