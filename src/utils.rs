@@ -122,19 +122,11 @@ fn calc_fn_hash<'a>(
     // We always skip the first module
     modules.skip(1).for_each(|m| m.hash(s));
     s.write(fn_name.as_bytes());
-    let num = if let Some(num) = num {
-        num
+    if let Some(num) = num {
+        s.write_usize(num);
     } else {
-        let mut count = 0;
-
-        params.for_each(|t| {
-            count += 1;
-            t.hash(s);
-        });
-
-        count
-    };
-    s.write_usize(num);
+        params.for_each(|t| t.hash(s));
+    }
     s.finish()
 }
 
