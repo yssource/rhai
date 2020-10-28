@@ -4,7 +4,7 @@ error[E0277]: the trait bound `NonClonable: Clone` is not satisfied
 12  |     pub fn test_fn(input: f32) -> NonClonable {
     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `NonClonable`
     |
-   ::: $WORKSPACE/src/any.rs
+   ::: $WORKSPACE/src/dynamic.rs
     |
     |     pub fn from<T: Variant + Clone>(value: T) -> Self {
     |                              ----- required by this bound in `rhai::Dynamic::from`

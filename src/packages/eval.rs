@@ -1,5 +1,5 @@
-use crate::dynamic::Dynamic;
 use crate::def_package;
+use crate::dynamic::Dynamic;
 use crate::parser::ImmutableString;
 use crate::plugin::*;
 use crate::result::EvalAltResult;
