@@ -2280,7 +2280,7 @@ fn make_assignment_stmt<'a>(
                 }
             }
             // expr[???] = rhs, expr.??? = rhs
-            _ => Err(PERR::AssignmentToCopy.into_err(x.lhs.position())),
+            _ => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(x.lhs.position())),
         },
         // const_expr = rhs
         expr if expr.is_constant() => {
@@ -2291,7 +2291,7 @@ fn make_assignment_stmt<'a>(
             Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(pos))
         }
         // expr = rhs
-        _ => Err(PERR::AssignmentToCopy.into_err(lhs.position())),
+        _ => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(lhs.position())),
     }
 }
 

@@ -302,26 +302,19 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => {
                 let char_value = ch.clone();
-                self.set_value((char_value, Position::none()), Position::none())
-                    .unwrap();
+                self.set_value((char_value, Position::none())).unwrap();
             }
         }
     }
     /// Update the value of the `Target`.
     #[cfg(any(not(feature = "no_object"), not(feature = "no_index")))]
-    pub fn set_value(
-        &mut self,
-        new_val: (Dynamic, Position),
-        target_pos: Position,
-    ) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_value(&mut self, new_val: (Dynamic, Position)) -> Result<(), Box<EvalAltResult>> {
         match self {
             Self::Ref(r) => **r = new_val.0,
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => **r = new_val.0,
-            Self::Value(_) => {
-                return EvalAltResult::ErrorAssignmentToUnknownLHS(target_pos).into();
-            }
+            Self::Value(_) => unreachable!(),
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(string, index, _) if string.is::<ImmutableString>() => {
                 let mut s = string.write_lock::<ImmutableString>().unwrap();
@@ -924,7 +917,7 @@ impl Engine {
                         {
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
-                                obj_ptr.set_value(new_val.unwrap(), rhs.position())?;
+                                obj_ptr.set_value(new_val.unwrap())?;
                                 None
                             }
                             Err(err) => match *err {
@@ -992,7 +985,7 @@ impl Engine {
                         let mut val = self
                             .get_indexed_mut(state, lib, target, index, *pos, true, false, level)?;
 
-                        val.set_value(new_val.unwrap(), rhs.position())?;
+                        val.set_value(new_val.unwrap())?;
                         Ok((Default::default(), true))
                     }
                     // {xxx:map}.id
@@ -1219,9 +1212,7 @@ impl Engine {
                 .map_err(|err| err.fill_position(*op_pos))
             }
             // {expr}.??? = ??? or {expr}[???] = ???
-            expr if new_val.is_some() => {
-                return EvalAltResult::ErrorAssignmentToUnknownLHS(expr.position()).into();
-            }
+            _ if new_val.is_some() => unreachable!(),
             // {expr}.??? or {expr}[???]
             expr => {
                 let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
@@ -1803,10 +1794,8 @@ impl Engine {
                         )?;
                         Ok(Default::default())
                     }
-                    // Constant expression (should be caught during parsing)
-                    expr if expr.is_constant() => unreachable!(),
-                    // Syntax error
-                    expr => EvalAltResult::ErrorAssignmentToUnknownLHS(expr.position()).into(),
+                    // Non-lvalue expression (should be caught during parsing)
+                    _ => unreachable!(),
                 }
             }
 

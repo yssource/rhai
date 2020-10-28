@@ -138,10 +138,11 @@ pub enum ParseErrorType {
     ///
     /// Never appears under the `no_module` feature.
     WrongExport,
-    /// Assignment to a copy of a value.
-    AssignmentToCopy,
     /// Assignment to an a constant variable. Wrapped value is the constant variable name.
     AssignmentToConstant(String),
+    /// Assignment to an inappropriate LHS (left-hand-side) expression.
+    /// Wrapped value is the error message (if any).
+    AssignmentToInvalidLHS(String),
     /// Expression exceeding the maximum levels of complexity.
     ///
     /// Never appears under the `unchecked` feature.
@@ -183,8 +184,8 @@ impl ParseErrorType {
             Self::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
             Self::DuplicatedExport(_) => "Duplicated variable/function in export statement",
             Self::WrongExport => "Export statement can only appear at global level",
-            Self::AssignmentToCopy => "Only a copy of the value is change with this assignment",
             Self::AssignmentToConstant(_) => "Cannot assign to a constant value",
+            Self::AssignmentToInvalidLHS(_) => "Expression cannot be assigned to",
             Self::ExprTooDeep => "Expression exceeds maximum complexity",
             Self::LiteralTooLarge(_, _) => "Literal exceeds maximum limit",
             Self::LoopBreak => "Break statement should only be used inside a loop"
@@ -233,6 +234,10 @@ impl fmt::Display for ParseErrorType {
 
             Self::AssignmentToConstant(s) if s.is_empty() => f.write_str(self.desc()),
             Self::AssignmentToConstant(s) => write!(f, "Cannot assign to constant '{}'", s),
+
+            Self::AssignmentToInvalidLHS(s) if s.is_empty() => f.write_str(self.desc()),
+            Self::AssignmentToInvalidLHS(s) => f.write_str(s),
+
             Self::LiteralTooLarge(typ, max) => {
                 write!(f, "{} exceeds the maximum limit ({})", typ, max)
             }

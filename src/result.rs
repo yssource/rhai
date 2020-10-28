@@ -71,8 +71,6 @@ pub enum EvalAltResult {
     ErrorFor(Position),
     /// Data race detected when accessing a variable. Wrapped value is the variable name.
     ErrorDataRace(String, Position),
-    /// Assignment to an inappropriate LHS (left-hand-side) expression.
-    ErrorAssignmentToUnknownLHS(Position),
     /// Assignment to a constant variable. Wrapped value is the variable name.
     ErrorAssignmentToConstant(String, Position),
     /// Inappropriate property access. Wrapped value is the property name.
@@ -129,9 +127,6 @@ impl EvalAltResult {
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
             Self::ErrorModuleNotFound(_, _) => "Module not found",
             Self::ErrorDataRace(_, _) => "Data race detected when accessing variable",
-            Self::ErrorAssignmentToUnknownLHS(_) => {
-                "Assignment to an unsupported left-hand side expression"
-            }
             Self::ErrorAssignmentToConstant(_, _) => "Assignment to a constant variable",
             Self::ErrorMismatchOutputType(_, _, _) => "Output type is incorrect",
             Self::ErrorInExpr(_) => "Malformed 'in' expression",
@@ -185,7 +180,6 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorIndexingType(_, _)
             | Self::ErrorUnboundThis(_)
             | Self::ErrorFor(_)
-            | Self::ErrorAssignmentToUnknownLHS(_)
             | Self::ErrorInExpr(_)
             | Self::ErrorDotExpr(_, _)
             | Self::ErrorTooManyOperations(_)
@@ -293,7 +287,6 @@ impl EvalAltResult {
             | Self::ErrorVariableNotFound(_, _)
             | Self::ErrorModuleNotFound(_, _)
             | Self::ErrorDataRace(_, _)
-            | Self::ErrorAssignmentToUnknownLHS(_)
             | Self::ErrorAssignmentToConstant(_, _)
             | Self::ErrorMismatchOutputType(_, _, _)
             | Self::ErrorInExpr(_)
@@ -329,7 +322,6 @@ impl EvalAltResult {
             | Self::ErrorVariableNotFound(_, pos)
             | Self::ErrorModuleNotFound(_, pos)
             | Self::ErrorDataRace(_, pos)
-            | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, _, pos)
             | Self::ErrorInExpr(pos)
@@ -364,7 +356,6 @@ impl EvalAltResult {
             | Self::ErrorVariableNotFound(_, pos)
             | Self::ErrorModuleNotFound(_, pos)
             | Self::ErrorDataRace(_, pos)
-            | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, _, pos)
             | Self::ErrorInExpr(pos)
