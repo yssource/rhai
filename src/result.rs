@@ -20,12 +20,18 @@ use crate::stdlib::{
 ///
 /// All wrapped `Position` values represent the location in the script where the error occurs.
 ///
+/// # Thread Safety
+///
 /// Currently, `EvalAltResult` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum EvalAltResult {
     /// System error. Wrapped values are the error message and the internal error.
+    #[cfg(not(feature = "sync"))]
     ErrorSystem(String, Box<dyn Error>),
+    /// System error. Wrapped values are the error message and the internal error.
+    #[cfg(feature = "sync")]
+    ErrorSystem(String, Box<dyn Error + Send + Sync>),
 
     /// Syntax error.
     ErrorParsing(ParseErrorType, Position),
@@ -65,8 +71,6 @@ pub enum EvalAltResult {
     ErrorFor(Position),
     /// Data race detected when accessing a variable. Wrapped value is the variable name.
     ErrorDataRace(String, Position),
-    /// Assignment to an inappropriate LHS (left-hand-side) expression.
-    ErrorAssignmentToUnknownLHS(Position),
     /// Assignment to a constant variable. Wrapped value is the variable name.
     ErrorAssignmentToConstant(String, Position),
     /// Inappropriate property access. Wrapped value is the property name.
@@ -123,9 +127,6 @@ impl EvalAltResult {
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
             Self::ErrorModuleNotFound(_, _) => "Module not found",
             Self::ErrorDataRace(_, _) => "Data race detected when accessing variable",
-            Self::ErrorAssignmentToUnknownLHS(_) => {
-                "Assignment to an unsupported left-hand side expression"
-            }
             Self::ErrorAssignmentToConstant(_, _) => "Assignment to a constant variable",
             Self::ErrorMismatchOutputType(_, _, _) => "Output type is incorrect",
             Self::ErrorInExpr(_) => "Malformed 'in' expression",
@@ -179,7 +180,6 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorIndexingType(_, _)
             | Self::ErrorUnboundThis(_)
             | Self::ErrorFor(_)
-            | Self::ErrorAssignmentToUnknownLHS(_)
             | Self::ErrorInExpr(_)
             | Self::ErrorDotExpr(_, _)
             | Self::ErrorTooManyOperations(_)
@@ -270,10 +270,10 @@ impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
 
 impl EvalAltResult {
     /// Can this error be caught?
-    pub fn catchable(&self) -> bool {
+    pub fn is_catchable(&self) -> bool {
         match self {
             Self::ErrorSystem(_, _) => false,
-            Self::ErrorParsing(_, _) => false,
+            Self::ErrorParsing(_, _) => unreachable!(),
 
             Self::ErrorFunctionNotFound(_, _)
             | Self::ErrorInFunctionCall(_, _, _)
@@ -287,7 +287,6 @@ impl EvalAltResult {
             | Self::ErrorVariableNotFound(_, _)
             | Self::ErrorModuleNotFound(_, _)
             | Self::ErrorDataRace(_, _)
-            | Self::ErrorAssignmentToUnknownLHS(_)
             | Self::ErrorAssignmentToConstant(_, _)
             | Self::ErrorMismatchOutputType(_, _, _)
             | Self::ErrorInExpr(_)
@@ -299,9 +298,28 @@ impl EvalAltResult {
             | Self::ErrorTooManyModules(_)
             | Self::ErrorStackOverflow(_)
             | Self::ErrorDataTooLarge(_, _, _, _)
-            | Self::ErrorTerminated(_)
-            | Self::LoopBreak(_, _)
-            | Self::Return(_, _) => false,
+            | Self::ErrorTerminated(_) => false,
+
+            Self::LoopBreak(_, _) | Self::Return(_, _) => unreachable!(),
+        }
+    }
+
+    /// Is this error a system exception?
+    pub fn is_system_exception(&self) -> bool {
+        match self {
+            Self::ErrorSystem(_, _) => true,
+            Self::ErrorParsing(_, _) => unreachable!(),
+
+            Self::ErrorTooManyOperations(_)
+            | Self::ErrorTooManyModules(_)
+            | Self::ErrorStackOverflow(_)
+            | Self::ErrorDataTooLarge(_, _, _, _) => true,
+
+            Self::ErrorTerminated(_) => true,
+
+            Self::LoopBreak(_, _) | Self::Return(_, _) => unreachable!(),
+
+            _ => false,
         }
     }
 
@@ -323,7 +341,6 @@ impl EvalAltResult {
             | Self::ErrorVariableNotFound(_, pos)
             | Self::ErrorModuleNotFound(_, pos)
             | Self::ErrorDataRace(_, pos)
-            | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, _, pos)
             | Self::ErrorInExpr(pos)
@@ -358,7 +375,6 @@ impl EvalAltResult {
             | Self::ErrorVariableNotFound(_, pos)
             | Self::ErrorModuleNotFound(_, pos)
             | Self::ErrorDataRace(_, pos)
-            | Self::ErrorAssignmentToUnknownLHS(pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, _, pos)
             | Self::ErrorInExpr(pos)

@@ -74,6 +74,8 @@ type FunctionsLib = HashMap<u64, ScriptFnDef, StraightHasherBuilder>;
 
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 ///
+/// # Thread Safety
+///
 /// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug, Clone, Default)]
 pub struct AST(
@@ -107,6 +109,7 @@ impl AST {
     }
 
     /// Get a mutable reference to the statements.
+    #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
     pub(crate) fn statements_mut(&mut self) -> &mut Vec<Stmt> {
         &mut self.0
@@ -398,13 +401,8 @@ impl AST {
         mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
         let Self(ref mut statements, ref mut functions) = self;
-
-        if !other.0.is_empty() {
-            statements.extend(other.0.into_iter());
-        }
-
+        statements.extend(other.0.into_iter());
         functions.merge_filtered(&other.1, &mut filter);
-
         self
     }
 
@@ -745,19 +743,21 @@ pub enum Stmt {
     /// No-op.
     Noop(Position),
     /// if expr { stmt } else { stmt }
-    IfThenElse(Box<(Expr, Stmt, Option<Stmt>, Position)>),
+    IfThenElse(Expr, Box<(Stmt, Option<Stmt>)>, Position),
     /// while expr { stmt }
-    While(Box<(Expr, Stmt, Position)>),
+    While(Expr, Box<Stmt>, Position),
     /// loop { stmt }
-    Loop(Box<(Stmt, Position)>),
+    Loop(Box<Stmt>, Position),
     /// for id in expr { stmt }
-    For(Box<(String, Expr, Stmt, Position)>),
+    For(Expr, Box<(String, Stmt)>, Position),
     /// let id = expr
-    Let(Box<((String, Position), Option<Expr>, Position)>),
+    Let(Box<(String, Position)>, Option<Expr>, Position),
     /// const id = expr
-    Const(Box<((String, Position), Option<Expr>, Position)>),
+    Const(Box<(String, Position)>, Option<Expr>, Position),
+    /// expr op= expr
+    Assignment(Box<(Expr, Cow<'static, str>, Expr)>, Position),
     /// { stmt; ... }
-    Block(Box<(StaticVec<Stmt>, Position)>),
+    Block(Vec<Stmt>, Position),
     /// try { stmt; ... } catch ( var ) { stmt; ... }
     TryCatch(
         Box<(
@@ -767,27 +767,25 @@ pub enum Stmt {
         )>,
     ),
     /// expr
-    Expr(Box<Expr>),
+    Expr(Expr),
     /// continue
     Continue(Position),
     /// break
     Break(Position),
     /// return/throw
-    ReturnWithVal(Box<((ReturnType, Position), Option<Expr>, Position)>),
+    ReturnWithVal((ReturnType, Position), Option<Expr>, Position),
     /// import expr as var
     #[cfg(not(feature = "no_module"))]
-    Import(Box<(Expr, Option<(ImmutableString, Position)>, Position)>),
+    Import(Expr, Option<Box<(ImmutableString, Position)>>, Position),
     /// export var as var, ...
     #[cfg(not(feature = "no_module"))]
     Export(
-        Box<(
-            StaticVec<((String, Position), Option<(String, Position)>)>,
-            Position,
-        )>,
+        Vec<((String, Position), Option<(String, Position)>)>,
+        Position,
     ),
     /// Convert a variable to shared.
     #[cfg(not(feature = "no_closure"))]
-    Share(Box<(String, Position)>),
+    Share(String, Position),
 }
 
 impl Default for Stmt {
@@ -798,55 +796,71 @@ impl Default for Stmt {
 }
 
 impl Stmt {
+    /// Is this statement `Noop`?
+    pub fn is_noop(&self) -> bool {
+        match self {
+            Self::Noop(_) => true,
+            _ => false,
+        }
+    }
+
     /// Get the `Position` of this statement.
     pub fn position(&self) -> Position {
         match self {
-            Stmt::Noop(pos) | Stmt::Continue(pos) | Stmt::Break(pos) => *pos,
-            Stmt::Let(x) => (x.0).1,
-            Stmt::Const(x) => (x.0).1,
-            Stmt::Block(x) => x.1,
-            Stmt::IfThenElse(x) => x.3,
-            Stmt::Expr(x) => x.position(),
-            Stmt::While(x) => x.2,
-            Stmt::Loop(x) => x.1,
-            Stmt::For(x) => x.3,
-            Stmt::ReturnWithVal(x) => (x.0).1,
-            Stmt::TryCatch(x) => (x.0).1,
+            Self::Noop(pos)
+            | Self::Continue(pos)
+            | Self::Break(pos)
+            | Self::Block(_, pos)
+            | Self::Assignment(_, pos)
+            | Self::IfThenElse(_, _, pos)
+            | Self::While(_, _, pos)
+            | Self::Loop(_, pos)
+            | Self::For(_, _, pos)
+            | Self::ReturnWithVal((_, pos), _, _) => *pos,
+
+            Self::Let(x, _, _) | Self::Const(x, _, _) => x.1,
+            Self::TryCatch(x) => (x.0).1,
+
+            Self::Expr(x) => x.position(),
 
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(x) => x.2,
+            Self::Import(_, _, pos) => *pos,
             #[cfg(not(feature = "no_module"))]
-            Stmt::Export(x) => x.1,
+            Self::Export(_, pos) => *pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(x) => x.1,
+            Self::Share(_, pos) => *pos,
         }
     }
 
     /// Override the `Position` of this statement.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
-            Stmt::Noop(pos) | Stmt::Continue(pos) | Stmt::Break(pos) => *pos = new_pos,
-            Stmt::Let(x) => (x.0).1 = new_pos,
-            Stmt::Const(x) => (x.0).1 = new_pos,
-            Stmt::Block(x) => x.1 = new_pos,
-            Stmt::IfThenElse(x) => x.3 = new_pos,
-            Stmt::Expr(x) => {
+            Self::Noop(pos)
+            | Self::Continue(pos)
+            | Self::Break(pos)
+            | Self::Block(_, pos)
+            | Self::Assignment(_, pos)
+            | Self::IfThenElse(_, _, pos)
+            | Self::While(_, _, pos)
+            | Self::Loop(_, pos)
+            | Self::For(_, _, pos)
+            | Self::ReturnWithVal((_, pos), _, _) => *pos = new_pos,
+
+            Self::Let(x, _, _) | Self::Const(x, _, _) => x.1 = new_pos,
+            Self::TryCatch(x) => (x.0).1 = new_pos,
+
+            Self::Expr(x) => {
                 x.set_position(new_pos);
             }
-            Stmt::While(x) => x.2 = new_pos,
-            Stmt::Loop(x) => x.1 = new_pos,
-            Stmt::For(x) => x.3 = new_pos,
-            Stmt::ReturnWithVal(x) => (x.0).1 = new_pos,
-            Stmt::TryCatch(x) => (x.0).1 = new_pos,
 
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(x) => x.2 = new_pos,
+            Self::Import(_, _, pos) => *pos = new_pos,
             #[cfg(not(feature = "no_module"))]
-            Stmt::Export(x) => x.1 = new_pos,
+            Self::Export(_, pos) => *pos = new_pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(x) => x.1 = new_pos,
+            Self::Share(_, pos) => *pos = new_pos,
         }
 
         self
@@ -855,55 +869,56 @@ impl Stmt {
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     pub fn is_self_terminated(&self) -> bool {
         match self {
-            Stmt::IfThenElse(_)
-            | Stmt::While(_)
-            | Stmt::Loop(_)
-            | Stmt::For(_)
-            | Stmt::Block(_)
-            | Stmt::TryCatch(_) => true,
+            Self::IfThenElse(_, _, _)
+            | Self::While(_, _, _)
+            | Self::Loop(_, _)
+            | Self::For(_, _, _)
+            | Self::Block(_, _)
+            | Self::TryCatch(_) => true,
 
             // A No-op requires a semicolon in order to know it is an empty statement!
-            Stmt::Noop(_) => false,
+            Self::Noop(_) => false,
 
-            Stmt::Let(_)
-            | Stmt::Const(_)
-            | Stmt::Expr(_)
-            | Stmt::Continue(_)
-            | Stmt::Break(_)
-            | Stmt::ReturnWithVal(_) => false,
+            Self::Let(_, _, _)
+            | Self::Const(_, _, _)
+            | Self::Assignment(_, _)
+            | Self::Expr(_)
+            | Self::Continue(_)
+            | Self::Break(_)
+            | Self::ReturnWithVal(_, _, _) => false,
 
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(_) | Stmt::Export(_) => false,
+            Self::Import(_, _, _) | Self::Export(_, _) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(_) => false,
+            Self::Share(_, _) => false,
         }
     }
 
     /// Is this statement _pure_?
     pub fn is_pure(&self) -> bool {
         match self {
-            Stmt::Noop(_) => true,
-            Stmt::Expr(expr) => expr.is_pure(),
-            Stmt::IfThenElse(x) if x.2.is_some() => {
-                x.0.is_pure() && x.1.is_pure() && x.2.as_ref().unwrap().is_pure()
+            Self::Noop(_) => true,
+            Self::Expr(expr) => expr.is_pure(),
+            Self::IfThenElse(condition, x, _) if x.1.is_some() => {
+                condition.is_pure() && x.0.is_pure() && x.1.as_ref().unwrap().is_pure()
             }
-            Stmt::IfThenElse(x) => x.1.is_pure(),
-            Stmt::While(x) => x.0.is_pure() && x.1.is_pure(),
-            Stmt::Loop(x) => x.0.is_pure(),
-            Stmt::For(x) => x.1.is_pure() && x.2.is_pure(),
-            Stmt::Let(_) | Stmt::Const(_) => false,
-            Stmt::Block(x) => x.0.iter().all(Stmt::is_pure),
-            Stmt::Continue(_) | Stmt::Break(_) | Stmt::ReturnWithVal(_) => false,
-            Stmt::TryCatch(x) => (x.0).0.is_pure() && (x.2).0.is_pure(),
+            Self::IfThenElse(condition, x, _) => condition.is_pure() && x.0.is_pure(),
+            Self::While(condition, block, _) => condition.is_pure() && block.is_pure(),
+            Self::Loop(block, _) => block.is_pure(),
+            Self::For(iterable, x, _) => iterable.is_pure() && x.1.is_pure(),
+            Self::Let(_, _, _) | Self::Const(_, _, _) | Self::Assignment(_, _) => false,
+            Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
+            Self::Continue(_) | Self::Break(_) | Self::ReturnWithVal(_, _, _) => false,
+            Self::TryCatch(x) => (x.0).0.is_pure() && (x.2).0.is_pure(),
 
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(_) => false,
+            Self::Import(_, _, _) => false,
             #[cfg(not(feature = "no_module"))]
-            Stmt::Export(_) => false,
+            Self::Export(_, _) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(_) => false,
+            Self::Share(_, _) => false,
         }
     }
 }
@@ -915,19 +930,23 @@ impl Stmt {
 ///
 /// This type is volatile and may change.
 #[derive(Clone)]
-pub struct CustomExpr(pub StaticVec<Expr>, pub Shared<FnCustomSyntaxEval>);
+pub struct CustomExpr {
+    keywords: StaticVec<Expr>,
+    func: Shared<FnCustomSyntaxEval>,
+    pos: Position,
+}
 
 impl fmt::Debug for CustomExpr {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, f)
+        fmt::Debug::fmt(&self.keywords, f)
     }
 }
 
 impl Hash for CustomExpr {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
+        self.keywords.hash(state);
     }
 }
 
@@ -935,12 +954,17 @@ impl CustomExpr {
     /// Get the keywords for this `CustomExpr`.
     #[inline(always)]
     pub fn keywords(&self) -> &[Expr] {
-        &self.0
+        &self.keywords
     }
     /// Get the implementation function for this `CustomExpr`.
     #[inline(always)]
     pub fn func(&self) -> &FnCustomSyntaxEval {
-        self.1.as_ref()
+        self.func.as_ref()
+    }
+    /// Get the position of this `CustomExpr`.
+    #[inline(always)]
+    pub fn position(&self) -> Position {
+        self.pos
     }
 }
 
@@ -964,6 +988,13 @@ impl Hash for FloatWrapper {
         state.write(&self.0.to_le_bytes());
         self.1.hash(state);
     }
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct BinaryExpr {
+    pub lhs: Expr,
+    pub rhs: Expr,
+    pub pos: Position,
 }
 
 /// _[INTERNALS]_ An expression sub-tree.
@@ -1015,22 +1046,20 @@ pub enum Expr {
             Option<bool>, // Default value is `bool` in order for `Expr` to be `Hash`.
         )>,
     ),
-    /// expr op= expr
-    Assignment(Box<(Expr, Cow<'static, str>, Expr, Position)>),
     /// lhs.rhs
-    Dot(Box<(Expr, Expr, Position)>),
+    Dot(Box<BinaryExpr>),
     /// expr[expr]
-    Index(Box<(Expr, Expr, Position)>),
+    Index(Box<BinaryExpr>),
     /// [ expr, ... ]
     Array(Box<(StaticVec<Expr>, Position)>),
     /// #{ name:expr, ... }
     Map(Box<(StaticVec<((ImmutableString, Position), Expr)>, Position)>),
     /// lhs in rhs
-    In(Box<(Expr, Expr, Position)>),
+    In(Box<BinaryExpr>),
     /// lhs && rhs
-    And(Box<(Expr, Expr, Position)>),
+    And(Box<BinaryExpr>),
     /// lhs || rhs
-    Or(Box<(Expr, Expr, Position)>),
+    Or(Box<BinaryExpr>),
     /// true
     True(Position),
     /// false
@@ -1038,7 +1067,7 @@ pub enum Expr {
     /// ()
     Unit(Position),
     /// Custom syntax
-    Custom(Box<(CustomExpr, Position)>),
+    Custom(Box<CustomExpr>),
 }
 
 impl Default for Expr {
@@ -1143,15 +1172,14 @@ impl Expr {
             Self::Stmt(x) => x.1,
             Self::Variable(x) => (x.0).1,
             Self::FnCall(x) => (x.0).3,
-            Self::Assignment(x) => x.0.position(),
 
-            Self::And(x) | Self::Or(x) | Self::In(x) => x.2,
+            Self::And(x) | Self::Or(x) | Self::In(x) => x.pos,
 
             Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos,
 
-            Self::Dot(x) | Self::Index(x) => x.0.position(),
+            Self::Dot(x) | Self::Index(x) => x.lhs.position(),
 
-            Self::Custom(x) => x.1,
+            Self::Custom(x) => x.pos,
         }
     }
 
@@ -1175,16 +1203,10 @@ impl Expr {
             Self::Property(x) => x.1 = new_pos,
             Self::Stmt(x) => x.1 = new_pos,
             Self::FnCall(x) => (x.0).3 = new_pos,
-            Self::And(x) => x.2 = new_pos,
-            Self::Or(x) => x.2 = new_pos,
-            Self::In(x) => x.2 = new_pos,
-            Self::True(pos) => *pos = new_pos,
-            Self::False(pos) => *pos = new_pos,
-            Self::Unit(pos) => *pos = new_pos,
-            Self::Assignment(x) => x.3 = new_pos,
-            Self::Dot(x) => x.2 = new_pos,
-            Self::Index(x) => x.2 = new_pos,
-            Self::Custom(x) => x.1 = new_pos,
+            Self::And(x) | Self::Or(x) | Self::In(x) => x.pos = new_pos,
+            Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos = new_pos,
+            Self::Dot(x) | Self::Index(x) => x.pos = new_pos,
+            Self::Custom(x) => x.pos = new_pos,
         }
 
         self
@@ -1200,8 +1222,7 @@ impl Expr {
             Self::Array(x) => x.0.iter().all(Self::is_pure),
 
             Self::Index(x) | Self::And(x) | Self::Or(x) | Self::In(x) => {
-                let (lhs, rhs, _) = x.as_ref();
-                lhs.is_pure() && rhs.is_pure()
+                x.lhs.is_pure() && x.rhs.is_pure()
             }
 
             Self::Stmt(x) => x.0.is_pure(),
@@ -1244,7 +1265,7 @@ impl Expr {
             Self::Map(x) => x.0.iter().map(|(_, expr)| expr).all(Self::is_literal),
 
             // Check in expression
-            Self::In(x) => match (&x.0, &x.1) {
+            Self::In(x) => match (&x.lhs, &x.rhs) {
                 (Self::StringConstant(_), Self::StringConstant(_))
                 | (Self::CharConstant(_), Self::StringConstant(_)) => true,
                 _ => false,
@@ -1277,7 +1298,7 @@ impl Expr {
             Self::Map(x) => x.0.iter().map(|(_, expr)| expr).all(Self::is_constant),
 
             // Check in expression
-            Self::In(x) => match (&x.0, &x.1) {
+            Self::In(x) => match (&x.lhs, &x.rhs) {
                 (Self::StringConstant(_), Self::StringConstant(_))
                 | (Self::CharConstant(_), Self::StringConstant(_)) => true,
                 _ => false,
@@ -1303,8 +1324,7 @@ impl Expr {
             | Self::Or(_)
             | Self::True(_)
             | Self::False(_)
-            | Self::Unit(_)
-            | Self::Assignment(_) => false,
+            | Self::Unit(_) => false,
 
             Self::StringConstant(_)
             | Self::Stmt(_)
@@ -1579,7 +1599,6 @@ fn parse_index_chain(
             }
 
             Expr::CharConstant(_)
-            | Expr::Assignment(_)
             | Expr::And(_)
             | Expr::Or(_)
             | Expr::In(_)
@@ -1615,7 +1634,6 @@ fn parse_index_chain(
             }
 
             Expr::CharConstant(_)
-            | Expr::Assignment(_)
             | Expr::And(_)
             | Expr::Or(_)
             | Expr::In(_)
@@ -1643,13 +1661,6 @@ fn parse_index_chain(
         x @ Expr::CharConstant(_) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a character".into(),
-            )
-            .into_err(x.position()))
-        }
-        // lhs[??? = ??? ]
-        x @ Expr::Assignment(_) => {
-            return Err(PERR::MalformedIndexExpr(
-                "Array access expects integer index, not an assignment".into(),
             )
             .into_err(x.position()))
         }
@@ -1693,7 +1704,11 @@ fn parse_index_chain(
                     let idx_expr =
                         parse_index_chain(input, state, lib, idx_expr, settings.level_up())?;
                     // Indexing binds to right
-                    Ok(Expr::Index(Box::new((lhs, idx_expr, prev_pos))))
+                    Ok(Expr::Index(Box::new(BinaryExpr {
+                        lhs,
+                        rhs: idx_expr,
+                        pos: prev_pos,
+                    })))
                 }
                 // Otherwise terminate the indexing chain
                 _ => {
@@ -1701,10 +1716,18 @@ fn parse_index_chain(
                         // Terminate with an `Expr::Expr` wrapper to prevent the last index expression
                         // inside brackets to be mis-parsed as another level of indexing, or a
                         // dot expression/function call to be mis-parsed as following the indexing chain.
-                        Expr::Index(_) | Expr::Dot(_) | Expr::FnCall(_) => Ok(Expr::Index(
-                            Box::new((lhs, Expr::Expr(Box::new(idx_expr)), settings.pos)),
-                        )),
-                        _ => Ok(Expr::Index(Box::new((lhs, idx_expr, settings.pos)))),
+                        Expr::Index(_) | Expr::Dot(_) | Expr::FnCall(_) => {
+                            Ok(Expr::Index(Box::new(BinaryExpr {
+                                lhs,
+                                rhs: Expr::Expr(Box::new(idx_expr)),
+                                pos: settings.pos,
+                            })))
+                        }
+                        _ => Ok(Expr::Index(Box::new(BinaryExpr {
+                            lhs,
+                            rhs: idx_expr,
+                            pos: settings.pos,
+                        }))),
                     }
                 }
             }
@@ -2218,18 +2241,18 @@ fn make_assignment_stmt<'a>(
     lhs: Expr,
     rhs: Expr,
     pos: Position,
-) -> Result<Expr, ParseError> {
+) -> Result<Stmt, ParseError> {
     match &lhs {
         // var (non-indexed) = rhs
         Expr::Variable(x) if x.3.is_none() => {
-            Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
+            Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
         }
         // var (indexed) = rhs
         Expr::Variable(x) => {
             let ((name, name_pos), _, _, index) = x.as_ref();
             match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                 ScopeEntryType::Normal => {
-                    Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
+                    Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
                 }
                 // Constant values cannot be assigned to
                 ScopeEntryType::Constant => {
@@ -2238,17 +2261,17 @@ fn make_assignment_stmt<'a>(
             }
         }
         // xxx[???] = rhs, xxx.??? = rhs
-        Expr::Index(x) | Expr::Dot(x) => match &x.0 {
+        Expr::Index(x) | Expr::Dot(x) => match &x.lhs {
             // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
             Expr::Variable(x) if x.3.is_none() => {
-                Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
+                Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
             }
             // var[???] (indexed) = rhs, var.??? (indexed) = rhs
             Expr::Variable(x) => {
                 let ((name, name_pos), _, _, index) = x.as_ref();
                 match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                     ScopeEntryType::Normal => {
-                        Ok(Expr::Assignment(Box::new((lhs, fn_name.into(), rhs, pos))))
+                        Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
                     }
                     // Constant values cannot be assigned to
                     ScopeEntryType::Constant => {
@@ -2257,7 +2280,7 @@ fn make_assignment_stmt<'a>(
                 }
             }
             // expr[???] = rhs, expr.??? = rhs
-            _ => Err(PERR::AssignmentToCopy.into_err(x.0.position())),
+            _ => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(x.lhs.position())),
         },
         // const_expr = rhs
         expr if expr.is_constant() => {
@@ -2268,7 +2291,7 @@ fn make_assignment_stmt<'a>(
             Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(pos))
         }
         // expr = rhs
-        _ => Err(PERR::AssignmentToCopy.into_err(lhs.position())),
+        _ => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(lhs.position())),
     }
 }
 
@@ -2279,7 +2302,7 @@ fn parse_op_assignment_stmt(
     lib: &mut FunctionsLib,
     lhs: Expr,
     mut settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+) -> Result<Stmt, ParseError> {
     let (token, token_pos) = input.peek().unwrap();
     settings.pos = *token_pos;
 
@@ -2301,7 +2324,7 @@ fn parse_op_assignment_stmt(
         | Token::OrAssign
         | Token::XOrAssign => token.syntax(),
 
-        _ => return Ok(lhs),
+        _ => return Ok(Stmt::Expr(lhs)),
     };
 
     let (_, pos) = input.next().unwrap();
@@ -2315,13 +2338,9 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
     Ok(match (lhs, rhs) {
         // idx_lhs[idx_expr].rhs
         // Attach dot chain to the bottom level of indexing chain
-        (Expr::Index(x), rhs) => {
-            let (idx_lhs, idx_expr, pos) = *x;
-            Expr::Index(Box::new((
-                idx_lhs,
-                make_dot_expr(idx_expr, rhs, op_pos)?,
-                pos,
-            )))
+        (Expr::Index(mut x), rhs) => {
+            x.rhs = make_dot_expr(x.rhs, rhs, op_pos)?;
+            Expr::Index(x)
         }
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
@@ -2331,31 +2350,47 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
             let setter = make_setter(&name);
             let rhs = Expr::Property(Box::new(((name.into(), getter, setter), pos)));
 
-            Expr::Dot(Box::new((lhs, rhs, op_pos)))
+            Expr::Dot(Box::new(BinaryExpr {
+                lhs,
+                rhs,
+                pos: op_pos,
+            }))
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(x)) if x.1.is_some() => {
             return Err(PERR::PropertyExpected.into_err(x.1.unwrap()[0].1));
         }
         // lhs.prop
-        (lhs, prop @ Expr::Property(_)) => Expr::Dot(Box::new((lhs, prop, op_pos))),
+        (lhs, prop @ Expr::Property(_)) => Expr::Dot(Box::new(BinaryExpr {
+            lhs,
+            rhs: prop,
+            pos: op_pos,
+        })),
         // lhs.dot_lhs.dot_rhs
         (lhs, Expr::Dot(x)) => {
-            let (dot_lhs, dot_rhs, pos) = *x;
-            Expr::Dot(Box::new((
+            let rhs = Expr::Dot(Box::new(BinaryExpr {
+                lhs: x.lhs.into_property(),
+                rhs: x.rhs,
+                pos: x.pos,
+            }));
+            Expr::Dot(Box::new(BinaryExpr {
                 lhs,
-                Expr::Dot(Box::new((dot_lhs.into_property(), dot_rhs, pos))),
-                op_pos,
-            )))
+                rhs,
+                pos: op_pos,
+            }))
         }
         // lhs.idx_lhs[idx_rhs]
         (lhs, Expr::Index(x)) => {
-            let (dot_lhs, dot_rhs, pos) = *x;
-            Expr::Dot(Box::new((
+            let rhs = Expr::Index(Box::new(BinaryExpr {
+                lhs: x.lhs.into_property(),
+                rhs: x.rhs,
+                pos: x.pos,
+            }));
+            Expr::Dot(Box::new(BinaryExpr {
                 lhs,
-                Expr::Index(Box::new((dot_lhs.into_property(), dot_rhs, pos))),
-                op_pos,
-            )))
+                rhs,
+                pos: op_pos,
+            }))
         }
         // lhs.Fn() or lhs.eval()
         (_, Expr::FnCall(x))
@@ -2376,7 +2411,11 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
             .into_err((x.0).3))
         }
         // lhs.func(...)
-        (lhs, func @ Expr::FnCall(_)) => Expr::Dot(Box::new((lhs, func, op_pos))),
+        (lhs, func @ Expr::FnCall(_)) => Expr::Dot(Box::new(BinaryExpr {
+            lhs,
+            rhs: func,
+            pos: op_pos,
+        })),
         // lhs.rhs
         (_, rhs) => return Err(PERR::PropertyExpected.into_err(rhs.position())),
     })
@@ -2389,7 +2428,6 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
         | (_, x @ Expr::And(_))
         | (_, x @ Expr::Or(_))
         | (_, x @ Expr::In(_))
-        | (_, x @ Expr::Assignment(_))
         | (_, x @ Expr::True(_))
         | (_, x @ Expr::False(_))
         | (_, x @ Expr::Unit(_)) => {
@@ -2452,13 +2490,6 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
             )
             .into_err(x.position()))
         }
-        // (??? = ???) in "xxxx"
-        (x @ Expr::Assignment(_), Expr::StringConstant(_)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for a string expects a string, not an assignment".into(),
-            )
-            .into_err(x.position()))
-        }
         // () in "xxxx"
         (x @ Expr::Unit(_), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
@@ -2511,13 +2542,6 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
             )
             .into_err(x.position()))
         }
-        // (??? = ???) in #{...}
-        (x @ Expr::Assignment(_), Expr::Map(_)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for an object map expects a string, not an assignment".into(),
-            )
-            .into_err(x.position()))
-        }
         // () in #{...}
         (x @ Expr::Unit(_), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
@@ -2529,7 +2553,11 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
         _ => (),
     }
 
-    Ok(Expr::In(Box::new((lhs, rhs, op_pos))))
+    Ok(Expr::In(Box::new(BinaryExpr {
+        lhs,
+        rhs,
+        pos: op_pos,
+    })))
 }
 
 /// Parse a binary expression.
@@ -2549,9 +2577,17 @@ fn parse_binary_op(
     let mut root = lhs;
 
     loop {
-        let (current_op, _) = input.peek().unwrap();
-        let custom = state.engine.custom_keywords.as_ref();
-        let precedence = current_op.precedence(custom);
+        let (current_op, current_pos) = input.peek().unwrap();
+        let precedence = if let Token::Custom(c) = current_op {
+            // Custom operators
+            if let Some(Some(p)) = state.engine.custom_keywords.get(c) {
+                *p
+            } else {
+                return Err(PERR::Reserved(c.clone()).into_err(*current_pos));
+            }
+        } else {
+            current_op.precedence()
+        };
         let bind_right = current_op.is_bind_right();
 
         // Bind left to the parent lhs expression if precedence is higher
@@ -2574,7 +2610,17 @@ fn parse_binary_op(
 
         let rhs = parse_unary(input, state, lib, settings)?;
 
-        let next_precedence = input.peek().unwrap().0.precedence(custom);
+        let (next_op, next_pos) = input.peek().unwrap();
+        let next_precedence = if let Token::Custom(c) = next_op {
+            // Custom operators
+            if let Some(Some(p)) = state.engine.custom_keywords.get(c) {
+                *p
+            } else {
+                return Err(PERR::Reserved(c.clone()).into_err(*next_pos));
+            }
+        } else {
+            next_op.precedence()
+        };
 
         // Bind to right if the next operator has higher precedence
         // If same precedence, then check if the operator binds right
@@ -2626,12 +2672,20 @@ fn parse_binary_op(
             Token::Or => {
                 let rhs = args.pop().unwrap();
                 let current_lhs = args.pop().unwrap();
-                Expr::Or(Box::new((current_lhs, rhs, pos)))
+                Expr::Or(Box::new(BinaryExpr {
+                    lhs: current_lhs,
+                    rhs,
+                    pos,
+                }))
             }
             Token::And => {
                 let rhs = args.pop().unwrap();
                 let current_lhs = args.pop().unwrap();
-                Expr::And(Box::new((current_lhs, rhs, pos)))
+                Expr::And(Box::new(BinaryExpr {
+                    lhs: current_lhs,
+                    rhs,
+                    pos,
+                }))
             }
             Token::In => {
                 let rhs = args.pop().unwrap();
@@ -2646,14 +2700,7 @@ fn parse_binary_op(
                 make_dot_expr(current_lhs, rhs, pos)?
             }
 
-            Token::Custom(s)
-                if state
-                    .engine
-                    .custom_keywords
-                    .as_ref()
-                    .map(|c| c.contains_key(&s))
-                    .unwrap_or(false) =>
-            {
+            Token::Custom(s) if state.engine.custom_keywords.contains_key(&s) => {
                 // Accept non-native functions for custom operators
                 let op = (op.0, false, op.2, op.3);
                 Expr::FnCall(Box::new((op, None, hash, args, None)))
@@ -2665,7 +2712,7 @@ fn parse_binary_op(
 }
 
 /// Parse a custom syntax.
-fn parse_custom(
+fn parse_custom_syntax(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
@@ -2691,13 +2738,26 @@ fn parse_custom(
         _ => (),
     }
 
-    for segment in syntax.segments.iter() {
+    let parse_func = &syntax.parse;
+
+    let mut segments: StaticVec<_> = Default::default();
+    segments.push(key.to_string());
+
+    loop {
         settings.pos = input.peek().unwrap().1;
         let settings = settings.level_up();
 
-        match segment.as_str() {
+        let token =
+            if let Some(seg) = parse_func(&segments).map_err(|err| err.0.into_err(settings.pos))? {
+                seg
+            } else {
+                break;
+            };
+
+        match token.as_str() {
             MARKER_IDENT => match input.next().unwrap() {
                 (Token::Identifier(s), pos) => {
+                    segments.push(s.clone());
                     exprs.push(Expr::Variable(Box::new(((s, pos), None, 0, None))));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
@@ -2705,31 +2765,37 @@ fn parse_custom(
                 }
                 (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
             },
-            MARKER_EXPR => exprs.push(parse_expr(input, state, lib, settings)?),
+            MARKER_EXPR => {
+                exprs.push(parse_expr(input, state, lib, settings)?);
+                segments.push(MARKER_EXPR.into());
+            }
             MARKER_BLOCK => {
                 let stmt = parse_block(input, state, lib, settings)?;
                 let pos = stmt.position();
-                exprs.push(Expr::Stmt(Box::new((stmt, pos))))
+                exprs.push(Expr::Stmt(Box::new((stmt, pos))));
+                segments.push(MARKER_BLOCK.into());
             }
-            s => match input.peek().unwrap() {
+            s => match input.next().unwrap() {
+                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                 (t, _) if t.syntax().as_ref() == s => {
-                    input.next().unwrap();
+                    segments.push(t.syntax().into_owned());
                 }
                 (_, pos) => {
                     return Err(PERR::MissingToken(
                         s.to_string(),
-                        format!("for '{}' expression", key),
+                        format!("for '{}' expression", segments[0]),
                     )
-                    .into_err(*pos))
+                    .into_err(pos))
                 }
             },
         }
     }
 
-    Ok(Expr::Custom(Box::new((
-        CustomExpr(exprs, syntax.func.clone()),
+    Ok(Expr::Custom(Box::new(CustomExpr {
+        keywords: exprs,
+        func: syntax.func.clone(),
         pos,
-    ))))
+    })))
 }
 
 /// Parse an expression.
@@ -2745,16 +2811,21 @@ fn parse_expr(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // Check if it is a custom syntax.
-    if let Some(ref custom) = state.engine.custom_syntax {
+    if !state.engine.custom_syntax.is_empty() {
         let (token, pos) = input.peek().unwrap();
         let token_pos = *pos;
 
         match token {
-            Token::Custom(key) if custom.contains_key(key) => {
-                let custom = custom.get_key_value(key).unwrap();
-                let (key, syntax) = custom;
-                input.next().unwrap();
-                return parse_custom(input, state, lib, settings, key, syntax, token_pos);
+            Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key) => {
+                match state.engine.custom_syntax.get_key_value(key) {
+                    Some((key, syntax)) => {
+                        input.next().unwrap();
+                        return parse_custom_syntax(
+                            input, state, lib, settings, key, syntax, token_pos,
+                        );
+                    }
+                    _ => (),
+                }
             }
             _ => (),
         }
@@ -2835,9 +2906,11 @@ fn parse_if(
         None
     };
 
-    Ok(Stmt::IfThenElse(Box::new((
-        guard, if_body, else_body, token_pos,
-    ))))
+    Ok(Stmt::IfThenElse(
+        guard,
+        Box::new((if_body, else_body)),
+        token_pos,
+    ))
 }
 
 /// Parse a while loop.
@@ -2860,9 +2933,9 @@ fn parse_while(
     ensure_not_assignment(input)?;
 
     settings.is_breakable = true;
-    let body = parse_block(input, state, lib, settings.level_up())?;
+    let body = Box::new(parse_block(input, state, lib, settings.level_up())?);
 
-    Ok(Stmt::While(Box::new((guard, body, token_pos))))
+    Ok(Stmt::While(guard, body, token_pos))
 }
 
 /// Parse a loop statement.
@@ -2881,9 +2954,9 @@ fn parse_loop(
 
     // loop { body }
     settings.is_breakable = true;
-    let body = parse_block(input, state, lib, settings.level_up())?;
+    let body = Box::new(parse_block(input, state, lib, settings.level_up())?);
 
-    Ok(Stmt::Loop(Box::new((body, token_pos))))
+    Ok(Stmt::Loop(body, token_pos))
 }
 
 /// Parse a for loop.
@@ -2938,7 +3011,7 @@ fn parse_for(
 
     state.stack.truncate(prev_stack_len);
 
-    Ok(Stmt::For(Box::new((name, expr, body, token_pos))))
+    Ok(Stmt::For(expr, Box::new((name, body)), token_pos))
 }
 
 /// Parse a variable definition statement.
@@ -2978,12 +3051,12 @@ fn parse_let(
         // let name = expr
         ScopeEntryType::Normal => {
             state.stack.push((name.clone(), ScopeEntryType::Normal));
-            Ok(Stmt::Let(Box::new(((name, pos), init_value, token_pos))))
+            Ok(Stmt::Let(Box::new((name, pos)), init_value, token_pos))
         }
         // const name = { expr:constant }
         ScopeEntryType::Constant => {
             state.stack.push((name.clone(), ScopeEntryType::Constant));
-            Ok(Stmt::Const(Box::new(((name, pos), init_value, token_pos))))
+            Ok(Stmt::Const(Box::new((name, pos)), init_value, token_pos))
         }
     }
 }
@@ -3008,7 +3081,7 @@ fn parse_import(
 
     // import expr as ...
     if !match_token(input, Token::As).0 {
-        return Ok(Stmt::Import(Box::new((expr, None, token_pos))));
+        return Ok(Stmt::Import(expr, None, token_pos));
     }
 
     // import expr as name ...
@@ -3023,11 +3096,11 @@ fn parse_import(
 
     state.modules.push(name.clone());
 
-    Ok(Stmt::Import(Box::new((
+    Ok(Stmt::Import(
         expr,
-        Some((name.into(), settings.pos)),
+        Some(Box::new((name.into(), settings.pos))),
         token_pos,
-    ))))
+    ))
 }
 
 /// Parse an export statement.
@@ -3044,7 +3117,7 @@ fn parse_export(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(_state.max_expr_depth)?;
 
-    let mut exports = StaticVec::new();
+    let mut exports = Vec::new();
 
     loop {
         let (id, id_pos) = match input.next().unwrap() {
@@ -3099,7 +3172,7 @@ fn parse_export(
         })
         .map_err(|(id2, pos)| PERR::DuplicatedExport(id2.to_string()).into_err(pos))?;
 
-    Ok(Stmt::Export(Box::new((exports, token_pos))))
+    Ok(Stmt::Export(exports, token_pos))
 }
 
 /// Parse a statement block.
@@ -3125,7 +3198,7 @@ fn parse_block(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let mut statements = StaticVec::new();
+    let mut statements = Vec::new();
     let prev_stack_len = state.stack.len();
 
     #[cfg(not(feature = "no_module"))]
@@ -3178,7 +3251,7 @@ fn parse_block(
     #[cfg(not(feature = "no_module"))]
     state.modules.truncate(prev_mods_len);
 
-    Ok(Stmt::Block(Box::new((statements, settings.pos))))
+    Ok(Stmt::Block(statements, settings.pos))
 }
 
 /// Parse an expression as a statement.
@@ -3194,8 +3267,8 @@ fn parse_expr_stmt(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let expr = parse_expr(input, state, lib, settings.level_up())?;
-    let expr = parse_op_assignment_stmt(input, state, lib, expr, settings.level_up())?;
-    Ok(Stmt::Expr(Box::new(expr)))
+    let stmt = parse_op_assignment_stmt(input, state, lib, expr, settings.level_up())?;
+    Ok(stmt)
 }
 
 /// Parse a single statement.
@@ -3306,26 +3379,26 @@ fn parse_stmt(
 
             match input.peek().unwrap() {
                 // `return`/`throw` at <EOF>
-                (Token::EOF, pos) => Ok(Some(Stmt::ReturnWithVal(Box::new((
+                (Token::EOF, pos) => Ok(Some(Stmt::ReturnWithVal(
                     (return_type, token_pos),
                     None,
                     *pos,
-                ))))),
+                ))),
                 // `return;` or `throw;`
-                (Token::SemiColon, _) => Ok(Some(Stmt::ReturnWithVal(Box::new((
+                (Token::SemiColon, _) => Ok(Some(Stmt::ReturnWithVal(
                     (return_type, token_pos),
                     None,
                     settings.pos,
-                ))))),
+                ))),
                 // `return` or `throw` with expression
                 (_, _) => {
                     let expr = parse_expr(input, state, lib, settings.level_up())?;
                     let pos = expr.position();
-                    Ok(Some(Stmt::ReturnWithVal(Box::new((
+                    Ok(Some(Stmt::ReturnWithVal(
                         (return_type, token_pos),
                         Some(expr),
                         pos,
-                    )))))
+                    )))
                 }
             }
         }
@@ -3559,12 +3632,16 @@ fn make_curry_from_externals(
     #[cfg(not(feature = "no_closure"))]
     {
         // Statement block
-        let mut statements: StaticVec<_> = Default::default();
+        let mut statements: Vec<_> = Default::default();
         // Insert `Share` statements
-        statements.extend(externals.into_iter().map(|x| Stmt::Share(Box::new(x))));
+        statements.extend(
+            externals
+                .into_iter()
+                .map(|(var_name, pos)| Stmt::Share(var_name, pos)),
+        );
         // Final expression
-        statements.push(Stmt::Expr(Box::new(expr)));
-        Expr::Stmt(Box::new((Stmt::Block(Box::new((statements, pos))), pos)))
+        statements.push(Stmt::Expr(expr));
+        Expr::Stmt(Box::new((Stmt::Block(statements, pos), pos)))
     }
 
     #[cfg(feature = "no_closure")]
@@ -3742,7 +3819,7 @@ impl Engine {
             }
         }
 
-        let expr = vec![Stmt::Expr(Box::new(expr))];
+        let expr = vec![Stmt::Expr(expr)];
 
         Ok(
             // Optimize AST

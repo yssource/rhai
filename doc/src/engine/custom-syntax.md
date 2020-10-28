@@ -54,16 +54,14 @@ These symbol types can be used:
 
 * `$ident$` - any [variable] name.
 
-### The First Symbol Must be a Keyword
+### The First Symbol Must be an Identifier
 
 There is no specific limit on the combination and sequencing of each symbol type,
 except the _first_ symbol which must be a custom keyword that follows the naming rules
 of [variables].
 
-The first symbol also cannot be a reserved [keyword], unless that keyword
-has been [disabled][disable keywords and operators].
-
-In other words, any valid identifier that is not an active [keyword] will work fine.
+The first symbol also cannot be a normal or reserved [keyword].
+In other words, any valid identifier that is not a [keyword] will work fine.
 
 ### The First Symbol Must be Unique
 
@@ -118,14 +116,19 @@ The function signature of an implementation is:
 
 where:
 
-* `context: &mut EvalContext` - mutable reference to the current evaluation _context_, exposing the following:
-  * `context.scope: &mut Scope` - mutable reference to the current [`Scope`]; variables can be added to/removed from it.
-  * `context.engine(): &Engine` - reference to the current [`Engine`].
-  * `context.iter_namespaces(): impl Iterator<Item = &Module>` - iterator of the namespaces (as [modules]) containing all script-defined functions.
-  * `context.this_ptr(): Option<&Dynamic>` - reference to the current bound [`this`] pointer, if any.
-  * `context.call_level(): usize` - the current nesting level of function calls.
+| Parameter                     |              Type               | Description                                                                           |
+| ----------------------------- | :-----------------------------: | ------------------------------------------------------------------------------------- |
+| `context`                     |       `&mut EvalContext`        | mutable reference to the current evaluation _context_                                 |
+| - `context.scope`             |          `&mut Scope`           | mutable reference to the current [`Scope`]; variables can be added to/removed from it |
+| - `context.engine()`          |            `&Engine`            | reference to the current [`Engine`]                                                   |
+| - `context.iter_namespaces()` | `impl Iterator<Item = &Module>` | iterator of the namespaces (as [modules]) containing all script-defined functions     |
+| - `context.this_ptr()`        |       `Option<&Dynamic>`        | reference to the current bound [`this`] pointer, if any                               |
+| - `context.call_level()`      |             `usize`             | the current nesting level of function calls                                           |
+| `inputs`                      |         `&[Expression]`         | a list of input expression trees                                                      |
 
-* `inputs: &[Expression]` - a list of input expression trees.
+### Return Value
+
+Return value is the result of evaluating the custom syntax expression.
 
 ### Access Arguments
 
@@ -215,9 +218,9 @@ fn implementation_func(
     Ok(().into())
 }
 
-// Register the custom syntax (sample): do |x| -> { x += 1 } while x < 0;
+// Register the custom syntax (sample): exec |x| -> { x += 1 } while x < 0;
 engine.register_custom_syntax(
-    &[ "do", "|", "$ident$", "|", "->", "$block$", "while", "$expr$" ], // the custom syntax
+    &[ "exec", "|", "$ident$", "|", "->", "$block$", "while", "$expr$" ], // the custom syntax
     1,  // the number of new variables declared within this custom syntax
     implementation_func
 )?;
@@ -252,3 +255,88 @@ Make sure there are _lots_ of examples for users to follow.
 
 Step Six - Profit!
 ------------------
+
+
+Really Advanced - Low Level Custom Syntax API
+--------------------------------------------
+
+Sometimes it is desirable to have multiple custom syntax starting with the
+same symbol.  This is especially common for _command-style_ syntax where the
+second symbol calls a particular command:
+
+```rust
+// The following simulates a command-style syntax, all starting with 'perform'.
+perform hello world;        // A fixed sequence of symbols
+perform action 42;          // Perform a system action with a parameter
+perform update system;      // Update the system
+perform check all;          // Check all system settings
+perform cleanup;            // Clean up the system
+perform add something;      // Add something to the system
+perform remove something;   // Delete something from the system
+```
+
+For even more flexibility, there is a _low level_ API for custom syntax that
+allows the registration of an entire mini-parser.
+
+Use `Engine::register_custom_syntax_raw` to register a custom syntax _parser_
+together with the implementation function:
+
+```rust
+engine.register_custom_syntax_raw(
+    "perform",
+    |stream| match stream.len() {
+        // perform ...
+        1 => Ok(Some("$ident$".to_string())),
+        // perform command ...
+        2 => match stream[1].as_str() {
+            "action" => Ok(Some("$expr$".to_string())),
+            "hello" => Ok(Some("world".to_string())),
+            "update" | "check" | "add" | "remove" => Ok(Some("$ident$".to_string())),
+            "cleanup" => Ok(None),
+            cmd => Err(ParseError(Box::new(ParseErrorType::BadInput(
+                format!("Improper command: {}", cmd))),
+                Position::none(),
+            )),
+        },
+        // perform command arg ...
+        3 => match (stream[1].as_str(), stream[2].as_str()) {
+            ("action", _) => Ok(None),
+            ("hello", "world") => Ok(None),
+            ("update", arg) if arg == "system" => Ok(None),
+            ("update", arg) if arg == "client" => Ok(None),
+            ("check", arg) => Ok(None),
+            ("add", arg) => Ok(None),
+            ("remove", arg) => Ok(None),
+            (cmd, arg) => Err(ParseError(Box::new(ParseErrorType::BadInput(
+                format!("Invalid argument for command {}: {}", cmd, arg))),
+                Position::none(),
+            )),
+        },
+        _ => unreachable!(),
+    },
+    0, // the number of new variables declared within this custom syntax
+    implementation_func
+);
+```
+
+### Function Signature
+
+The custom syntax parser has the following signature:
+
+> `Fn(stream: &[String]) -> Result<Option<String>, ParseError>`
+
+where:
+
+| Parameter |    Type     | Description                                                                                        |
+| --------- | :---------: | -------------------------------------------------------------------------------------------------- |
+| `stream`  | `&[String]` | a slice of symbols that have been parsed so far, possibly containing `"$expr$"` and/or `"$block$"` |
+
+### Return Value
+
+The return value is `Result<Option<String>, ParseError>` where:
+
+| Value              | Description                                                                                                                                                                                                      |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Ok(None)`         | parsing complete and there are no more symbols to match                                                                                                                                                          |
+| `Ok(Some(symbol))` | next symbol to match, which can also be `"$expr$"`, `"$ident$"` or `"$block$"`                                                                                                                                   |
+| `Err(ParseError)`  | error that is reflected back to the [`Engine`].<br/>Normally this is `ParseError(ParseErrorType::BadInput(message), Position::none())` to indicate that there is a syntax error, but it can be any `ParseError`. |

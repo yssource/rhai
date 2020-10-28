@@ -18,9 +18,7 @@ use crate::parser::FLOAT;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
-    char,
-    collections::HashMap,
-    fmt, format,
+    char, fmt, format,
     iter::Peekable,
     str::{Chars, FromStr},
     string::{String, ToString},
@@ -610,7 +608,7 @@ impl Token {
     }
 
     /// Get the precedence number of the token.
-    pub fn precedence(&self, custom: Option<&HashMap<String, u8>>) -> u8 {
+    pub fn precedence(&self) -> u8 {
         use Token::*;
 
         match self {
@@ -638,9 +636,6 @@ impl Token {
             LeftShift | RightShift => 210,
 
             Period => 240,
-
-            // Custom operators
-            Custom(s) => custom.map_or(0, |c| *c.get(s).unwrap()),
 
             _ => 0,
         }
@@ -692,7 +687,7 @@ impl Token {
             Import | Export | As => true,
 
             True | False | Let | Const | If | Else | While | Loop | For | In | Continue | Break
-            | Return | Throw => true,
+            | Return | Throw | Try | Catch => true,
 
             _ => false,
         }
@@ -1647,16 +1642,12 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let token = match (
-            get_next_token(&mut self.stream, &mut self.state, &mut self.pos),
-            self.engine.disabled_symbols.as_ref(),
-            self.engine.custom_keywords.as_ref(),
-        ) {
+        let token = match get_next_token(&mut self.stream, &mut self.state, &mut self.pos) {
             // {EOF}
-            (None, _, _) => None,
+            None => None,
             // Reserved keyword/symbol
-            (Some((Token::Reserved(s), pos)), disabled, custom) => Some((match
-                (s.as_str(), custom.map(|c| c.contains_key(&s)).unwrap_or(false))
+            Some((Token::Reserved(s), pos)) => Some((match
+                (s.as_str(), self.engine.custom_keywords.contains_key(&s))
             {
                 ("===", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
                     "'===' is not a valid operator. This is not JavaScript! Should it be '=='?".to_string(),
@@ -1691,21 +1682,19 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
                     format!("'{}' is a reserved symbol", token)
                 ))),
                 // Reserved keyword that is not custom and disabled.
-                (token, false) if disabled.map(|d| d.contains(token)).unwrap_or(false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                (token, false) if self.engine.disabled_symbols.contains(token) => Token::LexError(Box::new(LERR::ImproperSymbol(
                     format!("reserved symbol '{}' is disabled", token)
                 ))),
                 // Reserved keyword/operator that is not custom.
                 (_, false) => Token::Reserved(s),
             }, pos)),
             // Custom keyword
-            (Some((Token::Identifier(s), pos)), _, Some(custom)) if custom.contains_key(&s) => {
+            Some((Token::Identifier(s), pos)) if self.engine.custom_keywords.contains_key(&s) => {
                 Some((Token::Custom(s), pos))
             }
             // Custom standard keyword - must be disabled
-            (Some((token, pos)), Some(disabled), Some(custom))
-                if token.is_keyword() && custom.contains_key(token.syntax().as_ref()) =>
-            {
-                if disabled.contains(token.syntax().as_ref()) {
+            Some((token, pos)) if token.is_keyword() && self.engine.custom_keywords.contains_key(token.syntax().as_ref()) => {
+                if self.engine.disabled_symbols.contains(token.syntax().as_ref()) {
                     // Disabled standard keyword
                     Some((Token::Custom(token.syntax().into()), pos))
                 } else {
@@ -1714,21 +1703,17 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
                 }
             }
             // Disabled operator
-            (Some((token, pos)), Some(disabled), _)
-                if token.is_operator() && disabled.contains(token.syntax().as_ref()) =>
-            {
+            Some((token, pos)) if token.is_operator() && self.engine.disabled_symbols.contains(token.syntax().as_ref()) => {
                 Some((
                     Token::LexError(Box::new(LexError::UnexpectedInput(token.syntax().into()))),
                     pos,
                 ))
             }
             // Disabled standard keyword
-            (Some((token, pos)), Some(disabled), _)
-                if token.is_keyword() && disabled.contains(token.syntax().as_ref()) =>
-            {
+            Some((token, pos)) if token.is_keyword() && self.engine.disabled_symbols.contains(token.syntax().as_ref()) => {
                 Some((Token::Reserved(token.syntax().into()), pos))
             }
-            (r, _, _) => r,
+            r => r,
         };
 
         match token {

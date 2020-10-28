@@ -6,7 +6,7 @@ use crate::fn_native::{Callback, FnPtr, OnVarCallback};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
-use crate::parser::{Expr, ReturnType, Stmt};
+use crate::parser::{BinaryExpr, Expr, ReturnType, Stmt};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -302,26 +302,19 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => {
                 let char_value = ch.clone();
-                self.set_value((char_value, Position::none()), Position::none())
-                    .unwrap();
+                self.set_value((char_value, Position::none())).unwrap();
             }
         }
     }
     /// Update the value of the `Target`.
     #[cfg(any(not(feature = "no_object"), not(feature = "no_index")))]
-    pub fn set_value(
-        &mut self,
-        new_val: (Dynamic, Position),
-        target_pos: Position,
-    ) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_value(&mut self, new_val: (Dynamic, Position)) -> Result<(), Box<EvalAltResult>> {
         match self {
             Self::Ref(r) => **r = new_val.0,
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => **r = new_val.0,
-            Self::Value(_) => {
-                return EvalAltResult::ErrorAssignmentToUnknownLHS(target_pos).into();
-            }
+            Self::Value(_) => unreachable!(),
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(string, index, _) if string.is::<ImmutableString>() => {
                 let mut s = string.write_lock::<ImmutableString>().unwrap();
@@ -484,6 +477,14 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
 
 /// Rhai main scripting engine.
 ///
+/// # Thread Safety
+///
+/// `Engine` is re-entrant.
+///
+/// Currently, `Engine` is neither `Send` nor `Sync`. Use the `sync` feature to make it `Send + Sync`.
+///
+/// # Example
+///
 /// ```
 /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
 /// use rhai::Engine;
@@ -496,11 +497,9 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
 /// # Ok(())
 /// # }
 /// ```
-///
-/// Currently, `Engine` is neither `Send` nor `Sync`. Use the `sync` feature to make it `Send + Sync`.
 pub struct Engine {
     /// A unique ID identifying this scripting `Engine`.
-    pub id: Option<String>,
+    pub id: String,
 
     /// A module containing all functions directly loaded into the Engine.
     pub(crate) global_module: Module,
@@ -512,14 +511,14 @@ pub struct Engine {
     pub(crate) module_resolver: Option<Box<dyn ModuleResolver>>,
 
     /// A hashmap mapping type names to pretty-print names.
-    pub(crate) type_names: Option<HashMap<String, String>>,
+    pub(crate) type_names: HashMap<String, String>,
 
     /// A hashset containing symbols to disable.
-    pub(crate) disabled_symbols: Option<HashSet<String>>,
+    pub(crate) disabled_symbols: HashSet<String>,
     /// A hashset containing custom keywords and precedence to recognize.
-    pub(crate) custom_keywords: Option<HashMap<String, u8>>,
+    pub(crate) custom_keywords: HashMap<String, Option<u8>>,
     /// Custom syntax.
-    pub(crate) custom_syntax: Option<HashMap<String, CustomSyntax>>,
+    pub(crate) custom_syntax: HashMap<ImmutableString, CustomSyntax>,
     /// Callback closure for resolving variable access.
     pub(crate) resolve_var: Option<OnVarCallback>,
 
@@ -541,9 +540,10 @@ pub struct Engine {
 impl fmt::Debug for Engine {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.id.as_ref() {
-            Some(id) => write!(f, "Engine({})", id),
-            None => f.write_str("Engine"),
+        if !self.id.is_empty() {
+            write!(f, "Engine({})", self.id)
+        } else {
+            f.write_str("Engine")
         }
     }
 }
@@ -645,7 +645,7 @@ impl Engine {
     pub fn new() -> Self {
         // Create the new scripting Engine
         let mut engine = Self {
-            id: None,
+            id: Default::default(),
 
             packages: Default::default(),
             global_module: Default::default(),
@@ -658,10 +658,10 @@ impl Engine {
             #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
             module_resolver: None,
 
-            type_names: None,
-            disabled_symbols: None,
-            custom_keywords: None,
-            custom_syntax: None,
+            type_names: Default::default(),
+            disabled_symbols: Default::default(),
+            custom_keywords: Default::default(),
+            custom_syntax: Default::default(),
 
             // variable resolver
             resolve_var: None,
@@ -707,7 +707,7 @@ impl Engine {
     #[inline(always)]
     pub fn new_raw() -> Self {
         Self {
-            id: None,
+            id: Default::default(),
 
             packages: Default::default(),
             global_module: Default::default(),
@@ -715,10 +715,10 @@ impl Engine {
             #[cfg(not(feature = "no_module"))]
             module_resolver: None,
 
-            type_names: None,
-            disabled_symbols: None,
-            custom_keywords: None,
-            custom_syntax: None,
+            type_names: Default::default(),
+            disabled_symbols: Default::default(),
+            custom_keywords: Default::default(),
+            custom_syntax: Default::default(),
 
             resolve_var: None,
 
@@ -894,18 +894,17 @@ impl Engine {
                 match rhs {
                     // xxx[idx].expr... | xxx[idx][expr]...
                     Expr::Dot(x) | Expr::Index(x) => {
-                        let (idx, expr, pos) = x.as_ref();
-                        let idx_pos = idx.position();
+                        let idx_pos = x.lhs.position();
                         let idx_val = idx_val.as_value();
                         let obj_ptr = &mut self.get_indexed_mut(
                             state, lib, target, idx_val, idx_pos, false, true, level,
                         )?;
 
                         self.eval_dot_index_chain_helper(
-                            state, lib, this_ptr, obj_ptr, expr, idx_values, next_chain, level,
+                            state, lib, this_ptr, obj_ptr, &x.rhs, idx_values, next_chain, level,
                             new_val,
                         )
-                        .map_err(|err| err.fill_position(*pos))
+                        .map_err(|err| err.fill_position(x.pos))
                     }
                     // xxx[rhs] = new_val
                     _ if new_val.is_some() => {
@@ -918,7 +917,7 @@ impl Engine {
                         {
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
-                                obj_ptr.set_value(new_val.unwrap(), rhs.position())?;
+                                obj_ptr.set_value(new_val.unwrap())?;
                                 None
                             }
                             Err(err) => match *err {
@@ -986,7 +985,7 @@ impl Engine {
                         let mut val = self
                             .get_indexed_mut(state, lib, target, index, *pos, true, false, level)?;
 
-                        val.set_value(new_val.unwrap(), rhs.position())?;
+                        val.set_value(new_val.unwrap())?;
                         Ok((Default::default(), true))
                     }
                     // {xxx:map}.id
@@ -1024,9 +1023,7 @@ impl Engine {
                     }
                     // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
                     Expr::Index(x) | Expr::Dot(x) if target.is::<Map>() => {
-                        let (sub_lhs, expr, pos) = x.as_ref();
-
-                        let mut val = match sub_lhs {
+                        let mut val = match &x.lhs {
                             Expr::Property(p) => {
                                 let ((prop, _, _), pos) = p.as_ref();
                                 let index = prop.clone().into();
@@ -1054,16 +1051,14 @@ impl Engine {
                         };
 
                         self.eval_dot_index_chain_helper(
-                            state, lib, this_ptr, &mut val, expr, idx_values, next_chain, level,
+                            state, lib, this_ptr, &mut val, &x.rhs, idx_values, next_chain, level,
                             new_val,
                         )
-                        .map_err(|err| err.fill_position(*pos))
+                        .map_err(|err| err.fill_position(x.pos))
                     }
                     // xxx.sub_lhs[expr] | xxx.sub_lhs.expr
                     Expr::Index(x) | Expr::Dot(x) => {
-                        let (sub_lhs, expr, _) = x.as_ref();
-
-                        match sub_lhs {
+                        match &x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
                                 let ((_, getter, setter), pos) = p.as_ref();
@@ -1084,13 +1079,13 @@ impl Engine {
                                         lib,
                                         this_ptr,
                                         &mut val.into(),
-                                        expr,
+                                        &x.rhs,
                                         idx_values,
                                         next_chain,
                                         level,
                                         new_val,
                                     )
-                                    .map_err(|err| err.fill_position(*pos))?;
+                                    .map_err(|err| err.fill_position(x.pos))?;
 
                                 // Feed the value back via a setter just in case it has been updated
                                 if updated || may_be_changed {
@@ -1106,7 +1101,7 @@ impl Engine {
                                             EvalAltResult::ErrorDotExpr(_, _) => {
                                                 Ok(Default::default())
                                             }
-                                            _ => Err(err.fill_position(*pos)),
+                                            _ => Err(err.fill_position(x.pos)),
                                         },
                                     )?;
                                 }
@@ -1114,8 +1109,8 @@ impl Engine {
                                 Ok((result, may_be_changed))
                             }
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
-                            Expr::FnCall(x) if x.1.is_none() => {
-                                let ((name, native, _, pos), _, hash, _, def_val) = x.as_ref();
+                            Expr::FnCall(f) if f.1.is_none() => {
+                                let ((name, native, _, pos), _, hash, _, def_val) = f.as_ref();
                                 let def_val = def_val.map(Into::<Dynamic>::into);
                                 let args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self
@@ -1128,7 +1123,7 @@ impl Engine {
                                 let target = &mut val.into();
 
                                 self.eval_dot_index_chain_helper(
-                                    state, lib, this_ptr, target, expr, idx_values, next_chain,
+                                    state, lib, this_ptr, target, &x.rhs, idx_values, next_chain,
                                     level, new_val,
                                 )
                                 .map_err(|err| err.fill_position(*pos))
@@ -1161,7 +1156,14 @@ impl Engine {
         level: usize,
         new_val: Option<(Dynamic, Position)>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let ((dot_lhs, dot_rhs, op_pos), chain_type) = match expr {
+        let (
+            BinaryExpr {
+                lhs: dot_lhs,
+                rhs: dot_rhs,
+                pos: op_pos,
+            },
+            chain_type,
+        ) = match expr {
             Expr::Index(x) => (x.as_ref(), ChainType::Index),
             Expr::Dot(x) => (x.as_ref(), ChainType::Dot),
             _ => unreachable!(),
@@ -1210,9 +1212,7 @@ impl Engine {
                 .map_err(|err| err.fill_position(*op_pos))
             }
             // {expr}.??? = ??? or {expr}[???] = ???
-            expr if new_val.is_some() => {
-                return EvalAltResult::ErrorAssignmentToUnknownLHS(expr.position()).into();
-            }
+            _ if new_val.is_some() => unreachable!(),
             // {expr}.??? or {expr}[???]
             expr => {
                 let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
@@ -1259,7 +1259,7 @@ impl Engine {
             Expr::FnCall(_) => unreachable!(),
             Expr::Property(_) => idx_values.push(IndexChainValue::None),
             Expr::Index(x) | Expr::Dot(x) => {
-                let (lhs, rhs, _) = x.as_ref();
+                let BinaryExpr { lhs, rhs, .. } = x.as_ref();
 
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
@@ -1511,9 +1511,146 @@ impl Engine {
             // Statement block
             Expr::Stmt(x) => self.eval_stmt(scope, mods, state, lib, this_ptr, &x.0, level),
 
+            // lhs[idx_expr]
+            #[cfg(not(feature = "no_index"))]
+            Expr::Index(_) => {
+                self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
+            }
+
+            // lhs.dot_rhs
+            #[cfg(not(feature = "no_object"))]
+            Expr::Dot(_) => {
+                self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
+            }
+
+            #[cfg(not(feature = "no_index"))]
+            Expr::Array(x) => Ok(Dynamic(Union::Array(Box::new(
+                x.0.iter()
+                    .map(|item| self.eval_expr(scope, mods, state, lib, this_ptr, item, level))
+                    .collect::<Result<Vec<_>, _>>()?,
+            )))),
+
+            #[cfg(not(feature = "no_object"))]
+            Expr::Map(x) => Ok(Dynamic(Union::Map(Box::new(
+                x.0.iter()
+                    .map(|((key, _), expr)| {
+                        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                            .map(|val| (key.clone(), val))
+                    })
+                    .collect::<Result<HashMap<_, _>, _>>()?,
+            )))),
+
+            // Normal function call
+            Expr::FnCall(x) if x.1.is_none() => {
+                let ((name, native, cap_scope, pos), _, hash, args_expr, def_val) = x.as_ref();
+                let def_val = def_val.map(Into::<Dynamic>::into);
+                self.make_function_call(
+                    scope, mods, state, lib, this_ptr, name, args_expr, &def_val, *hash, *native,
+                    false, *cap_scope, level,
+                )
+                .map_err(|err| err.fill_position(*pos))
+            }
+
+            // Module-qualified function call
+            Expr::FnCall(x) if x.1.is_some() => {
+                let ((name, _, _, pos), modules, hash, args_expr, def_val) = x.as_ref();
+                self.make_qualified_function_call(
+                    scope, mods, state, lib, this_ptr, modules, name, args_expr, *def_val, *hash,
+                    level,
+                )
+                .map_err(|err| err.fill_position(*pos))
+            }
+
+            Expr::In(x) => {
+                self.eval_in_expr(scope, mods, state, lib, this_ptr, &x.lhs, &x.rhs, level)
+            }
+
+            Expr::And(x) => {
+                Ok((self
+                    .eval_expr(scope, mods, state, lib, this_ptr, &x.lhs, level)?
+                    .as_bool()
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, x.lhs.position()))?
+                    && // Short-circuit using &&
+                self
+                    .eval_expr(scope, mods, state, lib, this_ptr, &x.rhs, level)?
+                    .as_bool()
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, x.rhs.position()))?)
+                .into())
+            }
+
+            Expr::Or(x) => {
+                Ok((self
+                    .eval_expr(scope, mods, state, lib, this_ptr, &x.lhs, level)?
+                    .as_bool()
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, x.lhs.position()))?
+                    || // Short-circuit using ||
+                self
+                    .eval_expr(scope, mods, state, lib, this_ptr, &x.rhs, level)?
+                    .as_bool()
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, x.rhs.position()))?)
+                .into())
+            }
+
+            Expr::True(_) => Ok(true.into()),
+            Expr::False(_) => Ok(false.into()),
+            Expr::Unit(_) => Ok(().into()),
+
+            Expr::Custom(custom) => {
+                let func = custom.func();
+                let expressions = custom
+                    .keywords()
+                    .iter()
+                    .map(Into::into)
+                    .collect::<StaticVec<_>>();
+                let mut context = EvalContext {
+                    engine: self,
+                    scope,
+                    mods,
+                    state,
+                    lib,
+                    this_ptr,
+                    level,
+                };
+                func(&mut context, &expressions)
+            }
+
+            _ => unreachable!(),
+        };
+
+        self.check_data_size(result)
+            .map_err(|err| err.fill_position(expr.position()))
+    }
+
+    /// Evaluate a statement
+    ///
+    ///
+    /// # Safety
+    ///
+    /// This method uses some unsafe code, mainly for avoiding cloning of local variable names via
+    /// direct lifetime casting.
+    pub(crate) fn eval_stmt(
+        &self,
+        scope: &mut Scope,
+        mods: &mut Imports,
+        state: &mut State,
+        lib: &[&Module],
+        this_ptr: &mut Option<&mut Dynamic>,
+        stmt: &Stmt,
+        level: usize,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        self.inc_operations(state)
+            .map_err(|err| err.fill_position(stmt.position()))?;
+
+        let result = match stmt {
+            // No-op
+            Stmt::Noop(_) => Ok(Default::default()),
+
+            // Expression as statement
+            Stmt::Expr(expr) => self.eval_expr(scope, mods, state, lib, this_ptr, expr, level),
+
             // var op= rhs
-            Expr::Assignment(x) if x.0.get_variable_access(false).is_some() => {
-                let (lhs_expr, op, rhs_expr, op_pos) = x.as_ref();
+            Stmt::Assignment(x, op_pos) if x.0.get_variable_access(false).is_some() => {
+                let (lhs_expr, op, rhs_expr) = x.as_ref();
                 let mut rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
                     .flatten();
@@ -1611,8 +1748,8 @@ impl Engine {
             }
 
             // lhs op= rhs
-            Expr::Assignment(x) => {
-                let (lhs_expr, op, rhs_expr, op_pos) = x.as_ref();
+            Stmt::Assignment(x, op_pos) => {
+                let (lhs_expr, op, rhs_expr) = x.as_ref();
                 let mut rhs_val =
                     self.eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?;
 
@@ -1657,157 +1794,18 @@ impl Engine {
                         )?;
                         Ok(Default::default())
                     }
-                    // Constant expression (should be caught during parsing)
-                    expr if expr.is_constant() => unreachable!(),
-                    // Syntax error
-                    expr => EvalAltResult::ErrorAssignmentToUnknownLHS(expr.position()).into(),
+                    // Non-lvalue expression (should be caught during parsing)
+                    _ => unreachable!(),
                 }
             }
 
-            // lhs[idx_expr]
-            #[cfg(not(feature = "no_index"))]
-            Expr::Index(_) => {
-                self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
-            }
-
-            // lhs.dot_rhs
-            #[cfg(not(feature = "no_object"))]
-            Expr::Dot(_) => {
-                self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
-            }
-
-            #[cfg(not(feature = "no_index"))]
-            Expr::Array(x) => Ok(Dynamic(Union::Array(Box::new(
-                x.0.iter()
-                    .map(|item| self.eval_expr(scope, mods, state, lib, this_ptr, item, level))
-                    .collect::<Result<Vec<_>, _>>()?,
-            )))),
-
-            #[cfg(not(feature = "no_object"))]
-            Expr::Map(x) => Ok(Dynamic(Union::Map(Box::new(
-                x.0.iter()
-                    .map(|((key, _), expr)| {
-                        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                            .map(|val| (key.clone(), val))
-                    })
-                    .collect::<Result<HashMap<_, _>, _>>()?,
-            )))),
-
-            // Normal function call
-            Expr::FnCall(x) if x.1.is_none() => {
-                let ((name, native, cap_scope, pos), _, hash, args_expr, def_val) = x.as_ref();
-                let def_val = def_val.map(Into::<Dynamic>::into);
-                self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args_expr, &def_val, *hash, *native,
-                    false, *cap_scope, level,
-                )
-                .map_err(|err| err.fill_position(*pos))
-            }
-
-            // Module-qualified function call
-            Expr::FnCall(x) if x.1.is_some() => {
-                let ((name, _, _, pos), modules, hash, args_expr, def_val) = x.as_ref();
-                self.make_qualified_function_call(
-                    scope, mods, state, lib, this_ptr, modules, name, args_expr, *def_val, *hash,
-                    level,
-                )
-                .map_err(|err| err.fill_position(*pos))
-            }
-
-            Expr::In(x) => self.eval_in_expr(scope, mods, state, lib, this_ptr, &x.0, &x.1, level),
-
-            Expr::And(x) => {
-                let (lhs, rhs, _) = x.as_ref();
-                Ok((self
-                    .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?
-                    .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, lhs.position()))?
-                    && // Short-circuit using &&
-                self
-                    .eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?
-                    .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, rhs.position()))?)
-                .into())
-            }
-
-            Expr::Or(x) => {
-                let (lhs, rhs, _) = x.as_ref();
-                Ok((self
-                    .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?
-                    .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, lhs.position()))?
-                    || // Short-circuit using ||
-                self
-                    .eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?
-                    .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, rhs.position()))?)
-                .into())
-            }
-
-            Expr::True(_) => Ok(true.into()),
-            Expr::False(_) => Ok(false.into()),
-            Expr::Unit(_) => Ok(().into()),
-
-            Expr::Custom(x) => {
-                let func = (x.0).func();
-                let expressions = (x.0)
-                    .keywords()
-                    .iter()
-                    .map(Into::into)
-                    .collect::<StaticVec<_>>();
-                let mut context = EvalContext {
-                    engine: self,
-                    scope,
-                    mods,
-                    state,
-                    lib,
-                    this_ptr,
-                    level,
-                };
-                func(&mut context, &expressions)
-            }
-
-            _ => unreachable!(),
-        };
-
-        self.check_data_size(result)
-            .map_err(|err| err.fill_position(expr.position()))
-    }
-
-    /// Evaluate a statement
-    ///
-    ///
-    /// # Safety
-    ///
-    /// This method uses some unsafe code, mainly for avoiding cloning of local variable names via
-    /// direct lifetime casting.
-    pub(crate) fn eval_stmt(
-        &self,
-        scope: &mut Scope,
-        mods: &mut Imports,
-        state: &mut State,
-        lib: &[&Module],
-        this_ptr: &mut Option<&mut Dynamic>,
-        stmt: &Stmt,
-        level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.inc_operations(state)
-            .map_err(|err| err.fill_position(stmt.position()))?;
-
-        let result = match stmt {
-            // No-op
-            Stmt::Noop(_) => Ok(Default::default()),
-
-            // Expression as statement
-            Stmt::Expr(expr) => self.eval_expr(scope, mods, state, lib, this_ptr, expr, level),
-
             // Block scope
-            Stmt::Block(x) => {
+            Stmt::Block(statements, _) => {
                 let prev_scope_len = scope.len();
                 let prev_mods_len = mods.len();
                 state.scope_level += 1;
 
-                let result = x.0.iter().try_fold(Default::default(), |_, stmt| {
+                let result = statements.iter().try_fold(Default::default(), |_, stmt| {
                     self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
                 });
 
@@ -1823,9 +1821,8 @@ impl Engine {
             }
 
             // If-else statement
-            Stmt::IfThenElse(x) => {
-                let (expr, if_block, else_block, _) = x.as_ref();
-
+            Stmt::IfThenElse(expr, x, _) => {
+                let (if_block, else_block) = x.as_ref();
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
                     .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))
@@ -1841,9 +1838,7 @@ impl Engine {
             }
 
             // While loop
-            Stmt::While(x) => loop {
-                let (expr, body, _) = x.as_ref();
-
+            Stmt::While(expr, body, _) => loop {
                 match self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
@@ -1866,8 +1861,8 @@ impl Engine {
             },
 
             // Loop statement
-            Stmt::Loop(x) => loop {
-                match self.eval_stmt(scope, mods, state, lib, this_ptr, &x.0, level) {
+            Stmt::Loop(block, _) => loop {
+                match self.eval_stmt(scope, mods, state, lib, this_ptr, block, level) {
                     Ok(_) => (),
                     Err(err) => match *err {
                         EvalAltResult::LoopBreak(false, _) => (),
@@ -1878,8 +1873,8 @@ impl Engine {
             },
 
             // For loop
-            Stmt::For(x) => {
-                let (name, expr, stmt, _) = x.as_ref();
+            Stmt::For(expr, x, _) => {
+                let (name, stmt) = x.as_ref();
                 let iter_obj = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let iter_type = iter_obj.type_id();
 
@@ -1922,7 +1917,7 @@ impl Engine {
                     scope.rewind(scope.len() - 1);
                     Ok(Default::default())
                 } else {
-                    EvalAltResult::ErrorFor(x.1.position()).into()
+                    EvalAltResult::ErrorFor(expr.position()).into()
                 }
             }
 
@@ -1934,17 +1929,17 @@ impl Engine {
 
             // Try/Catch statement
             Stmt::TryCatch(x) => {
-                let ((body, _), var_def, (catch_body, _)) = x.as_ref();
+                let ((try_body, _), var_def, (catch_body, _)) = x.as_ref();
 
                 let result = self
-                    .eval_stmt(scope, mods, state, lib, this_ptr, body, level)
+                    .eval_stmt(scope, mods, state, lib, this_ptr, try_body, level)
                     .map(|_| ().into());
 
                 match result {
                     Ok(_) => result,
                     Err(err) => match *err {
                         mut err @ EvalAltResult::ErrorRuntime(_, _) | mut err
-                            if err.catchable() =>
+                            if err.is_catchable() =>
                         {
                             let value = if let EvalAltResult::ErrorRuntime(ref x, _) = err {
                                 x.clone()
@@ -1985,40 +1980,33 @@ impl Engine {
             }
 
             // Return value
-            Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Return => {
-                let expr = x.1.as_ref().unwrap();
-                EvalAltResult::Return(
-                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
-                    (x.0).1,
-                )
-                .into()
-            }
+            Stmt::ReturnWithVal((ReturnType::Return, pos), Some(expr), _) => EvalAltResult::Return(
+                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
+                *pos,
+            )
+            .into(),
 
             // Empty return
-            Stmt::ReturnWithVal(x) if (x.0).0 == ReturnType::Return => {
-                EvalAltResult::Return(Default::default(), (x.0).1).into()
+            Stmt::ReturnWithVal((ReturnType::Return, pos), None, _) => {
+                EvalAltResult::Return(Default::default(), *pos).into()
             }
 
             // Throw value
-            Stmt::ReturnWithVal(x) if x.1.is_some() && (x.0).0 == ReturnType::Exception => {
-                let expr = x.1.as_ref().unwrap();
+            Stmt::ReturnWithVal((ReturnType::Exception, pos), Some(expr), _) => {
                 let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-                EvalAltResult::ErrorRuntime(val, (x.0).1).into()
+                EvalAltResult::ErrorRuntime(val, *pos).into()
             }
 
             // Empty throw
-            Stmt::ReturnWithVal(x) if (x.0).0 == ReturnType::Exception => {
-                EvalAltResult::ErrorRuntime(().into(), (x.0).1).into()
+            Stmt::ReturnWithVal((ReturnType::Exception, pos), None, _) => {
+                EvalAltResult::ErrorRuntime(().into(), *pos).into()
             }
 
-            Stmt::ReturnWithVal(_) => unreachable!(),
-
             // Let/const statement
-            Stmt::Let(x) | Stmt::Const(x) => {
-                let ((var_name, _), expr, _) = x.as_ref();
+            Stmt::Let(var_def, expr, _) | Stmt::Const(var_def, expr, _) => {
                 let entry_type = match stmt {
-                    Stmt::Let(_) => ScopeEntryType::Normal,
-                    Stmt::Const(_) => ScopeEntryType::Constant,
+                    Stmt::Let(_, _, _) => ScopeEntryType::Normal,
+                    Stmt::Const(_, _, _) => ScopeEntryType::Constant,
                     _ => unreachable!(),
                 };
 
@@ -2028,16 +2016,14 @@ impl Engine {
                 } else {
                     ().into()
                 };
-                let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
+                let var_name = unsafe_cast_var_name_to_lifetime(&var_def.0, &state);
                 scope.push_dynamic_value(var_name, entry_type, val, false);
                 Ok(Default::default())
             }
 
             // Import statement
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(x) => {
-                let (expr, alias, _pos) = x.as_ref();
-
+            Stmt::Import(expr, alias, _pos) => {
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
                 if state.modules >= self.max_modules() {
@@ -2051,9 +2037,9 @@ impl Engine {
                     if let Some(resolver) = &self.module_resolver {
                         let mut module = resolver.resolve(self, &path, expr.position())?;
 
-                        if let Some((name, _)) = alias {
+                        if let Some(name_def) = alias {
                             module.index_all_sub_modules();
-                            mods.push((name.clone(), module));
+                            mods.push((name_def.0.clone(), module));
                         }
 
                         state.modules += 1;
@@ -2072,8 +2058,8 @@ impl Engine {
 
             // Export statement
             #[cfg(not(feature = "no_module"))]
-            Stmt::Export(x) => {
-                for ((id, id_pos), rename) in x.0.iter() {
+            Stmt::Export(list, _) => {
+                for ((id, id_pos), rename) in list.iter() {
                     // Mark scope variables as public
                     if let Some(index) = scope.get_index(id).map(|(i, _)| i) {
                         let alias = rename.as_ref().map(|(n, _)| n).unwrap_or_else(|| id);
@@ -2087,9 +2073,7 @@ impl Engine {
 
             // Share statement
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(x) => {
-                let (var_name, _) = x.as_ref();
-
+            Stmt::Share(var_name, _) => {
                 match scope.get_index(var_name) {
                     Some((index, ScopeEntryType::Normal)) => {
                         let (val, _) = scope.get_mut(index);
@@ -2274,14 +2258,14 @@ impl Engine {
     #[inline(always)]
     pub(crate) fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
-            .as_ref()
-            .and_then(|t| t.get(name).map(String::as_str))
+            .get(name)
+            .map(String::as_str)
             .unwrap_or_else(|| map_std_type_name(name))
     }
 
     /// Make a Box<EvalAltResult<ErrorMismatchDataType>>.
     #[inline(always)]
-    pub fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
+    pub(crate) fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
         EvalAltResult::ErrorMismatchDataType(
             typ.into(),
             self.map_type_name(type_name::<T>()).into(),

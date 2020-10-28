@@ -19,7 +19,7 @@ pub trait Func<ARGS, RET> {
     /// Create a Rust closure from an `AST`.
     /// The `Engine` and `AST` are consumed and basically embedded into the closure.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -50,7 +50,7 @@ pub trait Func<ARGS, RET> {
     /// Create a Rust closure from a script.
     /// The `Engine` is consumed and basically embedded into the closure.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {

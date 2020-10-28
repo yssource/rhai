@@ -46,7 +46,7 @@ impl DynamicSerializer {
 
 /// Serialize a Rust type that implements `serde::Serialize` into a `Dynamic`.
 ///
-/// # Examples
+/// # Example
 ///
 /// ```
 /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {

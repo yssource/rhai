@@ -45,6 +45,8 @@ where
     Ok(StepRange::<T>(from, to, step))
 }
 
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
 macro_rules! reg_range {
     ($lib:expr, $x:expr, $( $y:ty ),*) => (
         $(
@@ -54,6 +56,8 @@ macro_rules! reg_range {
     )
 }
 
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
 macro_rules! reg_step {
     ($lib:expr, $x:expr, $( $y:ty ),*) => (
         $(

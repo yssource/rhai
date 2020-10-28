@@ -125,7 +125,7 @@ impl AsRef<Module> for Module {
 impl Module {
     /// Create a new module.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -141,7 +141,7 @@ impl Module {
 
     /// Create a new module with a specified capacity for native Rust functions.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -160,7 +160,7 @@ impl Module {
 
     /// Is the module empty?
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -199,7 +199,7 @@ impl Module {
 
     /// Does a variable exist in the module?
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -215,7 +215,7 @@ impl Module {
 
     /// Get the value of a module variable.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -231,7 +231,7 @@ impl Module {
 
     /// Get a module variable as a `Dynamic`.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -249,7 +249,7 @@ impl Module {
     ///
     /// If there is an existing variable of the same name, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -327,7 +327,7 @@ impl Module {
 
     /// Does a sub-module exist in the module?
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -344,7 +344,7 @@ impl Module {
 
     /// Get a sub-module.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -361,7 +361,7 @@ impl Module {
 
     /// Get a mutable reference to a sub-module.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -380,7 +380,7 @@ impl Module {
     ///
     /// If there is an existing sub-module of the same name, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -402,7 +402,7 @@ impl Module {
     /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
     /// It is also returned by the `set_fn_XXX` calls.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -500,7 +500,7 @@ impl Module {
     ///
     /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -555,7 +555,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -584,7 +584,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -615,7 +615,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -646,7 +646,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust getter function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Module;
@@ -669,7 +669,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -706,7 +706,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -743,7 +743,7 @@ impl Module {
     ///
     /// If there is a similar existing setter Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -775,7 +775,7 @@ impl Module {
     /// Panics if the type is `Array` or `Map`.
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -813,7 +813,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -856,7 +856,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -904,7 +904,7 @@ impl Module {
     /// Panics if the type is `Array` or `Map`.
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -962,7 +962,7 @@ impl Module {
     /// Panics if the type is `Array` or `Map`.
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -997,7 +997,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -1047,7 +1047,7 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Module, ImmutableString};
@@ -1125,18 +1125,10 @@ impl Module {
     /// The other module is consumed to merge into this module.
     #[inline]
     pub fn combine(&mut self, other: Self) -> &mut Self {
-        if !other.modules.is_empty() {
-            self.modules.extend(other.modules.into_iter());
-        }
-        if !other.variables.is_empty() {
-            self.variables.extend(other.variables.into_iter());
-        }
-        if !other.functions.is_empty() {
-            self.functions.extend(other.functions.into_iter());
-        }
-        if !other.type_iterators.is_empty() {
-            self.type_iterators.extend(other.type_iterators.into_iter());
-        }
+        self.modules.extend(other.modules.into_iter());
+        self.variables.extend(other.variables.into_iter());
+        self.functions.extend(other.functions.into_iter());
+        self.type_iterators.extend(other.type_iterators.into_iter());
         self.all_functions.clear();
         self.all_variables.clear();
         self.indexed = false;
@@ -1148,20 +1140,38 @@ impl Module {
     /// Sub-modules are flattened onto the root module, with higher level overriding lower level.
     #[inline]
     pub fn combine_flatten(&mut self, other: Self) -> &mut Self {
-        if !other.modules.is_empty() {
-            other.modules.into_iter().for_each(|(_, m)| {
-                self.combine_flatten(m);
-            });
-        }
-        if !other.variables.is_empty() {
-            self.variables.extend(other.variables.into_iter());
-        }
-        if !other.functions.is_empty() {
-            self.functions.extend(other.functions.into_iter());
-        }
-        if !other.type_iterators.is_empty() {
-            self.type_iterators.extend(other.type_iterators.into_iter());
-        }
+        other.modules.into_iter().for_each(|(_, m)| {
+            self.combine_flatten(m);
+        });
+        self.variables.extend(other.variables.into_iter());
+        self.functions.extend(other.functions.into_iter());
+        self.type_iterators.extend(other.type_iterators.into_iter());
+        self.all_functions.clear();
+        self.all_variables.clear();
+        self.indexed = false;
+        self
+    }
+
+    /// Poly-fill this module with another module.
+    /// Only items not existing in this module are added.
+    #[inline]
+    pub fn fill_with(&mut self, other: &Self) -> &mut Self {
+        other.modules.iter().for_each(|(k, v)| {
+            if !self.modules.contains_key(k) {
+                self.modules.insert(k.clone(), v.clone());
+            }
+        });
+        other.variables.iter().for_each(|(k, v)| {
+            if !self.variables.contains_key(k) {
+                self.variables.insert(k.clone(), v.clone());
+            }
+        });
+        other.functions.iter().for_each(|(&k, v)| {
+            self.functions.entry(k).or_insert_with(|| v.clone());
+        });
+        other.type_iterators.iter().for_each(|(&k, &v)| {
+            self.type_iterators.entry(k).or_insert(v);
+        });
         self.all_functions.clear();
         self.all_variables.clear();
         self.indexed = false;
@@ -1181,42 +1191,32 @@ impl Module {
         mut _filter: &mut impl FnMut(FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
         #[cfg(not(feature = "no_function"))]
-        if !other.modules.is_empty() {
-            other.modules.iter().for_each(|(k, v)| {
-                let mut m = Self::new();
-                m.merge_filtered(v, _filter);
-                self.modules.insert(k.clone(), m);
-            });
-        }
+        other.modules.iter().for_each(|(k, v)| {
+            let mut m = Self::new();
+            m.merge_filtered(v, _filter);
+            self.modules.insert(k.clone(), m);
+        });
         #[cfg(feature = "no_function")]
-        if !other.modules.is_empty() {
-            self.modules
-                .extend(other.modules.iter().map(|(k, v)| (k.clone(), v.clone())));
-        }
-        if !other.variables.is_empty() {
-            self.variables
-                .extend(other.variables.iter().map(|(k, v)| (k.clone(), v.clone())));
-        }
-        if !other.functions.is_empty() {
-            self.functions.extend(
-                other
-                    .functions
-                    .iter()
-                    .filter(|(_, (_, _, _, _, v))| match v {
-                        #[cfg(not(feature = "no_function"))]
-                        CallableFunction::Script(f) => {
-                            _filter(f.access, f.name.as_str(), f.params.len())
-                        }
-                        _ => true,
-                    })
-                    .map(|(&k, v)| (k, v.clone())),
-            );
-        }
+        self.modules
+            .extend(other.modules.iter().map(|(k, v)| (k.clone(), v.clone())));
 
-        if !other.type_iterators.is_empty() {
-            self.type_iterators
-                .extend(other.type_iterators.iter().map(|(&k, v)| (k, v.clone())));
-        }
+        self.variables
+            .extend(other.variables.iter().map(|(k, v)| (k.clone(), v.clone())));
+        self.functions.extend(
+            other
+                .functions
+                .iter()
+                .filter(|(_, (_, _, _, _, v))| match v {
+                    #[cfg(not(feature = "no_function"))]
+                    CallableFunction::Script(f) => {
+                        _filter(f.access, f.name.as_str(), f.params.len())
+                    }
+                    _ => true,
+                })
+                .map(|(&k, v)| (k, v.clone())),
+        );
+
+        self.type_iterators.extend(other.type_iterators.iter());
         self.all_functions.clear();
         self.all_variables.clear();
         self.indexed = false;
@@ -1327,7 +1327,7 @@ impl Module {
     /// defined in the module, are _merged_ into a _unified_ namespace before each call.
     /// Therefore, all functions will be found.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {

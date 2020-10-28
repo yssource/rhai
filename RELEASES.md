@@ -2,6 +2,29 @@ Rhai Release Notes
 ==================
 
 
+Version 0.19.4
+==============
+
+This version adds a low-level API for more flexibility when defining custom syntax.
+
+Bug fixes
+---------
+
+* Fixes `Send + Sync` for `EvalAltResult` under the `sync` feature. Bug introduced with `0.19.3`.
+
+Breaking changes
+----------------
+
+* Custom syntax can no longer start with a keyword (even a _reserved_ one), even if it has been disabled. That is to avoid breaking scripts later when the keyword is no longer disabled.
+* `EvalAltResult::ErrorAssignmentToUnknownLHS` is moved to `ParseError::AssignmentToInvalidLHS`. `ParseError::AssignmentToCopy` is removed.
+
+New features
+------------
+
+* Low-level API for custom syntax allowing more flexibility in designing the syntax.
+* `Module::fill_with` to poly-fill a module with another.
+
+
 Version 0.19.3
 ==============
 

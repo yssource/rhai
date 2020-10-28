@@ -44,6 +44,10 @@ pub struct Entry<'a> {
 /// Type containing information about the current scope.
 /// Useful for keeping state between `Engine` evaluation runs.
 ///
+/// # Thread Safety
+///
+/// Currently, `Scope` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
+///
 /// # Example
 ///
 /// ```
@@ -67,15 +71,13 @@ pub struct Entry<'a> {
 ///
 /// When searching for entries, newly-added entries are found before similarly-named but older entries,
 /// allowing for automatic _shadowing_.
-///
-/// Currently, `Scope` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug, Clone, Default)]
 pub struct Scope<'a>(Vec<Entry<'a>>);
 
 impl<'a> Scope<'a> {
     /// Create a new Scope.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Scope;
@@ -92,7 +94,7 @@ impl<'a> Scope<'a> {
 
     /// Empty the Scope.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Scope;
@@ -117,7 +119,7 @@ impl<'a> Scope<'a> {
 
     /// Get the number of entries inside the Scope.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Scope;
@@ -135,7 +137,7 @@ impl<'a> Scope<'a> {
 
     /// Is the Scope empty?
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Scope;
@@ -153,7 +155,7 @@ impl<'a> Scope<'a> {
 
     /// Add (push) a new entry to the Scope.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Scope;
@@ -174,7 +176,7 @@ impl<'a> Scope<'a> {
 
     /// Add (push) a new `Dynamic` entry to the Scope.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Dynamic,  Scope};
@@ -197,7 +199,7 @@ impl<'a> Scope<'a> {
     /// However, in order to be used for optimization, constants must be in one of the recognized types:
     /// `INT` (default to `i64`, `i32` if `only_i32`), `f64`, `String`, `char` and `bool`.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Scope;
@@ -225,7 +227,7 @@ impl<'a> Scope<'a> {
     /// recognized types:
     /// `INT` (default to `i64`, `i32` if `only_i32`), `f64`, `String`, `char` and `bool`.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Dynamic, Scope};
@@ -272,7 +274,7 @@ impl<'a> Scope<'a> {
 
     /// Truncate (rewind) the Scope to a previous size.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Scope;
@@ -304,7 +306,7 @@ impl<'a> Scope<'a> {
 
     /// Does the scope contain the entry?
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Scope;
@@ -350,7 +352,7 @@ impl<'a> Scope<'a> {
 
     /// Get the value of an entry in the Scope, starting from the last.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Scope;
@@ -374,7 +376,7 @@ impl<'a> Scope<'a> {
     ///
     /// Panics when trying to update the value of a constant.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::Scope;
@@ -450,7 +452,7 @@ impl<'a> Scope<'a> {
 
     /// Get an iterator to entries in the Scope.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Dynamic, Scope};

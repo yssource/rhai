@@ -8,7 +8,7 @@ use crate::stdlib::{boxed::Box, ops::AddAssign, vec::Vec};
 /// Module resolution service that holds a collection of module resolves,
 /// to be searched in sequential order.
 ///
-/// # Examples
+/// # Example
 ///
 /// ```
 /// use rhai::{Engine, Module};
@@ -28,7 +28,7 @@ pub struct ModuleResolversCollection(Vec<Box<dyn ModuleResolver>>);
 impl ModuleResolversCollection {
     /// Create a new `ModuleResolversCollection`.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use rhai::{Engine, Module};
@@ -80,9 +80,7 @@ impl ModuleResolversCollection {
     /// The other `ModuleResolversCollection` is consumed.
     #[inline(always)]
     pub fn append(&mut self, other: Self) {
-        if !other.is_empty() {
-            self.0.extend(other.0.into_iter());
-        }
+        self.0.extend(other.0.into_iter());
     }
 }
 

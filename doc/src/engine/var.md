@@ -16,7 +16,7 @@ To do so, provide a closure to the [`Engine`] via the `Engine::on_var` method:
 let mut engine = Engine::new();
 
 // Register a variable resolver.
-engine.on_var(|name, index, scope, context| {
+engine.on_var(|name, index, context| {
     match name {
         "MYSTIC_NUMBER" => Ok(Some((42 as INT).into())),
         // Override a variable - make it not found even if it exists!
@@ -24,7 +24,7 @@ engine.on_var(|name, index, scope, context| {
             EvalAltResult::ErrorVariableNotFound(name.to_string(), Position::none())
         )),
         // Silently maps 'chameleon' into 'innocent'.
-        "chameleon" => scope.get_value("innocent").map(Some).ok_or_else(|| Box::new(
+        "chameleon" => context.scope.get_value("innocent").map(Some).ok_or_else(|| Box::new(
             EvalAltResult::ErrorVariableNotFound(name.to_string(), Position::none())
         )),
         // Return Ok(None) to continue with the normal variable resolution process.
@@ -67,27 +67,23 @@ The function signature passed to `Engine::on_var` takes the following form:
 
 where:
 
-* `name: &str` - variable name.
-
-* `index: usize` - an offset from the bottom of the current [`Scope`] that the variable is supposed to reside.
-  Offsets start from 1, with 1 meaning the last variable in the current [`Scope`].  Essentially the correct variable is at position `scope.len() - index`.
-
-  If `index` is zero, then there is no pre-calculated offset position and a search through the current [`Scope`] must be performed.
-
-* `context: &EvalContext` - reference to the current evaluation _context_, which exposes the following fields:
-  * `context.scope: &Scope` - reference to the current [`Scope`] containing all variables up to the current evaluation position.
-  * `context.engine(): &Engine` - reference to the current [`Engine`].
-  * `context.iter_namespaces(): impl Iterator<Item = &Module>` - iterator of the namespaces (as [modules]) containing all script-defined functions.
-  * `context.this_ptr(): Option<&Dynamic>` - reference to the current bound [`this`] pointer, if any.
-  * `context.call_level(): usize` - the current nesting level of function calls.
+| Parameter                     |              Type               | Description                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------------------- | :-----------------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                        |             `&str`              | variable name                                                                                                                                                                                                                                                                                                                                                                                  |
+| `index`                       |             `usize`             | an offset from the bottom of the current [`Scope`] that the variable is supposed to reside.<br/>Offsets start from 1, with 1 meaning the last variable in the current [`Scope`].  Essentially the correct variable is at position `scope.len() - index`.<br/>If `index` is zero, then there is no pre-calculated offset position and a search through the current [`Scope`] must be performed. |
+| `context`                     |         `&EvalContext`          | reference to the current evaluation _context_                                                                                                                                                                                                                                                                                                                                                  |
+| - `context.scope`             |            `&Scope`             | reference to the current [`Scope`] containing all variables up to the current evaluation position                                                                                                                                                                                                                                                                                              |
+| - `context.engine()`          |            `&Engine`            | reference to the current [`Engine`]                                                                                                                                                                                                                                                                                                                                                            |
+| - `context.iter_namespaces()` | `impl Iterator<Item = &Module>` | iterator of the namespaces (as [modules]) containing all script-defined functions                                                                                                                                                                                                                                                                                                              |
+| - `context.this_ptr()`        |       `Option<&Dynamic>`        | reference to the current bound [`this`] pointer, if any                                                                                                                                                                                                                                                                                                                                        |
+| - `context.call_level()`      |             `usize`             | the current nesting level of function calls                                                                                                                                                                                                                                                                                                                                                    |
 
 ### Return Value
 
 The return value is `Result<Option<Dynamic>, Box<EvalAltResult>>` where:
 
-* `Ok(None)` - normal variable resolution process should continue, meaning to continue searching through the [`Scope`].
-
-* `Ok(Some(Dynamic))` - wrapped [`Dynamic`] is taken as the value of the variable, which is treated as a constant.
-
-* `Err(Box<EvalAltResult>)` - error is reflected back to the [`Engine`].
-  Normally this is `EvalAltResult::ErrorVariableNotFound` to indicate that the variable does not exist, but it can be any error.
+| Value                     | Description                                                                                                                                                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Ok(None)`                | normal variable resolution process should continue, i.e. continue searching through the [`Scope`]                                                                                                                        |
+| `Ok(Some(Dynamic))`       | value of the variable, treated as a constant                                                                                                                                                                             |
+| `Err(Box<EvalAltResult>)` | error that is reflected back to the [`Engine`].<br/>Normally this is `EvalAltResult::ErrorVariableNotFound(var_name, Position::none())` to indicate that the variable does not exist, but it can be any `EvalAltResult`. |
