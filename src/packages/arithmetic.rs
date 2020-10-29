@@ -1,13 +1,13 @@
 #![allow(non_snake_case)]
 
 use crate::def_package;
-use crate::parser::INT;
 use crate::plugin::*;
+use crate::INT;
 
 use crate::{result::EvalAltResult, token::Position};
 
 #[cfg(not(feature = "no_float"))]
-use crate::parser::FLOAT;
+use crate::FLOAT;
 
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]

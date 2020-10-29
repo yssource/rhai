@@ -9,11 +9,11 @@ use crate::engine::{
 use crate::engine::KEYWORD_IS_SHARED;
 
 use crate::parse_error::LexError;
-use crate::parser::INT;
 use crate::StaticVec;
+use crate::INT;
 
 #[cfg(not(feature = "no_float"))]
-use crate::parser::FLOAT;
+use crate::FLOAT;
 
 use crate::stdlib::{
     borrow::Cow,

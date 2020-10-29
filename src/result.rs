@@ -2,9 +2,9 @@
 
 use crate::dynamic::Dynamic;
 use crate::parse_error::ParseErrorType;
-use crate::parser::INT;
 use crate::token::Position;
 use crate::utils::ImmutableString;
+use crate::INT;
 
 #[cfg(not(feature = "no_function"))]
 use crate::engine::is_anonymous_fn;

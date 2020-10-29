@@ -3,8 +3,9 @@
 use crate::def_package;
 use crate::dynamic::Dynamic;
 use crate::engine::Map;
-use crate::parser::{ImmutableString, INT};
 use crate::plugin::*;
+use crate::utils::ImmutableString;
+use crate::INT;
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;

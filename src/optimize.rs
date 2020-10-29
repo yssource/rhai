@@ -1,6 +1,6 @@
 //! Module implementing the AST optimizer.
 
-use crate::ast::AST;
+use crate::ast::{BinaryExpr, CustomExpr, Expr, ScriptFnDef, Stmt, AST};
 use crate::dynamic::Dynamic;
 use crate::engine::{
     Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT,
@@ -8,13 +8,13 @@ use crate::engine::{
 };
 use crate::fn_call::run_builtin_binary_op;
 use crate::module::Module;
-use crate::parser::{map_dynamic_to_expr, BinaryExpr, CustomExpr, Expr, ScriptFnDef, Stmt};
+use crate::parser::map_dynamic_to_expr;
 use crate::scope::{Entry as ScopeEntry, Scope};
 use crate::token::{is_valid_identifier, Position};
 use crate::{calc_native_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_function"))]
-use crate::parser::ReturnType;
+use crate::ast::ReturnType;
 
 use crate::stdlib::{
     boxed::Box,

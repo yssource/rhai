@@ -1,5 +1,6 @@
 //! Implement function-calling mechanism for `Engine`.
 
+use crate::ast::{Expr, Stmt};
 use crate::dynamic::Dynamic;
 use crate::engine::{
     search_imports, Engine, Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
@@ -10,21 +11,21 @@ use crate::fn_native::{FnCallArgs, FnPtr};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
 use crate::parse_error::ParseErrorType;
-use crate::parser::{Expr, ImmutableString, Stmt, INT};
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::stdlib::ops::Deref;
 use crate::token::Position;
-use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec};
+use crate::utils::ImmutableString;
+use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec, INT};
 
 #[cfg(not(feature = "no_function"))]
 use crate::{
-    parser::ScriptFnDef, r#unsafe::unsafe_cast_var_name_to_lifetime,
+    ast::ScriptFnDef, r#unsafe::unsafe_cast_var_name_to_lifetime,
     scope::EntryType as ScopeEntryType,
 };
 
 #[cfg(not(feature = "no_float"))]
-use crate::parser::FLOAT;
+use crate::FLOAT;
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::{FN_IDX_GET, FN_IDX_SET};
@@ -41,7 +42,6 @@ use crate::scope::Entry as ScopeEntry;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
-    borrow::Cow,
     boxed::Box,
     convert::TryFrom,
     format,
@@ -50,6 +50,9 @@ use crate::stdlib::{
     string::ToString,
     vec::Vec,
 };
+
+#[cfg(not(feature = "no_function"))]
+use crate::stdlib::borrow::Cow;
 
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]
@@ -628,7 +631,7 @@ impl Engine {
         statements: impl IntoIterator<Item = &'a Stmt>,
         lib: &[&Module],
     ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
-        let mut state = State::new();
+        let mut state = Default::default();
 
         statements
             .into_iter()

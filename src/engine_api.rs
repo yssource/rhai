@@ -2,7 +2,7 @@
 
 use crate::ast::AST;
 use crate::dynamic::{Dynamic, Variant};
-use crate::engine::{Engine, EvalContext, Imports, State};
+use crate::engine::{Engine, EvalContext, Imports};
 use crate::fn_native::{FnCallArgs, NativeCallContext, SendSync};
 use crate::optimize::OptimizationLevel;
 use crate::parse_error::ParseError;
@@ -1619,7 +1619,7 @@ impl Engine {
             .get_script_fn(name, args.len(), true)
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::none()))?;
 
-        let mut state = State::new();
+        let mut state = Default::default();
         let mut mods = Default::default();
 
         // Check for data race.

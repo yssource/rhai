@@ -1,9 +1,9 @@
 //! Module defining interfaces to native-Rust functions.
 
+use crate::ast::{FnAccess, ScriptFnDef};
 use crate::dynamic::Dynamic;
 use crate::engine::{Engine, EvalContext};
 use crate::module::Module;
-use crate::parser::{FnAccess, ScriptFnDef};
 use crate::plugin::PluginFunction;
 use crate::result::EvalAltResult;
 use crate::token::{is_valid_identifier, Position};

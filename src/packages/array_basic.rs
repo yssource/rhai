@@ -5,10 +5,11 @@ use crate::def_package;
 use crate::dynamic::Dynamic;
 use crate::engine::Array;
 use crate::fn_native::{FnPtr, NativeCallContext};
-use crate::parser::{ImmutableString, INT};
 use crate::plugin::*;
 use crate::result::EvalAltResult;
 use crate::token::Position;
+use crate::utils::ImmutableString;
+use crate::INT;
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::Map;
@@ -40,12 +41,12 @@ macro_rules! gen_array_functions {
                 }
 
                 #[rhai_fn(return_raw)]
-                pub fn pad(context: NativeCallContext, list: &mut Array, len: INT, item: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
+                pub fn pad(_context: NativeCallContext, list: &mut Array, len: INT, item: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     // Check if array will be over max size limit
                     #[cfg(not(feature = "unchecked"))]
-                    if context.engine().max_array_size() > 0 && len > 0 && (len as usize) > context.engine().max_array_size() {
+                    if _context.engine().max_array_size() > 0 && len > 0 && (len as usize) > _context.engine().max_array_size() {
                         return EvalAltResult::ErrorDataTooLarge(
-                            "Size of array".to_string(), context.engine().max_array_size(), len as usize, Position::none(),
+                            "Size of array".to_string(), _context.engine().max_array_size(), len as usize, Position::none(),
                         ).into();
                     }
 

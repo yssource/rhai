@@ -1,11 +1,11 @@
 //! Module defining macros for developing _plugins_.
 
+pub use crate::ast::FnAccess;
 pub use crate::dynamic::Dynamic;
 pub use crate::engine::Engine;
 pub use crate::fn_native::{CallableFunction, FnCallArgs, NativeCallContext};
 pub use crate::fn_register::{RegisterFn, RegisterResultFn};
 pub use crate::module::Module;
-pub use crate::parser::FnAccess;
 pub use crate::result::EvalAltResult;
 pub use crate::utils::ImmutableString;
 

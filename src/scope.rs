@@ -1,7 +1,8 @@
 //! Module that defines the `Scope` type representing a function call-stack scope.
 
+use crate::ast::Expr;
 use crate::dynamic::{Dynamic, Variant};
-use crate::parser::{map_dynamic_to_expr, Expr};
+use crate::parser::map_dynamic_to_expr;
 use crate::token::Position;
 
 use crate::stdlib::{borrow::Cow, boxed::Box, iter, string::String, vec::Vec};

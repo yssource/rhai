@@ -1,12 +1,12 @@
 //! Main module defining the script evaluation `Engine`.
 
+use crate::ast::{BinaryExpr, Expr, Ident, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, Dynamic, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{Callback, FnPtr, OnVarCallback};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
-use crate::parser::{BinaryExpr, Expr, Ident, ReturnType, Stmt};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -15,7 +15,7 @@ use crate::token::Position;
 use crate::{calc_native_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_index"))]
-use crate::parser::INT;
+use crate::INT;
 
 #[cfg(not(feature = "no_module"))]
 use crate::module::ModuleResolver;
@@ -389,11 +389,6 @@ pub struct State {
 }
 
 impl State {
-    /// Create a new `State`.
-    #[inline(always)]
-    pub fn new() -> Self {
-        Default::default()
-    }
     /// Is the state currently at global (root) level?
     #[inline(always)]
     pub fn is_global(&self) -> bool {
@@ -461,8 +456,8 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    pub fn imports(&self) -> &'a Imports {
-        self.mods.as_ref()
+    pub fn imports<'z: 'a>(&'z self) -> &'a Imports {
+        self.mods
     }
     /// Get an iterator over the namespaces containing definition of all script-defined functions.
     #[inline(always)]

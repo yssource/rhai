@@ -42,14 +42,6 @@ impl Hasher for StraightHasher {
     }
 }
 
-impl StraightHasher {
-    /// Create a `StraightHasher`.
-    #[inline(always)]
-    pub fn new() -> Self {
-        Self(0)
-    }
-}
-
 /// A hash builder for `StraightHasher`.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
 pub struct StraightHasherBuilder;
@@ -59,7 +51,7 @@ impl BuildHasher for StraightHasherBuilder {
 
     #[inline(always)]
     fn build_hasher(&self) -> Self::Hasher {
-        StraightHasher::new()
+        Default::default()
     }
 }
 
