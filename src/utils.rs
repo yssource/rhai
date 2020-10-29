@@ -9,7 +9,7 @@ use crate::stdlib::{
     cmp::Ordering,
     fmt,
     hash::{BuildHasher, Hash, Hasher},
-    iter::FromIterator,
+    iter::{empty, FromIterator},
     ops::{Add, AddAssign, Deref},
     str::FromStr,
     string::{String, ToString},
@@ -42,14 +42,6 @@ impl Hasher for StraightHasher {
     }
 }
 
-impl StraightHasher {
-    /// Create a `StraightHasher`.
-    #[inline(always)]
-    pub fn new() -> Self {
-        Self(0)
-    }
-}
-
 /// A hash builder for `StraightHasher`.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
 pub struct StraightHasherBuilder;
@@ -59,7 +51,7 @@ impl BuildHasher for StraightHasherBuilder {
 
     #[inline(always)]
     fn build_hasher(&self) -> Self::Hasher {
-        StraightHasher::new()
+        Default::default()
     }
 }
 
@@ -72,22 +64,61 @@ impl BuildHasher for StraightHasherBuilder {
 /// # Note
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
-pub fn calc_fn_hash<'a>(
+#[inline(always)]
+pub fn calc_native_fn_hash<'a>(
+    modules: impl Iterator<Item = &'a str>,
+    fn_name: &str,
+    params: impl Iterator<Item = TypeId>,
+) -> u64 {
+    calc_fn_hash(modules, fn_name, None, params)
+}
+
+/// _[INTERNALS]_ Calculate a `u64` hash key from a module-qualified function name and the number of parameters,
+/// but no parameter types.
+/// Exported under the `internals` feature only.
+///
+/// Module names are passed in via `&str` references from an iterator.
+/// Parameter types are passed in via `TypeId` values from an iterator.
+///
+/// # Note
+///
+/// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
+#[inline(always)]
+pub fn calc_script_fn_hash<'a>(
     modules: impl Iterator<Item = &'a str>,
     fn_name: &str,
     num: usize,
+) -> u64 {
+    calc_fn_hash(modules, fn_name, Some(num), empty())
+}
+
+/// Calculate a `u64` hash key from a module-qualified function name and parameter types.
+///
+/// Module names are passed in via `&str` references from an iterator.
+/// Parameter types are passed in via `TypeId` values from an iterator.
+///
+/// # Note
+///
+/// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
+fn calc_fn_hash<'a>(
+    modules: impl Iterator<Item = &'a str>,
+    fn_name: &str,
+    num: Option<usize>,
     params: impl Iterator<Item = TypeId>,
 ) -> u64 {
     #[cfg(feature = "no_std")]
-    let mut s: AHasher = Default::default();
+    let s: &mut AHasher = &mut Default::default();
     #[cfg(not(feature = "no_std"))]
-    let mut s = DefaultHasher::new();
+    let s = &mut DefaultHasher::new();
 
     // We always skip the first module
-    modules.skip(1).for_each(|m| m.hash(&mut s));
+    modules.skip(1).for_each(|m| m.hash(s));
     s.write(fn_name.as_bytes());
-    s.write_usize(num);
-    params.for_each(|t| t.hash(&mut s));
+    if let Some(num) = num {
+        s.write_usize(num);
+    } else {
+        params.for_each(|t| t.hash(s));
+    }
     s.finish()
 }
 

@@ -3,8 +3,9 @@
 use crate::def_package;
 use crate::engine::{FN_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
 use crate::fn_native::FnPtr;
-use crate::parser::{ImmutableString, INT};
 use crate::plugin::*;
+use crate::utils::ImmutableString;
+use crate::INT;
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;

@@ -1,22 +1,20 @@
 //! Module implementing the AST optimizer.
 
-use crate::any::Dynamic;
+use crate::ast::{BinaryExpr, CustomExpr, Expr, ScriptFnDef, Stmt, AST};
+use crate::dynamic::Dynamic;
 use crate::engine::{
     Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT,
     KEYWORD_TYPE_OF,
 };
 use crate::fn_call::run_builtin_binary_op;
 use crate::module::Module;
-use crate::parser::{map_dynamic_to_expr, BinaryExpr, Expr, ScriptFnDef, Stmt, AST};
+use crate::parser::map_dynamic_to_expr;
 use crate::scope::{Entry as ScopeEntry, Scope};
 use crate::token::{is_valid_identifier, Position};
-use crate::{calc_fn_hash, StaticVec};
+use crate::{calc_native_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_function"))]
-use crate::parser::ReturnType;
-
-#[cfg(feature = "internals")]
-use crate::parser::CustomExpr;
+use crate::ast::ReturnType;
 
 use crate::stdlib::{
     boxed::Box,
@@ -137,12 +135,7 @@ fn call_fn_with_constant_arguments(
     arg_values: &mut [Dynamic],
 ) -> Option<Dynamic> {
     // Search built-in's and external functions
-    let hash_fn = calc_fn_hash(
-        empty(),
-        fn_name,
-        arg_values.len(),
-        arg_values.iter().map(|a| a.type_id()),
-    );
+    let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_values.iter().map(|a| a.type_id()));
 
     state
         .engine
@@ -283,18 +276,18 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 .into_iter()
                 .map(|stmt| match stmt {
                     // Add constant literals into the state
-                    Stmt::Const(name, Some(expr), pos) if expr.is_literal() => {
+                    Stmt::Const(var_def, Some(expr), pos) if expr.is_literal() => {
                         state.set_dirty();
-                        state.push_constant(&name.0, expr);
+                        state.push_constant(&var_def.name, expr);
                         Stmt::Noop(pos) // No need to keep constants
                     }
-                    Stmt::Const(name, Some(expr), pos) if expr.is_literal() => {
+                    Stmt::Const(var_def, Some(expr), pos) if expr.is_literal() => {
                         let expr = optimize_expr(expr, state);
-                        Stmt::Const(name, Some(expr), pos)
+                        Stmt::Const(var_def, Some(expr), pos)
                     }
-                    Stmt::Const(name, None, pos) => {
+                    Stmt::Const(var_def, None, pos) => {
                         state.set_dirty();
-                        state.push_constant(&name.0, Expr::Unit(name.1));
+                        state.push_constant(&var_def.name, Expr::Unit(var_def.pos));
                         Stmt::Noop(pos) // No need to keep constants
                     }
                     // Optimize the statement
@@ -389,22 +382,25 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
             }
         }
         // try { block } catch ( var ) { block }
-        Stmt::TryCatch(x) if (x.0).0.is_pure() => {
+        Stmt::TryCatch(x) if x.0.is_pure() => {
             // If try block is pure, there will never be any exceptions
             state.set_dirty();
-            let pos = (x.0).0.position();
-            let mut statements: Vec<_> = Default::default();
-            statements.push(optimize_stmt((x.0).0, state, preserve_result));
+            let pos = x.0.position();
+            let mut statements = match optimize_stmt(x.0, state, preserve_result) {
+                Stmt::Block(statements, _) => statements,
+                stmt => vec![stmt],
+            };
             statements.push(Stmt::Noop(pos));
             Stmt::Block(statements, pos)
         }
         // try { block } catch ( var ) { block }
         Stmt::TryCatch(x) => {
-            let ((try_block, try_pos), var_name, (catch_block, catch_pos)) = *x;
+            let (try_block, var_name, catch_block, pos) = *x;
             Stmt::TryCatch(Box::new((
-                (optimize_stmt(try_block, state, false), try_pos),
+                optimize_stmt(try_block, state, false),
                 var_name,
-                (optimize_stmt(catch_block, state, false), catch_pos),
+                optimize_stmt(catch_block, state, false),
+                pos,
             )))
         }
         // expr;
@@ -463,7 +459,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 // All other items can be thrown away.
                 state.set_dirty();
                 let pos = m.1;
-                m.0.into_iter().find(|((name, _), _)| name == prop)
+                m.0.into_iter().find(|(x, _)| &x.name == prop)
                     .map(|(_, mut expr)| { expr.set_position(pos); expr })
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
@@ -495,15 +491,15 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 // All other items can be thrown away.
                 state.set_dirty();
                 let pos = m.1;
-                m.0.into_iter().find(|((name, _), _)| *name == s.0)
+                m.0.into_iter().find(|(x, _)| x.name == s.name)
                     .map(|(_, mut expr)| { expr.set_position(pos); expr })
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
             // string[int]
-            (Expr::StringConstant(s), Expr::IntegerConstant(i)) if i.0 >= 0 && (i.0 as usize) < s.0.chars().count() => {
+            (Expr::StringConstant(s), Expr::IntegerConstant(i)) if i.0 >= 0 && (i.0 as usize) < s.name.chars().count() => {
                 // String literal indexing - get the character
                 state.set_dirty();
-                Expr::CharConstant(Box::new((s.0.chars().nth(i.0 as usize).unwrap(), s.1)))
+                Expr::CharConstant(Box::new((s.name.chars().nth(i.0 as usize).unwrap(), s.pos)))
             }
             // lhs[rhs]
             (lhs, rhs) => Expr::Index(Box::new(BinaryExpr {
@@ -520,27 +516,27 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         // [ items .. ]
         #[cfg(not(feature = "no_object"))]
         Expr::Map(m) => Expr::Map(Box::new((m.0
-                            .into_iter().map(|((key, pos), expr)| ((key, pos), optimize_expr(expr, state)))
+                            .into_iter().map(|(key, expr)| (key, optimize_expr(expr, state)))
                             .collect(), m.1))),
         // lhs in rhs
         Expr::In(x) => match (x.lhs, x.rhs) {
             // "xxx" in "xxxxx"
             (Expr::StringConstant(a), Expr::StringConstant(b)) => {
                 state.set_dirty();
-                if b.0.contains(a.0.as_str()) { Expr::True(a.1) } else { Expr::False(a.1) }
+                if b.name.contains(a.name.as_str()) { Expr::True(a.pos) } else { Expr::False(a.pos) }
             }
             // 'x' in "xxxxx"
             (Expr::CharConstant(a), Expr::StringConstant(b)) => {
                 state.set_dirty();
-                if b.0.contains(a.0) { Expr::True(a.1) } else { Expr::False(a.1) }
+                if b.name.contains(a.0) { Expr::True(a.1) } else { Expr::False(a.1) }
             }
             // "xxx" in #{...}
             (Expr::StringConstant(a), Expr::Map(b)) => {
                 state.set_dirty();
-                if b.0.iter().find(|((name, _), _)| *name == a.0).is_some() {
-                    Expr::True(a.1)
+                if b.0.iter().find(|(x, _)| x.name == a.name).is_some() {
+                    Expr::True(a.pos)
                 } else {
-                    Expr::False(a.1)
+                    Expr::False(a.pos)
                 }
             }
             // 'x' in #{...}
@@ -548,7 +544,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 state.set_dirty();
                 let ch = a.0.to_string();
 
-                if b.0.iter().find(|((name, _), _)| name == &ch).is_some() {
+                if b.0.iter().find(|(x, _)| x.name == &ch).is_some() {
                     Expr::True(a.1)
                 } else {
                     Expr::False(a.1)
@@ -697,24 +693,20 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         }
 
         // constant-name
-        Expr::Variable(x) if x.1.is_none() && state.contains_constant(&(x.0).0) => {
-            let (name, pos) = x.0;
+        Expr::Variable(x) if x.1.is_none() && state.contains_constant(&x.0.name) => {
             state.set_dirty();
 
             // Replace constant with value
-            let mut expr = state.find_constant(&name).unwrap().clone();
-            expr.set_position(pos);
+            let mut expr = state.find_constant(&x.0.name).unwrap().clone();
+            expr.set_position(x.0.pos);
             expr
         }
 
         // Custom syntax
-        #[cfg(feature = "internals")]
-        Expr::Custom(x) => Expr::Custom(Box::new((
-            CustomExpr(
-                (x.0).0.into_iter().map(|expr| optimize_expr(expr, state)).collect(),
-                (x.0).1),
-            x.1
-        ))),
+        Expr::Custom(x) => Expr::Custom(Box::new(CustomExpr {
+            keywords: x.keywords.into_iter().map(|expr| optimize_expr(expr, state)).collect(),
+            ..*x
+        })),
 
         // All other expressions - skip
         expr => expr,
@@ -776,7 +768,7 @@ fn optimize(
                         let expr = optimize_expr(expr, &mut state);
 
                         if expr.is_literal() {
-                            state.push_constant(&var_def.0, expr.clone());
+                            state.push_constant(&var_def.name, expr.clone());
                         }
 
                         // Keep it in the global scope
@@ -788,7 +780,7 @@ fn optimize(
                         }
                     }
                     Stmt::Const(ref var_def, None, _) => {
-                        state.push_constant(&var_def.0, Expr::Unit(var_def.1));
+                        state.push_constant(&var_def.name, Expr::Unit(var_def.pos));
 
                         // Keep it in the global scope
                         stmt

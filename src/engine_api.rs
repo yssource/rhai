@@ -1,11 +1,11 @@
 //! Module that defines the extern API of `Engine`.
 
-use crate::any::{Dynamic, Variant};
-use crate::engine::{Engine, EvalContext, Imports, State};
-use crate::error::ParseError;
+use crate::ast::AST;
+use crate::dynamic::{Dynamic, Variant};
+use crate::engine::{Engine, EvalContext, Imports};
 use crate::fn_native::{FnCallArgs, NativeCallContext, SendSync};
 use crate::optimize::OptimizationLevel;
-use crate::parser::AST;
+use crate::parse_error::ParseError;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::Position;
@@ -19,7 +19,7 @@ use crate::{
 #[cfg(not(feature = "no_object"))]
 use crate::{
     engine::{make_getter, make_setter, Map},
-    error::ParseErrorType,
+    parse_error::ParseErrorType,
     token::Token,
 };
 
@@ -1619,7 +1619,7 @@ impl Engine {
             .get_script_fn(name, args.len(), true)
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::none()))?;
 
-        let mut state = State::new();
+        let mut state = Default::default();
         let mut mods = Default::default();
 
         // Check for data race.

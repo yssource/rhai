@@ -1,11 +1,12 @@
 #![allow(non_snake_case)]
 
-use crate::any::Dynamic;
 use crate::def_package;
+use crate::dynamic::Dynamic;
 use crate::fn_native::FnPtr;
-use crate::parser::{ImmutableString, INT};
 use crate::plugin::*;
+use crate::utils::ImmutableString;
 use crate::StaticVec;
+use crate::INT;
 
 #[cfg(not(feature = "unchecked"))]
 use crate::{result::EvalAltResult, token::Position};

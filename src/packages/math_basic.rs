@@ -1,12 +1,12 @@
 #![allow(non_snake_case)]
 
 use crate::def_package;
-use crate::parser::INT;
 use crate::plugin::*;
 use crate::token::Position;
+use crate::INT;
 
 #[cfg(not(feature = "no_float"))]
-use crate::parser::FLOAT;
+use crate::FLOAT;
 
 #[cfg(not(feature = "no_float"))]
 use crate::result::EvalAltResult;
@@ -111,7 +111,7 @@ mod int_functions {
 #[cfg(not(feature = "no_float"))]
 #[export_module]
 mod trig_functions {
-    use crate::parser::FLOAT;
+    use crate::FLOAT;
 
     pub fn sin(x: FLOAT) -> FLOAT {
         x.to_radians().sin()
@@ -154,7 +154,7 @@ mod trig_functions {
 #[cfg(not(feature = "no_float"))]
 #[export_module]
 mod float_functions {
-    use crate::parser::FLOAT;
+    use crate::FLOAT;
 
     pub fn sqrt(x: FLOAT) -> FLOAT {
         x.sqrt()

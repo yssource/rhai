@@ -1,7 +1,7 @@
-use crate::any::Variant;
 use crate::def_package;
-use crate::parser::INT;
+use crate::dynamic::Variant;
 use crate::result::EvalAltResult;
+use crate::INT;
 
 use crate::stdlib::{
     boxed::Box,

@@ -8,12 +8,12 @@ use crate::engine::{
 #[cfg(not(feature = "no_closure"))]
 use crate::engine::KEYWORD_IS_SHARED;
 
-use crate::error::LexError;
-use crate::parser::INT;
+use crate::parse_error::LexError;
 use crate::StaticVec;
+use crate::INT;
 
 #[cfg(not(feature = "no_float"))]
-use crate::parser::FLOAT;
+use crate::FLOAT;
 
 use crate::stdlib::{
     borrow::Cow,

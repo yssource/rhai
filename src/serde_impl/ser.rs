@@ -1,6 +1,6 @@
 //! Implement serialization support of `Dynamic` for [`serde`](https://crates.io/crates/serde).
 
-use crate::any::Dynamic;
+use crate::dynamic::Dynamic;
 use crate::result::EvalAltResult;
 use crate::token::Position;
 

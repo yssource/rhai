@@ -57,10 +57,11 @@
 #[cfg(feature = "no_std")]
 extern crate alloc;
 
-mod any;
-mod api;
+mod ast;
+mod dynamic;
 mod engine;
-mod error;
+mod engine_api;
+mod engine_settings;
 mod fn_args;
 mod fn_call;
 mod fn_func;
@@ -69,43 +70,60 @@ mod fn_register;
 mod module;
 mod optimize;
 pub mod packages;
+mod parse_error;
 mod parser;
 pub mod plugin;
 mod result;
 mod scope;
 #[cfg(feature = "serde")]
 mod serde_impl;
-mod settings;
 mod stdlib;
 mod syntax;
 mod token;
 mod r#unsafe;
 mod utils;
 
-pub use any::Dynamic;
+/// The system integer type.
+///
+/// If the `only_i32` feature is enabled, this will be `i32` instead.
+#[cfg(not(feature = "only_i32"))]
+pub type INT = i64;
+
+/// The system integer type.
+///
+/// If the `only_i32` feature is not enabled, this will be `i64` instead.
+#[cfg(feature = "only_i32")]
+pub type INT = i32;
+
+/// The system floating-point type.
+///
+/// Not available under the `no_float` feature.
+#[cfg(not(feature = "no_float"))]
+pub type FLOAT = f64;
+
+pub use ast::AST;
+pub use dynamic::Dynamic;
 pub use engine::{Engine, EvalContext};
-pub use error::{ParseError, ParseErrorType};
 pub use fn_native::{FnPtr, NativeCallContext};
 pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::Module;
-pub use parser::{ImmutableString, AST, INT};
+pub use parse_error::{ParseError, ParseErrorType};
 pub use result::EvalAltResult;
 pub use scope::Scope;
 pub use syntax::Expression;
 pub use token::Position;
+pub use utils::ImmutableString;
 
 #[cfg(feature = "internals")]
-pub use utils::calc_fn_hash;
+pub use utils::{calc_native_fn_hash, calc_script_fn_hash};
 
 #[cfg(not(feature = "internals"))]
-pub(crate) use utils::calc_fn_hash;
+pub(crate) use utils::{calc_native_fn_hash, calc_script_fn_hash};
 
 pub use rhai_codegen::*;
 
 #[cfg(not(feature = "no_function"))]
-pub use parser::FnAccess;
-#[cfg(feature = "no_function")]
-pub use parser::FnAccess;
+pub use ast::FnAccess;
 
 #[cfg(not(feature = "no_function"))]
 pub use fn_func::Func;
@@ -115,9 +133,6 @@ pub use engine::Array;
 
 #[cfg(not(feature = "no_object"))]
 pub use engine::Map;
-
-#[cfg(not(feature = "no_float"))]
-pub use parser::FLOAT;
 
 #[cfg(not(feature = "no_module"))]
 pub use module::ModuleResolver;
@@ -141,7 +156,7 @@ pub use optimize::OptimizationLevel;
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
-pub use error::LexError;
+pub use parse_error::LexError;
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
@@ -149,7 +164,9 @@ pub use token::{get_next_token, parse_string_literal, InputStream, Token, Tokeni
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
-pub use parser::{CustomExpr, Expr, FloatWrapper, ReturnType, ScriptFnDef, Stmt};
+pub use ast::{
+    BinaryExpr, CustomExpr, Expr, FloatWrapper, Ident, IdentX, ReturnType, ScriptFnDef, Stmt,
+};
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]

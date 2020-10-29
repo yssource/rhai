@@ -1,21 +1,21 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::any::{map_std_type_name, Dynamic, Union, Variant};
+use crate::ast::{BinaryExpr, Expr, Ident, ReturnType, Stmt};
+use crate::dynamic::{map_std_type_name, Dynamic, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{Callback, FnPtr, OnVarCallback};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
-use crate::parser::{BinaryExpr, Expr, ReturnType, Stmt};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::CustomSyntax;
 use crate::token::Position;
-use crate::{calc_fn_hash, StaticVec};
+use crate::{calc_native_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_index"))]
-use crate::parser::INT;
+use crate::INT;
 
 #[cfg(not(feature = "no_module"))]
 use crate::module::ModuleResolver;
@@ -29,10 +29,11 @@ use crate::utils::ImmutableString;
 
 #[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "no_object"))]
-use crate::any::DynamicWriteLock;
+use crate::dynamic::DynamicWriteLock;
 
 use crate::stdlib::{
     any::type_name,
+    borrow::Cow,
     boxed::Box,
     collections::{HashMap, HashSet},
     fmt, format,
@@ -388,10 +389,10 @@ pub struct State {
 }
 
 impl State {
-    /// Create a new `State`.
+    /// Is the state currently at global (root) level?
     #[inline(always)]
-    pub fn new() -> Self {
-        Default::default()
+    pub fn is_global(&self) -> bool {
+        self.scope_level == 0
     }
 }
 
@@ -455,7 +456,7 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    pub fn imports(&self) -> &'a Imports {
+    pub fn imports(&'a self) -> &'a Imports {
         self.mods
     }
     /// Get an iterator over the namespaces containing definition of all script-defined functions.
@@ -764,7 +765,7 @@ impl Engine {
         match expr {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
-                ((name, pos), Some(modules), hash_var, _) => {
+                (Ident { name, pos }, Some(modules), hash_var, _) => {
                     let module = search_imports_mut(mods, state, modules)?;
                     let target = module.get_qualified_var_mut(*hash_var).map_err(|mut err| {
                         match *err {
@@ -796,7 +797,7 @@ impl Engine {
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &'a Expr,
     ) -> Result<(Target<'s>, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
-        let ((name, pos), _, _, index) = match expr {
+        let (Ident { name, pos }, _, _, index) = match expr {
             Expr::Variable(v) => v.as_ref(),
             _ => unreachable!(),
         };
@@ -1187,7 +1188,10 @@ impl Engine {
         match dot_lhs {
             // id.??? or id[???]
             Expr::Variable(x) => {
-                let (var_name, var_pos) = &x.0;
+                let Ident {
+                    name: var_name,
+                    pos: var_pos,
+                } = &x.0;
 
                 self.inc_operations(state)
                     .map_err(|err| err.fill_position(*var_pos))?;
@@ -1438,8 +1442,7 @@ impl Engine {
                     let args = &mut [&mut lhs_value.clone(), value];
 
                     // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
-                    let hash =
-                        calc_fn_hash(empty(), op, args.len(), args.iter().map(|a| a.type_id()));
+                    let hash = calc_native_fn_hash(empty(), op, args.iter().map(|a| a.type_id()));
 
                     if self
                         .call_native_fn(state, lib, op, hash, args, false, false, &def_value)
@@ -1491,14 +1494,16 @@ impl Engine {
             Expr::IntegerConstant(x) => Ok(x.0.into()),
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(x) => Ok(x.0.into()),
-            Expr::StringConstant(x) => Ok(x.0.to_string().into()),
+            Expr::StringConstant(x) => Ok(x.name.to_string().into()),
             Expr::CharConstant(x) => Ok(x.0.into()),
-            Expr::FnPointer(x) => Ok(FnPtr::new_unchecked(x.0.clone(), Default::default()).into()),
-            Expr::Variable(x) if (x.0).0 == KEYWORD_THIS => {
+            Expr::FnPointer(x) => {
+                Ok(FnPtr::new_unchecked(x.name.clone(), Default::default()).into())
+            }
+            Expr::Variable(x) if (x.0).name == KEYWORD_THIS => {
                 if let Some(val) = this_ptr {
                     Ok(val.clone())
                 } else {
-                    EvalAltResult::ErrorUnboundThis((x.0).1).into()
+                    EvalAltResult::ErrorUnboundThis((x.0).pos).into()
                 }
             }
             Expr::Variable(_) => {
@@ -1533,9 +1538,9 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             Expr::Map(x) => Ok(Dynamic(Union::Map(Box::new(
                 x.0.iter()
-                    .map(|((key, _), expr)| {
+                    .map(|(key, expr)| {
                         self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                            .map(|val| (key.clone(), val))
+                            .map(|val| (key.name.clone(), val))
                     })
                     .collect::<Result<HashMap<_, _>, _>>()?,
             )))),
@@ -1687,7 +1692,7 @@ impl Engine {
                         // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
                         let arg_types =
                             once(lhs_ptr.as_mut().type_id()).chain(once(rhs_val.type_id()));
-                        let hash_fn = calc_fn_hash(empty(), op, 2, arg_types);
+                        let hash_fn = calc_native_fn_hash(empty(), op, arg_types);
 
                         match self
                             .global_module
@@ -1885,7 +1890,11 @@ impl Engine {
 
                 if let Some(func) = func {
                     // Add the loop variable
-                    let var_name = unsafe_cast_var_name_to_lifetime(name, &state);
+                    let var_name: Cow<'_, str> = if state.is_global() {
+                        name.clone().into()
+                    } else {
+                        unsafe_cast_var_name_to_lifetime(name).into()
+                    };
                     scope.push(var_name, ());
                     let index = scope.len() - 1;
                     state.scope_level += 1;
@@ -1929,7 +1938,7 @@ impl Engine {
 
             // Try/Catch statement
             Stmt::TryCatch(x) => {
-                let ((try_body, _), var_def, (catch_body, _)) = x.as_ref();
+                let (try_body, var_def, catch_body, _) = x.as_ref();
 
                 let result = self
                     .eval_stmt(scope, mods, state, lib, this_ptr, try_body, level)
@@ -1951,8 +1960,12 @@ impl Engine {
                             let orig_scope_len = scope.len();
                             state.scope_level += 1;
 
-                            if let Some((var_name, _)) = var_def {
-                                let var_name = unsafe_cast_var_name_to_lifetime(var_name, &state);
+                            if let Some(Ident { name, .. }) = var_def {
+                                let var_name: Cow<'_, str> = if state.is_global() {
+                                    name.clone().into()
+                                } else {
+                                    unsafe_cast_var_name_to_lifetime(name).into()
+                                };
                                 scope.push(var_name, value);
                             }
 
@@ -2016,7 +2029,11 @@ impl Engine {
                 } else {
                     ().into()
                 };
-                let var_name = unsafe_cast_var_name_to_lifetime(&var_def.0, &state);
+                let var_name: Cow<'_, str> = if state.is_global() {
+                    var_def.name.clone().into()
+                } else {
+                    unsafe_cast_var_name_to_lifetime(&var_def.name).into()
+                };
                 scope.push_dynamic_value(var_name, entry_type, val, false);
                 Ok(Default::default())
             }
@@ -2039,7 +2056,7 @@ impl Engine {
 
                         if let Some(name_def) = alias {
                             module.index_all_sub_modules();
-                            mods.push((name_def.0.clone(), module));
+                            mods.push((name_def.name.clone(), module));
                         }
 
                         state.modules += 1;
@@ -2059,13 +2076,13 @@ impl Engine {
             // Export statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(list, _) => {
-                for ((id, id_pos), rename) in list.iter() {
+                for (Ident { name, pos: id_pos }, rename) in list.iter() {
                     // Mark scope variables as public
-                    if let Some(index) = scope.get_index(id).map(|(i, _)| i) {
-                        let alias = rename.as_ref().map(|(n, _)| n).unwrap_or_else(|| id);
+                    if let Some(index) = scope.get_index(name).map(|(i, _)| i) {
+                        let alias = rename.as_ref().map(|x| &x.name).unwrap_or_else(|| name);
                         scope.set_entry_alias(index, alias.clone());
                     } else {
-                        return EvalAltResult::ErrorVariableNotFound(id.into(), *id_pos).into();
+                        return EvalAltResult::ErrorVariableNotFound(name.into(), *id_pos).into();
                     }
                 }
                 Ok(Default::default())
@@ -2073,7 +2090,7 @@ impl Engine {
 
             // Share statement
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(var_name, _) => {
+            Stmt::Share(Ident { name: var_name, .. }) => {
                 match scope.get_index(var_name) {
                     Some((index, ScopeEntryType::Normal)) => {
                         let (val, _) = scope.get_mut(index);

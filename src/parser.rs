@@ -1,588 +1,57 @@
 //! Main module defining the lexer and parser.
 
-use crate::any::{Dynamic, Union};
+use crate::ast::{BinaryExpr, CustomExpr, Expr, Ident, IdentX, ReturnType, ScriptFnDef, Stmt, AST};
+use crate::dynamic::{Dynamic, Union};
 use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
-use crate::error::{LexError, ParseError, ParseErrorType};
-use crate::fn_native::{FnPtr, Shared};
-use crate::module::{Module, ModuleRef};
+use crate::module::ModuleRef;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
+use crate::parse_error::{LexError, ParseError, ParseErrorType};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::syntax::{CustomSyntax, FnCustomSyntaxEval};
+use crate::syntax::CustomSyntax;
 use crate::token::{is_keyword_function, is_valid_identifier, Position, Token, TokenStream};
 use crate::utils::StraightHasherBuilder;
-use crate::{calc_fn_hash, StaticVec};
+use crate::{calc_script_fn_hash, StaticVec};
 
-#[cfg(not(feature = "no_index"))]
-use crate::engine::Array;
+#[cfg(not(feature = "no_float"))]
+use crate::ast::FloatWrapper;
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::{make_getter, make_setter, Map, KEYWORD_EVAL, KEYWORD_FN_PTR};
+use crate::engine::{make_getter, make_setter, KEYWORD_EVAL, KEYWORD_FN_PTR};
 
 #[cfg(not(feature = "no_function"))]
-use crate::engine::{FN_ANONYMOUS, KEYWORD_FN_PTR_CURRY};
+use crate::{
+    ast::FnAccess,
+    engine::{FN_ANONYMOUS, KEYWORD_FN_PTR_CURRY},
+    utils::ImmutableString,
+};
 
 use crate::stdlib::{
-    any::TypeId,
     borrow::Cow,
     boxed::Box,
-    char,
     collections::HashMap,
-    fmt, format,
-    hash::{Hash, Hasher},
+    format,
+    hash::Hash,
     iter::empty,
     num::NonZeroUsize,
-    ops::{Add, AddAssign},
     string::{String, ToString},
     vec,
     vec::Vec,
 };
 
+#[cfg(not(feature = "no_function"))]
+use crate::stdlib::hash::Hasher;
+
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(feature = "no_function"))]
 use crate::stdlib::collections::hash_map::DefaultHasher;
-
-#[cfg(not(feature = "no_closure"))]
-use crate::stdlib::collections::HashSet;
 
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_function"))]
 use ahash::AHasher;
 
-/// The system integer type.
-///
-/// If the `only_i32` feature is enabled, this will be `i32` instead.
-#[cfg(not(feature = "only_i32"))]
-pub type INT = i64;
-
-/// The system integer type.
-///
-/// If the `only_i32` feature is not enabled, this will be `i64` instead.
-#[cfg(feature = "only_i32")]
-pub type INT = i32;
-
-/// The system floating-point type.
-///
-/// Not available under the `no_float` feature.
-#[cfg(not(feature = "no_float"))]
-pub type FLOAT = f64;
-
 type PERR = ParseErrorType;
 
-pub use crate::utils::ImmutableString;
-
 type FunctionsLib = HashMap<u64, ScriptFnDef, StraightHasherBuilder>;
-
-/// Compiled AST (abstract syntax tree) of a Rhai script.
-///
-/// # Thread Safety
-///
-/// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
-#[derive(Debug, Clone, Default)]
-pub struct AST(
-    /// Global statements.
-    Vec<Stmt>,
-    /// Script-defined functions.
-    Module,
-);
-
-impl AST {
-    /// Create a new `AST`.
-    #[inline(always)]
-    pub fn new(statements: Vec<Stmt>, lib: Module) -> Self {
-        Self(statements, lib)
-    }
-
-    /// Get the statements.
-    #[cfg(not(feature = "internals"))]
-    #[inline(always)]
-    pub(crate) fn statements(&self) -> &[Stmt] {
-        &self.0
-    }
-
-    /// _[INTERNALS]_ Get the statements.
-    /// Exported under the `internals` feature only.
-    #[cfg(feature = "internals")]
-    #[deprecated(note = "this method is volatile and may change")]
-    #[inline(always)]
-    pub fn statements(&self) -> &[Stmt] {
-        &self.0
-    }
-
-    /// Get a mutable reference to the statements.
-    #[cfg(not(feature = "no_optimize"))]
-    #[inline(always)]
-    pub(crate) fn statements_mut(&mut self) -> &mut Vec<Stmt> {
-        &mut self.0
-    }
-
-    /// Get the internal `Module` containing all script-defined functions.
-    #[cfg(not(feature = "internals"))]
-    #[inline(always)]
-    pub(crate) fn lib(&self) -> &Module {
-        &self.1
-    }
-
-    /// _[INTERNALS]_ Get the internal `Module` containing all script-defined functions.
-    /// Exported under the `internals` feature only.
-    #[cfg(feature = "internals")]
-    #[deprecated(note = "this method is volatile and may change")]
-    #[inline(always)]
-    pub fn lib(&self) -> &Module {
-        &self.1
-    }
-
-    /// Clone the `AST`'s functions into a new `AST`.
-    /// No statements are cloned.
-    ///
-    /// This operation is cheap because functions are shared.
-    #[inline(always)]
-    pub fn clone_functions_only(&self) -> Self {
-        self.clone_functions_only_filtered(|_, _, _| true)
-    }
-
-    /// Clone the `AST`'s functions into a new `AST` based on a filter predicate.
-    /// No statements are cloned.
-    ///
-    /// This operation is cheap because functions are shared.
-    #[inline(always)]
-    pub fn clone_functions_only_filtered(
-        &self,
-        mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
-    ) -> Self {
-        let mut functions: Module = Default::default();
-        functions.merge_filtered(&self.1, &mut filter);
-        Self(Default::default(), functions)
-    }
-
-    /// Clone the `AST`'s script statements into a new `AST`.
-    /// No functions are cloned.
-    #[inline(always)]
-    pub fn clone_statements_only(&self) -> Self {
-        Self(self.0.clone(), Default::default())
-    }
-
-    /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
-    /// is returned.
-    ///
-    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
-    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
-    /// Of course, if the first `AST` uses a `return` statement at the end, then
-    /// the second `AST` will essentially be dead code.
-    ///
-    /// All script-defined functions in the second `AST` overwrite similarly-named functions
-    /// in the first `AST` with the same number of parameters.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # #[cfg(not(feature = "no_function"))]
-    /// # {
-    /// use rhai::Engine;
-    ///
-    /// let engine = Engine::new();
-    ///
-    /// let ast1 = engine.compile(r#"
-    ///                 fn foo(x) { 42 + x }
-    ///                 foo(1)
-    ///             "#)?;
-    ///
-    /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { "hello" + n }
-    ///                 foo("!")
-    ///             "#)?;
-    ///
-    /// let ast = ast1.merge(&ast2);    // Merge 'ast2' into 'ast1'
-    ///
-    /// // Notice that using the '+' operator also works:
-    /// // let ast = &ast1 + &ast2;
-    ///
-    /// // 'ast' is essentially:
-    /// //
-    /// //    fn foo(n) { "hello" + n } // <- definition of first 'foo' is overwritten
-    /// //    foo(1)                    // <- notice this will be "hello1" instead of 43,
-    /// //                              //    but it is no longer the return value
-    /// //    foo("!")                  // returns "hello!"
-    ///
-    /// // Evaluate it
-    /// assert_eq!(engine.eval_ast::<String>(&ast)?, "hello!");
-    /// # }
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[inline(always)]
-    pub fn merge(&self, other: &Self) -> Self {
-        self.merge_filtered(other, |_, _, _| true)
-    }
-
-    /// Combine one `AST` with another.  The second `AST` is consumed.
-    ///
-    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
-    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
-    /// Of course, if the first `AST` uses a `return` statement at the end, then
-    /// the second `AST` will essentially be dead code.
-    ///
-    /// All script-defined functions in the second `AST` overwrite similarly-named functions
-    /// in the first `AST` with the same number of parameters.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # #[cfg(not(feature = "no_function"))]
-    /// # {
-    /// use rhai::Engine;
-    ///
-    /// let engine = Engine::new();
-    ///
-    /// let mut ast1 = engine.compile(r#"
-    ///                     fn foo(x) { 42 + x }
-    ///                     foo(1)
-    ///                 "#)?;
-    ///
-    /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { "hello" + n }
-    ///                 foo("!")
-    ///             "#)?;
-    ///
-    /// ast1.combine(ast2);    // Combine 'ast2' into 'ast1'
-    ///
-    /// // Notice that using the '+=' operator also works:
-    /// // ast1 += ast2;
-    ///
-    /// // 'ast1' is essentially:
-    /// //
-    /// //    fn foo(n) { "hello" + n } // <- definition of first 'foo' is overwritten
-    /// //    foo(1)                    // <- notice this will be "hello1" instead of 43,
-    /// //                              //    but it is no longer the return value
-    /// //    foo("!")                  // returns "hello!"
-    ///
-    /// // Evaluate it
-    /// assert_eq!(engine.eval_ast::<String>(&ast1)?, "hello!");
-    /// # }
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[inline(always)]
-    pub fn combine(&mut self, other: Self) -> &mut Self {
-        self.combine_filtered(other, |_, _, _| true)
-    }
-
-    /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
-    /// is returned.
-    ///
-    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
-    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
-    /// Of course, if the first `AST` uses a `return` statement at the end, then
-    /// the second `AST` will essentially be dead code.
-    ///
-    /// All script-defined functions in the second `AST` are first selected based on a filter
-    /// predicate, then overwrite similarly-named functions in the first `AST` with the
-    /// same number of parameters.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # #[cfg(not(feature = "no_function"))]
-    /// # {
-    /// use rhai::Engine;
-    ///
-    /// let engine = Engine::new();
-    ///
-    /// let ast1 = engine.compile(r#"
-    ///                 fn foo(x) { 42 + x }
-    ///                 foo(1)
-    ///             "#)?;
-    ///
-    /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { "hello" + n }
-    ///                 fn error() { 0 }
-    ///                 foo("!")
-    ///             "#)?;
-    ///
-    /// // Merge 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
-    /// let ast = ast1.merge_filtered(&ast2, |_, name, params| name == "error" && params == 0);
-    ///
-    /// // 'ast' is essentially:
-    /// //
-    /// //    fn foo(n) { 42 + n }      // <- definition of 'ast1::foo' is not overwritten
-    /// //                              //    because 'ast2::foo' is filtered away
-    /// //    foo(1)                    // <- notice this will be 43 instead of "hello1",
-    /// //                              //    but it is no longer the return value
-    /// //    fn error() { 0 }          // <- this function passes the filter and is merged
-    /// //    foo("!")                  // <- returns "42!"
-    ///
-    /// // Evaluate it
-    /// assert_eq!(engine.eval_ast::<String>(&ast)?, "42!");
-    /// # }
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[inline]
-    pub fn merge_filtered(
-        &self,
-        other: &Self,
-        mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
-    ) -> Self {
-        let Self(statements, functions) = self;
-
-        let ast = match (statements.is_empty(), other.0.is_empty()) {
-            (false, false) => {
-                let mut statements = statements.clone();
-                statements.extend(other.0.iter().cloned());
-                statements
-            }
-            (false, true) => statements.clone(),
-            (true, false) => other.0.clone(),
-            (true, true) => vec![],
-        };
-
-        let mut functions = functions.clone();
-        functions.merge_filtered(&other.1, &mut filter);
-
-        Self::new(ast, functions)
-    }
-
-    /// Combine one `AST` with another.  The second `AST` is consumed.
-    ///
-    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
-    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
-    /// Of course, if the first `AST` uses a `return` statement at the end, then
-    /// the second `AST` will essentially be dead code.
-    ///
-    /// All script-defined functions in the second `AST` are first selected based on a filter
-    /// predicate, then overwrite similarly-named functions in the first `AST` with the
-    /// same number of parameters.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # #[cfg(not(feature = "no_function"))]
-    /// # {
-    /// use rhai::Engine;
-    ///
-    /// let engine = Engine::new();
-    ///
-    /// let mut ast1 = engine.compile(r#"
-    ///                     fn foo(x) { 42 + x }
-    ///                     foo(1)
-    ///                 "#)?;
-    ///
-    /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { "hello" + n }
-    ///                 fn error() { 0 }
-    ///                 foo("!")
-    ///             "#)?;
-    ///
-    /// // Combine 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
-    /// ast1.combine_filtered(ast2, |_, name, params| name == "error" && params == 0);
-    ///
-    /// // 'ast1' is essentially:
-    /// //
-    /// //    fn foo(n) { 42 + n }      // <- definition of 'ast1::foo' is not overwritten
-    /// //                              //    because 'ast2::foo' is filtered away
-    /// //    foo(1)                    // <- notice this will be 43 instead of "hello1",
-    /// //                              //    but it is no longer the return value
-    /// //    fn error() { 0 }          // <- this function passes the filter and is merged
-    /// //    foo("!")                  // <- returns "42!"
-    ///
-    /// // Evaluate it
-    /// assert_eq!(engine.eval_ast::<String>(&ast1)?, "42!");
-    /// # }
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[inline(always)]
-    pub fn combine_filtered(
-        &mut self,
-        other: Self,
-        mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
-    ) -> &mut Self {
-        let Self(ref mut statements, ref mut functions) = self;
-        statements.extend(other.0.into_iter());
-        functions.merge_filtered(&other.1, &mut filter);
-        self
-    }
-
-    /// Filter out the functions, retaining only some based on a filter predicate.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # #[cfg(not(feature = "no_function"))]
-    /// # {
-    /// use rhai::Engine;
-    ///
-    /// let engine = Engine::new();
-    ///
-    /// let mut ast = engine.compile(r#"
-    ///                         fn foo(n) { n + 1 }
-    ///                         fn bar() { print("hello"); }
-    ///                     "#)?;
-    ///
-    /// // Remove all functions except 'foo(_)'
-    /// ast.retain_functions(|_, name, params| name == "foo" && params == 1);
-    /// # }
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
-    pub fn retain_functions(&mut self, filter: impl FnMut(FnAccess, &str, usize) -> bool) {
-        self.1.retain_functions(filter);
-    }
-
-    /// Iterate through all functions
-    #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
-    pub fn iter_functions<'a>(
-        &'a self,
-    ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
-        self.1.iter_script_fn()
-    }
-
-    /// Clear all function definitions in the `AST`.
-    #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
-    pub fn clear_functions(&mut self) {
-        self.1 = Default::default();
-    }
-
-    /// Clear all statements in the `AST`, leaving only function definitions.
-    #[inline(always)]
-    pub fn clear_statements(&mut self) {
-        self.0 = vec![];
-    }
-}
-
-impl<A: AsRef<AST>> Add<A> for &AST {
-    type Output = AST;
-
-    #[inline(always)]
-    fn add(self, rhs: A) -> Self::Output {
-        self.merge(rhs.as_ref())
-    }
-}
-
-impl<A: Into<AST>> AddAssign<A> for AST {
-    #[inline(always)]
-    fn add_assign(&mut self, rhs: A) {
-        self.combine(rhs.into());
-    }
-}
-
-impl AsRef<[Stmt]> for AST {
-    #[inline(always)]
-    fn as_ref(&self) -> &[Stmt] {
-        self.statements()
-    }
-}
-
-impl AsRef<Module> for AST {
-    #[inline(always)]
-    fn as_ref(&self) -> &Module {
-        self.lib()
-    }
-}
-
-/// A type representing the access mode of a scripted function.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum FnAccess {
-    /// Public function.
-    Public,
-    /// Private function.
-    Private,
-}
-
-impl fmt::Display for FnAccess {
-    #[inline(always)]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Private => write!(f, "private"),
-            Self::Public => write!(f, "public"),
-        }
-    }
-}
-
-impl FnAccess {
-    /// Is this access mode private?
-    #[inline(always)]
-    pub fn is_private(self) -> bool {
-        match self {
-            Self::Public => false,
-            Self::Private => true,
-        }
-    }
-    /// Is this access mode public?
-    #[inline(always)]
-    pub fn is_public(self) -> bool {
-        match self {
-            Self::Public => true,
-            Self::Private => false,
-        }
-    }
-}
-
-/// _[INTERNALS]_ A type containing information on a scripted function.
-/// Exported under the `internals` feature only.
-///
-/// ## WARNING
-///
-/// This type is volatile and may change.
-#[derive(Debug, Clone)]
-pub struct ScriptFnDef {
-    /// Function name.
-    pub name: ImmutableString,
-    /// Function access mode.
-    pub access: FnAccess,
-    /// Names of function parameters.
-    pub params: StaticVec<String>,
-    /// Access to external variables.
-    #[cfg(not(feature = "no_closure"))]
-    pub externals: HashSet<String>,
-    /// Function body.
-    pub body: Stmt,
-    /// Position of the function definition.
-    pub pos: Position,
-    /// Encapsulated running environment, if any.
-    pub lib: Option<Shared<Module>>,
-}
-
-impl fmt::Display for ScriptFnDef {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}{}({})",
-            match self.access {
-                FnAccess::Public => "",
-                FnAccess::Private => "private ",
-            },
-            self.name,
-            self.params
-                .iter()
-                .map(|s| s.as_str())
-                .collect::<Vec<_>>()
-                .join(",")
-        )
-    }
-}
-
-/// _[INTERNALS]_ A type encapsulating the mode of a `return`/`throw` statement.
-/// Exported under the `internals` feature only.
-///
-/// ## WARNING
-///
-/// This type is volatile and may change.
-#[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
-pub enum ReturnType {
-    /// `return` statement.
-    Return,
-    /// `throw` statement.
-    Exception,
-}
 
 #[derive(Clone)]
 struct ParseState<'e> {
@@ -732,648 +201,6 @@ impl ParseSettings {
         }
     }
 }
-
-/// _[INTERNALS]_ A Rhai statement.
-/// Exported under the `internals` feature only.
-///
-/// Each variant is at most one pointer in size (for speed),
-/// with everything being allocated together in one single tuple.
-#[derive(Debug, Clone, Hash)]
-pub enum Stmt {
-    /// No-op.
-    Noop(Position),
-    /// if expr { stmt } else { stmt }
-    IfThenElse(Expr, Box<(Stmt, Option<Stmt>)>, Position),
-    /// while expr { stmt }
-    While(Expr, Box<Stmt>, Position),
-    /// loop { stmt }
-    Loop(Box<Stmt>, Position),
-    /// for id in expr { stmt }
-    For(Expr, Box<(String, Stmt)>, Position),
-    /// let id = expr
-    Let(Box<(String, Position)>, Option<Expr>, Position),
-    /// const id = expr
-    Const(Box<(String, Position)>, Option<Expr>, Position),
-    /// expr op= expr
-    Assignment(Box<(Expr, Cow<'static, str>, Expr)>, Position),
-    /// { stmt; ... }
-    Block(Vec<Stmt>, Position),
-    /// try { stmt; ... } catch ( var ) { stmt; ... }
-    TryCatch(
-        Box<(
-            (Stmt, Position),
-            Option<(String, Position)>,
-            (Stmt, Position),
-        )>,
-    ),
-    /// expr
-    Expr(Expr),
-    /// continue
-    Continue(Position),
-    /// break
-    Break(Position),
-    /// return/throw
-    ReturnWithVal((ReturnType, Position), Option<Expr>, Position),
-    /// import expr as var
-    #[cfg(not(feature = "no_module"))]
-    Import(Expr, Option<Box<(ImmutableString, Position)>>, Position),
-    /// export var as var, ...
-    #[cfg(not(feature = "no_module"))]
-    Export(
-        Vec<((String, Position), Option<(String, Position)>)>,
-        Position,
-    ),
-    /// Convert a variable to shared.
-    #[cfg(not(feature = "no_closure"))]
-    Share(String, Position),
-}
-
-impl Default for Stmt {
-    #[inline(always)]
-    fn default() -> Self {
-        Self::Noop(Default::default())
-    }
-}
-
-impl Stmt {
-    /// Is this statement `Noop`?
-    pub fn is_noop(&self) -> bool {
-        match self {
-            Self::Noop(_) => true,
-            _ => false,
-        }
-    }
-
-    /// Get the `Position` of this statement.
-    pub fn position(&self) -> Position {
-        match self {
-            Self::Noop(pos)
-            | Self::Continue(pos)
-            | Self::Break(pos)
-            | Self::Block(_, pos)
-            | Self::Assignment(_, pos)
-            | Self::IfThenElse(_, _, pos)
-            | Self::While(_, _, pos)
-            | Self::Loop(_, pos)
-            | Self::For(_, _, pos)
-            | Self::ReturnWithVal((_, pos), _, _) => *pos,
-
-            Self::Let(x, _, _) | Self::Const(x, _, _) => x.1,
-            Self::TryCatch(x) => (x.0).1,
-
-            Self::Expr(x) => x.position(),
-
-            #[cfg(not(feature = "no_module"))]
-            Self::Import(_, _, pos) => *pos,
-            #[cfg(not(feature = "no_module"))]
-            Self::Export(_, pos) => *pos,
-
-            #[cfg(not(feature = "no_closure"))]
-            Self::Share(_, pos) => *pos,
-        }
-    }
-
-    /// Override the `Position` of this statement.
-    pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
-        match self {
-            Self::Noop(pos)
-            | Self::Continue(pos)
-            | Self::Break(pos)
-            | Self::Block(_, pos)
-            | Self::Assignment(_, pos)
-            | Self::IfThenElse(_, _, pos)
-            | Self::While(_, _, pos)
-            | Self::Loop(_, pos)
-            | Self::For(_, _, pos)
-            | Self::ReturnWithVal((_, pos), _, _) => *pos = new_pos,
-
-            Self::Let(x, _, _) | Self::Const(x, _, _) => x.1 = new_pos,
-            Self::TryCatch(x) => (x.0).1 = new_pos,
-
-            Self::Expr(x) => {
-                x.set_position(new_pos);
-            }
-
-            #[cfg(not(feature = "no_module"))]
-            Self::Import(_, _, pos) => *pos = new_pos,
-            #[cfg(not(feature = "no_module"))]
-            Self::Export(_, pos) => *pos = new_pos,
-
-            #[cfg(not(feature = "no_closure"))]
-            Self::Share(_, pos) => *pos = new_pos,
-        }
-
-        self
-    }
-
-    /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
-    pub fn is_self_terminated(&self) -> bool {
-        match self {
-            Self::IfThenElse(_, _, _)
-            | Self::While(_, _, _)
-            | Self::Loop(_, _)
-            | Self::For(_, _, _)
-            | Self::Block(_, _)
-            | Self::TryCatch(_) => true,
-
-            // A No-op requires a semicolon in order to know it is an empty statement!
-            Self::Noop(_) => false,
-
-            Self::Let(_, _, _)
-            | Self::Const(_, _, _)
-            | Self::Assignment(_, _)
-            | Self::Expr(_)
-            | Self::Continue(_)
-            | Self::Break(_)
-            | Self::ReturnWithVal(_, _, _) => false,
-
-            #[cfg(not(feature = "no_module"))]
-            Self::Import(_, _, _) | Self::Export(_, _) => false,
-
-            #[cfg(not(feature = "no_closure"))]
-            Self::Share(_, _) => false,
-        }
-    }
-
-    /// Is this statement _pure_?
-    pub fn is_pure(&self) -> bool {
-        match self {
-            Self::Noop(_) => true,
-            Self::Expr(expr) => expr.is_pure(),
-            Self::IfThenElse(condition, x, _) if x.1.is_some() => {
-                condition.is_pure() && x.0.is_pure() && x.1.as_ref().unwrap().is_pure()
-            }
-            Self::IfThenElse(condition, x, _) => condition.is_pure() && x.0.is_pure(),
-            Self::While(condition, block, _) => condition.is_pure() && block.is_pure(),
-            Self::Loop(block, _) => block.is_pure(),
-            Self::For(iterable, x, _) => iterable.is_pure() && x.1.is_pure(),
-            Self::Let(_, _, _) | Self::Const(_, _, _) | Self::Assignment(_, _) => false,
-            Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
-            Self::Continue(_) | Self::Break(_) | Self::ReturnWithVal(_, _, _) => false,
-            Self::TryCatch(x) => (x.0).0.is_pure() && (x.2).0.is_pure(),
-
-            #[cfg(not(feature = "no_module"))]
-            Self::Import(_, _, _) => false,
-            #[cfg(not(feature = "no_module"))]
-            Self::Export(_, _) => false,
-
-            #[cfg(not(feature = "no_closure"))]
-            Self::Share(_, _) => false,
-        }
-    }
-}
-
-/// _[INTERNALS]_ A type wrapping a custom syntax definition.
-/// Exported under the `internals` feature only.
-///
-/// ## WARNING
-///
-/// This type is volatile and may change.
-#[derive(Clone)]
-pub struct CustomExpr {
-    keywords: StaticVec<Expr>,
-    func: Shared<FnCustomSyntaxEval>,
-    pos: Position,
-}
-
-impl fmt::Debug for CustomExpr {
-    #[inline(always)]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.keywords, f)
-    }
-}
-
-impl Hash for CustomExpr {
-    #[inline(always)]
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.keywords.hash(state);
-    }
-}
-
-impl CustomExpr {
-    /// Get the keywords for this `CustomExpr`.
-    #[inline(always)]
-    pub fn keywords(&self) -> &[Expr] {
-        &self.keywords
-    }
-    /// Get the implementation function for this `CustomExpr`.
-    #[inline(always)]
-    pub fn func(&self) -> &FnCustomSyntaxEval {
-        self.func.as_ref()
-    }
-    /// Get the position of this `CustomExpr`.
-    #[inline(always)]
-    pub fn position(&self) -> Position {
-        self.pos
-    }
-}
-
-/// _[INTERNALS]_ A type wrapping a floating-point number.
-/// Exported under the `internals` feature only.
-///
-/// This type is mainly used to provide a standard `Hash` implementation
-/// to floating-point numbers, allowing `Expr` to derive `Hash` automatically.
-///
-/// ## WARNING
-///
-/// This type is volatile and may change.
-#[cfg(not(feature = "no_float"))]
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
-pub struct FloatWrapper(pub FLOAT, pub Position);
-
-#[cfg(not(feature = "no_float"))]
-impl Hash for FloatWrapper {
-    #[inline(always)]
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write(&self.0.to_le_bytes());
-        self.1.hash(state);
-    }
-}
-
-#[derive(Debug, Clone, Hash)]
-pub struct BinaryExpr {
-    pub lhs: Expr,
-    pub rhs: Expr,
-    pub pos: Position,
-}
-
-/// _[INTERNALS]_ An expression sub-tree.
-/// Exported under the `internals` feature only.
-///
-/// Each variant is at most one pointer in size (for speed),
-/// with everything being allocated together in one single tuple.
-///
-/// ## WARNING
-///
-/// This type is volatile and may change.
-#[derive(Debug, Clone, Hash)]
-pub enum Expr {
-    /// Integer constant.
-    IntegerConstant(Box<(INT, Position)>),
-    /// Floating-point constant.
-    #[cfg(not(feature = "no_float"))]
-    FloatConstant(Box<FloatWrapper>),
-    /// Character constant.
-    CharConstant(Box<(char, Position)>),
-    /// String constant.
-    StringConstant(Box<(ImmutableString, Position)>),
-    /// FnPtr constant.
-    FnPointer(Box<(ImmutableString, Position)>),
-    /// Variable access - ((variable name, position), optional modules, hash, optional index)
-    Variable(
-        Box<(
-            (String, Position),
-            Option<Box<ModuleRef>>,
-            u64,
-            Option<NonZeroUsize>,
-        )>,
-    ),
-    /// Property access.
-    Property(Box<((ImmutableString, String, String), Position)>),
-    /// { stmt }
-    Stmt(Box<(Stmt, Position)>),
-    /// Wrapped expression - should not be optimized away.
-    Expr(Box<Expr>),
-    /// func(expr, ... ) - ((function name, native_only, capture, position), optional modules, hash, arguments, optional default value)
-    /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
-    /// and the function names are predictable, so no need to allocate a new `String`.
-    FnCall(
-        Box<(
-            (Cow<'static, str>, bool, bool, Position),
-            Option<Box<ModuleRef>>,
-            u64,
-            StaticVec<Expr>,
-            Option<bool>, // Default value is `bool` in order for `Expr` to be `Hash`.
-        )>,
-    ),
-    /// lhs.rhs
-    Dot(Box<BinaryExpr>),
-    /// expr[expr]
-    Index(Box<BinaryExpr>),
-    /// [ expr, ... ]
-    Array(Box<(StaticVec<Expr>, Position)>),
-    /// #{ name:expr, ... }
-    Map(Box<(StaticVec<((ImmutableString, Position), Expr)>, Position)>),
-    /// lhs in rhs
-    In(Box<BinaryExpr>),
-    /// lhs && rhs
-    And(Box<BinaryExpr>),
-    /// lhs || rhs
-    Or(Box<BinaryExpr>),
-    /// true
-    True(Position),
-    /// false
-    False(Position),
-    /// ()
-    Unit(Position),
-    /// Custom syntax
-    Custom(Box<CustomExpr>),
-}
-
-impl Default for Expr {
-    #[inline(always)]
-    fn default() -> Self {
-        Self::Unit(Default::default())
-    }
-}
-
-impl Expr {
-    /// Get the type of an expression.
-    ///
-    /// Returns `None` if the expression's result type is not constant.
-    pub fn get_type_id(&self) -> Option<TypeId> {
-        Some(match self {
-            Self::Expr(x) => return x.get_type_id(),
-
-            Self::IntegerConstant(_) => TypeId::of::<INT>(),
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_) => TypeId::of::<FLOAT>(),
-            Self::CharConstant(_) => TypeId::of::<char>(),
-            Self::StringConstant(_) => TypeId::of::<ImmutableString>(),
-            Self::FnPointer(_) => TypeId::of::<FnPtr>(),
-            Self::True(_) | Self::False(_) | Self::In(_) | Self::And(_) | Self::Or(_) => {
-                TypeId::of::<bool>()
-            }
-            Self::Unit(_) => TypeId::of::<()>(),
-
-            #[cfg(not(feature = "no_index"))]
-            Self::Array(_) => TypeId::of::<Array>(),
-
-            #[cfg(not(feature = "no_object"))]
-            Self::Map(_) => TypeId::of::<Map>(),
-
-            _ => return None,
-        })
-    }
-
-    /// Get the `Dynamic` value of a constant expression.
-    ///
-    /// Returns `None` if the expression is not constant.
-    pub fn get_constant_value(&self) -> Option<Dynamic> {
-        Some(match self {
-            Self::Expr(x) => return x.get_constant_value(),
-
-            Self::IntegerConstant(x) => x.0.into(),
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(x) => x.0.into(),
-            Self::CharConstant(x) => x.0.into(),
-            Self::StringConstant(x) => x.0.clone().into(),
-            Self::FnPointer(x) => Dynamic(Union::FnPtr(Box::new(FnPtr::new_unchecked(
-                x.0.clone(),
-                Default::default(),
-            )))),
-            Self::True(_) => true.into(),
-            Self::False(_) => false.into(),
-            Self::Unit(_) => ().into(),
-
-            #[cfg(not(feature = "no_index"))]
-            Self::Array(x) if x.0.iter().all(Self::is_constant) => Dynamic(Union::Array(Box::new(
-                x.0.iter()
-                    .map(|v| v.get_constant_value().unwrap())
-                    .collect(),
-            ))),
-
-            #[cfg(not(feature = "no_object"))]
-            Self::Map(x) if x.0.iter().all(|(_, v)| v.is_constant()) => {
-                Dynamic(Union::Map(Box::new(
-                    x.0.iter()
-                        .map(|((k, _), v)| (k.clone(), v.get_constant_value().unwrap()))
-                        .collect(),
-                )))
-            }
-
-            _ => return None,
-        })
-    }
-
-    /// Is the expression a simple variable access?
-    pub(crate) fn get_variable_access(&self, non_qualified: bool) -> Option<&str> {
-        match self {
-            Self::Variable(x) if !non_qualified || x.1.is_none() => Some((x.0).0.as_str()),
-            _ => None,
-        }
-    }
-
-    /// Get the `Position` of the expression.
-    pub fn position(&self) -> Position {
-        match self {
-            Self::Expr(x) => x.position(),
-
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(x) => x.1,
-
-            Self::IntegerConstant(x) => x.1,
-            Self::CharConstant(x) => x.1,
-            Self::StringConstant(x) => x.1,
-            Self::FnPointer(x) => x.1,
-            Self::Array(x) => x.1,
-            Self::Map(x) => x.1,
-            Self::Property(x) => x.1,
-            Self::Stmt(x) => x.1,
-            Self::Variable(x) => (x.0).1,
-            Self::FnCall(x) => (x.0).3,
-
-            Self::And(x) | Self::Or(x) | Self::In(x) => x.pos,
-
-            Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos,
-
-            Self::Dot(x) | Self::Index(x) => x.lhs.position(),
-
-            Self::Custom(x) => x.pos,
-        }
-    }
-
-    /// Override the `Position` of the expression.
-    pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
-        match self {
-            Self::Expr(x) => {
-                x.set_position(new_pos);
-            }
-
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(x) => x.1 = new_pos,
-
-            Self::IntegerConstant(x) => x.1 = new_pos,
-            Self::CharConstant(x) => x.1 = new_pos,
-            Self::StringConstant(x) => x.1 = new_pos,
-            Self::FnPointer(x) => x.1 = new_pos,
-            Self::Array(x) => x.1 = new_pos,
-            Self::Map(x) => x.1 = new_pos,
-            Self::Variable(x) => (x.0).1 = new_pos,
-            Self::Property(x) => x.1 = new_pos,
-            Self::Stmt(x) => x.1 = new_pos,
-            Self::FnCall(x) => (x.0).3 = new_pos,
-            Self::And(x) | Self::Or(x) | Self::In(x) => x.pos = new_pos,
-            Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos = new_pos,
-            Self::Dot(x) | Self::Index(x) => x.pos = new_pos,
-            Self::Custom(x) => x.pos = new_pos,
-        }
-
-        self
-    }
-
-    /// Is the expression pure?
-    ///
-    /// A pure expression has no side effects.
-    pub fn is_pure(&self) -> bool {
-        match self {
-            Self::Expr(x) => x.is_pure(),
-
-            Self::Array(x) => x.0.iter().all(Self::is_pure),
-
-            Self::Index(x) | Self::And(x) | Self::Or(x) | Self::In(x) => {
-                x.lhs.is_pure() && x.rhs.is_pure()
-            }
-
-            Self::Stmt(x) => x.0.is_pure(),
-
-            Self::Variable(_) => true,
-
-            _ => self.is_constant(),
-        }
-    }
-
-    /// Is the expression the unit `()` literal?
-    #[inline(always)]
-    pub fn is_unit(&self) -> bool {
-        match self {
-            Self::Unit(_) => true,
-            _ => false,
-        }
-    }
-
-    /// Is the expression a simple constant literal?
-    pub fn is_literal(&self) -> bool {
-        match self {
-            Self::Expr(x) => x.is_literal(),
-
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_) => true,
-
-            Self::IntegerConstant(_)
-            | Self::CharConstant(_)
-            | Self::StringConstant(_)
-            | Self::FnPointer(_)
-            | Self::True(_)
-            | Self::False(_)
-            | Self::Unit(_) => true,
-
-            // An array literal is literal if all items are literals
-            Self::Array(x) => x.0.iter().all(Self::is_literal),
-
-            // An map literal is literal if all items are literals
-            Self::Map(x) => x.0.iter().map(|(_, expr)| expr).all(Self::is_literal),
-
-            // Check in expression
-            Self::In(x) => match (&x.lhs, &x.rhs) {
-                (Self::StringConstant(_), Self::StringConstant(_))
-                | (Self::CharConstant(_), Self::StringConstant(_)) => true,
-                _ => false,
-            },
-
-            _ => false,
-        }
-    }
-
-    /// Is the expression a constant?
-    pub fn is_constant(&self) -> bool {
-        match self {
-            Self::Expr(x) => x.is_constant(),
-
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_) => true,
-
-            Self::IntegerConstant(_)
-            | Self::CharConstant(_)
-            | Self::StringConstant(_)
-            | Self::FnPointer(_)
-            | Self::True(_)
-            | Self::False(_)
-            | Self::Unit(_) => true,
-
-            // An array literal is constant if all items are constant
-            Self::Array(x) => x.0.iter().all(Self::is_constant),
-
-            // An map literal is constant if all items are constant
-            Self::Map(x) => x.0.iter().map(|(_, expr)| expr).all(Self::is_constant),
-
-            // Check in expression
-            Self::In(x) => match (&x.lhs, &x.rhs) {
-                (Self::StringConstant(_), Self::StringConstant(_))
-                | (Self::CharConstant(_), Self::StringConstant(_)) => true,
-                _ => false,
-            },
-
-            _ => false,
-        }
-    }
-
-    /// Is a particular token allowed as a postfix operator to this expression?
-    pub fn is_valid_postfix(&self, token: &Token) -> bool {
-        match self {
-            Self::Expr(x) => x.is_valid_postfix(token),
-
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_) => false,
-
-            Self::IntegerConstant(_)
-            | Self::CharConstant(_)
-            | Self::FnPointer(_)
-            | Self::In(_)
-            | Self::And(_)
-            | Self::Or(_)
-            | Self::True(_)
-            | Self::False(_)
-            | Self::Unit(_) => false,
-
-            Self::StringConstant(_)
-            | Self::Stmt(_)
-            | Self::FnCall(_)
-            | Self::Dot(_)
-            | Self::Index(_)
-            | Self::Array(_)
-            | Self::Map(_) => match token {
-                #[cfg(not(feature = "no_index"))]
-                Token::LeftBracket => true,
-                _ => false,
-            },
-
-            Self::Variable(_) => match token {
-                #[cfg(not(feature = "no_index"))]
-                Token::LeftBracket => true,
-                Token::LeftParen => true,
-                Token::Bang => true,
-                Token::DoubleColon => true,
-                _ => false,
-            },
-
-            Self::Property(_) => match token {
-                #[cfg(not(feature = "no_index"))]
-                Token::LeftBracket => true,
-                Token::LeftParen => true,
-                _ => false,
-            },
-
-            Self::Custom(_) => false,
-        }
-    }
-
-    /// Convert a `Variable` into a `Property`.  All other variants are untouched.
-    #[cfg(not(feature = "no_object"))]
-    #[inline]
-    pub(crate) fn into_property(self) -> Self {
-        match self {
-            Self::Variable(x) if x.1.is_none() => {
-                let (name, pos) = x.0;
-                let getter = make_getter(&name);
-                let setter = make_setter(&name);
-                Self::Property(Box::new(((name.into(), getter, setter), pos)))
-            }
-            _ => self,
-        }
-    }
-}
-
 /// Consume a particular token, checking that it is the expected one.
 fn eat_token(input: &mut TokenStream, token: Token) -> Position {
     let (t, pos) = input.next().unwrap();
@@ -1472,10 +299,10 @@ fn parse_fn_call(
                 //    zero number of arguments, and the actual list of argument `TypeId`'s.
                 // 3) The final hash is the XOR of the two hashes.
                 let qualifiers = modules.iter().map(|(m, _)| m.as_str());
-                calc_fn_hash(qualifiers, &id, 0, empty())
+                calc_script_fn_hash(qualifiers, &id, 0)
             } else {
                 // Qualifiers (none) + function name + no parameters.
-                calc_fn_hash(empty(), &id, 0, empty())
+                calc_script_fn_hash(empty(), &id, 0)
             };
 
             return Ok(Expr::FnCall(Box::new((
@@ -1515,10 +342,10 @@ fn parse_fn_call(
                     //    zero number of arguments, and the actual list of argument `TypeId`'s.
                     // 3) The final hash is the XOR of the two hashes.
                     let qualifiers = modules.iter().map(|(m, _)| m.as_str());
-                    calc_fn_hash(qualifiers, &id, args.len(), empty())
+                    calc_script_fn_hash(qualifiers, &id, args.len())
                 } else {
                     // Qualifiers (none) + function name + number of arguments.
-                    calc_fn_hash(empty(), &id, args.len(), empty())
+                    calc_script_fn_hash(empty(), &id, args.len())
                 };
 
                 return Ok(Expr::FnCall(Box::new((
@@ -1622,7 +449,7 @@ fn parse_index_chain(
                 return Err(PERR::MalformedIndexExpr(
                     "Array or string expects numeric index, not a string".into(),
                 )
-                .into_err(x.1))
+                .into_err(x.pos))
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -1872,7 +699,7 @@ fn parse_map_literal(
         }
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
-        map.push(((Into::<ImmutableString>::into(name), pos), expr));
+        map.push((IdentX::new(name, pos), expr));
 
         match input.peek().unwrap() {
             (Token::Comma, _) => {
@@ -1899,11 +726,11 @@ fn parse_map_literal(
     // Check for duplicating properties
     map.iter()
         .enumerate()
-        .try_for_each(|(i, ((k1, _), _))| {
+        .try_for_each(|(i, (IdentX { name: k1, .. }, _))| {
             map.iter()
                 .skip(i + 1)
-                .find(|((k2, _), _)| k2 == k1)
-                .map_or_else(|| Ok(()), |((k2, pos), _)| Err((k2, *pos)))
+                .find(|(IdentX { name: k2, .. }, _)| k2 == k1)
+                .map_or_else(|| Ok(()), |(IdentX { name: k2, pos }, _)| Err((k2, *pos)))
         })
         .map_err(|(key, pos)| PERR::DuplicatedProperty(key.to_string()).into_err(pos))?;
 
@@ -1940,7 +767,7 @@ fn parse_primary(
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => Expr::FloatConstant(Box::new(FloatWrapper(x, settings.pos))),
         Token::CharConstant(c) => Expr::CharConstant(Box::new((c, settings.pos))),
-        Token::StringConstant(s) => Expr::StringConstant(Box::new((s.into(), settings.pos))),
+        Token::StringConstant(s) => Expr::StringConstant(Box::new(IdentX::new(s, settings.pos))),
 
         // Function call
         Token::Identifier(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
@@ -1949,7 +776,7 @@ fn parse_primary(
             {
                 state.allow_capture = true;
             }
-            Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+            Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, None)))
         }
         // Module qualification
         #[cfg(not(feature = "no_module"))]
@@ -1959,18 +786,18 @@ fn parse_primary(
             {
                 state.allow_capture = true;
             }
-            Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+            Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, None)))
         }
         // Normal variable access
         Token::Identifier(s) => {
             let index = state.access_var(&s, settings.pos);
-            Expr::Variable(Box::new(((s, settings.pos), None, 0, index)))
+            Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, index)))
         }
 
         // Function call is allowed to have reserved keyword
         Token::Reserved(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
             if is_keyword_function(&s) {
-                Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+                Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, None)))
             } else {
                 return Err(PERR::Reserved(s).into_err(settings.pos));
             }
@@ -1984,7 +811,7 @@ fn parse_primary(
                         .into_err(settings.pos),
                 );
             } else {
-                Expr::Variable(Box::new(((s, settings.pos), None, 0, None)))
+                Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, None)))
             }
         }
 
@@ -2040,13 +867,13 @@ fn parse_primary(
                     .into_err(pos));
                 }
 
-                let ((name, pos), modules, _, _) = *x;
+                let (Ident { name, pos }, modules, _, _) = *x;
                 settings.pos = pos;
                 parse_fn_call(input, state, lib, name, true, modules, settings.level_up())?
             }
             // Function call
             (Expr::Variable(x), Token::LeftParen) => {
-                let ((name, pos), modules, _, _) = *x;
+                let (Ident { name, pos }, modules, _, _) = *x;
                 settings.pos = pos;
                 parse_fn_call(input, state, lib, name, false, modules, settings.level_up())?
             }
@@ -2054,7 +881,7 @@ fn parse_primary(
             // module access
             (Expr::Variable(x), Token::DoubleColon) => match input.next().unwrap() {
                 (Token::Identifier(id2), pos2) => {
-                    let ((name, pos), mut modules, _, index) = *x;
+                    let (Ident { name, pos }, mut modules, _, index) = *x;
 
                     if let Some(ref mut modules) = modules {
                         modules.push((name, pos));
@@ -2064,7 +891,7 @@ fn parse_primary(
                         modules = Some(Box::new(m));
                     }
 
-                    Expr::Variable(Box::new(((id2, pos2), modules, 0, index)))
+                    Expr::Variable(Box::new((Ident::new(id2, pos2), modules, 0, index)))
                 }
                 (Token::Reserved(id2), pos2) if is_valid_identifier(id2.chars()) => {
                     return Err(PERR::Reserved(id2).into_err(pos2));
@@ -2088,11 +915,11 @@ fn parse_primary(
     match &mut root_expr {
         // Cache the hash key for module-qualified variables
         Expr::Variable(x) if x.1.is_some() => {
-            let ((name, _), modules, hash, _) = x.as_mut();
+            let (Ident { name, .. }, modules, hash, _) = x.as_mut();
             let modules = modules.as_mut().unwrap();
 
             // Qualifiers + variable name
-            *hash = calc_fn_hash(modules.iter().map(|(v, _)| v.as_str()), name, 0, empty());
+            *hash = calc_script_fn_hash(modules.iter().map(|(v, _)| v.as_str()), name, 0);
 
             #[cfg(not(feature = "no_module"))]
             modules.set_index(state.find_module(&modules[0].0));
@@ -2136,10 +963,9 @@ fn parse_unary(
                         .map(|i| Expr::IntegerConstant(Box::new((i, pos))))
                         .or_else(|| {
                             #[cfg(not(feature = "no_float"))]
-                            return Some(Expr::FloatConstant(Box::new(FloatWrapper(
-                                -(x.0 as FLOAT),
-                                pos,
-                            ))));
+                            return Some(Expr::FloatConstant(Box::new(
+                                -Into::<FloatWrapper>::into(*x),
+                            )));
                             #[cfg(feature = "no_float")]
                             return None;
                         })
@@ -2148,14 +974,12 @@ fn parse_unary(
 
                 // Negative float
                 #[cfg(not(feature = "no_float"))]
-                Expr::FloatConstant(x) => {
-                    Ok(Expr::FloatConstant(Box::new(FloatWrapper(-x.0, x.1))))
-                }
+                Expr::FloatConstant(x) => Ok(Expr::FloatConstant(Box::new(-(*x)))),
 
                 // Call negative function
                 expr => {
                     let op = "-";
-                    let hash = calc_fn_hash(empty(), op, 1, empty());
+                    let hash = calc_script_fn_hash(empty(), op, 1);
                     let mut args = StaticVec::new();
                     args.push(expr);
 
@@ -2182,7 +1006,7 @@ fn parse_unary(
             args.push(expr);
 
             let op = "!";
-            let hash = calc_fn_hash(empty(), op, 1, empty());
+            let hash = calc_script_fn_hash(empty(), op, 1);
 
             Ok(Expr::FnCall(Box::new((
                 (op.into(), true, false, pos),
@@ -2222,7 +1046,7 @@ fn parse_unary(
             });
 
             // Qualifiers (none) + function name + number of arguments.
-            let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
+            let hash = calc_script_fn_hash(empty(), &func.name, func.params.len());
 
             lib.insert(hash, func);
 
@@ -2249,7 +1073,15 @@ fn make_assignment_stmt<'a>(
         }
         // var (indexed) = rhs
         Expr::Variable(x) => {
-            let ((name, name_pos), _, _, index) = x.as_ref();
+            let (
+                Ident {
+                    name,
+                    pos: name_pos,
+                },
+                _,
+                _,
+                index,
+            ) = x.as_ref();
             match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                 ScopeEntryType::Normal => {
                     Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
@@ -2268,7 +1100,15 @@ fn make_assignment_stmt<'a>(
             }
             // var[???] (indexed) = rhs, var.??? (indexed) = rhs
             Expr::Variable(x) => {
-                let ((name, name_pos), _, _, index) = x.as_ref();
+                let (
+                    Ident {
+                        name,
+                        pos: name_pos,
+                    },
+                    _,
+                    _,
+                    index,
+                ) = x.as_ref();
                 match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                     ScopeEntryType::Normal => {
                         Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
@@ -2344,7 +1184,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         }
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
-            let (name, pos) = x.0;
+            let Ident { name, pos } = x.0;
 
             let getter = make_getter(&name);
             let setter = make_setter(&name);
@@ -2639,7 +1479,7 @@ fn parse_binary_op(
 
         let cmp_def = Some(false);
         let op = op_token.syntax();
-        let hash = calc_fn_hash(empty(), &op, 2, empty());
+        let hash = calc_script_fn_hash(empty(), &op, 2);
         let op = (op, true, false, pos);
 
         let mut args = StaticVec::new();
@@ -2758,7 +1598,12 @@ fn parse_custom_syntax(
             MARKER_IDENT => match input.next().unwrap() {
                 (Token::Identifier(s), pos) => {
                     segments.push(s.clone());
-                    exprs.push(Expr::Variable(Box::new(((s, pos), None, 0, None))));
+                    exprs.push(Expr::Variable(Box::new((
+                        Ident::new(s, pos),
+                        None,
+                        0,
+                        None,
+                    ))));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
@@ -3051,12 +1896,20 @@ fn parse_let(
         // let name = expr
         ScopeEntryType::Normal => {
             state.stack.push((name.clone(), ScopeEntryType::Normal));
-            Ok(Stmt::Let(Box::new((name, pos)), init_value, token_pos))
+            Ok(Stmt::Let(
+                Box::new(Ident::new(name, pos)),
+                init_value,
+                token_pos,
+            ))
         }
         // const name = { expr:constant }
         ScopeEntryType::Constant => {
             state.stack.push((name.clone(), ScopeEntryType::Constant));
-            Ok(Stmt::Const(Box::new((name, pos)), init_value, token_pos))
+            Ok(Stmt::Const(
+                Box::new(Ident::new(name, pos)),
+                init_value,
+                token_pos,
+            ))
         }
     }
 }
@@ -3098,7 +1951,7 @@ fn parse_import(
 
     Ok(Stmt::Import(
         expr,
-        Some(Box::new((name.into(), settings.pos))),
+        Some(Box::new(IdentX::new(name, settings.pos))),
         token_pos,
     ))
 }
@@ -3131,7 +1984,7 @@ fn parse_export(
 
         let rename = if match_token(input, Token::As).0 {
             match input.next().unwrap() {
-                (Token::Identifier(s), pos) => Some((s.clone(), pos)),
+                (Token::Identifier(s), pos) => Some(Ident::new(s.clone(), pos)),
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
                 }
@@ -3142,7 +1995,7 @@ fn parse_export(
             None
         };
 
-        exports.push(((id, id_pos), rename));
+        exports.push((Ident::new(id, id_pos), rename));
 
         match input.peek().unwrap() {
             (Token::Comma, _) => {
@@ -3163,12 +2016,12 @@ fn parse_export(
     exports
         .iter()
         .enumerate()
-        .try_for_each(|(i, ((id1, _), _))| {
+        .try_for_each(|(i, (Ident { name: id1, .. }, _))| {
             exports
                 .iter()
                 .skip(i + 1)
-                .find(|((id2, _), _)| id2 == id1)
-                .map_or_else(|| Ok(()), |((id2, pos), _)| Err((id2, *pos)))
+                .find(|(Ident { name: id2, .. }, _)| id2 == id1)
+                .map_or_else(|| Ok(()), |(Ident { name: id2, pos }, _)| Err((id2, *pos)))
         })
         .map_err(|(id2, pos)| PERR::DuplicatedExport(id2.to_string()).into_err(pos))?;
 
@@ -3332,7 +2185,7 @@ fn parse_stmt(
                     let func = parse_fn(input, &mut new_state, lib, access, settings)?;
 
                     // Qualifiers (none) + function name + number of arguments.
-                    let hash = calc_fn_hash(empty(), &func.name, func.params.len(), empty());
+                    let hash = calc_script_fn_hash(empty(), &func.name, func.params.len());
 
                     lib.insert(hash, func);
 
@@ -3451,7 +2304,7 @@ fn parse_try_catch(
     // try { body } catch (
     let var_def = if match_token(input, Token::LeftParen).0 {
         let id = match input.next().unwrap() {
-            (Token::Identifier(s), pos) => (s, pos),
+            (Token::Identifier(s), pos) => Ident::new(s, pos),
             (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
         };
 
@@ -3474,9 +2327,10 @@ fn parse_try_catch(
     let catch_body = parse_block(input, state, lib, settings.level_up())?;
 
     Ok(Stmt::TryCatch(Box::new((
-        (body, token_pos),
+        body,
         var_def,
-        (catch_body, catch_pos),
+        catch_body,
+        (token_pos, catch_pos),
     ))))
 }
 
@@ -3588,11 +2442,7 @@ fn parse_fn(
 
 /// Creates a curried expression from a list of external variables
 #[cfg(not(feature = "no_function"))]
-fn make_curry_from_externals(
-    fn_expr: Expr,
-    externals: StaticVec<(String, Position)>,
-    pos: Position,
-) -> Expr {
+fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Position) -> Expr {
     if externals.is_empty() {
         return fn_expr;
     }
@@ -3603,21 +2453,16 @@ fn make_curry_from_externals(
     args.push(fn_expr);
 
     #[cfg(not(feature = "no_closure"))]
-    externals.iter().for_each(|(var_name, pos)| {
-        args.push(Expr::Variable(Box::new((
-            (var_name.into(), *pos),
-            None,
-            0,
-            None,
-        ))));
+    externals.iter().for_each(|x| {
+        args.push(Expr::Variable(Box::new((x.clone(), None, 0, None))));
     });
 
     #[cfg(feature = "no_closure")]
-    externals.into_iter().for_each(|(var_name, pos)| {
-        args.push(Expr::Variable(Box::new(((var_name, pos), None, 0, None))));
+    externals.into_iter().for_each(|x| {
+        args.push(Expr::Variable(Box::new((x.clone(), None, 0, None))));
     });
 
-    let hash = calc_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals + 1, empty());
+    let hash = calc_script_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals + 1);
 
     let expr = Expr::FnCall(Box::new((
         (KEYWORD_FN_PTR_CURRY.into(), false, false, pos),
@@ -3634,11 +2479,7 @@ fn make_curry_from_externals(
         // Statement block
         let mut statements: Vec<_> = Default::default();
         // Insert `Share` statements
-        statements.extend(
-            externals
-                .into_iter()
-                .map(|(var_name, pos)| Stmt::Share(var_name, pos)),
-        );
+        statements.extend(externals.into_iter().map(Stmt::Share));
         // Final expression
         statements.push(Stmt::Expr(expr));
         Expr::Stmt(Box::new((Stmt::Block(statements, pos), pos)))
@@ -3717,13 +2558,13 @@ fn parse_anon_fn(
 
     // External variables may need to be processed in a consistent order,
     // so extract them into a list.
-    let externals: StaticVec<_> = {
+    let externals: StaticVec<Ident> = {
         #[cfg(not(feature = "no_closure"))]
         {
             state
                 .externals
                 .iter()
-                .map(|(k, &v)| (k.clone(), v))
+                .map(|(k, &v)| Ident::new(k.clone(), v))
                 .collect()
         }
         #[cfg(feature = "no_closure")]
@@ -3733,8 +2574,7 @@ fn parse_anon_fn(
     let params: StaticVec<_> = if cfg!(not(feature = "no_closure")) {
         externals
             .iter()
-            .map(|(k, _)| k)
-            .cloned()
+            .map(|k| k.name.clone())
             .chain(params.into_iter().map(|(v, _)| v))
             .collect()
     } else {
@@ -3767,7 +2607,7 @@ fn parse_anon_fn(
         lib: None,
     };
 
-    let expr = Expr::FnPointer(Box::new((fn_name, settings.pos)));
+    let expr = Expr::FnPointer(Box::new(IdentX::new(fn_name, settings.pos)));
 
     let expr = if cfg!(not(feature = "no_closure")) {
         make_curry_from_externals(expr, externals, settings.pos)
@@ -3920,7 +2760,7 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         Union::Unit(_) => Some(Expr::Unit(pos)),
         Union::Int(value) => Some(Expr::IntegerConstant(Box::new((value, pos)))),
         Union::Char(value) => Some(Expr::CharConstant(Box::new((value, pos)))),
-        Union::Str(value) => Some(Expr::StringConstant(Box::new((value, pos)))),
+        Union::Str(value) => Some(Expr::StringConstant(Box::new(IdentX::new(value, pos)))),
         Union::Bool(true) => Some(Expr::True(pos)),
         Union::Bool(false) => Some(Expr::False(pos)),
         #[cfg(not(feature = "no_index"))]
@@ -3943,14 +2783,14 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         Union::Map(map) => {
             let items: Vec<_> = map
                 .into_iter()
-                .map(|(k, v)| ((k, pos), map_dynamic_to_expr(v, pos)))
+                .map(|(k, v)| (IdentX::new(k, pos), map_dynamic_to_expr(v, pos)))
                 .collect();
 
             if items.iter().all(|(_, expr)| expr.is_some()) {
                 Some(Expr::Map(Box::new((
                     items
                         .into_iter()
-                        .map(|((k, pos), expr)| ((k, pos), expr.unwrap()))
+                        .map(|(k, expr)| (k, expr.unwrap()))
                         .collect(),
                     pos,
                 ))))

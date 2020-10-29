@@ -1,21 +1,21 @@
 //! Module defining external-loaded modules for Rhai.
 
-use crate::any::{Dynamic, Variant};
+use crate::ast::FnAccess;
+use crate::dynamic::{Dynamic, Variant};
 use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, NativeCallContext, SendSync};
 use crate::fn_register::by_value as cast_arg;
-use crate::parser::FnAccess;
 use crate::result::EvalAltResult;
 use crate::token::{Position, Token};
 use crate::utils::{ImmutableString, StraightHasherBuilder};
-use crate::{calc_fn_hash, StaticVec};
+use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_function"))]
-use crate::{fn_native::Shared, parser::ScriptFnDef};
+use crate::{ast::ScriptFnDef, fn_native::Shared};
 
 #[cfg(not(feature = "no_module"))]
 use crate::{
+    ast::AST,
     engine::{Engine, Imports},
-    parser::AST,
     scope::{Entry as ScopeEntry, Scope},
 };
 
@@ -268,7 +268,7 @@ impl Module {
     /// Get a mutable reference to a modules-qualified variable.
     /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
-    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
+    /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash`.
     #[inline(always)]
     pub(crate) fn get_qualified_var_mut(
         &mut self,
@@ -291,7 +291,7 @@ impl Module {
     pub(crate) fn set_script_fn(&mut self, fn_def: Shared<ScriptFnDef>) -> u64 {
         // None + function name + number of arguments.
         let num_params = fn_def.params.len();
-        let hash_script = calc_fn_hash(empty(), &fn_def.name, num_params, empty());
+        let hash_script = calc_script_fn_hash(empty(), &fn_def.name, num_params);
         self.functions.insert(
             hash_script,
             (
@@ -399,7 +399,7 @@ impl Module {
 
     /// Does the particular Rust function exist in the module?
     ///
-    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
+    /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash`.
     /// It is also returned by the `set_fn_XXX` calls.
     ///
     /// # Example
@@ -441,31 +441,24 @@ impl Module {
     ) -> u64 {
         let name = name.into();
 
-        let args_len = if arg_types.is_empty() {
-            // Distinguish between a script function and a function with no parameters
-            usize::MAX
-        } else {
-            arg_types.len()
-        };
+        let hash_fn = calc_native_fn_hash(empty(), &name, arg_types.iter().cloned());
 
         let params = arg_types
             .into_iter()
             .cloned()
             .map(|id| {
-                if id == TypeId::of::<&str>() {
-                    TypeId::of::<ImmutableString>()
-                } else if id == TypeId::of::<String>() {
+                if id == TypeId::of::<&str>() || id == TypeId::of::<String>() {
                     TypeId::of::<ImmutableString>()
                 } else {
                     id
                 }
             })
-            .collect();
+            .collect::<StaticVec<_>>();
 
-        let hash_fn = calc_fn_hash(empty(), &name, args_len, arg_types.iter().cloned());
-
-        self.functions
-            .insert(hash_fn, (name, access, args_len, Some(params), func.into()));
+        self.functions.insert(
+            hash_fn,
+            (name, access, params.len(), Some(params), func.into()),
+        );
 
         self.indexed = false;
 
@@ -1094,7 +1087,7 @@ impl Module {
 
     /// Get a Rust function.
     ///
-    /// The `u64` hash is calculated by the function `crate::calc_fn_hash`.
+    /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash`.
     /// It is also returned by the `set_fn_XXX` calls.
     #[inline(always)]
     pub(crate) fn get_fn(&self, hash_fn: u64, public_only: bool) -> Option<&CallableFunction> {
@@ -1114,7 +1107,7 @@ impl Module {
     /// Get a modules-qualified function.
     /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
-    /// The `u64` hash is calculated by the function `crate::calc_fn_hash` and must match
+    /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash` and must match
     /// the hash calculated by `index_all_sub_modules`.
     #[inline(always)]
     pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
@@ -1408,7 +1401,7 @@ impl Module {
             // Index all variables
             module.variables.iter().for_each(|(var_name, value)| {
                 // Qualifiers + variable name
-                let hash_var = calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, 0, empty());
+                let hash_var = calc_script_fn_hash(qualifiers.iter().map(|&v| v), var_name, 0);
                 variables.push((hash_var, value.clone()));
             });
             // Index all Rust functions
@@ -1422,10 +1415,10 @@ impl Module {
                         // 1) Calculate a hash in a similar manner to script-defined functions,
                         //    i.e. qualifiers + function name + number of arguments.
                         let hash_qualified_script =
-                            calc_fn_hash(qualifiers.iter().cloned(), name, params.len(), empty());
+                            calc_script_fn_hash(qualifiers.iter().cloned(), name, params.len());
                         // 2) Calculate a second hash with no qualifiers, empty function name,
-                        //    zero number of arguments, and the actual list of argument `TypeId`'.s
-                        let hash_fn_args = calc_fn_hash(empty(), "", 0, params.iter().cloned());
+                        //    and the actual list of argument `TypeId`'.s
+                        let hash_fn_args = calc_native_fn_hash(empty(), "", params.iter().cloned());
                         // 3) The final hash is the XOR of the two hashes.
                         let hash_qualified_fn = hash_qualified_script ^ hash_fn_args;
 
@@ -1435,12 +1428,7 @@ impl Module {
                             _hash
                         } else {
                             // Qualifiers + function name + number of arguments.
-                            calc_fn_hash(
-                                qualifiers.iter().map(|&v| v),
-                                &name,
-                                *_num_params,
-                                empty(),
-                            )
+                            calc_script_fn_hash(qualifiers.iter().map(|&v| v), &name, *_num_params)
                         };
                         functions.push((hash_qualified_script, func.clone()));
                     }

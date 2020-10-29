@@ -1,8 +1,8 @@
 //! Implement deserialization support of `Dynamic` for [`serde`](https://crates.io/crates/serde).
 
 use super::str::ImmutableStringDeserializer;
-use crate::any::{Dynamic, Union};
-use crate::error::ParseErrorType;
+use crate::dynamic::{Dynamic, Union};
+use crate::parse_error::ParseErrorType;
 use crate::result::EvalAltResult;
 use crate::token::Position;
 use crate::utils::ImmutableString;

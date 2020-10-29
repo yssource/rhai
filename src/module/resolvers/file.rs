@@ -1,7 +1,7 @@
+use crate::ast::AST;
 use crate::engine::Engine;
 use crate::fn_native::Locked;
 use crate::module::{Module, ModuleResolver};
-use crate::parser::AST;
 use crate::result::EvalAltResult;
 use crate::token::Position;
 

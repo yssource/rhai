@@ -5,7 +5,9 @@ Rhai Release Notes
 Version 0.19.4
 ==============
 
-This version adds a low-level API for more flexibility when defining custom syntax.
+This version basically cleans up the code structure in preparation for a potential `1.0` release in the future.
+
+This version also adds a low-level API for more flexibility when defining custom syntax.
 
 Bug fixes
 ---------
@@ -23,6 +25,11 @@ New features
 
 * Low-level API for custom syntax allowing more flexibility in designing the syntax.
 * `Module::fill_with` to poly-fill a module with another.
+
+Enhancements
+------------
+
+* AST data structures are optimized to maximize cache friendliness. This may have speed impacts on large, complex scripts (benchmarks wanted!).
 
 
 Version 0.19.3

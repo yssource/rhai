@@ -1,14 +1,15 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
 use crate::fn_native::{FnPtr, SendSync};
-use crate::parser::{ImmutableString, INT};
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
+use crate::utils::ImmutableString;
+use crate::INT;
 
 #[cfg(not(feature = "no_closure"))]
 use crate::fn_native::{shared_try_take, Locked, Shared};
 
 #[cfg(not(feature = "no_float"))]
-use crate::parser::FLOAT;
+use crate::FLOAT;
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;

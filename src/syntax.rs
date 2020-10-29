@@ -1,10 +1,10 @@
 //! Module implementing custom syntax for `Engine`.
 
-use crate::any::Dynamic;
+use crate::ast::Expr;
+use crate::dynamic::Dynamic;
 use crate::engine::{Engine, EvalContext, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
-use crate::error::{LexError, ParseError};
 use crate::fn_native::{SendSync, Shared};
-use crate::parser::Expr;
+use crate::parse_error::{LexError, ParseError};
 use crate::result::EvalAltResult;
 use crate::token::{is_valid_identifier, Position, Token};
 use crate::utils::ImmutableString;

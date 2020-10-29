@@ -2,14 +2,14 @@
 
 use super::{arithmetic::make_err as make_arithmetic_err, math_basic::MAX_INT};
 
-use crate::any::Dynamic;
 use crate::def_package;
-use crate::parser::INT;
+use crate::dynamic::Dynamic;
 use crate::plugin::*;
 use crate::result::EvalAltResult;
+use crate::INT;
 
 #[cfg(not(feature = "no_float"))]
-use crate::parser::FLOAT;
+use crate::FLOAT;
 
 use crate::stdlib::boxed::Box;
 
