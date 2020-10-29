@@ -21,6 +21,7 @@ use crate::engine::{make_getter, make_setter, Map};
 use crate::stdlib::{
     any::TypeId,
     borrow::Cow,
+    boxed::Box,
     fmt,
     hash::{Hash, Hasher},
     num::NonZeroUsize,

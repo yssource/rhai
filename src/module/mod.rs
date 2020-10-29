@@ -10,7 +10,7 @@ use crate::utils::{ImmutableString, StraightHasherBuilder};
 use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_function"))]
-use crate::{fn_native::Shared, ast::ScriptFnDef};
+use crate::{ast::ScriptFnDef, fn_native::Shared};
 
 #[cfg(not(feature = "no_module"))]
 use crate::{
