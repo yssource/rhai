@@ -215,6 +215,10 @@ mod float_functions {
             Ok((x.trunc() as INT).into())
         }
     }
+    #[rhai_fn(name = "to_float")]
+    pub fn f32_to_float(x: f32) -> FLOAT {
+        x as FLOAT
+    }
     #[rhai_fn(name = "to_int", return_raw)]
     pub fn f64_to_int(x: f64) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f64) {
