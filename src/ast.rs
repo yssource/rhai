@@ -539,7 +539,7 @@ impl AsRef<Module> for AST {
 }
 
 /// An identifier containing a string name and a position.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Ident {
     pub name: String,
     pub pos: Position,
@@ -553,7 +553,7 @@ impl Ident {
 }
 
 /// An identifier containing an immutable name and a position.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct IdentX {
     pub name: ImmutableString,
     pub pos: Position,
@@ -903,7 +903,7 @@ pub enum Expr {
     StringConstant(Box<IdentX>),
     /// FnPtr constant.
     FnPointer(Box<IdentX>),
-    /// Variable access - ((variable name, position), optional modules, hash, optional index)
+    /// Variable access - (variable name, optional modules, hash, optional index)
     Variable(Box<(Ident, Option<ModuleRef>, u64, Option<NonZeroUsize>)>),
     /// Property access.
     Property(Box<(IdentX, (String, String))>),

@@ -1,6 +1,6 @@
 //! Module defining external-loaded modules for Rhai.
 
-use crate::ast::FnAccess;
+use crate::ast::{FnAccess, Ident};
 use crate::dynamic::{Dynamic, Variant};
 use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, NativeCallContext, SendSync};
 use crate::fn_register::by_value as cast_arg;
@@ -1502,7 +1502,7 @@ impl Module {
 ///
 /// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
-pub struct ModuleRef(StaticVec<(String, Position)>, Option<NonZeroUsize>);
+pub struct ModuleRef(StaticVec<Ident>, Option<NonZeroUsize>);
 
 impl fmt::Debug for ModuleRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1517,7 +1517,7 @@ impl fmt::Debug for ModuleRef {
 }
 
 impl Deref for ModuleRef {
-    type Target = StaticVec<(String, Position)>;
+    type Target = StaticVec<Ident>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -1532,15 +1532,15 @@ impl DerefMut for ModuleRef {
 
 impl fmt::Display for ModuleRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (m, _) in self.0.iter() {
-            write!(f, "{}{}", m, Token::DoubleColon.syntax())?;
+        for Ident { name, .. } in self.0.iter() {
+            write!(f, "{}{}", name, Token::DoubleColon.syntax())?;
         }
         Ok(())
     }
 }
 
-impl From<StaticVec<(String, Position)>> for ModuleRef {
-    fn from(modules: StaticVec<(String, Position)>) -> Self {
+impl From<StaticVec<Ident>> for ModuleRef {
+    fn from(modules: StaticVec<Ident>) -> Self {
         Self(modules, None)
     }
 }
