@@ -1094,7 +1094,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        modules: &Option<Box<ModuleRef>>,
+        modules: &Option<ModuleRef>,
         name: &str,
         args_expr: impl AsRef<[Expr]>,
         def_val: Option<bool>,

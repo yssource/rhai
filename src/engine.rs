@@ -589,7 +589,7 @@ fn default_print(_s: &str) {
 pub fn search_imports<'s>(
     mods: &'s Imports,
     state: &mut State,
-    modules: &Box<ModuleRef>,
+    modules: &ModuleRef,
 ) -> Result<&'s Module, Box<EvalAltResult>> {
     let (root, root_pos) = &modules[0];
 
@@ -617,7 +617,7 @@ pub fn search_imports<'s>(
 pub fn search_imports_mut<'s>(
     mods: &'s mut Imports,
     state: &mut State,
-    modules: &Box<ModuleRef>,
+    modules: &ModuleRef,
 ) -> Result<&'s mut Module, Box<EvalAltResult>> {
     let (root, root_pos) = &modules[0];
 

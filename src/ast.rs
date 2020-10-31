@@ -866,7 +866,7 @@ pub struct FnCallInfo {
     /// and the function names are predictable, so no need to allocate a new `String`.
     pub name: Cow<'static, str>,
     /// Namespace of the function, if any.
-    pub namespace: Option<Box<ModuleRef>>,
+    pub namespace: Option<ModuleRef>,
     /// Call native functions only? Set to `true` to skip searching for script-defined function overrides
     /// when it is certain that the function must be native (e.g. an operator).
     pub native_only: bool,
@@ -904,7 +904,7 @@ pub enum Expr {
     /// FnPtr constant.
     FnPointer(Box<IdentX>),
     /// Variable access - ((variable name, position), optional modules, hash, optional index)
-    Variable(Box<(Ident, Option<Box<ModuleRef>>, u64, Option<NonZeroUsize>)>),
+    Variable(Box<(Ident, Option<ModuleRef>, u64, Option<NonZeroUsize>)>),
     /// Property access.
     Property(Box<(IdentX, (String, String))>),
     /// { stmt }

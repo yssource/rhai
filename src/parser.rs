@@ -265,7 +265,7 @@ fn parse_fn_call(
     lib: &mut FunctionsLib,
     id: String,
     capture: bool,
-    mut namespace: Option<Box<ModuleRef>>,
+    mut namespace: Option<ModuleRef>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
     let (token, token_pos) = input.peek().unwrap();
@@ -898,7 +898,7 @@ fn parse_primary(
                     } else {
                         let mut m: ModuleRef = Default::default();
                         m.push((name, pos));
-                        modules = Some(Box::new(m));
+                        modules = Some(m);
                     }
 
                     Expr::Variable(Box::new((Ident::new(id2, pos2), modules, 0, index)))
