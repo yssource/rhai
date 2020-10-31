@@ -1,6 +1,8 @@
 //! Main module defining the lexer and parser.
 
-use crate::ast::{BinaryExpr, CustomExpr, Expr, Ident, IdentX, ReturnType, ScriptFnDef, Stmt, AST};
+use crate::ast::{
+    BinaryExpr, CustomExpr, Expr, FnCallInfo, Ident, IdentX, ReturnType, ScriptFnDef, Stmt, AST,
+};
 use crate::dynamic::{Dynamic, Union};
 use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::module::ModuleRef;
@@ -263,7 +265,7 @@ fn parse_fn_call(
     lib: &mut FunctionsLib,
     id: String,
     capture: bool,
-    mut modules: Option<Box<ModuleRef>>,
+    mut namespace: Option<Box<ModuleRef>>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
     let (token, token_pos) = input.peek().unwrap();
@@ -288,7 +290,7 @@ fn parse_fn_call(
         Token::RightParen => {
             eat_token(input, Token::RightParen);
 
-            let hash_script = if let Some(modules) = modules.as_mut() {
+            let hash_script = if let Some(modules) = namespace.as_mut() {
                 #[cfg(not(feature = "no_module"))]
                 modules.set_index(state.find_module(&modules[0].0));
 
@@ -305,13 +307,15 @@ fn parse_fn_call(
                 calc_script_fn_hash(empty(), &id, 0)
             };
 
-            return Ok(Expr::FnCall(Box::new((
-                (id.into(), false, capture, settings.pos),
-                modules,
-                hash_script,
+            return Ok(Expr::FnCall(Box::new(FnCallInfo {
+                name: id.into(),
+                capture,
+                namespace,
+                hash: hash_script,
                 args,
-                None,
-            ))));
+                pos: settings.pos,
+                ..Default::default()
+            })));
         }
         // id...
         _ => (),
@@ -331,7 +335,7 @@ fn parse_fn_call(
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
 
-                let hash_script = if let Some(modules) = modules.as_mut() {
+                let hash_script = if let Some(modules) = namespace.as_mut() {
                     #[cfg(not(feature = "no_module"))]
                     modules.set_index(state.find_module(&modules[0].0));
 
@@ -348,13 +352,15 @@ fn parse_fn_call(
                     calc_script_fn_hash(empty(), &id, args.len())
                 };
 
-                return Ok(Expr::FnCall(Box::new((
-                    (id.into(), false, capture, settings.pos),
-                    modules,
-                    hash_script,
+                return Ok(Expr::FnCall(Box::new(FnCallInfo {
+                    name: id.into(),
+                    capture,
+                    namespace,
+                    hash: hash_script,
                     args,
-                    None,
-                ))));
+                    pos: settings.pos,
+                    ..Default::default()
+                })));
             }
             // id(...args,
             (Token::Comma, _) => {
@@ -400,32 +406,32 @@ fn parse_index_chain(
     // Check type of indexing - must be integer or string
     match &idx_expr {
         // lhs[int]
-        Expr::IntegerConstant(x) if x.0 < 0 => {
+        Expr::IntegerConstant(x, pos) if *x < 0 => {
             return Err(PERR::MalformedIndexExpr(format!(
                 "Array access expects non-negative index: {} < 0",
-                x.0
+                *x
             ))
-            .into_err(x.1))
+            .into_err(*pos))
         }
-        Expr::IntegerConstant(x) => match lhs {
+        Expr::IntegerConstant(_, pos) => match lhs {
             Expr::Array(_) | Expr::StringConstant(_) => (),
 
             Expr::Map(_) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Object map access expects string index, not a number".into(),
                 )
-                .into_err(x.1))
+                .into_err(*pos))
             }
 
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(_) => {
+            Expr::FloatConstant(_, _) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
                 .into_err(lhs.position()))
             }
 
-            Expr::CharConstant(_)
+            Expr::CharConstant(_, _)
             | Expr::And(_)
             | Expr::Or(_)
             | Expr::In(_)
@@ -453,14 +459,14 @@ fn parse_index_chain(
             }
 
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(_) => {
+            Expr::FloatConstant(_, _) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
                 )
                 .into_err(lhs.position()))
             }
 
-            Expr::CharConstant(_)
+            Expr::CharConstant(_, _)
             | Expr::And(_)
             | Expr::Or(_)
             | Expr::In(_)
@@ -478,14 +484,14 @@ fn parse_index_chain(
 
         // lhs[float]
         #[cfg(not(feature = "no_float"))]
-        x @ Expr::FloatConstant(_) => {
+        x @ Expr::FloatConstant(_, _) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a float".into(),
             )
             .into_err(x.position()))
         }
         // lhs[char]
-        x @ Expr::CharConstant(_) => {
+        x @ Expr::CharConstant(_, _) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a character".into(),
             )
@@ -754,7 +760,7 @@ fn parse_primary(
         // { - block statement as expression
         Token::LeftBrace if settings.allow_stmt_expr => {
             return parse_block(input, state, lib, settings.level_up())
-                .map(|block| Expr::Stmt(Box::new((block, settings.pos))))
+                .map(|block| Expr::Stmt(Box::new(block), settings.pos))
         }
         Token::EOF => return Err(PERR::UnexpectedEOF.into_err(settings.pos)),
         _ => input.next().unwrap(),
@@ -763,10 +769,10 @@ fn parse_primary(
     let (next_token, _) = input.peek().unwrap();
 
     let mut root_expr = match token {
-        Token::IntegerConstant(x) => Expr::IntegerConstant(Box::new((x, settings.pos))),
+        Token::IntegerConstant(x) => Expr::IntegerConstant(x, settings.pos),
         #[cfg(not(feature = "no_float"))]
-        Token::FloatConstant(x) => Expr::FloatConstant(Box::new(FloatWrapper(x, settings.pos))),
-        Token::CharConstant(c) => Expr::CharConstant(Box::new((c, settings.pos))),
+        Token::FloatConstant(x) => Expr::FloatConstant(FloatWrapper(x), settings.pos),
+        Token::CharConstant(c) => Expr::CharConstant(c, settings.pos),
         Token::StringConstant(s) => Expr::StringConstant(Box::new(IdentX::new(s, settings.pos))),
 
         // Function call
@@ -946,35 +952,30 @@ fn parse_unary(
 
     match token {
         // If statement is allowed to act as expressions
-        Token::If if settings.allow_if_expr => Ok(Expr::Stmt(Box::new((
-            parse_if(input, state, lib, settings.level_up())?,
+        Token::If if settings.allow_if_expr => Ok(Expr::Stmt(
+            Box::new(parse_if(input, state, lib, settings.level_up())?),
             settings.pos,
-        )))),
+        )),
         // -expr
         Token::UnaryMinus => {
             let pos = eat_token(input, Token::UnaryMinus);
 
             match parse_unary(input, state, lib, settings.level_up())? {
                 // Negative integer
-                Expr::IntegerConstant(x) => {
-                    let (num, pos) = *x;
-
-                    num.checked_neg()
-                        .map(|i| Expr::IntegerConstant(Box::new((i, pos))))
-                        .or_else(|| {
-                            #[cfg(not(feature = "no_float"))]
-                            return Some(Expr::FloatConstant(Box::new(
-                                -Into::<FloatWrapper>::into(*x),
-                            )));
-                            #[cfg(feature = "no_float")]
-                            return None;
-                        })
-                        .ok_or_else(|| LexError::MalformedNumber(format!("-{}", x.0)).into_err(pos))
-                }
+                Expr::IntegerConstant(num, pos) => num
+                    .checked_neg()
+                    .map(|i| Expr::IntegerConstant(i, pos))
+                    .or_else(|| {
+                        #[cfg(not(feature = "no_float"))]
+                        return Some(Expr::FloatConstant(-Into::<FloatWrapper>::into(num), pos));
+                        #[cfg(feature = "no_float")]
+                        return None;
+                    })
+                    .ok_or_else(|| LexError::MalformedNumber(format!("-{}", num)).into_err(pos)),
 
                 // Negative float
                 #[cfg(not(feature = "no_float"))]
-                Expr::FloatConstant(x) => Ok(Expr::FloatConstant(Box::new(-(*x)))),
+                Expr::FloatConstant(x, pos) => Ok(Expr::FloatConstant(-x, pos)),
 
                 // Call negative function
                 expr => {
@@ -983,13 +984,15 @@ fn parse_unary(
                     let mut args = StaticVec::new();
                     args.push(expr);
 
-                    Ok(Expr::FnCall(Box::new((
-                        (op.into(), true, false, pos),
-                        None,
+                    Ok(Expr::FnCall(Box::new(FnCallInfo {
+                        name: op.into(),
+                        native_only: true,
+                        namespace: None,
                         hash,
                         args,
-                        None,
-                    ))))
+                        pos,
+                        ..Default::default()
+                    })))
                 }
             }
         }
@@ -1008,13 +1011,15 @@ fn parse_unary(
             let op = "!";
             let hash = calc_script_fn_hash(empty(), op, 1);
 
-            Ok(Expr::FnCall(Box::new((
-                (op.into(), true, false, pos),
-                None,
+            Ok(Expr::FnCall(Box::new(FnCallInfo {
+                name: op.into(),
+                native_only: true,
                 hash,
                 args,
-                Some(false), // NOT operator, when operating on invalid operand, defaults to false
-            ))))
+                def_value: Some(false), // NOT operator, when operating on invalid operand, defaults to false
+                pos,
+                ..Default::default()
+            })))
         }
         // | ...
         #[cfg(not(feature = "no_function"))]
@@ -1184,11 +1189,10 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         }
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
-            let Ident { name, pos } = x.0;
-
-            let getter = make_getter(&name);
-            let setter = make_setter(&name);
-            let rhs = Expr::Property(Box::new(((name.into(), getter, setter), pos)));
+            let ident = x.0;
+            let getter = make_getter(&ident.name);
+            let setter = make_setter(&ident.name);
+            let rhs = Expr::Property(Box::new((ident.into(), (getter, setter))));
 
             Expr::Dot(Box::new(BinaryExpr {
                 lhs,
@@ -1234,21 +1238,20 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         }
         // lhs.Fn() or lhs.eval()
         (_, Expr::FnCall(x))
-            if x.3.len() == 0 && [KEYWORD_FN_PTR, KEYWORD_EVAL].contains(&(x.0).0.as_ref()) =>
+            if x.args.len() == 0 && [KEYWORD_FN_PTR, KEYWORD_EVAL].contains(&x.name.as_ref()) =>
         {
             return Err(PERR::BadInput(format!(
                 "'{}' should not be called in method style. Try {}(...);",
-                (x.0).0,
-                (x.0).0
+                x.name, x.name
             ))
-            .into_err((x.0).3));
+            .into_err(x.pos));
         }
         // lhs.func!(...)
-        (_, Expr::FnCall(x)) if (x.0).2 => {
+        (_, Expr::FnCall(x)) if x.capture => {
             return Err(PERR::MalformedCapture(
                 "method-call style does not support capturing".into(),
             )
-            .into_err((x.0).3))
+            .into_err(x.pos));
         }
         // lhs.func(...)
         (lhs, func @ Expr::FnCall(_)) => Expr::Dot(Box::new(BinaryExpr {
@@ -1264,7 +1267,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
 /// Make an 'in' expression.
 fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseError> {
     match (&lhs, &rhs) {
-        (_, x @ Expr::IntegerConstant(_))
+        (_, x @ Expr::IntegerConstant(_, _))
         | (_, x @ Expr::And(_))
         | (_, x @ Expr::Or(_))
         | (_, x @ Expr::In(_))
@@ -1278,7 +1281,7 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
         }
 
         #[cfg(not(feature = "no_float"))]
-        (_, x @ Expr::FloatConstant(_)) => {
+        (_, x @ Expr::FloatConstant(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression expects a string, array or object map".into(),
             )
@@ -1287,18 +1290,18 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
 
         // "xxx" in "xxxx", 'x' in "xxxx" - OK!
         (Expr::StringConstant(_), Expr::StringConstant(_))
-        | (Expr::CharConstant(_), Expr::StringConstant(_)) => (),
+        | (Expr::CharConstant(_, _), Expr::StringConstant(_)) => (),
 
         // 123.456 in "xxxx"
         #[cfg(not(feature = "no_float"))]
-        (x @ Expr::FloatConstant(_), Expr::StringConstant(_)) => {
+        (x @ Expr::FloatConstant(_, _), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not a float".into(),
             )
             .into_err(x.position()))
         }
         // 123 in "xxxx"
-        (x @ Expr::IntegerConstant(_), Expr::StringConstant(_)) => {
+        (x @ Expr::IntegerConstant(_, _), Expr::StringConstant(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not a number".into(),
             )
@@ -1339,18 +1342,18 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
         }
 
         // "xxx" in #{...}, 'x' in #{...} - OK!
-        (Expr::StringConstant(_), Expr::Map(_)) | (Expr::CharConstant(_), Expr::Map(_)) => (),
+        (Expr::StringConstant(_), Expr::Map(_)) | (Expr::CharConstant(_, _), Expr::Map(_)) => (),
 
         // 123.456 in #{...}
         #[cfg(not(feature = "no_float"))]
-        (x @ Expr::FloatConstant(_), Expr::Map(_)) => {
+        (x @ Expr::FloatConstant(_, _), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not a float".into(),
             )
             .into_err(x.position()))
         }
         // 123 in #{...}
-        (x @ Expr::IntegerConstant(_), Expr::Map(_)) => {
+        (x @ Expr::IntegerConstant(_, _), Expr::Map(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not a number".into(),
             )
@@ -1480,7 +1483,14 @@ fn parse_binary_op(
         let cmp_def = Some(false);
         let op = op_token.syntax();
         let hash = calc_script_fn_hash(empty(), &op, 2);
-        let op = (op, true, false, pos);
+
+        let op_base = FnCallInfo {
+            name: op,
+            native_only: true,
+            capture: false,
+            pos,
+            ..Default::default()
+        };
 
         let mut args = StaticVec::new();
         args.push(root);
@@ -1497,17 +1507,31 @@ fn parse_binary_op(
             | Token::PowerOf
             | Token::Ampersand
             | Token::Pipe
-            | Token::XOr => Expr::FnCall(Box::new((op, None, hash, args, None))),
+            | Token::XOr => Expr::FnCall(Box::new(FnCallInfo {
+                hash,
+                args,
+                ..op_base
+            })),
 
             // '!=' defaults to true when passed invalid operands
-            Token::NotEqualsTo => Expr::FnCall(Box::new((op, None, hash, args, Some(true)))),
+            Token::NotEqualsTo => Expr::FnCall(Box::new(FnCallInfo {
+                hash,
+                args,
+                def_value: Some(true),
+                ..op_base
+            })),
 
             // Comparison operators default to false when passed invalid operands
             Token::EqualsTo
             | Token::LessThan
             | Token::LessThanEqualsTo
             | Token::GreaterThan
-            | Token::GreaterThanEqualsTo => Expr::FnCall(Box::new((op, None, hash, args, cmp_def))),
+            | Token::GreaterThanEqualsTo => Expr::FnCall(Box::new(FnCallInfo {
+                hash,
+                args,
+                def_value: cmp_def,
+                ..op_base
+            })),
 
             Token::Or => {
                 let rhs = args.pop().unwrap();
@@ -1542,8 +1566,12 @@ fn parse_binary_op(
 
             Token::Custom(s) if state.engine.custom_keywords.contains_key(&s) => {
                 // Accept non-native functions for custom operators
-                let op = (op.0, false, op.2, op.3);
-                Expr::FnCall(Box::new((op, None, hash, args, None)))
+                Expr::FnCall(Box::new(FnCallInfo {
+                    hash,
+                    args,
+                    native_only: false,
+                    ..op_base
+                }))
             }
 
             op_token => return Err(PERR::UnknownOperator(op_token.into()).into_err(pos)),
@@ -1617,7 +1645,7 @@ fn parse_custom_syntax(
             MARKER_BLOCK => {
                 let stmt = parse_block(input, state, lib, settings)?;
                 let pos = stmt.position();
-                exprs.push(Expr::Stmt(Box::new((stmt, pos))));
+                exprs.push(Expr::Stmt(Box::new(stmt), pos));
                 segments.push(MARKER_BLOCK.into());
             }
             s => match input.next().unwrap() {
@@ -2464,13 +2492,13 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
 
     let hash = calc_script_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals + 1);
 
-    let expr = Expr::FnCall(Box::new((
-        (KEYWORD_FN_PTR_CURRY.into(), false, false, pos),
-        None,
+    let expr = Expr::FnCall(Box::new(FnCallInfo {
+        name: KEYWORD_FN_PTR_CURRY.into(),
         hash,
         args,
-        None,
-    )));
+        pos,
+        ..Default::default()
+    }));
 
     // If there are captured variables, convert the entire expression into a statement block,
     // then insert the relevant `Share` statements.
@@ -2479,10 +2507,10 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
         // Statement block
         let mut statements: Vec<_> = Default::default();
         // Insert `Share` statements
-        statements.extend(externals.into_iter().map(Stmt::Share));
+        statements.extend(externals.into_iter().map(|x| Stmt::Share(Box::new(x))));
         // Final expression
         statements.push(Stmt::Expr(expr));
-        Expr::Stmt(Box::new((Stmt::Block(statements, pos), pos)))
+        Expr::Stmt(Box::new(Stmt::Block(statements, pos)), pos)
     }
 
     #[cfg(feature = "no_closure")]
@@ -2755,11 +2783,11 @@ impl Engine {
 pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
     match value.0 {
         #[cfg(not(feature = "no_float"))]
-        Union::Float(value) => Some(Expr::FloatConstant(Box::new(FloatWrapper(value, pos)))),
+        Union::Float(value) => Some(Expr::FloatConstant(FloatWrapper(value), pos)),
 
         Union::Unit(_) => Some(Expr::Unit(pos)),
-        Union::Int(value) => Some(Expr::IntegerConstant(Box::new((value, pos)))),
-        Union::Char(value) => Some(Expr::CharConstant(Box::new((value, pos)))),
+        Union::Int(value) => Some(Expr::IntegerConstant(value, pos)),
+        Union::Char(value) => Some(Expr::CharConstant(value, pos)),
         Union::Str(value) => Some(Expr::StringConstant(Box::new(IdentX::new(value, pos)))),
         Union::Bool(true) => Some(Expr::True(pos)),
         Union::Bool(false) => Some(Expr::False(pos)),

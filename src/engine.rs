@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::ast::{BinaryExpr, Expr, Ident, ReturnType, Stmt};
+use crate::ast::{BinaryExpr, Expr, FnCallInfo, Ident, IdentX, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, Dynamic, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{Callback, FnPtr, OnVarCallback};
@@ -968,12 +968,20 @@ impl Engine {
             ChainType::Dot => {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
-                    Expr::FnCall(x) if x.1.is_none() => {
-                        let ((name, native, _, pos), _, hash, _, def_val) = x.as_ref();
-                        let def_val = def_val.map(Into::<Dynamic>::into);
+                    Expr::FnCall(x) if x.namespace.is_none() => {
+                        let FnCallInfo {
+                            name,
+                            native_only: native,
+                            pos,
+                            hash,
+                            def_value,
+                            ..
+                        } = x.as_ref();
+                        let def_value = def_value.map(Into::<Dynamic>::into);
                         let args = idx_val.as_fn_call_args();
                         self.make_method_call(
-                            state, lib, name, *hash, target, args, &def_val, *native, false, level,
+                            state, lib, name, *hash, target, args, &def_value, *native, false,
+                            level,
                         )
                         .map_err(|err| err.fill_position(*pos))
                     }
@@ -981,8 +989,8 @@ impl Engine {
                     Expr::FnCall(_) => unreachable!(),
                     // {xxx:map}.id = ???
                     Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
-                        let ((prop, _, _), pos) = x.as_ref();
-                        let index = prop.clone().into();
+                        let IdentX { name, pos } = &x.0;
+                        let index = name.clone().into();
                         let mut val = self
                             .get_indexed_mut(state, lib, target, index, *pos, true, false, level)?;
 
@@ -991,8 +999,8 @@ impl Engine {
                     }
                     // {xxx:map}.id
                     Expr::Property(x) if target.is::<Map>() => {
-                        let ((prop, _, _), pos) = x.as_ref();
-                        let index = prop.clone().into();
+                        let IdentX { name, pos } = &x.0;
+                        let index = name.clone().into();
                         let val = self.get_indexed_mut(
                             state, lib, target, index, *pos, false, false, level,
                         )?;
@@ -1001,7 +1009,7 @@ impl Engine {
                     }
                     // xxx.id = ???
                     Expr::Property(x) if new_val.is_some() => {
-                        let ((_, _, setter), pos) = x.as_ref();
+                        let (IdentX { pos, .. }, (_, setter)) = x.as_ref();
                         let mut new_val = new_val;
                         let mut args = [target.as_mut(), &mut new_val.as_mut().unwrap().0];
                         self.exec_fn_call(
@@ -1013,7 +1021,7 @@ impl Engine {
                     }
                     // xxx.id
                     Expr::Property(x) => {
-                        let ((_, getter, _), pos) = x.as_ref();
+                        let (IdentX { pos, .. }, (getter, _)) = x.as_ref();
                         let mut args = [target.as_mut()];
                         self.exec_fn_call(
                             state, lib, getter, 0, &mut args, is_ref, true, false, None, &None,
@@ -1026,20 +1034,27 @@ impl Engine {
                     Expr::Index(x) | Expr::Dot(x) if target.is::<Map>() => {
                         let mut val = match &x.lhs {
                             Expr::Property(p) => {
-                                let ((prop, _, _), pos) = p.as_ref();
-                                let index = prop.clone().into();
+                                let IdentX { name, pos } = &p.0;
+                                let index = name.clone().into();
                                 self.get_indexed_mut(
                                     state, lib, target, index, *pos, false, true, level,
                                 )?
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
-                            Expr::FnCall(x) if x.1.is_none() => {
-                                let ((name, native, _, pos), _, hash, _, def_val) = x.as_ref();
-                                let def_val = def_val.map(Into::<Dynamic>::into);
+                            Expr::FnCall(x) if x.namespace.is_none() => {
+                                let FnCallInfo {
+                                    name,
+                                    native_only: native,
+                                    pos,
+                                    hash,
+                                    def_value,
+                                    ..
+                                } = x.as_ref();
+                                let def_value = def_value.map(Into::<Dynamic>::into);
                                 let args = idx_val.as_fn_call_args();
                                 let (val, _) = self
                                     .make_method_call(
-                                        state, lib, name, *hash, target, args, &def_val, *native,
+                                        state, lib, name, *hash, target, args, &def_value, *native,
                                         false, level,
                                     )
                                     .map_err(|err| err.fill_position(*pos))?;
@@ -1062,7 +1077,7 @@ impl Engine {
                         match &x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
-                                let ((_, getter, setter), pos) = p.as_ref();
+                                let (IdentX { pos, .. }, (getter, setter)) = p.as_ref();
                                 let arg_values = &mut [target.as_mut(), &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self
@@ -1110,13 +1125,20 @@ impl Engine {
                                 Ok((result, may_be_changed))
                             }
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
-                            Expr::FnCall(f) if f.1.is_none() => {
-                                let ((name, native, _, pos), _, hash, _, def_val) = f.as_ref();
-                                let def_val = def_val.map(Into::<Dynamic>::into);
+                            Expr::FnCall(f) if f.namespace.is_none() => {
+                                let FnCallInfo {
+                                    name,
+                                    native_only: native,
+                                    pos,
+                                    hash,
+                                    def_value,
+                                    ..
+                                } = f.as_ref();
+                                let def_value = def_value.map(Into::<Dynamic>::into);
                                 let args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self
                                     .make_method_call(
-                                        state, lib, name, *hash, target, args, &def_val, *native,
+                                        state, lib, name, *hash, target, args, &def_value, *native,
                                         false, level,
                                     )
                                     .map_err(|err| err.fill_position(*pos))?;
@@ -1250,13 +1272,14 @@ impl Engine {
             .map_err(|err| err.fill_position(expr.position()))?;
 
         match expr {
-            Expr::FnCall(x) if x.1.is_none() => {
-                let arg_values =
-                    x.3.iter()
-                        .map(|arg_expr| {
-                            self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
-                        })
-                        .collect::<Result<StaticVec<_>, _>>()?;
+            Expr::FnCall(x) if x.namespace.is_none() => {
+                let arg_values = x
+                    .args
+                    .iter()
+                    .map(|arg_expr| {
+                        self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
+                    })
+                    .collect::<Result<StaticVec<_>, _>>()?;
 
                 idx_values.push(arg_values.into());
             }
@@ -1268,14 +1291,14 @@ impl Engine {
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
                     Expr::Property(_) => IndexChainValue::None,
-                    Expr::FnCall(x) if chain_type == ChainType::Dot && x.1.is_none() => {
-                        x.3.iter()
-                            .map(|arg_expr| {
-                                self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
-                            })
-                            .collect::<Result<StaticVec<Dynamic>, _>>()?
-                            .into()
-                    }
+                    Expr::FnCall(x) if chain_type == ChainType::Dot && x.namespace.is_none() => x
+                        .args
+                        .iter()
+                        .map(|arg_expr| {
+                            self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
+                        })
+                        .collect::<Result<StaticVec<Dynamic>, _>>()?
+                        .into(),
                     Expr::FnCall(_) => unreachable!(),
                     _ => self
                         .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?
@@ -1491,11 +1514,11 @@ impl Engine {
         let result = match expr {
             Expr::Expr(x) => self.eval_expr(scope, mods, state, lib, this_ptr, x.as_ref(), level),
 
-            Expr::IntegerConstant(x) => Ok(x.0.into()),
+            Expr::IntegerConstant(x, _) => Ok((*x).into()),
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(x) => Ok(x.0.into()),
+            Expr::FloatConstant(x, _) => Ok(x.0.into()),
             Expr::StringConstant(x) => Ok(x.name.to_string().into()),
-            Expr::CharConstant(x) => Ok(x.0.into()),
+            Expr::CharConstant(x, _) => Ok((*x).into()),
             Expr::FnPointer(x) => {
                 Ok(FnPtr::new_unchecked(x.name.clone(), Default::default()).into())
             }
@@ -1514,7 +1537,7 @@ impl Engine {
             Expr::Property(_) => unreachable!(),
 
             // Statement block
-            Expr::Stmt(x) => self.eval_stmt(scope, mods, state, lib, this_ptr, &x.0, level),
+            Expr::Stmt(x, _) => self.eval_stmt(scope, mods, state, lib, this_ptr, x, level),
 
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
@@ -1546,21 +1569,38 @@ impl Engine {
             )))),
 
             // Normal function call
-            Expr::FnCall(x) if x.1.is_none() => {
-                let ((name, native, cap_scope, pos), _, hash, args_expr, def_val) = x.as_ref();
-                let def_val = def_val.map(Into::<Dynamic>::into);
+            Expr::FnCall(x) if x.namespace.is_none() => {
+                let FnCallInfo {
+                    name,
+                    native_only: native,
+                    capture: cap_scope,
+                    pos,
+                    hash,
+                    args,
+                    def_value,
+                    ..
+                } = x.as_ref();
+                let def_value = def_value.map(Into::<Dynamic>::into);
                 self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args_expr, &def_val, *hash, *native,
+                    scope, mods, state, lib, this_ptr, name, args, &def_value, *hash, *native,
                     false, *cap_scope, level,
                 )
                 .map_err(|err| err.fill_position(*pos))
             }
 
             // Module-qualified function call
-            Expr::FnCall(x) if x.1.is_some() => {
-                let ((name, _, _, pos), modules, hash, args_expr, def_val) = x.as_ref();
+            Expr::FnCall(x) if x.namespace.is_some() => {
+                let FnCallInfo {
+                    name,
+                    pos,
+                    namespace,
+                    hash,
+                    args,
+                    def_value,
+                    ..
+                } = x.as_ref();
                 self.make_qualified_function_call(
-                    scope, mods, state, lib, this_ptr, modules, name, args_expr, *def_val, *hash,
+                    scope, mods, state, lib, this_ptr, namespace, name, args, *def_value, *hash,
                     level,
                 )
                 .map_err(|err| err.fill_position(*pos))
@@ -2090,8 +2130,8 @@ impl Engine {
 
             // Share statement
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(Ident { name: var_name, .. }) => {
-                match scope.get_index(var_name) {
+            Stmt::Share(x) => {
+                match scope.get_index(&x.name) {
                     Some((index, ScopeEntryType::Normal)) => {
                         let (val, _) = scope.get_mut(index);
 

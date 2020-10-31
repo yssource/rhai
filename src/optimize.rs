@@ -1,6 +1,6 @@
 //! Module implementing the AST optimizer.
 
-use crate::ast::{BinaryExpr, CustomExpr, Expr, ScriptFnDef, Stmt, AST};
+use crate::ast::{BinaryExpr, CustomExpr, Expr, FnCallInfo, ScriptFnDef, Stmt, AST};
 use crate::dynamic::Dynamic;
 use crate::engine::{
     Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT,
@@ -404,9 +404,9 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
             )))
         }
         // expr;
-        Stmt::Expr(Expr::Stmt(x)) if matches!(x.0, Stmt::Expr(_)) => {
+        Stmt::Expr(Expr::Stmt(x, _)) if matches!(*x, Stmt::Expr(_)) => {
             state.set_dirty();
-            optimize_stmt(x.0, state, preserve_result)
+            optimize_stmt(*x, state, preserve_result)
         }
         // expr;
         Stmt::Expr(expr) => Stmt::Expr(optimize_expr(expr, state)),
@@ -434,11 +434,11 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         // expr - do not promote because there is a reason it is wrapped in an `Expr::Expr`
         Expr::Expr(x) => Expr::Expr(Box::new(optimize_expr(*x, state))),
         // { stmt }
-        Expr::Stmt(x) => match x.0 {
+        Expr::Stmt(x, pos) => match *x {
             // {} -> ()
             Stmt::Noop(_) => {
                 state.set_dirty();
-                Expr::Unit(x.1)
+                Expr::Unit(pos)
             }
             // { expr } -> expr
             Stmt::Expr(expr) => {
@@ -446,7 +446,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 optimize_expr(expr, state)
             }
             // { stmt }
-            stmt => Expr::Stmt(Box::new((optimize_stmt(stmt, state, true), x.1))),
+            stmt => Expr::Stmt(Box::new(optimize_stmt(stmt, state, true)), pos),
         },
 
         // lhs.rhs
@@ -454,7 +454,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         Expr::Dot(x) => match (x.lhs, x.rhs) {
             // map.string
             (Expr::Map(m), Expr::Property(p)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
-                let ((prop, _, _), _) = p.as_ref();
+                let prop = &p.0.name;
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
@@ -475,13 +475,13 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         #[cfg(not(feature = "no_index"))]
         Expr::Index(x) => match (x.lhs, x.rhs) {
             // array[int]
-            (Expr::Array(mut a), Expr::IntegerConstant(i))
-                if i.0 >= 0 && (i.0 as usize) < a.0.len() && a.0.iter().all(Expr::is_pure) =>
+            (Expr::Array(mut a), Expr::IntegerConstant(i, _))
+                if i >= 0 && (i as usize) < a.0.len() && a.0.iter().all(Expr::is_pure) =>
             {
                 // Array literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                let mut expr = a.0.remove(i.0 as usize);
+                let mut expr = a.0.remove(i as usize);
                 expr.set_position(a.1);
                 expr
             }
@@ -496,10 +496,10 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
             // string[int]
-            (Expr::StringConstant(s), Expr::IntegerConstant(i)) if i.0 >= 0 && (i.0 as usize) < s.name.chars().count() => {
+            (Expr::StringConstant(s), Expr::IntegerConstant(i, _)) if i >= 0 && (i as usize) < s.name.chars().count() => {
                 // String literal indexing - get the character
                 state.set_dirty();
-                Expr::CharConstant(Box::new((s.name.chars().nth(i.0 as usize).unwrap(), s.pos)))
+                Expr::CharConstant(s.name.chars().nth(i as usize).unwrap(), s.pos)
             }
             // lhs[rhs]
             (lhs, rhs) => Expr::Index(Box::new(BinaryExpr {
@@ -526,9 +526,9 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 if b.name.contains(a.name.as_str()) { Expr::True(a.pos) } else { Expr::False(a.pos) }
             }
             // 'x' in "xxxxx"
-            (Expr::CharConstant(a), Expr::StringConstant(b)) => {
+            (Expr::CharConstant(a, pos), Expr::StringConstant(b)) => {
                 state.set_dirty();
-                if b.name.contains(a.0) { Expr::True(a.1) } else { Expr::False(a.1) }
+                if b.name.contains(a) { Expr::True(pos) } else { Expr::False(pos) }
             }
             // "xxx" in #{...}
             (Expr::StringConstant(a), Expr::Map(b)) => {
@@ -540,14 +540,14 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 }
             }
             // 'x' in #{...}
-            (Expr::CharConstant(a), Expr::Map(b)) => {
+            (Expr::CharConstant(a, pos), Expr::Map(b)) => {
                 state.set_dirty();
-                let ch = a.0.to_string();
+                let ch = a.to_string();
 
                 if b.0.iter().find(|(x, _)| x.name == &ch).is_some() {
-                    Expr::True(a.1)
+                    Expr::True(pos)
                 } else {
-                    Expr::False(a.1)
+                    Expr::False(pos)
                 }
             }
             // lhs in rhs
@@ -607,20 +607,20 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         },
 
         // Do not call some special keywords
-        Expr::FnCall(mut x) if DONT_EVAL_KEYWORDS.contains(&(x.0).0.as_ref()) => {
-            x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
+        Expr::FnCall(mut x) if DONT_EVAL_KEYWORDS.contains(&x.name.as_ref()) => {
+            x.args = x.args.into_iter().map(|a| optimize_expr(a, state)).collect();
             Expr::FnCall(x)
         }
 
         // Call built-in operators
         Expr::FnCall(mut x)
-                if x.1.is_none() // Non-qualified
+                if x.namespace.is_none() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Simple // simple optimizations
-                && x.3.len() == 2 // binary call
-                && x.3.iter().all(Expr::is_constant) // all arguments are constants
-                && !is_valid_identifier((x.0).0.chars()) // cannot be scripted
+                && x.args.len() == 2 // binary call
+                && x.args.iter().all(Expr::is_constant) // all arguments are constants
+                && !is_valid_identifier(x.name.chars()) // cannot be scripted
         => {
-            let ((name, _, _, pos), _, _, args, _) = x.as_mut();
+            let FnCallInfo { name, pos, args, .. } = x.as_mut();
 
             let arg_values: StaticVec<_> = args.iter().map(|e| e.get_constant_value().unwrap()).collect();
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
@@ -636,17 +636,17 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 }
             }
 
-            x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
+            x.args = x.args.into_iter().map(|a| optimize_expr(a, state)).collect();
             Expr::FnCall(x)
         }
 
         // Eagerly call functions
         Expr::FnCall(mut x)
-                if x.1.is_none() // Non-qualified
+                if x.namespace.is_none() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Full // full optimizations
-                && x.3.iter().all(Expr::is_constant) // all arguments are constants
+                && x.args.iter().all(Expr::is_constant) // all arguments are constants
         => {
-            let ((name, _, _, pos), _, _, args, def_value) = x.as_mut();
+            let FnCallInfo { name, pos, args, def_value, .. } = x.as_mut();
 
             // First search for script-defined functions (can override built-in)
             #[cfg(not(feature = "no_function"))]
@@ -682,13 +682,13 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 }
             }
 
-            x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
+            x.args = x.args.into_iter().map(|a| optimize_expr(a, state)).collect();
             Expr::FnCall(x)
         }
 
         // id(args ..) -> optimize function call arguments
         Expr::FnCall(mut x) => {
-            x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
+            x.args = x.args.into_iter().map(|a| optimize_expr(a, state)).collect();
             Expr::FnCall(x)
         }
 
