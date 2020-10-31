@@ -1,6 +1,6 @@
 //! Module implementing the AST optimizer.
 
-use crate::ast::{BinaryExpr, CustomExpr, Expr, ScriptFnDef, Stmt, AST};
+use crate::ast::{BinaryExpr, CustomExpr, Expr, FnCallInfo, ScriptFnDef, Stmt, AST};
 use crate::dynamic::Dynamic;
 use crate::engine::{
     Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT,
@@ -404,9 +404,9 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
             )))
         }
         // expr;
-        Stmt::Expr(Expr::Stmt(x)) if matches!(x.0, Stmt::Expr(_)) => {
+        Stmt::Expr(Expr::Stmt(x, _)) if matches!(*x, Stmt::Expr(_)) => {
             state.set_dirty();
-            optimize_stmt(x.0, state, preserve_result)
+            optimize_stmt(*x, state, preserve_result)
         }
         // expr;
         Stmt::Expr(expr) => Stmt::Expr(optimize_expr(expr, state)),
@@ -434,11 +434,11 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         // expr - do not promote because there is a reason it is wrapped in an `Expr::Expr`
         Expr::Expr(x) => Expr::Expr(Box::new(optimize_expr(*x, state))),
         // { stmt }
-        Expr::Stmt(x) => match x.0 {
+        Expr::Stmt(x, pos) => match *x {
             // {} -> ()
             Stmt::Noop(_) => {
                 state.set_dirty();
-                Expr::Unit(x.1)
+                Expr::Unit(pos)
             }
             // { expr } -> expr
             Stmt::Expr(expr) => {
@@ -446,20 +446,19 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 optimize_expr(expr, state)
             }
             // { stmt }
-            stmt => Expr::Stmt(Box::new((optimize_stmt(stmt, state, true), x.1))),
+            stmt => Expr::Stmt(Box::new(optimize_stmt(stmt, state, true)), pos),
         },
 
         // lhs.rhs
         #[cfg(not(feature = "no_object"))]
-        Expr::Dot(x) => match (x.lhs, x.rhs) {
+        Expr::Dot(x, dot_pos) => match (x.lhs, x.rhs) {
             // map.string
-            (Expr::Map(m), Expr::Property(p)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
-                let ((prop, _, _), _) = p.as_ref();
+            (Expr::Map(m, pos), Expr::Property(p)) if m.iter().all(|(_, x)| x.is_pure()) => {
+                let prop = &p.0.name;
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                let pos = m.1;
-                m.0.into_iter().find(|(x, _)| &x.name == prop)
+                m.into_iter().find(|(x, _)| &x.name == prop)
                     .map(|(_, mut expr)| { expr.set_position(pos); expr })
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
@@ -467,98 +466,94 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             (lhs, rhs) => Expr::Dot(Box::new(BinaryExpr {
                 lhs: optimize_expr(lhs, state),
                 rhs: optimize_expr(rhs, state),
-                pos: x.pos
-            }))
+            }), dot_pos)
         }
 
         // lhs[rhs]
         #[cfg(not(feature = "no_index"))]
-        Expr::Index(x) => match (x.lhs, x.rhs) {
+        Expr::Index(x, idx_pos) => match (x.lhs, x.rhs) {
             // array[int]
-            (Expr::Array(mut a), Expr::IntegerConstant(i))
-                if i.0 >= 0 && (i.0 as usize) < a.0.len() && a.0.iter().all(Expr::is_pure) =>
+            (Expr::Array(mut a, pos), Expr::IntegerConstant(i, _))
+                if i >= 0 && (i as usize) < a.len() && a.iter().all(Expr::is_pure) =>
             {
                 // Array literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                let mut expr = a.0.remove(i.0 as usize);
-                expr.set_position(a.1);
+                let mut expr = a.remove(i as usize);
+                expr.set_position(pos);
                 expr
             }
             // map[string]
-            (Expr::Map(m), Expr::StringConstant(s)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
+            (Expr::Map(m, pos), Expr::StringConstant(s)) if m.iter().all(|(_, x)| x.is_pure()) => {
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                let pos = m.1;
-                m.0.into_iter().find(|(x, _)| x.name == s.name)
+                m.into_iter().find(|(x, _)| x.name == s.name)
                     .map(|(_, mut expr)| { expr.set_position(pos); expr })
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
             // string[int]
-            (Expr::StringConstant(s), Expr::IntegerConstant(i)) if i.0 >= 0 && (i.0 as usize) < s.name.chars().count() => {
+            (Expr::StringConstant(s), Expr::IntegerConstant(i, _)) if i >= 0 && (i as usize) < s.name.chars().count() => {
                 // String literal indexing - get the character
                 state.set_dirty();
-                Expr::CharConstant(Box::new((s.name.chars().nth(i.0 as usize).unwrap(), s.pos)))
+                Expr::CharConstant(s.name.chars().nth(i as usize).unwrap(), s.pos)
             }
             // lhs[rhs]
             (lhs, rhs) => Expr::Index(Box::new(BinaryExpr {
                 lhs: optimize_expr(lhs, state),
                 rhs: optimize_expr(rhs, state),
-                pos: x.pos
-            })),
+            }), idx_pos),
         },
         // [ items .. ]
         #[cfg(not(feature = "no_index"))]
-        Expr::Array(a) => Expr::Array(Box::new((a.0
+        Expr::Array(a, pos) => Expr::Array(Box::new(a
                                 .into_iter().map(|expr| optimize_expr(expr, state))
-                                .collect(), a.1))),
+                                .collect()), pos),
         // [ items .. ]
         #[cfg(not(feature = "no_object"))]
-        Expr::Map(m) => Expr::Map(Box::new((m.0
-                            .into_iter().map(|(key, expr)| (key, optimize_expr(expr, state)))
-                            .collect(), m.1))),
+        Expr::Map(m, pos) => Expr::Map(Box::new(m
+                                .into_iter().map(|(key, expr)| (key, optimize_expr(expr, state)))
+                                .collect()), pos),
         // lhs in rhs
-        Expr::In(x) => match (x.lhs, x.rhs) {
+        Expr::In(x, in_pos) => match (x.lhs, x.rhs) {
             // "xxx" in "xxxxx"
             (Expr::StringConstant(a), Expr::StringConstant(b)) => {
                 state.set_dirty();
                 if b.name.contains(a.name.as_str()) { Expr::True(a.pos) } else { Expr::False(a.pos) }
             }
             // 'x' in "xxxxx"
-            (Expr::CharConstant(a), Expr::StringConstant(b)) => {
+            (Expr::CharConstant(a, pos), Expr::StringConstant(b)) => {
                 state.set_dirty();
-                if b.name.contains(a.0) { Expr::True(a.1) } else { Expr::False(a.1) }
+                if b.name.contains(a) { Expr::True(pos) } else { Expr::False(pos) }
             }
             // "xxx" in #{...}
-            (Expr::StringConstant(a), Expr::Map(b)) => {
+            (Expr::StringConstant(a), Expr::Map(b, _)) => {
                 state.set_dirty();
-                if b.0.iter().find(|(x, _)| x.name == a.name).is_some() {
+                if b.iter().find(|(x, _)| x.name == a.name).is_some() {
                     Expr::True(a.pos)
                 } else {
                     Expr::False(a.pos)
                 }
             }
             // 'x' in #{...}
-            (Expr::CharConstant(a), Expr::Map(b)) => {
+            (Expr::CharConstant(a, pos), Expr::Map(b, _)) => {
                 state.set_dirty();
-                let ch = a.0.to_string();
+                let ch = a.to_string();
 
-                if b.0.iter().find(|(x, _)| x.name == &ch).is_some() {
-                    Expr::True(a.1)
+                if b.iter().find(|(x, _)| x.name == &ch).is_some() {
+                    Expr::True(pos)
                 } else {
-                    Expr::False(a.1)
+                    Expr::False(pos)
                 }
             }
             // lhs in rhs
             (lhs, rhs) => Expr::In(Box::new(BinaryExpr {
                 lhs: optimize_expr(lhs, state),
                 rhs: optimize_expr(rhs, state),
-                pos: x.pos
-            })),
+            }), in_pos),
         },
         // lhs && rhs
-        Expr::And(x) => match (x.lhs, x.rhs) {
+        Expr::And(x, and_pos) => match (x.lhs, x.rhs) {
             // true && rhs -> rhs
             (Expr::True(_), rhs) => {
                 state.set_dirty();
@@ -578,11 +573,10 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             (lhs, rhs) => Expr::And(Box::new(BinaryExpr {
                 lhs: optimize_expr(lhs, state),
                 rhs: optimize_expr(rhs, state),
-                pos: x.pos
-            })),
+            }), and_pos),
         },
         // lhs || rhs
-        Expr::Or(x) => match (x.lhs, x.rhs) {
+        Expr::Or(x, or_pos) => match (x.lhs, x.rhs) {
             // false || rhs -> rhs
             (Expr::False(_), rhs) => {
                 state.set_dirty();
@@ -602,25 +596,24 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             (lhs, rhs) => Expr::Or(Box::new(BinaryExpr {
                 lhs: optimize_expr(lhs, state),
                 rhs: optimize_expr(rhs, state),
-                pos: x.pos
-            })),
+            }), or_pos),
         },
 
         // Do not call some special keywords
-        Expr::FnCall(mut x) if DONT_EVAL_KEYWORDS.contains(&(x.0).0.as_ref()) => {
-            x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
-            Expr::FnCall(x)
+        Expr::FnCall(mut x, pos) if DONT_EVAL_KEYWORDS.contains(&x.name.as_ref()) => {
+            x.args = x.args.into_iter().map(|a| optimize_expr(a, state)).collect();
+            Expr::FnCall(x, pos)
         }
 
         // Call built-in operators
-        Expr::FnCall(mut x)
-                if x.1.is_none() // Non-qualified
+        Expr::FnCall(mut x, pos)
+                if x.namespace.is_none() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Simple // simple optimizations
-                && x.3.len() == 2 // binary call
-                && x.3.iter().all(Expr::is_constant) // all arguments are constants
-                && !is_valid_identifier((x.0).0.chars()) // cannot be scripted
+                && x.args.len() == 2 // binary call
+                && x.args.iter().all(Expr::is_constant) // all arguments are constants
+                && !is_valid_identifier(x.name.chars()) // cannot be scripted
         => {
-            let ((name, _, _, pos), _, _, args, _) = x.as_mut();
+            let FnCallInfo { name, args, .. } = x.as_mut();
 
             let arg_values: StaticVec<_> = args.iter().map(|e| e.get_constant_value().unwrap()).collect();
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
@@ -629,24 +622,24 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             if !state.engine.has_override_by_name_and_arguments(state.lib, name, arg_types.as_ref(), false) {
                 if let Some(expr) = run_builtin_binary_op(name, &arg_values[0], &arg_values[1])
                                         .ok().flatten()
-                                        .and_then(|result| map_dynamic_to_expr(result, *pos))
+                                        .and_then(|result| map_dynamic_to_expr(result, pos))
                 {
                     state.set_dirty();
                     return expr;
                 }
             }
 
-            x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
-            Expr::FnCall(x)
+            x.args = x.args.into_iter().map(|a| optimize_expr(a, state)).collect();
+            Expr::FnCall(x, pos)
         }
 
         // Eagerly call functions
-        Expr::FnCall(mut x)
-                if x.1.is_none() // Non-qualified
+        Expr::FnCall(mut x, pos)
+                if x.namespace.is_none() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Full // full optimizations
-                && x.3.iter().all(Expr::is_constant) // all arguments are constants
+                && x.args.iter().all(Expr::is_constant) // all arguments are constants
         => {
-            let ((name, _, _, pos), _, _, args, def_value) = x.as_mut();
+            let FnCallInfo { name, args, def_value, .. } = x.as_mut();
 
             // First search for script-defined functions (can override built-in)
             #[cfg(not(feature = "no_function"))]
@@ -675,21 +668,21 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                                                 def_value.map(|v| v.into())
                                             }
                                         })
-                                        .and_then(|result| map_dynamic_to_expr(result, *pos))
+                                        .and_then(|result| map_dynamic_to_expr(result, pos))
                 {
                     state.set_dirty();
                     return expr;
                 }
             }
 
-            x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
-            Expr::FnCall(x)
+            x.args = x.args.into_iter().map(|a| optimize_expr(a, state)).collect();
+            Expr::FnCall(x, pos)
         }
 
         // id(args ..) -> optimize function call arguments
-        Expr::FnCall(mut x) => {
-            x.3 = x.3.into_iter().map(|a| optimize_expr(a, state)).collect();
-            Expr::FnCall(x)
+        Expr::FnCall(mut x, pos) => {
+            x.args = x.args.into_iter().map(|a| optimize_expr(a, state)).collect();
+            Expr::FnCall(x, pos)
         }
 
         // constant-name
@@ -703,10 +696,10 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         }
 
         // Custom syntax
-        Expr::Custom(x) => Expr::Custom(Box::new(CustomExpr {
+        Expr::Custom(x, pos) => Expr::Custom(Box::new(CustomExpr {
             keywords: x.keywords.into_iter().map(|expr| optimize_expr(expr, state)).collect(),
             ..*x
-        })),
+        }), pos),
 
         // All other expressions - skip
         expr => expr,

@@ -559,6 +559,15 @@ pub struct IdentX {
     pub pos: Position,
 }
 
+impl From<Ident> for IdentX {
+    fn from(value: Ident) -> Self {
+        Self {
+            name: value.name.into(),
+            pos: value.pos,
+        }
+    }
+}
+
 impl IdentX {
     /// Create a new `Identifier`.
     pub fn new(name: impl Into<ImmutableString>, pos: Position) -> Self {
@@ -626,7 +635,7 @@ pub enum Stmt {
     Export(Vec<(Ident, Option<Ident>)>, Position),
     /// Convert a variable to shared.
     #[cfg(not(feature = "no_closure"))]
-    Share(Ident),
+    Share(Box<Ident>),
 }
 
 impl Default for Stmt {
@@ -670,7 +679,7 @@ impl Stmt {
             Self::Export(_, pos) => *pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(Ident { pos, .. }) => *pos,
+            Self::Share(x) => x.pos,
         }
     }
 
@@ -701,7 +710,7 @@ impl Stmt {
             Self::Export(_, pos) => *pos = new_pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(Ident { pos, .. }) => *pos = new_pos,
+            Self::Share(x) => x.pos = new_pos,
         }
 
         self
@@ -774,7 +783,6 @@ impl Stmt {
 pub struct CustomExpr {
     pub(crate) keywords: StaticVec<Expr>,
     pub(crate) func: Shared<FnCustomSyntaxEval>,
-    pub(crate) pos: Position,
 }
 
 impl fmt::Debug for CustomExpr {
@@ -802,11 +810,6 @@ impl CustomExpr {
     pub fn func(&self) -> &FnCustomSyntaxEval {
         self.func.as_ref()
     }
-    /// Get the position of this `CustomExpr`.
-    #[inline(always)]
-    pub fn position(&self) -> Position {
-        self.pos
-    }
 }
 
 /// _[INTERNALS]_ A type wrapping a floating-point number.
@@ -820,14 +823,13 @@ impl CustomExpr {
 /// This type is volatile and may change.
 #[cfg(not(feature = "no_float"))]
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
-pub struct FloatWrapper(pub FLOAT, pub Position);
+pub struct FloatWrapper(pub FLOAT);
 
 #[cfg(not(feature = "no_float"))]
 impl Hash for FloatWrapper {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write(&self.0.to_le_bytes());
-        self.1.hash(state);
     }
 }
 
@@ -836,23 +838,47 @@ impl Neg for FloatWrapper {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
-        Self(-self.0, self.1)
+        Self(-self.0)
     }
 }
 
 #[cfg(not(feature = "no_float"))]
-impl From<(INT, Position)> for FloatWrapper {
-    fn from((value, pos): (INT, Position)) -> Self {
-        Self(value as FLOAT, pos)
+impl From<INT> for FloatWrapper {
+    fn from(value: INT) -> Self {
+        Self(value as FLOAT)
     }
 }
 
 /// A binary expression structure.
 #[derive(Debug, Clone, Hash)]
 pub struct BinaryExpr {
+    /// LHS expression.
     pub lhs: Expr,
+    /// RHS expression.
     pub rhs: Expr,
-    pub pos: Position,
+}
+
+/// A function call.
+#[derive(Debug, Clone, Hash, Default)]
+pub struct FnCallInfo {
+    /// Function name.
+    /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
+    /// and the function names are predictable, so no need to allocate a new `String`.
+    pub name: Cow<'static, str>,
+    /// Namespace of the function, if any.
+    pub namespace: Option<Box<ModuleRef>>,
+    /// Call native functions only? Set to `true` to skip searching for script-defined function overrides
+    /// when it is certain that the function must be native (e.g. an operator).
+    pub native_only: bool,
+    /// Does this function call capture the parent scope?
+    pub capture: bool,
+    /// Pre-calculated hash for a script-defined function of the same name and number of parameters.
+    pub hash: u64,
+    /// List of function call arguments.
+    pub args: StaticVec<Expr>,
+    /// Default value when the function is not found, mostly used to provide a default for comparison functions.
+    /// Type is `bool` in order for `FnCallInfo` to be `Hash`
+    pub def_value: Option<bool>,
 }
 
 /// _[INTERNALS]_ An expression sub-tree.
@@ -867,12 +893,12 @@ pub struct BinaryExpr {
 #[derive(Debug, Clone, Hash)]
 pub enum Expr {
     /// Integer constant.
-    IntegerConstant(Box<(INT, Position)>),
+    IntegerConstant(INT, Position),
     /// Floating-point constant.
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(Box<FloatWrapper>),
+    FloatConstant(FloatWrapper, Position),
     /// Character constant.
-    CharConstant(Box<(char, Position)>),
+    CharConstant(char, Position),
     /// String constant.
     StringConstant(Box<IdentX>),
     /// FnPtr constant.
@@ -880,37 +906,27 @@ pub enum Expr {
     /// Variable access - ((variable name, position), optional modules, hash, optional index)
     Variable(Box<(Ident, Option<Box<ModuleRef>>, u64, Option<NonZeroUsize>)>),
     /// Property access.
-    Property(Box<((ImmutableString, String, String), Position)>),
+    Property(Box<(IdentX, (String, String))>),
     /// { stmt }
-    Stmt(Box<(Stmt, Position)>),
+    Stmt(Box<Stmt>, Position),
     /// Wrapped expression - should not be optimized away.
     Expr(Box<Expr>),
-    /// func(expr, ... ) - ((function name, native_only, capture, position), optional modules, hash, arguments, optional default value)
-    /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
-    /// and the function names are predictable, so no need to allocate a new `String`.
-    FnCall(
-        Box<(
-            (Cow<'static, str>, bool, bool, Position),
-            Option<Box<ModuleRef>>,
-            u64,
-            StaticVec<Expr>,
-            Option<bool>, // Default value is `bool` in order for `Expr` to be `Hash`.
-        )>,
-    ),
+    /// func(expr, ... )
+    FnCall(Box<FnCallInfo>, Position),
     /// lhs.rhs
-    Dot(Box<BinaryExpr>),
+    Dot(Box<BinaryExpr>, Position),
     /// expr[expr]
-    Index(Box<BinaryExpr>),
+    Index(Box<BinaryExpr>, Position),
     /// [ expr, ... ]
-    Array(Box<(StaticVec<Expr>, Position)>),
+    Array(Box<StaticVec<Expr>>, Position),
     /// #{ name:expr, ... }
-    Map(Box<(StaticVec<(IdentX, Expr)>, Position)>),
+    Map(Box<StaticVec<(IdentX, Expr)>>, Position),
     /// lhs in rhs
-    In(Box<BinaryExpr>),
+    In(Box<BinaryExpr>, Position),
     /// lhs && rhs
-    And(Box<BinaryExpr>),
+    And(Box<BinaryExpr>, Position),
     /// lhs || rhs
-    Or(Box<BinaryExpr>),
+    Or(Box<BinaryExpr>, Position),
     /// true
     True(Position),
     /// false
@@ -918,7 +934,7 @@ pub enum Expr {
     /// ()
     Unit(Position),
     /// Custom syntax
-    Custom(Box<CustomExpr>),
+    Custom(Box<CustomExpr>, Position),
 }
 
 impl Default for Expr {
@@ -936,22 +952,22 @@ impl Expr {
         Some(match self {
             Self::Expr(x) => return x.get_type_id(),
 
-            Self::IntegerConstant(_) => TypeId::of::<INT>(),
+            Self::IntegerConstant(_, _) => TypeId::of::<INT>(),
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_) => TypeId::of::<FLOAT>(),
-            Self::CharConstant(_) => TypeId::of::<char>(),
+            Self::FloatConstant(_, _) => TypeId::of::<FLOAT>(),
+            Self::CharConstant(_, _) => TypeId::of::<char>(),
             Self::StringConstant(_) => TypeId::of::<ImmutableString>(),
             Self::FnPointer(_) => TypeId::of::<FnPtr>(),
-            Self::True(_) | Self::False(_) | Self::In(_) | Self::And(_) | Self::Or(_) => {
+            Self::True(_) | Self::False(_) | Self::In(_, _) | Self::And(_, _) | Self::Or(_, _) => {
                 TypeId::of::<bool>()
             }
             Self::Unit(_) => TypeId::of::<()>(),
 
             #[cfg(not(feature = "no_index"))]
-            Self::Array(_) => TypeId::of::<Array>(),
+            Self::Array(_, _) => TypeId::of::<Array>(),
 
             #[cfg(not(feature = "no_object"))]
-            Self::Map(_) => TypeId::of::<Map>(),
+            Self::Map(_, _) => TypeId::of::<Map>(),
 
             _ => return None,
         })
@@ -964,10 +980,10 @@ impl Expr {
         Some(match self {
             Self::Expr(x) => return x.get_constant_value(),
 
-            Self::IntegerConstant(x) => x.0.into(),
+            Self::IntegerConstant(x, _) => (*x).into(),
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(x) => x.0.into(),
-            Self::CharConstant(x) => x.0.into(),
+            Self::FloatConstant(x, _) => x.0.into(),
+            Self::CharConstant(x, _) => (*x).into(),
             Self::StringConstant(x) => x.name.clone().into(),
             Self::FnPointer(x) => Dynamic(Union::FnPtr(Box::new(FnPtr::new_unchecked(
                 x.name.clone(),
@@ -978,16 +994,14 @@ impl Expr {
             Self::Unit(_) => ().into(),
 
             #[cfg(not(feature = "no_index"))]
-            Self::Array(x) if x.0.iter().all(Self::is_constant) => Dynamic(Union::Array(Box::new(
-                x.0.iter()
-                    .map(|v| v.get_constant_value().unwrap())
-                    .collect(),
-            ))),
+            Self::Array(x, _) if x.iter().all(Self::is_constant) => Dynamic(Union::Array(
+                Box::new(x.iter().map(|v| v.get_constant_value().unwrap()).collect()),
+            )),
 
             #[cfg(not(feature = "no_object"))]
-            Self::Map(x) if x.0.iter().all(|(_, v)| v.is_constant()) => {
+            Self::Map(x, _) if x.iter().all(|(_, v)| v.is_constant()) => {
                 Dynamic(Union::Map(Box::new(
-                    x.0.iter()
+                    x.iter()
                         .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap()))
                         .collect(),
                 )))
@@ -1011,26 +1025,26 @@ impl Expr {
             Self::Expr(x) => x.position(),
 
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(x) => x.1,
+            Self::FloatConstant(_, pos) => *pos,
 
-            Self::IntegerConstant(x) => x.1,
-            Self::CharConstant(x) => x.1,
+            Self::IntegerConstant(_, pos) => *pos,
+            Self::CharConstant(_, pos) => *pos,
             Self::StringConstant(x) => x.pos,
             Self::FnPointer(x) => x.pos,
-            Self::Array(x) => x.1,
-            Self::Map(x) => x.1,
-            Self::Property(x) => x.1,
-            Self::Stmt(x) => x.1,
+            Self::Array(_, pos) => *pos,
+            Self::Map(_, pos) => *pos,
+            Self::Property(x) => (x.0).pos,
+            Self::Stmt(_, pos) => *pos,
             Self::Variable(x) => (x.0).pos,
-            Self::FnCall(x) => (x.0).3,
+            Self::FnCall(_, pos) => *pos,
 
-            Self::And(x) | Self::Or(x) | Self::In(x) => x.pos,
+            Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => x.lhs.position(),
 
             Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos,
 
-            Self::Dot(x) | Self::Index(x) => x.lhs.position(),
+            Self::Dot(x, _) | Self::Index(x, _) => x.lhs.position(),
 
-            Self::Custom(x) => x.pos,
+            Self::Custom(_, pos) => *pos,
         }
     }
 
@@ -1042,22 +1056,22 @@ impl Expr {
             }
 
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(x) => x.1 = new_pos,
+            Self::FloatConstant(_, pos) => *pos = new_pos,
 
-            Self::IntegerConstant(x) => x.1 = new_pos,
-            Self::CharConstant(x) => x.1 = new_pos,
+            Self::IntegerConstant(_, pos) => *pos = new_pos,
+            Self::CharConstant(_, pos) => *pos = new_pos,
             Self::StringConstant(x) => x.pos = new_pos,
             Self::FnPointer(x) => x.pos = new_pos,
-            Self::Array(x) => x.1 = new_pos,
-            Self::Map(x) => x.1 = new_pos,
+            Self::Array(_, pos) => *pos = new_pos,
+            Self::Map(_, pos) => *pos = new_pos,
             Self::Variable(x) => (x.0).pos = new_pos,
-            Self::Property(x) => x.1 = new_pos,
-            Self::Stmt(x) => x.1 = new_pos,
-            Self::FnCall(x) => (x.0).3 = new_pos,
-            Self::And(x) | Self::Or(x) | Self::In(x) => x.pos = new_pos,
+            Self::Property(x) => (x.0).pos = new_pos,
+            Self::Stmt(_, pos) => *pos = new_pos,
+            Self::FnCall(_, pos) => *pos = new_pos,
+            Self::And(_, pos) | Self::Or(_, pos) | Self::In(_, pos) => *pos = new_pos,
             Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos = new_pos,
-            Self::Dot(x) | Self::Index(x) => x.pos = new_pos,
-            Self::Custom(x) => x.pos = new_pos,
+            Self::Dot(_, pos) | Self::Index(_, pos) => *pos = new_pos,
+            Self::Custom(_, pos) => *pos = new_pos,
         }
 
         self
@@ -1070,13 +1084,15 @@ impl Expr {
         match self {
             Self::Expr(x) => x.is_pure(),
 
-            Self::Array(x) => x.0.iter().all(Self::is_pure),
+            Self::Array(x, _) => x.iter().all(Self::is_pure),
 
-            Self::Index(x) | Self::And(x) | Self::Or(x) | Self::In(x) => {
+            Self::Map(x, _) => x.iter().map(|(_, v)| v).all(Self::is_pure),
+
+            Self::Index(x, _) | Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => {
                 x.lhs.is_pure() && x.rhs.is_pure()
             }
 
-            Self::Stmt(x) => x.0.is_pure(),
+            Self::Stmt(x, _) => x.is_pure(),
 
             Self::Variable(_) => true,
 
@@ -1099,10 +1115,10 @@ impl Expr {
             Self::Expr(x) => x.is_literal(),
 
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_) => true,
+            Self::FloatConstant(_, _) => true,
 
-            Self::IntegerConstant(_)
-            | Self::CharConstant(_)
+            Self::IntegerConstant(_, _)
+            | Self::CharConstant(_, _)
             | Self::StringConstant(_)
             | Self::FnPointer(_)
             | Self::True(_)
@@ -1110,15 +1126,15 @@ impl Expr {
             | Self::Unit(_) => true,
 
             // An array literal is literal if all items are literals
-            Self::Array(x) => x.0.iter().all(Self::is_literal),
+            Self::Array(x, _) => x.iter().all(Self::is_literal),
 
             // An map literal is literal if all items are literals
-            Self::Map(x) => x.0.iter().map(|(_, expr)| expr).all(Self::is_literal),
+            Self::Map(x, _) => x.iter().map(|(_, expr)| expr).all(Self::is_literal),
 
             // Check in expression
-            Self::In(x) => match (&x.lhs, &x.rhs) {
+            Self::In(x, _) => match (&x.lhs, &x.rhs) {
                 (Self::StringConstant(_), Self::StringConstant(_))
-                | (Self::CharConstant(_), Self::StringConstant(_)) => true,
+                | (Self::CharConstant(_, _), Self::StringConstant(_)) => true,
                 _ => false,
             },
 
@@ -1132,10 +1148,10 @@ impl Expr {
             Self::Expr(x) => x.is_constant(),
 
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_) => true,
+            Self::FloatConstant(_, _) => true,
 
-            Self::IntegerConstant(_)
-            | Self::CharConstant(_)
+            Self::IntegerConstant(_, _)
+            | Self::CharConstant(_, _)
             | Self::StringConstant(_)
             | Self::FnPointer(_)
             | Self::True(_)
@@ -1143,15 +1159,15 @@ impl Expr {
             | Self::Unit(_) => true,
 
             // An array literal is constant if all items are constant
-            Self::Array(x) => x.0.iter().all(Self::is_constant),
+            Self::Array(x, _) => x.iter().all(Self::is_constant),
 
             // An map literal is constant if all items are constant
-            Self::Map(x) => x.0.iter().map(|(_, expr)| expr).all(Self::is_constant),
+            Self::Map(x, _) => x.iter().map(|(_, expr)| expr).all(Self::is_constant),
 
             // Check in expression
-            Self::In(x) => match (&x.lhs, &x.rhs) {
+            Self::In(x, _) => match (&x.lhs, &x.rhs) {
                 (Self::StringConstant(_), Self::StringConstant(_))
-                | (Self::CharConstant(_), Self::StringConstant(_)) => true,
+                | (Self::CharConstant(_, _), Self::StringConstant(_)) => true,
                 _ => false,
             },
 
@@ -1165,25 +1181,25 @@ impl Expr {
             Self::Expr(x) => x.is_valid_postfix(token),
 
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_) => false,
+            Self::FloatConstant(_, _) => false,
 
-            Self::IntegerConstant(_)
-            | Self::CharConstant(_)
+            Self::IntegerConstant(_, _)
+            | Self::CharConstant(_, _)
             | Self::FnPointer(_)
-            | Self::In(_)
-            | Self::And(_)
-            | Self::Or(_)
+            | Self::In(_, _)
+            | Self::And(_, _)
+            | Self::Or(_, _)
             | Self::True(_)
             | Self::False(_)
             | Self::Unit(_) => false,
 
             Self::StringConstant(_)
-            | Self::Stmt(_)
-            | Self::FnCall(_)
-            | Self::Dot(_)
-            | Self::Index(_)
-            | Self::Array(_)
-            | Self::Map(_) => match token {
+            | Self::Stmt(_, _)
+            | Self::FnCall(_, _)
+            | Self::Dot(_, _)
+            | Self::Index(_, _)
+            | Self::Array(_, _)
+            | Self::Map(_, _) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
                 _ => false,
@@ -1205,7 +1221,7 @@ impl Expr {
                 _ => false,
             },
 
-            Self::Custom(_) => false,
+            Self::Custom(_, _) => false,
         }
     }
 
@@ -1215,10 +1231,10 @@ impl Expr {
     pub(crate) fn into_property(self) -> Self {
         match self {
             Self::Variable(x) if x.1.is_none() => {
-                let Ident { name, pos } = x.0;
-                let getter = make_getter(&name);
-                let setter = make_setter(&name);
-                Self::Property(Box::new(((name.into(), getter, setter), pos)))
+                let ident = x.0;
+                let getter = make_getter(&ident.name);
+                let setter = make_setter(&ident.name);
+                Self::Property(Box::new((ident.into(), (getter, setter))))
             }
             _ => self,
         }
