@@ -15,7 +15,7 @@ Other Online Resources for Rhai
 
 * [Online Playground][playground] - Run scripts directly from editor
 
-* [Discord Chat](https://discord.gg/yZMKAQ) - Rhai channel
+* [Discord Chat](https://discord.gg/HquqbYFcZ9) - Rhai channel
 
 * [Reddit](https://www.reddit.com/r/Rhai) - Rhai community
 
