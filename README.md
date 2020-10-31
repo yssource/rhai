@@ -7,7 +7,7 @@ Rhai - Embedded Scripting for Rust
 [![crates.io](https://img.shields.io/crates/v/rhai?logo=rust)](https://crates.io/crates/rhai/)
 [![crates.io](https://img.shields.io/crates/d/rhai?logo=rust)](https://crates.io/crates/rhai/)
 [![API Docs](https://docs.rs/rhai/badge.svg?logo=docs.rs)](https://docs.rs/rhai/)
-[![chat](https://img.shields.io/discord/767611025456889857.svg?logo=discord)](https://discord.gg/yZMKAQ)
+[![chat](https://img.shields.io/discord/767611025456889857.svg?logo=discord)](https://discord.gg/HquqbYFcZ9)
 [![Reddit](https://img.shields.io/reddit/subreddit-subscribers/Rhai?logo=reddit)](https://www.reddit.com/r/Rhai)
 
 Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way
