@@ -783,7 +783,6 @@ impl Stmt {
 pub struct CustomExpr {
     pub(crate) keywords: StaticVec<Expr>,
     pub(crate) func: Shared<FnCustomSyntaxEval>,
-    pub(crate) pos: Position,
 }
 
 impl fmt::Debug for CustomExpr {
@@ -810,11 +809,6 @@ impl CustomExpr {
     #[inline(always)]
     pub fn func(&self) -> &FnCustomSyntaxEval {
         self.func.as_ref()
-    }
-    /// Get the position of this `CustomExpr`.
-    #[inline(always)]
-    pub fn position(&self) -> Position {
-        self.pos
     }
 }
 
@@ -862,8 +856,6 @@ pub struct BinaryExpr {
     pub lhs: Expr,
     /// RHS expression.
     pub rhs: Expr,
-    /// Position of the expression.
-    pub pos: Position,
 }
 
 /// A function call.
@@ -887,8 +879,6 @@ pub struct FnCallInfo {
     /// Default value when the function is not found, mostly used to provide a default for comparison functions.
     /// Type is `bool` in order for `FnCallInfo` to be `Hash`
     pub def_value: Option<bool>,
-    /// Position of the function call.
-    pub pos: Position,
 }
 
 /// _[INTERNALS]_ An expression sub-tree.
@@ -922,21 +912,21 @@ pub enum Expr {
     /// Wrapped expression - should not be optimized away.
     Expr(Box<Expr>),
     /// func(expr, ... )
-    FnCall(Box<FnCallInfo>),
+    FnCall(Box<FnCallInfo>, Position),
     /// lhs.rhs
-    Dot(Box<BinaryExpr>),
+    Dot(Box<BinaryExpr>, Position),
     /// expr[expr]
-    Index(Box<BinaryExpr>),
+    Index(Box<BinaryExpr>, Position),
     /// [ expr, ... ]
-    Array(Box<(StaticVec<Expr>, Position)>),
+    Array(Box<StaticVec<Expr>>, Position),
     /// #{ name:expr, ... }
-    Map(Box<(StaticVec<(IdentX, Expr)>, Position)>),
+    Map(Box<StaticVec<(IdentX, Expr)>>, Position),
     /// lhs in rhs
-    In(Box<BinaryExpr>),
+    In(Box<BinaryExpr>, Position),
     /// lhs && rhs
-    And(Box<BinaryExpr>),
+    And(Box<BinaryExpr>, Position),
     /// lhs || rhs
-    Or(Box<BinaryExpr>),
+    Or(Box<BinaryExpr>, Position),
     /// true
     True(Position),
     /// false
@@ -944,7 +934,7 @@ pub enum Expr {
     /// ()
     Unit(Position),
     /// Custom syntax
-    Custom(Box<CustomExpr>),
+    Custom(Box<CustomExpr>, Position),
 }
 
 impl Default for Expr {
@@ -968,16 +958,16 @@ impl Expr {
             Self::CharConstant(_, _) => TypeId::of::<char>(),
             Self::StringConstant(_) => TypeId::of::<ImmutableString>(),
             Self::FnPointer(_) => TypeId::of::<FnPtr>(),
-            Self::True(_) | Self::False(_) | Self::In(_) | Self::And(_) | Self::Or(_) => {
+            Self::True(_) | Self::False(_) | Self::In(_, _) | Self::And(_, _) | Self::Or(_, _) => {
                 TypeId::of::<bool>()
             }
             Self::Unit(_) => TypeId::of::<()>(),
 
             #[cfg(not(feature = "no_index"))]
-            Self::Array(_) => TypeId::of::<Array>(),
+            Self::Array(_, _) => TypeId::of::<Array>(),
 
             #[cfg(not(feature = "no_object"))]
-            Self::Map(_) => TypeId::of::<Map>(),
+            Self::Map(_, _) => TypeId::of::<Map>(),
 
             _ => return None,
         })
@@ -1004,16 +994,14 @@ impl Expr {
             Self::Unit(_) => ().into(),
 
             #[cfg(not(feature = "no_index"))]
-            Self::Array(x) if x.0.iter().all(Self::is_constant) => Dynamic(Union::Array(Box::new(
-                x.0.iter()
-                    .map(|v| v.get_constant_value().unwrap())
-                    .collect(),
-            ))),
+            Self::Array(x, _) if x.iter().all(Self::is_constant) => Dynamic(Union::Array(
+                Box::new(x.iter().map(|v| v.get_constant_value().unwrap()).collect()),
+            )),
 
             #[cfg(not(feature = "no_object"))]
-            Self::Map(x) if x.0.iter().all(|(_, v)| v.is_constant()) => {
+            Self::Map(x, _) if x.iter().all(|(_, v)| v.is_constant()) => {
                 Dynamic(Union::Map(Box::new(
-                    x.0.iter()
+                    x.iter()
                         .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap()))
                         .collect(),
                 )))
@@ -1043,20 +1031,20 @@ impl Expr {
             Self::CharConstant(_, pos) => *pos,
             Self::StringConstant(x) => x.pos,
             Self::FnPointer(x) => x.pos,
-            Self::Array(x) => x.1,
-            Self::Map(x) => x.1,
+            Self::Array(_, pos) => *pos,
+            Self::Map(_, pos) => *pos,
             Self::Property(x) => (x.0).pos,
             Self::Stmt(_, pos) => *pos,
             Self::Variable(x) => (x.0).pos,
-            Self::FnCall(x) => x.pos,
+            Self::FnCall(_, pos) => *pos,
 
-            Self::And(x) | Self::Or(x) | Self::In(x) => x.pos,
+            Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => x.lhs.position(),
 
             Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos,
 
-            Self::Dot(x) | Self::Index(x) => x.lhs.position(),
+            Self::Dot(x, _) | Self::Index(x, _) => x.lhs.position(),
 
-            Self::Custom(x) => x.pos,
+            Self::Custom(_, pos) => *pos,
         }
     }
 
@@ -1074,16 +1062,16 @@ impl Expr {
             Self::CharConstant(_, pos) => *pos = new_pos,
             Self::StringConstant(x) => x.pos = new_pos,
             Self::FnPointer(x) => x.pos = new_pos,
-            Self::Array(x) => x.1 = new_pos,
-            Self::Map(x) => x.1 = new_pos,
+            Self::Array(_, pos) => *pos = new_pos,
+            Self::Map(_, pos) => *pos = new_pos,
             Self::Variable(x) => (x.0).pos = new_pos,
             Self::Property(x) => (x.0).pos = new_pos,
             Self::Stmt(_, pos) => *pos = new_pos,
-            Self::FnCall(x) => x.pos = new_pos,
-            Self::And(x) | Self::Or(x) | Self::In(x) => x.pos = new_pos,
+            Self::FnCall(_, pos) => *pos = new_pos,
+            Self::And(_, pos) | Self::Or(_, pos) | Self::In(_, pos) => *pos = new_pos,
             Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos = new_pos,
-            Self::Dot(x) | Self::Index(x) => x.pos = new_pos,
-            Self::Custom(x) => x.pos = new_pos,
+            Self::Dot(_, pos) | Self::Index(_, pos) => *pos = new_pos,
+            Self::Custom(_, pos) => *pos = new_pos,
         }
 
         self
@@ -1096,9 +1084,11 @@ impl Expr {
         match self {
             Self::Expr(x) => x.is_pure(),
 
-            Self::Array(x) => x.0.iter().all(Self::is_pure),
+            Self::Array(x, _) => x.iter().all(Self::is_pure),
 
-            Self::Index(x) | Self::And(x) | Self::Or(x) | Self::In(x) => {
+            Self::Map(x, _) => x.iter().map(|(_, v)| v).all(Self::is_pure),
+
+            Self::Index(x, _) | Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => {
                 x.lhs.is_pure() && x.rhs.is_pure()
             }
 
@@ -1136,13 +1126,13 @@ impl Expr {
             | Self::Unit(_) => true,
 
             // An array literal is literal if all items are literals
-            Self::Array(x) => x.0.iter().all(Self::is_literal),
+            Self::Array(x, _) => x.iter().all(Self::is_literal),
 
             // An map literal is literal if all items are literals
-            Self::Map(x) => x.0.iter().map(|(_, expr)| expr).all(Self::is_literal),
+            Self::Map(x, _) => x.iter().map(|(_, expr)| expr).all(Self::is_literal),
 
             // Check in expression
-            Self::In(x) => match (&x.lhs, &x.rhs) {
+            Self::In(x, _) => match (&x.lhs, &x.rhs) {
                 (Self::StringConstant(_), Self::StringConstant(_))
                 | (Self::CharConstant(_, _), Self::StringConstant(_)) => true,
                 _ => false,
@@ -1169,13 +1159,13 @@ impl Expr {
             | Self::Unit(_) => true,
 
             // An array literal is constant if all items are constant
-            Self::Array(x) => x.0.iter().all(Self::is_constant),
+            Self::Array(x, _) => x.iter().all(Self::is_constant),
 
             // An map literal is constant if all items are constant
-            Self::Map(x) => x.0.iter().map(|(_, expr)| expr).all(Self::is_constant),
+            Self::Map(x, _) => x.iter().map(|(_, expr)| expr).all(Self::is_constant),
 
             // Check in expression
-            Self::In(x) => match (&x.lhs, &x.rhs) {
+            Self::In(x, _) => match (&x.lhs, &x.rhs) {
                 (Self::StringConstant(_), Self::StringConstant(_))
                 | (Self::CharConstant(_, _), Self::StringConstant(_)) => true,
                 _ => false,
@@ -1196,20 +1186,20 @@ impl Expr {
             Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::FnPointer(_)
-            | Self::In(_)
-            | Self::And(_)
-            | Self::Or(_)
+            | Self::In(_, _)
+            | Self::And(_, _)
+            | Self::Or(_, _)
             | Self::True(_)
             | Self::False(_)
             | Self::Unit(_) => false,
 
             Self::StringConstant(_)
             | Self::Stmt(_, _)
-            | Self::FnCall(_)
-            | Self::Dot(_)
-            | Self::Index(_)
-            | Self::Array(_)
-            | Self::Map(_) => match token {
+            | Self::FnCall(_, _)
+            | Self::Dot(_, _)
+            | Self::Index(_, _)
+            | Self::Array(_, _)
+            | Self::Map(_, _) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
                 _ => false,
@@ -1231,7 +1221,7 @@ impl Expr {
                 _ => false,
             },
 
-            Self::Custom(_) => false,
+            Self::Custom(_, _) => false,
         }
     }
 

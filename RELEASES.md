@@ -6,6 +6,7 @@ Version 0.19.4
 ==============
 
 This version basically cleans up the code structure in preparation for a potential `1.0` release in the future.
+Most scripts should see a material speed increase.
 
 This version also adds a low-level API for more flexibility when defining custom syntax.
 
@@ -29,7 +30,7 @@ New features
 Enhancements
 ------------
 
-* AST data structures are optimized to maximize cache friendliness. This may have speed impacts on large, complex scripts (benchmarks wanted!).
+* Essential AST structures like `Expr` and `Stmt` are packed into smaller sizes (16 bytes and 32 bytes on 64-bit), stored inline for more cache friendliness, and de-`Box`ed as much as possible.
 
 
 Version 0.19.3

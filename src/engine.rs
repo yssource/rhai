@@ -879,8 +879,8 @@ impl Engine {
         let is_ref = target.is_ref();
 
         let next_chain = match rhs {
-            Expr::Index(_) => ChainType::Index,
-            Expr::Dot(_) => ChainType::Dot,
+            Expr::Index(_, _) => ChainType::Index,
+            Expr::Dot(_, _) => ChainType::Dot,
             _ => ChainType::None,
         };
 
@@ -894,7 +894,7 @@ impl Engine {
 
                 match rhs {
                     // xxx[idx].expr... | xxx[idx][expr]...
-                    Expr::Dot(x) | Expr::Index(x) => {
+                    Expr::Dot(x, x_pos) | Expr::Index(x, x_pos) => {
                         let idx_pos = x.lhs.position();
                         let idx_val = idx_val.as_value();
                         let obj_ptr = &mut self.get_indexed_mut(
@@ -905,7 +905,7 @@ impl Engine {
                             state, lib, this_ptr, obj_ptr, &x.rhs, idx_values, next_chain, level,
                             new_val,
                         )
-                        .map_err(|err| err.fill_position(x.pos))
+                        .map_err(|err| err.fill_position(*x_pos))
                     }
                     // xxx[rhs] = new_val
                     _ if new_val.is_some() => {
@@ -968,11 +968,10 @@ impl Engine {
             ChainType::Dot => {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
-                    Expr::FnCall(x) if x.namespace.is_none() => {
+                    Expr::FnCall(x, pos) if x.namespace.is_none() => {
                         let FnCallInfo {
                             name,
                             native_only: native,
-                            pos,
                             hash,
                             def_value,
                             ..
@@ -986,7 +985,7 @@ impl Engine {
                         .map_err(|err| err.fill_position(*pos))
                     }
                     // xxx.module::fn_name(...) - syntax error
-                    Expr::FnCall(_) => unreachable!(),
+                    Expr::FnCall(_, _) => unreachable!(),
                     // {xxx:map}.id = ???
                     Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
                         let IdentX { name, pos } = &x.0;
@@ -1031,7 +1030,7 @@ impl Engine {
                         .map_err(|err| err.fill_position(*pos))
                     }
                     // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
-                    Expr::Index(x) | Expr::Dot(x) if target.is::<Map>() => {
+                    Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target.is::<Map>() => {
                         let mut val = match &x.lhs {
                             Expr::Property(p) => {
                                 let IdentX { name, pos } = &p.0;
@@ -1041,11 +1040,10 @@ impl Engine {
                                 )?
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
-                            Expr::FnCall(x) if x.namespace.is_none() => {
+                            Expr::FnCall(x, pos) if x.namespace.is_none() => {
                                 let FnCallInfo {
                                     name,
                                     native_only: native,
-                                    pos,
                                     hash,
                                     def_value,
                                     ..
@@ -1061,7 +1059,7 @@ impl Engine {
                                 val.into()
                             }
                             // {xxx:map}.module::fn_name(...) - syntax error
-                            Expr::FnCall(_) => unreachable!(),
+                            Expr::FnCall(_, _) => unreachable!(),
                             // Others - syntax error
                             _ => unreachable!(),
                         };
@@ -1070,10 +1068,10 @@ impl Engine {
                             state, lib, this_ptr, &mut val, &x.rhs, idx_values, next_chain, level,
                             new_val,
                         )
-                        .map_err(|err| err.fill_position(x.pos))
+                        .map_err(|err| err.fill_position(*x_pos))
                     }
                     // xxx.sub_lhs[expr] | xxx.sub_lhs.expr
-                    Expr::Index(x) | Expr::Dot(x) => {
+                    Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) => {
                         match &x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
@@ -1101,7 +1099,7 @@ impl Engine {
                                         level,
                                         new_val,
                                     )
-                                    .map_err(|err| err.fill_position(x.pos))?;
+                                    .map_err(|err| err.fill_position(*x_pos))?;
 
                                 // Feed the value back via a setter just in case it has been updated
                                 if updated || may_be_changed {
@@ -1117,7 +1115,7 @@ impl Engine {
                                             EvalAltResult::ErrorDotExpr(_, _) => {
                                                 Ok(Default::default())
                                             }
-                                            _ => Err(err.fill_position(x.pos)),
+                                            _ => Err(err.fill_position(*x_pos)),
                                         },
                                     )?;
                                 }
@@ -1125,11 +1123,10 @@ impl Engine {
                                 Ok((result, may_be_changed))
                             }
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
-                            Expr::FnCall(f) if f.namespace.is_none() => {
+                            Expr::FnCall(f, pos) if f.namespace.is_none() => {
                                 let FnCallInfo {
                                     name,
                                     native_only: native,
-                                    pos,
                                     hash,
                                     def_value,
                                     ..
@@ -1152,7 +1149,7 @@ impl Engine {
                                 .map_err(|err| err.fill_position(*pos))
                             }
                             // xxx.module::fn_name(...) - syntax error
-                            Expr::FnCall(_) => unreachable!(),
+                            Expr::FnCall(_, _) => unreachable!(),
                             // Others - syntax error
                             _ => unreachable!(),
                         }
@@ -1183,12 +1180,12 @@ impl Engine {
             BinaryExpr {
                 lhs: dot_lhs,
                 rhs: dot_rhs,
-                pos: op_pos,
             },
             chain_type,
+            op_pos,
         ) = match expr {
-            Expr::Index(x) => (x.as_ref(), ChainType::Index),
-            Expr::Dot(x) => (x.as_ref(), ChainType::Dot),
+            Expr::Index(x, pos) => (x.as_ref(), ChainType::Index, *pos),
+            Expr::Dot(x, pos) => (x.as_ref(), ChainType::Dot, *pos),
             _ => unreachable!(),
         };
 
@@ -1235,7 +1232,7 @@ impl Engine {
                     state, lib, &mut None, obj_ptr, dot_rhs, idx_values, chain_type, level, new_val,
                 )
                 .map(|(v, _)| v)
-                .map_err(|err| err.fill_position(*op_pos))
+                .map_err(|err| err.fill_position(op_pos))
             }
             // {expr}.??? = ??? or {expr}[???] = ???
             _ if new_val.is_some() => unreachable!(),
@@ -1247,7 +1244,7 @@ impl Engine {
                     state, lib, this_ptr, obj_ptr, dot_rhs, idx_values, chain_type, level, new_val,
                 )
                 .map(|(v, _)| v)
-                .map_err(|err| err.fill_position(*op_pos))
+                .map_err(|err| err.fill_position(op_pos))
             }
         }
     }
@@ -1272,7 +1269,7 @@ impl Engine {
             .map_err(|err| err.fill_position(expr.position()))?;
 
         match expr {
-            Expr::FnCall(x) if x.namespace.is_none() => {
+            Expr::FnCall(x, _) if x.namespace.is_none() => {
                 let arg_values = x
                     .args
                     .iter()
@@ -1283,23 +1280,24 @@ impl Engine {
 
                 idx_values.push(arg_values.into());
             }
-            Expr::FnCall(_) => unreachable!(),
+            Expr::FnCall(_, _) => unreachable!(),
             Expr::Property(_) => idx_values.push(IndexChainValue::None),
-            Expr::Index(x) | Expr::Dot(x) => {
+            Expr::Index(x, _) | Expr::Dot(x, _) => {
                 let BinaryExpr { lhs, rhs, .. } = x.as_ref();
 
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
                     Expr::Property(_) => IndexChainValue::None,
-                    Expr::FnCall(x) if chain_type == ChainType::Dot && x.namespace.is_none() => x
-                        .args
-                        .iter()
-                        .map(|arg_expr| {
-                            self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
-                        })
-                        .collect::<Result<StaticVec<Dynamic>, _>>()?
-                        .into(),
-                    Expr::FnCall(_) => unreachable!(),
+                    Expr::FnCall(x, _) if chain_type == ChainType::Dot && x.namespace.is_none() => {
+                        x.args
+                            .iter()
+                            .map(|arg_expr| {
+                                self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
+                            })
+                            .collect::<Result<StaticVec<Dynamic>, _>>()?
+                            .into()
+                    }
+                    Expr::FnCall(_, _) => unreachable!(),
                     _ => self
                         .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?
                         .into(),
@@ -1307,8 +1305,8 @@ impl Engine {
 
                 // Push in reverse order
                 let chain_type = match expr {
-                    Expr::Index(_) => ChainType::Index,
-                    Expr::Dot(_) => ChainType::Dot,
+                    Expr::Index(_, _) => ChainType::Index,
+                    Expr::Dot(_, _) => ChainType::Dot,
                     _ => unreachable!(),
                 };
                 self.eval_indexed_chain(
@@ -1456,7 +1454,7 @@ impl Engine {
         match rhs_value {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(mut rhs_value)) => {
-                let op = "==";
+                const OP_FUNC: &str = "==";
 
                 // Call the `==` operator to compare each value
                 let def_value = Some(false.into());
@@ -1465,10 +1463,11 @@ impl Engine {
                     let args = &mut [&mut lhs_value.clone(), value];
 
                     // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
-                    let hash = calc_native_fn_hash(empty(), op, args.iter().map(|a| a.type_id()));
+                    let hash =
+                        calc_native_fn_hash(empty(), OP_FUNC, args.iter().map(|a| a.type_id()));
 
                     if self
-                        .call_native_fn(state, lib, op, hash, args, false, false, &def_value)
+                        .call_native_fn(state, lib, OP_FUNC, hash, args, false, false, &def_value)
                         .map_err(|err| err.fill_position(rhs.position()))?
                         .0
                         .as_bool()
@@ -1482,13 +1481,13 @@ impl Engine {
             }
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(rhs_value)) => match lhs_value {
-                // Only allows String or char
+                // Only allows string or char
                 Dynamic(Union::Str(s)) => Ok(rhs_value.contains_key(&s).into()),
                 Dynamic(Union::Char(c)) => Ok(rhs_value.contains_key(&c.to_string()).into()),
                 _ => EvalAltResult::ErrorInExpr(lhs.position()).into(),
             },
             Dynamic(Union::Str(rhs_value)) => match lhs_value {
-                // Only allows String or char
+                // Only allows string or char
                 Dynamic(Union::Str(s)) => Ok(rhs_value.contains(s.as_str()).into()),
                 Dynamic(Union::Char(c)) => Ok(rhs_value.contains(c).into()),
                 _ => EvalAltResult::ErrorInExpr(lhs.position()).into(),
@@ -1512,12 +1511,12 @@ impl Engine {
             .map_err(|err| err.fill_position(expr.position()))?;
 
         let result = match expr {
-            Expr::Expr(x) => self.eval_expr(scope, mods, state, lib, this_ptr, x.as_ref(), level),
+            Expr::Expr(x) => self.eval_expr(scope, mods, state, lib, this_ptr, x, level),
 
             Expr::IntegerConstant(x, _) => Ok((*x).into()),
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(x, _) => Ok(x.0.into()),
-            Expr::StringConstant(x) => Ok(x.name.to_string().into()),
+            Expr::StringConstant(x) => Ok(x.name.clone().into()),
             Expr::CharConstant(x, _) => Ok((*x).into()),
             Expr::FnPointer(x) => {
                 Ok(FnPtr::new_unchecked(x.name.clone(), Default::default()).into())
@@ -1541,26 +1540,26 @@ impl Engine {
 
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(_) => {
+            Expr::Index(_, _) => {
                 self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
             }
 
             // lhs.dot_rhs
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(_) => {
+            Expr::Dot(_, _) => {
                 self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
             }
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Array(x) => Ok(Dynamic(Union::Array(Box::new(
-                x.0.iter()
+            Expr::Array(x, _) => Ok(Dynamic(Union::Array(Box::new(
+                x.iter()
                     .map(|item| self.eval_expr(scope, mods, state, lib, this_ptr, item, level))
                     .collect::<Result<Vec<_>, _>>()?,
             )))),
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Map(x) => Ok(Dynamic(Union::Map(Box::new(
-                x.0.iter()
+            Expr::Map(x, _) => Ok(Dynamic(Union::Map(Box::new(
+                x.iter()
                     .map(|(key, expr)| {
                         self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
                             .map(|val| (key.name.clone(), val))
@@ -1569,12 +1568,11 @@ impl Engine {
             )))),
 
             // Normal function call
-            Expr::FnCall(x) if x.namespace.is_none() => {
+            Expr::FnCall(x, pos) if x.namespace.is_none() => {
                 let FnCallInfo {
                     name,
                     native_only: native,
                     capture: cap_scope,
-                    pos,
                     hash,
                     args,
                     def_value,
@@ -1589,10 +1587,9 @@ impl Engine {
             }
 
             // Module-qualified function call
-            Expr::FnCall(x) if x.namespace.is_some() => {
+            Expr::FnCall(x, pos) if x.namespace.is_some() => {
                 let FnCallInfo {
                     name,
-                    pos,
                     namespace,
                     hash,
                     args,
@@ -1606,11 +1603,11 @@ impl Engine {
                 .map_err(|err| err.fill_position(*pos))
             }
 
-            Expr::In(x) => {
+            Expr::In(x, _) => {
                 self.eval_in_expr(scope, mods, state, lib, this_ptr, &x.lhs, &x.rhs, level)
             }
 
-            Expr::And(x) => {
+            Expr::And(x, _) => {
                 Ok((self
                     .eval_expr(scope, mods, state, lib, this_ptr, &x.lhs, level)?
                     .as_bool()
@@ -1623,7 +1620,7 @@ impl Engine {
                 .into())
             }
 
-            Expr::Or(x) => {
+            Expr::Or(x, _) => {
                 Ok((self
                     .eval_expr(scope, mods, state, lib, this_ptr, &x.lhs, level)?
                     .as_bool()
@@ -1640,8 +1637,7 @@ impl Engine {
             Expr::False(_) => Ok(false.into()),
             Expr::Unit(_) => Ok(().into()),
 
-            Expr::Custom(custom) => {
-                let func = custom.func();
+            Expr::Custom(custom, _) => {
                 let expressions = custom
                     .keywords()
                     .iter()
@@ -1656,7 +1652,7 @@ impl Engine {
                     this_ptr,
                     level,
                 };
-                func(&mut context, &expressions)
+                (custom.func)(&mut context, &expressions)
             }
 
             _ => unreachable!(),
@@ -1825,7 +1821,7 @@ impl Engine {
                     Expr::Variable(_) => unreachable!(),
                     // idx_lhs[idx_expr] op= rhs
                     #[cfg(not(feature = "no_index"))]
-                    Expr::Index(_) => {
+                    Expr::Index(_, _) => {
                         self.eval_dot_index_chain(
                             scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
@@ -1833,7 +1829,7 @@ impl Engine {
                     }
                     // dot_lhs.dot_rhs op= rhs
                     #[cfg(not(feature = "no_object"))]
-                    Expr::Dot(_) => {
+                    Expr::Dot(_, _) => {
                         self.eval_dot_index_chain(
                             scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
