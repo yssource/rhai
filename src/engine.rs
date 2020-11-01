@@ -589,9 +589,9 @@ fn default_print(_s: &str) {
 pub fn search_imports<'s>(
     mods: &'s Imports,
     state: &mut State,
-    modules: &Box<ModuleRef>,
+    modules: &ModuleRef,
 ) -> Result<&'s Module, Box<EvalAltResult>> {
-    let (root, root_pos) = &modules[0];
+    let Ident { name: root, pos } = &modules[0];
 
     // Qualified - check if the root module is directly indexed
     let index = if state.always_search {
@@ -608,7 +608,7 @@ pub fn search_imports<'s>(
             .rev()
             .find(|(n, _)| n == root)
             .map(|(_, m)| m)
-            .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *root_pos))?
+            .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *pos))?
     })
 }
 
@@ -617,9 +617,9 @@ pub fn search_imports<'s>(
 pub fn search_imports_mut<'s>(
     mods: &'s mut Imports,
     state: &mut State,
-    modules: &Box<ModuleRef>,
+    modules: &ModuleRef,
 ) -> Result<&'s mut Module, Box<EvalAltResult>> {
-    let (root, root_pos) = &modules[0];
+    let Ident { name: root, pos } = &modules[0];
 
     // Qualified - check if the root module is directly indexed
     let index = if state.always_search {
@@ -636,7 +636,7 @@ pub fn search_imports_mut<'s>(
             .rev()
             .find(|(n, _)| n == root)
             .map(|(_, m)| m)
-            .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *root_pos))?
+            .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *pos))?
     })
 }
 

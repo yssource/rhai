@@ -265,7 +265,7 @@ fn parse_fn_call(
     lib: &mut FunctionsLib,
     id: String,
     capture: bool,
-    mut namespace: Option<Box<ModuleRef>>,
+    mut namespace: Option<ModuleRef>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
     let (token, token_pos) = input.peek().unwrap();
@@ -292,7 +292,7 @@ fn parse_fn_call(
 
             let hash_script = if let Some(modules) = namespace.as_mut() {
                 #[cfg(not(feature = "no_module"))]
-                modules.set_index(state.find_module(&modules[0].0));
+                modules.set_index(state.find_module(&modules[0].name));
 
                 // Rust functions are indexed in two steps:
                 // 1) Calculate a hash in a similar manner to script-defined functions,
@@ -300,7 +300,7 @@ fn parse_fn_call(
                 // 2) Calculate a second hash with no qualifiers, empty function name,
                 //    zero number of arguments, and the actual list of argument `TypeId`'s.
                 // 3) The final hash is the XOR of the two hashes.
-                let qualifiers = modules.iter().map(|(m, _)| m.as_str());
+                let qualifiers = modules.iter().map(|m| m.name.as_str());
                 calc_script_fn_hash(qualifiers, &id, 0)
             } else {
                 // Qualifiers (none) + function name + no parameters.
@@ -339,7 +339,7 @@ fn parse_fn_call(
 
                 let hash_script = if let Some(modules) = namespace.as_mut() {
                     #[cfg(not(feature = "no_module"))]
-                    modules.set_index(state.find_module(&modules[0].0));
+                    modules.set_index(state.find_module(&modules[0].name));
 
                     // Rust functions are indexed in two steps:
                     // 1) Calculate a hash in a similar manner to script-defined functions,
@@ -347,7 +347,7 @@ fn parse_fn_call(
                     // 2) Calculate a second hash with no qualifiers, empty function name,
                     //    zero number of arguments, and the actual list of argument `TypeId`'s.
                     // 3) The final hash is the XOR of the two hashes.
-                    let qualifiers = modules.iter().map(|(m, _)| m.as_str());
+                    let qualifiers = modules.iter().map(|m| m.name.as_str());
                     calc_script_fn_hash(qualifiers, &id, args.len())
                 } else {
                     // Qualifiers (none) + function name + number of arguments.
@@ -891,14 +891,14 @@ fn parse_primary(
             // module access
             (Expr::Variable(x), Token::DoubleColon) => match input.next().unwrap() {
                 (Token::Identifier(id2), pos2) => {
-                    let (Ident { name, pos }, mut modules, _, index) = *x;
+                    let (var_name_def, mut modules, _, index) = *x;
 
                     if let Some(ref mut modules) = modules {
-                        modules.push((name, pos));
+                        modules.push(var_name_def);
                     } else {
                         let mut m: ModuleRef = Default::default();
-                        m.push((name, pos));
-                        modules = Some(Box::new(m));
+                        m.push(var_name_def);
+                        modules = Some(m);
                     }
 
                     Expr::Variable(Box::new((Ident::new(id2, pos2), modules, 0, index)))
@@ -929,10 +929,10 @@ fn parse_primary(
             let modules = modules.as_mut().unwrap();
 
             // Qualifiers + variable name
-            *hash = calc_script_fn_hash(modules.iter().map(|(v, _)| v.as_str()), name, 0);
+            *hash = calc_script_fn_hash(modules.iter().map(|v| v.name.as_str()), name, 0);
 
             #[cfg(not(feature = "no_module"))]
-            modules.set_index(state.find_module(&modules[0].0));
+            modules.set_index(state.find_module(&modules[0].name));
         }
         _ => (),
     }
@@ -1206,7 +1206,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(x)) if x.1.is_some() => {
-            return Err(PERR::PropertyExpected.into_err(x.1.unwrap()[0].1));
+            return Err(PERR::PropertyExpected.into_err(x.1.unwrap()[0].pos));
         }
         // lhs.prop
         (lhs, prop @ Expr::Property(_)) => {

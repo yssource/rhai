@@ -99,7 +99,15 @@ pub type INT = i32;
 ///
 /// Not available under the `no_float` feature.
 #[cfg(not(feature = "no_float"))]
+#[cfg(not(feature = "f32_float"))]
 pub type FLOAT = f64;
+
+/// The system floating-point type.
+///
+/// Not available under the `no_float` feature.
+#[cfg(not(feature = "no_float"))]
+#[cfg(feature = "f32_float")]
+pub type FLOAT = f32;
 
 pub use ast::AST;
 pub use dynamic::Dynamic;

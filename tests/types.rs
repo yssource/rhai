@@ -16,7 +16,13 @@ fn test_type_of() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<String>("type_of(60 + 5)")?, "i32");
 
     #[cfg(not(feature = "no_float"))]
-    assert_eq!(engine.eval::<String>("type_of(1.0 + 2.0)")?, "f64");
+    {
+        #[cfg(not(feature = "f32_float"))]
+        assert_eq!(engine.eval::<String>("type_of(1.0 + 2.0)")?, "f64");
+
+        #[cfg(feature = "f32_float")]
+        assert_eq!(engine.eval::<String>("type_of(1.0 + 2.0)")?, "f32");
+    }
 
     #[cfg(not(feature = "no_index"))]
     assert_eq!(

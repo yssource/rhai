@@ -24,6 +24,7 @@ Breaking changes
 New features
 ------------
 
+* `f32_float` feature to set `FLOAT` to `f32`.
 * Low-level API for custom syntax allowing more flexibility in designing the syntax.
 * `Module::fill_with` to poly-fill a module with another.
 

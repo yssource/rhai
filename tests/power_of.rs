@@ -4,7 +4,7 @@ use rhai::{Engine, EvalAltResult, INT};
 use rhai::FLOAT;
 
 #[cfg(not(feature = "no_float"))]
-const EPSILON: FLOAT = 0.000_000_000_1;
+const EPSILON: FLOAT = 0.000_001;
 
 #[test]
 fn test_power_of() -> Result<(), Box<EvalAltResult>> {

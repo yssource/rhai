@@ -81,7 +81,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_float"))]
     module.set_fn_4_mut(
         "sum_of_three_args".to_string(),
-        |target: &mut INT, a: INT, b: INT, c: f64| {
+        |target: &mut INT, a: INT, b: INT, c: rhai::FLOAT| {
             *target = a + b + c as INT;
             Ok(())
         },
