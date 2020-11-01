@@ -25,6 +25,14 @@ import "crypto_init";           // run the script file 'crypto_init.rhai' withou
 
 import "crypto" as lock;        // run the script file 'crypto.rhai' and import it as a module named 'lock'
 
+const SECRET_NUMBER = 42;
+
+let mod_file = "crypto_" + SECRET_NUMBER;
+
+import mod_file as my_mod;      // load the script file "crypto_42.rhai" and import it as a module named 'my_mod'
+                                // notice that module path names can be dynamically constructed!
+                                // any expression that evaluates to a string is acceptable after the 'import' keyword
+
 lock::encrypt(secret);          // use functions defined under the module via '::'
 
 lock::hash::sha256(key);        // sub-modules are also supported

@@ -69,10 +69,58 @@ pub type Map = HashMap<ImmutableString, Dynamic>;
 ///
 /// This type is volatile and may change.
 //
-// Note - We cannot use &str or Cow<str> here because `eval` may load a module
-//        and the module name will live beyond the AST of the eval script text.
-//        The best we can do is a shared reference.
-pub type Imports = Vec<(ImmutableString, Module)>;
+// # Implementation Notes
+//
+// We cannot use &str or Cow<str> here because `eval` may load a module and the module name will live beyond
+// the AST of the eval script text. The best we can do is a shared reference.
+//
+// `Imports` is implemented as two `Vec`'s of exactly the same length.  That's because a `Module` is large,
+// so packing the import names together improves cache locality.
+#[derive(Debug, Clone, Default)]
+pub struct Imports(StaticVec<ImmutableString>, StaticVec<Module>);
+
+impl Imports {
+    /// Get the length of this stack of imported modules.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    /// Get the imported module at a particular index.
+    pub fn get(&self, index: usize) -> Option<&Module> {
+        self.1.get(index)
+    }
+    /// Get a mutable reference to the imported module at a particular index.
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut Module> {
+        self.1.get_mut(index)
+    }
+    /// Get the index of an imported module by name.
+    pub fn find(&self, name: &str) -> Option<usize> {
+        self.0
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, key)| key.as_str() == name)
+            .map(|(index, _)| index)
+    }
+    /// Push an imported module onto the stack.
+    pub fn push(&mut self, name: impl Into<ImmutableString>, module: Module) {
+        self.0.push(name.into());
+        self.1.push(module);
+    }
+    /// Truncate the stack of imported modules to a particular length.
+    pub fn truncate(&mut self, size: usize) {
+        self.0.truncate(size);
+        self.1.truncate(size);
+    }
+    /// Get an iterator to this stack of imported modules.
+    #[allow(dead_code)]
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
+        self.0.iter().map(|name| name.as_str()).zip(self.1.iter())
+    }
+    /// Get a consuming iterator to this stack of imported modules.
+    pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Module)> {
+        self.0.into_iter().zip(self.1.into_iter())
+    }
+}
 
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
@@ -602,12 +650,10 @@ pub fn search_imports<'s>(
 
     Ok(if index > 0 {
         let offset = mods.len() - index;
-        &mods.get(offset).unwrap().1
+        mods.get(offset).expect("invalid index in Imports")
     } else {
-        mods.iter()
-            .rev()
-            .find(|(n, _)| n == root)
-            .map(|(_, m)| m)
+        mods.find(root)
+            .map(|n| mods.get(n).expect("invalid index in Imports"))
             .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *pos))?
     })
 }
@@ -630,13 +676,14 @@ pub fn search_imports_mut<'s>(
 
     Ok(if index > 0 {
         let offset = mods.len() - index;
-        &mut mods.get_mut(offset).unwrap().1
+        mods.get_mut(offset).expect("invalid index in Imports")
     } else {
-        mods.iter_mut()
-            .rev()
-            .find(|(n, _)| n == root)
-            .map(|(_, m)| m)
-            .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *pos))?
+        if let Some(n) = mods.find(root) {
+            mods.get_mut(n)
+        } else {
+            None
+        }
+        .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *pos))?
     })
 }
 
@@ -2092,7 +2139,7 @@ impl Engine {
 
                         if let Some(name_def) = alias {
                             module.index_all_sub_modules();
-                            mods.push((name_def.name.clone(), module));
+                            mods.push(name_def.name.clone(), module);
                         }
 
                         state.modules += 1;

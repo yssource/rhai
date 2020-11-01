@@ -13,11 +13,7 @@ use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec};
 use crate::{ast::ScriptFnDef, fn_native::Shared};
 
 #[cfg(not(feature = "no_module"))]
-use crate::{
-    ast::AST,
-    engine::{Engine, Imports},
-    scope::Scope,
-};
+use crate::{ast::AST, engine::Engine, scope::Scope};
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::{Array, FN_IDX_GET, FN_IDX_SET};
@@ -1340,7 +1336,7 @@ impl Module {
         ast: &AST,
         engine: &Engine,
     ) -> Result<Self, Box<EvalAltResult>> {
-        let mut mods = Imports::new();
+        let mut mods = Default::default();
 
         // Run the script
         engine.eval_ast_with_scope_raw(&mut scope, &mut mods, &ast)?;
