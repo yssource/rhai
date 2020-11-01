@@ -34,19 +34,19 @@ fn test_float_parse() -> Result<(), Box<EvalAltResult>> {
 fn test_struct_with_float() -> Result<(), Box<EvalAltResult>> {
     #[derive(Clone)]
     struct TestStruct {
-        x: f64,
+        x: FLOAT,
     }
 
     impl TestStruct {
         fn update(&mut self) {
-            self.x += 5.789_f64;
+            self.x += 5.789;
         }
 
-        fn get_x(&mut self) -> f64 {
+        fn get_x(&mut self) -> FLOAT {
             self.x
         }
 
-        fn set_x(&mut self, new_x: f64) {
+        fn set_x(&mut self, new_x: FLOAT) {
             self.x = new_x;
         }
 

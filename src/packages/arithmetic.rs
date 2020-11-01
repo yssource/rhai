@@ -224,25 +224,32 @@ gen_signed_functions!(signed_num_128 => i128);
 #[cfg(not(feature = "no_float"))]
 #[export_module]
 mod f32_functions {
-    #[rhai_fn(name = "+")]
-    pub fn add(x: f32, y: f32) -> f32 {
-        x + y
-    }
-    #[rhai_fn(name = "-")]
-    pub fn subtract(x: f32, y: f32) -> f32 {
-        x - y
-    }
-    #[rhai_fn(name = "*")]
-    pub fn multiply(x: f32, y: f32) -> f32 {
-        x * y
-    }
-    #[rhai_fn(name = "/")]
-    pub fn divide(x: f32, y: f32) -> f32 {
-        x / y
-    }
-    #[rhai_fn(name = "%")]
-    pub fn modulo(x: f32, y: f32) -> f32 {
-        x % y
+    #[cfg(not(feature = "f32_float"))]
+    pub mod basic_arithmetic {
+        #[rhai_fn(name = "+")]
+        pub fn add(x: f32, y: f32) -> f32 {
+            x + y
+        }
+        #[rhai_fn(name = "-")]
+        pub fn subtract(x: f32, y: f32) -> f32 {
+            x - y
+        }
+        #[rhai_fn(name = "*")]
+        pub fn multiply(x: f32, y: f32) -> f32 {
+            x * y
+        }
+        #[rhai_fn(name = "/")]
+        pub fn divide(x: f32, y: f32) -> f32 {
+            x / y
+        }
+        #[rhai_fn(name = "%")]
+        pub fn modulo(x: f32, y: f32) -> f32 {
+            x % y
+        }
+        #[rhai_fn(name = "~", return_raw)]
+        pub fn pow_f_f(x: f32, y: f32) -> Result<Dynamic, Box<EvalAltResult>> {
+            Ok(Dynamic::from(x.powf(y)))
+        }
     }
     #[rhai_fn(name = "-")]
     pub fn neg(x: f32) -> f32 {
@@ -261,10 +268,6 @@ mod f32_functions {
         }
     }
     #[rhai_fn(name = "~", return_raw)]
-    pub fn pow_f_f(x: f32, y: f32) -> Result<Dynamic, Box<EvalAltResult>> {
-        Ok(Dynamic::from(x.powf(y)))
-    }
-    #[rhai_fn(name = "~", return_raw)]
     pub fn pow_f_i(x: f32, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && y > (i32::MAX as INT) {
             Err(make_err(format!(
@@ -280,6 +283,33 @@ mod f32_functions {
 #[cfg(not(feature = "no_float"))]
 #[export_module]
 mod f64_functions {
+    #[cfg(feature = "f32_float")]
+    pub mod basic_arithmetic {
+        #[rhai_fn(name = "+")]
+        pub fn add(x: f64, y: f64) -> f64 {
+            x + y
+        }
+        #[rhai_fn(name = "-")]
+        pub fn subtract(x: f64, y: f64) -> f64 {
+            x - y
+        }
+        #[rhai_fn(name = "*")]
+        pub fn multiply(x: f64, y: f64) -> f64 {
+            x * y
+        }
+        #[rhai_fn(name = "/")]
+        pub fn divide(x: f64, y: f64) -> f64 {
+            x / y
+        }
+        #[rhai_fn(name = "%")]
+        pub fn modulo(x: f64, y: f64) -> f64 {
+            x % y
+        }
+        #[rhai_fn(name = "~", return_raw)]
+        pub fn pow_f_f(x: f64, y: f64) -> Result<Dynamic, Box<EvalAltResult>> {
+            Ok(Dynamic::from(x.powf(y)))
+        }
+    }
     #[rhai_fn(name = "-")]
     pub fn neg(x: f64) -> f64 {
         -x
