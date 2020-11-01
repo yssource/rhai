@@ -2070,7 +2070,7 @@ impl Engine {
                 } else {
                     unsafe_cast_var_name_to_lifetime(&var_def.name).into()
                 };
-                scope.push_dynamic_value(var_name, entry_type, val, false);
+                scope.push_dynamic_value(var_name, entry_type, val);
                 Ok(Default::default())
             }
 

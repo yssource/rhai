@@ -16,7 +16,7 @@ use crate::{ast::ScriptFnDef, fn_native::Shared};
 use crate::{
     ast::AST,
     engine::{Engine, Imports},
-    scope::{Entry as ScopeEntry, Scope},
+    scope::Scope,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -1348,14 +1348,12 @@ impl Module {
         // Create new module
         let mut module = Module::new();
 
-        scope
-            .into_iter()
-            .for_each(|ScopeEntry { value, alias, .. }| {
-                // Variables with an alias left in the scope become module variables
-                if let Some(alias) = alias {
-                    module.variables.insert(*alias, value);
-                }
-            });
+        scope.into_iter().for_each(|(_, _, value, alias)| {
+            // Variables with an alias left in the scope become module variables
+            if let Some(alias) = alias {
+                module.variables.insert(alias, value);
+            }
+        });
 
         // Modules left in the scope become sub-modules
         mods.into_iter().for_each(|(alias, m)| {

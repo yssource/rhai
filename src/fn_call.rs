@@ -36,10 +36,6 @@ use crate::engine::{Map, Target, FN_GET, FN_SET};
 #[cfg(not(feature = "no_closure"))]
 use crate::engine::KEYWORD_IS_SHARED;
 
-#[cfg(not(feature = "no_closure"))]
-#[cfg(not(feature = "no_function"))]
-use crate::scope::Entry as ScopeEntry;
-
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
@@ -553,22 +549,14 @@ impl Engine {
                     if let Some(captured) = _capture_scope {
                         captured
                             .into_iter()
-                            .filter(|ScopeEntry { name, .. }| {
-                                func.externals.contains(name.as_ref())
-                            })
-                            .for_each(
-                                |ScopeEntry {
-                                     name, typ, value, ..
-                                 }| {
-                                    // Consume the scope values.
-                                    match typ {
-                                        ScopeEntryType::Normal => scope.push(name, value),
-                                        ScopeEntryType::Constant => {
-                                            scope.push_constant(name, value)
-                                        }
-                                    };
-                                },
-                            );
+                            .filter(|(name, _, _, _)| func.externals.contains(name.as_ref()))
+                            .for_each(|(name, typ, value, _)| {
+                                // Consume the scope values.
+                                match typ {
+                                    ScopeEntryType::Normal => scope.push(name, value),
+                                    ScopeEntryType::Constant => scope.push_constant(name, value),
+                                };
+                            });
                     }
 
                     let result = if _is_method {

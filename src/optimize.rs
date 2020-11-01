@@ -9,7 +9,7 @@ use crate::engine::{
 use crate::fn_call::run_builtin_binary_op;
 use crate::module::Module;
 use crate::parser::map_dynamic_to_expr;
-use crate::scope::{Entry as ScopeEntry, Scope};
+use crate::scope::Scope;
 use crate::token::{is_valid_identifier, Position};
 use crate::{calc_native_fn_hash, StaticVec};
 
@@ -721,24 +721,15 @@ fn optimize(
     // Set up the state
     let mut state = State::new(engine, lib, level);
 
-    // Add constants from the scope into the state
+    // Add constants from the scope that can be made into a literal into the state
     scope
-        .to_iter()
-        // Get all the constants that can be made into a constant literal.
-        .filter(|ScopeEntry { typ, .. }| typ.is_constant())
-        .for_each(
-            |ScopeEntry {
-                 name, expr, value, ..
-             }| {
-                if let Some(val) = expr
-                    .as_ref()
-                    .map(|expr| expr.as_ref().clone())
-                    .or_else(|| map_dynamic_to_expr(value.clone(), Position::none()))
-                {
-                    state.push_constant(name.as_ref(), val);
-                }
-            },
-        );
+        .iter()
+        .filter(|(_, typ, _)| *typ)
+        .for_each(|(name, _, value)| {
+            if let Some(val) = map_dynamic_to_expr(value.clone(), Position::none()) {
+                state.push_constant(name, val);
+            }
+        });
 
     let orig_constants_len = state.constants.len();
 
