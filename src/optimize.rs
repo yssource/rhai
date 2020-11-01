@@ -726,7 +726,7 @@ fn optimize(
         .iter()
         .filter(|(_, typ, _)| *typ)
         .for_each(|(name, _, value)| {
-            if let Some(val) = map_dynamic_to_expr(value.clone(), Position::none()) {
+            if let Some(val) = map_dynamic_to_expr(value, Position::none()) {
                 state.push_constant(name, val);
             }
         });
