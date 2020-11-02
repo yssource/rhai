@@ -2,7 +2,7 @@
 
 use super::str::ImmutableStringDeserializer;
 use crate::dynamic::{Dynamic, Union};
-use crate::parse_error::ParseErrorType;
+use crate::parse_error::{LexError, ParseErrorType};
 use crate::result::EvalAltResult;
 use crate::token::NO_POS;
 use crate::utils::ImmutableString;
@@ -123,10 +123,10 @@ pub fn from_dynamic<'de, T: Deserialize<'de>>(
 
 impl Error for Box<EvalAltResult> {
     fn custom<T: fmt::Display>(err: T) -> Self {
-        EvalAltResult::ErrorParsing(ParseErrorType::BadInput(
-            LexError::ImproperSymbol(err.to_string()),
+        EvalAltResult::ErrorParsing(
+            ParseErrorType::BadInput(LexError::ImproperSymbol(err.to_string())),
             NO_POS,
-        ))
+        )
         .into()
     }
 }
