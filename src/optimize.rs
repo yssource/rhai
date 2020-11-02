@@ -10,7 +10,7 @@ use crate::fn_call::run_builtin_binary_op;
 use crate::module::Module;
 use crate::parser::map_dynamic_to_expr;
 use crate::scope::Scope;
-use crate::token::{is_valid_identifier, Position};
+use crate::token::{is_valid_identifier,  NO_POS};
 use crate::{calc_native_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_function"))]
@@ -726,7 +726,7 @@ fn optimize(
         .iter()
         .filter(|(_, typ, _)| *typ)
         .for_each(|(name, _, value)| {
-            if let Some(val) = map_dynamic_to_expr(value, Position::none()) {
+            if let Some(val) = map_dynamic_to_expr(value, NO_POS) {
                 state.push_constant(name, val);
             }
         });

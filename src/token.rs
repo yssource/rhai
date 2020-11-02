@@ -44,6 +44,9 @@ pub struct Position {
     pos: u16,
 }
 
+/// No `Position`.
+pub const NO_POS: Position = Position { line: 0, pos: 0 };
+
 impl Position {
     /// Create a new `Position`.
     ///
@@ -121,7 +124,7 @@ impl Position {
     /// Create a `Position` representing no position.
     #[inline(always)]
     pub fn none() -> Self {
-        Self { line: 0, pos: 0 }
+        NO_POS
     }
 
     /// Is there no `Position`?

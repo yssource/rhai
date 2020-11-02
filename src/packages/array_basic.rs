@@ -7,7 +7,7 @@ use crate::engine::Array;
 use crate::fn_native::{FnPtr, NativeCallContext};
 use crate::plugin::*;
 use crate::result::EvalAltResult;
-use crate::token::Position;
+use crate::token::NO_POS;
 use crate::utils::ImmutableString;
 use crate::INT;
 
@@ -46,7 +46,7 @@ macro_rules! gen_array_functions {
                     #[cfg(not(feature = "unchecked"))]
                     if _ctx.engine().max_array_size() > 0 && len > 0 && (len as usize) > _ctx.engine().max_array_size() {
                         return EvalAltResult::ErrorDataTooLarge(
-                            "Size of array".to_string(), Position::none()
+                            "Size of array".to_string(), NO_POS
                         ).into();
                     }
 
@@ -219,7 +219,7 @@ mod array_functions {
                         Box::new(EvalAltResult::ErrorInFunctionCall(
                             "map".to_string(),
                             err,
-                            Position::none(),
+                            NO_POS,
                         ))
                     })?,
             );
@@ -250,7 +250,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "filter".to_string(),
                         err,
-                        Position::none(),
+                        NO_POS,
                     ))
                 })?
                 .as_bool()
@@ -283,7 +283,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "filter".to_string(),
                         err,
-                        Position::none(),
+                        NO_POS,
                     ))
                 })?
                 .as_bool()
@@ -316,7 +316,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "filter".to_string(),
                         err,
-                        Position::none(),
+                        NO_POS,
                     ))
                 })?
                 .as_bool()
@@ -351,7 +351,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "reduce".to_string(),
                         err,
-                        Position::none(),
+                        NO_POS,
                     ))
                 })?;
         }
@@ -369,7 +369,7 @@ mod array_functions {
             Box::new(EvalAltResult::ErrorInFunctionCall(
                 "reduce".to_string(),
                 err,
-                Position::none(),
+                NO_POS,
             ))
         })?;
 
@@ -388,7 +388,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "reduce".to_string(),
                         err,
-                        Position::none(),
+                        NO_POS,
                     ))
                 })?;
         }
@@ -418,7 +418,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "reduce".to_string(),
                         err,
-                        Position::none(),
+                        NO_POS,
                     ))
                 })?;
         }
@@ -436,7 +436,7 @@ mod array_functions {
             Box::new(EvalAltResult::ErrorInFunctionCall(
                 "reduce".to_string(),
                 err,
-                Position::none(),
+                NO_POS,
             ))
         })?;
 
@@ -455,7 +455,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "reduce".to_string(),
                         err,
-                        Position::none(),
+                        NO_POS,
                     ))
                 })?;
         }
@@ -525,7 +525,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "filter".to_string(),
                         err,
-                        Position::none(),
+                        NO_POS,
                     ))
                 })?
                 .as_bool()
@@ -584,7 +584,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "filter".to_string(),
                         err,
-                        Position::none(),
+                        NO_POS,
                     ))
                 })?
                 .as_bool()

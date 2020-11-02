@@ -22,6 +22,7 @@ Breaking changes
 * `EvalAltResult::ErrorAssignmentToUnknownLHS` is moved to `ParseError::AssignmentToInvalidLHS`. `ParseError::AssignmentToCopy` is removed.
 * `EvalAltResult::ErrorDataTooLarge` is simplified.
 * `Engine::on_progress` closure signature now returns `Option<Dynamic>` with the termination value passed on to `EvalAltResult::ErrorTerminated`.
+* `ParseErrorType::BadInput` now wraps a `LexError` instead of a text string.
 
 New features
 ------------

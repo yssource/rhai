@@ -21,11 +21,11 @@ engine.on_var(|name, index, context| {
         "MYSTIC_NUMBER" => Ok(Some((42 as INT).into())),
         // Override a variable - make it not found even if it exists!
         "DO_NOT_USE" => Err(Box::new(
-            EvalAltResult::ErrorVariableNotFound(name.to_string(), Position::none())
+            EvalAltResult::ErrorVariableNotFound(name.to_string(), NO_POS)
         )),
         // Silently maps 'chameleon' into 'innocent'.
         "chameleon" => context.scope.get_value("innocent").map(Some).ok_or_else(|| Box::new(
-            EvalAltResult::ErrorVariableNotFound(name.to_string(), Position::none())
+            EvalAltResult::ErrorVariableNotFound(name.to_string(), NO_POS)
         )),
         // Return Ok(None) to continue with the normal variable resolution process.
         _ => Ok(None)
@@ -82,8 +82,8 @@ where:
 
 The return value is `Result<Option<Dynamic>, Box<EvalAltResult>>` where:
 
-| Value                     | Description                                                                                                                                                                                                              |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Ok(None)`                | normal variable resolution process should continue, i.e. continue searching through the [`Scope`]                                                                                                                        |
-| `Ok(Some(Dynamic))`       | value of the variable, treated as a constant                                                                                                                                                                             |
-| `Err(Box<EvalAltResult>)` | error that is reflected back to the [`Engine`].<br/>Normally this is `EvalAltResult::ErrorVariableNotFound(var_name, Position::none())` to indicate that the variable does not exist, but it can be any `EvalAltResult`. |
+| Value                     | Description                                                                                                                                                                                                    |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Ok(None)`                | normal variable resolution process should continue, i.e. continue searching through the [`Scope`]                                                                                                              |
+| `Ok(Some(Dynamic))`       | value of the variable, treated as a constant                                                                                                                                                                   |
+| `Err(Box<EvalAltResult>)` | error that is reflected back to the [`Engine`].<br/>Normally this is `EvalAltResult::ErrorVariableNotFound(var_name, NO_POS)` to indicate that the variable does not exist, but it can be any `EvalAltResult`. |

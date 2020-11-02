@@ -9,7 +9,7 @@ use crate::StaticVec;
 use crate::INT;
 
 #[cfg(not(feature = "unchecked"))]
-use crate::{result::EvalAltResult, token::Position};
+use crate::{result::EvalAltResult, token::NO_POS};
 
 use crate::stdlib::{
     any::TypeId, boxed::Box, format, mem, string::String, string::ToString, vec::Vec,
@@ -259,11 +259,7 @@ mod string_functions {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
-            return EvalAltResult::ErrorDataTooLarge(
-                "Length of string".to_string(),
-                Position::none(),
-            )
-            .into();
+            return EvalAltResult::ErrorDataTooLarge("Length of string".to_string(), NO_POS).into();
         }
 
         if len > 0 {
@@ -281,7 +277,7 @@ mod string_functions {
                 {
                     return EvalAltResult::ErrorDataTooLarge(
                         "Length of string".to_string(),
-                        Position::none(),
+                        NO_POS,
                     )
                     .into();
                 }
@@ -300,11 +296,7 @@ mod string_functions {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
-            return EvalAltResult::ErrorDataTooLarge(
-                "Length of string".to_string(),
-                Position::none(),
-            )
-            .into();
+            return EvalAltResult::ErrorDataTooLarge("Length of string".to_string(), NO_POS).into();
         }
 
         if len > 0 {
@@ -329,7 +321,7 @@ mod string_functions {
                 {
                     return EvalAltResult::ErrorDataTooLarge(
                         "Length of string".to_string(),
-                        Position::none(),
+                        NO_POS,
                     )
                     .into();
                 }

@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, ParseError, ParseErrorType, Position, INT};
+use rhai::{Engine, EvalAltResult, LexError, ParseError, ParseErrorType, INT, NO_POS};
 
 #[test]
 fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
@@ -68,9 +68,9 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
             .register_custom_syntax(&["!"], 0, |_, _| Ok(().into()))
             .expect_err("should error")
             .0,
-        ParseErrorType::BadInput(
+        ParseErrorType::BadInput(LexError::ImproperSymbol(
             "Improper symbol for custom syntax at position #1: '!'".to_string()
-        )
+        ))
     );
 
     Ok(())
@@ -88,8 +88,10 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
             2 => match stream[1].as_str() {
                 "world" | "kitty" => Ok(None),
                 s => Err(ParseError(
-                    Box::new(ParseErrorType::BadInput(s.to_string())),
-                    Position::none(),
+                    Box::new(ParseErrorType::BadInput(LexError::ImproperSymbol(
+                        s.to_string(),
+                    ))),
+                    NO_POS,
                 )),
             },
             _ => unreachable!(),
@@ -109,7 +111,7 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<INT>("hello kitty")?, 42);
     assert_eq!(
         *engine.compile("hello hey").expect_err("should error").0,
-        ParseErrorType::BadInput("hey".to_string())
+        ParseErrorType::BadInput(LexError::ImproperSymbol("hey".to_string()))
     );
 
     Ok(())

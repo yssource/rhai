@@ -10,7 +10,9 @@ use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::parse_error::{LexError, ParseError, ParseErrorType};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::CustomSyntax;
-use crate::token::{is_keyword_function, is_valid_identifier, Position, Token, TokenStream};
+use crate::token::{
+    is_keyword_function, is_valid_identifier, Position, Token, TokenStream, NO_POS,
+};
 use crate::utils::StraightHasherBuilder;
 use crate::{calc_script_fn_hash, StaticVec};
 
@@ -816,10 +818,11 @@ fn parse_primary(
         // Access to `this` as a variable is OK
         Token::Reserved(s) if s == KEYWORD_THIS && *next_token != Token::LeftParen => {
             if !settings.is_function_scope {
-                return Err(
-                    PERR::BadInput(format!("'{}' can only be used in functions", s))
-                        .into_err(settings.pos),
-                );
+                return Err(PERR::BadInput(LexError::ImproperSymbol(format!(
+                    "'{}' can only be used in functions",
+                    s
+                )))
+                .into_err(settings.pos));
             } else {
                 Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, None)))
             }
@@ -840,7 +843,8 @@ fn parse_primary(
 
         _ => {
             return Err(
-                PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(settings.pos)
+                PERR::BadInput(LexError::UnexpectedInput(token.syntax().to_string()))
+                    .into_err(settings.pos),
             );
         }
     };
@@ -862,8 +866,10 @@ fn parse_primary(
                 return Err(if !match_token(input, Token::LeftParen).0 {
                     LexError::UnexpectedInput(Token::Bang.syntax().to_string()).into_err(token_pos)
                 } else {
-                    PERR::BadInput("'!' cannot be used to call module functions".to_string())
-                        .into_err(token_pos)
+                    PERR::BadInput(LexError::ImproperSymbol(
+                        "'!' cannot be used to call module functions".to_string(),
+                    ))
+                    .into_err(token_pos)
                 });
             }
             // Function call with !
@@ -1140,9 +1146,10 @@ fn make_assignment_stmt<'a>(
             Err(PERR::AssignmentToConstant("".into()).into_err(lhs.position()))
         }
         // ??? && ??? = rhs, ??? || ??? = rhs
-        Expr::And(_, _) | Expr::Or(_, _) => {
-            Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(pos))
-        }
+        Expr::And(_, _) | Expr::Or(_, _) => Err(PERR::BadInput(LexError::ImproperSymbol(
+            "Possibly a typo of '=='?".to_string(),
+        ))
+        .into_err(pos)),
         // expr = rhs
         _ => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(lhs.position())),
     }
@@ -1238,10 +1245,10 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         (_, Expr::FnCall(x, pos))
             if x.args.len() == 0 && [KEYWORD_FN_PTR, KEYWORD_EVAL].contains(&x.name.as_ref()) =>
         {
-            return Err(PERR::BadInput(format!(
+            return Err(PERR::BadInput(LexError::ImproperSymbol(format!(
                 "'{}' should not be called in method style. Try {}(...);",
                 x.name, x.name
-            ))
+            )))
             .into_err(pos));
         }
         // lhs.func!(...)
@@ -1734,9 +1741,10 @@ fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result
 /// Make sure that the expression is not a mis-typed assignment (i.e. `a = b` instead of `a == b`).
 fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
     match input.peek().unwrap() {
-        (Token::Equals, pos) => {
-            Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(*pos))
-        }
+        (Token::Equals, pos) => Err(PERR::BadInput(LexError::ImproperSymbol(
+            "Possibly a typo of '=='?".to_string(),
+        ))
+        .into_err(*pos)),
         (Token::PlusAssign, pos)
         | (Token::MinusAssign, pos)
         | (Token::MultiplyAssign, pos)
@@ -1747,9 +1755,9 @@ fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
         | (Token::PowerOfAssign, pos)
         | (Token::AndAssign, pos)
         | (Token::OrAssign, pos)
-        | (Token::XOrAssign, pos) => Err(PERR::BadInput(
+        | (Token::XOrAssign, pos) => Err(PERR::BadInput(LexError::ImproperSymbol(
             "Expecting a boolean expression, not an assignment".to_string(),
-        )
+        ))
         .into_err(*pos)),
 
         _ => Ok(()),
@@ -2683,7 +2691,7 @@ impl Engine {
             is_function_scope: false,
             is_breakable: false,
             level: 0,
-            pos: Position::none(),
+            pos: NO_POS,
         };
         let expr = parse_expr(input, &mut state, &mut functions, settings)?;
 
@@ -2694,7 +2702,8 @@ impl Engine {
             // Return error if the expression doesn't end
             (token, pos) => {
                 return Err(
-                    PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(*pos)
+                    PERR::BadInput(LexError::UnexpectedInput(token.syntax().to_string()))
+                        .into_err(*pos),
                 )
             }
         }
@@ -2732,7 +2741,7 @@ impl Engine {
                 is_function_scope: false,
                 is_breakable: false,
                 level: 0,
-                pos: Position::none(),
+                pos: NO_POS,
             };
 
             let stmt = match parse_stmt(input, &mut state, &mut functions, settings)? {

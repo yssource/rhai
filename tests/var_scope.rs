@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, Position, Scope, INT};
+use rhai::{Engine, EvalAltResult, Scope, INT, NO_POS};
 
 #[test]
 fn test_var_scope() -> Result<(), Box<EvalAltResult>> {
@@ -67,7 +67,7 @@ fn test_var_resolver() -> Result<(), Box<EvalAltResult>> {
             "MYSTIC_NUMBER" => Ok(Some((42 as INT).into())),
             // Override a variable - make it not found even if it exists!
             "DO_NOT_USE" => {
-                Err(EvalAltResult::ErrorVariableNotFound(name.to_string(), Position::none()).into())
+                Err(EvalAltResult::ErrorVariableNotFound(name.to_string(), NO_POS).into())
             }
             // Silently maps 'chameleon' into 'innocent'.
             "chameleon" => context
@@ -75,7 +75,7 @@ fn test_var_resolver() -> Result<(), Box<EvalAltResult>> {
                 .get_value("innocent")
                 .map(Some)
                 .ok_or_else(|| {
-                    EvalAltResult::ErrorVariableNotFound(name.to_string(), Position::none()).into()
+                    EvalAltResult::ErrorVariableNotFound(name.to_string(), NO_POS).into()
                 }),
             // Return Ok(None) to continue with the normal variable resolution process.
             _ => Ok(None),

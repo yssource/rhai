@@ -6,7 +6,7 @@ use crate::engine::{Engine, EvalContext};
 use crate::module::Module;
 use crate::plugin::PluginFunction;
 use crate::result::EvalAltResult;
-use crate::token::{is_valid_identifier, Position};
+use crate::token::{is_valid_identifier, NO_POS};
 use crate::utils::ImmutableString;
 use crate::{calc_script_fn_hash, StaticVec};
 
@@ -215,7 +215,7 @@ impl TryFrom<ImmutableString> for FnPtr {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, Default::default()))
         } else {
-            EvalAltResult::ErrorFunctionNotFound(value.into(), Position::none()).into()
+            EvalAltResult::ErrorFunctionNotFound(value.into(), NO_POS).into()
         }
     }
 }

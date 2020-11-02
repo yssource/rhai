@@ -5,7 +5,7 @@ use crate::dynamic::{Dynamic, Variant};
 use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, NativeCallContext, SendSync};
 use crate::fn_register::by_value as cast_arg;
 use crate::result::EvalAltResult;
-use crate::token::{Position, Token};
+use crate::token::{Token, NO_POS};
 use crate::utils::{ImmutableString, StraightHasherBuilder};
 use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec};
 
@@ -271,11 +271,11 @@ impl Module {
         hash_var: u64,
     ) -> Result<&mut Dynamic, Box<EvalAltResult>> {
         if hash_var == 0 {
-            Err(EvalAltResult::ErrorVariableNotFound(String::new(), Position::none()).into())
+            Err(EvalAltResult::ErrorVariableNotFound(String::new(), NO_POS).into())
         } else {
-            self.all_variables.get_mut(&hash_var).ok_or_else(|| {
-                EvalAltResult::ErrorVariableNotFound(String::new(), Position::none()).into()
-            })
+            self.all_variables
+                .get_mut(&hash_var)
+                .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(String::new(), NO_POS).into())
         }
     }
 

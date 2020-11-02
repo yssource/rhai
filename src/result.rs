@@ -2,7 +2,7 @@
 
 use crate::dynamic::Dynamic;
 use crate::parse_error::ParseErrorType;
-use crate::token::Position;
+use crate::token::{Position, NO_POS};
 use crate::utils::ImmutableString;
 use crate::INT;
 
@@ -252,7 +252,7 @@ impl fmt::Display for EvalAltResult {
 impl<T: AsRef<str>> From<T> for EvalAltResult {
     #[inline(always)]
     fn from(err: T) -> Self {
-        Self::ErrorRuntime(err.as_ref().to_string().into(), Position::none())
+        Self::ErrorRuntime(err.as_ref().to_string().into(), NO_POS)
     }
 }
 
@@ -261,7 +261,7 @@ impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
     fn from(err: T) -> Self {
         Box::new(EvalAltResult::ErrorRuntime(
             err.as_ref().to_string().into(),
-            Position::none(),
+            NO_POS,
         ))
     }
 }
@@ -324,7 +324,7 @@ impl EvalAltResult {
     /// Get the `Position` of this error.
     pub fn position(&self) -> Position {
         match self {
-            Self::ErrorSystem(_, _) => Position::none(),
+            Self::ErrorSystem(_, _) => NO_POS,
 
             Self::ErrorParsing(_, pos)
             | Self::ErrorFunctionNotFound(_, pos)

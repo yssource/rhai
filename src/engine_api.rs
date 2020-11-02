@@ -8,7 +8,7 @@ use crate::optimize::OptimizationLevel;
 use crate::parse_error::ParseError;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
-use crate::token::Position;
+use crate::token::{Position, NO_POS};
 
 #[cfg(not(feature = "no_index"))]
 use crate::{
@@ -1391,7 +1391,7 @@ impl Engine {
             EvalAltResult::ErrorMismatchOutputType(
                 self.map_type_name(type_name::<T>()).into(),
                 typ.into(),
-                Position::none(),
+                NO_POS,
             )
             .into()
         });
@@ -1527,7 +1527,7 @@ impl Engine {
             EvalAltResult::ErrorMismatchOutputType(
                 self.map_type_name(type_name::<T>()).into(),
                 typ.into(),
-                Position::none(),
+                NO_POS,
             )
             .into()
         });
@@ -1617,7 +1617,7 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let fn_def = lib
             .get_script_fn(name, args.len(), true)
-            .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::none()))?;
+            .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), NO_POS))?;
 
         let mut state = Default::default();
         let mut mods = Default::default();

@@ -14,7 +14,7 @@ use crate::parse_error::ParseErrorType;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::stdlib::ops::Deref;
-use crate::token::Position;
+use crate::token::NO_POS;
 use crate::utils::ImmutableString;
 use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec, INT};
 
@@ -159,7 +159,7 @@ pub fn ensure_no_data_race(
         {
             return EvalAltResult::ErrorDataRace(
                 format!("argument #{} of function '{}'", n + 1 + skip, fn_name),
-                Position::none(),
+                NO_POS,
             )
             .into();
         }
@@ -223,7 +223,7 @@ impl Engine {
                         EvalAltResult::ErrorMismatchOutputType(
                             self.map_type_name(type_name::<ImmutableString>()).into(),
                             typ.into(),
-                            Position::none(),
+                            NO_POS,
                         )
                     })?)
                     .into(),
@@ -234,7 +234,7 @@ impl Engine {
                         EvalAltResult::ErrorMismatchOutputType(
                             self.map_type_name(type_name::<ImmutableString>()).into(),
                             typ.into(),
-                            Position::none(),
+                            NO_POS,
                         )
                     })?)
                     .into(),
@@ -265,7 +265,7 @@ impl Engine {
                     prop,
                     self.map_type_name(args[0].type_name())
                 ),
-                Position::none(),
+                NO_POS,
             )
             .into();
         }
@@ -279,7 +279,7 @@ impl Engine {
                     self.map_type_name(args[0].type_name()),
                     self.map_type_name(args[1].type_name()),
                 ),
-                Position::none(),
+                NO_POS,
             )
             .into();
         }
@@ -293,7 +293,7 @@ impl Engine {
                     self.map_type_name(args[0].type_name()),
                     self.map_type_name(args[1].type_name()),
                 ),
-                Position::none(),
+                NO_POS,
             )
             .into();
         }
@@ -307,7 +307,7 @@ impl Engine {
                     self.map_type_name(args[0].type_name()),
                     self.map_type_name(args[1].type_name()),
                 ),
-                Position::none(),
+                NO_POS,
             )
             .into();
         }
@@ -326,7 +326,7 @@ impl Engine {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Position::none(),
+            NO_POS,
         )
         .into()
     }
@@ -357,9 +357,7 @@ impl Engine {
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
         if level > self.max_call_levels() {
-            return Err(Box::new(
-                EvalAltResult::ErrorStackOverflow(Position::none()),
-            ));
+            return Err(Box::new(EvalAltResult::ErrorStackOverflow(NO_POS)));
         }
 
         let orig_scope_level = state.scope_level;
@@ -396,29 +394,25 @@ impl Engine {
         // Evaluate the function at one higher level of call depth
         let stmt = &fn_def.body;
 
-        let result = self
-            .eval_stmt(scope, mods, state, unified_lib, this_ptr, stmt, level + 1)
-            .or_else(|err| match *err {
-                // Convert return statement to return value
-                EvalAltResult::Return(x, _) => Ok(x),
-                EvalAltResult::ErrorInFunctionCall(name, err, _) => {
-                    EvalAltResult::ErrorInFunctionCall(
-                        format!("{} > {}", fn_def.name, name),
-                        err,
-                        Position::none(),
-                    )
-                    .into()
-                }
-                // System errors are passed straight-through
-                err if err.is_system_exception() => Err(Box::new(err)),
-                // Other errors are wrapped in `ErrorInFunctionCall`
-                _ => EvalAltResult::ErrorInFunctionCall(
-                    fn_def.name.to_string(),
-                    err,
-                    Position::none(),
-                )
-                .into(),
-            });
+        let result =
+            self.eval_stmt(scope, mods, state, unified_lib, this_ptr, stmt, level + 1)
+                .or_else(|err| match *err {
+                    // Convert return statement to return value
+                    EvalAltResult::Return(x, _) => Ok(x),
+                    EvalAltResult::ErrorInFunctionCall(name, err, _) => {
+                        EvalAltResult::ErrorInFunctionCall(
+                            format!("{} > {}", fn_def.name, name),
+                            err,
+                            NO_POS,
+                        )
+                        .into()
+                    }
+                    // System errors are passed straight-through
+                    err if err.is_system_exception() => Err(Box::new(err)),
+                    // Other errors are wrapped in `ErrorInFunctionCall`
+                    _ => EvalAltResult::ErrorInFunctionCall(fn_def.name.to_string(), err, NO_POS)
+                        .into(),
+                });
 
         // Remove all local variables
         scope.rewind(prev_scope_len);
@@ -519,7 +513,7 @@ impl Engine {
                         fn_name, fn_name
                     )
                     .into(),
-                    Position::none(),
+                    NO_POS,
                 )
                 .into()
             }
@@ -656,9 +650,7 @@ impl Engine {
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
         if _level > self.max_call_levels() {
-            return Err(Box::new(
-                EvalAltResult::ErrorStackOverflow(Position::none()),
-            ));
+            return Err(Box::new(EvalAltResult::ErrorStackOverflow(NO_POS)));
         }
 
         // Compile the script text
@@ -1218,7 +1210,7 @@ impl Engine {
                         .collect::<Vec<_>>()
                         .join(", ")
                 ),
-                Position::none(),
+                NO_POS,
             )
             .into(),
         }

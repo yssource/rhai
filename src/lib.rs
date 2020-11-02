@@ -115,11 +115,11 @@ pub use engine::{Engine, EvalContext};
 pub use fn_native::{FnPtr, NativeCallContext};
 pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::Module;
-pub use parse_error::{ParseError, ParseErrorType};
+pub use parse_error::{LexError, ParseError, ParseErrorType};
 pub use result::EvalAltResult;
 pub use scope::Scope;
 pub use syntax::Expression;
-pub use token::Position;
+pub use token::{Position, NO_POS};
 pub use utils::ImmutableString;
 
 #[cfg(feature = "internals")]

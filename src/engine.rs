@@ -11,7 +11,7 @@ use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::CustomSyntax;
-use crate::token::Position;
+use crate::token::{Position, NO_POS};
 use crate::{calc_native_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_index"))]
@@ -351,7 +351,7 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => {
                 let char_value = ch.clone();
-                self.set_value((char_value, Position::none())).unwrap();
+                self.set_value((char_value, NO_POS)).unwrap();
             }
         }
     }
@@ -993,7 +993,7 @@ impl Engine {
                                 {
                                     EvalAltResult::ErrorIndexingType(
                                         self.map_type_name(val_type_name).into(),
-                                        Position::none(),
+                                        NO_POS,
                                     )
                                 }
                                 err => err,
@@ -1463,20 +1463,16 @@ impl Engine {
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _) if fn_sig.ends_with(']') => {
-                        Box::new(EvalAltResult::ErrorIndexingType(
-                            type_name.into(),
-                            Position::none(),
-                        ))
+                        Box::new(EvalAltResult::ErrorIndexingType(type_name.into(), NO_POS))
                     }
                     _ => err,
                 })
             }
 
-            _ => EvalAltResult::ErrorIndexingType(
-                self.map_type_name(val.type_name()).into(),
-                Position::none(),
-            )
-            .into(),
+            _ => {
+                EvalAltResult::ErrorIndexingType(self.map_type_name(val.type_name()).into(), NO_POS)
+                    .into()
+            }
         }
     }
 
@@ -2036,7 +2032,7 @@ impl Engine {
                             let value = if let EvalAltResult::ErrorRuntime(ref x, _) = err {
                                 x.clone()
                             } else {
-                                err.set_position(Position::none());
+                                err.set_position(NO_POS);
                                 err.to_string().into()
                             };
 
@@ -2298,26 +2294,18 @@ impl Engine {
         let (_arr, _map, s) = calc_size(result.as_ref().unwrap());
 
         if s > self.max_string_size() {
-            return EvalAltResult::ErrorDataTooLarge(
-                "Length of string".to_string(),
-                Position::none(),
-            )
-            .into();
+            return EvalAltResult::ErrorDataTooLarge("Length of string".to_string(), NO_POS).into();
         }
 
         #[cfg(not(feature = "no_index"))]
         if _arr > self.max_array_size() {
-            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), Position::none())
-                .into();
+            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), NO_POS).into();
         }
 
         #[cfg(not(feature = "no_object"))]
         if _map > self.max_map_size() {
-            return EvalAltResult::ErrorDataTooLarge(
-                "Size of object map".to_string(),
-                Position::none(),
-            )
-            .into();
+            return EvalAltResult::ErrorDataTooLarge("Size of object map".to_string(), NO_POS)
+                .into();
         }
 
         result
@@ -2331,14 +2319,14 @@ impl Engine {
         #[cfg(not(feature = "unchecked"))]
         // Guard against too many operations
         if self.max_operations() > 0 && state.operations > self.max_operations() {
-            return EvalAltResult::ErrorTooManyOperations(Position::none()).into();
+            return EvalAltResult::ErrorTooManyOperations(NO_POS).into();
         }
 
         // Report progress - only in steps
         if let Some(progress) = &self.progress {
             if let Some(token) = progress(&state.operations) {
                 // Terminate script if progress returns a termination token
-                return EvalAltResult::ErrorTerminated(token, Position::none()).into();
+                return EvalAltResult::ErrorTerminated(token, NO_POS).into();
             }
         }
 
