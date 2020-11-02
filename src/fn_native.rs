@@ -160,7 +160,7 @@ impl FnPtr {
     /// clone them _before_ calling this function.
     pub fn call_dynamic(
         &self,
-        context: NativeCallContext,
+        ctx: NativeCallContext,
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -182,11 +182,10 @@ impl FnPtr {
             args.insert(0, obj);
         }
 
-        context
-            .engine()
+        ctx.engine()
             .exec_fn_call(
                 &mut Default::default(),
-                context.lib,
+                ctx.lib,
                 fn_name,
                 hash_script,
                 args.as_mut(),

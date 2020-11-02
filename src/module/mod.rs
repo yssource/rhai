@@ -529,9 +529,8 @@ impl Module {
             + SendSync
             + 'static,
     ) -> u64 {
-        let f = move |context: NativeCallContext, args: &mut FnCallArgs| {
-            func(context, args).map(Dynamic::from)
-        };
+        let f =
+            move |ctx: NativeCallContext, args: &mut FnCallArgs| func(ctx, args).map(Dynamic::from);
         self.set_fn(
             name,
             FnAccess::Public,

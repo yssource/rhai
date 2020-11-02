@@ -41,12 +41,12 @@ macro_rules! gen_array_functions {
                 }
 
                 #[rhai_fn(return_raw)]
-                pub fn pad(_context: NativeCallContext, list: &mut Array, len: INT, item: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
+                pub fn pad(_ctx: NativeCallContext, list: &mut Array, len: INT, item: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     // Check if array will be over max size limit
                     #[cfg(not(feature = "unchecked"))]
-                    if _context.engine().max_array_size() > 0 && len > 0 && (len as usize) > _context.engine().max_array_size() {
+                    if _ctx.engine().max_array_size() > 0 && len > 0 && (len as usize) > _ctx.engine().max_array_size() {
                         return EvalAltResult::ErrorDataTooLarge(
-                            "Size of array".to_string(), _context.engine().max_array_size(), len as usize, Position::none(),
+                            "Size of array".to_string(), Position::none()
                         ).into();
                     }
 
@@ -197,7 +197,7 @@ mod array_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn map(
-        context: NativeCallContext,
+        ctx: NativeCallContext,
         list: &mut Array,
         mapper: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -206,12 +206,12 @@ mod array_functions {
         for (i, item) in list.iter().enumerate() {
             array.push(
                 mapper
-                    .call_dynamic(context, None, [item.clone()])
+                    .call_dynamic(ctx, None, [item.clone()])
                     .or_else(|err| match *err {
                         EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                             if fn_sig.starts_with(mapper.fn_name()) =>
                         {
-                            mapper.call_dynamic(context, None, [item.clone(), (i as INT).into()])
+                            mapper.call_dynamic(ctx, None, [item.clone(), (i as INT).into()])
                         }
                         _ => Err(err),
                     })
@@ -229,7 +229,7 @@ mod array_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn filter(
-        context: NativeCallContext,
+        ctx: NativeCallContext,
         list: &mut Array,
         filter: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -237,12 +237,12 @@ mod array_functions {
 
         for (i, item) in list.iter().enumerate() {
             if filter
-                .call_dynamic(context, None, [item.clone()])
+                .call_dynamic(ctx, None, [item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(context, None, [item.clone(), (i as INT).into()])
+                        filter.call_dynamic(ctx, None, [item.clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -264,18 +264,18 @@ mod array_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn some(
-        context: NativeCallContext,
+        ctx: NativeCallContext,
         list: &mut Array,
         filter: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         for (i, item) in list.iter().enumerate() {
             if filter
-                .call_dynamic(context, None, [item.clone()])
+                .call_dynamic(ctx, None, [item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(context, None, [item.clone(), (i as INT).into()])
+                        filter.call_dynamic(ctx, None, [item.clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -297,18 +297,18 @@ mod array_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn all(
-        context: NativeCallContext,
+        ctx: NativeCallContext,
         list: &mut Array,
         filter: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         for (i, item) in list.iter().enumerate() {
             if !filter
-                .call_dynamic(context, None, [item.clone()])
+                .call_dynamic(ctx, None, [item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(context, None, [item.clone(), (i as INT).into()])
+                        filter.call_dynamic(ctx, None, [item.clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -330,7 +330,7 @@ mod array_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn reduce(
-        context: NativeCallContext,
+        ctx: NativeCallContext,
         list: &mut Array,
         reducer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -338,16 +338,12 @@ mod array_functions {
 
         for (i, item) in list.iter().enumerate() {
             result = reducer
-                .call_dynamic(context, None, [result.clone(), item.clone()])
+                .call_dynamic(ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(reducer.fn_name()) =>
                     {
-                        reducer.call_dynamic(
-                            context,
-                            None,
-                            [result, item.clone(), (i as INT).into()],
-                        )
+                        reducer.call_dynamic(ctx, None, [result, item.clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -364,12 +360,12 @@ mod array_functions {
     }
     #[rhai_fn(name = "reduce", return_raw)]
     pub fn reduce_with_initial(
-        context: NativeCallContext,
+        ctx: NativeCallContext,
         list: &mut Array,
         reducer: FnPtr,
         initial: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut result = initial.call_dynamic(context, None, []).map_err(|err| {
+        let mut result = initial.call_dynamic(ctx, None, []).map_err(|err| {
             Box::new(EvalAltResult::ErrorInFunctionCall(
                 "reduce".to_string(),
                 err,
@@ -379,16 +375,12 @@ mod array_functions {
 
         for (i, item) in list.iter().enumerate() {
             result = reducer
-                .call_dynamic(context, None, [result.clone(), item.clone()])
+                .call_dynamic(ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(reducer.fn_name()) =>
                     {
-                        reducer.call_dynamic(
-                            context,
-                            None,
-                            [result, item.clone(), (i as INT).into()],
-                        )
+                        reducer.call_dynamic(ctx, None, [result, item.clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -405,7 +397,7 @@ mod array_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn reduce_rev(
-        context: NativeCallContext,
+        ctx: NativeCallContext,
         list: &mut Array,
         reducer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -413,16 +405,12 @@ mod array_functions {
 
         for (i, item) in list.iter().enumerate().rev() {
             result = reducer
-                .call_dynamic(context, None, [result.clone(), item.clone()])
+                .call_dynamic(ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(reducer.fn_name()) =>
                     {
-                        reducer.call_dynamic(
-                            context,
-                            None,
-                            [result, item.clone(), (i as INT).into()],
-                        )
+                        reducer.call_dynamic(ctx, None, [result, item.clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -439,12 +427,12 @@ mod array_functions {
     }
     #[rhai_fn(name = "reduce_rev", return_raw)]
     pub fn reduce_rev_with_initial(
-        context: NativeCallContext,
+        ctx: NativeCallContext,
         list: &mut Array,
         reducer: FnPtr,
         initial: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut result = initial.call_dynamic(context, None, []).map_err(|err| {
+        let mut result = initial.call_dynamic(ctx, None, []).map_err(|err| {
             Box::new(EvalAltResult::ErrorInFunctionCall(
                 "reduce".to_string(),
                 err,
@@ -454,16 +442,12 @@ mod array_functions {
 
         for (i, item) in list.iter().enumerate().rev() {
             result = reducer
-                .call_dynamic(context, None, [result.clone(), item.clone()])
+                .call_dynamic(ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(reducer.fn_name()) =>
                     {
-                        reducer.call_dynamic(
-                            context,
-                            None,
-                            [result, item.clone(), (i as INT).into()],
-                        )
+                        reducer.call_dynamic(ctx, None, [result, item.clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -480,13 +464,13 @@ mod array_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn sort(
-        context: NativeCallContext,
+        ctx: NativeCallContext,
         list: &mut Array,
         comparer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         list.sort_by(|x, y| {
             comparer
-                .call_dynamic(context, None, [x.clone(), y.clone()])
+                .call_dynamic(ctx, None, [x.clone(), y.clone()])
                 .ok()
                 .and_then(|v| v.as_int().ok())
                 .map(|v| {
@@ -516,7 +500,7 @@ mod array_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn drain(
-        context: NativeCallContext,
+        ctx: NativeCallContext,
         list: &mut Array,
         filter: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -528,12 +512,12 @@ mod array_functions {
             i -= 1;
 
             if filter
-                .call_dynamic(context, None, [list[i].clone()])
+                .call_dynamic(ctx, None, [list[i].clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(context, None, [list[i].clone(), (i as INT).into()])
+                        filter.call_dynamic(ctx, None, [list[i].clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -575,7 +559,7 @@ mod array_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn retain(
-        context: NativeCallContext,
+        ctx: NativeCallContext,
         list: &mut Array,
         filter: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -587,12 +571,12 @@ mod array_functions {
             i -= 1;
 
             if !filter
-                .call_dynamic(context, None, [list[i].clone()])
+                .call_dynamic(ctx, None, [list[i].clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(context, None, [list[i].clone(), (i as INT).into()])
+                        filter.call_dynamic(ctx, None, [list[i].clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })

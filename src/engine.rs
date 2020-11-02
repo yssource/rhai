@@ -576,7 +576,7 @@ pub struct Engine {
     /// Callback closure for implementing the `debug` command.
     pub(crate) debug: Callback<str, ()>,
     /// Callback closure for progress reporting.
-    pub(crate) progress: Option<Callback<u64, bool>>,
+    pub(crate) progress: Option<Callback<u64, Option<Dynamic>>>,
 
     /// Optimize the AST after compilation.
     pub(crate) optimization_level: OptimizationLevel,
@@ -2300,8 +2300,6 @@ impl Engine {
         if s > self.max_string_size() {
             return EvalAltResult::ErrorDataTooLarge(
                 "Length of string".to_string(),
-                self.max_string_size(),
-                s,
                 Position::none(),
             )
             .into();
@@ -2309,21 +2307,14 @@ impl Engine {
 
         #[cfg(not(feature = "no_index"))]
         if _arr > self.max_array_size() {
-            return EvalAltResult::ErrorDataTooLarge(
-                "Size of array".to_string(),
-                self.max_array_size(),
-                _arr,
-                Position::none(),
-            )
-            .into();
+            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), Position::none())
+                .into();
         }
 
         #[cfg(not(feature = "no_object"))]
         if _map > self.max_map_size() {
             return EvalAltResult::ErrorDataTooLarge(
-                "Number of properties in object map".to_string(),
-                self.max_map_size(),
-                _map,
+                "Size of object map".to_string(),
                 Position::none(),
             )
             .into();
@@ -2345,9 +2336,9 @@ impl Engine {
 
         // Report progress - only in steps
         if let Some(progress) = &self.progress {
-            if !progress(&state.operations) {
-                // Terminate script if progress returns false
-                return EvalAltResult::ErrorTerminated(Position::none()).into();
+            if let Some(token) = progress(&state.operations) {
+                // Terminate script if progress returns a termination token
+                return EvalAltResult::ErrorTerminated(token, Position::none()).into();
             }
         }
 

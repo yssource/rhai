@@ -17,13 +17,14 @@ engine.on_progress(|&count| {   // parameter is '&u64' - number of operations al
     if count % 1000 == 0 {
         println!("{}", count);  // print out a progress log every 1,000 operations
     }
-    true                        // return 'true' to continue running the script
-                                // return 'false' to immediately terminate the script
+    None                        // return 'None' to continue running the script
+                                // return 'Some(token)' to immediately terminate the script
 });
 ```
 
 The closure passed to `Engine::on_progress` will be called once for every operation.
-Return `false` to terminate the script immediately.
+Return `Some(token)` to terminate the script immediately, with the provided value
+(any [`Dynamic`] value) passed to `EvalAltResult::ErrorTerminated` as a termination token.
 
 
 Operations Count vs. Progress Percentage

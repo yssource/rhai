@@ -251,20 +251,16 @@ mod string_functions {
 
     #[rhai_fn(return_raw)]
     pub fn pad(
-        _context: NativeCallContext,
+        _ctx: NativeCallContext,
         s: &mut ImmutableString,
         len: INT,
         ch: char,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
-        if _context.engine().max_string_size() > 0
-            && len as usize > _context.engine().max_string_size()
-        {
+        if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
             return EvalAltResult::ErrorDataTooLarge(
                 "Length of string".to_string(),
-                _context.engine().max_string_size(),
-                len as usize,
                 Position::none(),
             )
             .into();
@@ -281,13 +277,10 @@ mod string_functions {
                 }
 
                 #[cfg(not(feature = "unchecked"))]
-                if _context.engine().max_string_size() > 0
-                    && s.len() > _context.engine().max_string_size()
+                if _ctx.engine().max_string_size() > 0 && s.len() > _ctx.engine().max_string_size()
                 {
                     return EvalAltResult::ErrorDataTooLarge(
                         "Length of string".to_string(),
-                        _context.engine().max_string_size(),
-                        s.len(),
                         Position::none(),
                     )
                     .into();
@@ -299,20 +292,16 @@ mod string_functions {
     }
     #[rhai_fn(name = "pad", return_raw)]
     pub fn pad_with_string(
-        _context: NativeCallContext,
+        _ctx: NativeCallContext,
         s: &mut ImmutableString,
         len: INT,
         padding: &str,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
-        if _context.engine().max_string_size() > 0
-            && len as usize > _context.engine().max_string_size()
-        {
+        if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
             return EvalAltResult::ErrorDataTooLarge(
                 "Length of string".to_string(),
-                _context.engine().max_string_size(),
-                len as usize,
                 Position::none(),
             )
             .into();
@@ -336,13 +325,10 @@ mod string_functions {
                 }
 
                 #[cfg(not(feature = "unchecked"))]
-                if _context.engine().max_string_size() > 0
-                    && s.len() > _context.engine().max_string_size()
+                if _ctx.engine().max_string_size() > 0 && s.len() > _ctx.engine().max_string_size()
                 {
                     return EvalAltResult::ErrorDataTooLarge(
                         "Length of string".to_string(),
-                        _context.engine().max_string_size(),
-                        s.len(),
                         Position::none(),
                     )
                     .into();

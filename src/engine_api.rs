@@ -1732,12 +1732,12 @@ impl Engine {
     ///
     /// engine.on_progress(move |&ops| {
     ///     if ops > 10000 {
-    ///         false
+    ///         Some("Over 10,000 operations!".into())
     ///     } else if ops % 800 == 0 {
     ///         *logger.write().unwrap() = ops;
-    ///         true
+    ///         None
     ///     } else {
-    ///         true
+    ///         None
     ///     }
     /// });
     ///
@@ -1752,7 +1752,7 @@ impl Engine {
     #[inline(always)]
     pub fn on_progress(
         &mut self,
-        callback: impl Fn(&u64) -> bool + SendSync + 'static,
+        callback: impl Fn(&u64) -> Option<Dynamic> + SendSync + 'static,
     ) -> &mut Self {
         self.progress = Some(Box::new(callback));
         self
