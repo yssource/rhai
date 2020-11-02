@@ -147,7 +147,7 @@ fn call_fn_with_constant_arguments(
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
             false,
             true,
-            &None,
+            None,
         )
         .ok()
         .map(|(v, _)| v)
@@ -454,7 +454,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         Expr::Dot(x, dot_pos) => match (x.lhs, x.rhs) {
             // map.string
             (Expr::Map(m, pos), Expr::Property(p)) if m.iter().all(|(_, x)| x.is_pure()) => {
-                let prop = &p.0.name;
+                let prop = &p.1.name;
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
@@ -686,12 +686,12 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         }
 
         // constant-name
-        Expr::Variable(x) if x.1.is_none() && state.contains_constant(&x.0.name) => {
+        Expr::Variable(x) if x.1.is_none() && state.contains_constant(&x.3.name) => {
             state.set_dirty();
 
             // Replace constant with value
-            let mut expr = state.find_constant(&x.0.name).unwrap().clone();
-            expr.set_position(x.0.pos);
+            let mut expr = state.find_constant(&x.3.name).unwrap().clone();
+            expr.set_position(x.3.pos);
             expr
         }
 

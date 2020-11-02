@@ -66,12 +66,12 @@ impl EntryType {
 // The variable type is packed separately into another array because it is even smaller.
 #[derive(Debug, Clone, Default)]
 pub struct Scope<'a> {
-    /// (Name, alias) of the entry.
-    names: Vec<(Cow<'a, str>, Option<String>)>,
-    /// Type of the entry.
-    types: Vec<EntryType>,
     /// Current value of the entry.
     values: Vec<Dynamic>,
+    /// Type of the entry.
+    types: Vec<EntryType>,
+    /// (Name, alias) of the entry.
+    names: Vec<(Cow<'a, str>, Option<String>)>,
 }
 
 impl<'a> Scope<'a> {

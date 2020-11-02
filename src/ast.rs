@@ -861,24 +861,24 @@ pub struct BinaryExpr {
 /// A function call.
 #[derive(Debug, Clone, Hash, Default)]
 pub struct FnCallInfo {
-    /// Function name.
-    /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
-    /// and the function names are predictable, so no need to allocate a new `String`.
-    pub name: Cow<'static, str>,
-    /// Namespace of the function, if any.
-    pub namespace: Option<ModuleRef>,
+    /// Pre-calculated hash for a script-defined function of the same name and number of parameters.
+    pub hash: u64,
     /// Call native functions only? Set to `true` to skip searching for script-defined function overrides
     /// when it is certain that the function must be native (e.g. an operator).
     pub native_only: bool,
     /// Does this function call capture the parent scope?
     pub capture: bool,
-    /// Pre-calculated hash for a script-defined function of the same name and number of parameters.
-    pub hash: u64,
-    /// List of function call arguments.
-    pub args: StaticVec<Expr>,
     /// Default value when the function is not found, mostly used to provide a default for comparison functions.
     /// Type is `bool` in order for `FnCallInfo` to be `Hash`
     pub def_value: Option<bool>,
+    /// Namespace of the function, if any.
+    pub namespace: Option<Box<ModuleRef>>,
+    /// Function name.
+    /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
+    /// and the function names are predictable, so no need to allocate a new `String`.
+    pub name: Cow<'static, str>,
+    /// List of function call arguments.
+    pub args: StaticVec<Expr>,
 }
 
 /// _[INTERNALS]_ An expression sub-tree.
@@ -903,10 +903,10 @@ pub enum Expr {
     StringConstant(Box<IdentX>),
     /// FnPtr constant.
     FnPointer(Box<IdentX>),
-    /// Variable access - (variable name, optional modules, hash, optional index)
-    Variable(Box<(Ident, Option<ModuleRef>, u64, Option<NonZeroUsize>)>),
-    /// Property access.
-    Property(Box<(IdentX, (String, String))>),
+    /// Variable access - (optional index, optional modules, hash, variable name)
+    Variable(Box<(Option<NonZeroUsize>, Option<Box<ModuleRef>>, u64, Ident)>),
+    /// Property access - (getter, setter), prop
+    Property(Box<((String, String), IdentX)>),
     /// { stmt }
     Stmt(Box<Stmt>, Position),
     /// Wrapped expression - should not be optimized away.
@@ -1014,7 +1014,7 @@ impl Expr {
     /// Is the expression a simple variable access?
     pub(crate) fn get_variable_access(&self, non_qualified: bool) -> Option<&str> {
         match self {
-            Self::Variable(x) if !non_qualified || x.1.is_none() => Some((x.0).name.as_str()),
+            Self::Variable(x) if !non_qualified || x.1.is_none() => Some((x.3).name.as_str()),
             _ => None,
         }
     }
@@ -1033,9 +1033,9 @@ impl Expr {
             Self::FnPointer(x) => x.pos,
             Self::Array(_, pos) => *pos,
             Self::Map(_, pos) => *pos,
-            Self::Property(x) => (x.0).pos,
+            Self::Property(x) => (x.1).pos,
             Self::Stmt(_, pos) => *pos,
-            Self::Variable(x) => (x.0).pos,
+            Self::Variable(x) => (x.3).pos,
             Self::FnCall(_, pos) => *pos,
 
             Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => x.lhs.position(),
@@ -1064,8 +1064,8 @@ impl Expr {
             Self::FnPointer(x) => x.pos = new_pos,
             Self::Array(_, pos) => *pos = new_pos,
             Self::Map(_, pos) => *pos = new_pos,
-            Self::Variable(x) => (x.0).pos = new_pos,
-            Self::Property(x) => (x.0).pos = new_pos,
+            Self::Variable(x) => (x.3).pos = new_pos,
+            Self::Property(x) => (x.1).pos = new_pos,
             Self::Stmt(_, pos) => *pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
             Self::And(_, pos) | Self::Or(_, pos) | Self::In(_, pos) => *pos = new_pos,
@@ -1231,10 +1231,10 @@ impl Expr {
     pub(crate) fn into_property(self) -> Self {
         match self {
             Self::Variable(x) if x.1.is_none() => {
-                let ident = x.0;
+                let ident = x.3;
                 let getter = make_getter(&ident.name);
                 let setter = make_setter(&ident.name);
-                Self::Property(Box::new((ident.into(), (getter, setter))))
+                Self::Property(Box::new(((getter, setter), ident.into())))
             }
             _ => self,
         }

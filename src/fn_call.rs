@@ -186,7 +186,7 @@ impl Engine {
         args: &mut FnCallArgs,
         is_ref: bool,
         pub_only: bool,
-        def_val: &Option<Dynamic>,
+        def_val: Option<Dynamic>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state)?;
 
@@ -254,7 +254,7 @@ impl Engine {
 
         // Return default value (if any)
         if let Some(val) = def_val {
-            return Ok((val.clone(), false));
+            return Ok((val, false));
         }
 
         // Getter function not found?
@@ -479,7 +479,7 @@ impl Engine {
         _is_method: bool,
         pub_only: bool,
         _capture_scope: Option<Scope>,
-        def_val: &Option<Dynamic>,
+        def_val: Option<Dynamic>,
         _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         // Check for data race.
@@ -686,7 +686,7 @@ impl Engine {
         hash_script: u64,
         target: &mut Target,
         mut call_args: StaticVec<Dynamic>,
-        def_val: &Option<Dynamic>,
+        def_val: Option<Dynamic>,
         native: bool,
         pub_only: bool,
         level: usize,
@@ -837,7 +837,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         name: &str,
         args_expr: impl AsRef<[Expr]>,
-        def_val: &Option<Dynamic>,
+        def_val: Option<Dynamic>,
         mut hash_script: u64,
         native: bool,
         pub_only: bool,
@@ -1074,7 +1074,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        modules: &Option<ModuleRef>,
+        modules: Option<&ModuleRef>,
         name: &str,
         args_expr: impl AsRef<[Expr]>,
         def_val: Option<bool>,

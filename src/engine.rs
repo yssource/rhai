@@ -77,7 +77,7 @@ pub type Map = HashMap<ImmutableString, Dynamic>;
 // `Imports` is implemented as two `Vec`'s of exactly the same length.  That's because a `Module` is large,
 // so packing the import names together improves cache locality.
 #[derive(Debug, Clone, Default)]
-pub struct Imports(StaticVec<ImmutableString>, StaticVec<Module>);
+pub struct Imports(StaticVec<Module>, StaticVec<ImmutableString>);
 
 impl Imports {
     /// Get the length of this stack of imported modules.
@@ -86,15 +86,15 @@ impl Imports {
     }
     /// Get the imported module at a particular index.
     pub fn get(&self, index: usize) -> Option<&Module> {
-        self.1.get(index)
+        self.0.get(index)
     }
     /// Get a mutable reference to the imported module at a particular index.
     pub fn get_mut(&mut self, index: usize) -> Option<&mut Module> {
-        self.1.get_mut(index)
+        self.0.get_mut(index)
     }
     /// Get the index of an imported module by name.
     pub fn find(&self, name: &str) -> Option<usize> {
-        self.0
+        self.1
             .iter()
             .enumerate()
             .rev()
@@ -103,8 +103,8 @@ impl Imports {
     }
     /// Push an imported module onto the stack.
     pub fn push(&mut self, name: impl Into<ImmutableString>, module: Module) {
-        self.0.push(name.into());
-        self.1.push(module);
+        self.0.push(module);
+        self.1.push(name.into());
     }
     /// Truncate the stack of imported modules to a particular length.
     pub fn truncate(&mut self, size: usize) {
@@ -114,11 +114,11 @@ impl Imports {
     /// Get an iterator to this stack of imported modules.
     #[allow(dead_code)]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
-        self.0.iter().map(|name| name.as_str()).zip(self.1.iter())
+        self.1.iter().map(|name| name.as_str()).zip(self.0.iter())
     }
     /// Get a consuming iterator to this stack of imported modules.
     pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Module)> {
-        self.0.into_iter().zip(self.1.into_iter())
+        self.1.into_iter().zip(self.0.into_iter())
     }
 }
 
@@ -812,7 +812,7 @@ impl Engine {
         match expr {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
-                (Ident { name, pos }, Some(modules), hash_var, _) => {
+                (_, Some(modules), hash_var, Ident { name, pos }) => {
                     let module = search_imports_mut(mods, state, modules)?;
                     let target = module.get_qualified_var_mut(*hash_var).map_err(|mut err| {
                         match *err {
@@ -844,7 +844,7 @@ impl Engine {
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &'a Expr,
     ) -> Result<(Target<'s>, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
-        let (Ident { name, pos }, _, _, index) = match expr {
+        let (index, _, _, Ident { name, pos }) = match expr {
             Expr::Variable(v) => v.as_ref(),
             _ => unreachable!(),
         };
@@ -984,7 +984,7 @@ impl Engine {
                             let args = &mut [val, &mut idx_val2, &mut new_val.0];
 
                             self.exec_fn_call(
-                                state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None, &None,
+                                state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None, None,
                                 level,
                             )
                             .map_err(|err| match *err {
@@ -1026,8 +1026,7 @@ impl Engine {
                         let def_value = def_value.map(Into::<Dynamic>::into);
                         let args = idx_val.as_fn_call_args();
                         self.make_method_call(
-                            state, lib, name, *hash, target, args, &def_value, *native, false,
-                            level,
+                            state, lib, name, *hash, target, args, def_value, *native, false, level,
                         )
                         .map_err(|err| err.fill_position(*pos))
                     }
@@ -1035,7 +1034,7 @@ impl Engine {
                     Expr::FnCall(_, _) => unreachable!(),
                     // {xxx:map}.id = ???
                     Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
-                        let IdentX { name, pos } = &x.0;
+                        let IdentX { name, pos } = &x.1;
                         let index = name.clone().into();
                         let mut val = self
                             .get_indexed_mut(state, lib, target, index, *pos, true, false, level)?;
@@ -1045,7 +1044,7 @@ impl Engine {
                     }
                     // {xxx:map}.id
                     Expr::Property(x) if target.is::<Map>() => {
-                        let IdentX { name, pos } = &x.0;
+                        let IdentX { name, pos } = &x.1;
                         let index = name.clone().into();
                         let val = self.get_indexed_mut(
                             state, lib, target, index, *pos, false, false, level,
@@ -1055,11 +1054,11 @@ impl Engine {
                     }
                     // xxx.id = ???
                     Expr::Property(x) if new_val.is_some() => {
-                        let (IdentX { pos, .. }, (_, setter)) = x.as_ref();
+                        let ((_, setter), IdentX { pos, .. }) = x.as_ref();
                         let mut new_val = new_val;
                         let mut args = [target.as_mut(), &mut new_val.as_mut().unwrap().0];
                         self.exec_fn_call(
-                            state, lib, setter, 0, &mut args, is_ref, true, false, None, &None,
+                            state, lib, setter, 0, &mut args, is_ref, true, false, None, None,
                             level,
                         )
                         .map(|(v, _)| (v, true))
@@ -1067,10 +1066,10 @@ impl Engine {
                     }
                     // xxx.id
                     Expr::Property(x) => {
-                        let (IdentX { pos, .. }, (getter, _)) = x.as_ref();
+                        let ((getter, _), IdentX { pos, .. }) = x.as_ref();
                         let mut args = [target.as_mut()];
                         self.exec_fn_call(
-                            state, lib, getter, 0, &mut args, is_ref, true, false, None, &None,
+                            state, lib, getter, 0, &mut args, is_ref, true, false, None, None,
                             level,
                         )
                         .map(|(v, _)| (v, false))
@@ -1080,7 +1079,7 @@ impl Engine {
                     Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target.is::<Map>() => {
                         let mut val = match &x.lhs {
                             Expr::Property(p) => {
-                                let IdentX { name, pos } = &p.0;
+                                let IdentX { name, pos } = &p.1;
                                 let index = name.clone().into();
                                 self.get_indexed_mut(
                                     state, lib, target, index, *pos, false, true, level,
@@ -1099,7 +1098,7 @@ impl Engine {
                                 let args = idx_val.as_fn_call_args();
                                 let (val, _) = self
                                     .make_method_call(
-                                        state, lib, name, *hash, target, args, &def_value, *native,
+                                        state, lib, name, *hash, target, args, def_value, *native,
                                         false, level,
                                     )
                                     .map_err(|err| err.fill_position(*pos))?;
@@ -1122,13 +1121,13 @@ impl Engine {
                         match &x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
-                                let (IdentX { pos, .. }, (getter, setter)) = p.as_ref();
+                                let ((getter, setter), IdentX { pos, .. }) = p.as_ref();
                                 let arg_values = &mut [target.as_mut(), &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self
                                     .exec_fn_call(
                                         state, lib, getter, 0, args, is_ref, true, false, None,
-                                        &None, level,
+                                        None, level,
                                     )
                                     .map_err(|err| err.fill_position(*pos))?;
 
@@ -1154,7 +1153,7 @@ impl Engine {
                                     arg_values[1] = val;
                                     self.exec_fn_call(
                                         state, lib, setter, 0, arg_values, is_ref, true, false,
-                                        None, &None, level,
+                                        None, None, level,
                                     )
                                     .or_else(
                                         |err| match *err {
@@ -1182,7 +1181,7 @@ impl Engine {
                                 let args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self
                                     .make_method_call(
-                                        state, lib, name, *hash, target, args, &def_value, *native,
+                                        state, lib, name, *hash, target, args, def_value, *native,
                                         false, level,
                                     )
                                     .map_err(|err| err.fill_position(*pos))?;
@@ -1257,7 +1256,7 @@ impl Engine {
                 let Ident {
                     name: var_name,
                     pos: var_pos,
-                } = &x.0;
+                } = &x.3;
 
                 self.inc_operations(state)
                     .map_err(|err| err.fill_position(*var_pos))?;
@@ -1458,7 +1457,7 @@ impl Engine {
                 let mut idx = idx;
                 let args = &mut [val, &mut idx];
                 self.exec_fn_call(
-                    state, _lib, FN_IDX_GET, 0, args, is_ref, true, false, None, &None, _level,
+                    state, _lib, FN_IDX_GET, 0, args, is_ref, true, false, None, None, _level,
                 )
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
@@ -1504,13 +1503,14 @@ impl Engine {
 
                 for value in rhs_value.iter_mut() {
                     let args = &mut [&mut lhs_value.clone(), value];
+                    let def_value = def_value.clone();
 
                     // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
                     let hash =
                         calc_native_fn_hash(empty(), OP_FUNC, args.iter().map(|a| a.type_id()));
 
                     if self
-                        .call_native_fn(state, lib, OP_FUNC, hash, args, false, false, &def_value)
+                        .call_native_fn(state, lib, OP_FUNC, hash, args, false, false, def_value)
                         .map_err(|err| err.fill_position(rhs.position()))?
                         .0
                         .as_bool()
@@ -1520,7 +1520,7 @@ impl Engine {
                     }
                 }
 
-                Ok(def_value.unwrap())
+                Ok(false.into())
             }
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(rhs_value)) => match lhs_value {
@@ -1564,11 +1564,11 @@ impl Engine {
             Expr::FnPointer(x) => {
                 Ok(FnPtr::new_unchecked(x.name.clone(), Default::default()).into())
             }
-            Expr::Variable(x) if (x.0).name == KEYWORD_THIS => {
+            Expr::Variable(x) if (x.3).name == KEYWORD_THIS => {
                 if let Some(val) = this_ptr {
                     Ok(val.clone())
                 } else {
-                    EvalAltResult::ErrorUnboundThis((x.0).pos).into()
+                    EvalAltResult::ErrorUnboundThis((x.3).pos).into()
                 }
             }
             Expr::Variable(_) => {
@@ -1623,7 +1623,7 @@ impl Engine {
                 } = x.as_ref();
                 let def_value = def_value.map(Into::<Dynamic>::into);
                 self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args, &def_value, *hash, *native,
+                    scope, mods, state, lib, this_ptr, name, args, def_value, *hash, *native,
                     false, *cap_scope, level,
                 )
                 .map_err(|err| err.fill_position(*pos))
@@ -1639,8 +1639,9 @@ impl Engine {
                     def_value,
                     ..
                 } = x.as_ref();
+                let modules = namespace.as_ref().map(|v| v.as_ref());
                 self.make_qualified_function_call(
-                    scope, mods, state, lib, this_ptr, namespace, name, args, *def_value, *hash,
+                    scope, mods, state, lib, this_ptr, modules, name, args, *def_value, *hash,
                     level,
                 )
                 .map_err(|err| err.fill_position(*pos))
@@ -1812,7 +1813,7 @@ impl Engine {
                                 // Run function
                                 let (value, _) = self
                                     .exec_fn_call(
-                                        state, lib, op, 0, args, false, false, false, None, &None,
+                                        state, lib, op, 0, args, false, false, false, None, None,
                                         level,
                                     )
                                     .map_err(|err| err.fill_position(*op_pos))?;
@@ -1850,7 +1851,7 @@ impl Engine {
 
                     let result = self
                         .exec_fn_call(
-                            state, lib, op, 0, args, false, false, false, None, &None, level,
+                            state, lib, op, 0, args, false, false, false, None, None, level,
                         )
                         .map(|(v, _)| v)
                         .map_err(|err| err.fill_position(*op_pos))?;

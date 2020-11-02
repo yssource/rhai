@@ -45,9 +45,14 @@ pub struct Position {
 }
 
 /// No `Position`.
-pub const NO_POS: Position = Position { line: 0, pos: 0 };
+pub const NO_POS: Position = Position::NONE;
 
 impl Position {
+    /// A `Position` representing no position.
+    pub const NONE: Self = Self { line: 0, pos: 0 };
+    /// A `Position` representing the first position.
+    pub const START: Self = Self { line: 1, pos: 0 };
+
     /// Create a new `Position`.
     ///
     /// `line` must not be zero.
@@ -65,27 +70,24 @@ impl Position {
             pos: position,
         }
     }
-
     /// Get the line number (1-based), or `None` if there is no position.
     #[inline(always)]
-    pub fn line(&self) -> Option<usize> {
+    pub fn line(self) -> Option<usize> {
         if self.is_none() {
             None
         } else {
             Some(self.line as usize)
         }
     }
-
     /// Get the character position (1-based), or `None` if at beginning of a line.
     #[inline(always)]
-    pub fn position(&self) -> Option<usize> {
+    pub fn position(self) -> Option<usize> {
         if self.is_none() || self.pos == 0 {
             None
         } else {
             Some(self.pos as usize)
         }
     }
-
     /// Advance by one character position.
     #[inline(always)]
     pub(crate) fn advance(&mut self) {
@@ -96,7 +98,6 @@ impl Position {
             self.pos += 1;
         }
     }
-
     /// Go backwards by one character position.
     ///
     /// # Panics
@@ -108,7 +109,6 @@ impl Position {
         assert!(self.pos > 0, "cannot rewind at position 0");
         self.pos -= 1;
     }
-
     /// Advance to the next line.
     #[inline(always)]
     pub(crate) fn new_line(&mut self) {
@@ -120,24 +120,22 @@ impl Position {
             self.pos = 0;
         }
     }
-
-    /// Create a `Position` representing no position.
+    /// Is this `Position` at the beginning of a line?
     #[inline(always)]
-    pub fn none() -> Self {
-        NO_POS
+    pub fn is_beginning_of_line(self) -> bool {
+        self.line == 0 && !self.is_none()
     }
-
     /// Is there no `Position`?
     #[inline(always)]
-    pub fn is_none(&self) -> bool {
-        self.line == 0 && self.pos == 0
+    pub fn is_none(self) -> bool {
+        self == Self::NONE
     }
 }
 
 impl Default for Position {
     #[inline(always)]
     fn default() -> Self {
-        Self::new(1, 0)
+        Self::START
     }
 }
 
@@ -330,7 +328,7 @@ pub enum Token {
     #[cfg(not(feature = "no_module"))]
     As,
     /// A lexer error.
-    LexError(Box<LexError>),
+    LexError(LexError),
     /// A comment block.
     Comment(String),
     /// A reserved symbol.
@@ -1120,9 +1118,7 @@ fn get_next_token_inner(
                         INT::from_str_radix(&out, radix)
                             .map(Token::IntegerConstant)
                             .unwrap_or_else(|_| {
-                                Token::LexError(Box::new(LERR::MalformedNumber(
-                                    result.into_iter().collect(),
-                                )))
+                                Token::LexError(LERR::MalformedNumber(result.into_iter().collect()))
                             }),
                         start_pos,
                     ));
@@ -1136,9 +1132,7 @@ fn get_next_token_inner(
 
                     return Some((
                         num.unwrap_or_else(|_| {
-                            Token::LexError(Box::new(LERR::MalformedNumber(
-                                result.into_iter().collect(),
-                            )))
+                            Token::LexError(LERR::MalformedNumber(result.into_iter().collect()))
                         }),
                         start_pos,
                     ));
@@ -1153,7 +1147,7 @@ fn get_next_token_inner(
             // " - string literal
             ('"', _) => {
                 return parse_string_literal(stream, state, pos, '"').map_or_else(
-                    |err| Some((Token::LexError(Box::new(err.0)), err.1)),
+                    |err| Some((Token::LexError(err.0), err.1)),
                     |out| Some((Token::StringConstant(out), start_pos)),
                 )
             }
@@ -1161,22 +1155,19 @@ fn get_next_token_inner(
             // ' - character literal
             ('\'', '\'') => {
                 return Some((
-                    Token::LexError(Box::new(LERR::MalformedChar("".to_string()))),
+                    Token::LexError(LERR::MalformedChar("".to_string())),
                     start_pos,
                 ))
             }
             ('\'', _) => {
                 return Some(parse_string_literal(stream, state, pos, '\'').map_or_else(
-                    |err| (Token::LexError(Box::new(err.0)), err.1),
+                    |err| (Token::LexError(err.0), err.1),
                     |result| {
                         let mut chars = result.chars();
                         let first = chars.next().unwrap();
 
                         if chars.next().is_some() {
-                            (
-                                Token::LexError(Box::new(LERR::MalformedChar(result))),
-                                start_pos,
-                            )
+                            (Token::LexError(LERR::MalformedChar(result)), start_pos)
                         } else {
                             (Token::CharConstant(first), start_pos)
                         }
@@ -1452,7 +1443,7 @@ fn get_next_token_inner(
             }
             (ch, _) => {
                 return Some((
-                    Token::LexError(Box::new(LERR::UnexpectedInput(ch.to_string()))),
+                    Token::LexError(LERR::UnexpectedInput(ch.to_string())),
                     start_pos,
                 ))
             }
@@ -1494,7 +1485,7 @@ fn get_identifier(
 
     if !is_valid_identifier {
         return Some((
-            Token::LexError(Box::new(LERR::MalformedIdentifier(identifier))),
+            Token::LexError(LERR::MalformedIdentifier(identifier)),
             start_pos,
         ));
     }
@@ -1652,42 +1643,42 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
             Some((Token::Reserved(s), pos)) => Some((match
                 (s.as_str(), self.engine.custom_keywords.contains_key(&s))
             {
-                ("===", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                ("===", false) => Token::LexError(LERR::ImproperSymbol(
                     "'===' is not a valid operator. This is not JavaScript! Should it be '=='?".to_string(),
-                ))),
-                ("!==", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                )),
+                ("!==", false) => Token::LexError(LERR::ImproperSymbol(
                     "'!==' is not a valid operator. This is not JavaScript! Should it be '!='?".to_string(),
-                ))),
-                ("->", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
-                    "'->' is not a valid symbol. This is not C or C++!".to_string()))),
-                ("<-", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                )),
+                ("->", false) => Token::LexError(LERR::ImproperSymbol(
+                    "'->' is not a valid symbol. This is not C or C++!".to_string())),
+                ("<-", false) => Token::LexError(LERR::ImproperSymbol(
                     "'<-' is not a valid symbol. This is not Go! Should it be '<='?".to_string(),
-                ))),
-                ("=>", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                )),
+                ("=>", false) => Token::LexError(LERR::ImproperSymbol(
                     "'=>' is not a valid symbol. This is not Rust! Should it be '>='?".to_string(),
-                ))),
-                (":=", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                )),
+                (":=", false) => Token::LexError(LERR::ImproperSymbol(
                     "':=' is not a valid assignment operator. This is not Go! Should it be simply '='?".to_string(),
-                ))),
-                ("::<", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                )),
+                ("::<", false) => Token::LexError(LERR::ImproperSymbol(
                     "'::<>' is not a valid symbol. This is not Rust! Should it be '::'?".to_string(),
-                ))),
-                ("(*", false) | ("*)", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                )),
+                ("(*", false) | ("*)", false) => Token::LexError(LERR::ImproperSymbol(
                     "'(* .. *)' is not a valid comment format. This is not Pascal! Should it be '/* .. */'?".to_string(),
-                ))),
-                ("#", false) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                )),
+                ("#", false) => Token::LexError(LERR::ImproperSymbol(
                     "'#' is not a valid symbol. Should it be '#{'?".to_string(),
-                ))),
+                )),
                 // Reserved keyword/operator that is custom.
                 (_, true) => Token::Custom(s),
                 // Reserved operator that is not custom.
-                (token, false) if !is_valid_identifier(token.chars()) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                (token, false) if !is_valid_identifier(token.chars()) => Token::LexError(LERR::ImproperSymbol(
                     format!("'{}' is a reserved symbol", token)
-                ))),
+                )),
                 // Reserved keyword that is not custom and disabled.
-                (token, false) if self.engine.disabled_symbols.contains(token) => Token::LexError(Box::new(LERR::ImproperSymbol(
+                (token, false) if self.engine.disabled_symbols.contains(token) => Token::LexError(LERR::ImproperSymbol(
                     format!("reserved symbol '{}' is disabled", token)
-                ))),
+                )),
                 // Reserved keyword/operator that is not custom.
                 (_, false) => Token::Reserved(s),
             }, pos)),
@@ -1708,7 +1699,7 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
             // Disabled operator
             Some((token, pos)) if token.is_operator() && self.engine.disabled_symbols.contains(token.syntax().as_ref()) => {
                 Some((
-                    Token::LexError(Box::new(LexError::UnexpectedInput(token.syntax().into()))),
+                    Token::LexError(LexError::UnexpectedInput(token.syntax().into())),
                     pos,
                 ))
             }
