@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, ParseErrorType, INT};
+use rhai::{Engine, EvalAltResult, ParseErrorType, Scope, INT};
 
 #[test]
 fn test_constant() -> Result<(), Box<EvalAltResult>> {
@@ -15,8 +15,23 @@ fn test_constant() -> Result<(), Box<EvalAltResult>> {
 
     #[cfg(not(feature = "no_index"))]
     assert!(matches!(
-        *engine.eval::<INT>("const x = [1, 2, 3, 4, 5]; x[2] = 42;").expect_err("expects error"),
+        *engine.consume("const x = [1, 2, 3, 4, 5]; x[2] = 42;").expect_err("expects error"),
         EvalAltResult::ErrorParsing(ParseErrorType::AssignmentToConstant(x), _) if x == "x"
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn test_constant_scope() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    let mut scope = Scope::new();
+    scope.push_constant("x", 42 as INT);
+
+    assert!(matches!(
+        *engine.consume_with_scope(&mut scope, "x = 1").expect_err("expects error"),
+        EvalAltResult::ErrorAssignmentToConstant(x, _) if x == "x"
     ));
 
     Ok(())

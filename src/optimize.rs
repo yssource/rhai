@@ -156,11 +156,16 @@ fn call_fn_with_constant_arguments(
 /// Optimize a statement.
 fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
     match stmt {
-        // id op= expr
-        Stmt::Assignment(x, pos) => Stmt::Assignment(
-            Box::new((optimize_expr(x.0, state), x.1, optimize_expr(x.2, state))),
-            pos,
-        ),
+        // expr op= expr
+        Stmt::Assignment(x, pos) => match x.0 {
+            Expr::Variable(_) => {
+                Stmt::Assignment(Box::new((x.0, x.1, optimize_expr(x.2, state))), pos)
+            }
+            _ => Stmt::Assignment(
+                Box::new((optimize_expr(x.0, state), x.1, optimize_expr(x.2, state))),
+                pos,
+            ),
+        },
         // if false { if_block } -> Noop
         Stmt::IfThenElse(Expr::False(pos), x, _) if x.1.is_none() => {
             state.set_dirty();
@@ -462,6 +467,11 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                     .map(|(_, mut expr)| { expr.set_position(pos); expr })
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
+            // var.rhs
+            (lhs @ Expr::Variable(_), rhs) => Expr::Dot(Box::new(BinaryExpr {
+                lhs,
+                rhs: optimize_expr(rhs, state),
+            }), dot_pos),
             // lhs.rhs
             (lhs, rhs) => Expr::Dot(Box::new(BinaryExpr {
                 lhs: optimize_expr(lhs, state),
@@ -498,6 +508,11 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 state.set_dirty();
                 Expr::CharConstant(s.name.chars().nth(i as usize).unwrap(), s.pos)
             }
+            // var[rhs]
+            (lhs @ Expr::Variable(_), rhs) => Expr::Index(Box::new(BinaryExpr {
+                lhs,
+                rhs: optimize_expr(rhs, state),
+            }), idx_pos),
             // lhs[rhs]
             (lhs, rhs) => Expr::Index(Box::new(BinaryExpr {
                 lhs: optimize_expr(lhs, state),

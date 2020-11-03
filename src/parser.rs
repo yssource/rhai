@@ -1087,7 +1087,7 @@ fn make_assignment_stmt<'a>(
 ) -> Result<Stmt, ParseError> {
     match &lhs {
         // var (non-indexed) = rhs
-        Expr::Variable(x) if x.1.is_none() => {
+        Expr::Variable(x) if x.0.is_none() => {
             Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
         }
         // var (indexed) = rhs
@@ -1114,7 +1114,7 @@ fn make_assignment_stmt<'a>(
         // xxx[???] = rhs, xxx.??? = rhs
         Expr::Index(x, _) | Expr::Dot(x, _) => match &x.lhs {
             // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
-            Expr::Variable(x) if x.1.is_none() => {
+            Expr::Variable(x) if x.0.is_none() => {
                 Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
             }
             // var[???] (indexed) = rhs, var.??? (indexed) = rhs
