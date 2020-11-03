@@ -1,7 +1,7 @@
 //! Module containing error definitions for the parsing process.
 
 use crate::result::EvalAltResult;
-use crate::token::Position;
+use crate::token::{Position, NO_POS};
 
 use crate::stdlib::{
     boxed::Box,
@@ -43,26 +43,34 @@ impl fmt::Display for LexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnexpectedInput(s) => write!(f, "Unexpected '{}'", s),
-            Self::MalformedEscapeSequence(s) => write!(f, "Invalid escape sequence: '{}'", s),
-            Self::MalformedNumber(s) => write!(f, "Invalid number: '{}'", s),
-            Self::MalformedChar(s) => write!(f, "Invalid character: '{}'", s),
-            Self::MalformedIdentifier(s) => write!(f, "Variable name is not proper: '{}'", s),
-            Self::UnterminatedString => write!(f, "Open string is not terminated"),
-            Self::StringTooLong(max) => write!(
-                f,
-                "Length of string literal exceeds the maximum limit ({})",
-                max
-            ),
+            Self::MalformedEscapeSequence(s) => write!(f, "{}: '{}'", self.desc(), s),
+            Self::MalformedNumber(s) => write!(f, "{}: '{}'", self.desc(), s),
+            Self::MalformedChar(s) => write!(f, "{}: '{}'", self.desc(), s),
+            Self::MalformedIdentifier(s) => write!(f, "{}: '{}'", self.desc(), s),
+            Self::UnterminatedString => f.write_str(self.desc()),
+            Self::StringTooLong(max) => write!(f, "{} ({})", self.desc(), max),
             Self::ImproperSymbol(s) => f.write_str(s),
         }
     }
 }
 
 impl LexError {
-    /// Convert a `LexError` into a `ParseError`.
+    pub(crate) fn desc(&self) -> &str {
+        match self {
+            Self::UnexpectedInput(_) => "Unexpected character encountered",
+            Self::UnterminatedString => "Open string is not terminated",
+            Self::StringTooLong(_) => "Length of string literal exceeds the maximum limit",
+            Self::MalformedEscapeSequence(_) => "Invalid escape sequence",
+            Self::MalformedNumber(_) => "Invalid number",
+            Self::MalformedChar(_) => "Invalid character",
+            Self::MalformedIdentifier(_) => "Variable name is not proper",
+            Self::ImproperSymbol(_) => "Invalid symbol encountered",
+        }
+    }
+    /// Convert a `&LexError` into a `ParseError`.
     #[inline(always)]
     pub fn into_err(&self, pos: Position) -> ParseError {
-        ParseError(Box::new(self.into()), pos)
+        ParseError(Box::new(self.clone().into()), pos)
     }
 }
 
@@ -74,10 +82,10 @@ impl LexError {
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 #[non_exhaustive]
 pub enum ParseErrorType {
-    /// Error in the script text. Wrapped value is the error message.
-    BadInput(String),
     /// The script ends prematurely.
     UnexpectedEOF,
+    /// Error in the script text. Wrapped value is the lex error.
+    BadInput(LexError),
     /// An unknown operator is encountered. Wrapped value is the operator.
     UnknownOperator(String),
     /// Expecting a particular token but not finding one. Wrapped values are the token and description.
@@ -164,8 +172,8 @@ impl ParseErrorType {
 
     pub(crate) fn desc(&self) -> &str {
         match self {
-            Self::BadInput(p) => p,
             Self::UnexpectedEOF => "Script is incomplete",
+            Self::BadInput(p) => p.desc(),
             Self::UnknownOperator(_) => "Unknown operator",
             Self::MissingToken(_, _) => "Expecting a certain token that is missing",
             Self::MalformedCallExpr(_) => "Invalid expression in function call arguments",
@@ -196,9 +204,9 @@ impl ParseErrorType {
 impl fmt::Display for ParseErrorType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::BadInput(s) | ParseErrorType::MalformedCallExpr(s) => {
-                f.write_str(if s.is_empty() { self.desc() } else { s })
-            }
+            Self::BadInput(err) => write!(f, "{}", err),
+
+            Self::MalformedCallExpr(s) => f.write_str(if s.is_empty() { self.desc() } else { s }),
             Self::UnknownOperator(s) => write!(f, "{}: '{}'", self.desc(), s),
 
             Self::MalformedIndexExpr(s) | Self::MalformedInExpr(s) | Self::MalformedCapture(s) => {
@@ -247,14 +255,14 @@ impl fmt::Display for ParseErrorType {
     }
 }
 
-impl From<&LexError> for ParseErrorType {
+impl From<LexError> for ParseErrorType {
     #[inline(always)]
-    fn from(err: &LexError) -> Self {
+    fn from(err: LexError) -> Self {
         match err {
             LexError::StringTooLong(max) => {
-                Self::LiteralTooLarge("Length of string literal".to_string(), *max)
+                Self::LiteralTooLarge("Length of string literal".to_string(), max)
             }
-            _ => Self::BadInput(err.to_string()),
+            _ => Self::BadInput(err),
         }
     }
 }
@@ -282,7 +290,7 @@ impl fmt::Display for ParseError {
 impl From<ParseErrorType> for Box<EvalAltResult> {
     #[inline(always)]
     fn from(err: ParseErrorType) -> Self {
-        Box::new(EvalAltResult::ErrorParsing(err, Position::none()))
+        Box::new(EvalAltResult::ErrorParsing(err, NO_POS))
     }
 }
 

@@ -38,7 +38,7 @@ fn test_max_string_size() -> Result<(), Box<EvalAltResult>> {
                 "#
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorDataTooLarge(_, 10, 13, _)
+        EvalAltResult::ErrorDataTooLarge(_, _)
     ));
 
     #[cfg(not(feature = "no_object"))]
@@ -52,7 +52,7 @@ fn test_max_string_size() -> Result<(), Box<EvalAltResult>> {
                 "#
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorDataTooLarge(_, 10, 100, _)
+        EvalAltResult::ErrorDataTooLarge(_, _)
     ));
 
     engine.set_max_string_size(0);
@@ -98,7 +98,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
                 "
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorDataTooLarge(_, 10, 12, _)
+        EvalAltResult::ErrorDataTooLarge(_, _)
     ));
 
     #[cfg(not(feature = "no_object"))]
@@ -112,7 +112,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
                 "
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorDataTooLarge(_, 10, 100, _)
+        EvalAltResult::ErrorDataTooLarge(_, _)
     ));
 
     assert!(matches!(
@@ -124,7 +124,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
                 "
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorDataTooLarge(_, 10, 12, _)
+        EvalAltResult::ErrorDataTooLarge(_, _)
     ));
 
     #[cfg(not(feature = "no_object"))]
@@ -137,7 +137,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
                 "
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorDataTooLarge(_, 10, 12, _)
+        EvalAltResult::ErrorDataTooLarge(_, _)
     ));
 
     assert!(matches!(
@@ -151,7 +151,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
                 "
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorDataTooLarge(_, 10, 12, _)
+        EvalAltResult::ErrorDataTooLarge(_, _)
     ));
 
     engine.set_max_array_size(0);
@@ -216,7 +216,7 @@ fn test_max_map_size() -> Result<(), Box<EvalAltResult>> {
                 "
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorDataTooLarge(_, 10, 12, _)
+        EvalAltResult::ErrorDataTooLarge(_, _)
     ));
 
     assert!(matches!(
@@ -228,7 +228,7 @@ fn test_max_map_size() -> Result<(), Box<EvalAltResult>> {
                 "
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorDataTooLarge(_, 10, 12, _)
+        EvalAltResult::ErrorDataTooLarge(_, _)
     ));
 
     #[cfg(not(feature = "no_index"))]
@@ -241,7 +241,7 @@ fn test_max_map_size() -> Result<(), Box<EvalAltResult>> {
                 "
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorDataTooLarge(_, 10, 12, _)
+        EvalAltResult::ErrorDataTooLarge(_, _)
     ));
 
     engine.set_max_map_size(0);

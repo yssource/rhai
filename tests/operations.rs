@@ -1,5 +1,5 @@
 #![cfg(not(feature = "unchecked"))]
-use rhai::{Engine, EvalAltResult};
+use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
 fn test_max_operations() -> Result<(), Box<EvalAltResult>> {
@@ -10,7 +10,7 @@ fn test_max_operations() -> Result<(), Box<EvalAltResult>> {
         if count % 100 == 0 {
             println!("{}", count);
         }
-        true
+        None
     });
 
     engine.eval::<()>("let x = 0; while x < 20 { x += 1; }")?;
@@ -38,7 +38,7 @@ fn test_max_operations_functions() -> Result<(), Box<EvalAltResult>> {
         if count % 100 == 0 {
             println!("{}", count);
         }
-        true
+        None
     });
 
     engine.eval::<()>(
@@ -94,7 +94,7 @@ fn test_max_operations_eval() -> Result<(), Box<EvalAltResult>> {
         if count % 100 == 0 {
             println!("{}", count);
         }
-        true
+        None
     });
 
     assert!(matches!(
@@ -117,13 +117,19 @@ fn test_max_operations_progress() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.set_max_operations(500);
 
-    engine.on_progress(|&count| count < 100);
+    engine.on_progress(|&count| {
+        if count < 100 {
+            None
+        } else {
+            Some((42 as INT).into())
+        }
+    });
 
     assert!(matches!(
         *engine
             .eval::<()>("for x in range(0, 500) {}")
             .expect_err("should error"),
-        EvalAltResult::ErrorTerminated(_)
+        EvalAltResult::ErrorTerminated(x, _) if x.as_int()? == 42
     ));
 
     Ok(())

@@ -5,7 +5,7 @@ use crate::dynamic::{Dynamic, Variant};
 use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, NativeCallContext, SendSync};
 use crate::fn_register::by_value as cast_arg;
 use crate::result::EvalAltResult;
-use crate::token::{Position, Token};
+use crate::token::{Token, NO_POS};
 use crate::utils::{ImmutableString, StraightHasherBuilder};
 use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec};
 
@@ -13,11 +13,7 @@ use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec};
 use crate::{ast::ScriptFnDef, fn_native::Shared};
 
 #[cfg(not(feature = "no_module"))]
-use crate::{
-    ast::AST,
-    engine::{Engine, Imports},
-    scope::{Entry as ScopeEntry, Scope},
-};
+use crate::{ast::AST, engine::Engine, scope::Scope};
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::{Array, FN_IDX_GET, FN_IDX_SET};
@@ -275,11 +271,11 @@ impl Module {
         hash_var: u64,
     ) -> Result<&mut Dynamic, Box<EvalAltResult>> {
         if hash_var == 0 {
-            Err(EvalAltResult::ErrorVariableNotFound(String::new(), Position::none()).into())
+            Err(EvalAltResult::ErrorVariableNotFound(String::new(), NO_POS).into())
         } else {
-            self.all_variables.get_mut(&hash_var).ok_or_else(|| {
-                EvalAltResult::ErrorVariableNotFound(String::new(), Position::none()).into()
-            })
+            self.all_variables
+                .get_mut(&hash_var)
+                .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(String::new(), NO_POS).into())
         }
     }
 
@@ -533,9 +529,8 @@ impl Module {
             + SendSync
             + 'static,
     ) -> u64 {
-        let f = move |context: NativeCallContext, args: &mut FnCallArgs| {
-            func(context, args).map(Dynamic::from)
-        };
+        let f =
+            move |ctx: NativeCallContext, args: &mut FnCallArgs| func(ctx, args).map(Dynamic::from);
         self.set_fn(
             name,
             FnAccess::Public,
@@ -1340,7 +1335,7 @@ impl Module {
         ast: &AST,
         engine: &Engine,
     ) -> Result<Self, Box<EvalAltResult>> {
-        let mut mods = Imports::new();
+        let mut mods = Default::default();
 
         // Run the script
         engine.eval_ast_with_scope_raw(&mut scope, &mut mods, &ast)?;
@@ -1348,14 +1343,12 @@ impl Module {
         // Create new module
         let mut module = Module::new();
 
-        scope
-            .into_iter()
-            .for_each(|ScopeEntry { value, alias, .. }| {
-                // Variables with an alias left in the scope become module variables
-                if let Some(alias) = alias {
-                    module.variables.insert(*alias, value);
-                }
-            });
+        scope.into_iter().for_each(|(_, _, value, alias)| {
+            // Variables with an alias left in the scope become module variables
+            if let Some(alias) = alias {
+                module.variables.insert(alias, value);
+            }
+        });
 
         // Modules left in the scope become sub-modules
         mods.into_iter().for_each(|(alias, m)| {

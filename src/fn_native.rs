@@ -6,7 +6,7 @@ use crate::engine::{Engine, EvalContext};
 use crate::module::Module;
 use crate::plugin::PluginFunction;
 use crate::result::EvalAltResult;
-use crate::token::{is_valid_identifier, Position};
+use crate::token::{is_valid_identifier, NO_POS};
 use crate::utils::ImmutableString;
 use crate::{calc_script_fn_hash, StaticVec};
 
@@ -160,7 +160,7 @@ impl FnPtr {
     /// clone them _before_ calling this function.
     pub fn call_dynamic(
         &self,
-        context: NativeCallContext,
+        ctx: NativeCallContext,
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -182,11 +182,10 @@ impl FnPtr {
             args.insert(0, obj);
         }
 
-        context
-            .engine()
+        ctx.engine()
             .exec_fn_call(
                 &mut Default::default(),
-                context.lib,
+                ctx.lib,
                 fn_name,
                 hash_script,
                 args.as_mut(),
@@ -194,7 +193,7 @@ impl FnPtr {
                 has_this,
                 true,
                 None,
-                &None,
+                None,
                 0,
             )
             .map(|(v, _)| v)
@@ -216,7 +215,7 @@ impl TryFrom<ImmutableString> for FnPtr {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, Default::default()))
         } else {
-            EvalAltResult::ErrorFunctionNotFound(value.into(), Position::none()).into()
+            EvalAltResult::ErrorFunctionNotFound(value.into(), NO_POS).into()
         }
     }
 }

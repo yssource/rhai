@@ -11,7 +11,7 @@ use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::CustomSyntax;
-use crate::token::Position;
+use crate::token::{Position, NO_POS};
 use crate::{calc_native_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_index"))]
@@ -69,10 +69,58 @@ pub type Map = HashMap<ImmutableString, Dynamic>;
 ///
 /// This type is volatile and may change.
 //
-// Note - We cannot use &str or Cow<str> here because `eval` may load a module
-//        and the module name will live beyond the AST of the eval script text.
-//        The best we can do is a shared reference.
-pub type Imports = Vec<(ImmutableString, Module)>;
+// # Implementation Notes
+//
+// We cannot use &str or Cow<str> here because `eval` may load a module and the module name will live beyond
+// the AST of the eval script text. The best we can do is a shared reference.
+//
+// `Imports` is implemented as two `Vec`'s of exactly the same length.  That's because a `Module` is large,
+// so packing the import names together improves cache locality.
+#[derive(Debug, Clone, Default)]
+pub struct Imports(StaticVec<Module>, StaticVec<ImmutableString>);
+
+impl Imports {
+    /// Get the length of this stack of imported modules.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    /// Get the imported module at a particular index.
+    pub fn get(&self, index: usize) -> Option<&Module> {
+        self.0.get(index)
+    }
+    /// Get a mutable reference to the imported module at a particular index.
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut Module> {
+        self.0.get_mut(index)
+    }
+    /// Get the index of an imported module by name.
+    pub fn find(&self, name: &str) -> Option<usize> {
+        self.1
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, key)| key.as_str() == name)
+            .map(|(index, _)| index)
+    }
+    /// Push an imported module onto the stack.
+    pub fn push(&mut self, name: impl Into<ImmutableString>, module: Module) {
+        self.0.push(module);
+        self.1.push(name.into());
+    }
+    /// Truncate the stack of imported modules to a particular length.
+    pub fn truncate(&mut self, size: usize) {
+        self.0.truncate(size);
+        self.1.truncate(size);
+    }
+    /// Get an iterator to this stack of imported modules.
+    #[allow(dead_code)]
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
+        self.1.iter().map(|name| name.as_str()).zip(self.0.iter())
+    }
+    /// Get a consuming iterator to this stack of imported modules.
+    pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Module)> {
+        self.1.into_iter().zip(self.0.into_iter())
+    }
+}
 
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
@@ -303,7 +351,7 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => {
                 let char_value = ch.clone();
-                self.set_value((char_value, Position::none())).unwrap();
+                self.set_value((char_value, NO_POS)).unwrap();
             }
         }
     }
@@ -528,7 +576,7 @@ pub struct Engine {
     /// Callback closure for implementing the `debug` command.
     pub(crate) debug: Callback<str, ()>,
     /// Callback closure for progress reporting.
-    pub(crate) progress: Option<Callback<u64, bool>>,
+    pub(crate) progress: Option<Callback<u64, Option<Dynamic>>>,
 
     /// Optimize the AST after compilation.
     pub(crate) optimization_level: OptimizationLevel,
@@ -602,12 +650,10 @@ pub fn search_imports<'s>(
 
     Ok(if index > 0 {
         let offset = mods.len() - index;
-        &mods.get(offset).unwrap().1
+        mods.get(offset).expect("invalid index in Imports")
     } else {
-        mods.iter()
-            .rev()
-            .find(|(n, _)| n == root)
-            .map(|(_, m)| m)
+        mods.find(root)
+            .map(|n| mods.get(n).expect("invalid index in Imports"))
             .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *pos))?
     })
 }
@@ -630,13 +676,14 @@ pub fn search_imports_mut<'s>(
 
     Ok(if index > 0 {
         let offset = mods.len() - index;
-        &mut mods.get_mut(offset).unwrap().1
+        mods.get_mut(offset).expect("invalid index in Imports")
     } else {
-        mods.iter_mut()
-            .rev()
-            .find(|(n, _)| n == root)
-            .map(|(_, m)| m)
-            .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *pos))?
+        if let Some(n) = mods.find(root) {
+            mods.get_mut(n)
+        } else {
+            None
+        }
+        .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *pos))?
     })
 }
 
@@ -765,7 +812,7 @@ impl Engine {
         match expr {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
-                (Ident { name, pos }, Some(modules), hash_var, _) => {
+                (_, Some(modules), hash_var, Ident { name, pos }) => {
                     let module = search_imports_mut(mods, state, modules)?;
                     let target = module.get_qualified_var_mut(*hash_var).map_err(|mut err| {
                         match *err {
@@ -797,7 +844,7 @@ impl Engine {
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &'a Expr,
     ) -> Result<(Target<'s>, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
-        let (Ident { name, pos }, _, _, index) = match expr {
+        let (index, _, _, Ident { name, pos }) = match expr {
             Expr::Variable(v) => v.as_ref(),
             _ => unreachable!(),
         };
@@ -937,7 +984,7 @@ impl Engine {
                             let args = &mut [val, &mut idx_val2, &mut new_val.0];
 
                             self.exec_fn_call(
-                                state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None, &None,
+                                state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None, None,
                                 level,
                             )
                             .map_err(|err| match *err {
@@ -946,7 +993,7 @@ impl Engine {
                                 {
                                     EvalAltResult::ErrorIndexingType(
                                         self.map_type_name(val_type_name).into(),
-                                        Position::none(),
+                                        NO_POS,
                                     )
                                 }
                                 err => err,
@@ -979,8 +1026,7 @@ impl Engine {
                         let def_value = def_value.map(Into::<Dynamic>::into);
                         let args = idx_val.as_fn_call_args();
                         self.make_method_call(
-                            state, lib, name, *hash, target, args, &def_value, *native, false,
-                            level,
+                            state, lib, name, *hash, target, args, def_value, *native, false, level,
                         )
                         .map_err(|err| err.fill_position(*pos))
                     }
@@ -988,7 +1034,7 @@ impl Engine {
                     Expr::FnCall(_, _) => unreachable!(),
                     // {xxx:map}.id = ???
                     Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
-                        let IdentX { name, pos } = &x.0;
+                        let IdentX { name, pos } = &x.1;
                         let index = name.clone().into();
                         let mut val = self
                             .get_indexed_mut(state, lib, target, index, *pos, true, false, level)?;
@@ -998,7 +1044,7 @@ impl Engine {
                     }
                     // {xxx:map}.id
                     Expr::Property(x) if target.is::<Map>() => {
-                        let IdentX { name, pos } = &x.0;
+                        let IdentX { name, pos } = &x.1;
                         let index = name.clone().into();
                         let val = self.get_indexed_mut(
                             state, lib, target, index, *pos, false, false, level,
@@ -1008,11 +1054,11 @@ impl Engine {
                     }
                     // xxx.id = ???
                     Expr::Property(x) if new_val.is_some() => {
-                        let (IdentX { pos, .. }, (_, setter)) = x.as_ref();
+                        let ((_, setter), IdentX { pos, .. }) = x.as_ref();
                         let mut new_val = new_val;
                         let mut args = [target.as_mut(), &mut new_val.as_mut().unwrap().0];
                         self.exec_fn_call(
-                            state, lib, setter, 0, &mut args, is_ref, true, false, None, &None,
+                            state, lib, setter, 0, &mut args, is_ref, true, false, None, None,
                             level,
                         )
                         .map(|(v, _)| (v, true))
@@ -1020,10 +1066,10 @@ impl Engine {
                     }
                     // xxx.id
                     Expr::Property(x) => {
-                        let (IdentX { pos, .. }, (getter, _)) = x.as_ref();
+                        let ((getter, _), IdentX { pos, .. }) = x.as_ref();
                         let mut args = [target.as_mut()];
                         self.exec_fn_call(
-                            state, lib, getter, 0, &mut args, is_ref, true, false, None, &None,
+                            state, lib, getter, 0, &mut args, is_ref, true, false, None, None,
                             level,
                         )
                         .map(|(v, _)| (v, false))
@@ -1033,7 +1079,7 @@ impl Engine {
                     Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target.is::<Map>() => {
                         let mut val = match &x.lhs {
                             Expr::Property(p) => {
-                                let IdentX { name, pos } = &p.0;
+                                let IdentX { name, pos } = &p.1;
                                 let index = name.clone().into();
                                 self.get_indexed_mut(
                                     state, lib, target, index, *pos, false, true, level,
@@ -1052,7 +1098,7 @@ impl Engine {
                                 let args = idx_val.as_fn_call_args();
                                 let (val, _) = self
                                     .make_method_call(
-                                        state, lib, name, *hash, target, args, &def_value, *native,
+                                        state, lib, name, *hash, target, args, def_value, *native,
                                         false, level,
                                     )
                                     .map_err(|err| err.fill_position(*pos))?;
@@ -1075,13 +1121,13 @@ impl Engine {
                         match &x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
-                                let (IdentX { pos, .. }, (getter, setter)) = p.as_ref();
+                                let ((getter, setter), IdentX { pos, .. }) = p.as_ref();
                                 let arg_values = &mut [target.as_mut(), &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self
                                     .exec_fn_call(
                                         state, lib, getter, 0, args, is_ref, true, false, None,
-                                        &None, level,
+                                        None, level,
                                     )
                                     .map_err(|err| err.fill_position(*pos))?;
 
@@ -1107,7 +1153,7 @@ impl Engine {
                                     arg_values[1] = val;
                                     self.exec_fn_call(
                                         state, lib, setter, 0, arg_values, is_ref, true, false,
-                                        None, &None, level,
+                                        None, None, level,
                                     )
                                     .or_else(
                                         |err| match *err {
@@ -1135,7 +1181,7 @@ impl Engine {
                                 let args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self
                                     .make_method_call(
-                                        state, lib, name, *hash, target, args, &def_value, *native,
+                                        state, lib, name, *hash, target, args, def_value, *native,
                                         false, level,
                                     )
                                     .map_err(|err| err.fill_position(*pos))?;
@@ -1210,7 +1256,7 @@ impl Engine {
                 let Ident {
                     name: var_name,
                     pos: var_pos,
-                } = &x.0;
+                } = &x.3;
 
                 self.inc_operations(state)
                     .map_err(|err| err.fill_position(*var_pos))?;
@@ -1411,25 +1457,21 @@ impl Engine {
                 let mut idx = idx;
                 let args = &mut [val, &mut idx];
                 self.exec_fn_call(
-                    state, _lib, FN_IDX_GET, 0, args, is_ref, true, false, None, &None, _level,
+                    state, _lib, FN_IDX_GET, 0, args, is_ref, true, false, None, None, _level,
                 )
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _) if fn_sig.ends_with(']') => {
-                        Box::new(EvalAltResult::ErrorIndexingType(
-                            type_name.into(),
-                            Position::none(),
-                        ))
+                        Box::new(EvalAltResult::ErrorIndexingType(type_name.into(), NO_POS))
                     }
                     _ => err,
                 })
             }
 
-            _ => EvalAltResult::ErrorIndexingType(
-                self.map_type_name(val.type_name()).into(),
-                Position::none(),
-            )
-            .into(),
+            _ => {
+                EvalAltResult::ErrorIndexingType(self.map_type_name(val.type_name()).into(), NO_POS)
+                    .into()
+            }
         }
     }
 
@@ -1461,13 +1503,14 @@ impl Engine {
 
                 for value in rhs_value.iter_mut() {
                     let args = &mut [&mut lhs_value.clone(), value];
+                    let def_value = def_value.clone();
 
                     // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
                     let hash =
                         calc_native_fn_hash(empty(), OP_FUNC, args.iter().map(|a| a.type_id()));
 
                     if self
-                        .call_native_fn(state, lib, OP_FUNC, hash, args, false, false, &def_value)
+                        .call_native_fn(state, lib, OP_FUNC, hash, args, false, false, def_value)
                         .map_err(|err| err.fill_position(rhs.position()))?
                         .0
                         .as_bool()
@@ -1477,7 +1520,7 @@ impl Engine {
                     }
                 }
 
-                Ok(def_value.unwrap())
+                Ok(false.into())
             }
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(rhs_value)) => match lhs_value {
@@ -1521,11 +1564,11 @@ impl Engine {
             Expr::FnPointer(x) => {
                 Ok(FnPtr::new_unchecked(x.name.clone(), Default::default()).into())
             }
-            Expr::Variable(x) if (x.0).name == KEYWORD_THIS => {
+            Expr::Variable(x) if (x.3).name == KEYWORD_THIS => {
                 if let Some(val) = this_ptr {
                     Ok(val.clone())
                 } else {
-                    EvalAltResult::ErrorUnboundThis((x.0).pos).into()
+                    EvalAltResult::ErrorUnboundThis((x.3).pos).into()
                 }
             }
             Expr::Variable(_) => {
@@ -1580,7 +1623,7 @@ impl Engine {
                 } = x.as_ref();
                 let def_value = def_value.map(Into::<Dynamic>::into);
                 self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args, &def_value, *hash, *native,
+                    scope, mods, state, lib, this_ptr, name, args, def_value, *hash, *native,
                     false, *cap_scope, level,
                 )
                 .map_err(|err| err.fill_position(*pos))
@@ -1596,8 +1639,9 @@ impl Engine {
                     def_value,
                     ..
                 } = x.as_ref();
+                let modules = namespace.as_ref().map(|v| v.as_ref());
                 self.make_qualified_function_call(
-                    scope, mods, state, lib, this_ptr, namespace, name, args, *def_value, *hash,
+                    scope, mods, state, lib, this_ptr, modules, name, args, *def_value, *hash,
                     level,
                 )
                 .map_err(|err| err.fill_position(*pos))
@@ -1769,7 +1813,7 @@ impl Engine {
                                 // Run function
                                 let (value, _) = self
                                     .exec_fn_call(
-                                        state, lib, op, 0, args, false, false, false, None, &None,
+                                        state, lib, op, 0, args, false, false, false, None, None,
                                         level,
                                     )
                                     .map_err(|err| err.fill_position(*op_pos))?;
@@ -1807,7 +1851,7 @@ impl Engine {
 
                     let result = self
                         .exec_fn_call(
-                            state, lib, op, 0, args, false, false, false, None, &None, level,
+                            state, lib, op, 0, args, false, false, false, None, None, level,
                         )
                         .map(|(v, _)| v)
                         .map_err(|err| err.fill_position(*op_pos))?;
@@ -1989,7 +2033,7 @@ impl Engine {
                             let value = if let EvalAltResult::ErrorRuntime(ref x, _) = err {
                                 x.clone()
                             } else {
-                                err.set_position(Position::none());
+                                err.set_position(NO_POS);
                                 err.to_string().into()
                             };
 
@@ -2070,7 +2114,7 @@ impl Engine {
                 } else {
                     unsafe_cast_var_name_to_lifetime(&var_def.name).into()
                 };
-                scope.push_dynamic_value(var_name, entry_type, val, false);
+                scope.push_dynamic_value(var_name, entry_type, val);
                 Ok(Default::default())
             }
 
@@ -2092,7 +2136,7 @@ impl Engine {
 
                         if let Some(name_def) = alias {
                             module.index_all_sub_modules();
-                            mods.push((name_def.name.clone(), module));
+                            mods.push(name_def.name.clone(), module);
                         }
 
                         state.modules += 1;
@@ -2251,35 +2295,18 @@ impl Engine {
         let (_arr, _map, s) = calc_size(result.as_ref().unwrap());
 
         if s > self.max_string_size() {
-            return EvalAltResult::ErrorDataTooLarge(
-                "Length of string".to_string(),
-                self.max_string_size(),
-                s,
-                Position::none(),
-            )
-            .into();
+            return EvalAltResult::ErrorDataTooLarge("Length of string".to_string(), NO_POS).into();
         }
 
         #[cfg(not(feature = "no_index"))]
         if _arr > self.max_array_size() {
-            return EvalAltResult::ErrorDataTooLarge(
-                "Size of array".to_string(),
-                self.max_array_size(),
-                _arr,
-                Position::none(),
-            )
-            .into();
+            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), NO_POS).into();
         }
 
         #[cfg(not(feature = "no_object"))]
         if _map > self.max_map_size() {
-            return EvalAltResult::ErrorDataTooLarge(
-                "Number of properties in object map".to_string(),
-                self.max_map_size(),
-                _map,
-                Position::none(),
-            )
-            .into();
+            return EvalAltResult::ErrorDataTooLarge("Size of object map".to_string(), NO_POS)
+                .into();
         }
 
         result
@@ -2293,14 +2320,14 @@ impl Engine {
         #[cfg(not(feature = "unchecked"))]
         // Guard against too many operations
         if self.max_operations() > 0 && state.operations > self.max_operations() {
-            return EvalAltResult::ErrorTooManyOperations(Position::none()).into();
+            return EvalAltResult::ErrorTooManyOperations(NO_POS).into();
         }
 
         // Report progress - only in steps
         if let Some(progress) = &self.progress {
-            if !progress(&state.operations) {
-                // Terminate script if progress returns false
-                return EvalAltResult::ErrorTerminated(Position::none()).into();
+            if let Some(token) = progress(&state.operations) {
+                // Terminate script if progress returns a termination token
+                return EvalAltResult::ErrorTerminated(token, NO_POS).into();
             }
         }
 

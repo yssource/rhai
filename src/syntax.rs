@@ -6,7 +6,7 @@ use crate::engine::{Engine, EvalContext, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT
 use crate::fn_native::{SendSync, Shared};
 use crate::parse_error::{LexError, ParseError};
 use crate::result::EvalAltResult;
-use crate::token::{is_valid_identifier, Position, Token};
+use crate::token::{is_valid_identifier, Position, Token, NO_POS};
 use crate::utils::ImmutableString;
 use crate::StaticVec;
 
@@ -139,7 +139,7 @@ impl Engine {
                         segments.len() + 1,
                         s
                     ))
-                    .into_err(Position::none())
+                    .into_err(NO_POS)
                     .into());
                 }
                 // Identifier in first position
@@ -156,7 +156,7 @@ impl Engine {
                         segments.len() + 1,
                         s
                     ))
-                    .into_err(Position::none())
+                    .into_err(NO_POS)
                     .into());
                 }
             };

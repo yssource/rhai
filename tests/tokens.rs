@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, ParseErrorType, RegisterFn, INT};
+use rhai::{Engine, EvalAltResult, LexError, ParseErrorType, RegisterFn, INT};
 
 #[test]
 fn test_tokens_disabled() {
@@ -16,10 +16,13 @@ fn test_tokens_disabled() {
 
     engine.disable_symbol("+="); // disable the '+=' operator
 
-    assert!(matches!(
-        *engine.compile("let x = 40 + 2; x += 1;").expect_err("should error").0,
-        ParseErrorType::BadInput(ref s) if s == "Unexpected '+='"
-    ));
+    assert_eq!(
+        *engine
+            .compile("let x = 40 + 2; x += 1;")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::BadInput(LexError::UnexpectedInput("+=".to_string()))
+    );
 }
 
 #[test]

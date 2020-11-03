@@ -2,7 +2,7 @@
 
 use crate::def_package;
 use crate::plugin::*;
-use crate::token::Position;
+use crate::token::NO_POS;
 use crate::INT;
 
 #[cfg(not(feature = "no_float"))]
@@ -85,11 +85,8 @@ mod int_functions {
     #[rhai_fn(name = "parse_int", return_raw)]
     pub fn parse_int_radix(s: &str, radix: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         if radix < 2 || radix > 36 {
-            return EvalAltResult::ErrorArithmetic(
-                format!("Invalid radix: '{}'", radix),
-                Position::none(),
-            )
-            .into();
+            return EvalAltResult::ErrorArithmetic(format!("Invalid radix: '{}'", radix), NO_POS)
+                .into();
         }
 
         INT::from_str_radix(s.trim(), radix as u32)
@@ -97,7 +94,7 @@ mod int_functions {
             .map_err(|err| {
                 EvalAltResult::ErrorArithmetic(
                     format!("Error parsing integer number '{}': {}", s, err),
-                    Position::none(),
+                    NO_POS,
                 )
                 .into()
             })
@@ -206,11 +203,8 @@ mod float_functions {
     #[rhai_fn(name = "to_int", return_raw)]
     pub fn f32_to_int(x: f32) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f32) {
-            EvalAltResult::ErrorArithmetic(
-                format!("Integer overflow: to_int({})", x),
-                Position::none(),
-            )
-            .into()
+            EvalAltResult::ErrorArithmetic(format!("Integer overflow: to_int({})", x), NO_POS)
+                .into()
         } else {
             Ok((x.trunc() as INT).into())
         }
@@ -218,11 +212,8 @@ mod float_functions {
     #[rhai_fn(name = "to_int", return_raw)]
     pub fn f64_to_int(x: f64) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f64) {
-            EvalAltResult::ErrorArithmetic(
-                format!("Integer overflow: to_int({})", x),
-                Position::none(),
-            )
-            .into()
+            EvalAltResult::ErrorArithmetic(format!("Integer overflow: to_int({})", x), NO_POS)
+                .into()
         } else {
             Ok((x.trunc() as INT).into())
         }
@@ -235,7 +226,7 @@ mod float_functions {
             .map_err(|err| {
                 EvalAltResult::ErrorArithmetic(
                     format!("Error parsing floating-point number '{}': {}", s, err),
-                    Position::none(),
+                    NO_POS,
                 )
                 .into()
             })

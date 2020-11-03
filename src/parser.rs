@@ -10,7 +10,9 @@ use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::parse_error::{LexError, ParseError, ParseErrorType};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::CustomSyntax;
-use crate::token::{is_keyword_function, is_valid_identifier, Position, Token, TokenStream};
+use crate::token::{
+    is_keyword_function, is_valid_identifier, Position, Token, TokenStream, NO_POS,
+};
 use crate::utils::StraightHasherBuilder;
 use crate::{calc_script_fn_hash, StaticVec};
 
@@ -265,7 +267,7 @@ fn parse_fn_call(
     lib: &mut FunctionsLib,
     id: String,
     capture: bool,
-    mut namespace: Option<ModuleRef>,
+    mut namespace: Option<Box<ModuleRef>>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
     let (token, token_pos) = input.peek().unwrap();
@@ -786,7 +788,7 @@ fn parse_primary(
             {
                 state.allow_capture = true;
             }
-            Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, None)))
+            Expr::Variable(Box::new((None, None, 0, Ident::new(s, settings.pos))))
         }
         // Module qualification
         #[cfg(not(feature = "no_module"))]
@@ -796,18 +798,18 @@ fn parse_primary(
             {
                 state.allow_capture = true;
             }
-            Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, None)))
+            Expr::Variable(Box::new((None, None, 0, Ident::new(s, settings.pos))))
         }
         // Normal variable access
         Token::Identifier(s) => {
             let index = state.access_var(&s, settings.pos);
-            Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, index)))
+            Expr::Variable(Box::new((index, None, 0, Ident::new(s, settings.pos))))
         }
 
         // Function call is allowed to have reserved keyword
         Token::Reserved(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
             if is_keyword_function(&s) {
-                Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, None)))
+                Expr::Variable(Box::new((None, None, 0, Ident::new(s, settings.pos))))
             } else {
                 return Err(PERR::Reserved(s).into_err(settings.pos));
             }
@@ -816,12 +818,13 @@ fn parse_primary(
         // Access to `this` as a variable is OK
         Token::Reserved(s) if s == KEYWORD_THIS && *next_token != Token::LeftParen => {
             if !settings.is_function_scope {
-                return Err(
-                    PERR::BadInput(format!("'{}' can only be used in functions", s))
-                        .into_err(settings.pos),
-                );
+                return Err(PERR::BadInput(LexError::ImproperSymbol(format!(
+                    "'{}' can only be used in functions",
+                    s
+                )))
+                .into_err(settings.pos));
             } else {
-                Expr::Variable(Box::new((Ident::new(s, settings.pos), None, 0, None)))
+                Expr::Variable(Box::new((None, None, 0, Ident::new(s, settings.pos))))
             }
         }
 
@@ -840,7 +843,8 @@ fn parse_primary(
 
         _ => {
             return Err(
-                PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(settings.pos)
+                PERR::BadInput(LexError::UnexpectedInput(token.syntax().to_string()))
+                    .into_err(settings.pos),
             );
         }
     };
@@ -862,8 +866,10 @@ fn parse_primary(
                 return Err(if !match_token(input, Token::LeftParen).0 {
                     LexError::UnexpectedInput(Token::Bang.syntax().to_string()).into_err(token_pos)
                 } else {
-                    PERR::BadInput("'!' cannot be used to call module functions".to_string())
-                        .into_err(token_pos)
+                    PERR::BadInput(LexError::ImproperSymbol(
+                        "'!' cannot be used to call module functions".to_string(),
+                    ))
+                    .into_err(token_pos)
                 });
             }
             // Function call with !
@@ -877,13 +883,13 @@ fn parse_primary(
                     .into_err(pos));
                 }
 
-                let (Ident { name, pos }, modules, _, _) = *x;
+                let (_, modules, _, Ident { name, pos }) = *x;
                 settings.pos = pos;
                 parse_fn_call(input, state, lib, name, true, modules, settings.level_up())?
             }
             // Function call
             (Expr::Variable(x), Token::LeftParen) => {
-                let (Ident { name, pos }, modules, _, _) = *x;
+                let (_, modules, _, Ident { name, pos }) = *x;
                 settings.pos = pos;
                 parse_fn_call(input, state, lib, name, false, modules, settings.level_up())?
             }
@@ -891,17 +897,17 @@ fn parse_primary(
             // module access
             (Expr::Variable(x), Token::DoubleColon) => match input.next().unwrap() {
                 (Token::Identifier(id2), pos2) => {
-                    let (var_name_def, mut modules, _, index) = *x;
+                    let (index, mut modules, _, var_name_def) = *x;
 
                     if let Some(ref mut modules) = modules {
                         modules.push(var_name_def);
                     } else {
                         let mut m: ModuleRef = Default::default();
                         m.push(var_name_def);
-                        modules = Some(m);
+                        modules = Some(Box::new(m));
                     }
 
-                    Expr::Variable(Box::new((Ident::new(id2, pos2), modules, 0, index)))
+                    Expr::Variable(Box::new((index, modules, 0, Ident::new(id2, pos2))))
                 }
                 (Token::Reserved(id2), pos2) if is_valid_identifier(id2.chars()) => {
                     return Err(PERR::Reserved(id2).into_err(pos2));
@@ -925,7 +931,7 @@ fn parse_primary(
     match &mut root_expr {
         // Cache the hash key for module-qualified variables
         Expr::Variable(x) if x.1.is_some() => {
-            let (Ident { name, .. }, modules, hash, _) = x.as_mut();
+            let (_, modules, hash, Ident { name, .. }) = x.as_mut();
             let modules = modules.as_mut().unwrap();
 
             // Qualifiers + variable name
@@ -1081,19 +1087,19 @@ fn make_assignment_stmt<'a>(
 ) -> Result<Stmt, ParseError> {
     match &lhs {
         // var (non-indexed) = rhs
-        Expr::Variable(x) if x.3.is_none() => {
+        Expr::Variable(x) if x.0.is_none() => {
             Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
         }
         // var (indexed) = rhs
         Expr::Variable(x) => {
             let (
+                index,
+                _,
+                _,
                 Ident {
                     name,
                     pos: name_pos,
                 },
-                _,
-                _,
-                index,
             ) = x.as_ref();
             match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                 ScopeEntryType::Normal => {
@@ -1108,19 +1114,19 @@ fn make_assignment_stmt<'a>(
         // xxx[???] = rhs, xxx.??? = rhs
         Expr::Index(x, _) | Expr::Dot(x, _) => match &x.lhs {
             // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
-            Expr::Variable(x) if x.3.is_none() => {
+            Expr::Variable(x) if x.0.is_none() => {
                 Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
             }
             // var[???] (indexed) = rhs, var.??? (indexed) = rhs
             Expr::Variable(x) => {
                 let (
+                    index,
+                    _,
+                    _,
                     Ident {
                         name,
                         pos: name_pos,
                     },
-                    _,
-                    _,
-                    index,
                 ) = x.as_ref();
                 match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                     ScopeEntryType::Normal => {
@@ -1140,9 +1146,10 @@ fn make_assignment_stmt<'a>(
             Err(PERR::AssignmentToConstant("".into()).into_err(lhs.position()))
         }
         // ??? && ??? = rhs, ??? || ??? = rhs
-        Expr::And(_, _) | Expr::Or(_, _) => {
-            Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(pos))
-        }
+        Expr::And(_, _) | Expr::Or(_, _) => Err(PERR::BadInput(LexError::ImproperSymbol(
+            "Possibly a typo of '=='?".to_string(),
+        ))
+        .into_err(pos)),
         // expr = rhs
         _ => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(lhs.position())),
     }
@@ -1197,10 +1204,10 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         }
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
-            let ident = x.0;
+            let ident = x.3;
             let getter = make_getter(&ident.name);
             let setter = make_setter(&ident.name);
-            let rhs = Expr::Property(Box::new((ident.into(), (getter, setter))));
+            let rhs = Expr::Property(Box::new(((getter, setter), ident.into())));
 
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
         }
@@ -1238,10 +1245,10 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         (_, Expr::FnCall(x, pos))
             if x.args.len() == 0 && [KEYWORD_FN_PTR, KEYWORD_EVAL].contains(&x.name.as_ref()) =>
         {
-            return Err(PERR::BadInput(format!(
+            return Err(PERR::BadInput(LexError::ImproperSymbol(format!(
                 "'{}' should not be called in method style. Try {}(...);",
                 x.name, x.name
-            ))
+            )))
             .into_err(pos));
         }
         // lhs.func!(...)
@@ -1635,10 +1642,10 @@ fn parse_custom_syntax(
                 (Token::Identifier(s), pos) => {
                     segments.push(s.clone());
                     exprs.push(Expr::Variable(Box::new((
-                        Ident::new(s, pos),
+                        None,
                         None,
                         0,
-                        None,
+                        Ident::new(s, pos),
                     ))));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
@@ -1734,9 +1741,10 @@ fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result
 /// Make sure that the expression is not a mis-typed assignment (i.e. `a = b` instead of `a == b`).
 fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
     match input.peek().unwrap() {
-        (Token::Equals, pos) => {
-            Err(PERR::BadInput("Possibly a typo of '=='?".to_string()).into_err(*pos))
-        }
+        (Token::Equals, pos) => Err(PERR::BadInput(LexError::ImproperSymbol(
+            "Possibly a typo of '=='?".to_string(),
+        ))
+        .into_err(*pos)),
         (Token::PlusAssign, pos)
         | (Token::MinusAssign, pos)
         | (Token::MultiplyAssign, pos)
@@ -1747,9 +1755,9 @@ fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
         | (Token::PowerOfAssign, pos)
         | (Token::AndAssign, pos)
         | (Token::OrAssign, pos)
-        | (Token::XOrAssign, pos) => Err(PERR::BadInput(
+        | (Token::XOrAssign, pos) => Err(PERR::BadInput(LexError::ImproperSymbol(
             "Expecting a boolean expression, not an assignment".to_string(),
-        )
+        ))
         .into_err(*pos)),
 
         _ => Ok(()),
@@ -2492,12 +2500,12 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
 
     #[cfg(not(feature = "no_closure"))]
     externals.iter().for_each(|x| {
-        args.push(Expr::Variable(Box::new((x.clone(), None, 0, None))));
+        args.push(Expr::Variable(Box::new((None, None, 0, x.clone()))));
     });
 
     #[cfg(feature = "no_closure")]
     externals.into_iter().for_each(|x| {
-        args.push(Expr::Variable(Box::new((x.clone(), None, 0, None))));
+        args.push(Expr::Variable(Box::new((None, None, 0, x.clone()))));
     });
 
     let hash = calc_script_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals + 1);
@@ -2683,7 +2691,7 @@ impl Engine {
             is_function_scope: false,
             is_breakable: false,
             level: 0,
-            pos: Position::none(),
+            pos: NO_POS,
         };
         let expr = parse_expr(input, &mut state, &mut functions, settings)?;
 
@@ -2694,7 +2702,8 @@ impl Engine {
             // Return error if the expression doesn't end
             (token, pos) => {
                 return Err(
-                    PERR::BadInput(format!("Unexpected '{}'", token.syntax())).into_err(*pos)
+                    PERR::BadInput(LexError::UnexpectedInput(token.syntax().to_string()))
+                        .into_err(*pos),
                 )
             }
         }
@@ -2732,7 +2741,7 @@ impl Engine {
                 is_function_scope: false,
                 is_breakable: false,
                 level: 0,
-                pos: Position::none(),
+                pos: NO_POS,
             };
 
             let stmt = match parse_stmt(input, &mut state, &mut functions, settings)? {

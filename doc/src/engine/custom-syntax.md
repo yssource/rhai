@@ -294,9 +294,8 @@ engine.register_custom_syntax_raw(
             "update" | "check" | "add" | "remove" => Ok(Some("$ident$".to_string())),
             "cleanup" => Ok(None),
             cmd => Err(ParseError(Box::new(ParseErrorType::BadInput(
-                format!("Improper command: {}", cmd))),
-                Position::none(),
-            )),
+                LexError::ImproperSymbol(format!("Improper command: {}", cmd))
+            )), NO_POS)),
         },
         // perform command arg ...
         3 => match (stream[1].as_str(), stream[2].as_str()) {
@@ -308,9 +307,10 @@ engine.register_custom_syntax_raw(
             ("add", arg) => Ok(None),
             ("remove", arg) => Ok(None),
             (cmd, arg) => Err(ParseError(Box::new(ParseErrorType::BadInput(
-                format!("Invalid argument for command {}: {}", cmd, arg))),
-                Position::none(),
-            )),
+                LexError::ImproperSymbol(
+                    format!("Invalid argument for command {}: {}", cmd, arg)
+                )
+            )), NO_POS)),
         },
         _ => unreachable!(),
     },
@@ -335,8 +335,8 @@ where:
 
 The return value is `Result<Option<String>, ParseError>` where:
 
-| Value              | Description                                                                                                                                                                                                      |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Ok(None)`         | parsing complete and there are no more symbols to match                                                                                                                                                          |
-| `Ok(Some(symbol))` | next symbol to match, which can also be `"$expr$"`, `"$ident$"` or `"$block$"`                                                                                                                                   |
-| `Err(ParseError)`  | error that is reflected back to the [`Engine`].<br/>Normally this is `ParseError(ParseErrorType::BadInput(message), Position::none())` to indicate that there is a syntax error, but it can be any `ParseError`. |
+| Value              | Description                                                                                                                                                                                                                      |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Ok(None)`         | parsing complete and there are no more symbols to match                                                                                                                                                                          |
+| `Ok(Some(symbol))` | next symbol to match, which can also be `"$expr$"`, `"$ident$"` or `"$block$"`                                                                                                                                                   |
+| `Err(ParseError)`  | error that is reflected back to the [`Engine`].<br/>Normally this is `ParseError(ParseErrorType::BadInput(LexError::ImproperSymbol(message)), NO_POS)` to indicate that there is a syntax error, but it can be any `ParseError`. |

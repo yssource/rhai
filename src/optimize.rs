@@ -9,8 +9,8 @@ use crate::engine::{
 use crate::fn_call::run_builtin_binary_op;
 use crate::module::Module;
 use crate::parser::map_dynamic_to_expr;
-use crate::scope::{Entry as ScopeEntry, Scope};
-use crate::token::{is_valid_identifier, Position};
+use crate::scope::Scope;
+use crate::token::{is_valid_identifier, NO_POS};
 use crate::{calc_native_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_function"))]
@@ -147,7 +147,7 @@ fn call_fn_with_constant_arguments(
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
             false,
             true,
-            &None,
+            None,
         )
         .ok()
         .map(|(v, _)| v)
@@ -156,11 +156,16 @@ fn call_fn_with_constant_arguments(
 /// Optimize a statement.
 fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
     match stmt {
-        // id op= expr
-        Stmt::Assignment(x, pos) => Stmt::Assignment(
-            Box::new((optimize_expr(x.0, state), x.1, optimize_expr(x.2, state))),
-            pos,
-        ),
+        // expr op= expr
+        Stmt::Assignment(x, pos) => match x.0 {
+            Expr::Variable(_) => {
+                Stmt::Assignment(Box::new((x.0, x.1, optimize_expr(x.2, state))), pos)
+            }
+            _ => Stmt::Assignment(
+                Box::new((optimize_expr(x.0, state), x.1, optimize_expr(x.2, state))),
+                pos,
+            ),
+        },
         // if false { if_block } -> Noop
         Stmt::IfThenElse(Expr::False(pos), x, _) if x.1.is_none() => {
             state.set_dirty();
@@ -454,7 +459,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         Expr::Dot(x, dot_pos) => match (x.lhs, x.rhs) {
             // map.string
             (Expr::Map(m, pos), Expr::Property(p)) if m.iter().all(|(_, x)| x.is_pure()) => {
-                let prop = &p.0.name;
+                let prop = &p.1.name;
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
@@ -462,6 +467,11 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                     .map(|(_, mut expr)| { expr.set_position(pos); expr })
                     .unwrap_or_else(|| Expr::Unit(pos))
             }
+            // var.rhs
+            (lhs @ Expr::Variable(_), rhs) => Expr::Dot(Box::new(BinaryExpr {
+                lhs,
+                rhs: optimize_expr(rhs, state),
+            }), dot_pos),
             // lhs.rhs
             (lhs, rhs) => Expr::Dot(Box::new(BinaryExpr {
                 lhs: optimize_expr(lhs, state),
@@ -498,6 +508,11 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 state.set_dirty();
                 Expr::CharConstant(s.name.chars().nth(i as usize).unwrap(), s.pos)
             }
+            // var[rhs]
+            (lhs @ Expr::Variable(_), rhs) => Expr::Index(Box::new(BinaryExpr {
+                lhs,
+                rhs: optimize_expr(rhs, state),
+            }), idx_pos),
             // lhs[rhs]
             (lhs, rhs) => Expr::Index(Box::new(BinaryExpr {
                 lhs: optimize_expr(lhs, state),
@@ -686,12 +701,12 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
         }
 
         // constant-name
-        Expr::Variable(x) if x.1.is_none() && state.contains_constant(&x.0.name) => {
+        Expr::Variable(x) if x.1.is_none() && state.contains_constant(&x.3.name) => {
             state.set_dirty();
 
             // Replace constant with value
-            let mut expr = state.find_constant(&x.0.name).unwrap().clone();
-            expr.set_position(x.0.pos);
+            let mut expr = state.find_constant(&x.3.name).unwrap().clone();
+            expr.set_position(x.3.pos);
             expr
         }
 
@@ -721,24 +736,15 @@ fn optimize(
     // Set up the state
     let mut state = State::new(engine, lib, level);
 
-    // Add constants from the scope into the state
+    // Add constants from the scope that can be made into a literal into the state
     scope
-        .to_iter()
-        // Get all the constants that can be made into a constant literal.
-        .filter(|ScopeEntry { typ, .. }| typ.is_constant())
-        .for_each(
-            |ScopeEntry {
-                 name, expr, value, ..
-             }| {
-                if let Some(val) = expr
-                    .as_ref()
-                    .map(|expr| expr.as_ref().clone())
-                    .or_else(|| map_dynamic_to_expr(value.clone(), Position::none()))
-                {
-                    state.push_constant(name.as_ref(), val);
-                }
-            },
-        );
+        .iter()
+        .filter(|(_, typ, _)| *typ)
+        .for_each(|(name, _, value)| {
+            if let Some(val) = map_dynamic_to_expr(value, NO_POS) {
+                state.push_constant(name, val);
+            }
+        });
 
     let orig_constants_len = state.constants.len();
 

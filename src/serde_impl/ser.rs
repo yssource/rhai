@@ -2,7 +2,7 @@
 
 use crate::dynamic::Dynamic;
 use crate::result::EvalAltResult;
-use crate::token::Position;
+use crate::token::NO_POS;
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::Array;
@@ -99,7 +99,7 @@ pub fn to_dynamic<T: Serialize>(value: T) -> Result<Dynamic, Box<EvalAltResult>>
 
 impl Error for Box<EvalAltResult> {
     fn custom<T: fmt::Display>(err: T) -> Self {
-        EvalAltResult::ErrorRuntime(err.to_string().into(), Position::none()).into()
+        EvalAltResult::ErrorRuntime(err.to_string().into(), NO_POS).into()
     }
 }
 
@@ -295,24 +295,16 @@ impl Serializer for &mut DynamicSerializer {
             make_variant(_variant, content)
         }
         #[cfg(feature = "no_object")]
-        return EvalAltResult::ErrorMismatchOutputType(
-            "Dynamic".into(),
-            "map".into(),
-            Position::none(),
-        )
-        .into();
+        return EvalAltResult::ErrorMismatchOutputType("Dynamic".into(), "map".into(), NO_POS)
+            .into();
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
         return Ok(DynamicSerializer::new(Array::new().into()));
         #[cfg(feature = "no_index")]
-        return EvalAltResult::ErrorMismatchOutputType(
-            "Dynamic".into(),
-            "array".into(),
-            Position::none(),
-        )
-        .into();
+        return EvalAltResult::ErrorMismatchOutputType("Dynamic".into(), "array".into(), NO_POS)
+            .into();
     }
 
     fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Box<EvalAltResult>> {
@@ -345,12 +337,7 @@ impl Serializer for &mut DynamicSerializer {
             let err_type = "map";
             #[cfg(not(feature = "no_object"))]
             let err_type = "array";
-            EvalAltResult::ErrorMismatchOutputType(
-                "Dynamic".into(),
-                err_type.into(),
-                Position::none(),
-            )
-            .into()
+            EvalAltResult::ErrorMismatchOutputType("Dynamic".into(), err_type.into(), NO_POS).into()
         }
     }
 
@@ -358,12 +345,8 @@ impl Serializer for &mut DynamicSerializer {
         #[cfg(not(feature = "no_object"))]
         return Ok(DynamicSerializer::new(Map::new().into()));
         #[cfg(feature = "no_object")]
-        return EvalAltResult::ErrorMismatchOutputType(
-            "Dynamic".into(),
-            "map".into(),
-            Position::none(),
-        )
-        .into();
+        return EvalAltResult::ErrorMismatchOutputType("Dynamic".into(), "map".into(), NO_POS)
+            .into();
     }
 
     fn serialize_struct(
@@ -387,12 +370,8 @@ impl Serializer for &mut DynamicSerializer {
             map: Map::with_capacity(_len),
         });
         #[cfg(feature = "no_object")]
-        return EvalAltResult::ErrorMismatchOutputType(
-            "Dynamic".into(),
-            "map".into(),
-            Position::none(),
-        )
-        .into();
+        return EvalAltResult::ErrorMismatchOutputType("Dynamic".into(), "map".into(), NO_POS)
+            .into();
     }
 }
 
@@ -501,11 +480,7 @@ impl SerializeMap for DynamicSerializer {
             let key = mem::take(&mut self._key)
                 .take_immutable_string()
                 .map_err(|typ| {
-                    EvalAltResult::ErrorMismatchOutputType(
-                        "string".into(),
-                        typ.into(),
-                        Position::none(),
-                    )
+                    EvalAltResult::ErrorMismatchOutputType("string".into(), typ.into(), NO_POS)
                 })?;
             let _value = _value.serialize(&mut *self)?;
             let map = self._value.downcast_mut::<Map>().unwrap();
@@ -525,11 +500,7 @@ impl SerializeMap for DynamicSerializer {
         {
             let _key: Dynamic = _key.serialize(&mut *self)?;
             let _key = _key.take_immutable_string().map_err(|typ| {
-                EvalAltResult::ErrorMismatchOutputType(
-                    "string".into(),
-                    typ.into(),
-                    Position::none(),
-                )
+                EvalAltResult::ErrorMismatchOutputType("string".into(), typ.into(), NO_POS)
             })?;
             let _value = _value.serialize(&mut *self)?;
             let map = self._value.downcast_mut::<Map>().unwrap();

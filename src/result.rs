@@ -2,7 +2,7 @@
 
 use crate::dynamic::Dynamic;
 use crate::parse_error::ParseErrorType;
-use crate::token::Position;
+use crate::token::{Position, NO_POS};
 use crate::utils::ImmutableString;
 use crate::INT;
 
@@ -83,11 +83,11 @@ pub enum EvalAltResult {
     ErrorTooManyModules(Position),
     /// Call stack over maximum limit.
     ErrorStackOverflow(Position),
-    /// Data value over maximum size limit. Wrapped values are the type name, maximum size and current size.
-    ErrorDataTooLarge(String, usize, usize, Position),
-    /// The script is prematurely terminated.
-    ErrorTerminated(Position),
-    /// Run-time error encountered. Wrapped value is the error.
+    /// Data value over maximum size limit. Wrapped value is the type name.
+    ErrorDataTooLarge(String, Position),
+    /// The script is prematurely terminated. Wrapped value is the termination token.
+    ErrorTerminated(Dynamic, Position),
+    /// Run-time error encountered. Wrapped value is the error token.
     ErrorRuntime(Dynamic, Position),
 
     /// Breaking out of loops - not an error if within a loop.
@@ -127,7 +127,7 @@ impl EvalAltResult {
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
             Self::ErrorModuleNotFound(_, _) => "Module not found",
             Self::ErrorDataRace(_, _) => "Data race detected when accessing variable",
-            Self::ErrorAssignmentToConstant(_, _) => "Assignment to a constant variable",
+            Self::ErrorAssignmentToConstant(_, _) => "Cannot assign to a constant",
             Self::ErrorMismatchOutputType(_, _, _) => "Output type is incorrect",
             Self::ErrorInExpr(_) => "Malformed 'in' expression",
             Self::ErrorDotExpr(_, _) => "Malformed dot expression",
@@ -135,8 +135,8 @@ impl EvalAltResult {
             Self::ErrorTooManyOperations(_) => "Too many operations",
             Self::ErrorTooManyModules(_) => "Too many modules imported",
             Self::ErrorStackOverflow(_) => "Stack overflow",
-            Self::ErrorDataTooLarge(_, _, _, _) => "Data size exceeds maximum limit",
-            Self::ErrorTerminated(_) => "Script terminated.",
+            Self::ErrorDataTooLarge(_, _) => "Data size exceeds maximum limit",
+            Self::ErrorTerminated(_,_) => "Script terminated.",
             Self::ErrorRuntime(_, _) => "Runtime error",
             Self::LoopBreak(true, _) => "Break statement not inside a loop",
             Self::LoopBreak(false, _) => "Continue statement not inside a loop",
@@ -185,7 +185,7 @@ impl fmt::Display for EvalAltResult {
             | Self::ErrorTooManyOperations(_)
             | Self::ErrorTooManyModules(_)
             | Self::ErrorStackOverflow(_)
-            | Self::ErrorTerminated(_) => f.write_str(desc)?,
+            | Self::ErrorTerminated(_, _) => f.write_str(desc)?,
 
             Self::ErrorRuntime(d, _) if d.is::<ImmutableString>() => {
                 let s = d.as_str().unwrap();
@@ -194,7 +194,9 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorRuntime(d, _) if d.is::<()>() => f.write_str(desc)?,
             Self::ErrorRuntime(d, _) => write!(f, "{}: {}", desc, d)?,
 
-            Self::ErrorAssignmentToConstant(s, _) => write!(f, "{}: '{}'", desc, s)?,
+            Self::ErrorAssignmentToConstant(s, _) => {
+                write!(f, "Cannot assign to constant '{}'", s)?
+            }
             Self::ErrorMismatchOutputType(r, s, _) => {
                 write!(f, "Output type is incorrect: {} (expecting {})", r, s)?
             }
@@ -237,9 +239,7 @@ impl fmt::Display for EvalAltResult {
                 "String index {} is out of bounds: only {} characters in the string",
                 index, max
             )?,
-            Self::ErrorDataTooLarge(typ, max, size, _) => {
-                write!(f, "{} ({}) exceeds the maximum limit ({})", typ, size, max)?
-            }
+            Self::ErrorDataTooLarge(typ, _) => write!(f, "{} exceeds maximum limit", typ)?,
         }
 
         // Do not write any position if None
@@ -254,7 +254,7 @@ impl fmt::Display for EvalAltResult {
 impl<T: AsRef<str>> From<T> for EvalAltResult {
     #[inline(always)]
     fn from(err: T) -> Self {
-        Self::ErrorRuntime(err.as_ref().to_string().into(), Position::none())
+        Self::ErrorRuntime(err.as_ref().to_string().into(), NO_POS)
     }
 }
 
@@ -263,7 +263,7 @@ impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
     fn from(err: T) -> Self {
         Box::new(EvalAltResult::ErrorRuntime(
             err.as_ref().to_string().into(),
-            Position::none(),
+            NO_POS,
         ))
     }
 }
@@ -297,8 +297,8 @@ impl EvalAltResult {
             Self::ErrorTooManyOperations(_)
             | Self::ErrorTooManyModules(_)
             | Self::ErrorStackOverflow(_)
-            | Self::ErrorDataTooLarge(_, _, _, _)
-            | Self::ErrorTerminated(_) => false,
+            | Self::ErrorDataTooLarge(_, _)
+            | Self::ErrorTerminated(_, _) => false,
 
             Self::LoopBreak(_, _) | Self::Return(_, _) => unreachable!(),
         }
@@ -313,9 +313,9 @@ impl EvalAltResult {
             Self::ErrorTooManyOperations(_)
             | Self::ErrorTooManyModules(_)
             | Self::ErrorStackOverflow(_)
-            | Self::ErrorDataTooLarge(_, _, _, _) => true,
+            | Self::ErrorDataTooLarge(_, _) => true,
 
-            Self::ErrorTerminated(_) => true,
+            Self::ErrorTerminated(_, _) => true,
 
             Self::LoopBreak(_, _) | Self::Return(_, _) => unreachable!(),
 
@@ -326,7 +326,7 @@ impl EvalAltResult {
     /// Get the `Position` of this error.
     pub fn position(&self) -> Position {
         match self {
-            Self::ErrorSystem(_, _) => Position::none(),
+            Self::ErrorSystem(_, _) => NO_POS,
 
             Self::ErrorParsing(_, pos)
             | Self::ErrorFunctionNotFound(_, pos)
@@ -349,8 +349,8 @@ impl EvalAltResult {
             | Self::ErrorTooManyOperations(pos)
             | Self::ErrorTooManyModules(pos)
             | Self::ErrorStackOverflow(pos)
-            | Self::ErrorDataTooLarge(_, _, _, pos)
-            | Self::ErrorTerminated(pos)
+            | Self::ErrorDataTooLarge(_, pos)
+            | Self::ErrorTerminated(_, pos)
             | Self::ErrorRuntime(_, pos)
             | Self::LoopBreak(_, pos)
             | Self::Return(_, pos) => *pos,
@@ -383,8 +383,8 @@ impl EvalAltResult {
             | Self::ErrorTooManyOperations(pos)
             | Self::ErrorTooManyModules(pos)
             | Self::ErrorStackOverflow(pos)
-            | Self::ErrorDataTooLarge(_, _, _, pos)
-            | Self::ErrorTerminated(pos)
+            | Self::ErrorDataTooLarge(_, pos)
+            | Self::ErrorTerminated(_, pos)
             | Self::ErrorRuntime(_, pos)
             | Self::LoopBreak(_, pos)
             | Self::Return(_, pos) => *pos = new_position,

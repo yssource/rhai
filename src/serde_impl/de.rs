@@ -2,9 +2,9 @@
 
 use super::str::ImmutableStringDeserializer;
 use crate::dynamic::{Dynamic, Union};
-use crate::parse_error::ParseErrorType;
+use crate::parse_error::{LexError, ParseErrorType};
 use crate::result::EvalAltResult;
-use crate::token::Position;
+use crate::token::NO_POS;
 use crate::utils::ImmutableString;
 
 use serde::de::{
@@ -45,12 +45,8 @@ impl<'de> DynamicDeserializer<'de> {
     }
     /// Shortcut for a type conversion error.
     fn type_error_str<T>(&self, error: &str) -> Result<T, Box<EvalAltResult>> {
-        EvalAltResult::ErrorMismatchOutputType(
-            error.into(),
-            self.value.type_name().into(),
-            Position::none(),
-        )
-        .into()
+        EvalAltResult::ErrorMismatchOutputType(error.into(), self.value.type_name().into(), NO_POS)
+            .into()
     }
     fn deserialize_int<V: Visitor<'de>>(
         &mut self,
@@ -127,8 +123,11 @@ pub fn from_dynamic<'de, T: Deserialize<'de>>(
 
 impl Error for Box<EvalAltResult> {
     fn custom<T: fmt::Display>(err: T) -> Self {
-        EvalAltResult::ErrorParsing(ParseErrorType::BadInput(err.to_string()), Position::none())
-            .into()
+        EvalAltResult::ErrorParsing(
+            ParseErrorType::BadInput(LexError::ImproperSymbol(err.to_string())),
+            NO_POS,
+        )
+        .into()
     }
 }
 
