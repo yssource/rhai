@@ -66,7 +66,7 @@ macro_rules! reg_functions {
     }
 }
 
-fn make_greeting<T: std::fmt::Display>(n: T) -> String {
+fn make_greeting(n: impl std::fmt::Display) -> String {
     format!("{} kitties", n)
 }
 

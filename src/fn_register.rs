@@ -144,7 +144,7 @@ macro_rules! make_func {
 
 /// To Dynamic mapping function.
 #[inline(always)]
-pub fn map_dynamic<T: Variant + Clone>(data: T) -> Result<Dynamic, Box<EvalAltResult>> {
+pub fn map_dynamic(data: impl Variant + Clone) -> Result<Dynamic, Box<EvalAltResult>> {
     Ok(data.into_dynamic())
 }
 

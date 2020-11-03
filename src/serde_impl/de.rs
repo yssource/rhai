@@ -452,28 +452,19 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 }
 
 /// `SeqAccess` implementation for arrays.
-struct IterateArray<'a, ITER>
-where
-    ITER: Iterator<Item = &'a Dynamic>,
-{
+struct IterateArray<'a, ITER: Iterator<Item = &'a Dynamic>> {
     /// Iterator for a stream of `Dynamic` values.
     iter: ITER,
 }
 
 #[cfg(not(feature = "no_index"))]
-impl<'a, ITER> IterateArray<'a, ITER>
-where
-    ITER: Iterator<Item = &'a Dynamic>,
-{
+impl<'a, ITER: Iterator<Item = &'a Dynamic>> IterateArray<'a, ITER> {
     pub fn new(iter: ITER) -> Self {
         Self { iter }
     }
 }
 
-impl<'a: 'de, 'de, ITER> SeqAccess<'de> for IterateArray<'a, ITER>
-where
-    ITER: Iterator<Item = &'a Dynamic>,
-{
+impl<'a: 'de, 'de, ITER: Iterator<Item = &'a Dynamic>> SeqAccess<'de> for IterateArray<'a, ITER> {
     type Error = Box<EvalAltResult>;
 
     fn next_element_seed<T: DeserializeSeed<'de>>(
@@ -555,10 +546,10 @@ impl<'t, 'de> EnumAccess<'de> for EnumDeserializer<'t, 'de> {
     type Error = Box<EvalAltResult>;
     type Variant = Self;
 
-    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
-    where
-        V: DeserializeSeed<'de>,
-    {
+    fn variant_seed<V: DeserializeSeed<'de>>(
+        self,
+        seed: V,
+    ) -> Result<(V::Value, Self::Variant), Self::Error> {
         seed.deserialize(self.tag.into_deserializer())
             .map(|v| (v, self))
     }
@@ -572,28 +563,26 @@ impl<'t, 'de> VariantAccess<'de> for EnumDeserializer<'t, 'de> {
         Deserialize::deserialize(&mut self.content)
     }
 
-    fn newtype_variant_seed<T>(mut self, seed: T) -> Result<T::Value, Self::Error>
-    where
-        T: DeserializeSeed<'de>,
-    {
+    fn newtype_variant_seed<T: DeserializeSeed<'de>>(
+        mut self,
+        seed: T,
+    ) -> Result<T::Value, Self::Error> {
         seed.deserialize(&mut self.content)
     }
 
-    fn tuple_variant<V>(mut self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
+    fn tuple_variant<V: Visitor<'de>>(
+        mut self,
+        len: usize,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
         self.content.deserialize_tuple(len, visitor)
     }
 
-    fn struct_variant<V>(
+    fn struct_variant<V: Visitor<'de>>(
         mut self,
         fields: &'static [&'static str],
         visitor: V,
-    ) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
+    ) -> Result<V::Value, Self::Error> {
         self.content.deserialize_struct("", fields, visitor)
     }
 }

@@ -42,13 +42,14 @@ are typically used for a WASM build:
 |    Feature    | Description                                                                                                                                                                                                                      |
 | :-----------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`unchecked`] | When a WASM module panics, it doesn't crash the entire web app; however this also disables [maximum number of operations] and [progress] tracking so a script can still run indefinitely - the web app must terminate it itself. |
-| [`only_i32`]  | JavaScript has only one `number` type and we're only supporting `wasm32` here (so far).                                                                                                                                          |
+| [`only_i32`]  | WASM supports 32-bit and 64-bit integers, but most scripts will only need 32-bit.                                                                                                                                                |
+| [`f32_float`] | WASM supports 32-bit single-precision and 64-bit double-precision floating-point numbers, but single-precision is usually fine for most uses.                                                                                    |
 | [`no_module`] | A WASM module cannot load modules from the file system, so usually this is not needed, but the savings are minimal; alternatively, a custom [module resolver] can be provided that loads other Rhai scripts.                     |
 
 The following features are typically _not_ used because they don't make sense in a WASM build:
 
-|    Feature    | Why unnecessary                                                    |
-| :-----------: | ------------------------------------------------------------------ |
-|   [`sync`]    | WASM is single-threaded.                                           |
-|  [`no_std`]   | `std` lib works fine with WASM.                                    |
-| [`internals`] | WASM usually doesn't need to access Rhai internal data structures. |
+|    Feature    | Why unnecessary                                                                                        |
+| :-----------: | ------------------------------------------------------------------------------------------------------ |
+|   [`sync`]    | WASM is single-threaded.                                                                               |
+|  [`no_std`]   | `std` lib works fine with WASM.                                                                        |
+| [`internals`] | WASM usually doesn't need to access Rhai internal data structures, unless you are walking the [`AST`]. |
