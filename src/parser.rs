@@ -765,8 +765,10 @@ fn parse_primary(
     let (token, _) = match token {
         // { - block statement as expression
         Token::LeftBrace if settings.allow_stmt_expr => {
-            return parse_block(input, state, lib, settings.level_up())
-                .map(|block| Expr::Stmt(Box::new(block), settings.pos))
+            return parse_block(input, state, lib, settings.level_up()).map(|block| match block {
+                Stmt::Block(statements, pos) => Expr::Stmt(Box::new(statements.into()), pos),
+                _ => unreachable!(),
+            })
         }
         Token::EOF => return Err(PERR::UnexpectedEOF.into_err(settings.pos)),
         _ => input.next().unwrap(),
@@ -962,10 +964,11 @@ fn parse_unary(
 
     match token {
         // If statement is allowed to act as expressions
-        Token::If if settings.allow_if_expr => Ok(Expr::Stmt(
-            Box::new(parse_if(input, state, lib, settings.level_up())?),
-            settings.pos,
-        )),
+        Token::If if settings.allow_if_expr => {
+            let mut block: StaticVec<_> = Default::default();
+            block.push(parse_if(input, state, lib, settings.level_up())?);
+            Ok(Expr::Stmt(Box::new(block), settings.pos))
+        }
         // -expr
         Token::UnaryMinus => {
             let pos = eat_token(input, Token::UnaryMinus);
@@ -1657,12 +1660,13 @@ fn parse_custom_syntax(
                 exprs.push(parse_expr(input, state, lib, settings)?);
                 segments.push(MARKER_EXPR.into());
             }
-            MARKER_BLOCK => {
-                let stmt = parse_block(input, state, lib, settings)?;
-                let pos = stmt.position();
-                exprs.push(Expr::Stmt(Box::new(stmt), pos));
-                segments.push(MARKER_BLOCK.into());
-            }
+            MARKER_BLOCK => match parse_block(input, state, lib, settings)? {
+                Stmt::Block(statements, pos) => {
+                    exprs.push(Expr::Stmt(Box::new(statements.into()), pos));
+                    segments.push(MARKER_BLOCK.into());
+                }
+                _ => unreachable!(),
+            },
             s => match input.next().unwrap() {
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                 (t, _) if t.syntax().as_ref() == s => {
@@ -2525,12 +2529,12 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
     #[cfg(not(feature = "no_closure"))]
     {
         // Statement block
-        let mut statements: Vec<_> = Default::default();
+        let mut statements: StaticVec<_> = Default::default();
         // Insert `Share` statements
         statements.extend(externals.into_iter().map(|x| Stmt::Share(Box::new(x))));
         // Final expression
         statements.push(Stmt::Expr(expr));
-        Expr::Stmt(Box::new(Stmt::Block(statements, pos)), pos)
+        Expr::Stmt(Box::new(statements), pos)
     }
 
     #[cfg(feature = "no_closure")]

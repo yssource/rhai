@@ -908,7 +908,7 @@ pub enum Expr {
     /// Property access - (getter, setter), prop
     Property(Box<((String, String), IdentX)>),
     /// { stmt }
-    Stmt(Box<Stmt>, Position),
+    Stmt(Box<StaticVec<Stmt>>, Position),
     /// Wrapped expression - should not be optimized away.
     Expr(Box<Expr>),
     /// func(expr, ... )
@@ -1092,7 +1092,7 @@ impl Expr {
                 x.lhs.is_pure() && x.rhs.is_pure()
             }
 
-            Self::Stmt(x, _) => x.is_pure(),
+            Self::Stmt(x, _) => x.iter().all(Stmt::is_pure),
 
             Self::Variable(_) => true,
 
