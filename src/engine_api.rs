@@ -1661,8 +1661,8 @@ impl Engine {
         let lib = if cfg!(not(feature = "no_function")) {
             ast.lib()
                 .iter_fn()
-                .filter(|(_, _, _, _, f)| f.is_script())
-                .map(|(_, _, _, _, f)| f.get_fn_def().clone())
+                .filter(|f| f.func.is_script())
+                .map(|f| f.func.get_fn_def().clone())
                 .collect()
         } else {
             Default::default()
