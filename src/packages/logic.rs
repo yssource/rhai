@@ -1,6 +1,10 @@
 use crate::def_package;
 use crate::plugin::*;
 
+#[cfg(any(
+    not(feature = "no_float"),
+    all(not(feature = "only_i32"), not(feature = "only_i64"))
+))]
 macro_rules! gen_cmp_functions {
     ($root:ident => $($arg_type:ident),+) => {
         mod $root { $(pub mod $arg_type {
@@ -37,6 +41,10 @@ macro_rules! gen_cmp_functions {
     };
 }
 
+#[cfg(any(
+    not(feature = "no_float"),
+    all(not(feature = "only_i32"), not(feature = "only_i64"))
+))]
 macro_rules! reg_functions {
     ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => { $(
         combine_with_exported_module!($mod_name, "logic", $root::$arg_type::functions);
@@ -54,7 +62,13 @@ def_package!(crate:LogicPackage:"Logical operators.", lib, {
     }
 
     #[cfg(not(feature = "no_float"))]
-    reg_functions!(lib += float; f32);
+    {
+        #[cfg(not(feature = "f32_float"))]
+        reg_functions!(lib += float; f32);
+
+        #[cfg(feature = "f32_float")]
+        reg_functions!(lib += float; f64);
+    }
 
     set_exported_fn!(lib, "!", not);
 });
@@ -75,4 +89,9 @@ gen_cmp_functions!(numbers => i8, u8, i16, u16, i32, u32, u64);
 gen_cmp_functions!(num_128 => i128, u128);
 
 #[cfg(not(feature = "no_float"))]
+#[cfg(not(feature = "f32_float"))]
 gen_cmp_functions!(float => f32);
+
+#[cfg(not(feature = "no_float"))]
+#[cfg(feature = "f32_float")]
+gen_cmp_functions!(float => f64);
