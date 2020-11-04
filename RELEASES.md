@@ -19,6 +19,10 @@ Breaking changes
 ----------------
 
 * Custom syntax can no longer start with a keyword (even a _reserved_ one), even if it has been disabled. That is to avoid breaking scripts later when the keyword is no longer disabled.
+
+Changes to Error Handling
+------------------------
+
 * `EvalAltResult::ErrorAssignmentToUnknownLHS` is moved to `ParseError::AssignmentToInvalidLHS`. `ParseError::AssignmentToCopy` is removed.
 * `EvalAltResult::ErrorDataTooLarge` is simplified.
 * `Engine::on_progress` closure signature now returns `Option<Dynamic>` with the termination value passed on to `EvalAltResult::ErrorTerminated`.
@@ -30,11 +34,13 @@ New features
 * `f32_float` feature to set `FLOAT` to `f32`.
 * Low-level API for custom syntax allowing more flexibility in designing the syntax.
 * `Module::fill_with` to poly-fill a module with another.
+* Scripts terminated via `Engine::on_progress` can now pass on a value as a termination token.
 
 Enhancements
 ------------
 
 * Essential AST structures like `Expr` and `Stmt` are packed into smaller sizes (16 bytes and 32 bytes on 64-bit), stored inline for more cache friendliness, and de-`Box`ed as much as possible.
+* `Scope` is optimized for cache friendliness.
 
 
 Version 0.19.3

@@ -604,9 +604,10 @@ impl Engine {
         }
     }
 
-    /// Evaluate a list of statements.
+    /// Evaluate a list of statements with an empty state and no `this` pointer.
+    /// This is commonly used to evaluate a list of statements in an `AST` or a script function body.
     #[inline]
-    pub(crate) fn eval_statements<'a>(
+    pub(crate) fn eval_statements_raw<'a>(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
@@ -667,7 +668,7 @@ impl Engine {
         }
 
         // Evaluate the AST
-        let (result, operations) = self.eval_statements(scope, mods, ast.statements(), lib)?;
+        let (result, operations) = self.eval_statements_raw(scope, mods, ast.statements(), lib)?;
 
         state.operations += operations;
         self.inc_operations(state)?;

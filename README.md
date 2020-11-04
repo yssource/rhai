@@ -30,7 +30,7 @@ Standard features
 * Fairly low compile-time overhead.
 * Fairly efficient evaluation (1 million iterations in 0.3 sec on a single core, 2.3 GHz Linux VM).
 * Tight integration with native Rust [functions](https://schungx.github.io/rhai/rust/functions.html) and [types]([#custom-types-and-methods](https://schungx.github.io/rhai/rust/custom.html)), including [getters/setters](https://schungx.github.io/rhai/rust/getters-setters.html), [methods](https://schungx.github.io/rhai/rust/custom.html) and [indexers](https://schungx.github.io/rhai/rust/indexers.html).
-* Freely pass Rust variables/constants into a script via an external [`Scope`](https://schungx.github.io/rhai/rust/scope.html).
+* Freely pass Rust variables/constants into a script via an external [`Scope`](https://schungx.github.io/rhai/rust/scope.html) - all clonable Rust types are supported; no need to implement any special trait.
 * Easily [call a script-defined function](https://schungx.github.io/rhai/engine/call-fn.html) from Rust.
 * Relatively little `unsafe` code (yes there are some for performance reasons).
 * Few dependencies (currently only [`smallvec`](https://crates.io/crates/smallvec)).

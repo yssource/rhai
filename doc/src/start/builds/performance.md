@@ -29,8 +29,9 @@ due to 64-bit arithmetic requiring more CPU cycles to complete.
 Minimize Size of `Dynamic`
 -------------------------
 
-Turning on [`no_float`] and [`only_i32`] on 32-bit targets makes the critical [`Dynamic`] data type only 8 bytes long.
-Normally [`Dynamic`] can be up to 16 bytes (e.g. on x86/x64 CPU's) in order to hold an `i64` or `f64`.
+Turning on [`no_float`] or [`f32_float`] and [`only_i32`] on 32-bit targets makes the critical [`Dynamic`]
+data type only 8 bytes long.
+Normally [`Dynamic`] can be up to 12-16 bytes in order to hold an `i64` or `f64`.
 
 A small [`Dynamic`] helps performance due to better cache efficiency.
 

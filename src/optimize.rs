@@ -408,10 +408,15 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 pos,
             )))
         }
-        // expr;
-        Stmt::Expr(Expr::Stmt(x, _)) if matches!(*x, Stmt::Expr(_)) => {
+        // {}
+        Stmt::Expr(Expr::Stmt(x, pos)) if x.is_empty() => {
             state.set_dirty();
-            optimize_stmt(*x, state, preserve_result)
+            Stmt::Noop(pos)
+        }
+        // {...};
+        Stmt::Expr(Expr::Stmt(x, pos)) => {
+            state.set_dirty();
+            Stmt::Block(x.into_vec(), pos)
         }
         // expr;
         Stmt::Expr(expr) => Stmt::Expr(optimize_expr(expr, state)),
@@ -438,8 +443,13 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
     match expr {
         // expr - do not promote because there is a reason it is wrapped in an `Expr::Expr`
         Expr::Expr(x) => Expr::Expr(Box::new(optimize_expr(*x, state))),
+        // {}
+        Expr::Stmt(x, pos) if x.is_empty() => {
+            state.set_dirty();
+            Expr::Unit(pos)
+        }
         // { stmt }
-        Expr::Stmt(x, pos) => match *x {
+        Expr::Stmt(mut x, pos) if x.len() == 1 => match x.pop().unwrap() {
             // {} -> ()
             Stmt::Noop(_) => {
                 state.set_dirty();
@@ -451,8 +461,12 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 optimize_expr(expr, state)
             }
             // { stmt }
-            stmt => Expr::Stmt(Box::new(optimize_stmt(stmt, state, true)), pos),
-        },
+            stmt => Expr::Stmt(Box::new(vec![optimize_stmt(stmt, state, true)].into()), pos)
+        }
+        // { stmt; ... }
+        Expr::Stmt(x, pos) => Expr::Stmt(Box::new(
+            x.into_iter().map(|stmt| optimize_stmt(stmt, state, true)).collect(),
+        ), pos),
 
         // lhs.rhs
         #[cfg(not(feature = "no_object"))]
@@ -852,7 +866,6 @@ pub fn optimize_into_ast(
                         params: fn_def.params.clone(),
                         #[cfg(not(feature = "no_closure"))]
                         externals: fn_def.externals.clone(),
-                        pos: fn_def.pos,
                         lib: None,
                     }
                     .into()

@@ -11,7 +11,7 @@ Rhai works seamlessly with _any_ Rust type.  The type can be _anything_; it does
 have any prerequisites other than being `Clone`.  It does not need to implement
 any other trait or use any custom `#[derive]`.
 
-This allows Rhai to be integrated into an existing code base with as little plumbing
+This allows Rhai to be integrated into an existing Rust code base with as little plumbing
 as possible, usually silently and seamlessly.  External types that are not defined
 within the same crate (and thus cannot implement special Rhai traits or
 use special `#[derive]`) can also be used easily with Rhai.

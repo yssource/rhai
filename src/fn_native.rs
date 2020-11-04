@@ -115,8 +115,8 @@ pub struct FnPtr(ImmutableString, StaticVec<Dynamic>);
 impl FnPtr {
     /// Create a new function pointer.
     #[inline(always)]
-    pub(crate) fn new_unchecked<S: Into<ImmutableString>>(
-        name: S,
+    pub(crate) fn new_unchecked(
+        name: impl Into<ImmutableString>,
         curry: StaticVec<Dynamic>,
     ) -> Self {
         Self(name.into(), curry)
@@ -147,7 +147,6 @@ impl FnPtr {
     pub fn is_anonymous(&self) -> bool {
         self.0.starts_with(FN_ANONYMOUS)
     }
-
     /// Call the function pointer with curried arguments (if any).
     ///
     /// If this function is a script-defined function, it must not be marked private.

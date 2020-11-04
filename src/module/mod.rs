@@ -37,13 +37,20 @@ use crate::stdlib::{
     vec::Vec,
 };
 
-pub type FuncInfo = (
-    String,
-    FnAccess,
-    usize,
-    Option<StaticVec<TypeId>>,
-    CallableFunction,
-);
+/// Data structure containing a single registered function.
+#[derive(Debug, Clone)]
+pub struct FuncInfo {
+    /// Function instance.
+    pub func: CallableFunction,
+    /// Function access mode.
+    pub access: FnAccess,
+    /// Function name.
+    pub name: String,
+    /// Number of parameters.
+    pub params: usize,
+    /// Parameter types (if applicable).
+    pub types: Option<StaticVec<TypeId>>,
+}
 
 /// An imported module, which may contain variables, sub-modules,
 /// external Rust functions, and script-defined functions.
@@ -91,7 +98,7 @@ impl fmt::Debug for Module {
                 .join(", "),
             self.functions
                 .values()
-                .map(|(_, _, _, _, f)| f.to_string())
+                .map(|FuncInfo { func, .. }| func.to_string())
                 .collect::<Vec<_>>()
                 .join(", "),
         )
@@ -290,13 +297,13 @@ impl Module {
         let hash_script = calc_script_fn_hash(empty(), &fn_def.name, num_params);
         self.functions.insert(
             hash_script,
-            (
-                fn_def.name.to_string(),
-                fn_def.access,
-                num_params,
-                None,
-                fn_def.into(),
-            ),
+            FuncInfo {
+                name: fn_def.name.to_string(),
+                access: fn_def.access,
+                params: num_params,
+                types: None,
+                func: fn_def.into(),
+            },
         );
         self.indexed = false;
         hash_script
@@ -313,12 +320,19 @@ impl Module {
     ) -> Option<&Shared<ScriptFnDef>> {
         self.functions
             .values()
-            .find(|(fn_name, access, num, _, _)| {
-                (!public_only || *access == FnAccess::Public)
-                    && *num == num_params
-                    && fn_name == name
-            })
-            .map(|(_, _, _, _, f)| f.get_shared_fn_def())
+            .find(
+                |FuncInfo {
+                     name: fn_name,
+                     access,
+                     params,
+                     ..
+                 }| {
+                    (!public_only || *access == FnAccess::Public)
+                        && *params == num_params
+                        && fn_name == name
+                },
+            )
+            .map(|FuncInfo { func, .. }| func.get_shared_fn_def())
     }
 
     /// Does a sub-module exist in the module?
@@ -414,7 +428,7 @@ impl Module {
         } else if public_only {
             self.functions
                 .get(&hash_fn)
-                .map(|(_, access, _, _, _)| access.is_public())
+                .map(|FuncInfo { access, .. }| access.is_public())
                 .unwrap_or(false)
         } else {
             self.functions.contains_key(&hash_fn)
@@ -453,7 +467,13 @@ impl Module {
 
         self.functions.insert(
             hash_fn,
-            (name, access, params.len(), Some(params), func.into()),
+            FuncInfo {
+                name,
+                access,
+                params: params.len(),
+                types: Some(params),
+                func: func.into(),
+            },
         );
 
         self.indexed = false;
@@ -1091,9 +1111,9 @@ impl Module {
         } else {
             self.functions
                 .get(&hash_fn)
-                .and_then(|(_, access, _, _, f)| match access {
-                    _ if !public_only => Some(f),
-                    FnAccess::Public => Some(f),
+                .and_then(|FuncInfo { access, func, .. }| match access {
+                    _ if !public_only => Some(func),
+                    FnAccess::Public => Some(func),
                     FnAccess::Private => None,
                 })
         }
@@ -1194,7 +1214,7 @@ impl Module {
             other
                 .functions
                 .iter()
-                .filter(|(_, (_, _, _, _, v))| match v {
+                .filter(|(_, FuncInfo { func, .. })| match func {
                     #[cfg(not(feature = "no_function"))]
                     CallableFunction::Script(f) => {
                         _filter(f.access, f.name.as_str(), f.params.len())
@@ -1218,10 +1238,11 @@ impl Module {
         &mut self,
         mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
-        self.functions.retain(|_, (_, _, _, _, v)| match v {
-            CallableFunction::Script(f) => filter(f.access, f.name.as_str(), f.params.len()),
-            _ => true,
-        });
+        self.functions
+            .retain(|_, FuncInfo { func, .. }| match func {
+                CallableFunction::Script(f) => filter(f.access, f.name.as_str(), f.params.len()),
+                _ => true,
+            });
 
         self.all_functions.clear();
         self.all_variables.clear();
@@ -1266,7 +1287,7 @@ impl Module {
     ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
         self.functions
             .values()
-            .map(|(_, _, _, _, f)| f)
+            .map(|f| &f.func)
             .filter(|f| f.is_script())
             .map(CallableFunction::get_shared_fn_def)
             .map(|f| {
@@ -1285,10 +1306,14 @@ impl Module {
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
     pub fn iter_script_fn_info(&self) -> impl Iterator<Item = (FnAccess, &str, usize)> {
-        self.functions
-            .values()
-            .filter(|(_, _, _, _, f)| f.is_script())
-            .map(|(name, access, num_params, _, _)| (*access, name.as_str(), *num_params))
+        self.functions.values().filter(|f| f.func.is_script()).map(
+            |FuncInfo {
+                 name,
+                 access,
+                 params,
+                 ..
+             }| (*access, name.as_str(), *params),
+        )
     }
 
     /// Get an iterator over all script-defined functions in the module.
@@ -1401,31 +1426,45 @@ impl Module {
             module
                 .functions
                 .iter()
-                .filter(|(_, (_, access, _, _, _))| access.is_public())
-                .for_each(|(&_hash, (name, _, _num_params, params, func))| {
-                    if let Some(params) = params {
-                        // Qualified Rust functions are indexed in two steps:
-                        // 1) Calculate a hash in a similar manner to script-defined functions,
-                        //    i.e. qualifiers + function name + number of arguments.
-                        let hash_qualified_script =
-                            calc_script_fn_hash(qualifiers.iter().cloned(), name, params.len());
-                        // 2) Calculate a second hash with no qualifiers, empty function name,
-                        //    and the actual list of argument `TypeId`'.s
-                        let hash_fn_args = calc_native_fn_hash(empty(), "", params.iter().cloned());
-                        // 3) The final hash is the XOR of the two hashes.
-                        let hash_qualified_fn = hash_qualified_script ^ hash_fn_args;
+                .filter(|(_, FuncInfo { access, .. })| access.is_public())
+                .for_each(
+                    |(
+                        &_hash,
+                        FuncInfo {
+                            name,
+                            params,
+                            types,
+                            func,
+                            ..
+                        },
+                    )| {
+                        if let Some(param_types) = types {
+                            assert_eq!(*params, param_types.len());
 
-                        functions.push((hash_qualified_fn, func.clone()));
-                    } else if cfg!(not(feature = "no_function")) {
-                        let hash_qualified_script = if qualifiers.is_empty() {
-                            _hash
-                        } else {
-                            // Qualifiers + function name + number of arguments.
-                            calc_script_fn_hash(qualifiers.iter().map(|&v| v), &name, *_num_params)
-                        };
-                        functions.push((hash_qualified_script, func.clone()));
-                    }
-                });
+                            // Qualified Rust functions are indexed in two steps:
+                            // 1) Calculate a hash in a similar manner to script-defined functions,
+                            //    i.e. qualifiers + function name + number of arguments.
+                            let hash_qualified_script =
+                                calc_script_fn_hash(qualifiers.iter().cloned(), name, *params);
+                            // 2) Calculate a second hash with no qualifiers, empty function name,
+                            //    and the actual list of argument `TypeId`'.s
+                            let hash_fn_args =
+                                calc_native_fn_hash(empty(), "", param_types.iter().cloned());
+                            // 3) The final hash is the XOR of the two hashes.
+                            let hash_qualified_fn = hash_qualified_script ^ hash_fn_args;
+
+                            functions.push((hash_qualified_fn, func.clone()));
+                        } else if cfg!(not(feature = "no_function")) {
+                            let hash_qualified_script = if qualifiers.is_empty() {
+                                _hash
+                            } else {
+                                // Qualifiers + function name + number of arguments.
+                                calc_script_fn_hash(qualifiers.iter().map(|&v| v), &name, *params)
+                            };
+                            functions.push((hash_qualified_script, func.clone()));
+                        }
+                    },
+                );
         }
 
         if !self.indexed {

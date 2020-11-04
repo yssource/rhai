@@ -1579,7 +1579,9 @@ impl Engine {
             Expr::Property(_) => unreachable!(),
 
             // Statement block
-            Expr::Stmt(x, _) => self.eval_stmt(scope, mods, state, lib, this_ptr, x, level),
+            Expr::Stmt(x, _) => {
+                self.eval_statements(scope, mods, state, lib, this_ptr, x.as_ref(), level)
+            }
 
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
@@ -1704,6 +1706,37 @@ impl Engine {
 
         self.check_data_size(result)
             .map_err(|err| err.fill_position(expr.position()))
+    }
+
+    pub(crate) fn eval_statements<'a>(
+        &self,
+        scope: &mut Scope,
+        mods: &mut Imports,
+        state: &mut State,
+        lib: &[&Module],
+        this_ptr: &mut Option<&mut Dynamic>,
+        statements: impl IntoIterator<Item = &'a Stmt>,
+        level: usize,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let prev_scope_len = scope.len();
+        let prev_mods_len = mods.len();
+        state.scope_level += 1;
+
+        let result = statements
+            .into_iter()
+            .try_fold(Default::default(), |_, stmt| {
+                self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
+            });
+
+        scope.rewind(prev_scope_len);
+        mods.truncate(prev_mods_len);
+        state.scope_level -= 1;
+
+        // The impact of an eval statement goes away at the end of a block
+        // because any new variables introduced will go out of scope
+        state.always_search = false;
+
+        result
     }
 
     /// Evaluate a statement
@@ -1886,23 +1919,7 @@ impl Engine {
 
             // Block scope
             Stmt::Block(statements, _) => {
-                let prev_scope_len = scope.len();
-                let prev_mods_len = mods.len();
-                state.scope_level += 1;
-
-                let result = statements.iter().try_fold(Default::default(), |_, stmt| {
-                    self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
-                });
-
-                scope.rewind(prev_scope_len);
-                mods.truncate(prev_mods_len);
-                state.scope_level -= 1;
-
-                // The impact of an eval statement goes away at the end of a block
-                // because any new variables introduced will go out of scope
-                state.always_search = false;
-
-                result
+                self.eval_statements(scope, mods, state, lib, this_ptr, statements, level)
             }
 
             // If-else statement

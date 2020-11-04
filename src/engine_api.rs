@@ -1405,7 +1405,7 @@ impl Engine {
         mods: &mut Imports,
         ast: &'a AST,
     ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
-        self.eval_statements(scope, mods, ast.statements(), &[ast.lib()])
+        self.eval_statements_raw(scope, mods, ast.statements(), &[ast.lib()])
     }
 
     /// Evaluate a file, but throw away the result and only return error (if any).
@@ -1467,7 +1467,7 @@ impl Engine {
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
         let mut mods = Default::default();
-        self.eval_statements(scope, &mut mods, ast.statements(), &[ast.lib()])
+        self.eval_statements_raw(scope, &mut mods, ast.statements(), &[ast.lib()])
             .map(|_| ())
     }
 
@@ -1661,8 +1661,8 @@ impl Engine {
         let lib = if cfg!(not(feature = "no_function")) {
             ast.lib()
                 .iter_fn()
-                .filter(|(_, _, _, _, f)| f.is_script())
-                .map(|(_, _, _, _, f)| f.get_fn_def().clone())
+                .filter(|f| f.func.is_script())
+                .map(|f| f.func.get_fn_def().clone())
                 .collect()
         } else {
             Default::default()

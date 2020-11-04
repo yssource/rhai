@@ -24,7 +24,21 @@ engine.on_progress(|&count| {   // parameter is '&u64' - number of operations al
 
 The closure passed to `Engine::on_progress` will be called once for every operation.
 Return `Some(token)` to terminate the script immediately, with the provided value
-(any [`Dynamic`] value) passed to `EvalAltResult::ErrorTerminated` as a termination token.
+(any [`Dynamic`]) acting as a termination token.
+
+
+Termination Token
+-----------------
+
+The [`Dynamic`] value returned by the closure for `Engine::on_progress` is a _termination token_.
+A script that is manually terminated returns with `Err(EvalAltResult::ErrorTerminated)`
+wrapping this value.
+
+The termination token is commonly used to provide information on the _reason_ or _source_
+behind the termination decision.
+
+If the termination token is not needed, simply return `Some(().into())` to terminate the script
+run with [`()`] as the token.
 
 
 Operations Count vs. Progress Percentage
