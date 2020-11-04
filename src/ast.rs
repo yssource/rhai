@@ -83,6 +83,10 @@ impl FnAccess {
 /// This type is volatile and may change.
 #[derive(Debug, Clone)]
 pub struct ScriptFnDef {
+    /// Function body.
+    pub body: Stmt,
+    /// Encapsulated running environment, if any.
+    pub lib: Option<Shared<Module>>,
     /// Function name.
     pub name: ImmutableString,
     /// Function access mode.
@@ -92,12 +96,6 @@ pub struct ScriptFnDef {
     /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
     pub externals: HashSet<String>,
-    /// Function body.
-    pub body: Stmt,
-    /// Position of the function definition.
-    pub pos: Position,
-    /// Encapsulated running environment, if any.
-    pub lib: Option<Shared<Module>>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -1238,5 +1236,21 @@ impl Expr {
             }
             _ => self,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// This test is to make sure no code changes increase the sizes of critical data structures.
+    #[test]
+    fn check_struct_sizes() {
+        use std::mem::size_of;
+
+        assert_eq!(size_of::<Dynamic>(), 16);
+        assert_eq!(size_of::<Option<Dynamic>>(), 16);
+        assert_eq!(size_of::<Expr>(), 16);
+        assert_eq!(size_of::<Stmt>(), 32);
     }
 }

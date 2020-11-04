@@ -866,7 +866,6 @@ pub fn optimize_into_ast(
                         params: fn_def.params.clone(),
                         #[cfg(not(feature = "no_closure"))]
                         externals: fn_def.externals.clone(),
-                        pos: fn_def.pos,
                         lib: None,
                     }
                     .into()

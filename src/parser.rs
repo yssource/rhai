@@ -2485,7 +2485,6 @@ fn parse_fn(
         #[cfg(not(feature = "no_closure"))]
         externals,
         body,
-        pos: settings.pos,
         lib: None,
     })
 }
@@ -2655,7 +2654,6 @@ fn parse_anon_fn(
         #[cfg(not(feature = "no_closure"))]
         externals: Default::default(),
         body,
-        pos: settings.pos,
         lib: None,
     };
 
