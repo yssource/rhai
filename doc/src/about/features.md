@@ -8,9 +8,11 @@ Easy
 
 * Easy-to-use language similar to JavaScript+Rust with dynamic typing.
 
-* Tight integration with native Rust [functions] and [types][custom types], including [getters/setters], [methods][custom type] and [indexers].
+* Tight integration with native Rust [functions] and [types][custom types] including [getters/setters],
+  [methods][custom type] and [indexers].
 
-* Freely pass Rust variables/constants into a script via an external [`Scope`].
+* Freely pass Rust variables/constants into a script via an external [`Scope`] - all clonable Rust types are supported seamlessly
+  without the need to implement any special trait.
 
 * Easily [call a script-defined function]({{rootUrl}}/engine/call-fn.md) from Rust.
 
@@ -51,12 +53,14 @@ Safe
 
 * Relatively little `unsafe` code (yes there are some for performance reasons).
 
-* Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless [explicitly permitted]({{rootUrl}}/patterns/control.md).
+* Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless
+  [explicitly permitted]({{rootUrl}}/patterns/control.md).
 
 Rugged
 ------
 
-* Protected against malicious attacks (such as [stack-overflow][maximum call stack depth], [over-sized data][maximum length of strings], and [runaway scripts][maximum number of operations] etc.) that may come from untrusted third-party user-land scripts.
+* Protected against malicious attacks (such as [stack-overflow][maximum call stack depth], [over-sized data][maximum length of strings],
+  and [runaway scripts][maximum number of operations] etc.) that may come from untrusted third-party user-land scripts.
 
 * Track script evaluation [progress] and manually terminate a script run.
 
