@@ -408,15 +408,15 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 pos,
             )))
         }
-        // expr;
+        // {}
         Stmt::Expr(Expr::Stmt(x, pos)) if x.is_empty() => {
             state.set_dirty();
             Stmt::Noop(pos)
         }
-        // expr;
-        Stmt::Expr(Expr::Stmt(mut x, _)) if x.len() == 1 => {
+        // {...};
+        Stmt::Expr(Expr::Stmt(x, pos)) => {
             state.set_dirty();
-            optimize_stmt(x.remove(0), state, preserve_result)
+            Stmt::Block(x.into_vec(), pos)
         }
         // expr;
         Stmt::Expr(expr) => Stmt::Expr(optimize_expr(expr, state)),
@@ -449,7 +449,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
             Expr::Unit(pos)
         }
         // { stmt }
-        Expr::Stmt(mut x, pos) if x.len() == 1 => match x.remove(0) {
+        Expr::Stmt(mut x, pos) if x.len() == 1 => match x.pop().unwrap() {
             // {} -> ()
             Stmt::Noop(_) => {
                 state.set_dirty();
