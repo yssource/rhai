@@ -2,7 +2,7 @@
 
 use crate::dynamic::{Dynamic, Variant};
 
-use crate::stdlib::{borrow::Cow, iter, string::String, vec::Vec};
+use crate::stdlib::{borrow::Cow, boxed::Box, iter, string::String, vec::Vec};
 
 /// Type of an entry in the Scope.
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
