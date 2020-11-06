@@ -77,7 +77,6 @@ f::do_work();               // works!
 let p = Fn("f::do_work");   // error: invalid function name
 
 fn do_work_now() {          // call it from a local function
-    import "foo" as f;
     f::do_work();
 }
 

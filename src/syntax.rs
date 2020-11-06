@@ -85,9 +85,14 @@ impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_, '_> {
     }
 }
 
+/// Definition of a custom syntax definition.
 pub struct CustomSyntax {
+    /// A parsing function to return the next keyword in a custom syntax based on the
+    /// keywords parsed so far.
     pub parse: Box<FnCustomSyntaxParse>,
+    /// Custom syntax implementation function.
     pub func: Shared<FnCustomSyntaxEval>,
+    /// Delta number of variables in the scope.
     pub scope_delta: isize,
 }
 

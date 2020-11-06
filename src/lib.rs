@@ -161,11 +161,6 @@ pub mod serde {
 pub use optimize::OptimizationLevel;
 
 // Expose internal data structures.
-
-#[cfg(feature = "internals")]
-#[deprecated(note = "this type is volatile and may change")]
-pub use parse_error::LexError;
-
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
 pub use token::{get_next_token, parse_string_literal, InputStream, Token, TokenizeState};

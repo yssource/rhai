@@ -1,6 +1,14 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.5
+==============
+
+Breaking changes
+----------------
+
+* Modules imported at global level can now be accessed in functions.
+
 
 Version 0.19.4
 ==============

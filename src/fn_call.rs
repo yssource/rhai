@@ -118,7 +118,6 @@ impl<'a> ArgBackup<'a> {
             mem::transmute(&mut self.value_copy)
         }));
     }
-
     /// This function restores the first argument that was replaced by `change_first_arg_to_copy`.
     ///
     /// # Safety
@@ -470,6 +469,7 @@ impl Engine {
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     pub(crate) fn exec_fn_call(
         &self,
+        mods: &mut Imports,
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
@@ -536,21 +536,24 @@ impl Engine {
                     let func = func.get_fn_def();
 
                     let scope: &mut Scope = &mut Default::default();
-                    let mods = &mut Default::default();
 
                     // Move captured variables into scope
                     #[cfg(not(feature = "no_closure"))]
                     if let Some(captured) = _capture_scope {
-                        captured
-                            .into_iter()
-                            .filter(|(name, _, _, _)| func.externals.contains(name.as_ref()))
-                            .for_each(|(name, typ, value, _)| {
-                                // Consume the scope values.
-                                match typ {
-                                    ScopeEntryType::Normal => scope.push(name, value),
-                                    ScopeEntryType::Constant => scope.push_constant(name, value),
-                                };
-                            });
+                        if let Some(ref externals) = func.externals {
+                            captured
+                                .into_iter()
+                                .filter(|(name, _, _, _)| externals.contains(name.as_ref()))
+                                .for_each(|(name, typ, value, _)| {
+                                    // Consume the scope values.
+                                    match typ {
+                                        ScopeEntryType::Normal => scope.push(name, value),
+                                        ScopeEntryType::Constant => {
+                                            scope.push_constant(name, value)
+                                        }
+                                    };
+                                });
+                        }
                     }
 
                     let result = if _is_method {
@@ -681,6 +684,7 @@ impl Engine {
     #[cfg(not(feature = "no_object"))]
     pub(crate) fn make_method_call(
         &self,
+        mods: &mut Imports,
         state: &mut State,
         lib: &[&Module],
         name: &str,
@@ -720,7 +724,7 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                state, lib, fn_name, hash, args, false, false, pub_only, None, def_val, level,
+                mods, state, lib, fn_name, hash, args, false, false, pub_only, None, def_val, level,
             )
         } else if _fn_name == KEYWORD_FN_PTR_CALL
             && call_args.len() > 0
@@ -747,7 +751,7 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                state, lib, fn_name, hash, args, is_ref, true, pub_only, None, def_val, level,
+                mods, state, lib, fn_name, hash, args, is_ref, true, pub_only, None, def_val, level,
             )
         } else if _fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
             // Curry call
@@ -815,7 +819,8 @@ impl Engine {
             let args = arg_values.as_mut();
 
             self.exec_fn_call(
-                state, lib, _fn_name, hash, args, is_ref, true, pub_only, None, def_val, level,
+                mods, state, lib, _fn_name, hash, args, is_ref, true, pub_only, None, def_val,
+                level,
             )
         }?;
 
@@ -1061,7 +1066,7 @@ impl Engine {
         let args = args.as_mut();
 
         self.exec_fn_call(
-            state, lib, name, hash, args, is_ref, false, pub_only, capture, def_val, level,
+            mods, state, lib, name, hash, args, is_ref, false, pub_only, capture, def_val, level,
         )
         .map(|(v, _)| v)
     }
@@ -1173,12 +1178,11 @@ impl Engine {
                 }
 
                 let args = args.as_mut();
-                let fn_def = f.get_fn_def();
+                let fn_def = f.get_shared_fn_def().clone();
 
                 let new_scope = &mut Default::default();
-                let mods = &mut Default::default();
 
-                self.call_script_fn(new_scope, mods, state, lib, &mut None, fn_def, args, level)
+                self.call_script_fn(new_scope, mods, state, lib, &mut None, &fn_def, args, level)
             }
             Some(f) if f.is_plugin_fn() => {
                 f.get_plugin_fn().call((self, lib).into(), args.as_mut())

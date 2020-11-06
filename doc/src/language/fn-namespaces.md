@@ -82,8 +82,9 @@ fn get_message() { "Hello!" }
 | script.rhai |
 ---------------
 
+import "message" as msg;
+
 fn say_hello() {
-    import "message" as msg;
     print(msg::get_message());
 }
 say_hello();

@@ -4,7 +4,7 @@ use crate::dynamic::{Dynamic, Union};
 use crate::fn_native::{FnPtr, Shared};
 use crate::module::{Module, ModuleRef};
 use crate::syntax::FnCustomSyntaxEval;
-use crate::token::{Position, Token};
+use crate::token::{Position, Token, NO_POS};
 use crate::utils::ImmutableString;
 use crate::StaticVec;
 use crate::INT;
@@ -93,9 +93,9 @@ pub struct ScriptFnDef {
     pub access: FnAccess,
     /// Names of function parameters.
     pub params: StaticVec<String>,
-    /// Access to external variables.
+    /// Access to external variables. Boxed because it occurs rarely.
     #[cfg(not(feature = "no_closure"))]
-    pub externals: HashSet<String>,
+    pub externals: Option<Box<HashSet<String>>>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -590,11 +590,12 @@ pub enum ReturnType {
     Exception,
 }
 
-/// _[INTERNALS]_ A Rhai statement.
+/// _[INTERNALS]_ A statement.
 /// Exported under the `internals` feature only.
 ///
-/// Each variant is at most one pointer in size (for speed),
-/// with everything being allocated together in one single tuple.
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
 pub enum Stmt {
     /// No-op.
@@ -616,7 +617,7 @@ pub enum Stmt {
     /// { stmt; ... }
     Block(Vec<Stmt>, Position),
     /// try { stmt; ... } catch ( var ) { stmt; ... }
-    TryCatch(Box<(Stmt, Option<Ident>, Stmt, (Position, Position))>),
+    TryCatch(Box<(Stmt, Option<Ident>, Stmt)>, Position, Position),
     /// expr
     Expr(Expr),
     /// continue
@@ -639,7 +640,7 @@ pub enum Stmt {
 impl Default for Stmt {
     #[inline(always)]
     fn default() -> Self {
-        Self::Noop(Default::default())
+        Self::Noop(NO_POS)
     }
 }
 
@@ -667,7 +668,7 @@ impl Stmt {
             | Self::ReturnWithVal((_, pos), _, _) => *pos,
 
             Self::Let(x, _, _) | Self::Const(x, _, _) => x.pos,
-            Self::TryCatch(x) => (x.3).0,
+            Self::TryCatch(_, pos, _) => *pos,
 
             Self::Expr(x) => x.position(),
 
@@ -696,7 +697,7 @@ impl Stmt {
             | Self::ReturnWithVal((_, pos), _, _) => *pos = new_pos,
 
             Self::Let(x, _, _) | Self::Const(x, _, _) => x.pos = new_pos,
-            Self::TryCatch(x) => (x.3).0 = new_pos,
+            Self::TryCatch(_, pos, _) => *pos = new_pos,
 
             Self::Expr(x) => {
                 x.set_position(new_pos);
@@ -722,7 +723,7 @@ impl Stmt {
             | Self::Loop(_, _)
             | Self::For(_, _, _)
             | Self::Block(_, _)
-            | Self::TryCatch(_) => true,
+            | Self::TryCatch(_, _, _) => true,
 
             // A No-op requires a semicolon in order to know it is an empty statement!
             Self::Noop(_) => false,
@@ -758,7 +759,7 @@ impl Stmt {
             Self::Let(_, _, _) | Self::Const(_, _, _) | Self::Assignment(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::ReturnWithVal(_, _, _) => false,
-            Self::TryCatch(x) => x.0.is_pure() && x.2.is_pure(),
+            Self::TryCatch(x, _, _) => x.0.is_pure() && x.2.is_pure(),
 
             #[cfg(not(feature = "no_module"))]
             Self::Import(_, _, _) => false,
@@ -779,7 +780,9 @@ impl Stmt {
 /// This type is volatile and may change.
 #[derive(Clone)]
 pub struct CustomExpr {
+    /// List of keywords.
     pub(crate) keywords: StaticVec<Expr>,
+    /// Implementation function.
     pub(crate) func: Shared<FnCustomSyntaxEval>,
 }
 
@@ -848,6 +851,11 @@ impl From<INT> for FloatWrapper {
 }
 
 /// A binary expression structure.
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
 pub struct BinaryExpr {
     /// LHS expression.
@@ -856,7 +864,12 @@ pub struct BinaryExpr {
     pub rhs: Expr,
 }
 
-/// A function call.
+/// _[INTERNALS]_ A function call.
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Debug, Clone, Hash, Default)]
 pub struct FnCallInfo {
     /// Pre-calculated hash for a script-defined function of the same name and number of parameters.
@@ -869,7 +882,7 @@ pub struct FnCallInfo {
     /// Default value when the function is not found, mostly used to provide a default for comparison functions.
     /// Type is `bool` in order for `FnCallInfo` to be `Hash`
     pub def_value: Option<bool>,
-    /// Namespace of the function, if any.
+    /// Namespace of the function, if any. Boxed because it occurs rarely.
     pub namespace: Option<Box<ModuleRef>>,
     /// Function name.
     /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
@@ -881,9 +894,6 @@ pub struct FnCallInfo {
 
 /// _[INTERNALS]_ An expression sub-tree.
 /// Exported under the `internals` feature only.
-///
-/// Each variant is at most one pointer in size (for speed),
-/// with everything being allocated together in one single tuple.
 ///
 /// ## WARNING
 ///
@@ -938,7 +948,7 @@ pub enum Expr {
 impl Default for Expr {
     #[inline(always)]
     fn default() -> Self {
-        Self::Unit(Default::default())
+        Self::Unit(NO_POS)
     }
 }
 
@@ -1241,16 +1251,21 @@ impl Expr {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     /// This test is to make sure no code changes increase the sizes of critical data structures.
     #[test]
     fn check_struct_sizes() {
         use std::mem::size_of;
 
-        assert_eq!(size_of::<Dynamic>(), 16);
-        assert_eq!(size_of::<Option<Dynamic>>(), 16);
-        assert_eq!(size_of::<Expr>(), 16);
-        assert_eq!(size_of::<Stmt>(), 32);
+        assert_eq!(size_of::<crate::Dynamic>(), 16);
+        assert_eq!(size_of::<Option<crate::Dynamic>>(), 16);
+        assert_eq!(size_of::<crate::Position>(), 4);
+        assert_eq!(size_of::<crate::ast::Expr>(), 16);
+        assert_eq!(size_of::<Option<crate::ast::Expr>>(), 16);
+        assert_eq!(size_of::<crate::ast::Stmt>(), 32);
+        assert_eq!(size_of::<Option<crate::ast::Stmt>>(), 32);
+        assert_eq!(size_of::<crate::Scope>(), 72);
+        assert_eq!(size_of::<crate::LexError>(), 32);
+        assert_eq!(size_of::<crate::ParseError>(), 16);
+        assert_eq!(size_of::<crate::EvalAltResult>(), 64);
     }
 }

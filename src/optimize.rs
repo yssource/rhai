@@ -387,7 +387,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
             }
         }
         // try { block } catch ( var ) { block }
-        Stmt::TryCatch(x) if x.0.is_pure() => {
+        Stmt::TryCatch(x, _, _) if x.0.is_pure() => {
             // If try block is pure, there will never be any exceptions
             state.set_dirty();
             let pos = x.0.position();
@@ -399,14 +399,17 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
             Stmt::Block(statements, pos)
         }
         // try { block } catch ( var ) { block }
-        Stmt::TryCatch(x) => {
-            let (try_block, var_name, catch_block, pos) = *x;
-            Stmt::TryCatch(Box::new((
-                optimize_stmt(try_block, state, false),
-                var_name,
-                optimize_stmt(catch_block, state, false),
-                pos,
-            )))
+        Stmt::TryCatch(x, try_pos, catch_pos) => {
+            let (try_block, var_name, catch_block) = *x;
+            Stmt::TryCatch(
+                Box::new((
+                    optimize_stmt(try_block, state, false),
+                    var_name,
+                    optimize_stmt(catch_block, state, false),
+                )),
+                try_pos,
+                catch_pos,
+            )
         }
         // {}
         Stmt::Expr(Expr::Stmt(x, pos)) if x.is_empty() => {
