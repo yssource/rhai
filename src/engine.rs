@@ -88,10 +88,6 @@ impl Imports {
     pub fn get(&self, index: usize) -> Option<&Module> {
         self.0.get(index)
     }
-    /// Get a mutable reference to the imported module at a particular index.
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut Module> {
-        self.0.get_mut(index)
-    }
     /// Get the index of an imported module by name.
     pub fn find(&self, name: &str) -> Option<usize> {
         self.1
@@ -658,35 +654,6 @@ pub fn search_imports<'s>(
     })
 }
 
-/// Search for a module within an imports stack.
-/// Position in `EvalAltResult` is `None` and must be set afterwards.
-pub fn search_imports_mut<'s>(
-    mods: &'s mut Imports,
-    state: &mut State,
-    modules: &ModuleRef,
-) -> Result<&'s mut Module, Box<EvalAltResult>> {
-    let Ident { name: root, pos } = &modules[0];
-
-    // Qualified - check if the root module is directly indexed
-    let index = if state.always_search {
-        0
-    } else {
-        modules.index().map_or(0, NonZeroUsize::get)
-    };
-
-    Ok(if index > 0 {
-        let offset = mods.len() - index;
-        mods.get_mut(offset).expect("invalid index in Imports")
-    } else {
-        if let Some(n) = mods.find(root) {
-            mods.get_mut(n)
-        } else {
-            None
-        }
-        .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *pos))?
-    })
-}
-
 impl Engine {
     /// Create a new `Engine`
     #[inline(always)]
@@ -803,7 +770,7 @@ impl Engine {
     pub(crate) fn search_namespace<'s, 'a>(
         &self,
         scope: &'s mut Scope,
-        mods: &'s mut Imports,
+        mods: &mut Imports,
         state: &mut State,
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
@@ -813,8 +780,8 @@ impl Engine {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
                 (_, Some(modules), hash_var, Ident { name, pos }) => {
-                    let module = search_imports_mut(mods, state, modules)?;
-                    let target = module.get_qualified_var_mut(*hash_var).map_err(|mut err| {
+                    let module = search_imports(mods, state, modules)?;
+                    let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
                         match *err {
                             EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
                                 *err_name = format!("{}{}", modules, name);
@@ -825,7 +792,7 @@ impl Engine {
                     })?;
 
                     // Module variables are constant
-                    Ok((target.into(), name, ScopeEntryType::Constant, *pos))
+                    Ok((target.clone().into(), name, ScopeEntryType::Constant, *pos))
                 }
                 // Normal variable access
                 _ => self.search_scope_only(scope, mods, state, lib, this_ptr, expr),
@@ -909,6 +876,7 @@ impl Engine {
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_dot_index_chain_helper(
         &self,
+        mods: &mut Imports,
         state: &mut State,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
@@ -945,12 +913,12 @@ impl Engine {
                         let idx_pos = x.lhs.position();
                         let idx_val = idx_val.as_value();
                         let obj_ptr = &mut self.get_indexed_mut(
-                            state, lib, target, idx_val, idx_pos, false, true, level,
+                            mods, state, lib, target, idx_val, idx_pos, false, true, level,
                         )?;
 
                         self.eval_dot_index_chain_helper(
-                            state, lib, this_ptr, obj_ptr, &x.rhs, idx_values, next_chain, level,
-                            new_val,
+                            mods, state, lib, this_ptr, obj_ptr, &x.rhs, idx_values, next_chain,
+                            level, new_val,
                         )
                         .map_err(|err| err.fill_position(*x_pos))
                     }
@@ -960,9 +928,9 @@ impl Engine {
                         let mut idx_val2 = idx_val.clone();
 
                         // `call_setter` is introduced to bypass double mutable borrowing of target
-                        let _call_setter = match self
-                            .get_indexed_mut(state, lib, target, idx_val, pos, true, false, level)
-                        {
+                        let _call_setter = match self.get_indexed_mut(
+                            mods, state, lib, target, idx_val, pos, true, false, level,
+                        ) {
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
                                 obj_ptr.set_value(new_val.unwrap())?;
@@ -984,8 +952,8 @@ impl Engine {
                             let args = &mut [val, &mut idx_val2, &mut new_val.0];
 
                             self.exec_fn_call(
-                                state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None, None,
-                                level,
+                                mods, state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None,
+                                None, level,
                             )
                             .map_err(|err| match *err {
                                 EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
@@ -1005,8 +973,10 @@ impl Engine {
                     // xxx[rhs]
                     _ => {
                         let idx_val = idx_val.as_value();
-                        self.get_indexed_mut(state, lib, target, idx_val, pos, false, true, level)
-                            .map(|v| (v.take_or_clone(), false))
+                        self.get_indexed_mut(
+                            mods, state, lib, target, idx_val, pos, false, true, level,
+                        )
+                        .map(|v| (v.take_or_clone(), false))
                     }
                 }
             }
@@ -1026,7 +996,8 @@ impl Engine {
                         let def_value = def_value.map(Into::<Dynamic>::into);
                         let args = idx_val.as_fn_call_args();
                         self.make_method_call(
-                            state, lib, name, *hash, target, args, def_value, *native, false, level,
+                            mods, state, lib, name, *hash, target, args, def_value, *native, false,
+                            level,
                         )
                         .map_err(|err| err.fill_position(*pos))
                     }
@@ -1036,8 +1007,9 @@ impl Engine {
                     Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
                         let IdentX { name, pos } = &x.1;
                         let index = name.clone().into();
-                        let mut val = self
-                            .get_indexed_mut(state, lib, target, index, *pos, true, false, level)?;
+                        let mut val = self.get_indexed_mut(
+                            mods, state, lib, target, index, *pos, true, false, level,
+                        )?;
 
                         val.set_value(new_val.unwrap())?;
                         Ok((Default::default(), true))
@@ -1047,7 +1019,7 @@ impl Engine {
                         let IdentX { name, pos } = &x.1;
                         let index = name.clone().into();
                         let val = self.get_indexed_mut(
-                            state, lib, target, index, *pos, false, false, level,
+                            mods, state, lib, target, index, *pos, false, false, level,
                         )?;
 
                         Ok((val.take_or_clone(), false))
@@ -1058,8 +1030,8 @@ impl Engine {
                         let mut new_val = new_val;
                         let mut args = [target.as_mut(), &mut new_val.as_mut().unwrap().0];
                         self.exec_fn_call(
-                            state, lib, setter, 0, &mut args, is_ref, true, false, None, None,
-                            level,
+                            mods, state, lib, setter, 0, &mut args, is_ref, true, false, None,
+                            None, level,
                         )
                         .map(|(v, _)| (v, true))
                         .map_err(|err| err.fill_position(*pos))
@@ -1069,8 +1041,8 @@ impl Engine {
                         let ((getter, _), IdentX { pos, .. }) = x.as_ref();
                         let mut args = [target.as_mut()];
                         self.exec_fn_call(
-                            state, lib, getter, 0, &mut args, is_ref, true, false, None, None,
-                            level,
+                            mods, state, lib, getter, 0, &mut args, is_ref, true, false, None,
+                            None, level,
                         )
                         .map(|(v, _)| (v, false))
                         .map_err(|err| err.fill_position(*pos))
@@ -1082,7 +1054,7 @@ impl Engine {
                                 let IdentX { name, pos } = &p.1;
                                 let index = name.clone().into();
                                 self.get_indexed_mut(
-                                    state, lib, target, index, *pos, false, true, level,
+                                    mods, state, lib, target, index, *pos, false, true, level,
                                 )?
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
@@ -1098,8 +1070,8 @@ impl Engine {
                                 let args = idx_val.as_fn_call_args();
                                 let (val, _) = self
                                     .make_method_call(
-                                        state, lib, name, *hash, target, args, def_value, *native,
-                                        false, level,
+                                        mods, state, lib, name, *hash, target, args, def_value,
+                                        *native, false, level,
                                     )
                                     .map_err(|err| err.fill_position(*pos))?;
                                 val.into()
@@ -1111,8 +1083,8 @@ impl Engine {
                         };
 
                         self.eval_dot_index_chain_helper(
-                            state, lib, this_ptr, &mut val, &x.rhs, idx_values, next_chain, level,
-                            new_val,
+                            mods, state, lib, this_ptr, &mut val, &x.rhs, idx_values, next_chain,
+                            level, new_val,
                         )
                         .map_err(|err| err.fill_position(*x_pos))
                     }
@@ -1126,8 +1098,8 @@ impl Engine {
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self
                                     .exec_fn_call(
-                                        state, lib, getter, 0, args, is_ref, true, false, None,
-                                        None, level,
+                                        mods, state, lib, getter, 0, args, is_ref, true, false,
+                                        None, None, level,
                                     )
                                     .map_err(|err| err.fill_position(*pos))?;
 
@@ -1135,6 +1107,7 @@ impl Engine {
 
                                 let (result, may_be_changed) = self
                                     .eval_dot_index_chain_helper(
+                                        mods,
                                         state,
                                         lib,
                                         this_ptr,
@@ -1152,8 +1125,8 @@ impl Engine {
                                     // Re-use args because the first &mut parameter will not be consumed
                                     arg_values[1] = val;
                                     self.exec_fn_call(
-                                        state, lib, setter, 0, arg_values, is_ref, true, false,
-                                        None, None, level,
+                                        mods, state, lib, setter, 0, arg_values, is_ref, true,
+                                        false, None, None, level,
                                     )
                                     .or_else(
                                         |err| match *err {
@@ -1181,16 +1154,16 @@ impl Engine {
                                 let args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self
                                     .make_method_call(
-                                        state, lib, name, *hash, target, args, def_value, *native,
-                                        false, level,
+                                        mods, state, lib, name, *hash, target, args, def_value,
+                                        *native, false, level,
                                     )
                                     .map_err(|err| err.fill_position(*pos))?;
                                 let val = &mut val;
                                 let target = &mut val.into();
 
                                 self.eval_dot_index_chain_helper(
-                                    state, lib, this_ptr, target, &x.rhs, idx_values, next_chain,
-                                    level, new_val,
+                                    mods, state, lib, this_ptr, target, &x.rhs, idx_values,
+                                    next_chain, level, new_val,
                                 )
                                 .map_err(|err| err.fill_position(*pos))
                             }
@@ -1275,7 +1248,8 @@ impl Engine {
 
                 let obj_ptr = &mut target.into();
                 self.eval_dot_index_chain_helper(
-                    state, lib, &mut None, obj_ptr, dot_rhs, idx_values, chain_type, level, new_val,
+                    mods, state, lib, &mut None, obj_ptr, dot_rhs, idx_values, chain_type, level,
+                    new_val,
                 )
                 .map(|(v, _)| v)
                 .map_err(|err| err.fill_position(op_pos))
@@ -1287,7 +1261,8 @@ impl Engine {
                 let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let obj_ptr = &mut val.into();
                 self.eval_dot_index_chain_helper(
-                    state, lib, this_ptr, obj_ptr, dot_rhs, idx_values, chain_type, level, new_val,
+                    mods, state, lib, this_ptr, obj_ptr, dot_rhs, idx_values, chain_type, level,
+                    new_val,
                 )
                 .map(|(v, _)| v)
                 .map_err(|err| err.fill_position(op_pos))
@@ -1375,6 +1350,7 @@ impl Engine {
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn get_indexed_mut<'a>(
         &self,
+        _mods: &mut Imports,
         state: &mut State,
         _lib: &[&Module],
         target: &'a mut Target,
@@ -1457,7 +1433,8 @@ impl Engine {
                 let mut idx = idx;
                 let args = &mut [val, &mut idx];
                 self.exec_fn_call(
-                    state, _lib, FN_IDX_GET, 0, args, is_ref, true, false, None, None, _level,
+                    _mods, state, _lib, FN_IDX_GET, 0, args, is_ref, true, false, None, None,
+                    _level,
                 )
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
@@ -1846,8 +1823,8 @@ impl Engine {
                                 // Run function
                                 let (value, _) = self
                                     .exec_fn_call(
-                                        state, lib, op, 0, args, false, false, false, None, None,
-                                        level,
+                                        mods, state, lib, op, 0, args, false, false, false, None,
+                                        None, level,
                                     )
                                     .map_err(|err| err.fill_position(*op_pos))?;
 
@@ -1884,7 +1861,7 @@ impl Engine {
 
                     let result = self
                         .exec_fn_call(
-                            state, lib, op, 0, args, false, false, false, None, None, level,
+                            mods, state, lib, op, 0, args, false, false, false, None, None, level,
                         )
                         .map(|(v, _)| v)
                         .map_err(|err| err.fill_position(*op_pos))?;

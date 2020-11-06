@@ -268,20 +268,17 @@ impl Module {
         self
     }
 
-    /// Get a mutable reference to a modules-qualified variable.
+    /// Get a reference to a modules-qualified variable.
     /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
     /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash`.
     #[inline(always)]
-    pub(crate) fn get_qualified_var_mut(
-        &mut self,
-        hash_var: u64,
-    ) -> Result<&mut Dynamic, Box<EvalAltResult>> {
+    pub(crate) fn get_qualified_var(&self, hash_var: u64) -> Result<&Dynamic, Box<EvalAltResult>> {
         if hash_var == 0 {
             Err(EvalAltResult::ErrorVariableNotFound(String::new(), NO_POS).into())
         } else {
             self.all_variables
-                .get_mut(&hash_var)
+                .get(&hash_var)
                 .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(String::new(), NO_POS).into())
         }
     }

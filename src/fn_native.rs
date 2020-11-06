@@ -184,6 +184,7 @@ impl FnPtr {
         ctx.engine()
             .exec_fn_call(
                 &mut Default::default(),
+                &mut Default::default(),
                 ctx.lib,
                 fn_name,
                 hash_script,
