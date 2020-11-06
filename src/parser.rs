@@ -32,7 +32,7 @@ use crate::{
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     format,
     hash::Hash,
     iter::empty,
@@ -2376,12 +2376,11 @@ fn parse_try_catch(
     // try { body } catch ( var ) { catch_block }
     let catch_body = parse_block(input, state, lib, settings.level_up())?;
 
-    Ok(Stmt::TryCatch(Box::new((
-        body,
-        var_def,
-        catch_body,
-        (token_pos, catch_pos),
-    ))))
+    Ok(Stmt::TryCatch(
+        Box::new((body, var_def, catch_body)),
+        token_pos,
+        catch_pos,
+    ))
 }
 
 /// Parse a function definition.
@@ -2470,7 +2469,7 @@ fn parse_fn(
     let params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
 
     #[cfg(not(feature = "no_closure"))]
-    let externals = state
+    let externals: HashSet<_> = state
         .externals
         .iter()
         .map(|(name, _)| name)
@@ -2483,7 +2482,11 @@ fn parse_fn(
         access,
         params,
         #[cfg(not(feature = "no_closure"))]
-        externals,
+        externals: if externals.is_empty() {
+            None
+        } else {
+            Some(Box::new(externals))
+        },
         body,
         lib: None,
     })

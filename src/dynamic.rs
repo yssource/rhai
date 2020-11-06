@@ -619,7 +619,6 @@ impl Dynamic {
 
         Self(Union::Variant(Box::new(boxed)))
     }
-
     /// Turn the `Dynamic` value into a shared `Dynamic` value backed by an `Rc<RefCell<Dynamic>>`
     /// or `Arc<RwLock<Dynamic>>` depending on the `sync` feature.
     ///
@@ -644,7 +643,6 @@ impl Dynamic {
         #[cfg(feature = "no_closure")]
         panic!("converting into a shared value is not supported under 'no_closure'");
     }
-
     /// Convert the `Dynamic` value into specific type.
     ///
     /// Casting to a `Dynamic` just returns as is, but if it contains a shared value,
@@ -775,7 +773,6 @@ impl Dynamic {
             _ => None,
         }
     }
-
     /// Convert the `Dynamic` value into a specific type.
     ///
     /// Casting to a `Dynamic` just returns as is, but if it contains a shared value,
@@ -819,7 +816,6 @@ impl Dynamic {
             )
         })
     }
-
     /// Flatten the `Dynamic` and clone it.
     ///
     /// If the `Dynamic` is not a shared value, it returns a cloned copy.
@@ -839,7 +835,6 @@ impl Dynamic {
             _ => self.clone(),
         }
     }
-
     /// Flatten the `Dynamic`.
     ///
     /// If the `Dynamic` is not a shared value, it returns itself.
@@ -867,7 +862,6 @@ impl Dynamic {
             _ => self,
         }
     }
-
     /// Is the `Dynamic` a shared value that is locked?
     ///
     /// ## Note
@@ -889,7 +883,6 @@ impl Dynamic {
             _ => false,
         }
     }
-
     /// Get a reference of a specific type to the `Dynamic`.
     /// Casting to `Dynamic` just returns a reference to it.
     ///
@@ -922,7 +915,6 @@ impl Dynamic {
                 .map(|r| DynamicReadLock(DynamicReadLockInner::Reference(r))),
         }
     }
-
     /// Get a mutable reference of a specific type to the `Dynamic`.
     /// Casting to `Dynamic` just returns a mutable reference to it.
     ///
@@ -955,7 +947,6 @@ impl Dynamic {
                 .map(|r| DynamicWriteLock(DynamicWriteLockInner::Reference(r))),
         }
     }
-
     /// Get a reference of a specific type to the `Dynamic`.
     /// Casting to `Dynamic` just returns a reference to it.
     ///
@@ -1045,7 +1036,6 @@ impl Dynamic {
             _ => None,
         }
     }
-
     /// Get a mutable reference of a specific type to the `Dynamic`.
     /// Casting to `Dynamic` just returns a mutable reference to it.
     ///
@@ -1129,7 +1119,6 @@ impl Dynamic {
             _ => None,
         }
     }
-
     /// Cast the `Dynamic` as the system integer type `INT` and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
@@ -1141,7 +1130,6 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-
     /// Cast the `Dynamic` as the system floating-point type `FLOAT` and return it.
     /// Returns the name of the actual type if the cast fails.
     #[cfg(not(feature = "no_float"))]
@@ -1154,7 +1142,6 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-
     /// Cast the `Dynamic` as a `bool` and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
@@ -1166,7 +1153,6 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-
     /// Cast the `Dynamic` as a `char` and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
@@ -1178,7 +1164,6 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-
     /// Cast the `Dynamic` as a string and return the string slice.
     /// Returns the name of the actual type if the cast fails.
     ///
@@ -1191,7 +1176,6 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-
     /// Convert the `Dynamic` into `String` and return it.
     /// If there are other references to the same string, a cloned copy is returned.
     /// Returns the name of the actual type if the cast fails.
@@ -1200,7 +1184,6 @@ impl Dynamic {
         self.take_immutable_string()
             .map(ImmutableString::into_owned)
     }
-
     /// Convert the `Dynamic` into `ImmutableString` and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline]

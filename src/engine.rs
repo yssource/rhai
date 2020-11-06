@@ -2034,8 +2034,8 @@ impl Engine {
             Stmt::Break(pos) => EvalAltResult::LoopBreak(true, *pos).into(),
 
             // Try/Catch statement
-            Stmt::TryCatch(x) => {
-                let (try_body, var_def, catch_body, _) = x.as_ref();
+            Stmt::TryCatch(x, _, _) => {
+                let (try_body, var_def, catch_body) = x.as_ref();
 
                 let result = self
                     .eval_stmt(scope, mods, state, lib, this_ptr, try_body, level)

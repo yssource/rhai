@@ -118,7 +118,6 @@ impl<'a> ArgBackup<'a> {
             mem::transmute(&mut self.value_copy)
         }));
     }
-
     /// This function restores the first argument that was replaced by `change_first_arg_to_copy`.
     ///
     /// # Safety
@@ -541,16 +540,20 @@ impl Engine {
                     // Move captured variables into scope
                     #[cfg(not(feature = "no_closure"))]
                     if let Some(captured) = _capture_scope {
-                        captured
-                            .into_iter()
-                            .filter(|(name, _, _, _)| func.externals.contains(name.as_ref()))
-                            .for_each(|(name, typ, value, _)| {
-                                // Consume the scope values.
-                                match typ {
-                                    ScopeEntryType::Normal => scope.push(name, value),
-                                    ScopeEntryType::Constant => scope.push_constant(name, value),
-                                };
-                            });
+                        if let Some(ref externals) = func.externals {
+                            captured
+                                .into_iter()
+                                .filter(|(name, _, _, _)| externals.contains(name.as_ref()))
+                                .for_each(|(name, typ, value, _)| {
+                                    // Consume the scope values.
+                                    match typ {
+                                        ScopeEntryType::Normal => scope.push(name, value),
+                                        ScopeEntryType::Constant => {
+                                            scope.push_constant(name, value)
+                                        }
+                                    };
+                                });
+                        }
                     }
 
                     let result = if _is_method {
