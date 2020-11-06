@@ -38,6 +38,10 @@ fn test_call_fn() -> Result<(), Box<EvalAltResult>> {
             fn hello() {
                 41 + foo
             }
+            fn define_var() {
+                let bar = 21;
+                bar * 2
+            }
         ",
     )?;
 
@@ -49,6 +53,11 @@ fn test_call_fn() -> Result<(), Box<EvalAltResult>> {
 
     let r: INT = engine.call_fn(&mut scope, &ast, "hello", ())?;
     assert_eq!(r, 42);
+
+    let r: INT = engine.call_fn(&mut scope, &ast, "define_var", ())?;
+    assert_eq!(r, 42);
+
+    assert!(!scope.contains("bar"));
 
     assert_eq!(
         scope
