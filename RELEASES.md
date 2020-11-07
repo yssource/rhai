@@ -8,6 +8,12 @@ Breaking changes
 ----------------
 
 * Modules imported at global level can now be accessed in functions.
+* `ModuleResolver::resolve` now returns `Shared<Module>` for better resources sharing when loading modules.
+
+Enhancements
+------------
+
+* Modules imported via `import` statements at global level can now be used in functions. There is no longer any need to re-`import` the modules at the beginning of each function block.
 
 
 Version 0.19.4

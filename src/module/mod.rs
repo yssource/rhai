@@ -329,7 +329,7 @@ impl Module {
                         && fn_name == name
                 },
             )
-            .map(|FuncInfo { func, .. }| func.get_shared_fn_def())
+            .map(|FuncInfo { func, .. }| func.get_fn_def())
     }
 
     /// Does a sub-module exist in the module?
@@ -1286,7 +1286,7 @@ impl Module {
             .values()
             .map(|f| &f.func)
             .filter(|f| f.is_script())
-            .map(CallableFunction::get_shared_fn_def)
+            .map(CallableFunction::get_fn_def)
             .map(|f| {
                 let func = f.clone();
                 (f.access, f.name.as_str(), f.params.len(), func)
@@ -1374,7 +1374,7 @@ impl Module {
 
         // Modules left in the scope become sub-modules
         mods.into_iter().for_each(|(alias, m)| {
-            module.modules.insert(alias.to_string(), m);
+            module.modules.insert(alias.to_string(), m.as_ref().clone());
         });
 
         // Non-private functions defined become module functions

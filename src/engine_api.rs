@@ -1662,7 +1662,7 @@ impl Engine {
             ast.lib()
                 .iter_fn()
                 .filter(|f| f.func.is_script())
-                .map(|f| f.func.get_fn_def().clone())
+                .map(|f| (**f.func.get_fn_def()).clone())
                 .collect()
         } else {
             Default::default()

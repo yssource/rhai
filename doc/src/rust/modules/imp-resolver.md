@@ -13,7 +13,7 @@ which contains only one function: `resolve`.
 When Rhai prepares to load a module, `ModuleResolver::resolve` is called with the name
 of the _module path_ (i.e. the path specified in the [`import`] statement).
 
-* Upon success, it should return a [`Module`].
+* Upon success, it should return an [`Rc<Module>`][module] (or `Arc<Module>` under [`sync`]).
 
 * If the path does not resolve to a valid module, return `EvalAltResult::ErrorModuleNotFound`.
 
@@ -37,14 +37,15 @@ impl ModuleResolver for MyModuleResolver {
         engine: &Engine,    // reference to the current 'Engine'
         path: &str,         // the module path
         pos: Position,      // position of the 'import' statement
-    ) -> Result<Module, Box<EvalAltResult>> {
+    ) -> Result<Rc<Module>, Box<EvalAltResult>> {
         // Check module path.
         if is_valid_module_path(path) {
-            // Load the custom module.
-            load_secret_module(path).map_err(|err|
-                // Return EvalAltResult::ErrorInModule upon loading error
-                EvalAltResult::ErrorInModule(err.to_string(), pos).into()
-            )
+            load_secret_module(path)    // load the custom module
+                .map(Rc::new)           // share it
+                .map_err(|err|
+                    // Return EvalAltResult::ErrorInModule upon loading error
+                    EvalAltResult::ErrorInModule(err.to_string(), pos).into()
+                )
         } else {
             // Return EvalAltResult::ErrorModuleNotFound if the path is invalid
             Err(EvalAltResult::ErrorModuleNotFound(path.into(), pos).into())
