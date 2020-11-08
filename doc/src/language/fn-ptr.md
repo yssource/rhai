@@ -236,7 +236,7 @@ This type is normally provided by the [`Engine`] (e.g. when using [`Engine::regi
 However, it may also be manually constructed from a tuple:
 
 ```rust
-use rhai::{Engine, FnPtr};
+use rhai::{Engine, FnPtr, NativeCallContext};
 
 let engine = Engine::new();
 
@@ -254,13 +254,11 @@ let fn_ptr = engine.eval_ast::<FnPtr>(&ast)?;
 // Get rid of the script, retaining only functions
 ast.retain_functions(|_, _, _| true);
 
-// Create native call context via a tuple
-let context =
-        (
-            &engine,            // the 'Engine'
-            &[ast.as_ref()]     // function namespace from the 'AST'
-                                // as a one-element slice
-        ).into();
+// Create native call context
+let context = NativeCallContext::new(
+    &engine,                    // the 'Engine'
+    &[ast.as_ref()]             // function namespace from the 'AST'
+);
 
 // 'f' captures: the engine, the AST, and the closure
 let f = move |x: i64| fn_ptr.call_dynamic(context, None, [x.into()]);

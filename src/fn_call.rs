@@ -571,7 +571,7 @@ impl Engine {
                             _level,
                         )?
                     } else {
-                        // Normal call of script function - map first argument to `this`
+                        // Normal call of script function
                         // The first argument is a reference?
                         let mut backup: ArgBackup = Default::default();
                         backup.change_first_arg_to_copy(is_ref, args);

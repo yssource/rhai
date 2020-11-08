@@ -432,3 +432,16 @@ fn test_module_ast_namespace2() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_module_file() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+    let ast = engine.compile(
+        r#"
+            import "scripts/module";
+            print("top");
+        "#,
+    )?;
+    Module::eval_ast_as_new(Default::default(), &ast, &engine)?;
+    Ok(())
+}

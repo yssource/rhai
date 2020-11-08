@@ -2,7 +2,7 @@
 
 use crate::def_package;
 use crate::dynamic::Dynamic;
-use crate::engine::Map;
+use crate::engine::{Map, OP_EQUALS};
 use crate::plugin::*;
 use crate::utils::ImmutableString;
 use crate::INT;
@@ -45,6 +45,45 @@ mod map_functions {
         map2.into_iter().for_each(|(key, value)| {
             map1.entry(key).or_insert(value);
         });
+    }
+    #[rhai_fn(name = "==", return_raw)]
+    pub fn equals(
+        mut ctx: NativeCallContext,
+        map1: &mut Map,
+        mut map2: Map,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        if map1.len() != map2.len() {
+            return Ok(false.into());
+        }
+        if map1.is_empty() {
+            return Ok(true.into());
+        }
+
+        let def_value = Some(false.into());
+
+        for (m1, v1) in map1.iter_mut() {
+            if let Some(v2) = map2.get_mut(m1) {
+                let equals = ctx
+                    .call_fn_dynamic_raw(OP_EQUALS, true, false, &mut [v1, v2], def_value.clone())
+                    .map(|v| v.as_bool().unwrap_or(false))?;
+
+                if !equals {
+                    return Ok(false.into());
+                }
+            } else {
+                return Ok(false.into());
+            }
+        }
+
+        Ok(true.into())
+    }
+    #[rhai_fn(name = "!=", return_raw)]
+    pub fn not_equals(
+        ctx: NativeCallContext,
+        map1: &mut Map,
+        map2: Map,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        equals(ctx, map1, map2).map(|r| (!r.as_bool().unwrap()).into())
     }
 
     #[cfg(not(feature = "no_index"))]

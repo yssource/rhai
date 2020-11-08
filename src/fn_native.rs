@@ -81,6 +81,31 @@ impl<'e, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized> From<(&'e Engine, &'m M)
 }
 
 impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
+    /// Create a new `NativeCallContext`.
+    #[inline(always)]
+    pub fn new(engine: &'e Engine, lib: &'m impl AsRef<[&'pm Module]>) -> Self {
+        Self {
+            engine,
+            mods: None,
+            lib: lib.as_ref(),
+        }
+    }
+    /// _[INTERNALS]_ Create a new `NativeCallContext`.
+    /// Available under the `internals` feature only.
+    #[cfg(feature = "internals")]
+    #[cfg(not(feature = "no_module"))]
+    #[inline(always)]
+    pub fn new_with_imports(
+        engine: &'e Engine,
+        mods: &'a mut Imports,
+        lib: &'m impl AsRef<[&'pm Module]>,
+    ) -> Self {
+        Self {
+            engine,
+            mods: Some(mods),
+            lib: lib.as_ref(),
+        }
+    }
     /// The current `Engine`.
     #[inline(always)]
     pub fn engine(&self) -> &'e Engine {
@@ -98,6 +123,54 @@ impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
     #[inline(always)]
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &'pm Module> + 'm {
         self.lib.iter().cloned()
+    }
+    /// Call a function inside the call context.
+    ///
+    /// ## WARNING
+    ///
+    /// All arguments may be _consumed_, meaning that they may be replaced by `()`.
+    /// This is to avoid unnecessarily cloning the arguments.
+    /// Do not use the arguments after this call. If they are needed afterwards,
+    /// clone them _before_ calling this function.
+    ///
+    /// If `is_method` is `true`, the first argument is assumed to be passed
+    /// by reference and is not consumed.
+    pub fn call_fn_dynamic_raw(
+        &mut self,
+        fn_name: &str,
+        is_method: bool,
+        public_only: bool,
+        args: &mut [&mut Dynamic],
+        def_value: Option<Dynamic>,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let mut mods = self.mods.cloned().unwrap_or_default();
+
+        let hash_script = calc_script_fn_hash(
+            empty(),
+            fn_name,
+            if is_method {
+                args.len() - 1
+            } else {
+                args.len()
+            },
+        );
+
+        self.engine()
+            .exec_fn_call(
+                &mut mods,
+                &mut Default::default(),
+                self.lib,
+                fn_name,
+                hash_script,
+                args,
+                is_method,
+                is_method,
+                public_only,
+                None,
+                def_value,
+                0,
+            )
+            .map(|(r, _)| r)
     }
 }
 
@@ -181,12 +254,11 @@ impl FnPtr {
     /// clone them _before_ calling this function.
     pub fn call_dynamic(
         &self,
-        ctx: NativeCallContext,
+        mut ctx: NativeCallContext,
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let arg_values = arg_values.as_mut();
-        let fn_name = self.fn_name();
 
         let mut args_data = self
             .curry()
@@ -195,32 +267,15 @@ impl FnPtr {
             .chain(arg_values.iter_mut().map(mem::take))
             .collect::<StaticVec<_>>();
 
-        let has_this = this_ptr.is_some();
         let mut args = args_data.iter_mut().collect::<StaticVec<_>>();
-        let hash_script = calc_script_fn_hash(empty(), fn_name, args.len());
+
+        let has_this = this_ptr.is_some();
 
         if let Some(obj) = this_ptr {
             args.insert(0, obj);
         }
 
-        let mut mods = ctx.mods.cloned().unwrap_or_default();
-
-        ctx.engine()
-            .exec_fn_call(
-                &mut mods,
-                &mut Default::default(),
-                ctx.lib,
-                fn_name,
-                hash_script,
-                args.as_mut(),
-                has_this,
-                has_this,
-                true,
-                None,
-                None,
-                0,
-            )
-            .map(|(v, _)| v)
+        ctx.call_fn_dynamic_raw(self.fn_name(), has_this, true, args.as_mut(), None)
     }
 }
 

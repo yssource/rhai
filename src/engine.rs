@@ -164,6 +164,7 @@ pub const FN_IDX_GET: &str = "index$get$";
 pub const FN_IDX_SET: &str = "index$set$";
 #[cfg(not(feature = "no_function"))]
 pub const FN_ANONYMOUS: &str = "anon$";
+pub const OP_EQUALS: &str = "==";
 pub const MARKER_EXPR: &str = "$expr$";
 pub const MARKER_BLOCK: &str = "$block$";
 pub const MARKER_IDENT: &str = "$ident$";
@@ -1474,8 +1475,6 @@ impl Engine {
         match rhs_value {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(mut rhs_value)) => {
-                const OP_FUNC: &str = "==";
-
                 // Call the `==` operator to compare each value
                 let def_value = Some(false.into());
 
@@ -1485,11 +1484,11 @@ impl Engine {
 
                     // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
                     let hash =
-                        calc_native_fn_hash(empty(), OP_FUNC, args.iter().map(|a| a.type_id()));
+                        calc_native_fn_hash(empty(), OP_EQUALS, args.iter().map(|a| a.type_id()));
 
                     if self
                         .call_native_fn(
-                            mods, state, lib, OP_FUNC, hash, args, false, false, def_value,
+                            mods, state, lib, OP_EQUALS, hash, args, false, false, def_value,
                         )
                         .map_err(|err| err.fill_position(rhs.position()))?
                         .0
