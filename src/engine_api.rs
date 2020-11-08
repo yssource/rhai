@@ -1519,7 +1519,8 @@ impl Engine {
         let mut arg_values = args.into_vec();
         let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
-        let result = self.call_fn_dynamic_raw(scope, ast.lib(), name, &mut None, args.as_mut())?;
+        let result =
+            self.call_fn_dynamic_raw(scope, &[ast.lib()], name, &mut None, args.as_mut())?;
 
         let typ = self.map_type_name(result.type_name());
 
@@ -1594,7 +1595,7 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
-        self.call_fn_dynamic_raw(scope, lib.as_ref(), name, &mut this_ptr, args.as_mut())
+        self.call_fn_dynamic_raw(scope, &[lib.as_ref()], name, &mut this_ptr, args.as_mut())
     }
 
     /// Call a script function defined in an `AST` with multiple `Dynamic` arguments.
@@ -1610,13 +1611,14 @@ impl Engine {
     pub(crate) fn call_fn_dynamic_raw(
         &self,
         scope: &mut Scope,
-        lib: &Module,
+        lib: &[&Module],
         name: &str,
         this_ptr: &mut Option<&mut Dynamic>,
         args: &mut FnCallArgs,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let fn_def = lib
-            .get_script_fn(name, args.len(), true)
+            .iter()
+            .find_map(|&m| m.get_script_fn(name, args.len(), true))
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), NO_POS))?;
 
         let mut state = Default::default();
@@ -1627,16 +1629,7 @@ impl Engine {
             ensure_no_data_race(name, args, false)?;
         }
 
-        self.call_script_fn(
-            scope,
-            &mut mods,
-            &mut state,
-            &[lib],
-            this_ptr,
-            fn_def,
-            args,
-            0,
-        )
+        self.call_script_fn(scope, &mut mods, &mut state, lib, this_ptr, fn_def, args, 0)
     }
 
     /// Optimize the `AST` with constants defined in an external Scope.

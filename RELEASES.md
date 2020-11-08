@@ -11,6 +11,7 @@ Bug fixes
 ---------
 
 * Fixes compilation error when using the `internals` feature.  Bug introduced in `0.19.4`.
+* Importing script files recursively no longer panics.
 
 Breaking changes
 ----------------
@@ -22,6 +23,8 @@ Enhancements
 ------------
 
 * Modules imported via `import` statements at global level can now be used in functions. There is no longer any need to re-`import` the modules at the beginning of each function block.
+* `index_of`, `==` and `!=` are defined for arrays.
+* `==` and `!=` are defined for object maps.
 
 
 Version 0.19.4

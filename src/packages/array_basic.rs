@@ -3,7 +3,7 @@
 
 use crate::def_package;
 use crate::dynamic::Dynamic;
-use crate::engine::Array;
+use crate::engine::{Array, OP_EQUALS};
 use crate::fn_native::{FnPtr, NativeCallContext};
 use crate::plugin::*;
 use crate::result::EvalAltResult;
@@ -261,6 +261,39 @@ mod array_functions {
         }
 
         Ok(array.into())
+    }
+    #[rhai_fn(return_raw)]
+    pub fn index_of(
+        ctx: NativeCallContext,
+        list: &mut Array,
+        filter: FnPtr,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        for (i, item) in list.iter().enumerate() {
+            if filter
+                .call_dynamic(ctx, None, [item.clone()])
+                .or_else(|err| match *err {
+                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                        if fn_sig.starts_with(filter.fn_name()) =>
+                    {
+                        filter.call_dynamic(ctx, None, [item.clone(), (i as INT).into()])
+                    }
+                    _ => Err(err),
+                })
+                .map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                        "filter".to_string(),
+                        err,
+                        NO_POS,
+                    ))
+                })?
+                .as_bool()
+                .unwrap_or(false)
+            {
+                return Ok((i as INT).into());
+            }
+        }
+
+        Ok((-1 as INT).into())
     }
     #[rhai_fn(return_raw)]
     pub fn some(
@@ -618,6 +651,41 @@ mod array_functions {
         drained.extend(list.drain(..start));
 
         drained
+    }
+    #[rhai_fn(name = "==", return_raw)]
+    pub fn equals(
+        mut ctx: NativeCallContext,
+        arr1: &mut Array,
+        mut arr2: Array,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        if arr1.len() != arr2.len() {
+            return Ok(false.into());
+        }
+        if arr1.is_empty() {
+            return Ok(true.into());
+        }
+
+        let def_value = Some(false.into());
+
+        for (a1, a2) in arr1.iter_mut().zip(arr2.iter_mut()) {
+            let equals = ctx
+                .call_fn_dynamic_raw(OP_EQUALS, true, false, &mut [a1, a2], def_value.clone())
+                .map(|v| v.as_bool().unwrap_or(false))?;
+
+            if !equals {
+                return Ok(false.into());
+            }
+        }
+
+        Ok(true.into())
+    }
+    #[rhai_fn(name = "!=", return_raw)]
+    pub fn not_equals(
+        ctx: NativeCallContext,
+        arr1: &mut Array,
+        arr2: Array,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        equals(ctx, arr1, arr2).map(|r| (!r.as_bool().unwrap()).into())
     }
 }
 
