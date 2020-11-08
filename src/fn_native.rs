@@ -81,6 +81,31 @@ impl<'e, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized> From<(&'e Engine, &'m M)
 }
 
 impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
+    /// Create a new `NativeCallContext`.
+    #[inline(always)]
+    pub fn new(engine: &'e Engine, lib: &'m impl AsRef<[&'pm Module]>) -> Self {
+        Self {
+            engine,
+            mods: None,
+            lib: lib.as_ref(),
+        }
+    }
+    /// _[INTERNALS]_ Create a new `NativeCallContext`.
+    /// Available under the `internals` feature only.
+    #[cfg(feature = "internals")]
+    #[cfg(not(feature = "no_module"))]
+    #[inline(always)]
+    pub fn new_with_imports(
+        engine: &'e Engine,
+        mods: &'a mut Imports,
+        lib: &'m impl AsRef<[&'pm Module]>,
+    ) -> Self {
+        Self {
+            engine,
+            mods: Some(mods),
+            lib: lib.as_ref(),
+        }
+    }
     /// The current `Engine`.
     #[inline(always)]
     pub fn engine(&self) -> &'e Engine {
