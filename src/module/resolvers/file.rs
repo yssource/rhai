@@ -4,7 +4,9 @@ use crate::module::{Module, ModuleResolver};
 use crate::result::EvalAltResult;
 use crate::token::Position;
 
-use crate::stdlib::{boxed::Box, collections::HashMap, path::PathBuf, string::String};
+use crate::stdlib::{
+    boxed::Box, collections::HashMap, io::Error as IoError, path::PathBuf, string::String,
+};
 
 /// Module resolution service that loads module script files from the file system.
 ///
@@ -135,32 +137,40 @@ impl ModuleResolver for FileModuleResolver {
         let scope = Default::default();
 
         // See if it is cached
-        let mut module = None;
+        let mut module: Option<Shared<Module>> = None;
 
-        let module_ref = {
+        let mut module_ref = {
             #[cfg(not(feature = "sync"))]
             let c = self.cache.borrow();
             #[cfg(feature = "sync")]
             let c = self.cache.read().unwrap();
 
             if let Some(module) = c.get(&file_path) {
-                module.clone()
+                Some(module.clone())
             } else {
-                // Load the file and compile it if not found
-                let ast = engine.compile_file(file_path.clone()).map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
-                })?;
-
-                let mut m = Module::eval_ast_as_new(scope, &ast, engine).map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
-                })?;
-
-                m.build_index();
-
-                let m: Shared<Module> = m.into();
-                module = Some(m.clone());
-                m
+                None
             }
+        };
+
+        if module_ref.is_none() {
+            // Load the script file and compile it
+            let ast = engine
+                .compile_file(file_path.clone())
+                .map_err(|err| match *err {
+                    EvalAltResult::ErrorSystem(_, err) if err.is::<IoError>() => {
+                        Box::new(EvalAltResult::ErrorModuleNotFound(path.to_string(), pos))
+                    }
+                    _ => Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos)),
+                })?;
+
+            let mut m = Module::eval_ast_as_new(scope, &ast, engine).map_err(|err| {
+                Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
+            })?;
+
+            m.build_index();
+
+            module = Some(m.into());
+            module_ref = module.clone();
         };
 
         if let Some(module) = module {
@@ -171,6 +181,6 @@ impl ModuleResolver for FileModuleResolver {
             self.cache.write().unwrap().insert(file_path, module);
         }
 
-        Ok(module_ref)
+        Ok(module_ref.unwrap())
     }
 }
