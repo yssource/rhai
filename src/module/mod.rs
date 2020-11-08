@@ -185,8 +185,11 @@ impl Module {
     /// let mut module = Module::new();
     /// assert!(!module.is_indexed());
     ///
+    /// # #[cfg(not(feature = "no_module"))]
+    /// # {
     /// module.build_index();
     /// assert!(module.is_indexed());
+    /// # }
     /// ```
     pub fn is_indexed(&self) -> bool {
         self.indexed
