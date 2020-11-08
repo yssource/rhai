@@ -14,6 +14,10 @@ When Rhai prepares to load a module, `ModuleResolver::resolve` is called with th
 of the _module path_ (i.e. the path specified in the [`import`] statement).
 
 * Upon success, it should return an [`Rc<Module>`][module] (or `Arc<Module>` under [`sync`]).
+  
+  The module should call `Module::build_index` on the target module before returning.
+  This method flattens the entire module tree and _indexes_ it for fast function name resolution.
+  If the module is already indexed, calling this method has no effect.
 
 * If the path does not resolve to a valid module, return `EvalAltResult::ErrorModuleNotFound`.
 
@@ -40,12 +44,14 @@ impl ModuleResolver for MyModuleResolver {
     ) -> Result<Rc<Module>, Box<EvalAltResult>> {
         // Check module path.
         if is_valid_module_path(path) {
-            load_secret_module(path)    // load the custom module
-                .map(Rc::new)           // share it
-                .map_err(|err|
-                    // Return EvalAltResult::ErrorInModule upon loading error
-                    EvalAltResult::ErrorInModule(err.to_string(), pos).into()
-                )
+            let mut my_module =
+                load_secret_module(path)        // load the custom module
+                    .map_err(|err|
+                        // Return EvalAltResult::ErrorInModule upon loading error
+                        EvalAltResult::ErrorInModule(path.into(), Box::new(err), pos).into()
+                    )?;
+            my_module.build_index();  // index it
+            Rc::new(my_module)                  // make it shared
         } else {
             // Return EvalAltResult::ErrorModuleNotFound if the path is invalid
             Err(EvalAltResult::ErrorModuleNotFound(path.into(), pos).into())

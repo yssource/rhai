@@ -3,7 +3,7 @@
 use crate::ast::{BinaryExpr, Expr, FnCallInfo, Ident, IdentX, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, Dynamic, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
-use crate::fn_native::{Callback, FnPtr, OnVarCallback, Shared};
+use crate::fn_native::{shared_try_take, Callback, FnPtr, OnVarCallback, Shared};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
@@ -2132,7 +2132,15 @@ impl Engine {
                         let module = resolver.resolve(self, &path, expr.position())?;
 
                         if let Some(name_def) = alias {
-                            mods.push(name_def.name.clone(), module);
+                            if !module.is_indexed() {
+                                // Index the module (making a clone copy if necessary) if it is not indexed
+                                let mut module =
+                                    shared_try_take(module).unwrap_or_else(|m| m.as_ref().clone());
+                                module.build_index();
+                                mods.push(name_def.name.clone(), module);
+                            } else {
+                                mods.push(name_def.name.clone(), module);
+                            }
                         }
 
                         state.modules += 1;

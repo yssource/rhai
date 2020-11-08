@@ -155,7 +155,7 @@ impl ModuleResolver for FileModuleResolver {
                     Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
                 })?;
 
-                m.index_all_sub_modules();
+                m.build_index();
 
                 let m: Shared<Module> = m.into();
                 module = Some(m.clone());

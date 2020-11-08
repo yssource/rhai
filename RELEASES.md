@@ -4,6 +4,14 @@ Rhai Release Notes
 Version 0.19.5
 ==============
 
+This version fixes a bug that prevents compilation with the `internals` feature.
+It also speeds up importing modules.
+
+Bug fixes
+---------
+
+* Fixes compilation error when using the `internals` feature.  Bug introduced in `0.19.4`.
+
 Breaking changes
 ----------------
 
