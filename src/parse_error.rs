@@ -138,10 +138,6 @@ pub enum ParseErrorType {
     ///
     /// Never appears under the `no_function` feature.
     FnMissingBody(String),
-    /// An export statement has duplicated names.
-    ///
-    /// Never appears under the `no_module` feature.
-    DuplicatedExport(String),
     /// Export statement not at global level.
     ///
     /// Never appears under the `no_module` feature.
@@ -190,7 +186,6 @@ impl ParseErrorType {
             Self::FnDuplicatedParam(_,_) => "Duplicated parameters in function declaration",
             Self::FnMissingBody(_) => "Expecting body statement block for function declaration",
             Self::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
-            Self::DuplicatedExport(_) => "Duplicated variable/function in export statement",
             Self::WrongExport => "Export statement can only appear at global level",
             Self::AssignmentToConstant(_) => "Cannot assign to a constant value",
             Self::AssignmentToInvalidLHS(_) => "Expression cannot be assigned to",
@@ -231,12 +226,6 @@ impl fmt::Display for ParseErrorType {
             Self::FnDuplicatedParam(s, arg) => {
                 write!(f, "Duplicated parameter '{}' for function '{}'", arg, s)
             }
-
-            Self::DuplicatedExport(s) => write!(
-                f,
-                "Duplicated variable/function '{}' in export statement",
-                s
-            ),
 
             Self::MissingToken(token, s) => write!(f, "Expecting '{}' {}", token, s),
 

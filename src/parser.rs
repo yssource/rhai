@@ -2076,19 +2076,6 @@ fn parse_export(
         }
     }
 
-    // Check for duplicating parameters
-    exports
-        .iter()
-        .enumerate()
-        .try_for_each(|(i, (Ident { name: id1, .. }, _))| {
-            exports
-                .iter()
-                .skip(i + 1)
-                .find(|(Ident { name: id2, .. }, _)| id2 == id1)
-                .map_or_else(|| Ok(()), |(Ident { name: id2, pos }, _)| Err((id2, *pos)))
-        })
-        .map_err(|(id2, pos)| PERR::DuplicatedExport(id2.to_string()).into_err(pos))?;
-
     Ok(Stmt::Export(exports, token_pos))
 }
 

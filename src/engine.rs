@@ -2124,7 +2124,7 @@ impl Engine {
 
                 #[cfg(not(feature = "no_module"))]
                 if let Some(alias) = _alias {
-                    scope.set_entry_alias(scope.len() - 1, alias);
+                    scope.add_entry_alias(scope.len() - 1, alias);
                 }
                 Ok(Default::default())
             }
@@ -2178,7 +2178,7 @@ impl Engine {
                     // Mark scope variables as public
                     if let Some(index) = scope.get_index(name).map(|(i, _)| i) {
                         let alias = rename.as_ref().map(|x| &x.name).unwrap_or_else(|| name);
-                        scope.set_entry_alias(index, alias.clone());
+                        scope.add_entry_alias(index, alias.clone());
                     } else {
                         return EvalAltResult::ErrorVariableNotFound(name.into(), *id_pos).into();
                     }

@@ -46,6 +46,18 @@ export x as answer;     // the variable 'x' is exported under the alias 'answer'
 }
 ```
 
+### Multiple Exports
+
+One `export` statement can export multiple variables, even under multiple names.
+
+```rust
+// The following exports three variables:
+//   - 'x' (as 'x' and 'hello')
+//   - 'y' (as 'foo' and 'bar')
+//   - 'z' (as 'z')
+export x, x as hello, x as world, y as foo, y as bar, z;
+```
+
 
 Export Functions
 ----------------

@@ -1380,10 +1380,14 @@ impl Module {
         // Create new module
         let mut module = Module::new();
 
-        scope.into_iter().for_each(|(_, _, value, alias)| {
+        scope.into_iter().for_each(|(_, _, value, mut aliases)| {
             // Variables with an alias left in the scope become module variables
-            if let Some(alias) = alias {
-                module.variables.insert(alias, value);
+            if aliases.len() > 1 {
+                aliases.into_iter().for_each(|alias| {
+                    module.variables.insert(alias, value.clone());
+                });
+            } else if aliases.len() == 1 {
+                module.variables.insert(aliases.pop().unwrap(), value);
             }
         });
 

@@ -248,7 +248,7 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
             import "another module" as extra;
         
             // Variables defined at global level become module variables
-            const x = 123;
+            export const x = 123;
             let foo = 41;
             let hello;
         
@@ -258,6 +258,7 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
 
             export
                 x as abc,
+                x as xxx,
                 foo,
                 hello;
         "#,
@@ -273,6 +274,14 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(r#"import "testing" as ttt; ttt::abc"#)?,
+        123
+    );
+    assert_eq!(
+        engine.eval::<INT>(r#"import "testing" as ttt; ttt::x"#)?,
+        123
+    );
+    assert_eq!(
+        engine.eval::<INT>(r#"import "testing" as ttt; ttt::xxx"#)?,
         123
     );
     assert_eq!(
