@@ -2092,10 +2092,10 @@ impl Engine {
             }
 
             // Let/const statement
-            Stmt::Let(var_def, expr, _) | Stmt::Const(var_def, expr, _) => {
+            Stmt::Let(var_def, expr, export, _) | Stmt::Const(var_def, expr, export, _) => {
                 let entry_type = match stmt {
-                    Stmt::Let(_, _, _) => ScopeEntryType::Normal,
-                    Stmt::Const(_, _, _) => ScopeEntryType::Constant,
+                    Stmt::Let(_, _, _, _) => ScopeEntryType::Normal,
+                    Stmt::Const(_, _, _, _) => ScopeEntryType::Constant,
                     _ => unreachable!(),
                 };
 
@@ -2105,12 +2105,25 @@ impl Engine {
                 } else {
                     ().into()
                 };
-                let var_name: Cow<'_, str> = if state.is_global() {
-                    var_def.name.clone().into()
+                let (var_name, alias): (Cow<'_, str>, _) = if state.is_global() {
+                    (
+                        var_def.name.clone().into(),
+                        if *export {
+                            Some(var_def.name.to_string())
+                        } else {
+                            None
+                        },
+                    )
+                } else if *export {
+                    unreachable!();
                 } else {
-                    unsafe_cast_var_name_to_lifetime(&var_def.name).into()
+                    (unsafe_cast_var_name_to_lifetime(&var_def.name).into(), None)
                 };
                 scope.push_dynamic_value(var_name, entry_type, val);
+
+                if let Some(alias) = alias {
+                    scope.set_entry_alias(scope.len() - 1, alias);
+                }
                 Ok(Default::default())
             }
 

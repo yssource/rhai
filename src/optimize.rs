@@ -266,9 +266,11 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
             )
         }
         // let id = expr;
-        Stmt::Let(name, Some(expr), pos) => Stmt::Let(name, Some(optimize_expr(expr, state)), pos),
+        Stmt::Let(name, Some(expr), export, pos) => {
+            Stmt::Let(name, Some(optimize_expr(expr, state)), export, pos)
+        }
         // let id;
-        stmt @ Stmt::Let(_, None, _) => stmt,
+        stmt @ Stmt::Let(_, None, _, _) => stmt,
         // import expr as var;
         #[cfg(not(feature = "no_module"))]
         Stmt::Import(expr, alias, pos) => Stmt::Import(optimize_expr(expr, state), alias, pos),
@@ -282,16 +284,12 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                 .into_iter()
                 .map(|stmt| match stmt {
                     // Add constant literals into the state
-                    Stmt::Const(var_def, Some(expr), pos) if expr.is_literal() => {
+                    Stmt::Const(var_def, Some(expr), _, pos) if expr.is_literal() => {
                         state.set_dirty();
                         state.push_constant(&var_def.name, expr);
                         Stmt::Noop(pos) // No need to keep constants
                     }
-                    Stmt::Const(var_def, Some(expr), pos) if expr.is_literal() => {
-                        let expr = optimize_expr(expr, state);
-                        Stmt::Const(var_def, Some(expr), pos)
-                    }
-                    Stmt::Const(var_def, None, pos) => {
+                    Stmt::Const(var_def, None, _, pos) => {
                         state.set_dirty();
                         state.push_constant(&var_def.name, Expr::Unit(var_def.pos));
                         Stmt::Noop(pos) // No need to keep constants
@@ -317,7 +315,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
 
             while let Some(expr) = result.pop() {
                 match expr {
-                    Stmt::Let(_, expr, _) => {
+                    Stmt::Let(_, expr, _, _) => {
                         removed = expr.as_ref().map(Expr::is_pure).unwrap_or(true)
                     }
                     #[cfg(not(feature = "no_module"))]
@@ -375,7 +373,7 @@ fn optimize_stmt(stmt: Stmt, state: &mut State, preserve_result: bool) -> Stmt {
                     Stmt::Noop(pos)
                 }
                 // Only one let statement - leave it alone
-                [x] if matches!(x, Stmt::Let(_, _, _)) => Stmt::Block(result, pos),
+                [x] if matches!(x, Stmt::Let(_, _, _, _)) => Stmt::Block(result, pos),
                 // Only one import statement - leave it alone
                 #[cfg(not(feature = "no_module"))]
                 [x] if matches!(x, Stmt::Import(_, _, _)) => Stmt::Block(result, pos),
@@ -780,7 +778,7 @@ fn optimize(
             .enumerate()
             .map(|(i, stmt)| {
                 match stmt {
-                    Stmt::Const(var_def, Some(expr), pos) => {
+                    Stmt::Const(var_def, Some(expr), export, pos) => {
                         // Load constants
                         let expr = optimize_expr(expr, &mut state);
 
@@ -791,12 +789,12 @@ fn optimize(
                         // Keep it in the global scope
                         if expr.is_unit() {
                             state.set_dirty();
-                            Stmt::Const(var_def, None, pos)
+                            Stmt::Const(var_def, None, export, pos)
                         } else {
-                            Stmt::Const(var_def, Some(expr), pos)
+                            Stmt::Const(var_def, Some(expr), export, pos)
                         }
                     }
-                    Stmt::Const(ref var_def, None, _) => {
+                    Stmt::Const(ref var_def, None, _, _) => {
                         state.push_constant(&var_def.name, Expr::Unit(var_def.pos));
 
                         // Keep it in the global scope
@@ -806,7 +804,7 @@ fn optimize(
                         // Keep all variable declarations at this level
                         // and always keep the last return value
                         let keep = match stmt {
-                            Stmt::Let(_, _, _) => true,
+                            Stmt::Let(_, _, _, _) => true,
                             #[cfg(not(feature = "no_module"))]
                             Stmt::Import(_, _, _) => true,
                             _ => i == num_statements - 1,
