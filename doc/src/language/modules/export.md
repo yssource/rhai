@@ -32,14 +32,17 @@ let x = 42;             // this will be exported below
 
 export x;               // the variable 'x' is exported under its own name
 
+export let x = 42;      // convenient short-hand to declare a variable and export it
+                        // under its own name
+
 export x as answer;     // the variable 'x' is exported under the alias 'answer'
                         // another script can load this module and access 'x' as 'module::answer'
 
 {
     let inner = 0;      // local variable - it disappears when the statement block ends,
-                        //                  therefore it is not 'global' and is not exported
+                        //                  therefore it is not 'global' and cannot be exported
 
-    export inner;       // exporting an temporary variable has no effect
+    export inner;       // <- syntax error: cannot export a local variable
 }
 ```
 

@@ -608,10 +608,10 @@ pub enum Stmt {
     Loop(Box<Stmt>, Position),
     /// for id in expr { stmt }
     For(Expr, Box<(String, Stmt)>, Position),
-    /// let id = expr
-    Let(Box<Ident>, Option<Expr>, Position),
-    /// const id = expr
-    Const(Box<Ident>, Option<Expr>, Position),
+    /// [export] let id = expr
+    Let(Box<Ident>, Option<Expr>, bool, Position),
+    /// [export] const id = expr
+    Const(Box<Ident>, Option<Expr>, bool, Position),
     /// expr op= expr
     Assignment(Box<(Expr, Cow<'static, str>, Expr)>, Position),
     /// { stmt; ... }
@@ -665,10 +665,10 @@ impl Stmt {
             | Self::While(_, _, pos)
             | Self::Loop(_, pos)
             | Self::For(_, _, pos)
-            | Self::ReturnWithVal((_, pos), _, _) => *pos,
-
-            Self::Let(x, _, _) | Self::Const(x, _, _) => x.pos,
-            Self::TryCatch(_, pos, _) => *pos,
+            | Self::ReturnWithVal((_, pos), _, _)
+            | Self::Let(_, _, _, pos)
+            | Self::Const(_, _, _, pos)
+            | Self::TryCatch(_, pos, _) => *pos,
 
             Self::Expr(x) => x.position(),
 
@@ -694,10 +694,10 @@ impl Stmt {
             | Self::While(_, _, pos)
             | Self::Loop(_, pos)
             | Self::For(_, _, pos)
-            | Self::ReturnWithVal((_, pos), _, _) => *pos = new_pos,
-
-            Self::Let(x, _, _) | Self::Const(x, _, _) => x.pos = new_pos,
-            Self::TryCatch(_, pos, _) => *pos = new_pos,
+            | Self::ReturnWithVal((_, pos), _, _)
+            | Self::Let(_, _, _, pos)
+            | Self::Const(_, _, _, pos)
+            | Self::TryCatch(_, pos, _) => *pos = new_pos,
 
             Self::Expr(x) => {
                 x.set_position(new_pos);
@@ -728,8 +728,8 @@ impl Stmt {
             // A No-op requires a semicolon in order to know it is an empty statement!
             Self::Noop(_) => false,
 
-            Self::Let(_, _, _)
-            | Self::Const(_, _, _)
+            Self::Let(_, _, _, _)
+            | Self::Const(_, _, _, _)
             | Self::Assignment(_, _)
             | Self::Expr(_)
             | Self::Continue(_)
@@ -756,7 +756,7 @@ impl Stmt {
             Self::While(condition, block, _) => condition.is_pure() && block.is_pure(),
             Self::Loop(block, _) => block.is_pure(),
             Self::For(iterable, x, _) => iterable.is_pure() && x.1.is_pure(),
-            Self::Let(_, _, _) | Self::Const(_, _, _) | Self::Assignment(_, _) => false,
+            Self::Let(_, _, _, _) | Self::Const(_, _, _, _) | Self::Assignment(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::ReturnWithVal(_, _, _) => false,
             Self::TryCatch(x, _, _) => x.0.is_pure() && x.2.is_pure(),

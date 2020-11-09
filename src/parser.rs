@@ -1918,6 +1918,7 @@ fn parse_let(
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     var_type: ScopeEntryType,
+    export: bool,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // let/const... (specified in `var_type`)
@@ -1938,7 +1939,7 @@ fn parse_let(
     };
 
     // let name = ...
-    let init_value = if match_token(input, Token::Equals).0 {
+    let init_expr = if match_token(input, Token::Equals).0 {
         // let name = expr
         Some(parse_expr(input, state, lib, settings.level_up())?)
     } else {
@@ -1949,20 +1950,14 @@ fn parse_let(
         // let name = expr
         ScopeEntryType::Normal => {
             state.stack.push((name.clone(), ScopeEntryType::Normal));
-            Ok(Stmt::Let(
-                Box::new(Ident::new(name, pos)),
-                init_value,
-                token_pos,
-            ))
+            let ident = Ident::new(name, pos);
+            Ok(Stmt::Let(Box::new(ident), init_expr, export, token_pos))
         }
         // const name = { expr:constant }
         ScopeEntryType::Constant => {
             state.stack.push((name.clone(), ScopeEntryType::Constant));
-            Ok(Stmt::Const(
-                Box::new(Ident::new(name, pos)),
-                init_value,
-                token_pos,
-            ))
+            let ident = Ident::new(name, pos);
+            Ok(Stmt::Const(Box::new(ident), init_expr, export, token_pos))
         }
     }
 }
@@ -2013,15 +2008,31 @@ fn parse_import(
 #[cfg(not(feature = "no_module"))]
 fn parse_export(
     input: &mut TokenStream,
-    _state: &mut ParseState,
-    _lib: &mut FunctionsLib,
+    state: &mut ParseState,
+    lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     let token_pos = eat_token(input, Token::Export);
     settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
-    settings.ensure_level_within_max_limit(_state.max_expr_depth)?;
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    match input.peek().unwrap() {
+        (Token::Let, pos) => {
+            let pos = *pos;
+            let mut stmt = parse_let(input, state, lib, ScopeEntryType::Normal, true, settings)?;
+            stmt.set_position(pos);
+            return Ok(stmt);
+        }
+        (Token::Const, pos) => {
+            let pos = *pos;
+            let mut stmt = parse_let(input, state, lib, ScopeEntryType::Constant, true, settings)?;
+            stmt.set_position(pos);
+            return Ok(stmt);
+        }
+        _ => (),
+    }
 
     let mut exports = Vec::new();
 
@@ -2311,8 +2322,10 @@ fn parse_stmt(
 
         Token::Try => parse_try_catch(input, state, lib, settings.level_up()).map(Some),
 
-        Token::Let => parse_let(input, state, lib, Normal, settings.level_up()).map(Some),
-        Token::Const => parse_let(input, state, lib, Constant, settings.level_up()).map(Some),
+        Token::Let => parse_let(input, state, lib, Normal, false, settings.level_up()).map(Some),
+        Token::Const => {
+            parse_let(input, state, lib, Constant, false, settings.level_up()).map(Some)
+        }
 
         #[cfg(not(feature = "no_module"))]
         Token::Import => parse_import(input, state, lib, settings.level_up()).map(Some),
