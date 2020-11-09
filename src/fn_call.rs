@@ -391,6 +391,11 @@ impl Engine {
             lib
         };
 
+        #[cfg(not(feature = "no_module"))]
+        if !fn_def.mods.is_empty() {
+            mods.extend(fn_def.mods.iter_raw());
+        }
+
         // Evaluate the function at one higher level of call depth
         let stmt = &fn_def.body;
 
@@ -541,10 +546,10 @@ impl Engine {
                     // Move captured variables into scope
                     #[cfg(not(feature = "no_closure"))]
                     if let Some(captured) = _capture_scope {
-                        if let Some(ref externals) = func.externals {
+                        if !func.externals.is_empty() {
                             captured
                                 .into_iter()
-                                .filter(|(name, _, _, _)| externals.contains(name.as_ref()))
+                                .filter(|(name, _, _, _)| func.externals.contains(name.as_ref()))
                                 .for_each(|(name, typ, value, _)| {
                                     // Consume the scope values.
                                     match typ {

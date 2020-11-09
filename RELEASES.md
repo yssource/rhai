@@ -18,12 +18,14 @@ Breaking changes
 
 * Modules imported at global level can now be accessed in functions.
 * `ModuleResolver::resolve` now returns `Shared<Module>` for better resources sharing when loading modules.
+* `ParseErrorType::DuplicatedExport` is removed as multiple `export`'s are now allowed.
 
 Enhancements
 ------------
 
 * Modules imported via `import` statements at global level can now be used in functions. There is no longer any need to re-`import` the modules at the beginning of each function block.
-* `export` keyword can now be tagged onto `let` and `const` statements as a short-hand.
+* Modules imported via `import` statements are encapsulated into the `AST` when loading a module from a script file.
+* `export` keyword can now be tagged onto `let` and `const` statements as a short-hand, e.g.: `export let x = 42;`
 * Variables can now be `export`-ed multiple times under different names.
 * `index_of`, `==` and `!=` are defined for arrays.
 * `==` and `!=` are defined for object maps.

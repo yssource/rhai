@@ -29,6 +29,9 @@ Loads a script file (based off the current directory) with `.rhai` extension.
 All functions in the _global_ namespace, plus all those defined in the same module,
 are _merged_ into a _unified_ namespace.
 
+All modules imported at _global_ level via [`import`] statements become sub-modules,
+which are also available to functions defined within the same script file.
+
 Modules are also _cached_ so a script file is only evaluated _once_, even when repeatedly imported.
 
 ```rust

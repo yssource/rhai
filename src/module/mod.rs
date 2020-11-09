@@ -1392,7 +1392,7 @@ impl Module {
         });
 
         // Modules left in the scope become sub-modules
-        mods.into_iter().for_each(|(alias, m)| {
+        mods.iter().for_each(|(alias, m)| {
             module.modules.insert(alias.to_string(), m.as_ref().clone());
         });
 
@@ -1407,6 +1407,7 @@ impl Module {
                     // Encapsulate AST environment
                     let mut func = func.as_ref().clone();
                     func.lib = Some(ast_lib.clone());
+                    func.mods = mods.clone();
                     module.set_script_fn(func.into());
                 });
         }

@@ -75,7 +75,7 @@ pub type Map = HashMap<ImmutableString, Dynamic>;
 // We cannot use &str or Cow<str> here because `eval` may load a module and the module name will live beyond
 // the AST of the eval script text. The best we can do is a shared reference.
 #[derive(Debug, Clone, Default)]
-pub struct Imports(StaticVec<(Shared<Module>, ImmutableString)>);
+pub struct Imports(StaticVec<(ImmutableString, Shared<Module>)>);
 
 impl Imports {
     /// Get the length of this stack of imported modules.
@@ -88,7 +88,7 @@ impl Imports {
     }
     /// Get the imported module at a particular index.
     pub fn get(&self, index: usize) -> Option<Shared<Module>> {
-        self.0.get(index).map(|(m, _)| m).cloned()
+        self.0.get(index).map(|(_, m)| m).cloned()
     }
     /// Get the index of an imported module by name.
     pub fn find(&self, name: &str) -> Option<usize> {
@@ -96,12 +96,12 @@ impl Imports {
             .iter()
             .enumerate()
             .rev()
-            .find(|(_, (_, key))| key.as_str() == name)
+            .find(|(_, (key, _))| key.as_str() == name)
             .map(|(index, _)| index)
     }
     /// Push an imported module onto the stack.
     pub fn push(&mut self, name: impl Into<ImmutableString>, module: impl Into<Shared<Module>>) {
-        self.0.push((module.into(), name.into()));
+        self.0.push((name.into(), module.into()));
     }
     /// Truncate the stack of imported modules to a particular length.
     pub fn truncate(&mut self, size: usize) {
@@ -112,11 +112,22 @@ impl Imports {
     pub fn iter(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
         self.0
             .iter()
-            .map(|(module, name)| (name.as_str(), module.clone()))
+            .map(|(name, module)| (name.as_str(), module.clone()))
+    }
+    /// Get an iterator to this stack of imported modules.
+    #[allow(dead_code)]
+    pub(crate) fn iter_raw<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> + 'a {
+        self.0.iter().cloned()
     }
     /// Get a consuming iterator to this stack of imported modules.
     pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
-        self.0.into_iter().map(|(module, name)| (name, module))
+        self.0.into_iter()
+    }
+    /// Add a stream of imported modules.
+    pub fn extend(&mut self, stream: impl Iterator<Item = (ImmutableString, Shared<Module>)>) {
+        self.0.extend(stream)
     }
 }
 
