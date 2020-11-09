@@ -24,6 +24,7 @@ Enhancements
 
 * Modules imported via `import` statements at global level can now be used in functions. There is no longer any need to re-`import` the modules at the beginning of each function block.
 * `export` keyword can now be tagged onto `let` and `const` statements as a short-hand.
+* Variables can now be `export`-ed multiple times under different names.
 * `index_of`, `==` and `!=` are defined for arrays.
 * `==` and `!=` are defined for object maps.
 

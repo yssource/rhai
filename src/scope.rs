@@ -1,6 +1,7 @@
 //! Module that defines the `Scope` type representing a function call-stack scope.
 
 use crate::dynamic::{Dynamic, Variant};
+use crate::StaticVec;
 
 use crate::stdlib::{borrow::Cow, boxed::Box, iter, string::String, vec::Vec};
 
@@ -70,8 +71,8 @@ pub struct Scope<'a> {
     values: Vec<Dynamic>,
     /// Type of the entry.
     types: Vec<EntryType>,
-    /// (Name, alias) of the entry. The alias is Boxed because it occurs rarely.
-    names: Vec<(Cow<'a, str>, Option<Box<String>>)>,
+    /// (Name, aliases) of the entry. The list of aliases is Boxed because it occurs rarely.
+    names: Vec<(Cow<'a, str>, Box<StaticVec<String>>)>,
 }
 
 impl<'a> Scope<'a> {
@@ -248,7 +249,7 @@ impl<'a> Scope<'a> {
         entry_type: EntryType,
         value: Dynamic,
     ) -> &mut Self {
-        self.names.push((name.into(), None));
+        self.names.push((name.into(), Box::new(Default::default())));
         self.types.push(entry_type);
         self.values.push(value.into());
         self
@@ -387,9 +388,11 @@ impl<'a> Scope<'a> {
     /// Update the access type of an entry in the Scope.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    pub(crate) fn set_entry_alias(&mut self, index: usize, alias: String) -> &mut Self {
+    pub(crate) fn add_entry_alias(&mut self, index: usize, alias: String) -> &mut Self {
         let entry = self.names.get_mut(index).expect("invalid index in Scope");
-        entry.1 = Some(Box::new(alias));
+        if !entry.1.contains(&alias) {
+            entry.1.push(alias);
+        }
         self
     }
     /// Clone the Scope, keeping only the last instances of each variable name.
@@ -416,11 +419,11 @@ impl<'a> Scope<'a> {
     #[inline(always)]
     pub(crate) fn into_iter(
         self,
-    ) -> impl Iterator<Item = (Cow<'a, str>, EntryType, Dynamic, Option<String>)> {
+    ) -> impl Iterator<Item = (Cow<'a, str>, EntryType, Dynamic, Vec<String>)> {
         self.names
             .into_iter()
             .zip(self.types.into_iter().zip(self.values.into_iter()))
-            .map(|((name, alias), (typ, value))| (name, typ, value, alias.map(|v| *v)))
+            .map(|((name, alias), (typ, value))| (name, typ, value, alias.to_vec()))
     }
     /// Get an iterator to entries in the Scope.
     /// Shared values are flatten-cloned.
@@ -467,7 +470,7 @@ impl<'a, K: Into<Cow<'a, str>>> iter::Extend<(K, EntryType, Dynamic)> for Scope<
     #[inline(always)]
     fn extend<T: IntoIterator<Item = (K, EntryType, Dynamic)>>(&mut self, iter: T) {
         iter.into_iter().for_each(|(name, typ, value)| {
-            self.names.push((name.into(), None));
+            self.names.push((name.into(), Box::new(Default::default())));
             self.types.push(typ);
             self.values.push(value);
         });
