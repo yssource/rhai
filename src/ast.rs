@@ -18,6 +18,9 @@ use crate::engine::Array;
 #[cfg(not(feature = "no_object"))]
 use crate::engine::{make_getter, make_setter, Map};
 
+#[cfg(not(feature = "no_module"))]
+use crate::engine::Imports;
+
 use crate::stdlib::{
     any::TypeId,
     borrow::Cow,
@@ -87,15 +90,18 @@ pub struct ScriptFnDef {
     pub body: Stmt,
     /// Encapsulated running environment, if any.
     pub lib: Option<Shared<Module>>,
+    /// Encapsulated imported modules.
+    #[cfg(not(feature = "no_module"))]
+    pub mods: Imports,
     /// Function name.
     pub name: ImmutableString,
     /// Function access mode.
     pub access: FnAccess,
     /// Names of function parameters.
     pub params: StaticVec<String>,
-    /// Access to external variables. Boxed because it occurs rarely.
+    /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
-    pub externals: Option<Box<HashSet<String>>>,
+    pub externals: HashSet<String>,
 }
 
 impl fmt::Display for ScriptFnDef {

@@ -869,6 +869,8 @@ pub fn optimize_into_ast(
                         #[cfg(not(feature = "no_closure"))]
                         externals: fn_def.externals.clone(),
                         lib: None,
+                        #[cfg(not(feature = "no_module"))]
+                        mods: Default::default(),
                     }
                     .into()
                 })

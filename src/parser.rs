@@ -2485,13 +2485,11 @@ fn parse_fn(
         access,
         params,
         #[cfg(not(feature = "no_closure"))]
-        externals: if externals.is_empty() {
-            None
-        } else {
-            Some(Box::new(externals))
-        },
+        externals,
         body,
         lib: None,
+        #[cfg(not(feature = "no_module"))]
+        mods: Default::default(),
     })
 }
 
@@ -2661,6 +2659,8 @@ fn parse_anon_fn(
         externals: Default::default(),
         body,
         lib: None,
+        #[cfg(not(feature = "no_module"))]
+        mods: Default::default(),
     };
 
     let expr = Expr::FnPointer(Box::new(IdentX::new(fn_name, settings.pos)));
