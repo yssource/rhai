@@ -3,7 +3,7 @@
 use crate::ast::{BinaryExpr, Expr, FnCallInfo, Ident, IdentX, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, Dynamic, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
-use crate::fn_native::{shared_try_take, Callback, FnPtr, OnVarCallback, Shared};
+use crate::fn_native::{Callback, FnPtr, OnVarCallback, Shared};
 use crate::module::{Module, ModuleRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
@@ -18,10 +18,11 @@ use crate::{calc_native_fn_hash, StaticVec};
 use crate::INT;
 
 #[cfg(not(feature = "no_module"))]
-use crate::module::ModuleResolver;
+use crate::{fn_native::shared_try_take, module::ModuleResolver};
 
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(feature = "no_module"))]
+#[cfg(not(target_arch = "wasm32"))]
 use crate::module::resolvers;
 
 #[cfg(any(not(feature = "no_object"), not(feature = "no_module")))]
@@ -2105,7 +2106,7 @@ impl Engine {
                 } else {
                     ().into()
                 };
-                let (var_name, alias): (Cow<'_, str>, _) = if state.is_global() {
+                let (var_name, _alias): (Cow<'_, str>, _) = if state.is_global() {
                     (
                         var_def.name.clone().into(),
                         if *export {
@@ -2121,7 +2122,8 @@ impl Engine {
                 };
                 scope.push_dynamic_value(var_name, entry_type, val);
 
-                if let Some(alias) = alias {
+                #[cfg(not(feature = "no_module"))]
+                if let Some(alias) = _alias {
                     scope.set_entry_alias(scope.len() - 1, alias);
                 }
                 Ok(Default::default())
