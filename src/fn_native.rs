@@ -176,6 +176,7 @@ impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
 
 /// Consume a `Shared` resource and return a mutable reference to the wrapped value.
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
+#[inline(always)]
 pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
     #[cfg(not(feature = "sync"))]
     return Rc::make_mut(value);
@@ -183,7 +184,14 @@ pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
     return Arc::make_mut(value);
 }
 
+/// Consume a `Shared` resource if is unique (i.e. not shared), or clone it otherwise.
+#[inline(always)]
+pub fn shared_take_or_clone<T: Clone>(value: Shared<T>) -> T {
+    shared_try_take(value).unwrap_or_else(|v| v.as_ref().clone())
+}
+
 /// Consume a `Shared` resource if is unique (i.e. not shared).
+#[inline(always)]
 pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
     #[cfg(not(feature = "sync"))]
     return Rc::try_unwrap(value);
@@ -196,6 +204,7 @@ pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
 /// # Panics
 ///
 /// Panics if the resource is shared (i.e. has other outstanding references).
+#[inline(always)]
 pub fn shared_take<T>(value: Shared<T>) -> T {
     shared_try_take(value).map_err(|_| ()).unwrap()
 }

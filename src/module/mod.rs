@@ -2,7 +2,10 @@
 
 use crate::ast::{FnAccess, Ident};
 use crate::dynamic::{Dynamic, Variant};
-use crate::fn_native::{CallableFunction, FnCallArgs, IteratorFn, NativeCallContext, SendSync};
+use crate::fn_native::{
+    shared_make_mut, shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn,
+    NativeCallContext, SendSync, Shared,
+};
 use crate::fn_register::by_value as cast_arg;
 use crate::result::EvalAltResult;
 use crate::token::{Token, NO_POS};
@@ -10,7 +13,7 @@ use crate::utils::{ImmutableString, StraightHasherBuilder};
 use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_function"))]
-use crate::{ast::ScriptFnDef, fn_native::Shared};
+use crate::ast::ScriptFnDef;
 
 #[cfg(not(feature = "no_module"))]
 use crate::{ast::AST, engine::Engine, scope::Scope};
@@ -56,10 +59,10 @@ pub struct FuncInfo {
 /// external Rust functions, and script-defined functions.
 ///
 /// Not available under the `no_module` feature.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Module {
     /// Sub-modules.
-    modules: HashMap<String, Module>,
+    modules: HashMap<String, Shared<Module>>,
     /// Module variables.
     variables: HashMap<String, Dynamic>,
     /// Flattened collection of all module variables, including those in sub-modules.
@@ -96,19 +99,6 @@ impl fmt::Debug for Module {
                 .collect::<Vec<_>>()
                 .join(", "),
         )
-    }
-}
-
-impl Clone for Module {
-    #[inline(always)]
-    fn clone(&self) -> Self {
-        // Only clone the index at the top level
-        Self {
-            all_variables: self.all_variables.clone(),
-            all_functions: self.all_functions.clone(),
-            indexed: self.indexed,
-            ..self.do_clone(false)
-        }
     }
 }
 
@@ -193,25 +183,6 @@ impl Module {
     /// ```
     pub fn is_indexed(&self) -> bool {
         self.indexed
-    }
-
-    /// Clone the module, optionally skipping the index.
-    #[inline(always)]
-    fn do_clone(&self, clone_index: bool) -> Self {
-        Self {
-            modules: if clone_index {
-                self.modules.clone()
-            } else {
-                self.modules
-                    .iter()
-                    .map(|(k, m)| (k.clone(), m.do_clone(clone_index)))
-                    .collect()
-            },
-            variables: self.variables.clone(),
-            functions: self.functions.clone(),
-            type_iterators: self.type_iterators.clone(),
-            ..Default::default()
-        }
     }
 
     /// Does a variable exist in the module?
@@ -377,7 +348,7 @@ impl Module {
     /// ```
     #[inline(always)]
     pub fn get_sub_module(&self, name: &str) -> Option<&Module> {
-        self.modules.get(name)
+        self.modules.get(name).map(|m| m.as_ref())
     }
 
     /// Get a mutable reference to a sub-module.
@@ -394,7 +365,7 @@ impl Module {
     /// ```
     #[inline(always)]
     pub fn get_sub_module_mut(&mut self, name: &str) -> Option<&mut Module> {
-        self.modules.get_mut(name)
+        self.modules.get_mut(name).map(shared_make_mut)
     }
 
     /// Set a sub-module into the module.
@@ -412,7 +383,11 @@ impl Module {
     /// assert!(module.get_sub_module("question").is_some());
     /// ```
     #[inline(always)]
-    pub fn set_sub_module(&mut self, name: impl Into<String>, sub_module: Module) -> &mut Self {
+    pub fn set_sub_module(
+        &mut self,
+        name: impl Into<String>,
+        sub_module: impl Into<Shared<Module>>,
+    ) -> &mut Self {
         self.modules.insert(name.into(), sub_module.into());
         self.indexed = false;
         self
@@ -1160,7 +1135,7 @@ impl Module {
     #[inline]
     pub fn combine_flatten(&mut self, other: Self) -> &mut Self {
         other.modules.into_iter().for_each(|(_, m)| {
-            self.combine_flatten(m);
+            self.combine_flatten(shared_take_or_clone(m));
         });
         self.variables.extend(other.variables.into_iter());
         self.functions.extend(other.functions.into_iter());
@@ -1213,7 +1188,7 @@ impl Module {
         other.modules.iter().for_each(|(k, v)| {
             let mut m = Self::new();
             m.merge_filtered(v, _filter);
-            self.modules.insert(k.clone(), m);
+            self.set_sub_module(k, m);
         });
         #[cfg(feature = "no_function")]
         self.modules
@@ -1266,8 +1241,8 @@ impl Module {
     pub fn count(&self) -> (usize, usize, usize) {
         (
             self.variables.len(),
-            self.variables.len(),
-            self.variables.len(),
+            self.functions.len(),
+            self.type_iterators.len(),
         )
     }
 
@@ -1393,7 +1368,7 @@ impl Module {
 
         // Modules left in the scope become sub-modules
         mods.iter().for_each(|(alias, m)| {
-            module.modules.insert(alias.to_string(), m.as_ref().clone());
+            module.set_sub_module(alias, m);
         });
 
         // Non-private functions defined become module functions

@@ -18,7 +18,7 @@ use crate::{calc_native_fn_hash, StaticVec};
 use crate::INT;
 
 #[cfg(not(feature = "no_module"))]
-use crate::{fn_native::shared_try_take, module::ModuleResolver};
+use crate::{fn_native::shared_take_or_clone, module::ModuleResolver};
 
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(feature = "no_module"))]
@@ -2159,8 +2159,7 @@ impl Engine {
                         if let Some(name_def) = alias {
                             if !module.is_indexed() {
                                 // Index the module (making a clone copy if necessary) if it is not indexed
-                                let mut module =
-                                    shared_try_take(module).unwrap_or_else(|m| m.as_ref().clone());
+                                let mut module = shared_take_or_clone(module);
                                 module.build_index();
                                 mods.push(name_def.name.clone(), module);
                             } else {
