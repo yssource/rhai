@@ -8,7 +8,7 @@ use crate::engine::{
     KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::fn_native::{FnCallArgs, FnPtr};
-use crate::module::{Module, ModuleRef};
+use crate::module::{Module, NamespaceRef};
 use crate::optimize::OptimizationLevel;
 use crate::parse_error::ParseErrorType;
 use crate::result::EvalAltResult;
@@ -432,13 +432,13 @@ impl Engine {
     pub(crate) fn has_override_by_name_and_arguments(
         &self,
         lib: &[&Module],
-        name: &str,
+        fn_name: &str,
         arg_types: impl AsRef<[TypeId]>,
         pub_only: bool,
     ) -> bool {
         let arg_types = arg_types.as_ref();
-        let hash_fn = calc_native_fn_hash(empty(), name, arg_types.iter().cloned());
-        let hash_script = calc_script_fn_hash(empty(), name, arg_types.len());
+        let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_types.iter().cloned());
+        let hash_script = calc_script_fn_hash(empty(), fn_name, arg_types.len());
 
         self.has_override(lib, hash_fn, hash_script, pub_only)
     }
@@ -694,7 +694,7 @@ impl Engine {
         mods: &mut Imports,
         state: &mut State,
         lib: &[&Module],
-        name: &str,
+        fn_name: &str,
         hash_script: u64,
         target: &mut Target,
         mut call_args: StaticVec<Dynamic>,
@@ -707,9 +707,9 @@ impl Engine {
 
         // Get a reference to the mutation target Dynamic
         let obj = target.as_mut();
-        let mut _fn_name = name;
+        let mut fn_name = fn_name;
 
-        let (result, updated) = if _fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
+        let (result, updated) = if fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
             // FnPtr call
             let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
             // Redirect function name
@@ -733,7 +733,7 @@ impl Engine {
             self.exec_fn_call(
                 mods, state, lib, fn_name, hash, args, false, false, pub_only, None, def_val, level,
             )
-        } else if _fn_name == KEYWORD_FN_PTR_CALL
+        } else if fn_name == KEYWORD_FN_PTR_CALL
             && call_args.len() > 0
             && call_args[0].is::<FnPtr>()
         {
@@ -760,7 +760,7 @@ impl Engine {
             self.exec_fn_call(
                 mods, state, lib, fn_name, hash, args, is_ref, true, pub_only, None, def_val, level,
             )
-        } else if _fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
+        } else if fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
             // Curry call
             let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
             Ok((
@@ -779,7 +779,7 @@ impl Engine {
         } else if {
             #[cfg(not(feature = "no_closure"))]
             {
-                _fn_name == KEYWORD_IS_SHARED && call_args.is_empty()
+                fn_name == KEYWORD_IS_SHARED && call_args.is_empty()
             }
             #[cfg(feature = "no_closure")]
             false
@@ -793,11 +793,11 @@ impl Engine {
             // Check if it is a map method call in OOP style
             #[cfg(not(feature = "no_object"))]
             if let Some(map) = obj.read_lock::<Map>() {
-                if let Some(val) = map.get(_fn_name) {
+                if let Some(val) = map.get(fn_name) {
                     if let Some(fn_ptr) = val.read_lock::<FnPtr>() {
                         // Remap the function name
                         _redirected = fn_ptr.get_fn_name().clone();
-                        _fn_name = &_redirected;
+                        fn_name = &_redirected;
                         // Add curried arguments
                         fn_ptr
                             .curry()
@@ -809,7 +809,7 @@ impl Engine {
                         hash = if native {
                             0
                         } else {
-                            calc_script_fn_hash(empty(), _fn_name, call_args.len())
+                            calc_script_fn_hash(empty(), fn_name, call_args.len())
                         };
                     }
                 }
@@ -826,8 +826,7 @@ impl Engine {
             let args = arg_values.as_mut();
 
             self.exec_fn_call(
-                mods, state, lib, _fn_name, hash, args, is_ref, true, pub_only, None, def_val,
-                level,
+                mods, state, lib, fn_name, hash, args, is_ref, true, pub_only, None, def_val, level,
             )
         }?;
 
@@ -848,7 +847,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        name: &str,
+        fn_name: &str,
         args_expr: impl AsRef<[Expr]>,
         def_val: Option<Dynamic>,
         mut hash_script: u64,
@@ -860,8 +859,9 @@ impl Engine {
         let args_expr = args_expr.as_ref();
 
         // Handle Fn()
-        if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
-            let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
+        if fn_name == KEYWORD_FN_PTR && args_expr.len() == 1 {
+            let hash_fn =
+                calc_native_fn_hash(empty(), fn_name, once(TypeId::of::<ImmutableString>()));
 
             if !self.has_override(lib, hash_fn, hash_script, pub_only) {
                 // Fn - only in function call style
@@ -878,7 +878,7 @@ impl Engine {
         }
 
         // Handle curry()
-        if name == KEYWORD_FN_PTR_CURRY && args_expr.len() > 1 {
+        if fn_name == KEYWORD_FN_PTR_CURRY && args_expr.len() > 1 {
             let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
             if !fn_ptr.is::<FnPtr>() {
@@ -905,7 +905,7 @@ impl Engine {
 
         // Handle is_shared()
         #[cfg(not(feature = "no_closure"))]
-        if name == KEYWORD_IS_SHARED && args_expr.len() == 1 {
+        if fn_name == KEYWORD_IS_SHARED && args_expr.len() == 1 {
             let value = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
             return Ok(value.is_shared().into());
@@ -915,7 +915,7 @@ impl Engine {
         let redirected;
         let mut args_expr = args_expr.as_ref();
         let mut curry = StaticVec::new();
-        let mut name = name;
+        let mut name = fn_name;
 
         if name == KEYWORD_FN_PTR_CALL
             && args_expr.len() >= 1
@@ -1078,7 +1078,7 @@ impl Engine {
         .map(|(v, _)| v)
     }
 
-    /// Call a module-qualified function in normal function-call style.
+    /// Call a namespace-qualified function in normal function-call style.
     /// Position in `EvalAltResult` is `None` and must be set afterwards.
     pub(crate) fn make_qualified_function_call(
         &self,
@@ -1087,8 +1087,8 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        modules: Option<&ModuleRef>,
-        name: &str,
+        namespace: Option<&NamespaceRef>,
+        fn_name: &str,
         args_expr: impl AsRef<[Expr]>,
         def_val: Option<bool>,
         hash_script: u64,
@@ -1096,7 +1096,7 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let args_expr = args_expr.as_ref();
 
-        let modules = modules.as_ref().unwrap();
+        let namespace = namespace.as_ref().unwrap();
         let mut arg_values: StaticVec<_>;
         let mut first_arg_value = None;
         let mut args: StaticVec<_>;
@@ -1105,7 +1105,7 @@ impl Engine {
             // No arguments
             args = Default::default();
         } else {
-            // See if the first argument is a variable (not module-qualified).
+            // See if the first argument is a variable (not namespace-qualified).
             // If so, convert to method-call style in order to leverage potential
             // &mut first argument and avoid cloning the value
             if args_expr[0].get_variable_access(true).is_some() {
@@ -1151,7 +1151,7 @@ impl Engine {
             }
         }
 
-        let module = search_imports(mods, state, modules)?;
+        let module = search_imports(mods, state, namespace)?;
 
         // First search in script-defined functions (can override built-in)
         let func = match module.get_qualified_fn(hash_script) {
@@ -1159,7 +1159,7 @@ impl Engine {
             None => {
                 self.inc_operations(state)?;
 
-                // Qualified Rust functions are indexed in two steps:
+                // Namespace-qualified Rust functions are indexed in two steps:
                 // 1) Calculate a hash in a similar manner to script-defined functions,
                 //    i.e. qualifiers + function name + number of arguments.
                 // 2) Calculate a second hash with no qualifiers, empty function name,
@@ -1210,8 +1210,8 @@ impl Engine {
             None => EvalAltResult::ErrorFunctionNotFound(
                 format!(
                     "{}{} ({})",
-                    modules,
-                    name,
+                    namespace,
+                    fn_name,
                     args.iter()
                         .map(|a| if a.is::<ImmutableString>() {
                             "&str | ImmutableString | String"

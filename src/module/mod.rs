@@ -55,8 +55,8 @@ pub struct FuncInfo {
     pub types: Option<StaticVec<TypeId>>,
 }
 
-/// An imported module, which may contain variables, sub-modules,
-/// external Rust functions, and script-defined functions.
+/// A module which may contain variables, sub-modules, external Rust functions,
+/// and/or script-defined functions.
 ///
 /// Not available under the `no_module` feature.
 #[derive(Default, Clone)]
@@ -253,7 +253,7 @@ impl Module {
         self
     }
 
-    /// Get a reference to a modules-qualified variable.
+    /// Get a reference to a namespace-qualified variable.
     /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
     /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash`.
@@ -1105,7 +1105,7 @@ impl Module {
         }
     }
 
-    /// Get a modules-qualified function.
+    /// Get a namespace-qualified function.
     /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
     /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash` and must match
@@ -1435,7 +1435,7 @@ impl Module {
                         if let Some(param_types) = types {
                             assert_eq!(*params, param_types.len());
 
-                            // Qualified Rust functions are indexed in two steps:
+                            // Namespace-qualified Rust functions are indexed in two steps:
                             // 1) Calculate a hash in a similar manner to script-defined functions,
                             //    i.e. qualifiers + function name + number of arguments.
                             let hash_qualified_script =
@@ -1516,21 +1516,21 @@ impl Module {
     }
 }
 
-/// _[INTERNALS]_ A chain of module names to qualify a variable or function call.
+/// _[INTERNALS]_ A chain of module names to namespace-qualify a variable or function call.
 /// Exported under the `internals` feature only.
 ///
 /// A `u64` hash key is cached for quick search purposes.
 ///
-/// A `StaticVec` is used because most module-level access contains only one level,
+/// A `StaticVec` is used because most namespace-qualified access contains only one level,
 /// and it is wasteful to always allocate a `Vec` with one element.
 ///
 /// ## WARNING
 ///
 /// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
-pub struct ModuleRef(StaticVec<Ident>, Option<NonZeroUsize>);
+pub struct NamespaceRef(StaticVec<Ident>, Option<NonZeroUsize>);
 
-impl fmt::Debug for ModuleRef {
+impl fmt::Debug for NamespaceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)?;
 
@@ -1542,7 +1542,7 @@ impl fmt::Debug for ModuleRef {
     }
 }
 
-impl Deref for ModuleRef {
+impl Deref for NamespaceRef {
     type Target = StaticVec<Ident>;
 
     fn deref(&self) -> &Self::Target {
@@ -1550,13 +1550,13 @@ impl Deref for ModuleRef {
     }
 }
 
-impl DerefMut for ModuleRef {
+impl DerefMut for NamespaceRef {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl fmt::Display for ModuleRef {
+impl fmt::Display for NamespaceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for Ident { name, .. } in self.0.iter() {
             write!(f, "{}{}", name, Token::DoubleColon.syntax())?;
@@ -1565,7 +1565,7 @@ impl fmt::Display for ModuleRef {
     }
 }
 
-impl From<StaticVec<Ident>> for ModuleRef {
+impl From<StaticVec<Ident>> for NamespaceRef {
     fn from(modules: StaticVec<Ident>) -> Self {
         Self(modules, None)
     }
@@ -1596,7 +1596,7 @@ impl<M: Into<Module>> AddAssign<M> for Module {
     }
 }
 
-impl ModuleRef {
+impl NamespaceRef {
     pub(crate) fn index(&self) -> Option<NonZeroUsize> {
         self.1
     }

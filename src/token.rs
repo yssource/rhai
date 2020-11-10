@@ -1735,7 +1735,7 @@ impl Engine {
             engine: self,
             state: TokenizeState {
                 #[cfg(not(feature = "unchecked"))]
-                max_string_size: self.limits_set.max_string_size,
+                max_string_size: self.limits.max_string_size,
                 #[cfg(feature = "unchecked")]
                 max_string_size: 0,
                 non_unary: false,

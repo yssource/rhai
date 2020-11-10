@@ -1,6 +1,6 @@
 //! Module implementing the AST optimizer.
 
-use crate::ast::{BinaryExpr, CustomExpr, Expr, FnCallInfo, ScriptFnDef, Stmt, AST};
+use crate::ast::{BinaryExpr, CustomExpr, Expr, FnCallExpr, ScriptFnDef, Stmt, AST};
 use crate::dynamic::Dynamic;
 use crate::engine::{
     Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT,
@@ -644,7 +644,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
                 && !is_valid_identifier(x.name.chars()) // cannot be scripted
         => {
-            let FnCallInfo { name, args, .. } = x.as_mut();
+            let FnCallExpr { name, args, .. } = x.as_mut();
 
             let arg_values: StaticVec<_> = args.iter().map(|e| e.get_constant_value().unwrap()).collect();
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
@@ -670,7 +670,7 @@ fn optimize_expr(expr: Expr, state: &mut State) -> Expr {
                 && state.optimization_level == OptimizationLevel::Full // full optimizations
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
         => {
-            let FnCallInfo { name, args, def_value, .. } = x.as_mut();
+            let FnCallExpr { name, args, def_value, .. } = x.as_mut();
 
             // First search for script-defined functions (can override built-in)
             #[cfg(not(feature = "no_function"))]

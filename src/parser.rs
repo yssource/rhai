@@ -1,11 +1,11 @@
 //! Main module defining the lexer and parser.
 
 use crate::ast::{
-    BinaryExpr, CustomExpr, Expr, FnCallInfo, Ident, IdentX, ReturnType, ScriptFnDef, Stmt, AST,
+    BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, ScriptFnDef, Stmt, AST,
 };
 use crate::dynamic::{Dynamic, Union};
 use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
-use crate::module::ModuleRef;
+use crate::module::NamespaceRef;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::parse_error::{LexError, ParseError, ParseErrorType};
 use crate::scope::{EntryType as ScopeEntryType, Scope};
@@ -270,7 +270,7 @@ fn parse_fn_call(
     lib: &mut FunctionsLib,
     id: String,
     capture: bool,
-    mut namespace: Option<Box<ModuleRef>>,
+    mut namespace: Option<Box<NamespaceRef>>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
     let (token, token_pos) = input.peek().unwrap();
@@ -313,7 +313,7 @@ fn parse_fn_call(
             };
 
             return Ok(Expr::FnCall(
-                Box::new(FnCallInfo {
+                Box::new(FnCallExpr {
                     name: id.into(),
                     capture,
                     namespace,
@@ -360,7 +360,7 @@ fn parse_fn_call(
                 };
 
                 return Ok(Expr::FnCall(
-                    Box::new(FnCallInfo {
+                    Box::new(FnCallExpr {
                         name: id.into(),
                         capture,
                         namespace,
@@ -907,7 +907,7 @@ fn parse_primary(
                     if let Some(ref mut modules) = modules {
                         modules.push(var_name_def);
                     } else {
-                        let mut m: ModuleRef = Default::default();
+                        let mut m: NamespaceRef = Default::default();
                         m.push(var_name_def);
                         modules = Some(Box::new(m));
                     }
@@ -934,16 +934,16 @@ fn parse_primary(
     }
 
     match &mut root_expr {
-        // Cache the hash key for module-qualified variables
+        // Cache the hash key for namespace-qualified variables
         Expr::Variable(x) if x.1.is_some() => {
             let (_, modules, hash, Ident { name, .. }) = x.as_mut();
-            let modules = modules.as_mut().unwrap();
+            let namespace = modules.as_mut().unwrap();
 
             // Qualifiers + variable name
-            *hash = calc_script_fn_hash(modules.iter().map(|v| v.name.as_str()), name, 0);
+            *hash = calc_script_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0);
 
             #[cfg(not(feature = "no_module"))]
-            modules.set_index(state.find_module(&modules[0].name));
+            namespace.set_index(state.find_module(&namespace[0].name));
         }
         _ => (),
     }
@@ -1001,7 +1001,7 @@ fn parse_unary(
                     args.push(expr);
 
                     Ok(Expr::FnCall(
-                        Box::new(FnCallInfo {
+                        Box::new(FnCallExpr {
                             name: op.into(),
                             native_only: true,
                             namespace: None,
@@ -1030,7 +1030,7 @@ fn parse_unary(
             let hash = calc_script_fn_hash(empty(), op, 1);
 
             Ok(Expr::FnCall(
-                Box::new(FnCallInfo {
+                Box::new(FnCallExpr {
                     name: op.into(),
                     native_only: true,
                     hash,
@@ -1490,7 +1490,7 @@ fn parse_binary_op(
         let op = op_token.syntax();
         let hash = calc_script_fn_hash(empty(), &op, 2);
 
-        let op_base = FnCallInfo {
+        let op_base = FnCallExpr {
             name: op,
             native_only: true,
             capture: false,
@@ -1513,7 +1513,7 @@ fn parse_binary_op(
             | Token::Ampersand
             | Token::Pipe
             | Token::XOr => Expr::FnCall(
-                Box::new(FnCallInfo {
+                Box::new(FnCallExpr {
                     hash,
                     args,
                     ..op_base
@@ -1523,7 +1523,7 @@ fn parse_binary_op(
 
             // '!=' defaults to true when passed invalid operands
             Token::NotEqualsTo => Expr::FnCall(
-                Box::new(FnCallInfo {
+                Box::new(FnCallExpr {
                     hash,
                     args,
                     def_value: Some(true),
@@ -1538,7 +1538,7 @@ fn parse_binary_op(
             | Token::LessThanEqualsTo
             | Token::GreaterThan
             | Token::GreaterThanEqualsTo => Expr::FnCall(
-                Box::new(FnCallInfo {
+                Box::new(FnCallExpr {
                     hash,
                     args,
                     def_value: cmp_def,
@@ -1585,7 +1585,7 @@ fn parse_binary_op(
             Token::Custom(s) if state.engine.custom_keywords.contains_key(&s) => {
                 // Accept non-native functions for custom operators
                 Expr::FnCall(
-                    Box::new(FnCallInfo {
+                    Box::new(FnCallExpr {
                         hash,
                         args,
                         native_only: false,
@@ -2518,7 +2518,7 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
     let hash = calc_script_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals + 1);
 
     let expr = Expr::FnCall(
-        Box::new(FnCallInfo {
+        Box::new(FnCallExpr {
             name: KEYWORD_FN_PTR_CURRY.into(),
             hash,
             args,

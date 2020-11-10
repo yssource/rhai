@@ -2,7 +2,7 @@
 
 use crate::dynamic::{Dynamic, Union};
 use crate::fn_native::{FnPtr, Shared};
-use crate::module::{Module, ModuleRef};
+use crate::module::{Module, NamespaceRef};
 use crate::syntax::FnCustomSyntaxEval;
 use crate::token::{Position, Token, NO_POS};
 use crate::utils::ImmutableString;
@@ -778,7 +778,7 @@ impl Stmt {
     }
 }
 
-/// _[INTERNALS]_ A type wrapping a custom syntax definition.
+/// _[INTERNALS]_ A custom syntax definition.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -823,7 +823,7 @@ impl CustomExpr {
 /// Exported under the `internals` feature only.
 ///
 /// This type is mainly used to provide a standard `Hash` implementation
-/// to floating-point numbers, allowing `Expr` to derive `Hash` automatically.
+/// for floating-point numbers, allowing `Expr` to derive `Hash`.
 ///
 /// ## WARNING
 ///
@@ -856,7 +856,7 @@ impl From<INT> for FloatWrapper {
     }
 }
 
-/// A binary expression structure.
+/// _[INTERNALS]_ A binary expression.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -877,7 +877,7 @@ pub struct BinaryExpr {
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Hash, Default)]
-pub struct FnCallInfo {
+pub struct FnCallExpr {
     /// Pre-calculated hash for a script-defined function of the same name and number of parameters.
     pub hash: u64,
     /// Call native functions only? Set to `true` to skip searching for script-defined function overrides
@@ -889,7 +889,7 @@ pub struct FnCallInfo {
     /// Type is `bool` in order for `FnCallInfo` to be `Hash`
     pub def_value: Option<bool>,
     /// Namespace of the function, if any. Boxed because it occurs rarely.
-    pub namespace: Option<Box<ModuleRef>>,
+    pub namespace: Option<Box<NamespaceRef>>,
     /// Function name.
     /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
     /// and the function names are predictable, so no need to allocate a new `String`.
@@ -918,7 +918,7 @@ pub enum Expr {
     /// FnPtr constant.
     FnPointer(Box<IdentX>),
     /// Variable access - (optional index, optional modules, hash, variable name)
-    Variable(Box<(Option<NonZeroUsize>, Option<Box<ModuleRef>>, u64, Ident)>),
+    Variable(Box<(Option<NonZeroUsize>, Option<Box<NamespaceRef>>, u64, Ident)>),
     /// Property access - (getter, setter), prop
     Property(Box<((String, String), IdentX)>),
     /// { stmt }
@@ -926,7 +926,7 @@ pub enum Expr {
     /// Wrapped expression - should not be optimized away.
     Expr(Box<Expr>),
     /// func(expr, ... )
-    FnCall(Box<FnCallInfo>, Position),
+    FnCall(Box<FnCallExpr>, Position),
     /// lhs.rhs
     Dot(Box<BinaryExpr>, Position),
     /// expr[expr]

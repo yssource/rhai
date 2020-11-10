@@ -1156,10 +1156,9 @@ impl Engine {
     ) -> Result<AST, ParseError> {
         let scripts = [script];
         let stream = self.lex(&scripts, None);
-        {
-            let mut peekable = stream.peekable();
-            self.parse_global_expr(&mut peekable, scope, self.optimization_level)
-        }
+
+        let mut peekable = stream.peekable();
+        self.parse_global_expr(&mut peekable, scope, self.optimization_level)
     }
 
     /// Evaluate a script file.

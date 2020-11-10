@@ -55,7 +55,7 @@ impl BuildHasher for StraightHasherBuilder {
     }
 }
 
-/// _[INTERNALS]_ Calculate a `u64` hash key from a module-qualified function name and parameter types.
+/// _[INTERNALS]_ Calculate a `u64` hash key from a namespace-qualified function name and parameter types.
 /// Exported under the `internals` feature only.
 ///
 /// Module names are passed in via `&str` references from an iterator.
@@ -73,8 +73,8 @@ pub fn calc_native_fn_hash<'a>(
     calc_fn_hash(modules, fn_name, None, params)
 }
 
-/// _[INTERNALS]_ Calculate a `u64` hash key from a module-qualified function name and the number of parameters,
-/// but no parameter types.
+/// _[INTERNALS]_ Calculate a `u64` hash key from a namespace-qualified function name
+/// and the number of parameters, but no parameter types.
 /// Exported under the `internals` feature only.
 ///
 /// Module names are passed in via `&str` references from an iterator.
@@ -92,7 +92,7 @@ pub fn calc_script_fn_hash<'a>(
     calc_fn_hash(modules, fn_name, Some(num), empty())
 }
 
-/// Calculate a `u64` hash key from a module-qualified function name and parameter types.
+/// Calculate a `u64` hash key from a namespace-qualified function name and parameter types.
 ///
 /// Module names are passed in via `&str` references from an iterator.
 /// Parameter types are passed in via `TypeId` values from an iterator.

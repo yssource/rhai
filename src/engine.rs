@@ -1,10 +1,10 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::ast::{BinaryExpr, Expr, FnCallInfo, Ident, IdentX, ReturnType, Stmt};
+use crate::ast::{BinaryExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, Dynamic, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{Callback, FnPtr, OnVarCallback, Shared};
-use crate::module::{Module, ModuleRef};
+use crate::module::{Module, NamespaceRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
@@ -593,7 +593,7 @@ pub struct Engine {
 
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
-    pub(crate) limits_set: Limits,
+    pub(crate) limits: Limits,
 }
 
 impl fmt::Debug for Engine {
@@ -636,6 +636,7 @@ pub fn is_anonymous_fn(fn_name: &str) -> bool {
 }
 
 /// Print/debug to stdout
+#[inline(always)]
 fn default_print(_s: &str) {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
@@ -647,15 +648,15 @@ fn default_print(_s: &str) {
 pub fn search_imports(
     mods: &Imports,
     state: &mut State,
-    modules: &ModuleRef,
+    namespace: &NamespaceRef,
 ) -> Result<Shared<Module>, Box<EvalAltResult>> {
-    let Ident { name: root, pos } = &modules[0];
+    let Ident { name: root, pos } = &namespace[0];
 
     // Qualified - check if the root module is directly indexed
     let index = if state.always_search {
         0
     } else {
-        modules.index().map_or(0, NonZeroUsize::get)
+        namespace.index().map_or(0, NonZeroUsize::get)
     };
 
     Ok(if index > 0 {
@@ -670,7 +671,7 @@ pub fn search_imports(
 
 impl Engine {
     /// Create a new `Engine`
-    #[inline(always)]
+    #[inline]
     pub fn new() -> Self {
         // Create the new scripting Engine
         let mut engine = Self {
@@ -710,7 +711,7 @@ impl Engine {
             },
 
             #[cfg(not(feature = "unchecked"))]
-            limits_set: Limits {
+            limits: Limits {
                 max_call_stack_depth: MAX_CALL_STACK_DEPTH,
                 max_expr_depth: MAX_EXPR_DEPTH,
                 #[cfg(not(feature = "no_function"))]
@@ -733,7 +734,7 @@ impl Engine {
 
     /// Create a new `Engine` with minimal built-in functions.
     /// Use the `load_package` method to load additional packages of functions.
-    #[inline(always)]
+    #[inline]
     pub fn new_raw() -> Self {
         Self {
             id: Default::default(),
@@ -762,7 +763,7 @@ impl Engine {
             },
 
             #[cfg(not(feature = "unchecked"))]
-            limits_set: Limits {
+            limits: Limits {
                 max_call_stack_depth: MAX_CALL_STACK_DEPTH,
                 max_expr_depth: MAX_EXPR_DEPTH,
                 #[cfg(not(feature = "no_function"))]
@@ -780,7 +781,7 @@ impl Engine {
     }
 
     /// Search for a variable within the scope or within imports,
-    /// depending on whether the variable name is qualified.
+    /// depending on whether the variable name is namespace-qualified.
     pub(crate) fn search_namespace<'s, 'a>(
         &self,
         scope: &'s mut Scope,
@@ -1000,7 +1001,7 @@ impl Engine {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x, pos) if x.namespace.is_none() => {
-                        let FnCallInfo {
+                        let FnCallExpr {
                             name,
                             native_only: native,
                             hash,
@@ -1073,7 +1074,7 @@ impl Engine {
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
                             Expr::FnCall(x, pos) if x.namespace.is_none() => {
-                                let FnCallInfo {
+                                let FnCallExpr {
                                     name,
                                     native_only: native,
                                     hash,
@@ -1157,7 +1158,7 @@ impl Engine {
                             }
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
                             Expr::FnCall(f, pos) if f.namespace.is_none() => {
-                                let FnCallInfo {
+                                let FnCallExpr {
                                     name,
                                     native_only: native,
                                     hash,
@@ -1209,14 +1210,7 @@ impl Engine {
         level: usize,
         new_val: Option<(Dynamic, Position)>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let (
-            BinaryExpr {
-                lhs: dot_lhs,
-                rhs: dot_rhs,
-            },
-            chain_type,
-            op_pos,
-        ) = match expr {
+        let (BinaryExpr { lhs, rhs }, chain_type, op_pos) = match expr {
             Expr::Index(x, pos) => (x.as_ref(), ChainType::Index, *pos),
             Expr::Dot(x, pos) => (x.as_ref(), ChainType::Dot, *pos),
             _ => unreachable!(),
@@ -1230,14 +1224,14 @@ impl Engine {
             state,
             lib,
             this_ptr,
-            dot_rhs,
+            rhs,
             chain_type,
             &mut idx_values,
             0,
             level,
         )?;
 
-        match dot_lhs {
+        match lhs {
             // id.??? or id[???]
             Expr::Variable(x) => {
                 let Ident {
@@ -1249,7 +1243,7 @@ impl Engine {
                     .map_err(|err| err.fill_position(*var_pos))?;
 
                 let (target, _, typ, pos) =
-                    self.search_namespace(scope, mods, state, lib, this_ptr, dot_lhs)?;
+                    self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
 
                 // Constants cannot be modified
                 match typ {
@@ -1262,7 +1256,7 @@ impl Engine {
 
                 let obj_ptr = &mut target.into();
                 self.eval_dot_index_chain_helper(
-                    mods, state, lib, &mut None, obj_ptr, dot_rhs, idx_values, chain_type, level,
+                    mods, state, lib, &mut None, obj_ptr, rhs, idx_values, chain_type, level,
                     new_val,
                 )
                 .map(|(v, _)| v)
@@ -1275,7 +1269,7 @@ impl Engine {
                 let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let obj_ptr = &mut val.into();
                 self.eval_dot_index_chain_helper(
-                    mods, state, lib, this_ptr, obj_ptr, dot_rhs, idx_values, chain_type, level,
+                    mods, state, lib, this_ptr, obj_ptr, rhs, idx_values, chain_type, level,
                     new_val,
                 )
                 .map(|(v, _)| v)
@@ -1605,7 +1599,7 @@ impl Engine {
 
             // Normal function call
             Expr::FnCall(x, pos) if x.namespace.is_none() => {
-                let FnCallInfo {
+                let FnCallExpr {
                     name,
                     native_only: native,
                     capture: cap_scope,
@@ -1622,9 +1616,9 @@ impl Engine {
                 .map_err(|err| err.fill_position(*pos))
             }
 
-            // Module-qualified function call
+            // Namespace-qualified function call
             Expr::FnCall(x, pos) if x.namespace.is_some() => {
-                let FnCallInfo {
+                let FnCallExpr {
                     name,
                     namespace,
                     hash,
@@ -1632,9 +1626,9 @@ impl Engine {
                     def_value,
                     ..
                 } = x.as_ref();
-                let modules = namespace.as_ref().map(|v| v.as_ref());
+                let namespace = namespace.as_ref().map(|v| v.as_ref());
                 self.make_qualified_function_call(
-                    scope, mods, state, lib, this_ptr, modules, name, args, *def_value, *hash,
+                    scope, mods, state, lib, this_ptr, namespace, name, args, *def_value, *hash,
                     level,
                 )
                 .map_err(|err| err.fill_position(*pos))
