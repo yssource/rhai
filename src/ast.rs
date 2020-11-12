@@ -16,7 +16,7 @@ use crate::FLOAT;
 use crate::engine::Array;
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::{make_getter, make_setter, Map};
+use crate::engine::Map;
 
 #[cfg(not(feature = "no_module"))]
 use crate::engine::Imports;
@@ -919,9 +919,9 @@ pub enum Expr {
     /// FnPtr constant.
     FnPointer(Box<IdentX>),
     /// Variable access - (optional index, optional modules, hash, variable name)
-    Variable(Box<(Option<NonZeroUsize>, Option<Box<NamespaceRef>>, u64, Ident)>),
+    Variable(Box<(Option<NonZeroUsize>, Option<Box<NamespaceRef>>, u64, IdentX)>),
     /// Property access - (getter, setter), prop
-    Property(Box<((String, String), IdentX)>),
+    Property(Box<((ImmutableString, ImmutableString), IdentX)>),
     /// { stmt }
     Stmt(Box<StaticVec<Stmt>>, Position),
     /// Wrapped expression - should not be optimized away.
@@ -1237,21 +1237,6 @@ impl Expr {
             },
 
             Self::Custom(_, _) => false,
-        }
-    }
-
-    /// Convert a `Variable` into a `Property`.  All other variants are untouched.
-    #[cfg(not(feature = "no_object"))]
-    #[inline]
-    pub(crate) fn into_property(self) -> Self {
-        match self {
-            Self::Variable(x) if x.1.is_none() => {
-                let ident = x.3;
-                let getter = make_getter(&ident.name);
-                let setter = make_setter(&ident.name);
-                Self::Property(Box::new(((getter, setter), ident.into())))
-            }
-            _ => self,
         }
     }
 }

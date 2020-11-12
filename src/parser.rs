@@ -64,6 +64,8 @@ type FunctionsLib = HashMap<u64, ScriptFnDef, StraightHasherBuilder>;
 struct ParseState<'e> {
     /// Reference to the scripting `Engine`.
     engine: &'e Engine,
+    /// Interned strings.
+    strings: HashMap<String, ImmutableString>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(String, ScopeEntryType)>,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
@@ -108,6 +110,7 @@ impl<'e> ParseState<'e> {
             externals: Default::default(),
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
+            strings: Default::default(),
             stack: Default::default(),
             #[cfg(not(feature = "no_module"))]
             modules: Default::default(),
@@ -163,6 +166,18 @@ impl<'e> ParseState<'e> {
             .find(|(_, n)| *n == name)
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
     }
+
+    /// Get an interned string, creating one if it is not yet interned.
+    pub fn get_interned_string(&mut self, text: String) -> ImmutableString {
+        if !self.strings.contains_key(&text) {
+            let value: ImmutableString = text.clone().into();
+            let result = value.clone();
+            self.strings.insert(text, value);
+            result
+        } else {
+            self.strings.get(&text).unwrap().clone()
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -208,6 +223,24 @@ impl ParseSettings {
         }
     }
 }
+
+impl Expr {
+    /// Convert a `Variable` into a `Property`.  All other variants are untouched.
+    #[cfg(not(feature = "no_object"))]
+    #[inline]
+    fn into_property(self, state: &mut ParseState) -> Self {
+        match self {
+            Self::Variable(x) if x.1.is_none() => {
+                let ident = x.3;
+                let getter = state.get_interned_string(make_getter(&ident.name));
+                let setter = state.get_interned_string(make_setter(&ident.name));
+                Self::Property(Box::new(((getter, setter), ident.into())))
+            }
+            _ => self,
+        }
+    }
+}
+
 /// Consume a particular token, checking that it is the expected one.
 fn eat_token(input: &mut TokenStream, token: Token) -> Position {
     let (t, pos) = input.next().unwrap();
@@ -268,7 +301,7 @@ fn parse_fn_call(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    id: String,
+    id: ImmutableString,
     capture: bool,
     mut namespace: Option<Box<NamespaceRef>>,
     settings: ParseSettings,
@@ -314,7 +347,7 @@ fn parse_fn_call(
 
             return Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
-                    name: id.into(),
+                    name: id.to_string().into(),
                     capture,
                     namespace,
                     hash: hash_script,
@@ -361,7 +394,7 @@ fn parse_fn_call(
 
                 return Ok(Expr::FnCall(
                     Box::new(FnCallExpr {
-                        name: id.into(),
+                        name: id.to_string().into(),
                         capture,
                         namespace,
                         hash: hash_script,
@@ -784,7 +817,10 @@ fn parse_primary(
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => Expr::FloatConstant(FloatWrapper(x), settings.pos),
         Token::CharConstant(c) => Expr::CharConstant(c, settings.pos),
-        Token::StringConstant(s) => Expr::StringConstant(Box::new(IdentX::new(s, settings.pos))),
+        Token::StringConstant(s) => Expr::StringConstant(Box::new(IdentX::new(
+            state.get_interned_string(s),
+            settings.pos,
+        ))),
 
         // Function call
         Token::Identifier(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
@@ -793,7 +829,8 @@ fn parse_primary(
             {
                 state.allow_capture = true;
             }
-            Expr::Variable(Box::new((None, None, 0, Ident::new(s, settings.pos))))
+            let var_name_def = IdentX::new(state.get_interned_string(s), settings.pos);
+            Expr::Variable(Box::new((None, None, 0, var_name_def)))
         }
         // Module qualification
         #[cfg(not(feature = "no_module"))]
@@ -803,18 +840,21 @@ fn parse_primary(
             {
                 state.allow_capture = true;
             }
-            Expr::Variable(Box::new((None, None, 0, Ident::new(s, settings.pos))))
+            let var_name_def = IdentX::new(state.get_interned_string(s), settings.pos);
+            Expr::Variable(Box::new((None, None, 0, var_name_def)))
         }
         // Normal variable access
         Token::Identifier(s) => {
             let index = state.access_var(&s, settings.pos);
-            Expr::Variable(Box::new((index, None, 0, Ident::new(s, settings.pos))))
+            let var_name_def = IdentX::new(state.get_interned_string(s), settings.pos);
+            Expr::Variable(Box::new((index, None, 0, var_name_def)))
         }
 
         // Function call is allowed to have reserved keyword
         Token::Reserved(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
             if is_keyword_function(&s) {
-                Expr::Variable(Box::new((None, None, 0, Ident::new(s, settings.pos))))
+                let var_name_def = IdentX::new(state.get_interned_string(s), settings.pos);
+                Expr::Variable(Box::new((None, None, 0, var_name_def)))
             } else {
                 return Err(PERR::Reserved(s).into_err(settings.pos));
             }
@@ -829,7 +869,8 @@ fn parse_primary(
                 )))
                 .into_err(settings.pos));
             } else {
-                Expr::Variable(Box::new((None, None, 0, Ident::new(s, settings.pos))))
+                let var_name_def = IdentX::new(state.get_interned_string(s), settings.pos);
+                Expr::Variable(Box::new((None, None, 0, var_name_def)))
             }
         }
 
@@ -888,13 +929,13 @@ fn parse_primary(
                     .into_err(pos));
                 }
 
-                let (_, modules, _, Ident { name, pos }) = *x;
+                let (_, modules, _, IdentX { name, pos }) = *x;
                 settings.pos = pos;
                 parse_fn_call(input, state, lib, name, true, modules, settings.level_up())?
             }
             // Function call
             (Expr::Variable(x), Token::LeftParen) => {
-                let (_, modules, _, Ident { name, pos }) = *x;
+                let (_, modules, _, IdentX { name, pos }) = *x;
                 settings.pos = pos;
                 parse_fn_call(input, state, lib, name, false, modules, settings.level_up())?
             }
@@ -912,7 +953,8 @@ fn parse_primary(
                         modules = Some(Box::new(m));
                     }
 
-                    Expr::Variable(Box::new((index, modules, 0, Ident::new(id2, pos2))))
+                    let var_name_def = IdentX::new(state.get_interned_string(id2), pos2);
+                    Expr::Variable(Box::new((index, modules, 0, var_name_def)))
                 }
                 (Token::Reserved(id2), pos2) if is_valid_identifier(id2.chars()) => {
                     return Err(PERR::Reserved(id2).into_err(pos2));
@@ -936,7 +978,7 @@ fn parse_primary(
     match &mut root_expr {
         // Cache the hash key for namespace-qualified variables
         Expr::Variable(x) if x.1.is_some() => {
-            let (_, modules, hash, Ident { name, .. }) = x.as_mut();
+            let (_, modules, hash, IdentX { name, .. }) = x.as_mut();
             let namespace = modules.as_mut().unwrap();
 
             // Qualifiers + variable name
@@ -1102,7 +1144,7 @@ fn make_assignment_stmt<'a>(
                 index,
                 _,
                 _,
-                Ident {
+                IdentX {
                     name,
                     pos: name_pos,
                 },
@@ -1113,7 +1155,7 @@ fn make_assignment_stmt<'a>(
                 }
                 // Constant values cannot be assigned to
                 ScopeEntryType::Constant => {
-                    Err(PERR::AssignmentToConstant(name.clone()).into_err(*name_pos))
+                    Err(PERR::AssignmentToConstant(name.to_string()).into_err(*name_pos))
                 }
             }
         }
@@ -1129,7 +1171,7 @@ fn make_assignment_stmt<'a>(
                     index,
                     _,
                     _,
-                    Ident {
+                    IdentX {
                         name,
                         pos: name_pos,
                     },
@@ -1140,7 +1182,7 @@ fn make_assignment_stmt<'a>(
                     }
                     // Constant values cannot be assigned to
                     ScopeEntryType::Constant => {
-                        Err(PERR::AssignmentToConstant(name.clone()).into_err(*name_pos))
+                        Err(PERR::AssignmentToConstant(name.to_string()).into_err(*name_pos))
                     }
                 }
             }
@@ -1200,20 +1242,25 @@ fn parse_op_assignment_stmt(
 
 /// Make a dot expression.
 #[cfg(not(feature = "no_object"))]
-fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseError> {
+fn make_dot_expr(
+    state: &mut ParseState,
+    lhs: Expr,
+    rhs: Expr,
+    op_pos: Position,
+) -> Result<Expr, ParseError> {
     Ok(match (lhs, rhs) {
         // idx_lhs[idx_expr].rhs
         // Attach dot chain to the bottom level of indexing chain
         (Expr::Index(mut x, pos), rhs) => {
-            x.rhs = make_dot_expr(x.rhs, rhs, op_pos)?;
+            x.rhs = make_dot_expr(state, x.rhs, rhs, op_pos)?;
             Expr::Index(x, pos)
         }
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
             let ident = x.3;
-            let getter = make_getter(&ident.name);
-            let setter = make_setter(&ident.name);
-            let rhs = Expr::Property(Box::new(((getter, setter), ident.into())));
+            let getter = state.get_interned_string(make_getter(&ident.name));
+            let setter = state.get_interned_string(make_setter(&ident.name));
+            let rhs = Expr::Property(Box::new(((getter, setter), ident)));
 
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
         }
@@ -1229,7 +1276,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         (lhs, Expr::Dot(x, pos)) => {
             let rhs = Expr::Dot(
                 Box::new(BinaryExpr {
-                    lhs: x.lhs.into_property(),
+                    lhs: x.lhs.into_property(state),
                     rhs: x.rhs,
                 }),
                 pos,
@@ -1240,7 +1287,7 @@ fn make_dot_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseEr
         (lhs, Expr::Index(x, pos)) => {
             let rhs = Expr::Index(
                 Box::new(BinaryExpr {
-                    lhs: x.lhs.into_property(),
+                    lhs: x.lhs.into_property(state),
                     rhs: x.rhs,
                 }),
                 pos,
@@ -1579,7 +1626,7 @@ fn parse_binary_op(
             Token::Period => {
                 let rhs = args.pop().unwrap();
                 let current_lhs = args.pop().unwrap();
-                make_dot_expr(current_lhs, rhs, pos)?
+                make_dot_expr(state, current_lhs, rhs, pos)?
             }
 
             Token::Custom(s) if state.engine.custom_keywords.contains_key(&s) => {
@@ -1647,12 +1694,8 @@ fn parse_custom_syntax(
             MARKER_IDENT => match input.next().unwrap() {
                 (Token::Identifier(s), pos) => {
                     segments.push(s.clone());
-                    exprs.push(Expr::Variable(Box::new((
-                        None,
-                        None,
-                        0,
-                        Ident::new(s, pos),
-                    ))));
+                    let var_name_def = IdentX::new(state.get_interned_string(s), pos);
+                    exprs.push(Expr::Variable(Box::new((None, None, 0, var_name_def))));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
@@ -1950,14 +1993,14 @@ fn parse_let(
         // let name = expr
         ScopeEntryType::Normal => {
             state.stack.push((name.clone(), ScopeEntryType::Normal));
-            let ident = Ident::new(name, pos);
-            Ok(Stmt::Let(Box::new(ident), init_expr, export, token_pos))
+            let var_def = Ident::new(name, pos);
+            Ok(Stmt::Let(Box::new(var_def), init_expr, export, token_pos))
         }
         // const name = { expr:constant }
         ScopeEntryType::Constant => {
             state.stack.push((name.clone(), ScopeEntryType::Constant));
-            let ident = Ident::new(name, pos);
-            Ok(Stmt::Const(Box::new(ident), init_expr, export, token_pos))
+            let var_def = Ident::new(name, pos);
+            Ok(Stmt::Const(Box::new(var_def), init_expr, export, token_pos))
         }
     }
 }
@@ -2507,7 +2550,7 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
 
     #[cfg(not(feature = "no_closure"))]
     externals.iter().for_each(|x| {
-        args.push(Expr::Variable(Box::new((None, None, 0, x.clone()))));
+        args.push(Expr::Variable(Box::new((None, None, 0, x.clone().into()))));
     });
 
     #[cfg(feature = "no_closure")]

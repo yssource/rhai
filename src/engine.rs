@@ -650,7 +650,7 @@ pub fn search_imports(
     state: &mut State,
     namespace: &NamespaceRef,
 ) -> Result<Shared<Module>, Box<EvalAltResult>> {
-    let Ident { name: root, pos } = &namespace[0];
+    let IdentX { name: root, pos } = &namespace[0];
 
     // Qualified - check if the root module is directly indexed
     let index = if state.always_search {
@@ -794,7 +794,7 @@ impl Engine {
         match expr {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
-                (_, Some(modules), hash_var, Ident { name, pos }) => {
+                (_, Some(modules), hash_var, IdentX { name, pos }) => {
                     let module = search_imports(mods, state, modules)?;
                     let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
                         match *err {
@@ -826,13 +826,13 @@ impl Engine {
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &'a Expr,
     ) -> Result<(Target<'s>, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
-        let (index, _, _, Ident { name, pos }) = match expr {
+        let (index, _, _, IdentX { name, pos }) = match expr {
             Expr::Variable(v) => v.as_ref(),
             _ => unreachable!(),
         };
 
         // Check if the variable is `this`
-        if name == KEYWORD_THIS {
+        if name.as_str() == KEYWORD_THIS {
             if let Some(val) = this_ptr {
                 return Ok(((*val).into(), KEYWORD_THIS, ScopeEntryType::Normal, *pos));
             } else {
@@ -871,7 +871,7 @@ impl Engine {
             // Find the variable in the scope
             scope
                 .get_index(name)
-                .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(name.into(), *pos))?
+                .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos))?
                 .0
         };
 
@@ -1234,7 +1234,7 @@ impl Engine {
         match lhs {
             // id.??? or id[???]
             Expr::Variable(x) => {
-                let Ident {
+                let IdentX {
                     name: var_name,
                     pos: var_pos,
                 } = &x.3;
