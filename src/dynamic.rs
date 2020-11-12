@@ -388,7 +388,7 @@ impl Hash for Dynamic {
             Union::Shared(cell) => (*cell.borrow()).hash(state),
             #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
-            Union::Shared(cell) => (*cell.read().unwrap()).hash(hasher),
+            Union::Shared(cell) => (*cell.read().unwrap()).hash(state),
 
             _ => unimplemented!(),
         }

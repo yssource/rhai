@@ -13,7 +13,7 @@ use crate::syntax::CustomSyntax;
 use crate::token::{
     is_keyword_function, is_valid_identifier, Position, Token, TokenStream, NO_POS,
 };
-use crate::utils::StraightHasherBuilder;
+use crate::utils::{ImmutableString, StraightHasherBuilder};
 use crate::{calc_script_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_float"))]
@@ -26,7 +26,6 @@ use crate::engine::{make_getter, make_setter, KEYWORD_EVAL, KEYWORD_FN_PTR};
 use crate::{
     ast::FnAccess,
     engine::{FN_ANONYMOUS, KEYWORD_FN_PTR_CURRY},
-    utils::ImmutableString,
 };
 
 use crate::stdlib::{
@@ -169,6 +168,7 @@ impl<'e> ParseState<'e> {
 
     /// Get an interned string, creating one if it is not yet interned.
     pub fn get_interned_string(&mut self, text: String) -> ImmutableString {
+        #[allow(clippy::map_entry)]
         if !self.strings.contains_key(&text) {
             let value: ImmutableString = text.clone().into();
             let result = value.clone();
@@ -2555,7 +2555,7 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
 
     #[cfg(feature = "no_closure")]
     externals.into_iter().for_each(|x| {
-        args.push(Expr::Variable(Box::new((None, None, 0, x.clone()))));
+        args.push(Expr::Variable(Box::new((None, None, 0, x.clone().into()))));
     });
 
     let hash = calc_script_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals + 1);
