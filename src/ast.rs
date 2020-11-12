@@ -836,6 +836,7 @@ pub struct FloatWrapper(pub FLOAT);
 impl Hash for FloatWrapper {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
+        TypeId::of::<FLOAT>().hash(state);
         state.write(&self.0.to_le_bytes());
     }
 }

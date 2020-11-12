@@ -21,6 +21,7 @@ use crate::stdlib::{
     any::{type_name, Any, TypeId},
     boxed::Box,
     fmt,
+    hash::{Hash, Hasher},
     ops::{Deref, DerefMut},
     string::{String, ToString},
 };
@@ -357,6 +358,39 @@ impl Dynamic {
             #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
             Union::Shared(cell) => (*cell.read().unwrap()).type_name(),
+        }
+    }
+}
+
+impl Hash for Dynamic {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match &self.0 {
+            Union::Unit(_) => ().hash(state),
+            Union::Bool(value) => value.hash(state),
+            Union::Str(s) => s.hash(state),
+            Union::Char(ch) => ch.hash(state),
+            Union::Int(i) => i.hash(state),
+            #[cfg(not(feature = "no_float"))]
+            Union::Float(f) => {
+                TypeId::of::<FLOAT>().hash(state);
+                state.write(&f.to_le_bytes());
+            }
+            #[cfg(not(feature = "no_index"))]
+            Union::Array(a) => a.hash(state),
+            #[cfg(not(feature = "no_object"))]
+            Union::Map(m) => m.iter().for_each(|(key, item)| {
+                key.hash(state);
+                item.hash(state);
+            }),
+
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(not(feature = "sync"))]
+            Union::Shared(cell) => (*cell.borrow()).hash(state),
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(feature = "sync")]
+            Union::Shared(cell) => (*cell.read().unwrap()).hash(hasher),
+
+            _ => unimplemented!(),
         }
     }
 }
