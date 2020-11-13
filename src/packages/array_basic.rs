@@ -281,7 +281,7 @@ mod array_functions {
                 })
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
-                        "filter".to_string(),
+                        "index_of".to_string(),
                         err,
                         NO_POS,
                     ))
@@ -314,7 +314,7 @@ mod array_functions {
                 })
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
-                        "filter".to_string(),
+                        "some".to_string(),
                         err,
                         NO_POS,
                     ))
@@ -347,7 +347,7 @@ mod array_functions {
                 })
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
-                        "filter".to_string(),
+                        "all".to_string(),
                         err,
                         NO_POS,
                     ))
@@ -449,7 +449,7 @@ mod array_functions {
                 })
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
-                        "reduce".to_string(),
+                        "reduce_rev".to_string(),
                         err,
                         NO_POS,
                     ))
@@ -467,7 +467,7 @@ mod array_functions {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut result = initial.call_dynamic(ctx, None, []).map_err(|err| {
             Box::new(EvalAltResult::ErrorInFunctionCall(
-                "reduce".to_string(),
+                "reduce_rev".to_string(),
                 err,
                 NO_POS,
             ))
@@ -486,7 +486,7 @@ mod array_functions {
                 })
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
-                        "reduce".to_string(),
+                        "reduce_rev".to_string(),
                         err,
                         NO_POS,
                     ))
@@ -556,7 +556,7 @@ mod array_functions {
                 })
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
-                        "filter".to_string(),
+                        "drain".to_string(),
                         err,
                         NO_POS,
                     ))
@@ -615,7 +615,7 @@ mod array_functions {
                 })
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
-                        "filter".to_string(),
+                        "retain".to_string(),
                         err,
                         NO_POS,
                     ))

@@ -9,6 +9,7 @@ use crate::parse_error::ParseError;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::{Position, NO_POS};
+use crate::utils::get_hasher;
 
 #[cfg(not(feature = "no_index"))]
 use crate::{
@@ -35,6 +36,7 @@ use crate::optimize::optimize_into_ast;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
+    hash::{Hash, Hasher},
     string::String,
 };
 
@@ -44,6 +46,13 @@ use crate::stdlib::mem;
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(target_arch = "wasm32"))]
 use crate::stdlib::{fs::File, io::prelude::*, path::PathBuf};
+
+/// Calculate a unique hash for a script.
+fn calc_hash_for_scripts<'a>(scripts: impl IntoIterator<Item = &'a &'a str>) -> u64 {
+    let s = &mut get_hasher();
+    scripts.into_iter().for_each(|&script| script.hash(s));
+    s.finish()
+}
 
 /// Engine public API
 impl Engine {
@@ -907,8 +916,9 @@ impl Engine {
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
+        let hash = calc_hash_for_scripts(scripts);
         let stream = self.lex(scripts, None);
-        self.parse(&mut stream.peekable(), scope, optimization_level)
+        self.parse(hash, &mut stream.peekable(), scope, optimization_level)
     }
 
     /// Read the contents of a file into a string.
@@ -1061,6 +1071,7 @@ impl Engine {
             .into());
         };
 
+        let hash = calc_hash_for_scripts(&scripts);
         let stream = self.lex(
             &scripts,
             if has_null {
@@ -1073,8 +1084,12 @@ impl Engine {
                 None
             },
         );
-        let ast =
-            self.parse_global_expr(&mut stream.peekable(), &scope, OptimizationLevel::None)?;
+        let ast = self.parse_global_expr(
+            hash,
+            &mut stream.peekable(),
+            &scope,
+            OptimizationLevel::None,
+        )?;
 
         // Handle null - map to ()
         if has_null {
@@ -1155,11 +1170,11 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
+        let hash = calc_hash_for_scripts(&scripts);
         let stream = self.lex(&scripts, None);
-        {
-            let mut peekable = stream.peekable();
-            self.parse_global_expr(&mut peekable, scope, self.optimization_level)
-        }
+
+        let mut peekable = stream.peekable();
+        self.parse_global_expr(hash, &mut peekable, scope, self.optimization_level)
     }
 
     /// Evaluate a script file.
@@ -1316,10 +1331,12 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
+        let hash = calc_hash_for_scripts(&scripts);
         let stream = self.lex(&scripts, None);
 
         // No need to optimize a lone expression
-        let ast = self.parse_global_expr(&mut stream.peekable(), scope, OptimizationLevel::None)?;
+        let ast =
+            self.parse_global_expr(hash, &mut stream.peekable(), scope, OptimizationLevel::None)?;
 
         self.eval_ast_with_scope(scope, &ast)
     }
@@ -1446,8 +1463,9 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
+        let hash = calc_hash_for_scripts(&scripts);
         let stream = self.lex(&scripts, None);
-        let ast = self.parse(&mut stream.peekable(), scope, self.optimization_level)?;
+        let ast = self.parse(hash, &mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }
 

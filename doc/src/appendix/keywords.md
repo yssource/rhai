@@ -13,6 +13,7 @@ Keywords List
 |      `is_shared`      | is a value shared?                          | [`no_closure`]  |     yes      |      no      |
 |         `if`          | if statement                                |                 |      no      |              |
 |        `else`         | else block of if statement                  |                 |      no      |              |
+|       `switch`        | matching                                    |                 |      no      |              |
 |        `while`        | while loop                                  |                 |      no      |              |
 |        `loop`         | infinite loop                               |                 |      no      |              |
 |         `for`         | for loop                                    |                 |      no      |              |
@@ -52,7 +53,6 @@ Reserved Keywords
 | `then`    | control flow          |
 | `goto`    | control flow          |
 | `exit`    | control flow          |
-| `switch`  | matching              |
 | `match`   | matching              |
 | `case`    | matching              |
 | `public`  | function/field access |

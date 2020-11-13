@@ -49,7 +49,7 @@ For example:
 let animal = "rabbit";
 let food = "carrot";
 
-animal eats food            // custom operator - 'eats'
+animal eats food            // custom operator 'eats'
 
 eats(animal, food)          // <- the above really de-sugars to this
 ```
@@ -61,7 +61,7 @@ nevertheless it makes the DSL syntax much simpler and expressive.
 Custom Syntax
 -------------
 
-For advanced DSL scenarios, it is possible to define entire expression [_syntax_][custom syntax] -
+For advanced DSL scenarios, it is possible to define entire expression [_syntax_][custom syntax] &ndash
 essentially custom statement types.
 
 For example, the following is a SQL-like syntax for some obscure DSL operation:

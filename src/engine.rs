@@ -1,10 +1,10 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::ast::{BinaryExpr, Expr, FnCallInfo, Ident, IdentX, ReturnType, Stmt};
+use crate::ast::{BinaryExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, Dynamic, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{Callback, FnPtr, OnVarCallback, Shared};
-use crate::module::{Module, ModuleRef};
+use crate::module::{Module, NamespaceRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
@@ -12,6 +12,7 @@ use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::CustomSyntax;
 use crate::token::{Position, NO_POS};
+use crate::utils::get_hasher;
 use crate::{calc_native_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_index"))]
@@ -38,6 +39,7 @@ use crate::stdlib::{
     boxed::Box,
     collections::{HashMap, HashSet},
     fmt, format,
+    hash::{Hash, Hasher},
     iter::{empty, once},
     num::NonZeroUsize,
     ops::DerefMut,
@@ -593,7 +595,7 @@ pub struct Engine {
 
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
-    pub(crate) limits_set: Limits,
+    pub(crate) limits: Limits,
 }
 
 impl fmt::Debug for Engine {
@@ -636,6 +638,7 @@ pub fn is_anonymous_fn(fn_name: &str) -> bool {
 }
 
 /// Print/debug to stdout
+#[inline(always)]
 fn default_print(_s: &str) {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
@@ -647,15 +650,15 @@ fn default_print(_s: &str) {
 pub fn search_imports(
     mods: &Imports,
     state: &mut State,
-    modules: &ModuleRef,
+    namespace: &NamespaceRef,
 ) -> Result<Shared<Module>, Box<EvalAltResult>> {
-    let Ident { name: root, pos } = &modules[0];
+    let IdentX { name: root, pos } = &namespace[0];
 
     // Qualified - check if the root module is directly indexed
     let index = if state.always_search {
         0
     } else {
-        modules.index().map_or(0, NonZeroUsize::get)
+        namespace.index().map_or(0, NonZeroUsize::get)
     };
 
     Ok(if index > 0 {
@@ -670,7 +673,7 @@ pub fn search_imports(
 
 impl Engine {
     /// Create a new `Engine`
-    #[inline(always)]
+    #[inline]
     pub fn new() -> Self {
         // Create the new scripting Engine
         let mut engine = Self {
@@ -710,7 +713,7 @@ impl Engine {
             },
 
             #[cfg(not(feature = "unchecked"))]
-            limits_set: Limits {
+            limits: Limits {
                 max_call_stack_depth: MAX_CALL_STACK_DEPTH,
                 max_expr_depth: MAX_EXPR_DEPTH,
                 #[cfg(not(feature = "no_function"))]
@@ -733,7 +736,7 @@ impl Engine {
 
     /// Create a new `Engine` with minimal built-in functions.
     /// Use the `load_package` method to load additional packages of functions.
-    #[inline(always)]
+    #[inline]
     pub fn new_raw() -> Self {
         Self {
             id: Default::default(),
@@ -762,7 +765,7 @@ impl Engine {
             },
 
             #[cfg(not(feature = "unchecked"))]
-            limits_set: Limits {
+            limits: Limits {
                 max_call_stack_depth: MAX_CALL_STACK_DEPTH,
                 max_expr_depth: MAX_EXPR_DEPTH,
                 #[cfg(not(feature = "no_function"))]
@@ -780,7 +783,7 @@ impl Engine {
     }
 
     /// Search for a variable within the scope or within imports,
-    /// depending on whether the variable name is qualified.
+    /// depending on whether the variable name is namespace-qualified.
     pub(crate) fn search_namespace<'s, 'a>(
         &self,
         scope: &'s mut Scope,
@@ -793,7 +796,7 @@ impl Engine {
         match expr {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
-                (_, Some(modules), hash_var, Ident { name, pos }) => {
+                (_, Some(modules), hash_var, IdentX { name, pos }) => {
                     let module = search_imports(mods, state, modules)?;
                     let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
                         match *err {
@@ -825,13 +828,13 @@ impl Engine {
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &'a Expr,
     ) -> Result<(Target<'s>, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
-        let (index, _, _, Ident { name, pos }) = match expr {
+        let (index, _, _, IdentX { name, pos }) = match expr {
             Expr::Variable(v) => v.as_ref(),
             _ => unreachable!(),
         };
 
         // Check if the variable is `this`
-        if name == KEYWORD_THIS {
+        if name.as_str() == KEYWORD_THIS {
             if let Some(val) = this_ptr {
                 return Ok(((*val).into(), KEYWORD_THIS, ScopeEntryType::Normal, *pos));
             } else {
@@ -870,7 +873,7 @@ impl Engine {
             // Find the variable in the scope
             scope
                 .get_index(name)
-                .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(name.into(), *pos))?
+                .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos))?
                 .0
         };
 
@@ -1000,7 +1003,7 @@ impl Engine {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x, pos) if x.namespace.is_none() => {
-                        let FnCallInfo {
+                        let FnCallExpr {
                             name,
                             native_only: native,
                             hash,
@@ -1073,7 +1076,7 @@ impl Engine {
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
                             Expr::FnCall(x, pos) if x.namespace.is_none() => {
-                                let FnCallInfo {
+                                let FnCallExpr {
                                     name,
                                     native_only: native,
                                     hash,
@@ -1157,7 +1160,7 @@ impl Engine {
                             }
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
                             Expr::FnCall(f, pos) if f.namespace.is_none() => {
-                                let FnCallInfo {
+                                let FnCallExpr {
                                     name,
                                     native_only: native,
                                     hash,
@@ -1209,14 +1212,7 @@ impl Engine {
         level: usize,
         new_val: Option<(Dynamic, Position)>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let (
-            BinaryExpr {
-                lhs: dot_lhs,
-                rhs: dot_rhs,
-            },
-            chain_type,
-            op_pos,
-        ) = match expr {
+        let (BinaryExpr { lhs, rhs }, chain_type, op_pos) = match expr {
             Expr::Index(x, pos) => (x.as_ref(), ChainType::Index, *pos),
             Expr::Dot(x, pos) => (x.as_ref(), ChainType::Dot, *pos),
             _ => unreachable!(),
@@ -1230,17 +1226,17 @@ impl Engine {
             state,
             lib,
             this_ptr,
-            dot_rhs,
+            rhs,
             chain_type,
             &mut idx_values,
             0,
             level,
         )?;
 
-        match dot_lhs {
+        match lhs {
             // id.??? or id[???]
             Expr::Variable(x) => {
-                let Ident {
+                let IdentX {
                     name: var_name,
                     pos: var_pos,
                 } = &x.3;
@@ -1249,7 +1245,7 @@ impl Engine {
                     .map_err(|err| err.fill_position(*var_pos))?;
 
                 let (target, _, typ, pos) =
-                    self.search_namespace(scope, mods, state, lib, this_ptr, dot_lhs)?;
+                    self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
 
                 // Constants cannot be modified
                 match typ {
@@ -1262,7 +1258,7 @@ impl Engine {
 
                 let obj_ptr = &mut target.into();
                 self.eval_dot_index_chain_helper(
-                    mods, state, lib, &mut None, obj_ptr, dot_rhs, idx_values, chain_type, level,
+                    mods, state, lib, &mut None, obj_ptr, rhs, idx_values, chain_type, level,
                     new_val,
                 )
                 .map(|(v, _)| v)
@@ -1275,7 +1271,7 @@ impl Engine {
                 let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let obj_ptr = &mut val.into();
                 self.eval_dot_index_chain_helper(
-                    mods, state, lib, this_ptr, obj_ptr, dot_rhs, idx_values, chain_type, level,
+                    mods, state, lib, this_ptr, obj_ptr, rhs, idx_values, chain_type, level,
                     new_val,
                 )
                 .map(|(v, _)| v)
@@ -1549,12 +1545,10 @@ impl Engine {
 
             Expr::IntegerConstant(x, _) => Ok((*x).into()),
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(x, _) => Ok(x.0.into()),
-            Expr::StringConstant(x) => Ok(x.name.clone().into()),
+            Expr::FloatConstant(x, _) => Ok((*x).into()),
+            Expr::StringConstant(x, _) => Ok(x.clone().into()),
             Expr::CharConstant(x, _) => Ok((*x).into()),
-            Expr::FnPointer(x) => {
-                Ok(FnPtr::new_unchecked(x.name.clone(), Default::default()).into())
-            }
+            Expr::FnPointer(x, _) => Ok(FnPtr::new_unchecked(x.clone(), Default::default()).into()),
             Expr::Variable(x) if (x.3).name == KEYWORD_THIS => {
                 if let Some(val) = this_ptr {
                     Ok(val.clone())
@@ -1605,7 +1599,7 @@ impl Engine {
 
             // Normal function call
             Expr::FnCall(x, pos) if x.namespace.is_none() => {
-                let FnCallInfo {
+                let FnCallExpr {
                     name,
                     native_only: native,
                     capture: cap_scope,
@@ -1622,9 +1616,9 @@ impl Engine {
                 .map_err(|err| err.fill_position(*pos))
             }
 
-            // Module-qualified function call
+            // Namespace-qualified function call
             Expr::FnCall(x, pos) if x.namespace.is_some() => {
-                let FnCallInfo {
+                let FnCallExpr {
                     name,
                     namespace,
                     hash,
@@ -1632,9 +1626,9 @@ impl Engine {
                     def_value,
                     ..
                 } = x.as_ref();
-                let modules = namespace.as_ref().map(|v| v.as_ref());
+                let namespace = namespace.as_ref().map(|v| v.as_ref());
                 self.make_qualified_function_call(
-                    scope, mods, state, lib, this_ptr, modules, name, args, *def_value, *hash,
+                    scope, mods, state, lib, this_ptr, namespace, name, args, *def_value, *hash,
                     level,
                 )
                 .map_err(|err| err.fill_position(*pos))
@@ -1673,6 +1667,25 @@ impl Engine {
             Expr::True(_) => Ok(true.into()),
             Expr::False(_) => Ok(false.into()),
             Expr::Unit(_) => Ok(().into()),
+
+            Expr::Switch(x, _) => {
+                let (match_expr, table, def_stmt) = x.as_ref();
+
+                let match_item =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, match_expr, level)?;
+
+                let hasher = &mut get_hasher();
+                match_item.hash(hasher);
+                let hash = hasher.finish();
+
+                if let Some(stmt) = table.get(&hash) {
+                    self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
+                } else if let Some(def_stmt) = def_stmt {
+                    self.eval_stmt(scope, mods, state, lib, this_ptr, def_stmt, level)
+                } else {
+                    Ok(().into())
+                }
+            }
 
             Expr::Custom(custom, _) => {
                 let expressions = custom
@@ -2184,13 +2197,14 @@ impl Engine {
             // Export statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(list, _) => {
-                for (Ident { name, pos: id_pos }, rename) in list.iter() {
+                for (IdentX { name, pos: id_pos }, rename) in list.iter() {
                     // Mark scope variables as public
                     if let Some(index) = scope.get_index(name).map(|(i, _)| i) {
                         let alias = rename.as_ref().map(|x| &x.name).unwrap_or_else(|| name);
-                        scope.add_entry_alias(index, alias.clone());
+                        scope.add_entry_alias(index, alias.to_string());
                     } else {
-                        return EvalAltResult::ErrorVariableNotFound(name.into(), *id_pos).into();
+                        return EvalAltResult::ErrorVariableNotFound(name.to_string(), *id_pos)
+                            .into();
                     }
                 }
                 Ok(Default::default())

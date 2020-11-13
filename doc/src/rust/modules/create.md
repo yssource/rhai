@@ -69,9 +69,9 @@ resolver.insert("question", module);
 let mut engine = Engine::new();
 engine.set_module_resolver(Some(resolver));
 
-// Use module-qualified variables
+// Use namespace-qualified variables
 engine.eval::<i64>(r#"import "question" as q; q::answer + 1"#)? == 42;
 
-// Call module-qualified functions
+// Call namespace-qualified functions
 engine.eval::<i64>(r#"import "question" as q; q::inc(q::answer)"#)? == 42;
 ```

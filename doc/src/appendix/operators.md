@@ -39,6 +39,7 @@ Symbols and Patterns
 
 | Symbol                             |         Name         | Description                           |
 | ---------------------------------- | :------------------: | ------------------------------------- |
+| `_`                                |      underscore      | default `switch` case                 |
 | `;`                                |      semicolon       | statement separator                   |
 | `,`                                |        comma         | list separator                        |
 | `:`                                |        colon         | [object map] property value separator |
@@ -52,6 +53,7 @@ Symbols and Patterns
 | <code>\|</code> .. <code>\|</code> |        pipes         | closure                               |
 | `[` .. `]`                         |       brackets       | [array] literal                       |
 | `!`                                |         bang         | function call in calling scope        |
+| `=>`                               |     double arrow     | `switch` expression case separator    |
 | `//`                               |       comment        | line comment                          |
 | `/*` .. `*/`                       |       comment        | block comment                         |
 | `(*` .. `*)`                       |       comment        | _reserved_                            |
@@ -64,7 +66,6 @@ Symbols and Patterns
 | `#`                                |         hash         | _reserved_                            |
 | `@`                                |          at          | _reserved_                            |
 | `$`                                |        dollar        | _reserved_                            |
-| `=>`                               |     double arrow     | _reserved_                            |
 | `->`                               |        arrow         | _reserved_                            |
 | `<-`                               |      left arrow      | _reserved_                            |
 | `===`                              |   strict equals to   | _reserved_                            |

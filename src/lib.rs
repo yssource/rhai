@@ -83,19 +83,20 @@ mod token;
 mod r#unsafe;
 mod utils;
 
-/// The system integer type.
+/// The system integer type. It is defined as `i64`.
 ///
 /// If the `only_i32` feature is enabled, this will be `i32` instead.
 #[cfg(not(feature = "only_i32"))]
 pub type INT = i64;
 
 /// The system integer type.
+/// It is defined as `i32` since the `only_i32` feature is used.
 ///
 /// If the `only_i32` feature is not enabled, this will be `i64` instead.
 #[cfg(feature = "only_i32")]
 pub type INT = i32;
 
-/// The system floating-point type.
+/// The system floating-point type. It is defined as `f64`.
 ///
 /// Not available under the `no_float` feature.
 #[cfg(not(feature = "no_float"))]
@@ -103,6 +104,7 @@ pub type INT = i32;
 pub type FLOAT = f64;
 
 /// The system floating-point type.
+/// It is defined as `f32` since the `f32_float` feature is used.
 ///
 /// Not available under the `no_float` feature.
 #[cfg(not(feature = "no_float"))]
@@ -168,8 +170,7 @@ pub use token::{get_next_token, parse_string_literal, InputStream, Token, Tokeni
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
 pub use ast::{
-    BinaryExpr, CustomExpr, Expr, FloatWrapper, FnCallInfo, Ident, IdentX, ReturnType, ScriptFnDef,
-    Stmt,
+    BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, ScriptFnDef, Stmt,
 };
 
 #[cfg(feature = "internals")]
@@ -178,7 +179,7 @@ pub use engine::{Imports, Limits, State as EvalState};
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
-pub use module::ModuleRef;
+pub use module::NamespaceRef;
 
 /// _[INTERNALS]_ Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
 /// which is a specialized `Vec` backed by a small, fixed-size array when there are <= 4 items stored.

@@ -15,10 +15,10 @@ allow combining all functions in one [`AST`] into another, forming a new, unifie
 
 In general, there are two types of _namespaces_ where functions are looked up:
 
-| Namespace | Source                                                                                | Lookup method                  | Sub-modules? | Variables? |
-| --------- | ------------------------------------------------------------------------------------- | ------------------------------ | :----------: | :--------: |
-| Global    | 1) `Engine::register_XXX` API<br/>2) [`AST`] being evaluated<br/>3) [packages] loaded | simple function name           |   ignored    |  ignored   |
-| Module    | [`Module`]                                                                            | module-qualified function name |     yes      |    yes     |
+| Namespace | Source                                                                                | Lookup method                     | Sub-modules? | Variables? |
+| --------- | ------------------------------------------------------------------------------------- | --------------------------------- | :----------: | :--------: |
+| Global    | 1) `Engine::register_XXX` API<br/>2) [`AST`] being evaluated<br/>3) [packages] loaded | simple function name              |   ignored    |  ignored   |
+| Module    | [`Module`]                                                                            | namespace-qualified function name |     yes      |    yes     |
 
 
 Global Namespace

@@ -1,6 +1,17 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.6
+==============
+
+This version adds the `switch` statement.
+
+New features
+------------
+
+* `switch` statement.
+
+
 Version 0.19.5
 ==============
 
@@ -209,7 +220,7 @@ Bug fixes
 ---------
 
 * Fixes bug that prevents calling functions in closures.
-* Fixes bug that erroneously consumes the first argument to a module-qualified function call.
+* Fixes bug that erroneously consumes the first argument to a namespace-qualified function call.
 
 New features
 ------------
@@ -299,7 +310,7 @@ New features
 * The boolean `^` (XOR) operator is added.
 * `FnPtr` is exposed as the function pointer type.
 * `rhai::module_resolvers::ModuleResolversCollection` added to try a list of module resolvers.
-* It is now possible to mutate the first argument of a module-qualified function call when the argument is a simple variable (but not a module constant).
+* It is now possible to mutate the first argument of a namespace-qualified function call when the argument is a simple variable (but not a module constant).
 * Many configuration/setting API's now returns `&mut Self` so that the calls can be chained.
 * `String` parameters in functions are supported (but inefficiently).
 

@@ -108,6 +108,8 @@ pub enum ParseErrorType {
     ///
     /// Never appears under the `no_object` feature.
     DuplicatedProperty(String),
+    /// A switch case is duplicated.
+    DuplicatedSwitchCase,
     /// Missing a property name for custom types and maps.
     ///
     /// Never appears under the `no_object` feature.
@@ -177,6 +179,7 @@ impl ParseErrorType {
             Self::MalformedInExpr(_) => "Invalid 'in' expression",
             Self::MalformedCapture(_) => "Invalid capturing",
             Self::DuplicatedProperty(_) => "Duplicated property in object map literal",
+            Self::DuplicatedSwitchCase => "Duplicated switch case",
             Self::PropertyExpected => "Expecting name of a property",
             Self::VariableExpected => "Expecting name of a variable",
             Self::Reserved(_) => "Invalid use of reserved keyword",
@@ -211,6 +214,7 @@ impl fmt::Display for ParseErrorType {
             Self::DuplicatedProperty(s) => {
                 write!(f, "Duplicated property '{}' for object map literal", s)
             }
+            Self::DuplicatedSwitchCase => f.write_str(self.desc()),
 
             Self::ExprExpected(s) => write!(f, "Expecting {} expression", s),
 

@@ -12,27 +12,19 @@ Use `type_of()` to Get Value Type
 Because [`type_of()`] a `Dynamic` value returns the type of the actual value,
 it is usually used to perform type-specific actions based on the actual value's type.
 
-```rust
+```c
 let mystery = get_some_dynamic_value();
 
-if type_of(mystery) == "i64" {
-    print("Hey, I got an integer here!");
-} else if type_of(mystery) == "f64" {
-    print("Hey, I got a float here!");
-} else if type_of(mystery) == "string" {
-    print("Hey, I got a string here!");
-} else if type_of(mystery) == "bool" {
-    print("Hey, I got a boolean here!");
-} else if type_of(mystery) == "array" {
-    print("Hey, I got an array here!");
-} else if type_of(mystery) == "map" {
-    print("Hey, I got an object map here!");
-} else if type_of(mystery) == "Fn" {
-    print("Hey, I got a function pointer here!");
-} else if type_of(mystery) == "TestStruct" {
-    print("Hey, I got the TestStruct custom type here!");
-} else {
-    print("I don't know what this is: " + type_of(mystery));
+switch mystery {
+    "i64" => print("Hey, I got an integer here!"),
+    "f64" => print("Hey, I got a float here!"),
+    "string" => print("Hey, I got a string here!"),
+    "bool" => print("Hey, I got a boolean here!"),
+    "array" => print("Hey, I got an array here!"),
+    "map" => print("Hey, I got an object map here!"),
+    "Fn" => print("Hey, I got a function pointer here!"),
+    "TestStruct" => print("Hey, I got the TestStruct custom type here!"),
+    _ => print("I don't know what this is: " + type_of(mystery))
 }
 ```
 
