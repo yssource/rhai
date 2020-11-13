@@ -1544,11 +1544,9 @@ impl Engine {
             Expr::IntegerConstant(x, _) => Ok((*x).into()),
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(x, _) => Ok(x.0.into()),
-            Expr::StringConstant(x) => Ok(x.name.clone().into()),
+            Expr::StringConstant(x, _) => Ok(x.clone().into()),
             Expr::CharConstant(x, _) => Ok((*x).into()),
-            Expr::FnPointer(x) => {
-                Ok(FnPtr::new_unchecked(x.name.clone(), Default::default()).into())
-            }
+            Expr::FnPointer(x, _) => Ok(FnPtr::new_unchecked(x.clone(), Default::default()).into()),
             Expr::Variable(x) if (x.3).name == KEYWORD_THIS => {
                 if let Some(val) = this_ptr {
                     Ok(val.clone())
@@ -2178,13 +2176,14 @@ impl Engine {
             // Export statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(list, _) => {
-                for (Ident { name, pos: id_pos }, rename) in list.iter() {
+                for (IdentX { name, pos: id_pos }, rename) in list.iter() {
                     // Mark scope variables as public
                     if let Some(index) = scope.get_index(name).map(|(i, _)| i) {
                         let alias = rename.as_ref().map(|x| &x.name).unwrap_or_else(|| name);
-                        scope.add_entry_alias(index, alias.clone());
+                        scope.add_entry_alias(index, alias.to_string());
                     } else {
-                        return EvalAltResult::ErrorVariableNotFound(name.into(), *id_pos).into();
+                        return EvalAltResult::ErrorVariableNotFound(name.to_string(), *id_pos)
+                            .into();
                     }
                 }
                 Ok(Default::default())

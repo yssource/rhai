@@ -502,19 +502,19 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                 *expr = result;
             }
             // map[string]
-            (Expr::Map(m, pos), Expr::StringConstant(s)) if m.iter().all(|(_, x)| x.is_pure()) => {
+            (Expr::Map(m, pos), Expr::StringConstant(s, _)) if m.iter().all(|(_, x)| x.is_pure()) => {
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                *expr = mem::take(m).into_iter().find(|(x, _)| x.name == s.name)
+                *expr = mem::take(m).into_iter().find(|(x, _)| x.name == *s)
                             .map(|(_, mut expr)| { expr.set_position(*pos); expr })
                             .unwrap_or_else(|| Expr::Unit(*pos));
             }
             // string[int]
-            (Expr::StringConstant(s), Expr::IntegerConstant(i, _)) if *i >= 0 && (*i as usize) < s.name.chars().count() => {
+            (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _)) if *i >= 0 && (*i as usize) < s.chars().count() => {
                 // String literal indexing - get the character
                 state.set_dirty();
-                *expr = Expr::CharConstant(s.name.chars().nth(*i as usize).unwrap(), s.pos);
+                *expr = Expr::CharConstant(s.chars().nth(*i as usize).unwrap(), *pos);
             }
             // var[rhs]
             (Expr::Variable(_), rhs) => optimize_expr(rhs, state),
@@ -530,22 +530,22 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         // lhs in rhs
         Expr::In(x, _) => match (&mut x.lhs, &mut x.rhs) {
             // "xxx" in "xxxxx"
-            (Expr::StringConstant(a), Expr::StringConstant(b)) => {
+            (Expr::StringConstant(a, pos), Expr::StringConstant(b, _)) => {
                 state.set_dirty();
-                *expr = if b.name.contains(a.name.as_str()) { Expr::True(a.pos) } else { Expr::False(a.pos) };
+                *expr = if b.contains(a.as_str()) { Expr::True(*pos) } else { Expr::False(*pos) };
             }
             // 'x' in "xxxxx"
-            (Expr::CharConstant(a, pos), Expr::StringConstant(b)) => {
+            (Expr::CharConstant(a, pos), Expr::StringConstant(b, _)) => {
                 state.set_dirty();
-                *expr = if b.name.contains(*a) { Expr::True(*pos) } else { Expr::False(*pos) };
+                *expr = if b.contains(*a) { Expr::True(*pos) } else { Expr::False(*pos) };
             }
             // "xxx" in #{...}
-            (Expr::StringConstant(a), Expr::Map(b, _)) => {
+            (Expr::StringConstant(a, pos), Expr::Map(b, _)) => {
                 state.set_dirty();
-                *expr = if b.iter().find(|(x, _)| x.name == a.name).is_some() {
-                    Expr::True(a.pos)
+                *expr = if b.iter().find(|(x, _)| x.name == *a).is_some() {
+                    Expr::True(*pos)
                 } else {
-                    Expr::False(a.pos)
+                    Expr::False(*pos)
                 };
             }
             // 'x' in #{...}

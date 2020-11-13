@@ -66,10 +66,10 @@ struct ParseState<'e> {
     /// Interned strings.
     strings: HashMap<String, ImmutableString>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
-    stack: Vec<(String, ScopeEntryType)>,
+    stack: Vec<(ImmutableString, ScopeEntryType)>,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
-    externals: HashMap<String, Position>,
+    externals: HashMap<ImmutableString, Position>,
     /// An indicator that disables variable capturing into externals one single time
     /// up until the nearest consumed Identifier token.
     /// If set to false the next call to `access_var` will not capture the variable.
@@ -78,7 +78,7 @@ struct ParseState<'e> {
     allow_capture: bool,
     /// Encapsulates a local stack with imported module names.
     #[cfg(not(feature = "no_module"))]
-    modules: Vec<String>,
+    modules: Vec<ImmutableString>,
     /// Maximum levels of expression nesting.
     #[cfg(not(feature = "unchecked"))]
     max_expr_depth: usize,
@@ -136,7 +136,7 @@ impl<'e> ParseState<'e> {
         #[cfg(not(feature = "no_closure"))]
         if self.allow_capture {
             if index.is_none() && !self.externals.contains_key(name) {
-                self.externals.insert(name.to_string(), _pos);
+                self.externals.insert(name.into(), _pos);
             }
         } else {
             self.allow_capture = true
@@ -162,20 +162,24 @@ impl<'e> ParseState<'e> {
             .iter()
             .rev()
             .enumerate()
-            .find(|(_, n)| *n == name)
+            .find(|(_, n)| **n == name)
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
     }
 
     /// Get an interned string, creating one if it is not yet interned.
-    pub fn get_interned_string(&mut self, text: String) -> ImmutableString {
+    pub fn get_interned_string<S>(&mut self, text: S) -> ImmutableString
+    where
+        S: AsRef<str> + Into<ImmutableString>,
+    {
         #[allow(clippy::map_entry)]
-        if !self.strings.contains_key(&text) {
-            let value: ImmutableString = text.clone().into();
+        if !self.strings.contains_key(text.as_ref()) {
+            let value: ImmutableString = text.into();
             let result = value.clone();
-            self.strings.insert(text, value);
+            let key = value.to_string();
+            self.strings.insert(key, value);
             result
         } else {
-            self.strings.get(&text).unwrap().clone()
+            self.strings.get(text.as_ref()).unwrap().clone()
         }
     }
 }
@@ -456,7 +460,7 @@ fn parse_index_chain(
             .into_err(*pos))
         }
         Expr::IntegerConstant(_, pos) => match lhs {
-            Expr::Array(_, _) | Expr::StringConstant(_) => (),
+            Expr::Array(_, _) | Expr::StringConstant(_, _) => (),
 
             Expr::Map(_, _) => {
                 return Err(PERR::MalformedIndexExpr(
@@ -490,14 +494,14 @@ fn parse_index_chain(
         },
 
         // lhs[string]
-        Expr::StringConstant(x) => match lhs {
+        Expr::StringConstant(_, pos) => match lhs {
             Expr::Map(_, _) => (),
 
-            Expr::Array(_, _) | Expr::StringConstant(_) => {
+            Expr::Array(_, _) | Expr::StringConstant(_, _) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Array or string expects numeric index, not a string".into(),
                 )
-                .into_err(x.pos))
+                .into_err(*pos))
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -817,10 +821,9 @@ fn parse_primary(
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => Expr::FloatConstant(FloatWrapper(x), settings.pos),
         Token::CharConstant(c) => Expr::CharConstant(c, settings.pos),
-        Token::StringConstant(s) => Expr::StringConstant(Box::new(IdentX::new(
-            state.get_interned_string(s),
-            settings.pos,
-        ))),
+        Token::StringConstant(s) => {
+            Expr::StringConstant(state.get_interned_string(s), settings.pos)
+        }
 
         // Function call
         Token::Identifier(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
@@ -1345,19 +1348,19 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
         }
 
         // "xxx" in "xxxx", 'x' in "xxxx" - OK!
-        (Expr::StringConstant(_), Expr::StringConstant(_))
-        | (Expr::CharConstant(_, _), Expr::StringConstant(_)) => (),
+        (Expr::StringConstant(_, _), Expr::StringConstant(_, _))
+        | (Expr::CharConstant(_, _), Expr::StringConstant(_, _)) => (),
 
         // 123.456 in "xxxx"
         #[cfg(not(feature = "no_float"))]
-        (x @ Expr::FloatConstant(_, _), Expr::StringConstant(_)) => {
+        (x @ Expr::FloatConstant(_, _), Expr::StringConstant(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not a float".into(),
             )
             .into_err(x.position()))
         }
         // 123 in "xxxx"
-        (x @ Expr::IntegerConstant(_, _), Expr::StringConstant(_)) => {
+        (x @ Expr::IntegerConstant(_, _), Expr::StringConstant(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not a number".into(),
             )
@@ -1365,32 +1368,32 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
         }
         // (??? && ???) in "xxxx", (??? || ???) in "xxxx", (??? in ???) in "xxxx",
         //  true in "xxxx", false in "xxxx"
-        (x @ Expr::And(_, _), Expr::StringConstant(_))
-        | (x @ Expr::Or(_, _), Expr::StringConstant(_))
-        | (x @ Expr::In(_, _), Expr::StringConstant(_))
-        | (x @ Expr::True(_), Expr::StringConstant(_))
-        | (x @ Expr::False(_), Expr::StringConstant(_)) => {
+        (x @ Expr::And(_, _), Expr::StringConstant(_, _))
+        | (x @ Expr::Or(_, _), Expr::StringConstant(_, _))
+        | (x @ Expr::In(_, _), Expr::StringConstant(_, _))
+        | (x @ Expr::True(_), Expr::StringConstant(_, _))
+        | (x @ Expr::False(_), Expr::StringConstant(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not a boolean".into(),
             )
             .into_err(x.position()))
         }
         // [???, ???, ???] in "xxxx"
-        (x @ Expr::Array(_, _), Expr::StringConstant(_)) => {
+        (x @ Expr::Array(_, _), Expr::StringConstant(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not an array".into(),
             )
             .into_err(x.position()))
         }
         // #{...} in "xxxx"
-        (x @ Expr::Map(_, _), Expr::StringConstant(_)) => {
+        (x @ Expr::Map(_, _), Expr::StringConstant(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not an object map".into(),
             )
             .into_err(x.position()))
         }
         // () in "xxxx"
-        (x @ Expr::Unit(_), Expr::StringConstant(_)) => {
+        (x @ Expr::Unit(_), Expr::StringConstant(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not ()".into(),
             )
@@ -1398,7 +1401,7 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
         }
 
         // "xxx" in #{...}, 'x' in #{...} - OK!
-        (Expr::StringConstant(_), Expr::Map(_, _))
+        (Expr::StringConstant(_, _), Expr::Map(_, _))
         | (Expr::CharConstant(_, _), Expr::Map(_, _)) => (),
 
         // 123.456 in #{...}
@@ -1664,7 +1667,7 @@ fn parse_custom_syntax(
         delta if delta > 0 => {
             state.stack.resize(
                 state.stack.len() + delta as usize,
-                ("".to_string(), ScopeEntryType::Normal),
+                ("".into(), ScopeEntryType::Normal),
             );
         }
         delta if delta < 0 && state.stack.len() <= delta.abs() as usize => state.stack.clear(),
@@ -1944,8 +1947,9 @@ fn parse_for(
     ensure_not_statement_expr(input, "a boolean")?;
     let expr = parse_expr(input, state, lib, settings.level_up())?;
 
+    let loop_var = state.get_interned_string(name.clone());
     let prev_stack_len = state.stack.len();
-    state.stack.push((name.clone(), ScopeEntryType::Normal));
+    state.stack.push((loop_var, ScopeEntryType::Normal));
 
     settings.is_breakable = true;
     let body = parse_block(input, state, lib, settings.level_up())?;
@@ -1992,13 +1996,15 @@ fn parse_let(
     match var_type {
         // let name = expr
         ScopeEntryType::Normal => {
-            state.stack.push((name.clone(), ScopeEntryType::Normal));
+            let var_name = state.get_interned_string(name.clone());
+            state.stack.push((var_name, ScopeEntryType::Normal));
             let var_def = Ident::new(name, pos);
             Ok(Stmt::Let(Box::new(var_def), init_expr, export, token_pos))
         }
         // const name = { expr:constant }
         ScopeEntryType::Constant => {
-            state.stack.push((name.clone(), ScopeEntryType::Constant));
+            let var_name = state.get_interned_string(name.clone());
+            state.stack.push((var_name, ScopeEntryType::Constant));
             let var_def = Ident::new(name, pos);
             Ok(Stmt::Const(Box::new(var_def), init_expr, export, token_pos))
         }
@@ -2038,6 +2044,7 @@ fn parse_import(
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
+    let name = state.get_interned_string(name);
     state.modules.push(name.clone());
 
     Ok(Stmt::Import(
@@ -2091,7 +2098,7 @@ fn parse_export(
 
         let rename = if match_token(input, Token::As).0 {
             match input.next().unwrap() {
-                (Token::Identifier(s), pos) => Some(Ident::new(s.clone(), pos)),
+                (Token::Identifier(s), pos) => Some(IdentX::new(state.get_interned_string(s), pos)),
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
                 }
@@ -2102,7 +2109,7 @@ fn parse_export(
             None
         };
 
-        exports.push((Ident::new(id, id_pos), rename));
+        exports.push((IdentX::new(state.get_interned_string(id), id_pos), rename));
 
         match input.peek().unwrap() {
             (Token::Comma, _) => {
@@ -2464,6 +2471,7 @@ fn parse_fn(
             match input.next().unwrap() {
                 (Token::RightParen, _) => break,
                 (Token::Identifier(s), pos) => {
+                    let s = state.get_interned_string(s);
                     state.stack.push((s.clone(), ScopeEntryType::Normal));
                     params.push((s, pos))
                 }
@@ -2538,7 +2546,7 @@ fn parse_fn(
 
 /// Creates a curried expression from a list of external variables
 #[cfg(not(feature = "no_function"))]
-fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Position) -> Expr {
+fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<IdentX>, pos: Position) -> Expr {
     if externals.is_empty() {
         return fn_expr;
     }
@@ -2577,7 +2585,7 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
         // Statement block
         let mut statements: StaticVec<_> = Default::default();
         // Insert `Share` statements
-        statements.extend(externals.into_iter().map(|x| Stmt::Share(Box::new(x))));
+        statements.extend(externals.into_iter().map(|x| Stmt::Share(x)));
         // Final expression
         statements.push(Stmt::Expr(expr));
         Expr::Stmt(Box::new(statements), pos)
@@ -2606,6 +2614,7 @@ fn parse_anon_fn(
                 match input.next().unwrap() {
                     (Token::Pipe, _) => break,
                     (Token::Identifier(s), pos) => {
+                        let s = state.get_interned_string(s);
                         state.stack.push((s.clone(), ScopeEntryType::Normal));
                         params.push((s, pos))
                     }
@@ -2656,13 +2665,13 @@ fn parse_anon_fn(
 
     // External variables may need to be processed in a consistent order,
     // so extract them into a list.
-    let externals: StaticVec<Ident> = {
+    let externals: StaticVec<IdentX> = {
         #[cfg(not(feature = "no_closure"))]
         {
             state
                 .externals
                 .iter()
-                .map(|(k, &v)| Ident::new(k.clone(), v))
+                .map(|(k, &v)| IdentX::new(k.clone(), v))
                 .collect()
         }
         #[cfg(feature = "no_closure")]
@@ -2706,7 +2715,7 @@ fn parse_anon_fn(
         mods: Default::default(),
     };
 
-    let expr = Expr::FnPointer(Box::new(IdentX::new(fn_name, settings.pos)));
+    let expr = Expr::FnPointer(fn_name, settings.pos);
 
     let expr = if cfg!(not(feature = "no_closure")) {
         make_curry_from_externals(expr, externals, settings.pos)
@@ -2860,7 +2869,7 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         Union::Unit(_) => Some(Expr::Unit(pos)),
         Union::Int(value) => Some(Expr::IntegerConstant(value, pos)),
         Union::Char(value) => Some(Expr::CharConstant(value, pos)),
-        Union::Str(value) => Some(Expr::StringConstant(Box::new(IdentX::new(value, pos)))),
+        Union::Str(value) => Some(Expr::StringConstant(value, pos)),
         Union::Bool(true) => Some(Expr::True(pos)),
         Union::Bool(false) => Some(Expr::False(pos)),
         #[cfg(not(feature = "no_index"))]

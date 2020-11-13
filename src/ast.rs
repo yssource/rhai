@@ -98,10 +98,10 @@ pub struct ScriptFnDef {
     /// Function access mode.
     pub access: FnAccess,
     /// Names of function parameters.
-    pub params: StaticVec<String>,
+    pub params: StaticVec<ImmutableString>,
     /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
-    pub externals: HashSet<String>,
+    pub externals: HashSet<ImmutableString>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -637,10 +637,10 @@ pub enum Stmt {
     Import(Expr, Option<Box<IdentX>>, Position),
     /// export var as var, ...
     #[cfg(not(feature = "no_module"))]
-    Export(Vec<(Ident, Option<Ident>)>, Position),
+    Export(Vec<(IdentX, Option<IdentX>)>, Position),
     /// Convert a variable to shared.
     #[cfg(not(feature = "no_closure"))]
-    Share(Box<Ident>),
+    Share(IdentX),
 }
 
 impl Default for Stmt {
@@ -915,9 +915,9 @@ pub enum Expr {
     /// Character constant.
     CharConstant(char, Position),
     /// String constant.
-    StringConstant(Box<IdentX>),
+    StringConstant(ImmutableString, Position),
     /// FnPtr constant.
-    FnPointer(Box<IdentX>),
+    FnPointer(ImmutableString, Position),
     /// Variable access - (optional index, optional modules, hash, variable name)
     Variable(Box<(Option<NonZeroUsize>, Option<Box<NamespaceRef>>, u64, IdentX)>),
     /// Property access - (getter, setter), prop
@@ -971,8 +971,8 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, _) => TypeId::of::<FLOAT>(),
             Self::CharConstant(_, _) => TypeId::of::<char>(),
-            Self::StringConstant(_) => TypeId::of::<ImmutableString>(),
-            Self::FnPointer(_) => TypeId::of::<FnPtr>(),
+            Self::StringConstant(_, _) => TypeId::of::<ImmutableString>(),
+            Self::FnPointer(_, _) => TypeId::of::<FnPtr>(),
             Self::True(_) | Self::False(_) | Self::In(_, _) | Self::And(_, _) | Self::Or(_, _) => {
                 TypeId::of::<bool>()
             }
@@ -999,9 +999,9 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(x, _) => x.0.into(),
             Self::CharConstant(x, _) => (*x).into(),
-            Self::StringConstant(x) => x.name.clone().into(),
-            Self::FnPointer(x) => Dynamic(Union::FnPtr(Box::new(FnPtr::new_unchecked(
-                x.name.clone(),
+            Self::StringConstant(x, _) => x.clone().into(),
+            Self::FnPointer(x, _) => Dynamic(Union::FnPtr(Box::new(FnPtr::new_unchecked(
+                x.clone(),
                 Default::default(),
             )))),
             Self::True(_) => true.into(),
@@ -1044,8 +1044,8 @@ impl Expr {
 
             Self::IntegerConstant(_, pos) => *pos,
             Self::CharConstant(_, pos) => *pos,
-            Self::StringConstant(x) => x.pos,
-            Self::FnPointer(x) => x.pos,
+            Self::StringConstant(_, pos) => *pos,
+            Self::FnPointer(_, pos) => *pos,
             Self::Array(_, pos) => *pos,
             Self::Map(_, pos) => *pos,
             Self::Property(x) => (x.1).pos,
@@ -1075,8 +1075,8 @@ impl Expr {
 
             Self::IntegerConstant(_, pos) => *pos = new_pos,
             Self::CharConstant(_, pos) => *pos = new_pos,
-            Self::StringConstant(x) => x.pos = new_pos,
-            Self::FnPointer(x) => x.pos = new_pos,
+            Self::StringConstant(_, pos) => *pos = new_pos,
+            Self::FnPointer(_, pos) => *pos = new_pos,
             Self::Array(_, pos) => *pos = new_pos,
             Self::Map(_, pos) => *pos = new_pos,
             Self::Variable(x) => (x.3).pos = new_pos,
@@ -1134,8 +1134,8 @@ impl Expr {
 
             Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
-            | Self::StringConstant(_)
-            | Self::FnPointer(_)
+            | Self::StringConstant(_, _)
+            | Self::FnPointer(_, _)
             | Self::True(_)
             | Self::False(_)
             | Self::Unit(_) => true,
@@ -1148,8 +1148,8 @@ impl Expr {
 
             // Check in expression
             Self::In(x, _) => match (&x.lhs, &x.rhs) {
-                (Self::StringConstant(_), Self::StringConstant(_))
-                | (Self::CharConstant(_, _), Self::StringConstant(_)) => true,
+                (Self::StringConstant(_, _), Self::StringConstant(_, _))
+                | (Self::CharConstant(_, _), Self::StringConstant(_, _)) => true,
                 _ => false,
             },
 
@@ -1167,8 +1167,8 @@ impl Expr {
 
             Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
-            | Self::StringConstant(_)
-            | Self::FnPointer(_)
+            | Self::StringConstant(_, _)
+            | Self::FnPointer(_, _)
             | Self::True(_)
             | Self::False(_)
             | Self::Unit(_) => true,
@@ -1181,8 +1181,8 @@ impl Expr {
 
             // Check in expression
             Self::In(x, _) => match (&x.lhs, &x.rhs) {
-                (Self::StringConstant(_), Self::StringConstant(_))
-                | (Self::CharConstant(_, _), Self::StringConstant(_)) => true,
+                (Self::StringConstant(_, _), Self::StringConstant(_, _))
+                | (Self::CharConstant(_, _), Self::StringConstant(_, _)) => true,
                 _ => false,
             },
 
@@ -1200,7 +1200,7 @@ impl Expr {
 
             Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
-            | Self::FnPointer(_)
+            | Self::FnPointer(_, _)
             | Self::In(_, _)
             | Self::And(_, _)
             | Self::Or(_, _)
@@ -1208,7 +1208,7 @@ impl Expr {
             | Self::False(_)
             | Self::Unit(_) => false,
 
-            Self::StringConstant(_)
+            Self::StringConstant(_, _)
             | Self::Stmt(_, _)
             | Self::FnCall(_, _)
             | Self::Dot(_, _)
