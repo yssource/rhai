@@ -2590,7 +2590,7 @@ fn parse_fn(
                 (Token::RightParen, _) => break,
                 (Token::Identifier(s), pos) => {
                     if params.iter().any(|(p, _)| p == &s) {
-                        return Err(PERR::FnDuplicatedParam(name.to_string(), s).into_err(pos));
+                        return Err(PERR::FnDuplicatedParam(name, s).into_err(pos));
                     }
                     let s = state.get_interned_string(s);
                     state.stack.push((s.clone(), ScopeEntryType::Normal));
