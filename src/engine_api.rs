@@ -9,6 +9,7 @@ use crate::parse_error::ParseError;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
 use crate::token::{Position, NO_POS};
+use crate::utils::get_hasher;
 
 #[cfg(not(feature = "no_index"))]
 use crate::{
@@ -27,7 +28,7 @@ use crate::{
 use crate::fn_register::{RegisterFn, RegisterResultFn};
 
 #[cfg(not(feature = "no_function"))]
-use crate::{fn_args::FuncArgs, fn_call::ensure_no_data_race, module::Module, StaticVec, utils::get_hasher};
+use crate::{fn_args::FuncArgs, fn_call::ensure_no_data_race, module::Module, StaticVec};
 
 #[cfg(not(feature = "no_optimize"))]
 use crate::optimize::optimize_into_ast;
