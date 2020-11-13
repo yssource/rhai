@@ -92,6 +92,16 @@ pub fn calc_script_fn_hash<'a>(
     calc_fn_hash(modules, fn_name, Some(num), empty())
 }
 
+/// Create an instance of the default hasher.
+pub fn get_hasher() -> impl Hasher {
+    #[cfg(feature = "no_std")]
+    let s: AHasher = Default::default();
+    #[cfg(not(feature = "no_std"))]
+    let s = DefaultHasher::new();
+
+    s
+}
+
 /// Calculate a `u64` hash key from a namespace-qualified function name and parameter types.
 ///
 /// Module names are passed in via `&str` references from an iterator.
@@ -106,10 +116,7 @@ fn calc_fn_hash<'a>(
     num: Option<usize>,
     params: impl Iterator<Item = TypeId>,
 ) -> u64 {
-    #[cfg(feature = "no_std")]
-    let s: &mut AHasher = &mut Default::default();
-    #[cfg(not(feature = "no_std"))]
-    let s = &mut DefaultHasher::new();
+    let s = &mut get_hasher();
 
     // We always skip the first module
     modules.skip(1).for_each(|m| m.hash(s));

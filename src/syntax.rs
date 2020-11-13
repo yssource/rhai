@@ -34,7 +34,7 @@ pub type FnCustomSyntaxParse =
     dyn Fn(&[String]) -> Result<Option<String>, ParseError> + Send + Sync;
 
 /// An expression sub-tree in an AST.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct Expression<'a>(&'a Expr);
 
 impl<'a> From<&'a Expr> for Expression<'a> {

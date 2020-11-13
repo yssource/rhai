@@ -216,6 +216,10 @@ pub enum Token {
     Colon,
     /// `::`
     DoubleColon,
+    /// `=>`
+    DoubleArrow,
+    /// `_`
+    Underscore,
     /// `,`
     Comma,
     /// `.`
@@ -236,6 +240,8 @@ pub enum Token {
     If,
     /// `else`
     Else,
+    /// `switch`
+    Switch,
     /// `while`
     While,
     /// `loop`
@@ -371,6 +377,8 @@ impl Token {
                 SemiColon => ";",
                 Colon => ":",
                 DoubleColon => "::",
+                DoubleArrow => "=>",
+                Underscore => "_",
                 Comma => ",",
                 Period => ".",
                 MapStart => "#{",
@@ -381,6 +389,7 @@ impl Token {
                 Const => "const",
                 If => "if",
                 Else => "else",
+                Switch => "switch",
                 While => "while",
                 Loop => "loop",
                 For => "for",
@@ -455,6 +464,8 @@ impl Token {
             ";" => SemiColon,
             ":" => Colon,
             "::" => DoubleColon,
+            "=>" => DoubleArrow,
+            "_" => Underscore,
             "," => Comma,
             "." => Period,
             "#{" => MapStart,
@@ -465,6 +476,7 @@ impl Token {
             "const" => Const,
             "if" => If,
             "else" => Else,
+            "switch" => Switch,
             "while" => While,
             "loop" => Loop,
             "for" => For,
@@ -521,11 +533,12 @@ impl Token {
             #[cfg(feature = "no_module")]
             "import" | "export" | "as" => Reserved(syntax.into()),
 
-            "===" | "!==" | "->" | "<-" | "=>" | ":=" | "::<" | "(*" | "*)" | "#" | "public"
-            | "new" | "use" | "module" | "package" | "var" | "static" | "shared" | "with"
-            | "do" | "each" | "then" | "goto" | "exit" | "switch" | "match" | "case"
-            | "default" | "void" | "null" | "nil" | "spawn" | "thread" | "go" | "sync"
-            | "async" | "await" | "yield" => Reserved(syntax.into()),
+            "===" | "!==" | "->" | "<-" | ":=" | "::<" | "(*" | "*)" | "#" | "public" | "new"
+            | "use" | "module" | "package" | "var" | "static" | "shared" | "with" | "do"
+            | "each" | "then" | "goto" | "exit" | "match" | "case" | "default" | "void"
+            | "null" | "nil" | "spawn" | "thread" | "go" | "sync" | "async" | "await" | "yield" => {
+                Reserved(syntax.into())
+            }
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
             | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_DEF_VAR
@@ -1318,7 +1331,7 @@ fn get_next_token_inner(
             }
             ('=', '>') => {
                 eat_next(stream, pos);
-                return Some((Token::Reserved("=>".into()), start_pos));
+                return Some((Token::DoubleArrow, start_pos));
             }
             ('=', _) => return Some((Token::Equals, start_pos)),
 
@@ -1481,7 +1494,11 @@ fn get_identifier(
 
     let is_valid_identifier = is_valid_identifier(result.iter().cloned());
 
-    let identifier = result.into_iter().collect();
+    let identifier: String = result.into_iter().collect();
+
+    if let Some(token) = Token::lookup_from_syntax(&identifier) {
+        return Some((token, start_pos));
+    }
 
     if !is_valid_identifier {
         return Some((
@@ -1490,10 +1507,7 @@ fn get_identifier(
         ));
     }
 
-    return Some((
-        Token::lookup_from_syntax(&identifier).unwrap_or_else(|| Token::Identifier(identifier)),
-        start_pos,
-    ));
+    return Some((Token::Identifier(identifier), start_pos));
 }
 
 /// Is this keyword allowed as a function?
@@ -1653,9 +1667,6 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
                     "'->' is not a valid symbol. This is not C or C++!".to_string())),
                 ("<-", false) => Token::LexError(LERR::ImproperSymbol(
                     "'<-' is not a valid symbol. This is not Go! Should it be '<='?".to_string(),
-                )),
-                ("=>", false) => Token::LexError(LERR::ImproperSymbol(
-                    "'=>' is not a valid symbol. This is not Rust! Should it be '>='?".to_string(),
                 )),
                 (":=", false) => Token::LexError(LERR::ImproperSymbol(
                     "':=' is not a valid assignment operator. This is not Go! Should it be simply '='?".to_string(),

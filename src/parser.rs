@@ -13,11 +13,11 @@ use crate::syntax::CustomSyntax;
 use crate::token::{
     is_keyword_function, is_valid_identifier, Position, Token, TokenStream, NO_POS,
 };
-use crate::utils::{ImmutableString, StraightHasherBuilder};
+use crate::utils::{get_hasher, ImmutableString, StraightHasherBuilder};
 use crate::{calc_script_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_float"))]
-use crate::ast::FloatWrapper;
+use crate::FLOAT;
 
 #[cfg(not(feature = "no_object"))]
 use crate::engine::{make_getter, make_setter, KEYWORD_EVAL, KEYWORD_FN_PTR};
@@ -33,7 +33,7 @@ use crate::stdlib::{
     boxed::Box,
     collections::HashMap,
     format,
-    hash::Hash,
+    hash::{Hash, Hasher},
     iter::empty,
     num::NonZeroUsize,
     string::{String, ToString},
@@ -41,28 +41,19 @@ use crate::stdlib::{
     vec::Vec,
 };
 
-#[cfg(not(feature = "no_function"))]
-use crate::stdlib::hash::Hasher;
-
 #[cfg(not(feature = "no_closure"))]
 use crate::stdlib::collections::HashSet;
-
-#[cfg(not(feature = "no_std"))]
-#[cfg(not(feature = "no_function"))]
-use crate::stdlib::collections::hash_map::DefaultHasher;
-
-#[cfg(feature = "no_std")]
-#[cfg(not(feature = "no_function"))]
-use ahash::AHasher;
 
 type PERR = ParseErrorType;
 
 type FunctionsLib = HashMap<u64, ScriptFnDef, StraightHasherBuilder>;
 
-#[derive(Clone)]
+#[derive(Debug)]
 struct ParseState<'e> {
     /// Reference to the scripting `Engine`.
     engine: &'e Engine,
+    /// Hash that uniquely identifies a script.
+    script_hash: u64,
     /// Interned strings.
     strings: HashMap<String, ImmutableString>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
@@ -93,6 +84,7 @@ impl<'e> ParseState<'e> {
     #[inline(always)]
     pub fn new(
         engine: &'e Engine,
+        script_hash: u64,
         #[cfg(not(feature = "unchecked"))] max_expr_depth: usize,
         #[cfg(not(feature = "unchecked"))]
         #[cfg(not(feature = "no_function"))]
@@ -100,6 +92,7 @@ impl<'e> ParseState<'e> {
     ) -> Self {
         Self {
             engine,
+            script_hash,
             #[cfg(not(feature = "unchecked"))]
             max_expr_depth,
             #[cfg(not(feature = "unchecked"))]
@@ -633,7 +626,9 @@ fn parse_array_literal(
 
     let mut arr = StaticVec::new();
 
-    while !input.peek().unwrap().0.is_eof() {
+    loop {
+        const MISSING_RBRACKET: &str = "to end this array literal";
+
         #[cfg(not(feature = "unchecked"))]
         if state.engine.max_array_size() > 0 && arr.len() >= state.engine.max_array_size() {
             return Err(PERR::LiteralTooLarge(
@@ -648,6 +643,12 @@ fn parse_array_literal(
                 eat_token(input, Token::RightBracket);
                 break;
             }
+            (Token::EOF, pos) => {
+                return Err(
+                    PERR::MissingToken(Token::RightBracket.into(), MISSING_RBRACKET.into())
+                        .into_err(*pos),
+                )
+            }
             _ => {
                 let expr = parse_expr(input, state, lib, settings.level_up())?;
                 arr.push(expr);
@@ -660,11 +661,10 @@ fn parse_array_literal(
             }
             (Token::RightBracket, _) => (),
             (Token::EOF, pos) => {
-                return Err(PERR::MissingToken(
-                    Token::RightBracket.into(),
-                    "to end this array literal".into(),
+                return Err(
+                    PERR::MissingToken(Token::RightBracket.into(), MISSING_RBRACKET.into())
+                        .into_err(*pos),
                 )
-                .into_err(*pos))
             }
             (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
             (_, pos) => {
@@ -691,9 +691,9 @@ fn parse_map_literal(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let mut map = StaticVec::new();
+    let mut map: StaticVec<(IdentX, Expr)> = Default::default();
 
-    while !input.peek().unwrap().0.is_eof() {
+    loop {
         const MISSING_RBRACE: &str = "to end this object map literal";
 
         match input.peek().unwrap() {
@@ -701,12 +701,22 @@ fn parse_map_literal(
                 eat_token(input, Token::RightBrace);
                 break;
             }
+            (Token::EOF, pos) => {
+                return Err(
+                    PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
+                        .into_err(*pos),
+                )
+            }
             _ => (),
         }
 
         let (name, pos) = match input.next().unwrap() {
-            (Token::Identifier(s), pos) => (s, pos),
-            (Token::StringConstant(s), pos) => (s, pos),
+            (Token::Identifier(s), pos) | (Token::StringConstant(s), pos) => {
+                if map.iter().any(|(p, _)| p.name == &s) {
+                    return Err(PERR::DuplicatedProperty(s).into_err(pos));
+                }
+                (s, pos)
+            }
             (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                 return Err(PERR::Reserved(s).into_err(pos));
             }
@@ -775,18 +785,126 @@ fn parse_map_literal(
         }
     }
 
-    // Check for duplicating properties
-    map.iter()
-        .enumerate()
-        .try_for_each(|(i, (IdentX { name: k1, .. }, _))| {
-            map.iter()
-                .skip(i + 1)
-                .find(|(IdentX { name: k2, .. }, _)| k2 == k1)
-                .map_or_else(|| Ok(()), |(IdentX { name: k2, pos }, _)| Err((k2, *pos)))
-        })
-        .map_err(|(key, pos)| PERR::DuplicatedProperty(key.to_string()).into_err(pos))?;
-
     Ok(Expr::Map(Box::new(map), settings.pos))
+}
+
+/// Parse a switch expression.
+fn parse_switch(
+    input: &mut TokenStream,
+    state: &mut ParseState,
+    lib: &mut FunctionsLib,
+    settings: ParseSettings,
+) -> Result<Expr, ParseError> {
+    #[cfg(not(feature = "unchecked"))]
+    settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    let item = parse_expr(input, state, lib, settings.level_up())?;
+
+    match input.next().unwrap() {
+        (Token::LeftBrace, _) => (),
+        (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+        (_, pos) => {
+            return Err(PERR::MissingToken(
+                Token::LeftBrace.into(),
+                "to start a switch block".into(),
+            )
+            .into_err(pos))
+        }
+    }
+
+    let mut table: HashMap<u64, Stmt, StraightHasherBuilder> = Default::default();
+    let mut def_stmt = None;
+
+    loop {
+        const MISSING_RBRACE: &str = "to end this switch block";
+
+        let expr = match input.peek().unwrap() {
+            (Token::RightBrace, _) => {
+                eat_token(input, Token::RightBrace);
+                break;
+            }
+            (Token::EOF, pos) => {
+                return Err(
+                    PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
+                        .into_err(*pos),
+                )
+            }
+            (Token::Underscore, _) if def_stmt.is_none() => {
+                eat_token(input, Token::Underscore);
+                None
+            }
+            (Token::Underscore, pos) => return Err(PERR::DuplicatedSwitchCase.into_err(*pos)),
+            _ => Some(parse_expr(input, state, lib, settings.level_up())?),
+        };
+
+        let hash = if let Some(expr) = expr {
+            if let Some(value) = expr.get_constant_value() {
+                let hasher = &mut get_hasher();
+                value.hash(hasher);
+                let hash = hasher.finish();
+
+                if table.contains_key(&hash) {
+                    return Err(PERR::DuplicatedSwitchCase.into_err(expr.position()));
+                }
+
+                Some(hash)
+            } else {
+                return Err(PERR::ExprExpected("a literal".to_string()).into_err(expr.position()));
+            }
+        } else {
+            None
+        };
+
+        match input.next().unwrap() {
+            (Token::DoubleArrow, _) => (),
+            (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+            (_, pos) => {
+                return Err(PERR::MissingToken(
+                    Token::DoubleArrow.into(),
+                    "in this switch case".to_string(),
+                )
+                .into_err(pos))
+            }
+        };
+
+        let stmt = parse_stmt(input, state, lib, settings.level_up()).map(Option::unwrap)?;
+
+        let need_comma = !stmt.is_self_terminated();
+
+        def_stmt = if let Some(hash) = hash {
+            table.insert(hash, stmt);
+            None
+        } else {
+            Some(stmt)
+        };
+
+        match input.peek().unwrap() {
+            (Token::Comma, _) => {
+                eat_token(input, Token::Comma);
+            }
+            (Token::RightBrace, _) => (),
+            (Token::EOF, pos) => {
+                return Err(
+                    PERR::MissingToken(Token::RightParen.into(), MISSING_RBRACE.into())
+                        .into_err(*pos),
+                )
+            }
+            (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
+            (_, pos) if need_comma => {
+                return Err(PERR::MissingToken(
+                    Token::Comma.into(),
+                    "to separate the items in this switch block".into(),
+                )
+                .into_err(*pos))
+            }
+            (_, _) => (),
+        }
+    }
+
+    Ok(Expr::Switch(
+        Box::new((item, table, def_stmt)),
+        settings.pos,
+    ))
 }
 
 /// Parse a primary expression.
@@ -819,7 +937,7 @@ fn parse_primary(
     let mut root_expr = match token {
         Token::IntegerConstant(x) => Expr::IntegerConstant(x, settings.pos),
         #[cfg(not(feature = "no_float"))]
-        Token::FloatConstant(x) => Expr::FloatConstant(FloatWrapper(x), settings.pos),
+        Token::FloatConstant(x) => Expr::FloatConstant(x, settings.pos),
         Token::CharConstant(c) => Expr::CharConstant(c, settings.pos),
         Token::StringConstant(s) => {
             Expr::StringConstant(state.get_interned_string(s), settings.pos)
@@ -886,6 +1004,7 @@ fn parse_primary(
         Token::LeftBracket => parse_array_literal(input, state, lib, settings.level_up())?,
         #[cfg(not(feature = "no_object"))]
         Token::MapStart => parse_map_literal(input, state, lib, settings.level_up())?,
+        Token::Switch => parse_switch(input, state, lib, settings.level_up())?,
         Token::True => Expr::True(settings.pos),
         Token::False => Expr::False(settings.pos),
         Token::LexError(err) => return Err(err.into_err(settings.pos)),
@@ -1028,7 +1147,7 @@ fn parse_unary(
                     .map(|i| Expr::IntegerConstant(i, pos))
                     .or_else(|| {
                         #[cfg(not(feature = "no_float"))]
-                        return Some(Expr::FloatConstant(-Into::<FloatWrapper>::into(num), pos));
+                        return Some(Expr::FloatConstant(-(num as FLOAT), pos));
                         #[cfg(feature = "no_float")]
                         return None;
                     })
@@ -1091,6 +1210,7 @@ fn parse_unary(
         Token::Pipe | Token::Or if settings.allow_anonymous_fn => {
             let mut new_state = ParseState::new(
                 state.engine,
+                state.script_hash,
                 #[cfg(not(feature = "unchecked"))]
                 state.max_function_expr_depth,
                 #[cfg(not(feature = "unchecked"))]
@@ -2162,10 +2282,7 @@ fn parse_block(
         // Parse statements inside the block
         settings.is_global = false;
 
-        let stmt = match parse_stmt(input, state, lib, settings.level_up())? {
-            Some(s) => s,
-            None => continue,
-        };
+        let stmt = parse_stmt(input, state, lib, settings.level_up()).map(Option::unwrap)?;
 
         // See if it needs a terminating semicolon
         let need_semicolon = !stmt.is_self_terminated();
@@ -2266,6 +2383,7 @@ fn parse_stmt(
                 (Token::Fn, pos) => {
                     let mut new_state = ParseState::new(
                         state.engine,
+                        state.script_hash,
                         #[cfg(not(feature = "unchecked"))]
                         state.max_function_expr_depth,
                         #[cfg(not(feature = "unchecked"))]
@@ -2471,6 +2589,9 @@ fn parse_fn(
             match input.next().unwrap() {
                 (Token::RightParen, _) => break,
                 (Token::Identifier(s), pos) => {
+                    if params.iter().any(|(p, _)| p == &s) {
+                        return Err(PERR::FnDuplicatedParam(name.to_string(), s).into_err(pos));
+                    }
                     let s = state.get_interned_string(s);
                     state.stack.push((s.clone(), ScopeEntryType::Normal));
                     params.push((s, pos))
@@ -2495,21 +2616,6 @@ fn parse_fn(
             }
         }
     }
-
-    // Check for duplicating parameters
-    params
-        .iter()
-        .enumerate()
-        .try_for_each(|(i, (p1, _))| {
-            params
-                .iter()
-                .skip(i + 1)
-                .find(|(p2, _)| p2 == p1)
-                .map_or_else(|| Ok(()), |(p2, pos)| Err((p2, *pos)))
-        })
-        .map_err(|(p, pos)| {
-            PERR::FnDuplicatedParam(name.to_string(), p.to_string()).into_err(pos)
-        })?;
 
     // Parse function body
     let body = match input.peek().unwrap() {
@@ -2614,6 +2720,9 @@ fn parse_anon_fn(
                 match input.next().unwrap() {
                     (Token::Pipe, _) => break,
                     (Token::Identifier(s), pos) => {
+                        if params.iter().any(|(p, _)| p == &s) {
+                            return Err(PERR::FnDuplicatedParam("".to_string(), s).into_err(pos));
+                        }
                         let s = state.get_interned_string(s);
                         state.stack.push((s.clone(), ScopeEntryType::Normal));
                         params.push((s, pos))
@@ -2644,24 +2753,9 @@ fn parse_anon_fn(
         }
     }
 
-    // Check for duplicating parameters
-    params
-        .iter()
-        .enumerate()
-        .try_for_each(|(i, (p1, _))| {
-            params
-                .iter()
-                .skip(i + 1)
-                .find(|(p2, _)| p2 == p1)
-                .map_or_else(|| Ok(()), |(p2, pos)| Err((p2, *pos)))
-        })
-        .map_err(|(p, pos)| PERR::FnDuplicatedParam("".to_string(), p.to_string()).into_err(pos))?;
-
     // Parse function body
     settings.is_breakable = false;
-    let pos = input.peek().unwrap().1;
-    let body = parse_stmt(input, state, lib, settings.level_up())
-        .map(|stmt| stmt.unwrap_or_else(|| Stmt::Noop(pos)))?;
+    let body = parse_stmt(input, state, lib, settings.level_up()).map(Option::unwrap)?;
 
     // External variables may need to be processed in a consistent order,
     // so extract them into a list.
@@ -2688,18 +2782,12 @@ fn parse_anon_fn(
         params.into_iter().map(|(v, _)| v).collect()
     };
 
-    // Calculate hash
-    #[cfg(feature = "no_std")]
-    let mut s: AHasher = Default::default();
-    #[cfg(not(feature = "no_std"))]
-    let mut s = DefaultHasher::new();
+    // Create unique function name by hashing the script hash plus the position
+    let hasher = &mut get_hasher();
+    state.script_hash.hash(hasher);
+    settings.pos.hash(hasher);
+    let hash = hasher.finish();
 
-    s.write_usize(params.len());
-    params.iter().for_each(|a| a.hash(&mut s));
-    body.hash(&mut s);
-    let hash = s.finish();
-
-    // Create unique function name
     let fn_name: ImmutableString = format!("{}{:016x}", FN_ANONYMOUS, hash).into();
 
     // Define the function
@@ -2729,6 +2817,7 @@ fn parse_anon_fn(
 impl Engine {
     pub(crate) fn parse_global_expr(
         &self,
+        script_hash: u64,
         input: &mut TokenStream,
         scope: &Scope,
         optimization_level: OptimizationLevel,
@@ -2736,6 +2825,7 @@ impl Engine {
         let mut functions = Default::default();
         let mut state = ParseState::new(
             self,
+            script_hash,
             #[cfg(not(feature = "unchecked"))]
             self.max_expr_depth(),
             #[cfg(not(feature = "unchecked"))]
@@ -2779,12 +2869,14 @@ impl Engine {
     /// Parse the global level statements.
     fn parse_global_level(
         &self,
+        script_hash: u64,
         input: &mut TokenStream,
     ) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
         let mut statements: Vec<Stmt> = Default::default();
         let mut functions = Default::default();
         let mut state = ParseState::new(
             self,
+            script_hash,
             #[cfg(not(feature = "unchecked"))]
             self.max_expr_depth(),
             #[cfg(not(feature = "unchecked"))]
@@ -2845,11 +2937,12 @@ impl Engine {
     #[inline(always)]
     pub(crate) fn parse(
         &self,
+        script_hash: u64,
         input: &mut TokenStream,
         scope: &Scope,
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let (statements, lib) = self.parse_global_level(input)?;
+        let (statements, lib) = self.parse_global_level(script_hash, input)?;
 
         Ok(
             // Optimize AST
@@ -2864,7 +2957,7 @@ impl Engine {
 pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
     match value.0 {
         #[cfg(not(feature = "no_float"))]
-        Union::Float(value) => Some(Expr::FloatConstant(FloatWrapper(value), pos)),
+        Union::Float(value) => Some(Expr::FloatConstant(value, pos)),
 
         Union::Unit(_) => Some(Expr::Unit(pos)),
         Union::Int(value) => Some(Expr::IntegerConstant(value, pos)),

@@ -11,6 +11,7 @@ use crate::module::Module;
 use crate::parser::map_dynamic_to_expr;
 use crate::scope::Scope;
 use crate::token::{is_valid_identifier, Position, NO_POS};
+use crate::utils::get_hasher;
 use crate::{calc_native_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_function"))]
@@ -18,6 +19,7 @@ use crate::ast::ReturnType;
 
 use crate::stdlib::{
     boxed::Box,
+    hash::{Hash, Hasher},
     iter::empty,
     mem,
     string::{String, ToString},
@@ -169,7 +171,7 @@ fn optimize_stmt_block(
     // Optimize each statement in the block
     statements.iter_mut().for_each(|stmt| match stmt {
         // Add constant literals into the state
-        Stmt::Const(var_def, Some(expr), _, pos) if expr.is_literal() => {
+        Stmt::Const(var_def, Some(expr), _, pos) if expr.is_constant() => {
             state.set_dirty();
             state.push_constant(&var_def.name, mem::take(expr));
             *stmt = Stmt::Noop(*pos); // No need to keep constants
@@ -695,6 +697,42 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             *expr = result;
         }
 
+        // switch const { ... }
+        Expr::Switch(x, pos) if x.0.is_constant() => {
+            let value = x.0.get_constant_value().unwrap();
+            let hasher = &mut get_hasher();
+            value.hash(hasher);
+            let hash = hasher.finish();
+
+            state.set_dirty();
+
+            let table = &mut x.1;
+
+            if let Some(stmt) = table.get_mut(&hash) {
+                optimize_stmt(stmt, state, true);
+                *expr = Expr::Stmt(Box::new(vec![mem::take(stmt)].into()), *pos);
+            } else if let Some(def_stmt) = x.2.as_mut() {
+                optimize_stmt(def_stmt, state, true);
+                *expr = Expr::Stmt(Box::new(vec![mem::take(def_stmt)].into()), *pos);
+            } else {
+                *expr = Expr::Unit(*pos);
+            }
+        }
+
+        // switch
+        Expr::Switch(x, _) => {
+            optimize_expr(&mut x.0, state);
+            x.1.values_mut().for_each(|stmt| optimize_stmt(stmt, state, true));
+            if let Some(def_stmt) = x.2.as_mut() {
+                optimize_stmt(def_stmt, state, true);
+
+                match def_stmt {
+                    Stmt::Noop(_) | Stmt::Expr(Expr::Unit(_)) => x.2 = None,
+                    _ => ()
+                }
+            }
+        }
+
         // Custom syntax
         Expr::Custom(x, _) => x.keywords.iter_mut().for_each(|expr| optimize_expr(expr, state)),
 
@@ -746,7 +784,7 @@ fn optimize(
                     let value_expr = expr.as_mut().unwrap();
                     optimize_expr(value_expr, &mut state);
 
-                    if value_expr.is_literal() {
+                    if value_expr.is_constant() {
                         state.push_constant(&var_def.name, value_expr.clone());
                     }
 

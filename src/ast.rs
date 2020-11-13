@@ -5,7 +5,7 @@ use crate::fn_native::{FnPtr, Shared};
 use crate::module::{Module, NamespaceRef};
 use crate::syntax::FnCustomSyntaxEval;
 use crate::token::{Position, Token, NO_POS};
-use crate::utils::ImmutableString;
+use crate::utils::{ImmutableString, StraightHasherBuilder};
 use crate::StaticVec;
 use crate::INT;
 
@@ -25,17 +25,15 @@ use crate::stdlib::{
     any::TypeId,
     borrow::Cow,
     boxed::Box,
+    collections::HashMap,
     fmt,
-    hash::{Hash, Hasher},
+    hash::Hash,
     num::NonZeroUsize,
     ops::{Add, AddAssign},
     string::String,
     vec,
     vec::Vec,
 };
-
-#[cfg(not(feature = "no_float"))]
-use crate::stdlib::ops::Neg;
 
 #[cfg(not(feature = "no_closure"))]
 use crate::stdlib::collections::HashSet;
@@ -602,7 +600,7 @@ pub enum ReturnType {
 /// ## WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
     /// No-op.
     Noop(Position),
@@ -799,13 +797,6 @@ impl fmt::Debug for CustomExpr {
     }
 }
 
-impl Hash for CustomExpr {
-    #[inline(always)]
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.keywords.hash(state);
-    }
-}
-
 impl CustomExpr {
     /// Get the keywords for this `CustomExpr`.
     #[inline(always)]
@@ -819,51 +810,13 @@ impl CustomExpr {
     }
 }
 
-/// _[INTERNALS]_ A type wrapping a floating-point number.
-/// Exported under the `internals` feature only.
-///
-/// This type is mainly used to provide a standard `Hash` implementation
-/// for floating-point numbers, allowing `Expr` to derive `Hash`.
-///
-/// ## WARNING
-///
-/// This type is volatile and may change.
-#[cfg(not(feature = "no_float"))]
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
-pub struct FloatWrapper(pub FLOAT);
-
-#[cfg(not(feature = "no_float"))]
-impl Hash for FloatWrapper {
-    #[inline(always)]
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        TypeId::of::<FLOAT>().hash(state);
-        state.write(&self.0.to_le_bytes());
-    }
-}
-
-#[cfg(not(feature = "no_float"))]
-impl Neg for FloatWrapper {
-    type Output = Self;
-
-    fn neg(self) -> Self::Output {
-        Self(-self.0)
-    }
-}
-
-#[cfg(not(feature = "no_float"))]
-impl From<INT> for FloatWrapper {
-    fn from(value: INT) -> Self {
-        Self(value as FLOAT)
-    }
-}
-
 /// _[INTERNALS]_ A binary expression.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct BinaryExpr {
     /// LHS expression.
     pub lhs: Expr,
@@ -877,7 +830,7 @@ pub struct BinaryExpr {
 /// ## WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Hash, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct FnCallExpr {
     /// Pre-calculated hash for a script-defined function of the same name and number of parameters.
     pub hash: u64,
@@ -905,19 +858,29 @@ pub struct FnCallExpr {
 /// ## WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     /// Integer constant.
     IntegerConstant(INT, Position),
     /// Floating-point constant.
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(FloatWrapper, Position),
+    FloatConstant(FLOAT, Position),
     /// Character constant.
     CharConstant(char, Position),
     /// String constant.
     StringConstant(ImmutableString, Position),
     /// FnPtr constant.
     FnPointer(ImmutableString, Position),
+    /// [ expr, ... ]
+    Array(Box<StaticVec<Expr>>, Position),
+    /// #{ name:expr, ... }
+    Map(Box<StaticVec<(IdentX, Expr)>>, Position),
+    /// true
+    True(Position),
+    /// false
+    False(Position),
+    /// ()
+    Unit(Position),
     /// Variable access - (optional index, optional modules, hash, variable name)
     Variable(Box<(Option<NonZeroUsize>, Option<Box<NamespaceRef>>, u64, IdentX)>),
     /// Property access - (getter, setter), prop
@@ -932,22 +895,21 @@ pub enum Expr {
     Dot(Box<BinaryExpr>, Position),
     /// expr[expr]
     Index(Box<BinaryExpr>, Position),
-    /// [ expr, ... ]
-    Array(Box<StaticVec<Expr>>, Position),
-    /// #{ name:expr, ... }
-    Map(Box<StaticVec<(IdentX, Expr)>>, Position),
+    /// switch expr { literal or _ => stmt, ... }
+    Switch(
+        Box<(
+            Expr,
+            HashMap<u64, Stmt, StraightHasherBuilder>,
+            Option<Stmt>,
+        )>,
+        Position,
+    ),
     /// lhs in rhs
     In(Box<BinaryExpr>, Position),
     /// lhs && rhs
     And(Box<BinaryExpr>, Position),
     /// lhs || rhs
     Or(Box<BinaryExpr>, Position),
-    /// true
-    True(Position),
-    /// false
-    False(Position),
-    /// ()
-    Unit(Position),
     /// Custom syntax
     Custom(Box<CustomExpr>, Position),
 }
@@ -997,7 +959,7 @@ impl Expr {
 
             Self::IntegerConstant(x, _) => (*x).into(),
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(x, _) => x.0.into(),
+            Self::FloatConstant(x, _) => (*x).into(),
             Self::CharConstant(x, _) => (*x).into(),
             Self::StringConstant(x, _) => x.clone().into(),
             Self::FnPointer(x, _) => Dynamic(Union::FnPtr(Box::new(FnPtr::new_unchecked(
@@ -1052,6 +1014,7 @@ impl Expr {
             Self::Stmt(_, pos) => *pos,
             Self::Variable(x) => (x.3).pos,
             Self::FnCall(_, pos) => *pos,
+            Self::Switch(_, pos) => *pos,
 
             Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => x.lhs.position(),
 
@@ -1083,6 +1046,7 @@ impl Expr {
             Self::Property(x) => (x.1).pos = new_pos,
             Self::Stmt(_, pos) => *pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
+            Self::Switch(_, pos) => *pos = new_pos,
             Self::And(_, pos) | Self::Or(_, pos) | Self::In(_, pos) => *pos = new_pos,
             Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos = new_pos,
             Self::Dot(_, pos) | Self::Index(_, pos) => *pos = new_pos,
@@ -1120,39 +1084,6 @@ impl Expr {
     pub fn is_unit(&self) -> bool {
         match self {
             Self::Unit(_) => true,
-            _ => false,
-        }
-    }
-
-    /// Is the expression a simple constant literal?
-    pub fn is_literal(&self) -> bool {
-        match self {
-            Self::Expr(x) => x.is_literal(),
-
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_, _) => true,
-
-            Self::IntegerConstant(_, _)
-            | Self::CharConstant(_, _)
-            | Self::StringConstant(_, _)
-            | Self::FnPointer(_, _)
-            | Self::True(_)
-            | Self::False(_)
-            | Self::Unit(_) => true,
-
-            // An array literal is literal if all items are literals
-            Self::Array(x, _) => x.iter().all(Self::is_literal),
-
-            // An map literal is literal if all items are literals
-            Self::Map(x, _) => x.iter().map(|(_, expr)| expr).all(Self::is_literal),
-
-            // Check in expression
-            Self::In(x, _) => match (&x.lhs, &x.rhs) {
-                (Self::StringConstant(_, _), Self::StringConstant(_, _))
-                | (Self::CharConstant(_, _), Self::StringConstant(_, _)) => true,
-                _ => false,
-            },
-
             _ => false,
         }
     }
@@ -1211,6 +1142,7 @@ impl Expr {
             Self::StringConstant(_, _)
             | Self::Stmt(_, _)
             | Self::FnCall(_, _)
+            | Self::Switch(_, _)
             | Self::Dot(_, _)
             | Self::Index(_, _)
             | Self::Array(_, _)

@@ -1,6 +1,17 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.6
+==============
+
+This version adds the `switch` statement.
+
+New features
+------------
+
+* `switch` statement.
+
+
 Version 0.19.5
 ==============
 

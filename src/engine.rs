@@ -12,6 +12,7 @@ use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::CustomSyntax;
 use crate::token::{Position, NO_POS};
+use crate::utils::get_hasher;
 use crate::{calc_native_fn_hash, StaticVec};
 
 #[cfg(not(feature = "no_index"))]
@@ -38,6 +39,7 @@ use crate::stdlib::{
     boxed::Box,
     collections::{HashMap, HashSet},
     fmt, format,
+    hash::{Hash, Hasher},
     iter::{empty, once},
     num::NonZeroUsize,
     ops::DerefMut,
@@ -1543,7 +1545,7 @@ impl Engine {
 
             Expr::IntegerConstant(x, _) => Ok((*x).into()),
             #[cfg(not(feature = "no_float"))]
-            Expr::FloatConstant(x, _) => Ok(x.0.into()),
+            Expr::FloatConstant(x, _) => Ok((*x).into()),
             Expr::StringConstant(x, _) => Ok(x.clone().into()),
             Expr::CharConstant(x, _) => Ok((*x).into()),
             Expr::FnPointer(x, _) => Ok(FnPtr::new_unchecked(x.clone(), Default::default()).into()),
@@ -1665,6 +1667,25 @@ impl Engine {
             Expr::True(_) => Ok(true.into()),
             Expr::False(_) => Ok(false.into()),
             Expr::Unit(_) => Ok(().into()),
+
+            Expr::Switch(x, _) => {
+                let (match_expr, table, def_stmt) = x.as_ref();
+
+                let match_item =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, match_expr, level)?;
+
+                let hasher = &mut get_hasher();
+                match_item.hash(hasher);
+                let hash = hasher.finish();
+
+                if let Some(stmt) = table.get(&hash) {
+                    self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
+                } else if let Some(def_stmt) = def_stmt {
+                    self.eval_stmt(scope, mods, state, lib, this_ptr, def_stmt, level)
+                } else {
+                    Ok(().into())
+                }
+            }
 
             Expr::Custom(custom, _) => {
                 let expressions = custom
