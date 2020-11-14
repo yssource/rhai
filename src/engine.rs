@@ -44,7 +44,6 @@ use crate::stdlib::{
     num::NonZeroUsize,
     ops::DerefMut,
     string::{String, ToString},
-    vec::Vec,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -57,7 +56,7 @@ use crate::stdlib::mem;
 ///
 /// Not available under the `no_index` feature.
 #[cfg(not(feature = "no_index"))]
-pub type Array = Vec<Dynamic>;
+pub type Array = crate::stdlib::vec::Vec<Dynamic>;
 
 /// Hash map of `Dynamic` values with `ImmutableString` keys.
 ///
@@ -338,18 +337,10 @@ impl<'a> Target<'a> {
             _ => None,
         }
     }
-    /// Get a mutable reference from the `Target`.
+    /// Convert a shared or reference `Target` into a target with an owned value.
     #[inline(always)]
-    pub fn as_mut(&mut self) -> &mut Dynamic {
-        match self {
-            Self::Ref(r) => *r,
-            #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
-            Self::LockGuard((r, _)) => r.deref_mut(),
-            Self::Value(ref mut r) => r,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, ref mut r) => r,
-        }
+    pub fn into_owned(self) -> Target<'static> {
+        self.take_or_clone().into()
     }
     /// Propagate a changed value back to the original source.
     /// This has no effect except for string indexing.
@@ -417,6 +408,36 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
         }
 
         Self::Ref(value)
+    }
+}
+
+impl AsRef<Dynamic> for Target<'_> {
+    #[inline(always)]
+    fn as_ref(&self) -> &Dynamic {
+        match self {
+            Self::Ref(r) => *r,
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(not(feature = "no_object"))]
+            Self::LockGuard((r, _)) => &**r,
+            Self::Value(ref r) => r,
+            #[cfg(not(feature = "no_index"))]
+            Self::StringChar(_, _, ref r) => r,
+        }
+    }
+}
+
+impl AsMut<Dynamic> for Target<'_> {
+    #[inline(always)]
+    fn as_mut(&mut self) -> &mut Dynamic {
+        match self {
+            Self::Ref(r) => *r,
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(not(feature = "no_object"))]
+            Self::LockGuard((r, _)) => r.deref_mut(),
+            Self::Value(ref mut r) => r,
+            #[cfg(not(feature = "no_index"))]
+            Self::StringChar(_, _, ref mut r) => r,
+        }
     }
 }
 
@@ -919,6 +940,8 @@ impl Engine {
         // Pop the last index value
         let idx_val = idx_values.pop().unwrap();
 
+        let target_val = target.as_mut();
+
         match chain_type {
             #[cfg(not(feature = "no_index"))]
             ChainType::Index => {
@@ -930,7 +953,8 @@ impl Engine {
                         let idx_pos = x.lhs.position();
                         let idx_val = idx_val.as_value();
                         let obj_ptr = &mut self.get_indexed_mut(
-                            mods, state, lib, target, idx_val, idx_pos, false, true, level,
+                            mods, state, lib, target_val, idx_val, idx_pos, false, is_ref, true,
+                            level,
                         )?;
 
                         self.eval_dot_index_chain_helper(
@@ -946,7 +970,7 @@ impl Engine {
 
                         // `call_setter` is introduced to bypass double mutable borrowing of target
                         let _call_setter = match self.get_indexed_mut(
-                            mods, state, lib, target, idx_val, pos, true, false, level,
+                            mods, state, lib, target_val, idx_val, pos, true, is_ref, false, level,
                         ) {
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
@@ -964,9 +988,8 @@ impl Engine {
 
                         #[cfg(not(feature = "no_index"))]
                         if let Some(mut new_val) = _call_setter {
-                            let val = target.as_mut();
-                            let val_type_name = val.type_name();
-                            let args = &mut [val, &mut idx_val2, &mut new_val.0];
+                            let val_type_name = target_val.type_name();
+                            let args = &mut [target_val, &mut idx_val2, &mut new_val.0];
 
                             self.exec_fn_call(
                                 mods, state, lib, FN_IDX_SET, 0, args, is_ref, true, false, None,
@@ -991,7 +1014,7 @@ impl Engine {
                     _ => {
                         let idx_val = idx_val.as_value();
                         self.get_indexed_mut(
-                            mods, state, lib, target, idx_val, pos, false, true, level,
+                            mods, state, lib, target_val, idx_val, pos, false, is_ref, true, level,
                         )
                         .map(|v| (v.take_or_clone(), false))
                     }
@@ -1021,22 +1044,22 @@ impl Engine {
                     // xxx.module::fn_name(...) - syntax error
                     Expr::FnCall(_, _) => unreachable!(),
                     // {xxx:map}.id = ???
-                    Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
+                    Expr::Property(x) if target_val.is::<Map>() && new_val.is_some() => {
                         let IdentX { name, pos } = &x.1;
                         let index = name.clone().into();
                         let mut val = self.get_indexed_mut(
-                            mods, state, lib, target, index, *pos, true, false, level,
+                            mods, state, lib, target_val, index, *pos, true, is_ref, false, level,
                         )?;
 
                         val.set_value(new_val.unwrap())?;
                         Ok((Default::default(), true))
                     }
                     // {xxx:map}.id
-                    Expr::Property(x) if target.is::<Map>() => {
+                    Expr::Property(x) if target_val.is::<Map>() => {
                         let IdentX { name, pos } = &x.1;
                         let index = name.clone().into();
                         let val = self.get_indexed_mut(
-                            mods, state, lib, target, index, *pos, false, false, level,
+                            mods, state, lib, target_val, index, *pos, false, is_ref, false, level,
                         )?;
 
                         Ok((val.take_or_clone(), false))
@@ -1045,7 +1068,7 @@ impl Engine {
                     Expr::Property(x) if new_val.is_some() => {
                         let ((_, setter), IdentX { pos, .. }) = x.as_ref();
                         let mut new_val = new_val;
-                        let mut args = [target.as_mut(), &mut new_val.as_mut().unwrap().0];
+                        let mut args = [target_val, &mut new_val.as_mut().unwrap().0];
                         self.exec_fn_call(
                             mods, state, lib, setter, 0, &mut args, is_ref, true, false, None,
                             None, level,
@@ -1056,7 +1079,7 @@ impl Engine {
                     // xxx.id
                     Expr::Property(x) => {
                         let ((getter, _), IdentX { pos, .. }) = x.as_ref();
-                        let mut args = [target.as_mut()];
+                        let mut args = [target_val];
                         self.exec_fn_call(
                             mods, state, lib, getter, 0, &mut args, is_ref, true, false, None,
                             None, level,
@@ -1065,13 +1088,14 @@ impl Engine {
                         .map_err(|err| err.fill_position(*pos))
                     }
                     // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
-                    Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target.is::<Map>() => {
+                    Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target_val.is::<Map>() => {
                         let mut val = match &x.lhs {
                             Expr::Property(p) => {
                                 let IdentX { name, pos } = &p.1;
                                 let index = name.clone().into();
                                 self.get_indexed_mut(
-                                    mods, state, lib, target, index, *pos, false, true, level,
+                                    mods, state, lib, target_val, index, *pos, false, is_ref, true,
+                                    level,
                                 )?
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
@@ -1111,7 +1135,7 @@ impl Engine {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
                                 let ((getter, setter), IdentX { pos, .. }) = p.as_ref();
-                                let arg_values = &mut [target.as_mut(), &mut Default::default()];
+                                let arg_values = &mut [target_val, &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self
                                     .exec_fn_call(
@@ -1358,26 +1382,22 @@ impl Engine {
     /// Get the value at the indexed position of a base type
     /// Position in `EvalAltResult` may be None and should be set afterwards.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    fn get_indexed_mut<'a>(
+    fn get_indexed_mut<'t>(
         &self,
         _mods: &mut Imports,
         state: &mut State,
         _lib: &[&Module],
-        target: &'a mut Target,
+        target: &'t mut Dynamic,
         idx: Dynamic,
         idx_pos: Position,
         _create: bool,
+        _is_ref: bool,
         _indexers: bool,
         _level: usize,
-    ) -> Result<Target<'a>, Box<EvalAltResult>> {
+    ) -> Result<Target<'t>, Box<EvalAltResult>> {
         self.inc_operations(state)?;
 
-        #[cfg(not(feature = "no_index"))]
-        let is_ref = target.is_ref();
-
-        let val = target.as_mut();
-
-        match val {
+        match target {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(arr)) => {
                 // val_array[idx]
@@ -1431,7 +1451,7 @@ impl Engine {
                     let ch = s.chars().nth(offset).ok_or_else(|| {
                         EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos)
                     })?;
-                    Ok(Target::StringChar(val, offset, ch.into()))
+                    Ok(Target::StringChar(target, offset, ch.into()))
                 } else {
                     EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos).into()
                 }
@@ -1439,11 +1459,11 @@ impl Engine {
 
             #[cfg(not(feature = "no_index"))]
             _ if _indexers => {
-                let type_name = val.type_name();
+                let type_name = target.type_name();
                 let mut idx = idx;
-                let args = &mut [val, &mut idx];
+                let args = &mut [target, &mut idx];
                 self.exec_fn_call(
-                    _mods, state, _lib, FN_IDX_GET, 0, args, is_ref, true, false, None, None,
+                    _mods, state, _lib, FN_IDX_GET, 0, args, _is_ref, true, false, None, None,
                     _level,
                 )
                 .map(|(v, _)| v.into())
@@ -1455,10 +1475,11 @@ impl Engine {
                 })
             }
 
-            _ => {
-                EvalAltResult::ErrorIndexingType(self.map_type_name(val.type_name()).into(), NO_POS)
-                    .into()
-            }
+            _ => EvalAltResult::ErrorIndexingType(
+                self.map_type_name(target.type_name()).into(),
+                NO_POS,
+            )
+            .into(),
         }
     }
 
@@ -1523,6 +1544,119 @@ impl Engine {
                 _ => EvalAltResult::ErrorInExpr(lhs.position()).into(),
             },
             _ => EvalAltResult::ErrorInExpr(rhs.position()).into(),
+        }
+    }
+
+    /// Get a `Target` from an expression.
+    pub(crate) fn eval_expr_as_target<'s>(
+        &self,
+        scope: &'s mut Scope,
+        mods: &mut Imports,
+        state: &mut State,
+        lib: &[&Module],
+        this_ptr: &'s mut Option<&mut Dynamic>,
+        expr: &Expr,
+        no_const: bool,
+        level: usize,
+    ) -> Result<(Target<'s>, Position), Box<EvalAltResult>> {
+        match expr {
+            // var - point directly to the value
+            Expr::Variable(_) => {
+                let (target, _, typ, pos) =
+                    self.search_namespace(scope, mods, state, lib, this_ptr, expr)?;
+
+                Ok((
+                    match typ {
+                        // If necessary, constants are cloned
+                        ScopeEntryType::Constant if no_const => target.into_owned(),
+                        _ => target,
+                    },
+                    pos,
+                ))
+            }
+            // var[...]
+            #[cfg(not(feature = "no_index"))]
+            Expr::Index(x, _) if x.lhs.get_variable_access(false).is_some() => match x.rhs {
+                Expr::Property(_) => unreachable!(),
+                // var[...]...
+                Expr::FnCall(_, _) | Expr::Index(_, _) | Expr::Dot(_, _) => self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                    .map(|v| (v.into(), expr.position())),
+                // var[expr] - point directly to the item
+                _ => {
+                    let idx = self.eval_expr(scope, mods, state, lib, this_ptr, &x.rhs, level)?;
+                    let idx_pos = x.rhs.position();
+                    let (mut target, pos) = self.eval_expr_as_target(
+                        scope, mods, state, lib, this_ptr, &x.lhs, no_const, level,
+                    )?;
+
+                    let is_ref = target.is_ref();
+
+                    if target.is_shared() || target.is_value() {
+                        let target_ref = target.as_mut();
+                        self.get_indexed_mut(
+                            mods, state, lib, target_ref, idx, idx_pos, false, is_ref, true, level,
+                        )
+                        .map(Target::into_owned)
+                    } else {
+                        let target_ref = target.take_ref().unwrap();
+                        self.get_indexed_mut(
+                            mods, state, lib, target_ref, idx, idx_pos, false, is_ref, true, level,
+                        )
+                    }
+                    .map(|v| (v, pos))
+                }
+            },
+            // var.prop
+            #[cfg(not(feature = "no_object"))]
+            Expr::Dot(x, _) if x.lhs.get_variable_access(false).is_some() => match x.rhs {
+                Expr::Variable(_) => unreachable!(),
+                // var.prop
+                Expr::Property(ref p) => {
+                    let (mut target, _) = self.eval_expr_as_target(
+                        scope, mods, state, lib, this_ptr, &x.lhs, no_const, level,
+                    )?;
+                    let is_ref = target.is_ref();
+
+                    if target.is::<Map>() {
+                        // map.prop - point directly to the item
+                        let (_, IdentX { name, pos }) = p.as_ref();
+                        let idx = name.clone().into();
+
+                        if target.is_shared() || target.is_value() {
+                            let target_ref = target.as_mut();
+                            self.get_indexed_mut(
+                                mods, state, lib, target_ref, idx, *pos, false, is_ref, true, level,
+                            )
+                            .map(Target::into_owned)
+                        } else {
+                            let target_ref = target.take_ref().unwrap();
+                            self.get_indexed_mut(
+                                mods, state, lib, target_ref, idx, *pos, false, is_ref, true, level,
+                            )
+                        }
+                        .map(|v| (v, *pos))
+                    } else {
+                        // var.prop - call property getter
+                        let ((getter, _), IdentX { pos, .. }) = p.as_ref();
+                        let mut args = [target.as_mut()];
+                        self.exec_fn_call(
+                            mods, state, lib, getter, 0, &mut args, is_ref, true, false, None,
+                            None, level,
+                        )
+                        .map(|(v, _)| (v.into(), *pos))
+                        .map_err(|err| err.fill_position(*pos))
+                    }
+                }
+                // var.???
+                _ => self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                    .map(|v| (v.into(), expr.position())),
+            },
+            // expr
+            _ => self
+                .eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                .map(|v| (v.into(), expr.position())),
         }
     }
 
@@ -1671,11 +1805,13 @@ impl Engine {
             Expr::Switch(x, _) => {
                 let (match_expr, table, def_stmt) = x.as_ref();
 
-                let match_item =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, match_expr, level)?;
-
                 let hasher = &mut get_hasher();
-                match_item.hash(hasher);
+                self.eval_expr_as_target(
+                    scope, mods, state, lib, this_ptr, match_expr, false, level,
+                )?
+                .0
+                .as_ref()
+                .hash(hasher);
                 let hash = hasher.finish();
 
                 if let Some(stmt) = table.get(&hash) {

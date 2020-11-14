@@ -1042,8 +1042,13 @@ impl Engine {
                     .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
                     .collect::<Result<_, _>>()?;
 
-                let (target, _, _, pos) =
+                let (target, _, typ, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, &args_expr[0])?;
+
+                let target = match typ {
+                    ScopeEntryType::Normal => target,
+                    ScopeEntryType::Constant => target.into_owned(),
+                };
 
                 self.inc_operations(state)
                     .map_err(|err| err.fill_position(pos))?;

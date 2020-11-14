@@ -8,7 +8,7 @@ use crate::optimize::OptimizationLevel;
 use crate::parse_error::ParseError;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
-use crate::token::{Position, NO_POS};
+use crate::token::NO_POS;
 use crate::utils::get_hasher;
 
 #[cfg(not(feature = "no_index"))]
@@ -21,7 +21,7 @@ use crate::{
 use crate::{
     engine::{make_getter, make_setter, Map},
     parse_error::ParseErrorType,
-    token::Token,
+    token::{Position, Token},
 };
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]

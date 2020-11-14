@@ -3,7 +3,7 @@
 use crate::fn_native::{FnPtr, SendSync};
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
 use crate::utils::ImmutableString;
-use crate::{StaticVec, INT};
+use crate::INT;
 
 #[cfg(not(feature = "no_closure"))]
 use crate::fn_native::{shared_try_take, Locked, Shared};
@@ -15,7 +15,7 @@ use crate::FLOAT;
 use crate::engine::Array;
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::Map;
+use crate::{engine::Map, StaticVec};
 
 use crate::stdlib::{
     any::{type_name, Any, TypeId},
