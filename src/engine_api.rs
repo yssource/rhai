@@ -84,7 +84,6 @@ impl Engine {
         self.global_module.set_raw_fn(name, arg_types, func);
         self
     }
-
     /// Register a custom type for use with the `Engine`.
     /// The type must implement `Clone`.
     ///
@@ -126,7 +125,6 @@ impl Engine {
     pub fn register_type<T: Variant + Clone>(&mut self) -> &mut Self {
         self.register_type_with_name::<T>(type_name::<T>())
     }
-
     /// Register a custom type for use with the `Engine`, with a pretty-print name
     /// for the `type_of` function. The type must implement `Clone`.
     ///
@@ -177,7 +175,6 @@ impl Engine {
         self.type_names.insert(type_name::<T>().into(), name.into());
         self
     }
-
     /// Register an iterator adapter for an iterable type with the `Engine`.
     /// This is an advanced feature.
     #[inline(always)]
@@ -189,7 +186,6 @@ impl Engine {
         self.global_module.set_iterable::<T>();
         self
     }
-
     /// Register a getter function for a member of a registered type with the `Engine`.
     ///
     /// The function signature must start with `&mut self` and not `&self`.
@@ -238,7 +234,6 @@ impl Engine {
     {
         self.register_fn(&make_getter(name), callback)
     }
-
     /// Register a getter function for a member of a registered type with the `Engine`.
     /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
     ///
@@ -286,7 +281,6 @@ impl Engine {
     ) -> &mut Self {
         self.register_result_fn(&make_getter(name), callback)
     }
-
     /// Register a setter function for a member of a registered type with the `Engine`.
     ///
     /// # Example
@@ -336,7 +330,6 @@ impl Engine {
     {
         self.register_fn(&make_setter(name), callback)
     }
-
     /// Register a setter function for a member of a registered type with the `Engine`.
     /// Returns `Result<(), Box<EvalAltResult>>`.
     ///
@@ -392,7 +385,6 @@ impl Engine {
             callback(obj, value).map(Into::into)
         })
     }
-
     /// Short-hand for registering both getter and setter functions
     /// of a registered type with the `Engine`.
     ///
@@ -445,7 +437,6 @@ impl Engine {
     {
         self.register_get(name, get_fn).register_set(name, set_fn)
     }
-
     /// Register an index getter for a custom type with the `Engine`.
     ///
     /// The function signature must start with `&mut self` and not `&self`.
@@ -514,7 +505,6 @@ impl Engine {
 
         self.register_fn(FN_IDX_GET, callback)
     }
-
     /// Register an index getter for a custom type with the `Engine`.
     /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
     ///
@@ -585,7 +575,6 @@ impl Engine {
 
         self.register_result_fn(FN_IDX_GET, callback)
     }
-
     /// Register an index setter for a custom type with the `Engine`.
     ///
     /// # Panics
@@ -654,7 +643,6 @@ impl Engine {
 
         self.register_fn(FN_IDX_SET, callback)
     }
-
     /// Register an index setter for a custom type with the `Engine`.
     /// Returns `Result<(), Box<EvalAltResult>>`.
     ///
@@ -729,7 +717,6 @@ impl Engine {
             callback(obj, index, value).map(Into::into)
         })
     }
-
     /// Short-hand for register both index getter and setter functions for a custom type with the `Engine`.
     ///
     /// # Panics
@@ -785,7 +772,6 @@ impl Engine {
         self.register_indexer_get(getter)
             .register_indexer_set(setter)
     }
-
     /// Compile a string into an `AST`, which can be used later for evaluation.
     ///
     /// # Example
@@ -809,7 +795,6 @@ impl Engine {
     pub fn compile(&self, script: &str) -> Result<AST, ParseError> {
         self.compile_with_scope(&Default::default(), script)
     }
-
     /// Compile a string into an `AST` using own scope, which can be used later for evaluation.
     ///
     /// The scope is useful for passing constants into the script for optimization
@@ -852,7 +837,6 @@ impl Engine {
     pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, ParseError> {
         self.compile_scripts_with_scope(scope, &[script])
     }
-
     /// When passed a list of strings, first join the strings into one large script,
     /// and then compile them into an `AST` using own scope, which can be used later for evaluation.
     ///
@@ -907,7 +891,6 @@ impl Engine {
     ) -> Result<AST, ParseError> {
         self.compile_with_scope_and_optimization_level(scope, scripts, self.optimization_level)
     }
-
     /// Join a list of strings and compile into an `AST` using own scope at a specific optimization level.
     #[inline(always)]
     pub(crate) fn compile_with_scope_and_optimization_level(
@@ -920,7 +903,6 @@ impl Engine {
         let stream = self.lex(scripts, None);
         self.parse(hash, &mut stream.peekable(), scope, optimization_level)
     }
-
     /// Read the contents of a file into a string.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
@@ -944,7 +926,6 @@ impl Engine {
 
         Ok(contents)
     }
-
     /// Compile a script file into an `AST`, which can be used later for evaluation.
     ///
     /// # Example
@@ -971,7 +952,6 @@ impl Engine {
     pub fn compile_file(&self, path: PathBuf) -> Result<AST, Box<EvalAltResult>> {
         self.compile_file_with_scope(&Default::default(), path)
     }
-
     /// Compile a script file into an `AST` using own scope, which can be used later for evaluation.
     ///
     /// The scope is useful for passing constants into the script for optimization
@@ -1013,7 +993,6 @@ impl Engine {
     ) -> Result<AST, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| Ok(self.compile_with_scope(scope, &contents)?))
     }
-
     /// Parse a JSON string into a map.
     ///
     /// The JSON string must be an object hash.  It cannot be a simple JavaScript primitive.
@@ -1098,7 +1077,6 @@ impl Engine {
 
         self.eval_ast_with_scope(&mut scope, &ast)
     }
-
     /// Compile a string containing an expression into an `AST`,
     /// which can be used later for evaluation.
     ///
@@ -1123,7 +1101,6 @@ impl Engine {
     pub fn compile_expression(&self, script: &str) -> Result<AST, ParseError> {
         self.compile_expression_with_scope(&Default::default(), script)
     }
-
     /// Compile a string containing an expression into an `AST` using own scope,
     /// which can be used later for evaluation.
     ///
@@ -1176,7 +1153,6 @@ impl Engine {
         let mut peekable = stream.peekable();
         self.parse_global_expr(hash, &mut peekable, scope, self.optimization_level)
     }
-
     /// Evaluate a script file.
     ///
     /// # Example
@@ -1198,7 +1174,6 @@ impl Engine {
     pub fn eval_file<T: Variant + Clone>(&self, path: PathBuf) -> Result<T, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
-
     /// Evaluate a script file with own scope.
     ///
     /// # Example
@@ -1228,7 +1203,6 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.eval_with_scope::<T>(scope, &contents))
     }
-
     /// Evaluate a string.
     ///
     /// # Example
@@ -1247,7 +1221,6 @@ impl Engine {
     pub fn eval<T: Variant + Clone>(&self, script: &str) -> Result<T, Box<EvalAltResult>> {
         self.eval_with_scope(&mut Default::default(), script)
     }
-
     /// Evaluate a string with own scope.
     ///
     /// # Example
@@ -1283,7 +1256,6 @@ impl Engine {
         )?;
         self.eval_ast_with_scope(scope, &ast)
     }
-
     /// Evaluate a string containing an expression.
     ///
     /// # Example
@@ -1305,7 +1277,6 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         self.eval_expression_with_scope(&mut Default::default(), script)
     }
-
     /// Evaluate a string containing an expression with own scope.
     ///
     /// # Example
@@ -1340,7 +1311,6 @@ impl Engine {
 
         self.eval_ast_with_scope(scope, &ast)
     }
-
     /// Evaluate an `AST`.
     ///
     /// # Example
@@ -1363,7 +1333,6 @@ impl Engine {
     pub fn eval_ast<T: Variant + Clone>(&self, ast: &AST) -> Result<T, Box<EvalAltResult>> {
         self.eval_ast_with_scope(&mut Default::default(), ast)
     }
-
     /// Evaluate an `AST` with own scope.
     ///
     /// # Example
@@ -1413,7 +1382,6 @@ impl Engine {
             .into()
         });
     }
-
     /// Evaluate an `AST` with own scope.
     #[inline(always)]
     pub(crate) fn eval_ast_with_scope_raw<'a>(
@@ -1424,7 +1392,6 @@ impl Engine {
     ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
         self.eval_statements_raw(scope, mods, ast.statements(), &[ast.lib()])
     }
-
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[cfg(not(feature = "no_std"))]
@@ -1433,7 +1400,6 @@ impl Engine {
     pub fn consume_file(&self, path: PathBuf) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.consume(&contents))
     }
-
     /// Evaluate a file with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[cfg(not(feature = "no_std"))]
@@ -1446,14 +1412,12 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.consume_with_scope(scope, &contents))
     }
-
     /// Evaluate a string, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[inline(always)]
     pub fn consume(&self, script: &str) -> Result<(), Box<EvalAltResult>> {
         self.consume_with_scope(&mut Default::default(), script)
     }
-
     /// Evaluate a string with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[inline]
@@ -1468,14 +1432,12 @@ impl Engine {
         let ast = self.parse(hash, &mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }
-
     /// Evaluate an AST, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[inline(always)]
     pub fn consume_ast(&self, ast: &AST) -> Result<(), Box<EvalAltResult>> {
         self.consume_ast_with_scope(&mut Default::default(), ast)
     }
-
     /// Evaluate an `AST` with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[inline(always)]
@@ -1488,7 +1450,6 @@ impl Engine {
         self.eval_statements_raw(scope, &mut mods, ast.statements(), &[ast.lib()])
             .map(|_| ())
     }
-
     /// Call a script function defined in an `AST` with multiple arguments.
     /// Arguments are passed as a tuple.
     ///
@@ -1551,7 +1512,6 @@ impl Engine {
             .into()
         });
     }
-
     /// Call a script function defined in an `AST` with multiple `Dynamic` arguments
     /// and optionally a value for binding to the 'this' pointer.
     ///
@@ -1615,7 +1575,6 @@ impl Engine {
 
         self.call_fn_dynamic_raw(scope, &[lib.as_ref()], name, &mut this_ptr, args.as_mut())
     }
-
     /// Call a script function defined in an `AST` with multiple `Dynamic` arguments.
     ///
     /// ## WARNING
@@ -1649,7 +1608,6 @@ impl Engine {
 
         self.call_script_fn(scope, &mut mods, &mut state, lib, this_ptr, fn_def, args, 0)
     }
-
     /// Optimize the `AST` with constants defined in an external Scope.
     /// An optimized copy of the `AST` is returned while the original `AST` is consumed.
     ///
@@ -1683,7 +1641,6 @@ impl Engine {
         let stmt = mem::take(ast.statements_mut());
         optimize_into_ast(self, scope, stmt, lib, optimization_level)
     }
-
     /// Provide a callback that will be invoked before each variable access.
     ///
     /// ## Return Value of Callback
@@ -1726,7 +1683,6 @@ impl Engine {
         self.resolve_var = Some(Box::new(callback));
         self
     }
-
     /// Register a callback for script evaluation progress.
     ///
     /// # Example
@@ -1769,7 +1725,6 @@ impl Engine {
         self.progress = Some(Box::new(callback));
         self
     }
-
     /// Override default action of `print` (print to stdout using `println!`)
     ///
     /// # Example
@@ -1799,7 +1754,6 @@ impl Engine {
         self.print = Box::new(callback);
         self
     }
-
     /// Override default action of `debug` (print to stdout using `println!`)
     ///
     /// # Example

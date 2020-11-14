@@ -263,7 +263,6 @@ impl Dynamic {
             _ => false,
         }
     }
-
     /// Does this `Dynamic` hold a shared data type
     /// instead of one of the supported system primitive types?
     #[inline(always)]
@@ -274,7 +273,6 @@ impl Dynamic {
             _ => false,
         }
     }
-
     /// Is the value held by this `Dynamic` a particular type?
     ///
     /// If the `Dynamic` is a Shared variant checking is performed on
@@ -289,7 +287,6 @@ impl Dynamic {
 
         self.type_id() == target_type_id
     }
-
     /// Get the TypeId of the value held by this `Dynamic`.
     ///
     /// # Panics or Deadlocks When Value is Shared
@@ -323,7 +320,6 @@ impl Dynamic {
             Union::Shared(cell) => (*cell.read().unwrap()).type_id(),
         }
     }
-
     /// Get the name of the type of the value held by this `Dynamic`.
     ///
     /// # Panics or Deadlocks When Value is Shared

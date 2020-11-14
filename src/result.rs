@@ -303,7 +303,6 @@ impl EvalAltResult {
             Self::LoopBreak(_, _) | Self::Return(_, _) => unreachable!(),
         }
     }
-
     /// Is this error a system exception?
     pub fn is_system_exception(&self) -> bool {
         match self {
@@ -322,7 +321,6 @@ impl EvalAltResult {
             _ => false,
         }
     }
-
     /// Get the `Position` of this error.
     pub fn position(&self) -> Position {
         match self {
@@ -356,7 +354,6 @@ impl EvalAltResult {
             | Self::Return(_, pos) => *pos,
         }
     }
-
     /// Override the `Position` of this error.
     pub fn set_position(&mut self, new_position: Position) {
         match self {
@@ -390,7 +387,6 @@ impl EvalAltResult {
             | Self::Return(_, pos) => *pos = new_position,
         }
     }
-
     /// Consume the current `EvalAltResult` and return a new one with the specified `Position`
     /// if the current position is `Position::None`.
     #[inline(always)]
