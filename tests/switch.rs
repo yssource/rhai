@@ -64,13 +64,14 @@ fn test_switch() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[cfg(not(feature = "no_index"))]
+#[cfg(not(feature = "no_object"))]
 mod test_switch_enum {
     use super::*;
     use rhai::Array;
     #[derive(Debug, Clone)]
     enum MyEnum {
         Foo,
-        Bar(i64),
+        Bar(INT),
         Baz(String, bool),
     }
 
@@ -90,7 +91,9 @@ mod test_switch_enum {
     fn test_switch_enum() -> Result<(), Box<EvalAltResult>> {
         let mut engine = Engine::new();
 
-        engine.register_get("get_data", MyEnum::get_enum_data);
+        engine
+            .register_type_with_name::<MyEnum>("MyEnum")
+            .register_get("get_data", MyEnum::get_enum_data);
 
         let mut scope = Scope::new();
         scope.push("x", MyEnum::Baz("hello".to_string(), true));
