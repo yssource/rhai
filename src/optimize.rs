@@ -17,6 +17,12 @@ use crate::{calc_native_fn_hash, StaticVec};
 #[cfg(not(feature = "no_function"))]
 use crate::ast::ReturnType;
 
+#[cfg(not(feature = "no_index"))]
+use crate::Array;
+
+#[cfg(not(feature = "no_object"))]
+use crate::Map;
+
 use crate::stdlib::{
     boxed::Box,
     hash::{Hash, Hasher},
@@ -523,9 +529,25 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             // lhs[rhs]
             (lhs, rhs) => { optimize_expr(lhs, state); optimize_expr(rhs, state); }
         },
+        // [ constant .. ]
+        #[cfg(not(feature = "no_index"))]
+        Expr::Array(a, pos) if a.iter().all(Expr::is_constant) => {
+            state.set_dirty();
+            let mut arr: Array = Default::default();
+            arr.extend(mem::take(a).into_iter().map(|expr| expr.get_constant_value().unwrap()));
+            *expr = Expr::DynamicConstant(Box::new(arr.into()), *pos);
+        }
         // [ items .. ]
         #[cfg(not(feature = "no_index"))]
         Expr::Array(a, _) => a.iter_mut().for_each(|expr| optimize_expr(expr, state)),
+        // #{ key:constant, .. }
+        #[cfg(not(feature = "no_object"))]
+        Expr::Map(m, pos) if m.iter().all(|(_, expr)| expr.is_constant()) => {
+            state.set_dirty();
+            let mut map: Map = Default::default();
+            map.extend(mem::take(m).into_iter().map(|(key, expr)| (key.name, expr.get_constant_value().unwrap())));
+            *expr = Expr::DynamicConstant(Box::new(map.into()), *pos);
+        }
         // #{ key:value, .. }
         #[cfg(not(feature = "no_object"))]
         Expr::Map(m, _) => m.iter_mut().for_each(|(_, expr)| optimize_expr(expr, state)),

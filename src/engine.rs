@@ -1677,6 +1677,7 @@ impl Engine {
         let result = match expr {
             Expr::Expr(x) => self.eval_expr(scope, mods, state, lib, this_ptr, x, level),
 
+            Expr::DynamicConstant(x, _) => Ok(x.as_ref().clone()),
             Expr::IntegerConstant(x, _) => Ok((*x).into()),
             #[cfg(not(feature = "no_float"))]
             Expr::FloatConstant(x, _) => Ok((*x).into()),

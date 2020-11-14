@@ -860,6 +860,8 @@ pub struct FnCallExpr {
 /// This type is volatile and may change.
 #[derive(Debug, Clone)]
 pub enum Expr {
+    /// Dynamic constant.
+    DynamicConstant(Box<Dynamic>, Position),
     /// Integer constant.
     IntegerConstant(INT, Position),
     /// Floating-point constant.
@@ -929,6 +931,7 @@ impl Expr {
         Some(match self {
             Self::Expr(x) => return x.get_type_id(),
 
+            Self::DynamicConstant(x, _) => x.type_id(),
             Self::IntegerConstant(_, _) => TypeId::of::<INT>(),
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, _) => TypeId::of::<FLOAT>(),
@@ -957,6 +960,7 @@ impl Expr {
         Some(match self {
             Self::Expr(x) => return x.get_constant_value(),
 
+            Self::DynamicConstant(x, _) => x.as_ref().clone(),
             Self::IntegerConstant(x, _) => (*x).into(),
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(x, _) => (*x).into(),
@@ -1004,6 +1008,7 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, pos) => *pos,
 
+            Self::DynamicConstant(_, pos) => *pos,
             Self::IntegerConstant(_, pos) => *pos,
             Self::CharConstant(_, pos) => *pos,
             Self::StringConstant(_, pos) => *pos,
@@ -1036,6 +1041,7 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, pos) => *pos = new_pos,
 
+            Self::DynamicConstant(_, pos) => *pos = new_pos,
             Self::IntegerConstant(_, pos) => *pos = new_pos,
             Self::CharConstant(_, pos) => *pos = new_pos,
             Self::StringConstant(_, pos) => *pos = new_pos,
@@ -1096,7 +1102,8 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, _) => true,
 
-            Self::IntegerConstant(_, _)
+            Self::DynamicConstant(_, _)
+            | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::StringConstant(_, _)
             | Self::FnPointer(_, _)
@@ -1129,7 +1136,8 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, _) => false,
 
-            Self::IntegerConstant(_, _)
+            Self::DynamicConstant(_, _)
+            | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::FnPointer(_, _)
             | Self::In(_, _)
