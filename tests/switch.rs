@@ -90,9 +90,7 @@ mod test_switch_enum {
     fn test_switch_enum() -> Result<(), Box<EvalAltResult>> {
         let mut engine = Engine::new();
 
-        engine
-            .register_type_with_name::<MyEnum>("MyEnum")
-            .register_get("get_data", MyEnum::get_enum_data);
+        engine.register_get("get_data", MyEnum::get_enum_data);
 
         let mut scope = Scope::new();
         scope.push("x", MyEnum::Baz("hello".to_string(), true));

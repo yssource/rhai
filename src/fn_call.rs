@@ -12,17 +12,14 @@ use crate::module::{Module, NamespaceRef};
 use crate::optimize::OptimizationLevel;
 use crate::parse_error::ParseErrorType;
 use crate::result::EvalAltResult;
-use crate::scope::Scope;
+use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::stdlib::ops::Deref;
 use crate::token::NO_POS;
 use crate::utils::ImmutableString;
 use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec, INT};
 
 #[cfg(not(feature = "no_function"))]
-use crate::{
-    ast::ScriptFnDef, r#unsafe::unsafe_cast_var_name_to_lifetime,
-    scope::EntryType as ScopeEntryType,
-};
+use crate::{ast::ScriptFnDef, r#unsafe::unsafe_cast_var_name_to_lifetime};
 
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;

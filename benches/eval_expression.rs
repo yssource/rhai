@@ -161,9 +161,12 @@ fn bench_eval_loop_strings_no_build(bench: &mut Bencher) {
 fn bench_eval_switch(bench: &mut Bencher) {
     let script = r#"
         let sum = 0;
+        let rem = 0;
 
         for x in range(0, 10000) {
-            sum += switch x % 5 {
+            rem = x % 5;
+
+            sum += switch rem {
                 0 => 10,
                 1 => 12,
                 2 => 42,
@@ -185,9 +188,10 @@ fn bench_eval_switch(bench: &mut Bencher) {
 fn bench_eval_nested_if(bench: &mut Bencher) {
     let script = r#"
         let sum = 0;
+        let rem = 0;
 
         for x in range(0, 10000) {
-            let rem = x % 5;
+            rem = x % 5;
 
             sum += if rem == 0 {
                 10

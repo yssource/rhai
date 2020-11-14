@@ -1718,7 +1718,7 @@ impl Engine {
             Expr::Array(x, _) => Ok(Dynamic(Union::Array(Box::new(
                 x.iter()
                     .map(|item| self.eval_expr(scope, mods, state, lib, this_ptr, item, level))
-                    .collect::<Result<Vec<_>, _>>()?,
+                    .collect::<Result<_, _>>()?,
             )))),
 
             #[cfg(not(feature = "no_object"))]
