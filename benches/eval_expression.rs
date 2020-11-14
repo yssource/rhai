@@ -163,7 +163,7 @@ fn bench_eval_switch(bench: &mut Bencher) {
         let sum = 0;
         let rem = 0;
 
-        for x in range(0, 10000) {
+        for x in range(0, 10) {
             rem = x % 5;
 
             sum += switch rem {
@@ -190,7 +190,7 @@ fn bench_eval_nested_if(bench: &mut Bencher) {
         let sum = 0;
         let rem = 0;
 
-        for x in range(0, 10000) {
+        for x in range(0, 10) {
             rem = x % 5;
 
             sum += if rem == 0 {
