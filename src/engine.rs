@@ -1803,27 +1803,6 @@ impl Engine {
             Expr::False(_) => Ok(false.into()),
             Expr::Unit(_) => Ok(().into()),
 
-            Expr::Switch(x, _) => {
-                let (match_expr, table, def_stmt) = x.as_ref();
-
-                let hasher = &mut get_hasher();
-                self.eval_expr_as_target(
-                    scope, mods, state, lib, this_ptr, match_expr, false, level,
-                )?
-                .0
-                .as_ref()
-                .hash(hasher);
-                let hash = hasher.finish();
-
-                if let Some(stmt) = table.get(&hash) {
-                    self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
-                } else if let Some(def_stmt) = def_stmt {
-                    self.eval_stmt(scope, mods, state, lib, this_ptr, def_stmt, level)
-                } else {
-                    Ok(().into())
-                }
-            }
-
             Expr::Custom(custom, _) => {
                 let expressions = custom
                     .keywords()
@@ -2063,7 +2042,7 @@ impl Engine {
                 self.eval_statements(scope, mods, state, lib, this_ptr, statements, level)
             }
 
-            // If-else statement
+            // If statement
             Stmt::If(expr, x, _) => {
                 let (if_block, else_block) = x.as_ref();
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
@@ -2078,6 +2057,28 @@ impl Engine {
                             Ok(Default::default())
                         }
                     })
+            }
+
+            // Switch statement
+            Stmt::Switch(match_expr, x, _) => {
+                let (table, def_stmt) = x.as_ref();
+
+                let hasher = &mut get_hasher();
+                self.eval_expr_as_target(
+                    scope, mods, state, lib, this_ptr, match_expr, false, level,
+                )?
+                .0
+                .as_ref()
+                .hash(hasher);
+                let hash = hasher.finish();
+
+                if let Some(stmt) = table.get(&hash) {
+                    self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
+                } else if let Some(def_stmt) = def_stmt {
+                    self.eval_stmt(scope, mods, state, lib, this_ptr, def_stmt, level)
+                } else {
+                    Ok(().into())
+                }
             }
 
             // While loop

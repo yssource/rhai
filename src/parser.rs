@@ -192,6 +192,8 @@ struct ParseSettings {
     allow_anonymous_fn: bool,
     /// Is if-expression allowed?
     allow_if_expr: bool,
+    /// Is switch expression allowed?
+    allow_switch_expr: bool,
     /// Is statement-expression allowed?
     allow_stmt_expr: bool,
     /// Current expression nesting level.
@@ -793,8 +795,12 @@ fn parse_switch(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+    mut settings: ParseSettings,
+) -> Result<Stmt, ParseError> {
+    // switch ...
+    let token_pos = eat_token(input, Token::Switch);
+    settings.pos = token_pos;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -901,8 +907,9 @@ fn parse_switch(
         }
     }
 
-    Ok(Expr::Switch(
-        Box::new((item, table, def_stmt)),
+    Ok(Stmt::Switch(
+        item,
+        Box::new((table, def_stmt)),
         settings.pos,
     ))
 }
@@ -1004,7 +1011,6 @@ fn parse_primary(
         Token::LeftBracket => parse_array_literal(input, state, lib, settings.level_up())?,
         #[cfg(not(feature = "no_object"))]
         Token::MapStart => parse_map_literal(input, state, lib, settings.level_up())?,
-        Token::Switch => parse_switch(input, state, lib, settings.level_up())?,
         Token::True => Expr::True(settings.pos),
         Token::False => Expr::False(settings.pos),
         Token::LexError(err) => return Err(err.into_err(settings.pos)),
@@ -1136,6 +1142,12 @@ fn parse_unary(
             block.push(parse_if(input, state, lib, settings.level_up())?);
             Ok(Expr::Stmt(Box::new(block), settings.pos))
         }
+        // Switch statement is allowed to act as expressions
+        Token::Switch if settings.allow_switch_expr => {
+            let mut block: StaticVec<_> = Default::default();
+            block.push(parse_switch(input, state, lib, settings.level_up())?);
+            Ok(Expr::Stmt(Box::new(block), settings.pos))
+        }
         // -expr
         Token::UnaryMinus => {
             let pos = eat_token(input, Token::UnaryMinus);
@@ -1219,6 +1231,7 @@ fn parse_unary(
 
             let settings = ParseSettings {
                 allow_if_expr: true,
+                allow_switch_expr: true,
                 allow_stmt_expr: true,
                 allow_anonymous_fn: true,
                 is_global: false,
@@ -2388,6 +2401,7 @@ fn parse_stmt(
 
                     let settings = ParseSettings {
                         allow_if_expr: true,
+                        allow_switch_expr: true,
                         allow_stmt_expr: true,
                         allow_anonymous_fn: true,
                         is_global: false,
@@ -2827,6 +2841,7 @@ impl Engine {
 
         let settings = ParseSettings {
             allow_if_expr: false,
+            allow_switch_expr: false,
             allow_stmt_expr: false,
             allow_anonymous_fn: false,
             is_global: true,
@@ -2879,6 +2894,7 @@ impl Engine {
         while !input.peek().unwrap().0.is_eof() {
             let settings = ParseSettings {
                 allow_if_expr: true,
+                allow_switch_expr: true,
                 allow_stmt_expr: true,
                 allow_anonymous_fn: true,
                 is_global: true,

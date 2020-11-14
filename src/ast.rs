@@ -583,6 +583,12 @@ pub enum Stmt {
     Noop(Position),
     /// if expr { stmt } else { stmt }
     If(Expr, Box<(Stmt, Option<Stmt>)>, Position),
+    /// switch expr { literal or _ => stmt, ... }
+    Switch(
+        Expr,
+        Box<(HashMap<u64, Stmt, StraightHasherBuilder>, Option<Stmt>)>,
+        Position,
+    ),
     /// while expr { stmt }
     While(Expr, Box<Stmt>, Position),
     /// loop { stmt }
@@ -642,6 +648,7 @@ impl Stmt {
             | Self::Block(_, pos)
             | Self::Assignment(_, pos)
             | Self::If(_, _, pos)
+            | Self::Switch(_, _, pos)
             | Self::While(_, _, pos)
             | Self::Loop(_, pos)
             | Self::For(_, _, pos)
@@ -670,6 +677,7 @@ impl Stmt {
             | Self::Block(_, pos)
             | Self::Assignment(_, pos)
             | Self::If(_, _, pos)
+            | Self::Switch(_, _, pos)
             | Self::While(_, _, pos)
             | Self::Loop(_, pos)
             | Self::For(_, _, pos)
@@ -697,6 +705,7 @@ impl Stmt {
     pub fn is_self_terminated(&self) -> bool {
         match self {
             Self::If(_, _, _)
+            | Self::Switch(_, _, _)
             | Self::While(_, _, _)
             | Self::Loop(_, _)
             | Self::For(_, _, _)
@@ -726,10 +735,16 @@ impl Stmt {
         match self {
             Self::Noop(_) => true,
             Self::Expr(expr) => expr.is_pure(),
-            Self::If(condition, x, _) if x.1.is_some() => {
-                condition.is_pure() && x.0.is_pure() && x.1.as_ref().unwrap().is_pure()
+            Self::If(condition, x, _) => {
+                condition.is_pure()
+                    && x.0.is_pure()
+                    && x.1.as_ref().map(Stmt::is_pure).unwrap_or(true)
             }
-            Self::If(condition, x, _) => condition.is_pure() && x.0.is_pure(),
+            Self::Switch(expr, x, _) => {
+                expr.is_pure()
+                    && x.0.values().all(Stmt::is_pure)
+                    && x.1.as_ref().map(Stmt::is_pure).unwrap_or(true)
+            }
             Self::While(condition, block, _) => condition.is_pure() && block.is_pure(),
             Self::Loop(block, _) => block.is_pure(),
             Self::For(iterable, x, _) => iterable.is_pure() && x.1.is_pure(),
@@ -872,15 +887,6 @@ pub enum Expr {
     Dot(Box<BinaryExpr>, Position),
     /// expr[expr]
     Index(Box<BinaryExpr>, Position),
-    /// switch expr { literal or _ => stmt, ... }
-    Switch(
-        Box<(
-            Expr,
-            HashMap<u64, Stmt, StraightHasherBuilder>,
-            Option<Stmt>,
-        )>,
-        Position,
-    ),
     /// lhs in rhs
     In(Box<BinaryExpr>, Position),
     /// lhs && rhs
@@ -963,7 +969,6 @@ impl Expr {
             Self::Stmt(_, pos) => *pos,
             Self::Variable(x) => (x.3).pos,
             Self::FnCall(_, pos) => *pos,
-            Self::Switch(_, pos) => *pos,
 
             Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => x.lhs.position(),
 
@@ -995,7 +1000,6 @@ impl Expr {
             Self::Property(x) => (x.1).pos = new_pos,
             Self::Stmt(_, pos) => *pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
-            Self::Switch(_, pos) => *pos = new_pos,
             Self::And(_, pos) | Self::Or(_, pos) | Self::In(_, pos) => *pos = new_pos,
             Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos = new_pos,
             Self::Dot(_, pos) | Self::Index(_, pos) => *pos = new_pos,
@@ -1089,7 +1093,6 @@ impl Expr {
             Self::StringConstant(_, _)
             | Self::Stmt(_, _)
             | Self::FnCall(_, _)
-            | Self::Switch(_, _)
             | Self::Dot(_, _)
             | Self::Index(_, _)
             | Self::Array(_, _)

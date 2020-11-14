@@ -1,4 +1,4 @@
-use rhai::{Dynamic, Engine, EvalAltResult, Scope, INT};
+use rhai::{Engine, EvalAltResult, Scope, INT};
 
 #[test]
 fn test_switch() -> Result<(), Box<EvalAltResult>> {

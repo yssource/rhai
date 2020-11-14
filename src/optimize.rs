@@ -291,6 +291,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                 optimize_expr(&mut x.2, state);
             }
         },
+
         // if false { if_block } -> Noop
         Stmt::If(Expr::False(pos), x, _) if x.1.is_none() => {
             state.set_dirty();
@@ -343,6 +344,42 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                 optimize_stmt(else_block, state, true);
                 match else_block {
                     Stmt::Noop(_) => x.1 = None, // Noop -> no else block
+                    _ => (),
+                }
+            }
+        }
+
+        // switch const { ... }
+        Stmt::Switch(expr, x, pos) if expr.is_constant() => {
+            let value = expr.get_constant_value().unwrap();
+            let hasher = &mut get_hasher();
+            value.hash(hasher);
+            let hash = hasher.finish();
+
+            state.set_dirty();
+
+            let table = &mut x.0;
+
+            if let Some(stmt) = table.get_mut(&hash) {
+                optimize_stmt(stmt, state, true);
+                *expr = Expr::Stmt(Box::new(vec![mem::take(stmt)].into()), *pos);
+            } else if let Some(def_stmt) = x.1.as_mut() {
+                optimize_stmt(def_stmt, state, true);
+                *expr = Expr::Stmt(Box::new(vec![mem::take(def_stmt)].into()), *pos);
+            } else {
+                *expr = Expr::Unit(*pos);
+            }
+        }
+        // switch
+        Stmt::Switch(expr, x, _) => {
+            optimize_expr(expr, state);
+            x.0.values_mut()
+                .for_each(|stmt| optimize_stmt(stmt, state, true));
+            if let Some(def_stmt) = x.1.as_mut() {
+                optimize_stmt(def_stmt, state, true);
+
+                match def_stmt {
+                    Stmt::Noop(_) | Stmt::Expr(Expr::Unit(_)) => x.1 = None,
                     _ => (),
                 }
             }
@@ -715,42 +752,6 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             let mut result = state.find_constant(&x.3.name).unwrap().clone();
             result.set_position(x.3.pos);
             *expr = result;
-        }
-
-        // switch const { ... }
-        Expr::Switch(x, pos) if x.0.is_constant() => {
-            let value = x.0.get_constant_value().unwrap();
-            let hasher = &mut get_hasher();
-            value.hash(hasher);
-            let hash = hasher.finish();
-
-            state.set_dirty();
-
-            let table = &mut x.1;
-
-            if let Some(stmt) = table.get_mut(&hash) {
-                optimize_stmt(stmt, state, true);
-                *expr = Expr::Stmt(Box::new(vec![mem::take(stmt)].into()), *pos);
-            } else if let Some(def_stmt) = x.2.as_mut() {
-                optimize_stmt(def_stmt, state, true);
-                *expr = Expr::Stmt(Box::new(vec![mem::take(def_stmt)].into()), *pos);
-            } else {
-                *expr = Expr::Unit(*pos);
-            }
-        }
-
-        // switch
-        Expr::Switch(x, _) => {
-            optimize_expr(&mut x.0, state);
-            x.1.values_mut().for_each(|stmt| optimize_stmt(stmt, state, true));
-            if let Some(def_stmt) = x.2.as_mut() {
-                optimize_stmt(def_stmt, state, true);
-
-                match def_stmt {
-                    Stmt::Noop(_) | Stmt::Expr(Expr::Unit(_)) => x.2 = None,
-                    _ => ()
-                }
-            }
         }
 
         // Custom syntax
