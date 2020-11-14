@@ -582,7 +582,7 @@ pub enum Stmt {
     /// No-op.
     Noop(Position),
     /// if expr { stmt } else { stmt }
-    IfThenElse(Expr, Box<(Stmt, Option<Stmt>)>, Position),
+    If(Expr, Box<(Stmt, Option<Stmt>)>, Position),
     /// while expr { stmt }
     While(Expr, Box<Stmt>, Position),
     /// loop { stmt }
@@ -606,7 +606,7 @@ pub enum Stmt {
     /// break
     Break(Position),
     /// return/throw
-    ReturnWithVal((ReturnType, Position), Option<Expr>, Position),
+    Return((ReturnType, Position), Option<Expr>, Position),
     /// import expr as var
     #[cfg(not(feature = "no_module"))]
     Import(Expr, Option<Box<IdentX>>, Position),
@@ -641,11 +641,11 @@ impl Stmt {
             | Self::Break(pos)
             | Self::Block(_, pos)
             | Self::Assignment(_, pos)
-            | Self::IfThenElse(_, _, pos)
+            | Self::If(_, _, pos)
             | Self::While(_, _, pos)
             | Self::Loop(_, pos)
             | Self::For(_, _, pos)
-            | Self::ReturnWithVal((_, pos), _, _)
+            | Self::Return((_, pos), _, _)
             | Self::Let(_, _, _, pos)
             | Self::Const(_, _, _, pos)
             | Self::TryCatch(_, pos, _) => *pos,
@@ -669,11 +669,11 @@ impl Stmt {
             | Self::Break(pos)
             | Self::Block(_, pos)
             | Self::Assignment(_, pos)
-            | Self::IfThenElse(_, _, pos)
+            | Self::If(_, _, pos)
             | Self::While(_, _, pos)
             | Self::Loop(_, pos)
             | Self::For(_, _, pos)
-            | Self::ReturnWithVal((_, pos), _, _)
+            | Self::Return((_, pos), _, _)
             | Self::Let(_, _, _, pos)
             | Self::Const(_, _, _, pos)
             | Self::TryCatch(_, pos, _) => *pos = new_pos,
@@ -696,7 +696,7 @@ impl Stmt {
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     pub fn is_self_terminated(&self) -> bool {
         match self {
-            Self::IfThenElse(_, _, _)
+            Self::If(_, _, _)
             | Self::While(_, _, _)
             | Self::Loop(_, _)
             | Self::For(_, _, _)
@@ -712,7 +712,7 @@ impl Stmt {
             | Self::Expr(_)
             | Self::Continue(_)
             | Self::Break(_)
-            | Self::ReturnWithVal(_, _, _) => false,
+            | Self::Return(_, _, _) => false,
 
             #[cfg(not(feature = "no_module"))]
             Self::Import(_, _, _) | Self::Export(_, _) => false,
@@ -726,16 +726,16 @@ impl Stmt {
         match self {
             Self::Noop(_) => true,
             Self::Expr(expr) => expr.is_pure(),
-            Self::IfThenElse(condition, x, _) if x.1.is_some() => {
+            Self::If(condition, x, _) if x.1.is_some() => {
                 condition.is_pure() && x.0.is_pure() && x.1.as_ref().unwrap().is_pure()
             }
-            Self::IfThenElse(condition, x, _) => condition.is_pure() && x.0.is_pure(),
+            Self::If(condition, x, _) => condition.is_pure() && x.0.is_pure(),
             Self::While(condition, block, _) => condition.is_pure() && block.is_pure(),
             Self::Loop(block, _) => block.is_pure(),
             Self::For(iterable, x, _) => iterable.is_pure() && x.1.is_pure(),
             Self::Let(_, _, _, _) | Self::Const(_, _, _, _) | Self::Assignment(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
-            Self::Continue(_) | Self::Break(_) | Self::ReturnWithVal(_, _, _) => false,
+            Self::Continue(_) | Self::Break(_) | Self::Return(_, _, _) => false,
             Self::TryCatch(x, _, _) => x.0.is_pure() && x.2.is_pure(),
 
             #[cfg(not(feature = "no_module"))]

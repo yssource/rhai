@@ -243,7 +243,7 @@ fn optimize_stmt_block(
         }
 
         match stmt {
-            Stmt::ReturnWithVal(_, _, _) | Stmt::Break(_) => dead_code = true,
+            Stmt::Return(_, _, _) | Stmt::Break(_) => dead_code = true,
             _ => (),
         }
 
@@ -292,19 +292,17 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             }
         },
         // if false { if_block } -> Noop
-        Stmt::IfThenElse(Expr::False(pos), x, _) if x.1.is_none() => {
+        Stmt::If(Expr::False(pos), x, _) if x.1.is_none() => {
             state.set_dirty();
             *stmt = Stmt::Noop(*pos);
         }
         // if true { if_block } -> if_block
-        Stmt::IfThenElse(Expr::True(_), x, _) if x.1.is_none() => {
+        Stmt::If(Expr::True(_), x, _) if x.1.is_none() => {
             *stmt = mem::take(&mut x.0);
             optimize_stmt(stmt, state, true);
         }
         // if expr { Noop }
-        Stmt::IfThenElse(ref mut condition, x, _)
-            if x.1.is_none() && matches!(x.0, Stmt::Noop(_)) =>
-        {
+        Stmt::If(ref mut condition, x, _) if x.1.is_none() && matches!(x.0, Stmt::Noop(_)) => {
             state.set_dirty();
 
             let pos = condition.position();
@@ -323,22 +321,22 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             };
         }
         // if expr { if_block }
-        Stmt::IfThenElse(ref mut condition, ref mut x, _) if x.1.is_none() => {
+        Stmt::If(ref mut condition, ref mut x, _) if x.1.is_none() => {
             optimize_expr(condition, state);
             optimize_stmt(&mut x.0, state, true);
         }
         // if false { if_block } else { else_block } -> else_block
-        Stmt::IfThenElse(Expr::False(_), x, _) if x.1.is_some() => {
+        Stmt::If(Expr::False(_), x, _) if x.1.is_some() => {
             *stmt = mem::take(x.1.as_mut().unwrap());
             optimize_stmt(stmt, state, true);
         }
         // if true { if_block } else { else_block } -> if_block
-        Stmt::IfThenElse(Expr::True(_), x, _) => {
+        Stmt::If(Expr::True(_), x, _) => {
             *stmt = mem::take(&mut x.0);
             optimize_stmt(stmt, state, true);
         }
         // if expr { if_block } else { else_block }
-        Stmt::IfThenElse(ref mut condition, ref mut x, _) => {
+        Stmt::If(ref mut condition, ref mut x, _) => {
             optimize_expr(condition, state);
             optimize_stmt(&mut x.0, state, true);
             if let Some(else_block) = x.1.as_mut() {
@@ -441,7 +439,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         // expr;
         Stmt::Expr(ref mut expr) => optimize_expr(expr, state),
         // return expr;
-        Stmt::ReturnWithVal(_, Some(ref mut expr), _) => optimize_expr(expr, state),
+        Stmt::Return(_, Some(ref mut expr), _) => optimize_expr(expr, state),
 
         // All other statements - skip
         _ => (),
@@ -908,11 +906,9 @@ pub fn optimize_into_ast(
                     // {} -> Noop
                     fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
                         // { return val; } -> val
-                        Stmt::ReturnWithVal((ReturnType::Return, _), Some(expr), _) => {
-                            Stmt::Expr(expr)
-                        }
+                        Stmt::Return((ReturnType::Return, _), Some(expr), _) => Stmt::Expr(expr),
                         // { return; } -> ()
-                        Stmt::ReturnWithVal((ReturnType::Return, pos), None, _) => {
+                        Stmt::Return((ReturnType::Return, pos), None, _) => {
                             Stmt::Expr(Expr::Unit(pos))
                         }
                         // All others

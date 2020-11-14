@@ -2064,7 +2064,7 @@ impl Engine {
             }
 
             // If-else statement
-            Stmt::IfThenElse(expr, x, _) => {
+            Stmt::If(expr, x, _) => {
                 let (if_block, else_block) = x.as_ref();
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
@@ -2231,25 +2231,25 @@ impl Engine {
             }
 
             // Return value
-            Stmt::ReturnWithVal((ReturnType::Return, pos), Some(expr), _) => EvalAltResult::Return(
+            Stmt::Return((ReturnType::Return, pos), Some(expr), _) => EvalAltResult::Return(
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
                 *pos,
             )
             .into(),
 
             // Empty return
-            Stmt::ReturnWithVal((ReturnType::Return, pos), None, _) => {
+            Stmt::Return((ReturnType::Return, pos), None, _) => {
                 EvalAltResult::Return(Default::default(), *pos).into()
             }
 
             // Throw value
-            Stmt::ReturnWithVal((ReturnType::Exception, pos), Some(expr), _) => {
+            Stmt::Return((ReturnType::Exception, pos), Some(expr), _) => {
                 let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 EvalAltResult::ErrorRuntime(val, *pos).into()
             }
 
             // Empty throw
-            Stmt::ReturnWithVal((ReturnType::Exception, pos), None, _) => {
+            Stmt::Return((ReturnType::Exception, pos), None, _) => {
                 EvalAltResult::ErrorRuntime(().into(), *pos).into()
             }
 

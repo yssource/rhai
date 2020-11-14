@@ -1970,11 +1970,7 @@ fn parse_if(
         None
     };
 
-    Ok(Stmt::IfThenElse(
-        guard,
-        Box::new((if_body, else_body)),
-        token_pos,
-    ))
+    Ok(Stmt::If(guard, Box::new((if_body, else_body)), token_pos))
 }
 
 /// Parse a while loop.
@@ -2451,13 +2447,9 @@ fn parse_stmt(
 
             match input.peek().unwrap() {
                 // `return`/`throw` at <EOF>
-                (Token::EOF, pos) => Ok(Some(Stmt::ReturnWithVal(
-                    (return_type, token_pos),
-                    None,
-                    *pos,
-                ))),
+                (Token::EOF, pos) => Ok(Some(Stmt::Return((return_type, token_pos), None, *pos))),
                 // `return;` or `throw;`
-                (Token::SemiColon, _) => Ok(Some(Stmt::ReturnWithVal(
+                (Token::SemiColon, _) => Ok(Some(Stmt::Return(
                     (return_type, token_pos),
                     None,
                     settings.pos,
@@ -2466,7 +2458,7 @@ fn parse_stmt(
                 (_, _) => {
                     let expr = parse_expr(input, state, lib, settings.level_up())?;
                     let pos = expr.position();
-                    Ok(Some(Stmt::ReturnWithVal(
+                    Ok(Some(Stmt::Return(
                         (return_type, token_pos),
                         Some(expr),
                         pos,
