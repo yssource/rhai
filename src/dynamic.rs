@@ -22,6 +22,7 @@ use crate::stdlib::{
     boxed::Box,
     fmt,
     hash::{Hash, Hasher},
+    mem,
     ops::{Deref, DerefMut},
     string::{String, ToString},
 };
@@ -360,6 +361,8 @@ impl Dynamic {
 
 impl Hash for Dynamic {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        mem::discriminant(self).hash(state);
+
         match &self.0 {
             Union::Unit(_) => ().hash(state),
             Union::Bool(value) => value.hash(state),
@@ -367,20 +370,17 @@ impl Hash for Dynamic {
             Union::Char(ch) => ch.hash(state),
             Union::Int(i) => i.hash(state),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(f) => {
-                TypeId::of::<FLOAT>().hash(state);
-                state.write(&f.to_le_bytes());
-            }
+            Union::Float(f) => f.to_le_bytes().hash(state),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(a) => a.hash(state),
+            Union::Array(a) => (**a).hash(state),
             #[cfg(not(feature = "no_object"))]
             Union::Map(m) => {
-                let mut buf: StaticVec<_> = m.keys().collect();
-                buf.sort();
+                let mut buf: StaticVec<_> = m.iter().collect();
+                buf.sort_by(|(a, _), (b, _)| a.cmp(b));
 
-                buf.into_iter().for_each(|key| {
+                buf.into_iter().for_each(|(key, value)| {
                     key.hash(state);
-                    m[key].hash(state);
+                    value.hash(state);
                 })
             }
 
