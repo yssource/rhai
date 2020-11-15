@@ -3,7 +3,7 @@
 
 use crate::def_package;
 use crate::dynamic::Dynamic;
-use crate::engine::{Array, OP_EQUALS};
+use crate::engine::{Array, OP_EQUALS, TYPICAL_ARRAY_SIZE};
 use crate::fn_native::{FnPtr, NativeCallContext};
 use crate::plugin::*;
 use crate::result::EvalAltResult;
@@ -14,7 +14,7 @@ use crate::INT;
 #[cfg(not(feature = "no_object"))]
 use crate::engine::Map;
 
-use crate::stdlib::{any::TypeId, boxed::Box, cmp::Ordering, string::ToString};
+use crate::stdlib::{any::TypeId, boxed::Box, cmp::max, cmp::Ordering, string::ToString};
 
 pub type Unit = ();
 
@@ -201,7 +201,7 @@ mod array_functions {
         list: &mut Array,
         mapper: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut array = Array::with_capacity(list.len());
+        let mut array = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, list.len()));
 
         for (i, item) in list.iter().enumerate() {
             array.push(
@@ -233,7 +233,7 @@ mod array_functions {
         list: &mut Array,
         filter: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut array = Array::with_capacity(list.len());
+        let mut array = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, list.len()));
 
         for (i, item) in list.iter().enumerate() {
             if filter
@@ -537,7 +537,7 @@ mod array_functions {
         list: &mut Array,
         filter: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut drained = Array::with_capacity(list.len());
+        let mut drained = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, list.len()));
 
         let mut i = list.len();
 
@@ -596,7 +596,7 @@ mod array_functions {
         list: &mut Array,
         filter: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut drained = Array::with_capacity(list.len());
+        let mut drained = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, list.len()));
 
         let mut i = list.len();
 

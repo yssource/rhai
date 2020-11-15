@@ -720,10 +720,10 @@ impl Engine {
             #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
             module_resolver: None,
 
-            type_names: HashMap::with_capacity(8),
-            disabled_symbols: HashSet::with_capacity(4),
-            custom_keywords: HashMap::with_capacity(4),
-            custom_syntax: HashMap::with_capacity(4),
+            type_names: Default::default(),
+            disabled_symbols: Default::default(),
+            custom_keywords: Default::default(),
+            custom_syntax: Default::default(),
 
             // variable resolver
             resolve_var: None,
@@ -777,10 +777,10 @@ impl Engine {
             #[cfg(not(feature = "no_module"))]
             module_resolver: None,
 
-            type_names: HashMap::with_capacity(8),
-            disabled_symbols: HashSet::with_capacity(4),
-            custom_keywords: HashMap::with_capacity(4),
-            custom_syntax: HashMap::with_capacity(4),
+            type_names: Default::default(),
+            disabled_symbols: Default::default(),
+            custom_keywords: Default::default(),
+            custom_syntax: Default::default(),
 
             resolve_var: None,
 
@@ -1726,7 +1726,7 @@ impl Engine {
 
             #[cfg(not(feature = "no_index"))]
             Expr::Array(x, _) => {
-                let mut arr = Vec::with_capacity(max(TYPICAL_ARRAY_SIZE, x.len()));
+                let mut arr = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, x.len()));
                 for item in x.as_ref() {
                     arr.push(self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?);
                 }
@@ -1735,7 +1735,7 @@ impl Engine {
 
             #[cfg(not(feature = "no_object"))]
             Expr::Map(x, _) => {
-                let mut map = HashMap::with_capacity(max(TYPICAL_MAP_SIZE, x.len()));
+                let mut map = Map::with_capacity(max(TYPICAL_MAP_SIZE, x.len()));
                 for (IdentX { name: key, .. }, expr) in x.as_ref() {
                     map.insert(
                         key.clone(),

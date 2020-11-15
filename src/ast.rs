@@ -16,10 +16,10 @@ use crate::FLOAT;
 use crate::engine::Imports;
 
 #[cfg(not(feature = "no_index"))]
-use crate::engine::TYPICAL_ARRAY_SIZE;
+use crate::{engine::TYPICAL_ARRAY_SIZE, Array};
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::TYPICAL_MAP_SIZE;
+use crate::{engine::TYPICAL_MAP_SIZE, Map};
 
 use crate::stdlib::{
     borrow::Cow,
@@ -129,7 +129,7 @@ impl fmt::Display for ScriptFnDef {
 /// # Thread Safety
 ///
 /// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct AST(
     /// Global statements.
     Vec<Stmt>,
@@ -137,11 +137,17 @@ pub struct AST(
     Module,
 );
 
+impl Default for AST {
+    fn default() -> Self {
+        Self(Vec::with_capacity(16), Default::default())
+    }
+}
+
 impl AST {
     /// Create a new `AST`.
     #[inline(always)]
-    pub fn new(statements: Vec<Stmt>, lib: Module) -> Self {
-        Self(statements, lib)
+    pub fn new(statements: impl IntoIterator<Item = Stmt>, lib: Module) -> Self {
+        Self(statements.into_iter().collect(), lib)
     }
     /// Get the statements.
     #[cfg(not(feature = "internals"))]
@@ -937,14 +943,14 @@ impl Expr {
 
             #[cfg(not(feature = "no_index"))]
             Self::Array(x, _) if self.is_constant() => {
-                let mut arr = Vec::with_capacity(max(TYPICAL_ARRAY_SIZE, x.len()));
+                let mut arr = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, x.len()));
                 arr.extend(x.iter().map(|v| v.get_constant_value().unwrap()));
                 Dynamic(Union::Array(Box::new(arr)))
             }
 
             #[cfg(not(feature = "no_object"))]
             Self::Map(x, _) if self.is_constant() => {
-                let mut map = HashMap::with_capacity(max(TYPICAL_MAP_SIZE, x.len()));
+                let mut map = Map::with_capacity(max(TYPICAL_MAP_SIZE, x.len()));
                 map.extend(
                     x.iter()
                         .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap())),

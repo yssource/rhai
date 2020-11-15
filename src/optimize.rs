@@ -753,7 +753,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
 }
 
 fn optimize(
-    statements: Vec<Stmt>,
+    mut statements: Vec<Stmt>,
     engine: &Engine,
     scope: &Scope,
     lib: &[&Module],
@@ -761,6 +761,7 @@ fn optimize(
 ) -> Vec<Stmt> {
     // If optimization level is None then skip optimizing
     if level == OptimizationLevel::None {
+        statements.shrink_to_fit();
         return statements;
     }
 
@@ -779,16 +780,14 @@ fn optimize(
 
     let orig_constants_len = state.constants.len();
 
-    let mut result = statements;
-
     // Optimization loop
     loop {
         state.reset();
         state.restore_constants(orig_constants_len);
 
-        let num_statements = result.len();
+        let num_statements = statements.len();
 
-        result.iter_mut().enumerate().for_each(|(i, stmt)| {
+        statements.iter_mut().enumerate().for_each(|(i, stmt)| {
             match stmt {
                 Stmt::Const(var_def, expr, _, _) if expr.is_some() => {
                     // Load constants
@@ -828,26 +827,27 @@ fn optimize(
     }
 
     // Eliminate code that is pure but always keep the last statement
-    let last_stmt = result.pop();
+    let last_stmt = statements.pop();
 
     // Remove all pure statements at global level
-    result.retain(|stmt| !stmt.is_pure());
+    statements.retain(|stmt| !stmt.is_pure());
 
     // Add back the last statement unless it is a lone No-op
     if let Some(stmt) = last_stmt {
-        if !result.is_empty() || !stmt.is_noop() {
-            result.push(stmt);
+        if !statements.is_empty() || !stmt.is_noop() {
+            statements.push(stmt);
         }
     }
 
-    result
+    statements.shrink_to_fit();
+    statements
 }
 
 /// Optimize an AST.
 pub fn optimize_into_ast(
     engine: &Engine,
     scope: &Scope,
-    statements: Vec<Stmt>,
+    mut statements: Vec<Stmt>,
     _functions: Vec<ScriptFnDef>,
     level: OptimizationLevel,
 ) -> AST {
@@ -921,6 +921,8 @@ pub fn optimize_into_ast(
 
     #[cfg(feature = "no_function")]
     let lib = Default::default();
+
+    statements.shrink_to_fit();
 
     AST::new(
         match level {

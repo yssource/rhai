@@ -41,9 +41,6 @@ use crate::stdlib::{
     vec::Vec,
 };
 
-#[cfg(not(feature = "no_closure"))]
-use crate::stdlib::collections::HashSet;
-
 type PERR = ParseErrorType;
 
 type FunctionsLib = HashMap<u64, ScriptFnDef, StraightHasherBuilder>;
@@ -99,7 +96,7 @@ impl<'e> ParseState<'e> {
             #[cfg(not(feature = "no_function"))]
             max_function_expr_depth,
             #[cfg(not(feature = "no_closure"))]
-            externals: HashMap::with_capacity(8),
+            externals: Default::default(),
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
             strings: HashMap::with_capacity(64),
@@ -2211,7 +2208,7 @@ fn parse_export(
         _ => (),
     }
 
-    let mut exports = Vec::new();
+    let mut exports = Vec::with_capacity(4);
 
     loop {
         let (id, id_pos) = match input.next().unwrap() {
@@ -2279,7 +2276,7 @@ fn parse_block(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let mut statements = Vec::new();
+    let mut statements = Vec::with_capacity(8);
     let prev_stack_len = state.stack.len();
 
     #[cfg(not(feature = "no_module"))]
@@ -2584,7 +2581,7 @@ fn parse_fn(
         (_, pos) => return Err(PERR::FnMissingParams(name).into_err(*pos)),
     };
 
-    let mut params = Vec::new();
+    let mut params: StaticVec<_> = Default::default();
 
     if !match_token(input, Token::RightParen).0 {
         let sep_err = format!("to separate the parameters of function '{}'", name);
@@ -2716,7 +2713,7 @@ fn parse_anon_fn(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let mut params = Vec::new();
+    let mut params: StaticVec<_> = Default::default();
 
     if input.next().unwrap().0 != Token::Or {
         if !match_token(input, Token::Pipe).0 {
@@ -2800,7 +2797,7 @@ fn parse_anon_fn(
         access: FnAccess::Public,
         params,
         #[cfg(not(feature = "no_closure"))]
-        externals: HashSet::with_capacity(4),
+        externals: Default::default(),
         body,
         lib: None,
         #[cfg(not(feature = "no_module"))]
@@ -2877,8 +2874,8 @@ impl Engine {
         script_hash: u64,
         input: &mut TokenStream,
     ) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
-        let mut statements: Vec<Stmt> = Default::default();
-        let mut functions = Default::default();
+        let mut statements = Vec::with_capacity(16);
+        let mut functions = HashMap::with_capacity_and_hasher(16, StraightHasherBuilder);
         let mut state = ParseState::new(
             self,
             script_hash,

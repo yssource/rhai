@@ -81,12 +81,12 @@ pub struct Module {
 impl Default for Module {
     fn default() -> Self {
         Self {
-            modules: HashMap::with_capacity(4),
-            variables: HashMap::with_capacity(4),
-            all_variables: HashMap::with_capacity_and_hasher(32, StraightHasherBuilder),
+            modules: Default::default(),
+            variables: Default::default(),
+            all_variables: Default::default(),
             functions: HashMap::with_capacity_and_hasher(64, StraightHasherBuilder),
             all_functions: HashMap::with_capacity_and_hasher(256, StraightHasherBuilder),
-            type_iterators: HashMap::with_capacity(4),
+            type_iterators: Default::default(),
             indexed: false,
         }
     }
@@ -1477,8 +1477,8 @@ impl Module {
 
         if !self.indexed {
             let mut qualifiers = Vec::with_capacity(4);
-            let mut variables = Vec::with_capacity(8);
-            let mut functions = Vec::with_capacity(16);
+            let mut variables = Vec::with_capacity(16);
+            let mut functions = Vec::with_capacity(256);
 
             qualifiers.push("root");
 
