@@ -16,7 +16,11 @@ use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec};
 use crate::ast::ScriptFnDef;
 
 #[cfg(not(feature = "no_module"))]
-use crate::{ast::AST, engine::Engine, scope::Scope};
+use crate::{
+    ast::AST,
+    engine::{Engine, Imports},
+    scope::Scope,
+};
 
 #[cfg(not(feature = "no_index"))]
 use crate::engine::{Array, FN_IDX_GET, FN_IDX_SET};
@@ -1361,7 +1365,8 @@ impl Module {
         ast: &AST,
         engine: &Engine,
     ) -> Result<Self, Box<EvalAltResult>> {
-        let mut mods = Default::default();
+        let mut mods = engine.global_sub_modules.clone();
+        let orig_mods_len = mods.len();
 
         // Run the script
         engine.eval_ast_with_scope_raw(&mut scope, &mut mods, &ast)?;
@@ -1380,8 +1385,11 @@ impl Module {
             }
         });
 
-        // Modules left in the scope become sub-modules
-        mods.iter().for_each(|(alias, m)| {
+        // Extra modules left in the scope become sub-modules
+        let mut func_mods: Imports = Default::default();
+
+        mods.into_iter().skip(orig_mods_len).for_each(|(alias, m)| {
+            func_mods.push(alias.clone(), m.clone());
             module.set_sub_module(alias, m);
         });
 
@@ -1396,7 +1404,7 @@ impl Module {
                     // Encapsulate AST environment
                     let mut func = func.as_ref().clone();
                     func.lib = Some(ast_lib.clone());
-                    func.mods = mods.clone();
+                    func.mods = func_mods.clone();
                     module.set_script_fn(func.into());
                 });
         }

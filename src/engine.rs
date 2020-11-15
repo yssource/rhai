@@ -596,6 +596,8 @@ pub struct Engine {
     pub(crate) global_module: Module,
     /// A collection of all library packages loaded into the Engine.
     pub(crate) packages: PackagesCollection,
+    /// A collection of all sub-modules directly loaded into the Engine.
+    pub(crate) global_sub_modules: Imports,
 
     /// A module resolution service.
     #[cfg(not(feature = "no_module"))]
@@ -711,6 +713,7 @@ impl Engine {
 
             packages: Default::default(),
             global_module: Default::default(),
+            global_sub_modules: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_std"))]
@@ -773,6 +776,7 @@ impl Engine {
 
             packages: Default::default(),
             global_module: Default::default(),
+            global_sub_modules: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
             module_resolver: None,
@@ -1814,7 +1818,7 @@ impl Engine {
 
             Expr::True(_) => Ok(true.into()),
             Expr::False(_) => Ok(false.into()),
-            Expr::Unit(_) => Ok(().into()),
+            Expr::Unit(_) => Ok(Dynamic::UNIT),
 
             Expr::Custom(custom, _) => {
                 let expressions = custom
@@ -2090,7 +2094,7 @@ impl Engine {
                 } else if let Some(def_stmt) = def_stmt {
                     self.eval_stmt(scope, mods, state, lib, this_ptr, def_stmt, level)
                 } else {
-                    Ok(().into())
+                    Ok(Dynamic::UNIT)
                 }
             }
 

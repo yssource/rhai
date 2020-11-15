@@ -30,6 +30,9 @@ use crate::fn_register::{RegisterFn, RegisterResultFn};
 #[cfg(not(feature = "no_function"))]
 use crate::{fn_args::FuncArgs, fn_call::ensure_no_data_race, module::Module, StaticVec};
 
+#[cfg(not(feature = "no_module"))]
+use crate::fn_native::{shared_take_or_clone, Shared};
+
 #[cfg(not(feature = "no_optimize"))]
 use crate::optimize::optimize_into_ast;
 
@@ -772,6 +775,45 @@ impl Engine {
         self.register_indexer_get(getter)
             .register_indexer_set(setter)
     }
+    /// Register a `Module` as a sub-module with the `Engine`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::{Engine, Module};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Create the module
+    /// let mut module = Module::new();
+    /// module.set_fn_1("calc", |x: i64| Ok(x + 1));
+    ///
+    /// // Register the module as a sub-module
+    /// engine.register_module("CalcService", module);
+    ///
+    /// assert_eq!(engine.eval::<i64>("CalcService::calc(41)")?, 42);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_module"))]
+    pub fn register_module(
+        &mut self,
+        name: impl Into<ImmutableString>,
+        module: impl Into<Shared<Module>>,
+    ) -> &mut Self {
+        let module = module.into();
+
+        if !module.is_indexed() {
+            // Index the module (making a clone copy if necessary) if it is not indexed
+            let mut module = shared_take_or_clone(module);
+            module.build_index();
+            self.global_sub_modules.push(name, module);
+        } else {
+            self.global_sub_modules.push(name, module);
+        }
+        self
+    }
     /// Compile a string into an `AST`, which can be used later for evaluation.
     ///
     /// # Example
@@ -1368,7 +1410,8 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, Box<EvalAltResult>> {
-        let mut mods = Default::default();
+        let mut mods = self.global_sub_modules.clone();
+
         let (result, _) = self.eval_ast_with_scope_raw(scope, &mut mods, ast)?;
 
         let typ = self.map_type_name(result.type_name());
@@ -1446,7 +1489,8 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
-        let mut mods = Default::default();
+        let mut mods = self.global_sub_modules.clone();
+
         self.eval_statements_raw(scope, &mut mods, ast.statements(), &[ast.lib()])
             .map(|_| ())
     }
@@ -1599,7 +1643,7 @@ impl Engine {
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), NO_POS))?;
 
         let mut state = Default::default();
-        let mut mods = Default::default();
+        let mut mods = self.global_sub_modules.clone();
 
         // Check for data race.
         if cfg!(not(feature = "no_closure")) {
