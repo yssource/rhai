@@ -17,12 +17,6 @@ use crate::{calc_native_fn_hash, StaticVec};
 #[cfg(not(feature = "no_function"))]
 use crate::ast::ReturnType;
 
-#[cfg(not(feature = "no_index"))]
-use crate::Array;
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
 use crate::stdlib::{
     boxed::Box,
     hash::{Hash, Hasher},
@@ -566,26 +560,22 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         },
         // [ constant .. ]
         #[cfg(not(feature = "no_index"))]
-        Expr::Array(a, pos) if a.iter().all(Expr::is_constant) => {
+        Expr::Array(_, _) if expr.is_constant() => {
             state.set_dirty();
-            let mut arr: Array = Default::default();
-            arr.extend(mem::take(a).into_iter().map(|expr| expr.get_constant_value().unwrap()));
-            *expr = Expr::DynamicConstant(Box::new(arr.into()), *pos);
+            *expr = Expr::DynamicConstant(Box::new(expr.get_constant_value().unwrap()), expr.position());
         }
         // [ items .. ]
         #[cfg(not(feature = "no_index"))]
-        Expr::Array(a, _) => a.iter_mut().for_each(|expr| optimize_expr(expr, state)),
+        Expr::Array(x, _) => x.iter_mut().for_each(|expr| optimize_expr(expr, state)),
         // #{ key:constant, .. }
         #[cfg(not(feature = "no_object"))]
-        Expr::Map(m, pos) if m.iter().all(|(_, expr)| expr.is_constant()) => {
+        Expr::Map(_, _) if expr.is_constant()=> {
             state.set_dirty();
-            let mut map: Map = Default::default();
-            map.extend(mem::take(m).into_iter().map(|(key, expr)| (key.name, expr.get_constant_value().unwrap())));
-            *expr = Expr::DynamicConstant(Box::new(map.into()), *pos);
+            *expr = Expr::DynamicConstant(Box::new(expr.get_constant_value().unwrap()), expr.position());
         }
         // #{ key:value, .. }
         #[cfg(not(feature = "no_object"))]
-        Expr::Map(m, _) => m.iter_mut().for_each(|(_, expr)| optimize_expr(expr, state)),
+        Expr::Map(x, _) => x.iter_mut().for_each(|(_, expr)| optimize_expr(expr, state)),
         // lhs in rhs
         Expr::In(x, _) => match (&mut x.lhs, &mut x.rhs) {
             // "xxx" in "xxxxx"

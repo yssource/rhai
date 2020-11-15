@@ -15,6 +15,12 @@ use crate::FLOAT;
 #[cfg(not(feature = "no_module"))]
 use crate::engine::Imports;
 
+#[cfg(not(feature = "no_index"))]
+use crate::engine::TYPICAL_ARRAY_SIZE;
+
+#[cfg(not(feature = "no_object"))]
+use crate::engine::TYPICAL_MAP_SIZE;
+
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
@@ -30,6 +36,9 @@ use crate::stdlib::{
 
 #[cfg(not(feature = "no_closure"))]
 use crate::stdlib::collections::HashSet;
+
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+use crate::stdlib::cmp::max;
 
 /// A type representing the access mode of a scripted function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -927,17 +936,20 @@ impl Expr {
             Self::Unit(_) => ().into(),
 
             #[cfg(not(feature = "no_index"))]
-            Self::Array(x, _) if x.iter().all(Self::is_constant) => Dynamic(Union::Array(
-                Box::new(x.iter().map(|v| v.get_constant_value().unwrap()).collect()),
-            )),
+            Self::Array(x, _) if self.is_constant() => {
+                let mut arr = Vec::with_capacity(max(TYPICAL_ARRAY_SIZE, x.len()));
+                arr.extend(x.iter().map(|v| v.get_constant_value().unwrap()));
+                Dynamic(Union::Array(Box::new(arr)))
+            }
 
             #[cfg(not(feature = "no_object"))]
-            Self::Map(x, _) if x.iter().all(|(_, v)| v.is_constant()) => {
-                Dynamic(Union::Map(Box::new(
+            Self::Map(x, _) if self.is_constant() => {
+                let mut map = HashMap::with_capacity(max(TYPICAL_MAP_SIZE, x.len()));
+                map.extend(
                     x.iter()
-                        .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap()))
-                        .collect(),
-                )))
+                        .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap())),
+                );
+                Dynamic(Union::Map(Box::new(map)))
             }
 
             _ => return None,

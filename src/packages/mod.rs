@@ -56,7 +56,9 @@ pub(crate) struct PackagesCollection(StaticVec<PackageLibrary>);
 
 impl PackagesCollection {
     /// Add a `PackageLibrary` into the `PackagesCollection`.
-    pub fn push(&mut self, package: PackageLibrary) {
+    ///
+    /// Packages are searched in reverse order.
+    pub fn add(&mut self, package: PackageLibrary) {
         // Later packages override previous ones.
         self.0.insert(0, package);
     }

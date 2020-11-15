@@ -59,7 +59,7 @@ pub struct FuncInfo {
 /// and/or script-defined functions.
 ///
 /// Not available under the `no_module` feature.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Module {
     /// Sub-modules.
     modules: HashMap<String, Shared<Module>>,
@@ -69,13 +69,27 @@ pub struct Module {
     all_variables: HashMap<u64, Dynamic, StraightHasherBuilder>,
     /// External Rust functions.
     functions: HashMap<u64, FuncInfo, StraightHasherBuilder>,
-    /// Iterator functions, keyed by the type producing the iterator.
-    type_iterators: HashMap<TypeId, IteratorFn>,
     /// Flattened collection of all external Rust functions, native or scripted,
     /// including those in sub-modules.
     all_functions: HashMap<u64, CallableFunction, StraightHasherBuilder>,
+    /// Iterator functions, keyed by the type producing the iterator.
+    type_iterators: HashMap<TypeId, IteratorFn>,
     /// Is the module indexed?
     indexed: bool,
+}
+
+impl Default for Module {
+    fn default() -> Self {
+        Self {
+            modules: HashMap::with_capacity(4),
+            variables: HashMap::with_capacity(4),
+            all_variables: HashMap::with_capacity_and_hasher(32, StraightHasherBuilder),
+            functions: HashMap::with_capacity_and_hasher(64, StraightHasherBuilder),
+            all_functions: HashMap::with_capacity_and_hasher(256, StraightHasherBuilder),
+            type_iterators: HashMap::with_capacity(4),
+            indexed: false,
+        }
+    }
 }
 
 impl fmt::Debug for Module {
@@ -1462,9 +1476,9 @@ impl Module {
         }
 
         if !self.indexed {
-            let mut qualifiers: Vec<_> = Default::default();
-            let mut variables: Vec<_> = Default::default();
-            let mut functions: Vec<_> = Default::default();
+            let mut qualifiers = Vec::with_capacity(4);
+            let mut variables = Vec::with_capacity(8);
+            let mut functions = Vec::with_capacity(16);
 
             qualifiers.push("root");
 

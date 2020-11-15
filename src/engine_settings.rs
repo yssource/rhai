@@ -23,8 +23,7 @@ impl Engine {
     /// In other words, loaded packages are searched in reverse order.
     #[inline(always)]
     pub fn load_package(&mut self, package: impl Into<PackageLibrary>) -> &mut Self {
-        // Push the package to the top - packages are searched in reverse order
-        self.packages.push(package.into());
+        self.packages.add(package.into());
         self
     }
     /// Control whether and how the `Engine` will optimize an AST after compilation.

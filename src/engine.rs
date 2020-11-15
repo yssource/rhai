@@ -58,11 +58,20 @@ use crate::stdlib::mem;
 #[cfg(not(feature = "no_index"))]
 pub type Array = crate::stdlib::vec::Vec<Dynamic>;
 
+#[cfg(not(feature = "no_index"))]
+pub const TYPICAL_ARRAY_SIZE: usize = 8; // Small arrays are typical
+
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+use crate::stdlib::cmp::max;
+
 /// Hash map of `Dynamic` values with `ImmutableString` keys.
 ///
 /// Not available under the `no_object` feature.
 #[cfg(not(feature = "no_object"))]
 pub type Map = HashMap<ImmutableString, Dynamic>;
+
+#[cfg(not(feature = "no_object"))]
+pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 
 /// _[INTERNALS]_ A stack of imported modules.
 /// Exported under the `internals` feature only.
@@ -597,7 +606,7 @@ pub struct Engine {
 
     /// A hashset containing symbols to disable.
     pub(crate) disabled_symbols: HashSet<String>,
-    /// A hashset containing custom keywords and precedence to recognize.
+    /// A hashmap containing custom keywords and precedence to recognize.
     pub(crate) custom_keywords: HashMap<String, Option<u8>>,
     /// Custom syntax.
     pub(crate) custom_syntax: HashMap<ImmutableString, CustomSyntax>,
@@ -711,10 +720,10 @@ impl Engine {
             #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
             module_resolver: None,
 
-            type_names: Default::default(),
-            disabled_symbols: Default::default(),
-            custom_keywords: Default::default(),
-            custom_syntax: Default::default(),
+            type_names: HashMap::with_capacity(8),
+            disabled_symbols: HashSet::with_capacity(4),
+            custom_keywords: HashMap::with_capacity(4),
+            custom_syntax: HashMap::with_capacity(4),
 
             // variable resolver
             resolve_var: None,
@@ -768,10 +777,10 @@ impl Engine {
             #[cfg(not(feature = "no_module"))]
             module_resolver: None,
 
-            type_names: Default::default(),
-            disabled_symbols: Default::default(),
-            custom_keywords: Default::default(),
-            custom_syntax: Default::default(),
+            type_names: HashMap::with_capacity(8),
+            disabled_symbols: HashSet::with_capacity(4),
+            custom_keywords: HashMap::with_capacity(4),
+            custom_syntax: HashMap::with_capacity(4),
 
             resolve_var: None,
 
@@ -1716,21 +1725,25 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Array(x, _) => Ok(Dynamic(Union::Array(Box::new(
-                x.iter()
-                    .map(|item| self.eval_expr(scope, mods, state, lib, this_ptr, item, level))
-                    .collect::<Result<_, _>>()?,
-            )))),
+            Expr::Array(x, _) => {
+                let mut arr = Vec::with_capacity(max(TYPICAL_ARRAY_SIZE, x.len()));
+                for item in x.as_ref() {
+                    arr.push(self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?);
+                }
+                Ok(Dynamic(Union::Array(Box::new(arr))))
+            }
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Map(x, _) => Ok(Dynamic(Union::Map(Box::new(
-                x.iter()
-                    .map(|(key, expr)| {
-                        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                            .map(|val| (key.name.clone(), val))
-                    })
-                    .collect::<Result<HashMap<_, _>, _>>()?,
-            )))),
+            Expr::Map(x, _) => {
+                let mut map = HashMap::with_capacity(max(TYPICAL_MAP_SIZE, x.len()));
+                for (IdentX { name: key, .. }, expr) in x.as_ref() {
+                    map.insert(
+                        key.clone(),
+                        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
+                    );
+                }
+                Ok(Dynamic(Union::Map(Box::new(map))))
+            }
 
             // Normal function call
             Expr::FnCall(x, pos) if x.namespace.is_none() => {

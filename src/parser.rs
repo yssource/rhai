@@ -69,7 +69,7 @@ struct ParseState<'e> {
     allow_capture: bool,
     /// Encapsulates a local stack with imported module names.
     #[cfg(not(feature = "no_module"))]
-    modules: Vec<ImmutableString>,
+    modules: StaticVec<ImmutableString>,
     /// Maximum levels of expression nesting.
     #[cfg(not(feature = "unchecked"))]
     max_expr_depth: usize,
@@ -99,11 +99,11 @@ impl<'e> ParseState<'e> {
             #[cfg(not(feature = "no_function"))]
             max_function_expr_depth,
             #[cfg(not(feature = "no_closure"))]
-            externals: Default::default(),
+            externals: HashMap::with_capacity(8),
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
-            strings: Default::default(),
-            stack: Default::default(),
+            strings: HashMap::with_capacity(64),
+            stack: Vec::with_capacity(16),
             #[cfg(not(feature = "no_module"))]
             modules: Default::default(),
         }
@@ -818,7 +818,7 @@ fn parse_switch(
         }
     }
 
-    let mut table: HashMap<u64, Stmt, StraightHasherBuilder> = Default::default();
+    let mut table = HashMap::with_capacity_and_hasher(16, StraightHasherBuilder);
     let mut def_stmt = None;
 
     loop {
@@ -1137,17 +1137,15 @@ fn parse_unary(
 
     match token {
         // If statement is allowed to act as expressions
-        Token::If if settings.allow_if_expr => {
-            let mut block: StaticVec<_> = Default::default();
-            block.push(parse_if(input, state, lib, settings.level_up())?);
-            Ok(Expr::Stmt(Box::new(block), settings.pos))
-        }
+        Token::If if settings.allow_if_expr => Ok(Expr::Stmt(
+            Box::new(vec![parse_if(input, state, lib, settings.level_up())?].into()),
+            settings.pos,
+        )),
         // Switch statement is allowed to act as expressions
-        Token::Switch if settings.allow_switch_expr => {
-            let mut block: StaticVec<_> = Default::default();
-            block.push(parse_switch(input, state, lib, settings.level_up())?);
-            Ok(Expr::Stmt(Box::new(block), settings.pos))
-        }
+        Token::Switch if settings.allow_switch_expr => Ok(Expr::Stmt(
+            Box::new(vec![parse_switch(input, state, lib, settings.level_up())?].into()),
+            settings.pos,
+        )),
         // -expr
         Token::UnaryMinus => {
             let pos = eat_token(input, Token::UnaryMinus);
@@ -2635,7 +2633,7 @@ fn parse_fn(
     let params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
 
     #[cfg(not(feature = "no_closure"))]
-    let externals: HashSet<_> = state
+    let externals = state
         .externals
         .iter()
         .map(|(name, _)| name)
@@ -2802,7 +2800,7 @@ fn parse_anon_fn(
         access: FnAccess::Public,
         params,
         #[cfg(not(feature = "no_closure"))]
-        externals: Default::default(),
+        externals: HashSet::with_capacity(4),
         body,
         lib: None,
         #[cfg(not(feature = "no_module"))]
