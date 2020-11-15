@@ -45,7 +45,7 @@ engine.register_raw_fn(
 
         *x += y;                                            // perform the action
 
-        Ok(().into())                                       // must be 'Result<Dynamic, Box<EvalAltResult>>'
+        Ok(Dynamic::UNIT)                                       // must be 'Result<Dynamic, Box<EvalAltResult>>'
     }
 );
 

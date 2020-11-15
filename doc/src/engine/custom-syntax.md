@@ -216,7 +216,7 @@ fn implementation_func(
         }
     }
 
-    Ok(().into())
+    Ok(Dynamic::UNIT)
 }
 
 // Register the custom syntax (sample): exec |x| -> { x += 1 } while x < 0;

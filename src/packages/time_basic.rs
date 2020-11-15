@@ -150,7 +150,7 @@ mod time_functions {
         #[rhai_fn(return_raw, name = "+=")]
         pub fn add_assign(x: &mut Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
             *x = add_impl(*x, seconds)?;
-            Ok(().into())
+            Ok(Dynamic::UNIT)
         }
         #[rhai_fn(return_raw, name = "-")]
         pub fn subtract(x: Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -162,7 +162,7 @@ mod time_functions {
             seconds: FLOAT,
         ) -> Result<Dynamic, Box<EvalAltResult>> {
             *x = subtract_impl(*x, seconds)?;
-            Ok(().into())
+            Ok(Dynamic::UNIT)
         }
     }
 
@@ -204,7 +204,7 @@ mod time_functions {
     #[rhai_fn(return_raw, name = "+=")]
     pub fn add_assign(x: &mut Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         *x = add_impl(*x, seconds)?;
-        Ok(().into())
+        Ok(Dynamic::UNIT)
     }
     #[rhai_fn(return_raw, name = "-")]
     pub fn subtract(x: Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -213,7 +213,7 @@ mod time_functions {
     #[rhai_fn(return_raw, name = "-=")]
     pub fn subtract_assign(x: &mut Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         *x = subtract_impl(*x, seconds)?;
-        Ok(().into())
+        Ok(Dynamic::UNIT)
     }
 
     #[rhai_fn(name = "==")]

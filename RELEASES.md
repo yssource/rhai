@@ -10,6 +10,12 @@ New features
 ------------
 
 * `switch` statement.
+* `Engine::register_module` to register a module as a sub-module in the global namespace.
+
+Enhancements
+------------
+
+* New constant `Dynamic::UNIT`.
 
 
 Version 0.19.5

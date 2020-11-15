@@ -247,7 +247,7 @@ impl Serializer for &mut DynamicSerializer {
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Box<EvalAltResult>> {
-        Ok(().into())
+        Ok(Dynamic::UNIT)
     }
 
     fn serialize_some<T: ?Sized + Serialize>(
@@ -258,7 +258,7 @@ impl Serializer for &mut DynamicSerializer {
     }
 
     fn serialize_unit(self) -> Result<Self::Ok, Box<EvalAltResult>> {
-        Ok(().into())
+        Ok(Dynamic::UNIT)
     }
 
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Box<EvalAltResult>> {

@@ -957,7 +957,7 @@ fn parse_primary(
             let var_name_def = IdentX::new(state.get_interned_string(s), settings.pos);
             Expr::Variable(Box::new((None, None, 0, var_name_def)))
         }
-        // Module qualification
+        // Namespace qualification
         #[cfg(not(feature = "no_module"))]
         Token::Identifier(s) if *next_token == Token::DoubleColon => {
             // Once the identifier consumed we must enable next variables capturing

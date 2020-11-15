@@ -532,11 +532,13 @@ impl Clone for Dynamic {
 impl Default for Dynamic {
     #[inline(always)]
     fn default() -> Self {
-        Self(Union::Unit(()))
+        Self::UNIT
     }
 }
 
 impl Dynamic {
+    pub const UNIT: Dynamic = Self(Union::Unit(()));
+
     /// Create a `Dynamic` from any type.  A `Dynamic` value is simply returned as is.
     ///
     /// # Safety

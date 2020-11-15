@@ -284,7 +284,7 @@ mod string_functions {
             }
         }
 
-        Ok(().into())
+        Ok(Dynamic::UNIT)
     }
     #[rhai_fn(name = "pad", return_raw)]
     pub fn pad_with_string(
@@ -328,7 +328,7 @@ mod string_functions {
             }
         }
 
-        Ok(().into())
+        Ok(Dynamic::UNIT)
     }
 
     #[cfg(not(feature = "no_index"))]

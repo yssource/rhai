@@ -651,7 +651,7 @@ impl Engine {
 
         let script = script.trim();
         if script.is_empty() {
-            return Ok(().into());
+            return Ok(Dynamic::UNIT);
         }
 
         // Check for stack overflow

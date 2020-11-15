@@ -54,7 +54,7 @@ macro_rules! gen_array_functions {
                         list.resize(len as usize, Dynamic::from(item));
                     }
 
-                    Ok(().into())
+                    Ok(Dynamic::UNIT)
                 }
             }
         })* }
@@ -367,7 +367,7 @@ mod array_functions {
         list: &mut Array,
         reducer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut result: Dynamic = ().into();
+        let mut result: Dynamic = Dynamic::UNIT;
 
         for (i, item) in list.iter().enumerate() {
             result = reducer
@@ -434,7 +434,7 @@ mod array_functions {
         list: &mut Array,
         reducer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut result: Dynamic = ().into();
+        let mut result: Dynamic = Dynamic::UNIT;
 
         for (i, item) in list.iter().enumerate().rev() {
             result = reducer
@@ -529,7 +529,7 @@ mod array_functions {
                 })
         });
 
-        Ok(().into())
+        Ok(Dynamic::UNIT)
     }
     #[rhai_fn(return_raw)]
     pub fn drain(

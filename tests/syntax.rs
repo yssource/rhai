@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, LexError, ParseError, ParseErrorType, INT, NO_POS};
+use rhai::{Dynamic, Engine, EvalAltResult, LexError, ParseError, ParseErrorType, INT, NO_POS};
 
 #[test]
 fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
@@ -48,7 +48,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
                 }
             }
 
-            Ok(().into())
+            Ok(Dynamic::UNIT)
         },
     )?;
 
@@ -65,7 +65,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
     // The first symbol must be an identifier
     assert_eq!(
         *engine
-            .register_custom_syntax(&["!"], 0, |_, _| Ok(().into()))
+            .register_custom_syntax(&["!"], 0, |_, _| Ok(Dynamic::UNIT))
             .expect_err("should error")
             .0,
         ParseErrorType::BadInput(LexError::ImproperSymbol(
