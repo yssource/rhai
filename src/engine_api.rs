@@ -811,9 +811,9 @@ impl Engine {
             // Index the module (making a clone copy if necessary) if it is not indexed
             let mut module = shared_take_or_clone(module);
             module.build_index();
-            self.global_sub_modules.push(name, module);
+            self.global_sub_modules.push_fixed(name, module);
         } else {
-            self.global_sub_modules.push(name, module);
+            self.global_sub_modules.push_fixed(name, module);
         }
         self
     }

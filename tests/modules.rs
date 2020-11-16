@@ -23,6 +23,7 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
     sub_module2.set_var("answer", 41 as INT);
 
     let hash_inc = sub_module2.set_fn_1("inc", |x: INT| Ok(x + 1));
+    sub_module2.set_fn_1_mut("super_inc", |x: &mut INT| Ok(*x + 1));
 
     sub_module.set_sub_module("universe", sub_module2);
     module.set_sub_module("life", sub_module);
@@ -39,26 +40,32 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(m2.get_var_value::<INT>("answer").unwrap(), 41);
 
-    let mut resolver = StaticModuleResolver::new();
-    resolver.insert("question", module);
-
     let mut engine = Engine::new();
-    engine.set_module_resolver(Some(resolver));
+    engine.register_module("question", module);
 
+    assert_eq!(engine.eval::<INT>("question::MYSTIC_NUMBER")?, 42);
+    assert!(engine.eval::<INT>("MYSTIC_NUMBER").is_err());
     assert_eq!(
-        engine.eval::<INT>(r#"import "question" as q; q::MYSTIC_NUMBER"#)?,
+        engine.eval::<INT>("question::life::universe::answer + 1")?,
         42
     );
     assert_eq!(
-        engine.eval::<INT>(r#"import "question" as q; q::life::universe::answer + 1"#)?,
+        engine.eval::<INT>("question::life::universe::inc(question::life::universe::answer)")?,
         42
     );
+    assert!(engine
+        .eval::<INT>("inc(question::life::universe::answer)")
+        .is_err());
+
+    #[cfg(not(feature = "no_object"))]
     assert_eq!(
-        engine.eval::<INT>(
-            r#"import "question" as q; q::life::universe::inc(q::life::universe::answer)"#
-        )?,
+        engine.eval::<INT>("super_inc(question::life::universe::answer)")?,
         42
     );
+    #[cfg(feature = "no_object")]
+    assert!(engine
+        .eval::<INT>("super_inc(question::life::universe::answer)")
+        .is_err());
 
     Ok(())
 }

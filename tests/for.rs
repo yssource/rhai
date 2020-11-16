@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, INT};
+use rhai::{Engine, EvalAltResult, Module, INT};
 
 #[cfg(not(feature = "no_index"))]
 #[test]
@@ -72,6 +72,48 @@ fn test_for_object() -> Result<(), Box<EvalAltResult>> {
     "#;
 
     assert_eq!(engine.eval::<INT>(script)?, 9);
+
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct MyIterableType(String);
+
+impl IntoIterator for MyIterableType {
+    type Item = char;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.chars().collect::<Vec<_>>().into_iter()
+    }
+}
+
+#[cfg(not(feature = "no_module"))]
+#[test]
+fn test_for_module_iterator() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    // Set a type iterator deep inside a nested module chain
+    let mut sub_module = Module::new();
+    sub_module.set_iterable::<MyIterableType>();
+    sub_module.set_fn_0("new_ts", || Ok(MyIterableType("hello".to_string())));
+
+    let mut module = Module::new();
+    module.set_sub_module("inner", sub_module);
+
+    engine.register_module("testing", module);
+
+    let script = r#"
+        let item = testing::inner::new_ts();
+        let result = "";
+
+        for x in item {
+            result += x;
+        }
+        result
+    "#;
+
+    assert_eq!(engine.eval::<String>(script)?, "hello");
 
     Ok(())
 }

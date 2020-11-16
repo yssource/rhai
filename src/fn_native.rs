@@ -56,10 +56,10 @@ pub struct NativeCallContext<'e, 'a, 'm, 'pm: 'm> {
     lib: &'m [&'pm Module],
 }
 
-impl<'e, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized>
-    From<(&'e Engine, &'a mut Imports, &'m M)> for NativeCallContext<'e, 'a, 'm, 'pm>
+impl<'e, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized> From<(&'e Engine, &'a Imports, &'m M)>
+    for NativeCallContext<'e, 'a, 'm, 'pm>
 {
-    fn from(value: (&'e Engine, &'a mut Imports, &'m M)) -> Self {
+    fn from(value: (&'e Engine, &'a Imports, &'m M)) -> Self {
         Self {
             engine: value.0,
             mods: Some(value.1),

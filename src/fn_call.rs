@@ -175,7 +175,7 @@ impl Engine {
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     pub(crate) fn call_native_fn(
         &self,
-        mods: &mut Imports,
+        mods: &Imports,
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
@@ -192,7 +192,8 @@ impl Engine {
         // Then search packages
         let func = //lib.get_fn(hash_fn, pub_only)
             self.global_module.get_fn(hash_fn, pub_only)
-                .or_else(|| self.packages.get_fn(hash_fn, pub_only));
+                .or_else(|| self.packages.get_fn(hash_fn))
+                .or_else(|| mods.get_fn(hash_fn));
 
         if let Some(func) = func {
             assert!(func.is_native());
@@ -428,6 +429,7 @@ impl Engine {
     #[inline]
     pub(crate) fn has_override_by_name_and_arguments(
         &self,
+        mods: &Imports,
         lib: &[&Module],
         fn_name: &str,
         arg_types: impl AsRef<[TypeId]>,
@@ -437,13 +439,14 @@ impl Engine {
         let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_types.iter().cloned());
         let hash_script = calc_script_fn_hash(empty(), fn_name, arg_types.len());
 
-        self.has_override(lib, hash_fn, hash_script, pub_only)
+        self.has_override(mods, lib, hash_fn, hash_script, pub_only)
     }
 
     // Has a system function an override?
     #[inline(always)]
     pub(crate) fn has_override(
         &self,
+        mods: &Imports,
         lib: &[&Module],
         hash_fn: u64,
         hash_script: u64,
@@ -456,10 +459,13 @@ impl Engine {
             //|| lib.iter().any(|&m| m.contains_fn(hash_fn, pub_only))
             // Then check registered functions
             //|| self.global_module.contains_fn(hash_script, pub_only)
-            || self.global_module.contains_fn(hash_fn, pub_only)
+            || self.global_module.contains_fn(hash_fn, false)
             // Then check packages
-            || self.packages.contains_fn(hash_script, pub_only)
-            || self.packages.contains_fn(hash_fn, pub_only)
+            || self.packages.contains_fn(hash_script)
+            || self.packages.contains_fn(hash_fn)
+            // Then check imported modules
+            || mods.contains_fn(hash_script)
+            || mods.contains_fn(hash_fn)
     }
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
@@ -497,7 +503,8 @@ impl Engine {
         match fn_name {
             // type_of
             KEYWORD_TYPE_OF
-                if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
+                if args.len() == 1
+                    && !self.has_override(mods, lib, hash_fn, hash_script, pub_only) =>
             {
                 Ok((
                     self.map_type_name(args[0].type_name()).to_string().into(),
@@ -508,7 +515,8 @@ impl Engine {
             // Fn/eval - reaching this point it must be a method-style call, mostly like redirected
             //           by a function pointer so it isn't caught at parse time.
             KEYWORD_FN_PTR | KEYWORD_EVAL
-                if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
+                if args.len() == 1
+                    && !self.has_override(mods, lib, hash_fn, hash_script, pub_only) =>
             {
                 EvalAltResult::ErrorRuntime(
                     format!(
@@ -523,16 +531,14 @@ impl Engine {
 
             // Script-like function found
             #[cfg(not(feature = "no_function"))]
-            _ if lib.iter().any(|&m| m.contains_fn(hash_script, pub_only))
-                //|| self.global_module.contains_fn(hash_script, pub_only)
-                || self.packages.contains_fn(hash_script, pub_only) =>
-            {
+            _ if self.has_override(mods, lib, 0, hash_script, pub_only) => {
                 // Get function
                 let func = lib
                     .iter()
                     .find_map(|&m| m.get_fn(hash_script, pub_only))
                     //.or_else(|| self.global_module.get_fn(hash_script, pub_only))
-                    .or_else(|| self.packages.get_fn(hash_script, pub_only))
+                    .or_else(|| self.packages.get_fn(hash_script))
+                    //.or_else(|| mods.get_fn(hash_script))
                     .unwrap();
 
                 if func.is_script() {
@@ -860,7 +866,7 @@ impl Engine {
             let hash_fn =
                 calc_native_fn_hash(empty(), fn_name, once(TypeId::of::<ImmutableString>()));
 
-            if !self.has_override(lib, hash_fn, hash_script, pub_only) {
+            if !self.has_override(mods, lib, hash_fn, hash_script, pub_only) {
                 // Fn - only in function call style
                 return self
                     .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
@@ -916,7 +922,7 @@ impl Engine {
 
         if name == KEYWORD_FN_PTR_CALL
             && args_expr.len() >= 1
-            && !self.has_override(lib, 0, hash_script, pub_only)
+            && !self.has_override(mods, lib, 0, hash_script, pub_only)
         {
             let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
@@ -946,7 +952,7 @@ impl Engine {
         if name == KEYWORD_IS_DEF_VAR && args_expr.len() == 1 {
             let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
 
-            if !self.has_override(lib, hash_fn, hash_script, pub_only) {
+            if !self.has_override(mods, lib, hash_fn, hash_script, pub_only) {
                 let var_name =
                     self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
                 let var_name = var_name.as_str().map_err(|err| {
@@ -966,7 +972,7 @@ impl Engine {
                     .cloned(),
             );
 
-            if !self.has_override(lib, hash_fn, hash_script, pub_only) {
+            if !self.has_override(mods, lib, hash_fn, hash_script, pub_only) {
                 let fn_name =
                     self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
                 let num_params =
@@ -993,7 +999,7 @@ impl Engine {
         if name == KEYWORD_EVAL && args_expr.len() == 1 {
             let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
 
-            if !self.has_override(lib, hash_fn, hash_script, pub_only) {
+            if !self.has_override(mods, lib, hash_fn, hash_script, pub_only) {
                 // eval - only in function call style
                 let prev_len = scope.len();
                 let script =
@@ -1194,7 +1200,7 @@ impl Engine {
             Some(f) if f.is_plugin_fn() => f
                 .get_plugin_fn()
                 .clone()
-                .call((self, mods, lib).into(), args.as_mut()),
+                .call((self, &*mods, lib).into(), args.as_mut()),
             Some(f) if f.is_native() => {
                 if !f.is_method() {
                     // Clone first argument
@@ -1205,7 +1211,7 @@ impl Engine {
                     }
                 }
 
-                f.get_native_fn().clone()((self, mods, lib).into(), args.as_mut())
+                f.get_native_fn().clone()((self, &*mods, lib).into(), args.as_mut())
             }
             Some(_) => unreachable!(),
             None if def_val.is_some() => Ok(def_val.unwrap().into()),

@@ -123,10 +123,10 @@ x == 43;
 Notice that, when using a [module] as a [package], only functions registered at the _top level_
 can be accessed.  Variables as well as sub-modules are ignored.
 
-### Use `Engine::load_module`
+### Use `Engine::register_module`
 
 Another simple way to load this into an [`Engine`] is, again, to use the `exported_module!` macro
-to turn it into a normal Rhai [module], then use the `Engine::load_module` method on it:
+to turn it into a normal Rhai [module], then use the `Engine::register_module` method on it:
 
 ```rust
 fn main() {
@@ -136,7 +136,7 @@ fn main() {
     let module = exported_module!(my_module);
 
     // A module can simply be loaded as a globally-available module.
-    engine.load_module("service", module);
+    engine.register_module("service", module);
 }
 ```
 
@@ -156,6 +156,17 @@ let x = service::get_num();
 x == 42;
 
 service::increment(x);
+x == 43;
+```
+
+`Engine::register_module` also exposes all _methods_ and _iterators_ from the module to the
+_global_ namespace, so [getters/setters] and [indexers] for [custom types] work as expected.
+
+Therefore, in the example able, `increment` works fine when called in method-call style:
+
+```rust
+let x = 42;
+x.increment();
 x == 43;
 ```
 

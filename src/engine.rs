@@ -3,7 +3,7 @@
 use crate::ast::{BinaryExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, Dynamic, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
-use crate::fn_native::{Callback, FnPtr, OnVarCallback, Shared};
+use crate::fn_native::{CallableFunction, Callback, FnPtr, IteratorFn, OnVarCallback, Shared};
 use crate::module::{Module, NamespaceRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
@@ -85,7 +85,7 @@ pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 // We cannot use &str or Cow<str> here because `eval` may load a module and the module name will live beyond
 // the AST of the eval script text. The best we can do is a shared reference.
 #[derive(Debug, Clone, Default)]
-pub struct Imports(StaticVec<(ImmutableString, Shared<Module>)>);
+pub struct Imports(StaticVec<(ImmutableString, bool, Shared<Module>)>);
 
 impl Imports {
     /// Get the length of this stack of imported modules.
@@ -98,7 +98,7 @@ impl Imports {
     }
     /// Get the imported module at a particular index.
     pub fn get(&self, index: usize) -> Option<Shared<Module>> {
-        self.0.get(index).map(|(_, m)| m).cloned()
+        self.0.get(index).map(|(_, _, m)| m).cloned()
     }
     /// Get the index of an imported module by name.
     pub fn find(&self, name: &str) -> Option<usize> {
@@ -106,12 +106,21 @@ impl Imports {
             .iter()
             .enumerate()
             .rev()
-            .find(|(_, (key, _))| key.as_str() == name)
+            .find(|(_, (key, _, _))| key.as_str() == name)
             .map(|(index, _)| index)
     }
     /// Push an imported module onto the stack.
     pub fn push(&mut self, name: impl Into<ImmutableString>, module: impl Into<Shared<Module>>) {
-        self.0.push((name.into(), module.into()));
+        self.0.push((name.into(), false, module.into()));
+    }
+    /// Push a fixed module onto the stack.
+    #[cfg(not(feature = "no_module"))]
+    pub(crate) fn push_fixed(
+        &mut self,
+        name: impl Into<ImmutableString>,
+        module: impl Into<Shared<Module>>,
+    ) {
+        self.0.push((name.into(), true, module.into()));
     }
     /// Truncate the stack of imported modules to a particular length.
     pub fn truncate(&mut self, size: usize) {
@@ -119,25 +128,58 @@ impl Imports {
     }
     /// Get an iterator to this stack of imported modules.
     #[allow(dead_code)]
-    pub fn iter(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&str, bool, Shared<Module>)> {
         self.0
             .iter()
-            .map(|(name, module)| (name.as_str(), module.clone()))
+            .map(|(name, fixed, module)| (name.as_str(), *fixed, module.clone()))
     }
     /// Get an iterator to this stack of imported modules.
     #[allow(dead_code)]
     pub(crate) fn iter_raw<'a>(
         &'a self,
-    ) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> + 'a {
+    ) -> impl Iterator<Item = (ImmutableString, bool, Shared<Module>)> + 'a {
         self.0.iter().cloned()
     }
     /// Get a consuming iterator to this stack of imported modules.
-    pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
+    pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, bool, Shared<Module>)> {
         self.0.into_iter()
     }
     /// Add a stream of imported modules.
-    pub fn extend(&mut self, stream: impl Iterator<Item = (ImmutableString, Shared<Module>)>) {
+    pub fn extend(
+        &mut self,
+        stream: impl Iterator<Item = (ImmutableString, bool, Shared<Module>)>,
+    ) {
         self.0.extend(stream)
+    }
+    /// Does the specified function hash key exist in this stack of imported modules?
+    #[allow(dead_code)]
+    pub fn contains_fn(&self, hash: u64) -> bool {
+        self.0
+            .iter()
+            .any(|(_, fixed, m)| *fixed && m.contains_qualified_fn(hash))
+    }
+    /// Get specified function via its hash key.
+    pub fn get_fn(&self, hash: u64) -> Option<&CallableFunction> {
+        self.0
+            .iter()
+            .rev()
+            .filter(|&&(_, fixed, _)| fixed)
+            .find_map(|(_, _, m)| m.get_qualified_fn(hash))
+    }
+    /// Does the specified TypeId iterator exist in this stack of imported modules?
+    #[allow(dead_code)]
+    pub fn contains_iter(&self, id: TypeId) -> bool {
+        self.0
+            .iter()
+            .any(|(_, fixed, m)| *fixed && m.contains_qualified_iter(id))
+    }
+    /// Get the specified TypeId iterator.
+    pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
+        self.0
+            .iter()
+            .rev()
+            .filter(|&&(_, fixed, _)| fixed)
+            .find_map(|(_, _, m)| m.get_qualified_iter(id))
     }
 }
 
@@ -1947,7 +1989,8 @@ impl Engine {
                         match self
                             .global_module
                             .get_fn(hash_fn, false)
-                            .or_else(|| self.packages.get_fn(hash_fn, false))
+                            .or_else(|| self.packages.get_fn(hash_fn))
+                            .or_else(|| mods.get_fn(hash_fn))
                         {
                             // op= function registered as method
                             Some(func) if func.is_method() => {
@@ -1965,9 +2008,10 @@ impl Engine {
 
                                 // Overriding exact implementation
                                 if func.is_plugin_fn() {
-                                    func.get_plugin_fn().call((self, mods, lib).into(), args)?;
+                                    func.get_plugin_fn()
+                                        .call((self, &*mods, lib).into(), args)?;
                                 } else {
-                                    func.get_native_fn()((self, mods, lib).into(), args)?;
+                                    func.get_native_fn()((self, &*mods, lib).into(), args)?;
                                 }
                             }
                             // Built-in op-assignment function
@@ -2142,7 +2186,8 @@ impl Engine {
                 let func = self
                     .global_module
                     .get_iter(iter_type)
-                    .or_else(|| self.packages.get_iter(iter_type));
+                    .or_else(|| self.packages.get_iter(iter_type))
+                    .or_else(|| mods.get_iter(iter_type));
 
                 if let Some(func) = func {
                     // Add the loop variable

@@ -12,8 +12,10 @@ enum variants or to extract internal data from them.
 Simulate an Enum API
 --------------------
 
+A [plugin module] is extremely handy in creating an entire API for a custom enum type.
+
 ```rust
-use rhai::{Engine, RegisterFn, Dynamic, EvalAltResult};
+use rhai::{Engine, Dynamic, EvalAltResult};
 use rhai::plugin::*;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -25,48 +27,76 @@ enum MyEnum {
 
 // Create a plugin module with functions constructing the 'MyEnum' variants
 #[export_module]
-pub mod MyEnumModule {
-    // 'MyEnum' variants
+mod MyEnumModule {
+    // Constructors for 'MyEnum' variants
     pub const Foo: &MyEnum = MyEnum::Foo;
-    pub fn Bar(value: i64) -> MyEnum { MyEnum::Bar(value) }
-    pub fn Baz(val1: String, val2: bool) -> MyEnum { MyEnum::Baz(val1, val2) }
-}
-
-let mut engine = Engine::new();
-
-// Register API for 'MyEnum'
-engine
-    // Register enum custom type
-    .register_type_with_name::<MyEnum>("MyEnum")
-    // Register access to fields
-    .register_get("type", |a: &mut MyEnum| match a {
-        MyEnum::Foo => "Foo".to_string(),
-        MyEnum::Bar(_) => "Bar".to_string(),
-        MyEnum::Baz(_, _) => "Baz".to_string()
-    })
-    .register_get("field_0", |a: &mut MyEnum| match a {
-        MyEnum::Foo => Dynamic::UNIT,
-        MyEnum::Bar(x) => Dynamic::from(x),
-        MyEnum::Baz(x, _) => Dynamic::from(x)
-    })
-    .register_get("field_1", |a: &mut MyEnum| match a {
-        MyEnum::Foo | MyEnum::Bar(_) => Dynamic::UNIT,
-        MyEnum::Baz(_, x) => Dynamic::from(x)
-    })
-    // Register printing
-    .register_fn("to_string", |a: &mut MyEnum| format!("{:?}", a))
-    .register_fn("print", |a: &mut MyEnum| format!("{:?}", a))
-    .register_fn("debug", |a: &mut MyEnum| format!("{:?}", a))
-    .register_fn("+", |s: &str, a: MyEnum| format!("{}{:?}", s, a))
-    .register_fn("+", |a: &mut MyEnum, s: &str| format!("{:?}", a).push_str(s))
-    .register_fn("+=", |s: &mut ImmutableString, a: MyEnum| s += a.to_string())
-    // Register '==' and '!=' operators
-    .register_fn("==", |a: &mut MyEnum, b: MyEnum| a == &b)
-    .register_fn("!=", |a: &mut MyEnum, b: MyEnum| a != &b)
-    // Register array functions
-    .register_fn("push", |list: &mut Array, item: MyEnum| list.push(Dynamic::from(item)))
-    .register_fn("+=", |list: &mut Array, item: MyEnum| list.push(Dynamic::from(item)))
-    .register_fn("insert", |list: &mut Array, position: i64, item: MyEnum| {
+    pub fn Bar(value: i64) -> MyEnum {
+        MyEnum::Bar(value)
+    }
+    pub fn Baz(val1: String, val2: bool) -> MyEnum {
+        MyEnum::Baz(val1, val2)
+    }
+    // Access to fields
+    #[rhai_fn(get = "enum_type")]
+    pub fn get_type(a: &mut MyEnum) -> String {
+        match a {
+            MyEnum::Foo => "Foo".to_string(),
+            MyEnum::Bar(_) => "Bar".to_string(),
+            MyEnum::Baz(_, _) => "Baz".to_string()
+        }
+    }
+    #[rhai_fn(get = "field_0")]
+    pub fn get_field_0(a: &mut MyEnum) -> Dynamic {
+        match a {
+            MyEnum::Foo => Dynamic::UNIT,
+            MyEnum::Bar(x) => Dynamic::from(x),
+            MyEnum::Baz(x, _) => Dynamic::from(x)
+        }
+    }
+    #[rhai_fn(get = "field_1")]
+    pub fn get_field_1(a: &mut MyEnum) -> Dynamic {
+        match a {
+            MyEnum::Foo | MyEnum::Bar(_) => Dynamic::UNIT,
+            MyEnum::Baz(_, x) => Dynamic::from(x)
+        }
+    }
+    // Printing
+    #[rhai(name = "to_string", name = "print", name = "debug")]
+    pub fn to_string(a: &mut MyEnum) -> String {
+        format!("{:?}", a))
+    }
+    #[rhai_fn(name = "+")]
+    pub fn add_to_str(s: &str, a: MyEnum) -> String {
+        format!("{}{:?}", s, a))
+    }
+    #[rhai_fn(name = "+")]
+    pub fn add_str(a: &mut MyEnum, s: &str) -> String {
+        format!("{:?}", a).push_str(s))
+    }
+    #[rhai_fn(name = "+=")]
+    pub fn append_to_str(s: &mut ImmutableString, a: MyEnum) -> String {
+        s += a.to_string())
+    }
+    // '==' and '!=' operators
+    #[rhai_fn(name = "==")]
+    pub fn eq(a: &mut MyEnum, b: MyEnum) -> bool {
+        a == &b
+    }
+    #[rhai_fn(name = "!=")]
+    pub fn neq(a: &mut MyEnum, b: MyEnum) -> bool {
+        a != &b
+    }
+    // Array functions
+    #[rhai_fn(name = "push")]
+    pub fn append_to_array(list: &mut Array, item: MyEnum) {
+        list.push(Dynamic::from(item)));
+    }
+    #[rhai_fn(name = "+=")]
+    pub fn append_to_array_op(list: &mut Array, item: MyEnum) {
+        list.push(Dynamic::from(item)));
+    }
+    #[rhai_fn(name = "insert")]
+    pub fn insert_to_array(list: &mut Array, position: i64, item: MyEnum) {
         if position <= 0 {
             list.insert(0, Dynamic::from(item));
         } else if (position as usize) >= list.len() - 1 {
@@ -74,17 +104,22 @@ engine
         } else {
             list.insert(position as usize, Dynamic::from(item));
         }
-    }).register_fn("pad", |list: &mut Array, len: i64, item: MyEnum| {
+    }
+    #[rhai_fn(name = "pad")]
+    pub fn pad_array(list: &mut Array, len: i64, item: MyEnum) {
         if len as usize > list.len() { list.resize(len as usize, item); }
-    })
-    // Load the module as the module namespace "MyEnum"
+    }
+}
+
+let mut engine = Engine::new();
+
+// Load the module as the module namespace "MyEnum"
+engine
+    .register_type_with_name::<MyEnum>("MyEnum")
     .register_module("MyEnum", exported_module!(MyEnumModule));
 ```
 
-Instead of registering all these manually, it is often convenient to wrap them up into
-a [custom package] that can be loaded into any [`Engine`].
-
-With this API in place, working with enums will be almost the same as in Rust:
+With this API in place, working with enums feels almost the same as in Rust:
 
 ```rust
 let x = MyEnum::Foo;
@@ -99,11 +134,11 @@ y != MyEnum::Bar(0);
 
 // Detect enum types
 
-x.type == "Foo";
+x.enum_type == "Foo";
 
-y.type == "Bar";
+y.enum_type == "Bar";
 
-z.type == "Baz";
+z.enum_type == "Baz";
 
 // Extract enum fields
 
@@ -116,24 +151,49 @@ z.field_0 == "hello";
 z.field_1 == true;
 ```
 
+Since enums are internally treated as [custom types], they are not _literals_ and cannot be
+used as a match case in `switch` expressions.  This is quite a limitation because the equivalent
+`match` statement is commonly used in Rust to work with enums and bind variables to
+variant-internal data.
+
+It is possible, however, to `switch` through enum variants based on their types:
+
+```c
+switch x.enum_type {
+  "Foo" => ...,
+  "Bar" => {
+    let value = foo.field_0;
+    ...
+  }
+  "Baz" => {
+    let val1 = foo.field_0;
+    let val2 = foo.field_1;
+    ...
+  }
+}
+```
+
 
 Use `switch` Through Arrays
 ---------------------------
 
-Since enums are internally treated as [custom types], they are not _literals_ and cannot be
-used as a match case in `switch` expressions.  This is quite a limitation because the equivalent
-`match` statement is commonly used in Rust to work with enums.
-
-One way to work with Rust enums in a `switch` expression is through exposing the internal data
-of each enum variant as an [array], usually with the name of the variant as the first item:
+Another way to work with Rust enums in a `switch` expression is through exposing the internal data
+of each enum variant as a variable-length [array], usually with the name of the variant as
+the first item for convenience:
 
 ```rust
 use rhai::Array;
 
-engine.register_get("enum_data", |x: &mut Enum} {
+engine.register_get("enum_data", |x: &mut Enum| {
     match x {
-        Enum::Foo => vec!["Foo".into()] as Array,
-        Enum::Bar(value) => vec!["Bar".into(), (*value).into()] as Array,
+        Enum::Foo => vec![
+            "Foo".into()
+        ] as Array,
+
+        Enum::Bar(value) => vec![
+            "Bar".into(), (*value).into()
+        ] as Array,
+
         Enum::Baz(val1, val2) => vec![
             "Baz".into(), val1.clone().into(), (*val2).into()
         ] as Array

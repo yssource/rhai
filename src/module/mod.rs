@@ -73,11 +73,13 @@ pub struct Module {
     all_variables: HashMap<u64, Dynamic, StraightHasherBuilder>,
     /// External Rust functions.
     functions: HashMap<u64, FuncInfo, StraightHasherBuilder>,
-    /// Flattened collection of all external Rust functions, native or scripted,
+    /// Flattened collection of all external Rust functions, native or scripted.
     /// including those in sub-modules.
     all_functions: HashMap<u64, CallableFunction, StraightHasherBuilder>,
     /// Iterator functions, keyed by the type producing the iterator.
     type_iterators: HashMap<TypeId, IteratorFn>,
+    /// Flattened collection of iterator functions, including those in sub-modules.
+    all_type_iterators: HashMap<TypeId, IteratorFn>,
     /// Is the module indexed?
     indexed: bool,
 }
@@ -91,6 +93,7 @@ impl Default for Module {
             functions: HashMap::with_capacity_and_hasher(64, StraightHasherBuilder),
             all_functions: HashMap::with_capacity_and_hasher(256, StraightHasherBuilder),
             type_iterators: Default::default(),
+            all_type_iterators: Default::default(),
             indexed: false,
         }
     }
@@ -181,6 +184,7 @@ impl Module {
             && self.all_variables.is_empty()
             && self.modules.is_empty()
             && self.type_iterators.is_empty()
+            && self.all_type_iterators.is_empty()
     }
 
     /// Is the module indexed?
@@ -1123,6 +1127,15 @@ impl Module {
         }
     }
 
+    /// Does the particular namespace-qualified function exist in the module?
+    ///
+    /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash` and must match
+    /// the hash calculated by `build_index`.
+    #[inline]
+    pub fn contains_qualified_fn(&self, hash_fn: u64) -> bool {
+        self.all_functions.contains_key(&hash_fn)
+    }
+
     /// Get a namespace-qualified function.
     /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
@@ -1143,6 +1156,7 @@ impl Module {
         self.type_iterators.extend(other.type_iterators.into_iter());
         self.all_functions.clear();
         self.all_variables.clear();
+        self.all_type_iterators.clear();
         self.indexed = false;
         self
     }
@@ -1160,6 +1174,7 @@ impl Module {
         self.type_iterators.extend(other.type_iterators.into_iter());
         self.all_functions.clear();
         self.all_variables.clear();
+        self.all_type_iterators.clear();
         self.indexed = false;
         self
     }
@@ -1186,6 +1201,7 @@ impl Module {
         });
         self.all_functions.clear();
         self.all_variables.clear();
+        self.all_type_iterators.clear();
         self.indexed = false;
         self
     }
@@ -1231,6 +1247,7 @@ impl Module {
         self.type_iterators.extend(other.type_iterators.iter());
         self.all_functions.clear();
         self.all_variables.clear();
+        self.all_type_iterators.clear();
         self.indexed = false;
         self
     }
@@ -1250,6 +1267,7 @@ impl Module {
 
         self.all_functions.clear();
         self.all_variables.clear();
+        self.all_type_iterators.clear();
         self.indexed = false;
         self
     }
@@ -1388,10 +1406,13 @@ impl Module {
         // Extra modules left in the scope become sub-modules
         let mut func_mods: Imports = Default::default();
 
-        mods.into_iter().skip(orig_mods_len).for_each(|(alias, m)| {
-            func_mods.push(alias.clone(), m.clone());
-            module.set_sub_module(alias, m);
-        });
+        mods.into_iter()
+            .skip(orig_mods_len)
+            .filter(|&(_, fixed, _)| !fixed)
+            .for_each(|(alias, _, m)| {
+                func_mods.push(alias.clone(), m.clone());
+                module.set_sub_module(alias, m);
+            });
 
         // Non-private functions defined become module functions
         #[cfg(not(feature = "no_function"))]
@@ -1422,13 +1443,14 @@ impl Module {
         fn index_module<'a>(
             module: &'a Module,
             qualifiers: &mut Vec<&'a str>,
-            variables: &mut Vec<(u64, Dynamic)>,
-            functions: &mut Vec<(u64, CallableFunction)>,
+            variables: &mut HashMap<u64, Dynamic, StraightHasherBuilder>,
+            functions: &mut HashMap<u64, CallableFunction, StraightHasherBuilder>,
+            type_iterators: &mut HashMap<TypeId, IteratorFn>,
         ) {
             module.modules.iter().for_each(|(name, m)| {
                 // Index all the sub-modules first.
                 qualifiers.push(name);
-                index_module(m, qualifiers, variables, functions);
+                index_module(m, qualifiers, variables, functions, type_iterators);
                 qualifiers.pop();
             });
 
@@ -1436,8 +1458,14 @@ impl Module {
             module.variables.iter().for_each(|(var_name, value)| {
                 // Qualifiers + variable name
                 let hash_var = calc_script_fn_hash(qualifiers.iter().map(|&v| v), var_name, 0);
-                variables.push((hash_var, value.clone()));
+                variables.insert(hash_var, value.clone());
             });
+
+            // Index type iterators
+            module.type_iterators.iter().for_each(|(&type_id, func)| {
+                type_iterators.insert(type_id, func.clone());
+            });
+
             // Index all Rust functions
             module
                 .functions
@@ -1445,7 +1473,7 @@ impl Module {
                 .filter(|(_, FuncInfo { access, .. })| access.is_public())
                 .for_each(
                     |(
-                        &_hash,
+                        &hash,
                         FuncInfo {
                             name,
                             params,
@@ -1454,6 +1482,12 @@ impl Module {
                             ..
                         },
                     )| {
+                        // Flatten all methods so they can be available without namespace qualifiers
+                        #[cfg(not(feature = "no_object"))]
+                        if func.is_method() {
+                            functions.insert(hash, func.clone());
+                        }
+
                         if let Some(param_types) = types {
                             assert_eq!(*params, param_types.len());
 
@@ -1469,15 +1503,17 @@ impl Module {
                             // 3) The final hash is the XOR of the two hashes.
                             let hash_qualified_fn = hash_qualified_script ^ hash_fn_args;
 
-                            functions.push((hash_qualified_fn, func.clone()));
+                            functions.insert(hash_qualified_fn, func.clone());
                         } else if cfg!(not(feature = "no_function")) {
-                            let hash_qualified_script = if qualifiers.is_empty() {
-                                _hash
+                            let hash_qualified_script = if cfg!(feature = "no_object")
+                                && qualifiers.is_empty()
+                            {
+                                hash
                             } else {
                                 // Qualifiers + function name + number of arguments.
                                 calc_script_fn_hash(qualifiers.iter().map(|&v| v), &name, *params)
                             };
-                            functions.push((hash_qualified_script, func.clone()));
+                            functions.insert(hash_qualified_script, func.clone());
                         }
                     },
                 );
@@ -1485,17 +1521,30 @@ impl Module {
 
         if !self.indexed {
             let mut qualifiers = Vec::with_capacity(4);
-            let mut variables = Vec::with_capacity(16);
-            let mut functions = Vec::with_capacity(256);
+            let mut variables = HashMap::with_capacity_and_hasher(16, StraightHasherBuilder);
+            let mut functions = HashMap::with_capacity_and_hasher(256, StraightHasherBuilder);
+            let mut type_iterators = HashMap::with_capacity(16);
 
             qualifiers.push("root");
 
-            index_module(self, &mut qualifiers, &mut variables, &mut functions);
+            index_module(
+                self,
+                &mut qualifiers,
+                &mut variables,
+                &mut functions,
+                &mut type_iterators,
+            );
 
-            self.all_variables = variables.into_iter().collect();
-            self.all_functions = functions.into_iter().collect();
+            self.all_variables = variables;
+            self.all_functions = functions;
+            self.all_type_iterators = type_iterators;
             self.indexed = true;
         }
+    }
+
+    /// Does a type iterator exist in the entire module tree?
+    pub fn contains_qualified_iter(&self, id: TypeId) -> bool {
+        self.all_type_iterators.contains_key(&id)
     }
 
     /// Does a type iterator exist in the module?
@@ -1530,6 +1579,11 @@ impl Module {
         self.set_iter(TypeId::of::<T>(), |obj: Dynamic| {
             Box::new(obj.cast::<T>().map(Dynamic::from))
         })
+    }
+
+    /// Get the specified type iterator.
+    pub(crate) fn get_qualified_iter(&self, id: TypeId) -> Option<IteratorFn> {
+        self.all_type_iterators.get(&id).cloned()
     }
 
     /// Get the specified type iterator.

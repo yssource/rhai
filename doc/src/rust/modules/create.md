@@ -45,7 +45,7 @@ engine.eval::<i64>("inc(41)")? == 42;       // no need to import module
 Make the `Module` a Global Module
 ------------------------------------
 
-`Engine::load_module` loads a [module] and makes it available globally under a specific namespace.
+`Engine::register_module` loads a [module] and makes it available globally under a specific namespace.
 
 ```rust
 use rhai::{Engine, Module};
@@ -55,9 +55,28 @@ module.set_fn_1("inc", |x: i64| Ok(x+1));   // use the 'set_fn_XXX' API to add f
 
 // Load the module into the Engine as a sub-module named 'calc'
 let mut engine = Engine::new();
-engine.load_module("calc", module);
+engine.register_module("calc", module);
 
 engine.eval::<i64>("calc::inc(41)")? == 42; // refer to the 'Calc' module
+```
+
+`Engine::register_module` also exposes all _methods_ and _iterators_ from the module to the
+_global_ namespace, so [getters/setters] and [indexers] for [custom types] work as expected.
+
+```rust
+use rhai::{Engine, Module};
+
+let mut module = Module::new();             // new module
+module.set_fn_1_mut("inc",                  // add new method
+    |x: &mut i64| Ok(x+1)
+);
+
+// Load the module into the Engine as a sub-module named 'calc'
+let mut engine = Engine::new();
+engine.register_module("calc", module);
+
+// The method 'inc' works as expected because it is exposed to the global namespace
+engine.eval::<i64>("let x = 41; x.inc()")? == 42;
 ```
 
 

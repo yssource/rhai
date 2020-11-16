@@ -64,16 +64,12 @@ impl PackagesCollection {
     }
     /// Does the specified function hash key exist in the `PackagesCollection`?
     #[allow(dead_code)]
-    pub fn contains_fn(&self, hash: u64, public_only: bool) -> bool {
-        self.0.iter().any(|p| p.contains_fn(hash, public_only))
+    pub fn contains_fn(&self, hash: u64) -> bool {
+        self.0.iter().any(|p| p.contains_fn(hash, false))
     }
     /// Get specified function via its hash key.
-    pub fn get_fn(&self, hash: u64, public_only: bool) -> Option<&CallableFunction> {
-        self.0
-            .iter()
-            .map(|p| p.get_fn(hash, public_only))
-            .find(|f| f.is_some())
-            .flatten()
+    pub fn get_fn(&self, hash: u64) -> Option<&CallableFunction> {
+        self.0.iter().find_map(|p| p.get_fn(hash, false))
     }
     /// Does the specified TypeId iterator exist in the `PackagesCollection`?
     #[allow(dead_code)]
@@ -82,11 +78,7 @@ impl PackagesCollection {
     }
     /// Get the specified TypeId iterator.
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
-        self.0
-            .iter()
-            .map(|p| p.get_iter(id))
-            .find(|f| f.is_some())
-            .flatten()
+        self.0.iter().find_map(|p| p.get_iter(id))
     }
 }
 
