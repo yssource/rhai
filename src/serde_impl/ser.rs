@@ -5,9 +5,10 @@ use crate::result::EvalAltResult;
 use crate::token::NO_POS;
 
 #[cfg(not(feature = "no_index"))]
-use crate::engine::Array;
+use crate::Array;
+
 #[cfg(not(feature = "no_object"))]
-use crate::engine::Map;
+use crate::Map;
 
 use serde::ser::{
     Error, SerializeMap, SerializeSeq, SerializeStruct, SerializeTuple, SerializeTupleStruct,
@@ -15,16 +16,7 @@ use serde::ser::{
 };
 use serde::Serialize;
 
-#[cfg(not(any(feature = "no_object", feature = "no_index")))]
-use serde::ser::SerializeTupleVariant;
-
-#[cfg(not(feature = "no_object"))]
-use serde::ser::SerializeStructVariant;
-
 use crate::stdlib::{boxed::Box, fmt, string::ToString};
-
-#[cfg(not(feature = "no_object"))]
-use crate::stdlib::mem;
 
 /// Serializer for `Dynamic` which is kept as a reference.
 pub struct DynamicSerializer {
@@ -477,7 +469,7 @@ impl SerializeMap for DynamicSerializer {
     ) -> Result<(), Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
         {
-            let key = mem::take(&mut self._key)
+            let key = crate::stdlib::mem::take(&mut self._key)
                 .take_immutable_string()
                 .map_err(|typ| {
                     EvalAltResult::ErrorMismatchOutputType("string".into(), typ.into(), NO_POS)
@@ -554,7 +546,7 @@ pub struct TupleVariantSerializer {
 }
 
 #[cfg(not(any(feature = "no_object", feature = "no_index")))]
-impl SerializeTupleVariant for TupleVariantSerializer {
+impl serde::ser::SerializeTupleVariant for TupleVariantSerializer {
     type Ok = Dynamic;
     type Error = Box<EvalAltResult>;
 
@@ -579,7 +571,7 @@ pub struct StructVariantSerializer {
 }
 
 #[cfg(not(feature = "no_object"))]
-impl SerializeStructVariant for StructVariantSerializer {
+impl serde::ser::SerializeStructVariant for StructVariantSerializer {
     type Ok = Dynamic;
     type Error = Box<EvalAltResult>;
 

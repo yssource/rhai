@@ -427,6 +427,7 @@ impl<'a> Scope<'a> {
     }
     /// Get an iterator to entries in the Scope.
     #[inline(always)]
+    #[allow(dead_code)]
     pub(crate) fn into_iter(
         self,
     ) -> impl Iterator<Item = (Cow<'a, str>, EntryType, Dynamic, Vec<String>)> {

@@ -5,17 +5,14 @@ use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
 use crate::utils::ImmutableString;
 use crate::INT;
 
-#[cfg(not(feature = "no_closure"))]
-use crate::fn_native::{shared_try_take, Locked, Shared};
-
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
 
 #[cfg(not(feature = "no_index"))]
-use crate::engine::Array;
+use crate::Array;
 
 #[cfg(not(feature = "no_object"))]
-use crate::{engine::Map, StaticVec};
+use crate::Map;
 
 use crate::stdlib::{
     any::{type_name, Any, TypeId},
@@ -26,20 +23,6 @@ use crate::stdlib::{
     ops::{Deref, DerefMut},
     string::{String, ToString},
 };
-
-#[cfg(not(feature = "no_closure"))]
-#[cfg(not(feature = "sync"))]
-use crate::stdlib::cell::{Ref, RefMut};
-
-#[cfg(not(feature = "no_closure"))]
-#[cfg(feature = "sync")]
-use crate::stdlib::sync::{RwLockReadGuard, RwLockWriteGuard};
-
-#[cfg(not(feature = "no_object"))]
-use crate::stdlib::collections::HashMap;
-
-#[cfg(not(feature = "no_index"))]
-use crate::stdlib::vec::Vec;
 
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(target_arch = "wasm32"))]
@@ -165,7 +148,7 @@ pub enum Union {
     Variant(Box<Box<dyn Variant>>),
 
     #[cfg(not(feature = "no_closure"))]
-    Shared(Shared<Locked<Dynamic>>),
+    Shared(crate::Shared<crate::Locked<Dynamic>>),
 }
 
 /// Underlying `Variant` read guard for `Dynamic`.
@@ -184,11 +167,11 @@ enum DynamicReadLockInner<'d, T: Variant + Clone> {
     /// A read guard to a shared `RefCell`.
     #[cfg(not(feature = "no_closure"))]
     #[cfg(not(feature = "sync"))]
-    Guard(Ref<'d, Dynamic>),
+    Guard(crate::stdlib::cell::Ref<'d, Dynamic>),
     /// A read guard to a shared `RwLock`.
     #[cfg(not(feature = "no_closure"))]
     #[cfg(feature = "sync")]
-    Guard(RwLockReadGuard<'d, Dynamic>),
+    Guard(crate::stdlib::sync::RwLockReadGuard<'d, Dynamic>),
 }
 
 impl<'d, T: Variant + Clone> Deref for DynamicReadLock<'d, T> {
@@ -221,11 +204,11 @@ enum DynamicWriteLockInner<'d, T: Variant + Clone> {
     /// A write guard to a shared `RefCell`.
     #[cfg(not(feature = "no_closure"))]
     #[cfg(not(feature = "sync"))]
-    Guard(RefMut<'d, Dynamic>),
+    Guard(crate::stdlib::cell::RefMut<'d, Dynamic>),
     /// A write guard to a shared `RwLock`.
     #[cfg(not(feature = "no_closure"))]
     #[cfg(feature = "sync")]
-    Guard(RwLockWriteGuard<'d, Dynamic>),
+    Guard(crate::stdlib::sync::RwLockWriteGuard<'d, Dynamic>),
 }
 
 impl<'d, T: Variant + Clone> Deref for DynamicWriteLock<'d, T> {
@@ -375,7 +358,7 @@ impl Hash for Dynamic {
             Union::Array(a) => (**a).hash(state),
             #[cfg(not(feature = "no_object"))]
             Union::Map(m) => {
-                let mut buf: StaticVec<_> = m.iter().collect();
+                let mut buf: crate::StaticVec<_> = m.iter().collect();
                 buf.sort_by(|(a, _), (b, _)| a.cmp(b));
 
                 buf.into_iter().for_each(|(key, value)| {
@@ -694,7 +677,7 @@ impl Dynamic {
         #[cfg(not(feature = "no_closure"))]
         return match self.0 {
             Union::Shared(..) => self,
-            _ => Self(Union::Shared(Locked::new(self).into())),
+            _ => Self(Union::Shared(crate::Locked::new(self).into())),
         };
 
         #[cfg(feature = "no_closure")]
@@ -902,7 +885,7 @@ impl Dynamic {
     pub fn flatten(self) -> Self {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(cell) => shared_try_take(cell).map_or_else(
+            Union::Shared(cell) => crate::fn_native::shared_try_take(cell).map_or_else(
                 |cell| {
                     #[cfg(not(feature = "sync"))]
                     return cell.borrow().clone();
@@ -1312,9 +1295,9 @@ impl<S: Into<ImmutableString>> From<S> for Dynamic {
     }
 }
 #[cfg(not(feature = "no_index"))]
-impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
+impl<T: Variant + Clone> From<crate::stdlib::vec::Vec<T>> for Dynamic {
     #[inline(always)]
-    fn from(value: Vec<T>) -> Self {
+    fn from(value: crate::stdlib::vec::Vec<T>) -> Self {
         Self(Union::Array(Box::new(
             value.into_iter().map(Dynamic::from).collect(),
         )))
@@ -1330,9 +1313,11 @@ impl<T: Variant + Clone> From<&[T]> for Dynamic {
     }
 }
 #[cfg(not(feature = "no_object"))]
-impl<K: Into<ImmutableString>, T: Variant + Clone> From<HashMap<K, T>> for Dynamic {
+impl<K: Into<ImmutableString>, T: Variant + Clone> From<crate::stdlib::collections::HashMap<K, T>>
+    for Dynamic
+{
     #[inline(always)]
-    fn from(value: HashMap<K, T>) -> Self {
+    fn from(value: crate::stdlib::collections::HashMap<K, T>) -> Self {
         Self(Union::Map(Box::new(
             value
                 .into_iter()

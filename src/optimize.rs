@@ -14,9 +14,6 @@ use crate::token::{is_valid_identifier, Position, NO_POS};
 use crate::utils::get_hasher;
 use crate::{calc_native_fn_hash, StaticVec};
 
-#[cfg(not(feature = "no_function"))]
-use crate::ast::ReturnType;
-
 use crate::stdlib::{
     boxed::Box,
     hash::{Hash, Hasher},
@@ -897,9 +894,11 @@ pub fn optimize_into_ast(
                     // {} -> Noop
                     fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
                         // { return val; } -> val
-                        Stmt::Return((ReturnType::Return, _), Some(expr), _) => Stmt::Expr(expr),
+                        Stmt::Return((crate::ast::ReturnType::Return, _), Some(expr), _) => {
+                            Stmt::Expr(expr)
+                        }
                         // { return; } -> ()
-                        Stmt::Return((ReturnType::Return, pos), None, _) => {
+                        Stmt::Return((crate::ast::ReturnType::Return, pos), None, _) => {
                             Stmt::Expr(Expr::Unit(pos))
                         }
                         // All others

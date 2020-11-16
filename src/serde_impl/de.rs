@@ -13,13 +13,10 @@ use serde::de::{
 use serde::Deserialize;
 
 #[cfg(not(feature = "no_index"))]
-use crate::engine::Array;
+use crate::Array;
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::Map;
-
-#[cfg(not(feature = "no_object"))]
-use serde::de::{EnumAccess, VariantAccess};
+use crate::Map;
 
 use crate::stdlib::{any::type_name, boxed::Box, fmt, string::ToString};
 
@@ -542,7 +539,7 @@ struct EnumDeserializer<'t, 'de: 't> {
 }
 
 #[cfg(not(feature = "no_object"))]
-impl<'t, 'de> EnumAccess<'de> for EnumDeserializer<'t, 'de> {
+impl<'t, 'de> serde::de::EnumAccess<'de> for EnumDeserializer<'t, 'de> {
     type Error = Box<EvalAltResult>;
     type Variant = Self;
 
@@ -556,7 +553,7 @@ impl<'t, 'de> EnumAccess<'de> for EnumDeserializer<'t, 'de> {
 }
 
 #[cfg(not(feature = "no_object"))]
-impl<'t, 'de> VariantAccess<'de> for EnumDeserializer<'t, 'de> {
+impl<'t, 'de> serde::de::VariantAccess<'de> for EnumDeserializer<'t, 'de> {
     type Error = Box<EvalAltResult>;
 
     fn unit_variant(mut self) -> Result<(), Self::Error> {

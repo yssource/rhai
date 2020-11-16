@@ -12,32 +12,10 @@ use crate::token::NO_POS;
 use crate::utils::get_hasher;
 
 #[cfg(not(feature = "no_index"))]
-use crate::{
-    engine::{Array, FN_IDX_GET, FN_IDX_SET},
-    utils::ImmutableString,
-};
+use crate::Array;
 
 #[cfg(not(feature = "no_object"))]
-use crate::{
-    engine::{make_getter, make_setter, Map},
-    parse_error::ParseErrorType,
-    token::{Position, Token},
-};
-
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-use crate::fn_register::{RegisterFn, RegisterResultFn};
-
-#[cfg(not(feature = "no_function"))]
-use crate::{fn_args::FuncArgs, fn_call::ensure_no_data_race, StaticVec};
-
-#[cfg(not(feature = "no_module"))]
-use crate::fn_native::{shared_take_or_clone, Shared};
-
-#[cfg(any(not(feature = "no_function"), not(feature = "no_module")))]
-use crate::module::Module;
-
-#[cfg(not(feature = "no_optimize"))]
-use crate::optimize::optimize_into_ast;
+use crate::Map;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -45,9 +23,6 @@ use crate::stdlib::{
     hash::{Hash, Hasher},
     string::String,
 };
-
-#[cfg(not(feature = "no_optimize"))]
-use crate::stdlib::mem;
 
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(target_arch = "wasm32"))]
@@ -238,7 +213,7 @@ impl Engine {
         T: Variant + Clone,
         U: Variant + Clone,
     {
-        self.register_fn(&make_getter(name), callback)
+        crate::RegisterFn::register_fn(self, &crate::engine::make_getter(name), callback)
     }
     /// Register a getter function for a member of a registered type with the `Engine`.
     /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
@@ -285,7 +260,11 @@ impl Engine {
         name: &str,
         callback: impl Fn(&mut T) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
-        self.register_result_fn(&make_getter(name), callback)
+        crate::RegisterResultFn::register_result_fn(
+            self,
+            &crate::engine::make_getter(name),
+            callback,
+        )
     }
     /// Register a setter function for a member of a registered type with the `Engine`.
     ///
@@ -334,7 +313,7 @@ impl Engine {
         T: Variant + Clone,
         U: Variant + Clone,
     {
-        self.register_fn(&make_setter(name), callback)
+        crate::RegisterFn::register_fn(self, &crate::engine::make_setter(name), callback)
     }
     /// Register a setter function for a member of a registered type with the `Engine`.
     /// Returns `Result<(), Box<EvalAltResult>>`.
@@ -387,9 +366,11 @@ impl Engine {
         T: Variant + Clone,
         U: Variant + Clone,
     {
-        self.register_result_fn(&make_setter(name), move |obj: &mut T, value: U| {
-            callback(obj, value).map(Into::into)
-        })
+        crate::RegisterResultFn::register_result_fn(
+            self,
+            &crate::engine::make_setter(name),
+            move |obj: &mut T, value: U| callback(obj, value).map(Into::into),
+        )
     }
     /// Short-hand for registering both getter and setter functions
     /// of a registered type with the `Engine`.
@@ -504,12 +485,12 @@ impl Engine {
         }
         if TypeId::of::<T>() == TypeId::of::<String>()
             || TypeId::of::<T>() == TypeId::of::<&str>()
-            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+            || TypeId::of::<T>() == TypeId::of::<crate::ImmutableString>()
         {
             panic!("Cannot register indexer for strings.");
         }
 
-        self.register_fn(FN_IDX_GET, callback)
+        crate::RegisterFn::register_fn(self, crate::engine::FN_IDX_GET, callback)
     }
     /// Register an index getter for a custom type with the `Engine`.
     /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
@@ -574,12 +555,12 @@ impl Engine {
         }
         if TypeId::of::<T>() == TypeId::of::<String>()
             || TypeId::of::<T>() == TypeId::of::<&str>()
-            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+            || TypeId::of::<T>() == TypeId::of::<crate::ImmutableString>()
         {
             panic!("Cannot register indexer for strings.");
         }
 
-        self.register_result_fn(FN_IDX_GET, callback)
+        crate::RegisterResultFn::register_result_fn(self, crate::engine::FN_IDX_GET, callback)
     }
     /// Register an index setter for a custom type with the `Engine`.
     ///
@@ -642,12 +623,12 @@ impl Engine {
         }
         if TypeId::of::<T>() == TypeId::of::<String>()
             || TypeId::of::<T>() == TypeId::of::<&str>()
-            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+            || TypeId::of::<T>() == TypeId::of::<crate::ImmutableString>()
         {
             panic!("Cannot register indexer for strings.");
         }
 
-        self.register_fn(FN_IDX_SET, callback)
+        crate::RegisterFn::register_fn(self, crate::engine::FN_IDX_SET, callback)
     }
     /// Register an index setter for a custom type with the `Engine`.
     /// Returns `Result<(), Box<EvalAltResult>>`.
@@ -714,14 +695,16 @@ impl Engine {
         }
         if TypeId::of::<T>() == TypeId::of::<String>()
             || TypeId::of::<T>() == TypeId::of::<&str>()
-            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+            || TypeId::of::<T>() == TypeId::of::<crate::ImmutableString>()
         {
             panic!("Cannot register indexer for strings.");
         }
 
-        self.register_result_fn(FN_IDX_SET, move |obj: &mut T, index: X, value: U| {
-            callback(obj, index, value).map(Into::into)
-        })
+        crate::RegisterResultFn::register_result_fn(
+            self,
+            crate::engine::FN_IDX_SET,
+            move |obj: &mut T, index: X, value: U| callback(obj, index, value).map(Into::into),
+        )
     }
     /// Short-hand for register both index getter and setter functions for a custom type with the `Engine`.
     ///
@@ -802,14 +785,14 @@ impl Engine {
     #[cfg(not(feature = "no_module"))]
     pub fn register_module(
         &mut self,
-        name: impl Into<ImmutableString>,
-        module: impl Into<Shared<Module>>,
+        name: impl Into<crate::ImmutableString>,
+        module: impl Into<crate::Shared<crate::Module>>,
     ) -> &mut Self {
         let module = module.into();
 
         if !module.is_indexed() {
             // Index the module (making a clone copy if necessary) if it is not indexed
-            let mut module = shared_take_or_clone(module);
+            let mut module = crate::fn_native::shared_take_or_clone(module);
             module.build_index();
             self.global_sub_modules.push_fixed(name, module);
         } else {
@@ -1078,6 +1061,8 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     pub fn parse_json(&self, json: &str, has_null: bool) -> Result<Map, Box<EvalAltResult>> {
+        use crate::token::{Position, Token};
+
         let mut scope = Default::default();
 
         // Trims the JSON string and add a '#' in front
@@ -1087,7 +1072,7 @@ impl Engine {
         } else if json_text.starts_with(Token::LeftBrace.syntax().as_ref()) {
             ["#", json_text]
         } else {
-            return Err(ParseErrorType::MissingToken(
+            return Err(crate::ParseErrorType::MissingToken(
                 Token::LeftBrace.syntax().into(),
                 "to start a JSON object hash".into(),
             )
@@ -1535,7 +1520,7 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub fn call_fn<A: FuncArgs, T: Variant + Clone>(
+    pub fn call_fn<A: crate::fn_args::FuncArgs, T: Variant + Clone>(
         &self,
         scope: &mut Scope,
         ast: &AST,
@@ -1543,7 +1528,7 @@ impl Engine {
         args: A,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
-        let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
+        let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
         let result =
             self.call_fn_dynamic_raw(scope, &[ast.lib()], name, &mut None, args.as_mut())?;
@@ -1613,12 +1598,12 @@ impl Engine {
     pub fn call_fn_dynamic(
         &self,
         scope: &mut Scope,
-        lib: impl AsRef<Module>,
+        lib: impl AsRef<crate::Module>,
         name: &str,
         mut this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
+        let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
         self.call_fn_dynamic_raw(scope, &[lib.as_ref()], name, &mut this_ptr, args.as_mut())
     }
@@ -1635,7 +1620,7 @@ impl Engine {
     pub(crate) fn call_fn_dynamic_raw(
         &self,
         scope: &mut Scope,
-        lib: &[&Module],
+        lib: &[&crate::Module],
         name: &str,
         this_ptr: &mut Option<&mut Dynamic>,
         args: &mut FnCallArgs,
@@ -1650,7 +1635,7 @@ impl Engine {
 
         // Check for data race.
         if cfg!(not(feature = "no_closure")) {
-            ensure_no_data_race(name, args, false)?;
+            crate::fn_call::ensure_no_data_race(name, args, false)?;
         }
 
         self.call_script_fn(scope, &mut mods, &mut state, lib, this_ptr, fn_def, args, 0)
@@ -1685,8 +1670,8 @@ impl Engine {
         #[cfg(feature = "no_function")]
         let lib = Default::default();
 
-        let stmt = mem::take(ast.statements_mut());
-        optimize_into_ast(self, scope, stmt, lib, optimization_level)
+        let stmt = crate::stdlib::mem::take(ast.statements_mut());
+        crate::optimize::optimize_into_ast(self, scope, stmt, lib, optimization_level)
     }
     /// Provide a callback that will be invoked before each variable access.
     ///

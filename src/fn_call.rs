@@ -18,20 +18,11 @@ use crate::token::NO_POS;
 use crate::utils::ImmutableString;
 use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec, INT};
 
-#[cfg(not(feature = "no_function"))]
-use crate::{ast::ScriptFnDef, r#unsafe::unsafe_cast_var_name_to_lifetime};
-
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
 
-#[cfg(not(feature = "no_index"))]
-use crate::engine::{FN_IDX_GET, FN_IDX_SET};
-
 #[cfg(not(feature = "no_object"))]
-use crate::engine::{Map, Target, FN_GET, FN_SET};
-
-#[cfg(not(feature = "no_closure"))]
-use crate::engine::KEYWORD_IS_SHARED;
+use crate::Map;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -44,9 +35,6 @@ use crate::stdlib::{
     vec::Vec,
 };
 
-#[cfg(not(feature = "no_function"))]
-use crate::stdlib::borrow::Cow;
-
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]
 use num_traits::float::Float;
@@ -55,8 +43,8 @@ use num_traits::float::Float;
 #[inline(always)]
 fn extract_prop_from_getter(_fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
-    if _fn_name.starts_with(FN_GET) {
-        return Some(&_fn_name[FN_GET.len()..]);
+    if _fn_name.starts_with(crate::engine::FN_GET) {
+        return Some(&_fn_name[crate::engine::FN_GET.len()..]);
     }
 
     None
@@ -66,8 +54,8 @@ fn extract_prop_from_getter(_fn_name: &str) -> Option<&str> {
 #[inline(always)]
 fn extract_prop_from_setter(_fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
-    if _fn_name.starts_with(FN_SET) {
-        return Some(&_fn_name[FN_SET.len()..]);
+    if _fn_name.starts_with(crate::engine::FN_SET) {
+        return Some(&_fn_name[crate::engine::FN_SET.len()..]);
     }
 
     None
@@ -284,7 +272,7 @@ impl Engine {
 
         // index getter function not found?
         #[cfg(not(feature = "no_index"))]
-        if fn_name == FN_IDX_GET && args.len() == 2 {
+        if fn_name == crate::engine::FN_IDX_GET && args.len() == 2 {
             return EvalAltResult::ErrorFunctionNotFound(
                 format!(
                     "{} [{}]",
@@ -298,7 +286,7 @@ impl Engine {
 
         // index setter function not found?
         #[cfg(not(feature = "no_index"))]
-        if fn_name == FN_IDX_SET {
+        if fn_name == crate::engine::FN_IDX_SET {
             return EvalAltResult::ErrorFunctionNotFound(
                 format!(
                     "{} [{}]=",
@@ -345,7 +333,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        fn_def: &ScriptFnDef,
+        fn_def: &crate::ast::ScriptFnDef,
         args: &mut FnCallArgs,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -372,7 +360,8 @@ impl Engine {
                 .iter()
                 .zip(args.iter_mut().map(|v| mem::take(*v)))
                 .map(|(name, value)| {
-                    let var_name: Cow<'_, str> = unsafe_cast_var_name_to_lifetime(name).into();
+                    let var_name: crate::stdlib::borrow::Cow<'_, str> =
+                        crate::r#unsafe::unsafe_cast_var_name_to_lifetime(name).into();
                     (var_name, ScopeEntryType::Normal, value)
                 }),
         );
@@ -699,7 +688,7 @@ impl Engine {
         lib: &[&Module],
         fn_name: &str,
         hash_script: u64,
-        target: &mut Target,
+        target: &mut crate::engine::Target,
         mut call_args: StaticVec<Dynamic>,
         def_val: Option<Dynamic>,
         native: bool,
@@ -782,7 +771,7 @@ impl Engine {
         } else if {
             #[cfg(not(feature = "no_closure"))]
             {
-                fn_name == KEYWORD_IS_SHARED && call_args.is_empty()
+                fn_name == crate::engine::KEYWORD_IS_SHARED && call_args.is_empty()
             }
             #[cfg(feature = "no_closure")]
             false
@@ -908,7 +897,7 @@ impl Engine {
 
         // Handle is_shared()
         #[cfg(not(feature = "no_closure"))]
-        if fn_name == KEYWORD_IS_SHARED && args_expr.len() == 1 {
+        if fn_name == crate::engine::KEYWORD_IS_SHARED && args_expr.len() == 1 {
             let value = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
             return Ok(value.is_shared().into());

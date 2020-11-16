@@ -10,27 +10,14 @@ use crate::fn_register::by_value as cast_arg;
 use crate::result::EvalAltResult;
 use crate::token::{Token, NO_POS};
 use crate::utils::{ImmutableString, StraightHasherBuilder};
-use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec};
-
-#[cfg(not(feature = "no_function"))]
-use crate::ast::ScriptFnDef;
-
-#[cfg(not(feature = "no_module"))]
-use crate::{
-    ast::AST,
-    engine::{Engine, Imports},
-    scope::Scope,
-};
+use crate::StaticVec;
 
 #[cfg(not(feature = "no_index"))]
-use crate::engine::{Array, FN_IDX_GET, FN_IDX_SET};
-
-#[cfg(not(feature = "no_object"))]
-use crate::engine::{make_getter, make_setter};
+use crate::Array;
 
 #[cfg(not(feature = "no_index"))]
 #[cfg(not(feature = "no_object"))]
-use crate::engine::Map;
+use crate::Map;
 
 use crate::stdlib::{
     any::TypeId,
@@ -295,10 +282,10 @@ impl Module {
     /// If there is an existing function of the same name and number of arguments, it is replaced.
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub(crate) fn set_script_fn(&mut self, fn_def: Shared<ScriptFnDef>) -> u64 {
+    pub(crate) fn set_script_fn(&mut self, fn_def: Shared<crate::ast::ScriptFnDef>) -> u64 {
         // None + function name + number of arguments.
         let num_params = fn_def.params.len();
-        let hash_script = calc_script_fn_hash(empty(), &fn_def.name, num_params);
+        let hash_script = crate::calc_script_fn_hash(empty(), &fn_def.name, num_params);
         self.functions.insert(
             hash_script,
             FuncInfo {
@@ -321,7 +308,7 @@ impl Module {
         name: &str,
         num_params: usize,
         public_only: bool,
-    ) -> Option<&Shared<ScriptFnDef>> {
+    ) -> Option<&Shared<crate::ast::ScriptFnDef>> {
         self.functions
             .values()
             .find(
@@ -459,7 +446,7 @@ impl Module {
     ) -> u64 {
         let name = name.into();
 
-        let hash_fn = calc_native_fn_hash(empty(), &name, arg_types.iter().cloned());
+        let hash_fn = crate::calc_native_fn_hash(empty(), &name, arg_types.iter().cloned());
 
         let params = arg_types
             .into_iter()
@@ -678,7 +665,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(&mut A) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
-        self.set_fn_1_mut(make_getter(&name.into()), func)
+        self.set_fn_1_mut(crate::engine::make_getter(&name.into()), func)
     }
 
     /// Set a Rust function taking two parameters into the module, returning a hash key.
@@ -778,7 +765,7 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(&mut A, B) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
-        self.set_fn_2_mut(make_setter(&name.into()), func)
+        self.set_fn_2_mut(crate::engine::make_setter(&name.into()), func)
     }
 
     /// Set a Rust index getter taking two parameters (the first one mutable) into the module,
@@ -822,7 +809,7 @@ impl Module {
             panic!("Cannot register indexer for strings.");
         }
 
-        self.set_fn_2_mut(FN_IDX_GET, func)
+        self.set_fn_2_mut(crate::engine::FN_IDX_GET, func)
     }
 
     /// Set a Rust function taking three parameters into the module, returning a hash key.
@@ -961,7 +948,7 @@ impl Module {
         };
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
-            FN_IDX_SET,
+            crate::engine::FN_IDX_SET,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
@@ -1307,7 +1294,7 @@ impl Module {
     #[inline(always)]
     pub(crate) fn iter_script_fn<'a>(
         &'a self,
-    ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
+    ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<crate::ast::ScriptFnDef>)> + 'a {
         self.functions
             .values()
             .map(|f| &f.func)
@@ -1352,7 +1339,7 @@ impl Module {
     #[inline(always)]
     pub fn iter_script_fn_info(
         &self,
-    ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> {
+    ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<crate::ast::ScriptFnDef>)> {
         self.iter_script_fn()
     }
 
@@ -1379,9 +1366,9 @@ impl Module {
     /// ```
     #[cfg(not(feature = "no_module"))]
     pub fn eval_ast_as_new(
-        mut scope: Scope,
-        ast: &AST,
-        engine: &Engine,
+        mut scope: crate::Scope,
+        ast: &crate::AST,
+        engine: &crate::Engine,
     ) -> Result<Self, Box<EvalAltResult>> {
         let mut mods = engine.global_sub_modules.clone();
         let orig_mods_len = mods.len();
@@ -1404,7 +1391,7 @@ impl Module {
         });
 
         // Extra modules left in the scope become sub-modules
-        let mut func_mods: Imports = Default::default();
+        let mut func_mods: crate::engine::Imports = Default::default();
 
         mods.into_iter()
             .skip(orig_mods_len)
@@ -1457,7 +1444,8 @@ impl Module {
             // Index all variables
             module.variables.iter().for_each(|(var_name, value)| {
                 // Qualifiers + variable name
-                let hash_var = calc_script_fn_hash(qualifiers.iter().map(|&v| v), var_name, 0);
+                let hash_var =
+                    crate::calc_script_fn_hash(qualifiers.iter().map(|&v| v), var_name, 0);
                 variables.insert(hash_var, value.clone());
             });
 
@@ -1494,25 +1482,34 @@ impl Module {
                             // Namespace-qualified Rust functions are indexed in two steps:
                             // 1) Calculate a hash in a similar manner to script-defined functions,
                             //    i.e. qualifiers + function name + number of arguments.
-                            let hash_qualified_script =
-                                calc_script_fn_hash(qualifiers.iter().cloned(), name, *params);
+                            let hash_qualified_script = crate::calc_script_fn_hash(
+                                qualifiers.iter().cloned(),
+                                name,
+                                *params,
+                            );
                             // 2) Calculate a second hash with no qualifiers, empty function name,
                             //    and the actual list of argument `TypeId`'.s
-                            let hash_fn_args =
-                                calc_native_fn_hash(empty(), "", param_types.iter().cloned());
+                            let hash_fn_args = crate::calc_native_fn_hash(
+                                empty(),
+                                "",
+                                param_types.iter().cloned(),
+                            );
                             // 3) The final hash is the XOR of the two hashes.
                             let hash_qualified_fn = hash_qualified_script ^ hash_fn_args;
 
                             functions.insert(hash_qualified_fn, func.clone());
                         } else if cfg!(not(feature = "no_function")) {
-                            let hash_qualified_script = if cfg!(feature = "no_object")
-                                && qualifiers.is_empty()
-                            {
-                                hash
-                            } else {
-                                // Qualifiers + function name + number of arguments.
-                                calc_script_fn_hash(qualifiers.iter().map(|&v| v), &name, *params)
-                            };
+                            let hash_qualified_script =
+                                if cfg!(feature = "no_object") && qualifiers.is_empty() {
+                                    hash
+                                } else {
+                                    // Qualifiers + function name + number of arguments.
+                                    crate::calc_script_fn_hash(
+                                        qualifiers.iter().map(|&v| v),
+                                        &name,
+                                        *params,
+                                    )
+                                };
                             functions.insert(hash_qualified_script, func.clone());
                         }
                     },

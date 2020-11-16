@@ -4,12 +4,6 @@ use crate::engine::Engine;
 use crate::packages::PackageLibrary;
 use crate::token::{is_valid_identifier, Token};
 
-#[cfg(not(feature = "no_module"))]
-use crate::module::ModuleResolver;
-
-#[cfg(not(feature = "no_optimize"))]
-use crate::optimize::OptimizationLevel;
-
 use crate::stdlib::{format, string::String};
 
 #[cfg(not(feature = "no_module"))]
@@ -31,7 +25,10 @@ impl Engine {
     /// Not available under the `no_optimize` feature.
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
-    pub fn set_optimization_level(&mut self, optimization_level: OptimizationLevel) -> &mut Self {
+    pub fn set_optimization_level(
+        &mut self,
+        optimization_level: crate::OptimizationLevel,
+    ) -> &mut Self {
         self.optimization_level = optimization_level;
         self
     }
@@ -41,7 +38,7 @@ impl Engine {
     /// Not available under the `no_optimize` feature.
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
-    pub fn optimization_level(&self) -> OptimizationLevel {
+    pub fn optimization_level(&self) -> crate::OptimizationLevel {
         self.optimization_level
     }
     /// Set the maximum levels of function calls allowed for a script in order to avoid
@@ -177,9 +174,9 @@ impl Engine {
     #[inline(always)]
     pub fn set_module_resolver(
         &mut self,
-        resolver: Option<impl ModuleResolver + 'static>,
+        resolver: Option<impl crate::ModuleResolver + 'static>,
     ) -> &mut Self {
-        self.module_resolver = resolver.map(|f| Box::new(f) as Box<dyn ModuleResolver>);
+        self.module_resolver = resolver.map(|f| Box::new(f) as Box<dyn crate::ModuleResolver>);
         self
     }
     /// Disable a particular keyword or operator in the language.

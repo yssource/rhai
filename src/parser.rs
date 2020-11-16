@@ -19,15 +19,6 @@ use crate::{calc_script_fn_hash, StaticVec};
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
 
-#[cfg(not(feature = "no_object"))]
-use crate::engine::{make_getter, make_setter, KEYWORD_EVAL, KEYWORD_FN_PTR};
-
-#[cfg(not(feature = "no_function"))]
-use crate::{
-    ast::FnAccess,
-    engine::{FN_ANONYMOUS, KEYWORD_FN_PTR_CURRY},
-};
-
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
@@ -228,8 +219,8 @@ impl Expr {
         match self {
             Self::Variable(x) if x.1.is_none() => {
                 let ident = x.3;
-                let getter = state.get_interned_string(make_getter(&ident.name));
-                let setter = state.get_interned_string(make_setter(&ident.name));
+                let getter = state.get_interned_string(crate::engine::make_getter(&ident.name));
+                let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
                 Self::Property(Box::new(((getter, setter), ident.into())))
             }
             _ => self,
@@ -1389,8 +1380,8 @@ fn make_dot_expr(
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
             let ident = x.3;
-            let getter = state.get_interned_string(make_getter(&ident.name));
-            let setter = state.get_interned_string(make_setter(&ident.name));
+            let getter = state.get_interned_string(crate::engine::make_getter(&ident.name));
+            let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
             let rhs = Expr::Property(Box::new(((getter, setter), ident)));
 
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
@@ -1427,7 +1418,7 @@ fn make_dot_expr(
         }
         // lhs.Fn() or lhs.eval()
         (_, Expr::FnCall(x, pos))
-            if x.args.len() == 0 && [KEYWORD_FN_PTR, KEYWORD_EVAL].contains(&x.name.as_ref()) =>
+            if x.args.len() == 0 && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL].contains(&x.name.as_ref()) =>
         {
             return Err(PERR::BadInput(LexError::ImproperSymbol(format!(
                 "'{}' should not be called in method style. Try {}(...);",
@@ -2378,9 +2369,9 @@ fn parse_stmt(
         Token::Fn | Token::Private => {
             let access = if matches!(token, Token::Private) {
                 eat_token(input, Token::Private);
-                FnAccess::Private
+                crate::FnAccess::Private
             } else {
-                FnAccess::Public
+                crate::FnAccess::Public
             };
 
             match input.next().unwrap() {
@@ -2561,7 +2552,7 @@ fn parse_fn(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    access: FnAccess,
+    access: crate::FnAccess,
     mut settings: ParseSettings,
 ) -> Result<ScriptFnDef, ParseError> {
     #[cfg(not(feature = "unchecked"))]
@@ -2673,11 +2664,11 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<IdentX>, pos: P
         args.push(Expr::Variable(Box::new((None, None, 0, x.clone().into()))));
     });
 
-    let hash = calc_script_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals + 1);
+    let hash = calc_script_fn_hash(empty(), crate::engine::KEYWORD_FN_PTR_CURRY, num_externals + 1);
 
     let expr = Expr::FnCall(
         Box::new(FnCallExpr {
-            name: KEYWORD_FN_PTR_CURRY.into(),
+            name: crate::engine::KEYWORD_FN_PTR_CURRY.into(),
             hash,
             args,
             ..Default::default()
@@ -2789,12 +2780,12 @@ fn parse_anon_fn(
     settings.pos.hash(hasher);
     let hash = hasher.finish();
 
-    let fn_name: ImmutableString = format!("{}{:016x}", FN_ANONYMOUS, hash).into();
+    let fn_name: ImmutableString = format!("{}{:016x}", crate::engine::FN_ANONYMOUS, hash).into();
 
     // Define the function
     let script = ScriptFnDef {
         name: fn_name.clone(),
-        access: FnAccess::Public,
+        access: crate::FnAccess::Public,
         params,
         #[cfg(not(feature = "no_closure"))]
         externals: Default::default(),

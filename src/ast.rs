@@ -12,14 +12,11 @@ use crate::INT;
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
 
-#[cfg(not(feature = "no_module"))]
-use crate::engine::Imports;
-
 #[cfg(not(feature = "no_index"))]
-use crate::{engine::TYPICAL_ARRAY_SIZE, Array};
+use crate::Array;
 
 #[cfg(not(feature = "no_object"))]
-use crate::{engine::TYPICAL_MAP_SIZE, Map};
+use crate::Map;
 
 use crate::stdlib::{
     borrow::Cow,
@@ -92,7 +89,7 @@ pub struct ScriptFnDef {
     pub lib: Option<Shared<Module>>,
     /// Encapsulated imported modules.
     #[cfg(not(feature = "no_module"))]
-    pub mods: Imports,
+    pub mods: crate::engine::Imports,
     /// Function name.
     pub name: ImmutableString,
     /// Function access mode.
@@ -943,14 +940,14 @@ impl Expr {
 
             #[cfg(not(feature = "no_index"))]
             Self::Array(x, _) if self.is_constant() => {
-                let mut arr = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, x.len()));
+                let mut arr = Array::with_capacity(max(crate::engine::TYPICAL_ARRAY_SIZE, x.len()));
                 arr.extend(x.iter().map(|v| v.get_constant_value().unwrap()));
                 Dynamic(Union::Array(Box::new(arr)))
             }
 
             #[cfg(not(feature = "no_object"))]
             Self::Map(x, _) if self.is_constant() => {
-                let mut map = Map::with_capacity(max(TYPICAL_MAP_SIZE, x.len()));
+                let mut map = Map::with_capacity(max(crate::engine::TYPICAL_MAP_SIZE, x.len()));
                 map.extend(
                     x.iter()
                         .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap())),

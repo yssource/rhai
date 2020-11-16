@@ -8,10 +8,10 @@ use crate::utils::ImmutableString;
 use crate::INT;
 
 #[cfg(not(feature = "no_index"))]
-use crate::engine::Array;
+use crate::Array;
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::Map;
+use crate::Map;
 
 use crate::stdlib::{
     fmt::{Debug, Display},

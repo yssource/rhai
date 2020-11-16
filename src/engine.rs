@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation `Engine`.
 
-use crate::ast::{BinaryExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, Stmt};
+use crate::ast::{Expr, FnCallExpr, Ident, IdentX, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, Dynamic, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{CallableFunction, Callback, FnPtr, IteratorFn, OnVarCallback, Shared};
@@ -12,29 +12,11 @@ use crate::result::EvalAltResult;
 use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::syntax::CustomSyntax;
 use crate::token::{Position, NO_POS};
-use crate::utils::get_hasher;
+use crate::utils::{get_hasher, ImmutableString};
 use crate::{calc_native_fn_hash, StaticVec};
 
-#[cfg(not(feature = "no_index"))]
-use crate::INT;
-
-#[cfg(not(feature = "no_module"))]
-use crate::{fn_native::shared_take_or_clone, module::ModuleResolver};
-
-#[cfg(not(feature = "no_std"))]
-#[cfg(not(feature = "no_module"))]
-#[cfg(not(target_arch = "wasm32"))]
-use crate::module::resolvers;
-
-#[cfg(any(not(feature = "no_object"), not(feature = "no_module")))]
-use crate::utils::ImmutableString;
-
-#[cfg(not(feature = "no_closure"))]
-#[cfg(not(feature = "no_object"))]
-use crate::dynamic::DynamicWriteLock;
-
 use crate::stdlib::{
-    any::type_name,
+    any::{type_name, TypeId},
     borrow::Cow,
     boxed::Box,
     collections::{HashMap, HashSet},
@@ -46,12 +28,6 @@ use crate::stdlib::{
     string::{String, ToString},
 };
 
-#[cfg(not(feature = "no_index"))]
-use crate::stdlib::any::TypeId;
-
-#[cfg(not(feature = "no_closure"))]
-use crate::stdlib::mem;
-
 /// Variable-sized array of `Dynamic` values.
 ///
 /// Not available under the `no_index` feature.
@@ -60,9 +36,6 @@ pub type Array = crate::stdlib::vec::Vec<Dynamic>;
 
 #[cfg(not(feature = "no_index"))]
 pub const TYPICAL_ARRAY_SIZE: usize = 8; // Small arrays are typical
-
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-use crate::stdlib::cmp::max;
 
 /// Hash map of `Dynamic` values with `ImmutableString` keys.
 ///
@@ -228,6 +201,7 @@ pub const FN_IDX_GET: &str = "index$get$";
 pub const FN_IDX_SET: &str = "index$set$";
 #[cfg(not(feature = "no_function"))]
 pub const FN_ANONYMOUS: &str = "anon$";
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 pub const OP_EQUALS: &str = "==";
 pub const MARKER_EXPR: &str = "$expr$";
 pub const MARKER_BLOCK: &str = "$block$";
@@ -301,7 +275,7 @@ pub enum Target<'a> {
     /// It holds both the access guard and the original shared value.
     #[cfg(not(feature = "no_closure"))]
     #[cfg(not(feature = "no_object"))]
-    LockGuard((DynamicWriteLock<'a, Dynamic>, Dynamic)),
+    LockGuard((crate::dynamic::DynamicWriteLock<'a, Dynamic>, Dynamic)),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
     Value(Dynamic),
     /// The target is a character inside a String.
@@ -643,7 +617,7 @@ pub struct Engine {
 
     /// A module resolution service.
     #[cfg(not(feature = "no_module"))]
-    pub(crate) module_resolver: Option<Box<dyn ModuleResolver>>,
+    pub(crate) module_resolver: Option<Box<dyn crate::ModuleResolver>>,
 
     /// A hashmap mapping type names to pretty-print names.
     pub(crate) type_names: HashMap<String, String>,
@@ -760,7 +734,7 @@ impl Engine {
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_std"))]
             #[cfg(not(target_arch = "wasm32"))]
-            module_resolver: Some(Box::new(resolvers::FileModuleResolver::new())),
+            module_resolver: Some(Box::new(crate::module::resolvers::FileModuleResolver::new())),
             #[cfg(not(feature = "no_module"))]
             #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
             module_resolver: None,
@@ -1291,7 +1265,7 @@ impl Engine {
         level: usize,
         new_val: Option<(Dynamic, Position)>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let (BinaryExpr { lhs, rhs }, chain_type, op_pos) = match expr {
+        let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, op_pos) = match expr {
             Expr::Index(x, pos) => (x.as_ref(), ChainType::Index, *pos),
             Expr::Dot(x, pos) => (x.as_ref(), ChainType::Dot, *pos),
             _ => unreachable!(),
@@ -1393,7 +1367,7 @@ impl Engine {
             Expr::FnCall(_, _) => unreachable!(),
             Expr::Property(_) => idx_values.push(IndexChainValue::None),
             Expr::Index(x, _) | Expr::Dot(x, _) => {
-                let BinaryExpr { lhs, rhs, .. } = x.as_ref();
+                let crate::ast::BinaryExpr { lhs, rhs, .. } = x.as_ref();
 
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
@@ -1458,7 +1432,7 @@ impl Engine {
                 // val_array[idx]
                 let index = idx
                     .as_int()
-                    .map_err(|err| self.make_type_mismatch_err::<INT>(err, idx_pos))?;
+                    .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
 
                 let arr_len = arr.len();
 
@@ -1499,7 +1473,7 @@ impl Engine {
                 let chars_len = s.chars().count();
                 let index = idx
                     .as_int()
-                    .map_err(|err| self.make_type_mismatch_err::<INT>(err, idx_pos))?;
+                    .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
 
                 if index >= 0 {
                     let offset = index as usize;
@@ -1772,7 +1746,8 @@ impl Engine {
 
             #[cfg(not(feature = "no_index"))]
             Expr::Array(x, _) => {
-                let mut arr = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, x.len()));
+                let mut arr =
+                    Array::with_capacity(crate::stdlib::cmp::max(TYPICAL_ARRAY_SIZE, x.len()));
                 for item in x.as_ref() {
                     arr.push(self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?);
                 }
@@ -1781,7 +1756,8 @@ impl Engine {
 
             #[cfg(not(feature = "no_object"))]
             Expr::Map(x, _) => {
-                let mut map = Map::with_capacity(max(TYPICAL_MAP_SIZE, x.len()));
+                let mut map =
+                    Map::with_capacity(crate::stdlib::cmp::max(TYPICAL_MAP_SIZE, x.len()));
                 for (IdentX { name: key, .. }, expr) in x.as_ref() {
                     map.insert(
                         key.clone(),
@@ -2372,7 +2348,7 @@ impl Engine {
                         if let Some(name_def) = alias {
                             if !module.is_indexed() {
                                 // Index the module (making a clone copy if necessary) if it is not indexed
-                                let mut module = shared_take_or_clone(module);
+                                let mut module = crate::fn_native::shared_take_or_clone(module);
                                 module.build_index();
                                 mods.push(name_def.name.clone(), module);
                             } else {
@@ -2419,7 +2395,7 @@ impl Engine {
 
                         if !val.is_shared() {
                             // Replace the variable with a shared value.
-                            *val = mem::take(val).into_shared();
+                            *val = crate::stdlib::mem::take(val).into_shared();
                         }
                     }
                     _ => (),

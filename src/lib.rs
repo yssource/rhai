@@ -124,6 +124,9 @@ pub use syntax::Expression;
 pub use token::{Position, NO_POS};
 pub use utils::ImmutableString;
 
+#[allow(dead_code)]
+use fn_native::{Locked, Shared};
+
 #[cfg(feature = "internals")]
 pub use utils::{calc_native_fn_hash, calc_script_fn_hash};
 

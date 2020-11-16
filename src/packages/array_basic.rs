@@ -12,7 +12,7 @@ use crate::utils::ImmutableString;
 use crate::INT;
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::Map;
+use crate::Map;
 
 use crate::stdlib::{any::TypeId, boxed::Box, cmp::max, cmp::Ordering, string::ToString};
 
