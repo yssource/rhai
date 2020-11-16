@@ -3,6 +3,7 @@
 use crate::dynamic::Variant;
 use crate::engine::{EvalContext, Imports};
 use crate::fn_native::{FnCallArgs, SendSync};
+use crate::optimize::OptimizationLevel;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
@@ -11,8 +12,7 @@ use crate::stdlib::{
 };
 use crate::utils::get_hasher;
 use crate::{
-    scope::Scope, Dynamic, Engine, EvalAltResult, NativeCallContext, OptimizationLevel, ParseError,
-    AST, NO_POS,
+    scope::Scope, Dynamic, Engine, EvalAltResult, NativeCallContext, ParseError, AST, NO_POS,
 };
 
 #[cfg(not(feature = "no_index"))]

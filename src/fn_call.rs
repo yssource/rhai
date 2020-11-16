@@ -8,6 +8,7 @@ use crate::engine::{
 };
 use crate::fn_native::FnCallArgs;
 use crate::module::NamespaceRef;
+use crate::optimize::OptimizationLevel;
 use crate::scope::EntryType as ScopeEntryType;
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -22,7 +23,7 @@ use crate::stdlib::{
 };
 use crate::{
     calc_native_fn_hash, calc_script_fn_hash, Dynamic, Engine, EvalAltResult, FnPtr,
-    ImmutableString, Module, OptimizationLevel, ParseErrorType, Scope, StaticVec, INT, NO_POS,
+    ImmutableString, Module, ParseErrorType, Scope, StaticVec, INT, NO_POS,
 };
 
 #[cfg(not(feature = "no_float"))]

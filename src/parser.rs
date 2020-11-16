@@ -7,6 +7,7 @@ use crate::dynamic::Union;
 use crate::engine::{KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::module::NamespaceRef;
 use crate::optimize::optimize_into_ast;
+use crate::optimize::OptimizationLevel;
 use crate::scope::EntryType as ScopeEntryType;
 use crate::stdlib::{
     borrow::Cow,
@@ -24,8 +25,8 @@ use crate::syntax::CustomSyntax;
 use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
-    calc_script_fn_hash, Dynamic, Engine, ImmutableString, LexError, OptimizationLevel, ParseError,
-    ParseErrorType, Position, Scope, StaticVec, AST, NO_POS,
+    calc_script_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType,
+    Position, Scope, StaticVec, AST, NO_POS,
 };
 
 #[cfg(not(feature = "no_float"))]

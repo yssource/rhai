@@ -5,6 +5,7 @@ use crate::dynamic::{map_std_type_name, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{CallableFunction, Callback, IteratorFn, OnVarCallback};
 use crate::module::NamespaceRef;
+use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::scope::EntryType as ScopeEntryType;
@@ -23,8 +24,8 @@ use crate::stdlib::{
 use crate::syntax::CustomSyntax;
 use crate::utils::get_hasher;
 use crate::{
-    calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, OptimizationLevel,
-    Position, Scope, Shared, StaticVec, NO_POS,
+    calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position, Scope,
+    Shared, StaticVec, NO_POS,
 };
 
 #[cfg(not(feature = "no_index"))]
