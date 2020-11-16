@@ -193,7 +193,6 @@ impl Engine {
 
         Ok(self)
     }
-
     /// Register a custom syntax with the `Engine`.
     ///
     /// ## WARNING - Low Level API

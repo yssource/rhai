@@ -259,7 +259,7 @@ impl Module {
         let mut mod_all = mod_all.unwrap();
         let mod_name = mod_all.ident.clone();
         let (_, orig_content) = mod_all.content.take().unwrap();
-        let mod_attrs = mem::replace(&mut mod_all.attrs, Vec::with_capacity(0));
+        let mod_attrs = mem::take(&mut mod_all.attrs);
 
         if !params.skip {
             // Generate new module items.

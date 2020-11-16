@@ -10,15 +10,19 @@ use crate::token::{is_valid_identifier, NO_POS};
 use crate::utils::ImmutableString;
 use crate::{calc_script_fn_hash, StaticVec};
 
-#[cfg(not(feature = "no_function"))]
-use crate::engine::FN_ANONYMOUS;
-
 use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, iter::empty, mem, string::String};
 
-#[cfg(feature = "sync")]
-use crate::stdlib::sync::{Arc, RwLock};
 #[cfg(not(feature = "sync"))]
-use crate::stdlib::{cell::RefCell, rc::Rc};
+use crate::stdlib::rc::Rc;
+#[cfg(feature = "sync")]
+use crate::stdlib::sync::Arc;
+
+#[cfg(any(not(feature = "no_closure"), not(feature = "no_module")))]
+#[cfg(not(feature = "sync"))]
+use crate::stdlib::cell::RefCell;
+#[cfg(any(not(feature = "no_closure"), not(feature = "no_module")))]
+#[cfg(feature = "sync")]
+use crate::stdlib::sync::RwLock;
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
@@ -42,9 +46,11 @@ pub type Shared<T> = Rc<T>;
 pub type Shared<T> = Arc<T>;
 
 /// Synchronized shared object.
+#[cfg(any(not(feature = "no_closure"), not(feature = "no_module")))]
 #[cfg(not(feature = "sync"))]
 pub type Locked<T> = RefCell<T>;
 /// Synchronized shared object.
+#[cfg(any(not(feature = "no_closure"), not(feature = "no_module")))]
 #[cfg(feature = "sync")]
 pub type Locked<T> = RwLock<T>;
 
@@ -56,10 +62,10 @@ pub struct NativeCallContext<'e, 'a, 'm, 'pm: 'm> {
     lib: &'m [&'pm Module],
 }
 
-impl<'e, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized>
-    From<(&'e Engine, &'a mut Imports, &'m M)> for NativeCallContext<'e, 'a, 'm, 'pm>
+impl<'e, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized> From<(&'e Engine, &'a Imports, &'m M)>
+    for NativeCallContext<'e, 'a, 'm, 'pm>
 {
-    fn from(value: (&'e Engine, &'a mut Imports, &'m M)) -> Self {
+    fn from(value: (&'e Engine, &'a Imports, &'m M)) -> Self {
         Self {
             engine: value.0,
             mods: Some(value.1),
@@ -249,7 +255,7 @@ impl FnPtr {
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn is_anonymous(&self) -> bool {
-        self.0.starts_with(FN_ANONYMOUS)
+        self.0.starts_with(crate::engine::FN_ANONYMOUS)
     }
     /// Call the function pointer with curried arguments (if any).
     ///

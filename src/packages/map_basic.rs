@@ -8,7 +8,7 @@ use crate::utils::ImmutableString;
 use crate::INT;
 
 #[cfg(not(feature = "no_index"))]
-use crate::engine::Array;
+use crate::Array;
 
 def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
     combine_with_exported_module!(lib, "map", map_functions);

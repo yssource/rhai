@@ -19,15 +19,6 @@ use crate::{calc_script_fn_hash, StaticVec};
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
 
-#[cfg(not(feature = "no_object"))]
-use crate::engine::{make_getter, make_setter, KEYWORD_EVAL, KEYWORD_FN_PTR};
-
-#[cfg(not(feature = "no_function"))]
-use crate::{
-    ast::FnAccess,
-    engine::{FN_ANONYMOUS, KEYWORD_FN_PTR_CURRY},
-};
-
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
@@ -40,9 +31,6 @@ use crate::stdlib::{
     vec,
     vec::Vec,
 };
-
-#[cfg(not(feature = "no_closure"))]
-use crate::stdlib::collections::HashSet;
 
 type PERR = ParseErrorType;
 
@@ -69,7 +57,7 @@ struct ParseState<'e> {
     allow_capture: bool,
     /// Encapsulates a local stack with imported module names.
     #[cfg(not(feature = "no_module"))]
-    modules: Vec<ImmutableString>,
+    modules: StaticVec<ImmutableString>,
     /// Maximum levels of expression nesting.
     #[cfg(not(feature = "unchecked"))]
     max_expr_depth: usize,
@@ -102,8 +90,8 @@ impl<'e> ParseState<'e> {
             externals: Default::default(),
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
-            strings: Default::default(),
-            stack: Default::default(),
+            strings: HashMap::with_capacity(64),
+            stack: Vec::with_capacity(16),
             #[cfg(not(feature = "no_module"))]
             modules: Default::default(),
         }
@@ -192,6 +180,8 @@ struct ParseSettings {
     allow_anonymous_fn: bool,
     /// Is if-expression allowed?
     allow_if_expr: bool,
+    /// Is switch expression allowed?
+    allow_switch_expr: bool,
     /// Is statement-expression allowed?
     allow_stmt_expr: bool,
     /// Current expression nesting level.
@@ -229,8 +219,8 @@ impl Expr {
         match self {
             Self::Variable(x) if x.1.is_none() => {
                 let ident = x.3;
-                let getter = state.get_interned_string(make_getter(&ident.name));
-                let setter = state.get_interned_string(make_setter(&ident.name));
+                let getter = state.get_interned_string(crate::engine::make_getter(&ident.name));
+                let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
                 Self::Property(Box::new(((getter, setter), ident.into())))
             }
             _ => self,
@@ -793,8 +783,12 @@ fn parse_switch(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    settings: ParseSettings,
-) -> Result<Expr, ParseError> {
+    mut settings: ParseSettings,
+) -> Result<Stmt, ParseError> {
+    // switch ...
+    let token_pos = eat_token(input, Token::Switch);
+    settings.pos = token_pos;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -812,7 +806,7 @@ fn parse_switch(
         }
     }
 
-    let mut table: HashMap<u64, Stmt, StraightHasherBuilder> = Default::default();
+    let mut table = HashMap::with_capacity_and_hasher(16, StraightHasherBuilder);
     let mut def_stmt = None;
 
     loop {
@@ -901,8 +895,9 @@ fn parse_switch(
         }
     }
 
-    Ok(Expr::Switch(
-        Box::new((item, table, def_stmt)),
+    Ok(Stmt::Switch(
+        item,
+        Box::new((table, def_stmt)),
         settings.pos,
     ))
 }
@@ -953,7 +948,7 @@ fn parse_primary(
             let var_name_def = IdentX::new(state.get_interned_string(s), settings.pos);
             Expr::Variable(Box::new((None, None, 0, var_name_def)))
         }
-        // Module qualification
+        // Namespace qualification
         #[cfg(not(feature = "no_module"))]
         Token::Identifier(s) if *next_token == Token::DoubleColon => {
             // Once the identifier consumed we must enable next variables capturing
@@ -1004,7 +999,6 @@ fn parse_primary(
         Token::LeftBracket => parse_array_literal(input, state, lib, settings.level_up())?,
         #[cfg(not(feature = "no_object"))]
         Token::MapStart => parse_map_literal(input, state, lib, settings.level_up())?,
-        Token::Switch => parse_switch(input, state, lib, settings.level_up())?,
         Token::True => Expr::True(settings.pos),
         Token::False => Expr::False(settings.pos),
         Token::LexError(err) => return Err(err.into_err(settings.pos)),
@@ -1131,11 +1125,15 @@ fn parse_unary(
 
     match token {
         // If statement is allowed to act as expressions
-        Token::If if settings.allow_if_expr => {
-            let mut block: StaticVec<_> = Default::default();
-            block.push(parse_if(input, state, lib, settings.level_up())?);
-            Ok(Expr::Stmt(Box::new(block), settings.pos))
-        }
+        Token::If if settings.allow_if_expr => Ok(Expr::Stmt(
+            Box::new(vec![parse_if(input, state, lib, settings.level_up())?].into()),
+            settings.pos,
+        )),
+        // Switch statement is allowed to act as expressions
+        Token::Switch if settings.allow_switch_expr => Ok(Expr::Stmt(
+            Box::new(vec![parse_switch(input, state, lib, settings.level_up())?].into()),
+            settings.pos,
+        )),
         // -expr
         Token::UnaryMinus => {
             let pos = eat_token(input, Token::UnaryMinus);
@@ -1219,6 +1217,7 @@ fn parse_unary(
 
             let settings = ParseSettings {
                 allow_if_expr: true,
+                allow_switch_expr: true,
                 allow_stmt_expr: true,
                 allow_anonymous_fn: true,
                 is_global: false,
@@ -1381,8 +1380,8 @@ fn make_dot_expr(
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
             let ident = x.3;
-            let getter = state.get_interned_string(make_getter(&ident.name));
-            let setter = state.get_interned_string(make_setter(&ident.name));
+            let getter = state.get_interned_string(crate::engine::make_getter(&ident.name));
+            let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
             let rhs = Expr::Property(Box::new(((getter, setter), ident)));
 
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
@@ -1419,7 +1418,7 @@ fn make_dot_expr(
         }
         // lhs.Fn() or lhs.eval()
         (_, Expr::FnCall(x, pos))
-            if x.args.len() == 0 && [KEYWORD_FN_PTR, KEYWORD_EVAL].contains(&x.name.as_ref()) =>
+            if x.args.len() == 0 && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL].contains(&x.name.as_ref()) =>
         {
             return Err(PERR::BadInput(LexError::ImproperSymbol(format!(
                 "'{}' should not be called in method style. Try {}(...);",
@@ -1970,11 +1969,7 @@ fn parse_if(
         None
     };
 
-    Ok(Stmt::IfThenElse(
-        guard,
-        Box::new((if_body, else_body)),
-        token_pos,
-    ))
+    Ok(Stmt::If(guard, Box::new((if_body, else_body)), token_pos))
 }
 
 /// Parse a while loop.
@@ -2204,7 +2199,7 @@ fn parse_export(
         _ => (),
     }
 
-    let mut exports = Vec::new();
+    let mut exports = Vec::with_capacity(4);
 
     loop {
         let (id, id_pos) = match input.next().unwrap() {
@@ -2272,7 +2267,7 @@ fn parse_block(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let mut statements = Vec::new();
+    let mut statements = Vec::with_capacity(8);
     let prev_stack_len = state.stack.len();
 
     #[cfg(not(feature = "no_module"))]
@@ -2374,9 +2369,9 @@ fn parse_stmt(
         Token::Fn | Token::Private => {
             let access = if matches!(token, Token::Private) {
                 eat_token(input, Token::Private);
-                FnAccess::Private
+                crate::FnAccess::Private
             } else {
-                FnAccess::Public
+                crate::FnAccess::Public
             };
 
             match input.next().unwrap() {
@@ -2392,6 +2387,7 @@ fn parse_stmt(
 
                     let settings = ParseSettings {
                         allow_if_expr: true,
+                        allow_switch_expr: true,
                         allow_stmt_expr: true,
                         allow_anonymous_fn: true,
                         is_global: false,
@@ -2451,13 +2447,9 @@ fn parse_stmt(
 
             match input.peek().unwrap() {
                 // `return`/`throw` at <EOF>
-                (Token::EOF, pos) => Ok(Some(Stmt::ReturnWithVal(
-                    (return_type, token_pos),
-                    None,
-                    *pos,
-                ))),
+                (Token::EOF, pos) => Ok(Some(Stmt::Return((return_type, token_pos), None, *pos))),
                 // `return;` or `throw;`
-                (Token::SemiColon, _) => Ok(Some(Stmt::ReturnWithVal(
+                (Token::SemiColon, _) => Ok(Some(Stmt::Return(
                     (return_type, token_pos),
                     None,
                     settings.pos,
@@ -2466,7 +2458,7 @@ fn parse_stmt(
                 (_, _) => {
                     let expr = parse_expr(input, state, lib, settings.level_up())?;
                     let pos = expr.position();
-                    Ok(Some(Stmt::ReturnWithVal(
+                    Ok(Some(Stmt::Return(
                         (return_type, token_pos),
                         Some(expr),
                         pos,
@@ -2560,7 +2552,7 @@ fn parse_fn(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    access: FnAccess,
+    access: crate::FnAccess,
     mut settings: ParseSettings,
 ) -> Result<ScriptFnDef, ParseError> {
     #[cfg(not(feature = "unchecked"))]
@@ -2580,7 +2572,7 @@ fn parse_fn(
         (_, pos) => return Err(PERR::FnMissingParams(name).into_err(*pos)),
     };
 
-    let mut params = Vec::new();
+    let mut params: StaticVec<_> = Default::default();
 
     if !match_token(input, Token::RightParen).0 {
         let sep_err = format!("to separate the parameters of function '{}'", name);
@@ -2590,7 +2582,7 @@ fn parse_fn(
                 (Token::RightParen, _) => break,
                 (Token::Identifier(s), pos) => {
                     if params.iter().any(|(p, _)| p == &s) {
-                        return Err(PERR::FnDuplicatedParam(name.to_string(), s).into_err(pos));
+                        return Err(PERR::FnDuplicatedParam(name, s).into_err(pos));
                     }
                     let s = state.get_interned_string(s);
                     state.stack.push((s.clone(), ScopeEntryType::Normal));
@@ -2629,7 +2621,7 @@ fn parse_fn(
     let params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
 
     #[cfg(not(feature = "no_closure"))]
-    let externals: HashSet<_> = state
+    let externals = state
         .externals
         .iter()
         .map(|(name, _)| name)
@@ -2672,11 +2664,11 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<IdentX>, pos: P
         args.push(Expr::Variable(Box::new((None, None, 0, x.clone().into()))));
     });
 
-    let hash = calc_script_fn_hash(empty(), KEYWORD_FN_PTR_CURRY, num_externals + 1);
+    let hash = calc_script_fn_hash(empty(), crate::engine::KEYWORD_FN_PTR_CURRY, num_externals + 1);
 
     let expr = Expr::FnCall(
         Box::new(FnCallExpr {
-            name: KEYWORD_FN_PTR_CURRY.into(),
+            name: crate::engine::KEYWORD_FN_PTR_CURRY.into(),
             hash,
             args,
             ..Default::default()
@@ -2712,7 +2704,7 @@ fn parse_anon_fn(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let mut params = Vec::new();
+    let mut params: StaticVec<_> = Default::default();
 
     if input.next().unwrap().0 != Token::Or {
         if !match_token(input, Token::Pipe).0 {
@@ -2788,12 +2780,12 @@ fn parse_anon_fn(
     settings.pos.hash(hasher);
     let hash = hasher.finish();
 
-    let fn_name: ImmutableString = format!("{}{:016x}", FN_ANONYMOUS, hash).into();
+    let fn_name: ImmutableString = format!("{}{:016x}", crate::engine::FN_ANONYMOUS, hash).into();
 
     // Define the function
     let script = ScriptFnDef {
         name: fn_name.clone(),
-        access: FnAccess::Public,
+        access: crate::FnAccess::Public,
         params,
         #[cfg(not(feature = "no_closure"))]
         externals: Default::default(),
@@ -2835,6 +2827,7 @@ impl Engine {
 
         let settings = ParseSettings {
             allow_if_expr: false,
+            allow_switch_expr: false,
             allow_stmt_expr: false,
             allow_anonymous_fn: false,
             is_global: true,
@@ -2872,8 +2865,8 @@ impl Engine {
         script_hash: u64,
         input: &mut TokenStream,
     ) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
-        let mut statements: Vec<Stmt> = Default::default();
-        let mut functions = Default::default();
+        let mut statements = Vec::with_capacity(16);
+        let mut functions = HashMap::with_capacity_and_hasher(16, StraightHasherBuilder);
         let mut state = ParseState::new(
             self,
             script_hash,
@@ -2887,6 +2880,7 @@ impl Engine {
         while !input.peek().unwrap().0.is_eof() {
             let settings = ParseSettings {
                 allow_if_expr: true,
+                allow_switch_expr: true,
                 allow_stmt_expr: true,
                 allow_anonymous_fn: true,
                 is_global: true,

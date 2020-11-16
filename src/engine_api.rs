@@ -8,30 +8,14 @@ use crate::optimize::OptimizationLevel;
 use crate::parse_error::ParseError;
 use crate::result::EvalAltResult;
 use crate::scope::Scope;
-use crate::token::{Position, NO_POS};
+use crate::token::NO_POS;
 use crate::utils::get_hasher;
 
 #[cfg(not(feature = "no_index"))]
-use crate::{
-    engine::{Array, FN_IDX_GET, FN_IDX_SET},
-    utils::ImmutableString,
-};
+use crate::Array;
 
 #[cfg(not(feature = "no_object"))]
-use crate::{
-    engine::{make_getter, make_setter, Map},
-    parse_error::ParseErrorType,
-    token::Token,
-};
-
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-use crate::fn_register::{RegisterFn, RegisterResultFn};
-
-#[cfg(not(feature = "no_function"))]
-use crate::{fn_args::FuncArgs, fn_call::ensure_no_data_race, module::Module, StaticVec};
-
-#[cfg(not(feature = "no_optimize"))]
-use crate::optimize::optimize_into_ast;
+use crate::Map;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -39,9 +23,6 @@ use crate::stdlib::{
     hash::{Hash, Hasher},
     string::String,
 };
-
-#[cfg(not(feature = "no_optimize"))]
-use crate::stdlib::mem;
 
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(target_arch = "wasm32"))]
@@ -84,7 +65,6 @@ impl Engine {
         self.global_module.set_raw_fn(name, arg_types, func);
         self
     }
-
     /// Register a custom type for use with the `Engine`.
     /// The type must implement `Clone`.
     ///
@@ -126,7 +106,6 @@ impl Engine {
     pub fn register_type<T: Variant + Clone>(&mut self) -> &mut Self {
         self.register_type_with_name::<T>(type_name::<T>())
     }
-
     /// Register a custom type for use with the `Engine`, with a pretty-print name
     /// for the `type_of` function. The type must implement `Clone`.
     ///
@@ -177,7 +156,6 @@ impl Engine {
         self.type_names.insert(type_name::<T>().into(), name.into());
         self
     }
-
     /// Register an iterator adapter for an iterable type with the `Engine`.
     /// This is an advanced feature.
     #[inline(always)]
@@ -189,7 +167,6 @@ impl Engine {
         self.global_module.set_iterable::<T>();
         self
     }
-
     /// Register a getter function for a member of a registered type with the `Engine`.
     ///
     /// The function signature must start with `&mut self` and not `&self`.
@@ -236,9 +213,8 @@ impl Engine {
         T: Variant + Clone,
         U: Variant + Clone,
     {
-        self.register_fn(&make_getter(name), callback)
+        crate::RegisterFn::register_fn(self, &crate::engine::make_getter(name), callback)
     }
-
     /// Register a getter function for a member of a registered type with the `Engine`.
     /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
     ///
@@ -284,9 +260,12 @@ impl Engine {
         name: &str,
         callback: impl Fn(&mut T) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
-        self.register_result_fn(&make_getter(name), callback)
+        crate::RegisterResultFn::register_result_fn(
+            self,
+            &crate::engine::make_getter(name),
+            callback,
+        )
     }
-
     /// Register a setter function for a member of a registered type with the `Engine`.
     ///
     /// # Example
@@ -334,9 +313,8 @@ impl Engine {
         T: Variant + Clone,
         U: Variant + Clone,
     {
-        self.register_fn(&make_setter(name), callback)
+        crate::RegisterFn::register_fn(self, &crate::engine::make_setter(name), callback)
     }
-
     /// Register a setter function for a member of a registered type with the `Engine`.
     /// Returns `Result<(), Box<EvalAltResult>>`.
     ///
@@ -388,11 +366,12 @@ impl Engine {
         T: Variant + Clone,
         U: Variant + Clone,
     {
-        self.register_result_fn(&make_setter(name), move |obj: &mut T, value: U| {
-            callback(obj, value).map(Into::into)
-        })
+        crate::RegisterResultFn::register_result_fn(
+            self,
+            &crate::engine::make_setter(name),
+            move |obj: &mut T, value: U| callback(obj, value).map(Into::into),
+        )
     }
-
     /// Short-hand for registering both getter and setter functions
     /// of a registered type with the `Engine`.
     ///
@@ -445,7 +424,6 @@ impl Engine {
     {
         self.register_get(name, get_fn).register_set(name, set_fn)
     }
-
     /// Register an index getter for a custom type with the `Engine`.
     ///
     /// The function signature must start with `&mut self` and not `&self`.
@@ -507,14 +485,13 @@ impl Engine {
         }
         if TypeId::of::<T>() == TypeId::of::<String>()
             || TypeId::of::<T>() == TypeId::of::<&str>()
-            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+            || TypeId::of::<T>() == TypeId::of::<crate::ImmutableString>()
         {
             panic!("Cannot register indexer for strings.");
         }
 
-        self.register_fn(FN_IDX_GET, callback)
+        crate::RegisterFn::register_fn(self, crate::engine::FN_IDX_GET, callback)
     }
-
     /// Register an index getter for a custom type with the `Engine`.
     /// Returns `Result<Dynamic, Box<EvalAltResult>>`.
     ///
@@ -578,14 +555,13 @@ impl Engine {
         }
         if TypeId::of::<T>() == TypeId::of::<String>()
             || TypeId::of::<T>() == TypeId::of::<&str>()
-            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+            || TypeId::of::<T>() == TypeId::of::<crate::ImmutableString>()
         {
             panic!("Cannot register indexer for strings.");
         }
 
-        self.register_result_fn(FN_IDX_GET, callback)
+        crate::RegisterResultFn::register_result_fn(self, crate::engine::FN_IDX_GET, callback)
     }
-
     /// Register an index setter for a custom type with the `Engine`.
     ///
     /// # Panics
@@ -647,14 +623,13 @@ impl Engine {
         }
         if TypeId::of::<T>() == TypeId::of::<String>()
             || TypeId::of::<T>() == TypeId::of::<&str>()
-            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+            || TypeId::of::<T>() == TypeId::of::<crate::ImmutableString>()
         {
             panic!("Cannot register indexer for strings.");
         }
 
-        self.register_fn(FN_IDX_SET, callback)
+        crate::RegisterFn::register_fn(self, crate::engine::FN_IDX_SET, callback)
     }
-
     /// Register an index setter for a custom type with the `Engine`.
     /// Returns `Result<(), Box<EvalAltResult>>`.
     ///
@@ -720,16 +695,17 @@ impl Engine {
         }
         if TypeId::of::<T>() == TypeId::of::<String>()
             || TypeId::of::<T>() == TypeId::of::<&str>()
-            || TypeId::of::<T>() == TypeId::of::<ImmutableString>()
+            || TypeId::of::<T>() == TypeId::of::<crate::ImmutableString>()
         {
             panic!("Cannot register indexer for strings.");
         }
 
-        self.register_result_fn(FN_IDX_SET, move |obj: &mut T, index: X, value: U| {
-            callback(obj, index, value).map(Into::into)
-        })
+        crate::RegisterResultFn::register_result_fn(
+            self,
+            crate::engine::FN_IDX_SET,
+            move |obj: &mut T, index: X, value: U| callback(obj, index, value).map(Into::into),
+        )
     }
-
     /// Short-hand for register both index getter and setter functions for a custom type with the `Engine`.
     ///
     /// # Panics
@@ -785,7 +761,45 @@ impl Engine {
         self.register_indexer_get(getter)
             .register_indexer_set(setter)
     }
+    /// Register a `Module` as a sub-module with the `Engine`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::{Engine, Module};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Create the module
+    /// let mut module = Module::new();
+    /// module.set_fn_1("calc", |x: i64| Ok(x + 1));
+    ///
+    /// // Register the module as a sub-module
+    /// engine.register_module("CalcService", module);
+    ///
+    /// assert_eq!(engine.eval::<i64>("CalcService::calc(41)")?, 42);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(not(feature = "no_module"))]
+    pub fn register_module(
+        &mut self,
+        name: impl Into<crate::ImmutableString>,
+        module: impl Into<crate::Shared<crate::Module>>,
+    ) -> &mut Self {
+        let module = module.into();
 
+        if !module.is_indexed() {
+            // Index the module (making a clone copy if necessary) if it is not indexed
+            let mut module = crate::fn_native::shared_take_or_clone(module);
+            module.build_index();
+            self.global_sub_modules.push_fixed(name, module);
+        } else {
+            self.global_sub_modules.push_fixed(name, module);
+        }
+        self
+    }
     /// Compile a string into an `AST`, which can be used later for evaluation.
     ///
     /// # Example
@@ -809,7 +823,6 @@ impl Engine {
     pub fn compile(&self, script: &str) -> Result<AST, ParseError> {
         self.compile_with_scope(&Default::default(), script)
     }
-
     /// Compile a string into an `AST` using own scope, which can be used later for evaluation.
     ///
     /// The scope is useful for passing constants into the script for optimization
@@ -852,7 +865,6 @@ impl Engine {
     pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, ParseError> {
         self.compile_scripts_with_scope(scope, &[script])
     }
-
     /// When passed a list of strings, first join the strings into one large script,
     /// and then compile them into an `AST` using own scope, which can be used later for evaluation.
     ///
@@ -907,7 +919,6 @@ impl Engine {
     ) -> Result<AST, ParseError> {
         self.compile_with_scope_and_optimization_level(scope, scripts, self.optimization_level)
     }
-
     /// Join a list of strings and compile into an `AST` using own scope at a specific optimization level.
     #[inline(always)]
     pub(crate) fn compile_with_scope_and_optimization_level(
@@ -920,7 +931,6 @@ impl Engine {
         let stream = self.lex(scripts, None);
         self.parse(hash, &mut stream.peekable(), scope, optimization_level)
     }
-
     /// Read the contents of a file into a string.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
@@ -944,7 +954,6 @@ impl Engine {
 
         Ok(contents)
     }
-
     /// Compile a script file into an `AST`, which can be used later for evaluation.
     ///
     /// # Example
@@ -971,7 +980,6 @@ impl Engine {
     pub fn compile_file(&self, path: PathBuf) -> Result<AST, Box<EvalAltResult>> {
         self.compile_file_with_scope(&Default::default(), path)
     }
-
     /// Compile a script file into an `AST` using own scope, which can be used later for evaluation.
     ///
     /// The scope is useful for passing constants into the script for optimization
@@ -1013,7 +1021,6 @@ impl Engine {
     ) -> Result<AST, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| Ok(self.compile_with_scope(scope, &contents)?))
     }
-
     /// Parse a JSON string into a map.
     ///
     /// The JSON string must be an object hash.  It cannot be a simple JavaScript primitive.
@@ -1054,6 +1061,8 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     pub fn parse_json(&self, json: &str, has_null: bool) -> Result<Map, Box<EvalAltResult>> {
+        use crate::token::{Position, Token};
+
         let mut scope = Default::default();
 
         // Trims the JSON string and add a '#' in front
@@ -1063,7 +1072,7 @@ impl Engine {
         } else if json_text.starts_with(Token::LeftBrace.syntax().as_ref()) {
             ["#", json_text]
         } else {
-            return Err(ParseErrorType::MissingToken(
+            return Err(crate::ParseErrorType::MissingToken(
                 Token::LeftBrace.syntax().into(),
                 "to start a JSON object hash".into(),
             )
@@ -1098,7 +1107,6 @@ impl Engine {
 
         self.eval_ast_with_scope(&mut scope, &ast)
     }
-
     /// Compile a string containing an expression into an `AST`,
     /// which can be used later for evaluation.
     ///
@@ -1123,7 +1131,6 @@ impl Engine {
     pub fn compile_expression(&self, script: &str) -> Result<AST, ParseError> {
         self.compile_expression_with_scope(&Default::default(), script)
     }
-
     /// Compile a string containing an expression into an `AST` using own scope,
     /// which can be used later for evaluation.
     ///
@@ -1176,7 +1183,6 @@ impl Engine {
         let mut peekable = stream.peekable();
         self.parse_global_expr(hash, &mut peekable, scope, self.optimization_level)
     }
-
     /// Evaluate a script file.
     ///
     /// # Example
@@ -1198,7 +1204,6 @@ impl Engine {
     pub fn eval_file<T: Variant + Clone>(&self, path: PathBuf) -> Result<T, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
-
     /// Evaluate a script file with own scope.
     ///
     /// # Example
@@ -1228,7 +1233,6 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.eval_with_scope::<T>(scope, &contents))
     }
-
     /// Evaluate a string.
     ///
     /// # Example
@@ -1247,7 +1251,6 @@ impl Engine {
     pub fn eval<T: Variant + Clone>(&self, script: &str) -> Result<T, Box<EvalAltResult>> {
         self.eval_with_scope(&mut Default::default(), script)
     }
-
     /// Evaluate a string with own scope.
     ///
     /// # Example
@@ -1283,7 +1286,6 @@ impl Engine {
         )?;
         self.eval_ast_with_scope(scope, &ast)
     }
-
     /// Evaluate a string containing an expression.
     ///
     /// # Example
@@ -1305,7 +1307,6 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         self.eval_expression_with_scope(&mut Default::default(), script)
     }
-
     /// Evaluate a string containing an expression with own scope.
     ///
     /// # Example
@@ -1340,7 +1341,6 @@ impl Engine {
 
         self.eval_ast_with_scope(scope, &ast)
     }
-
     /// Evaluate an `AST`.
     ///
     /// # Example
@@ -1363,7 +1363,6 @@ impl Engine {
     pub fn eval_ast<T: Variant + Clone>(&self, ast: &AST) -> Result<T, Box<EvalAltResult>> {
         self.eval_ast_with_scope(&mut Default::default(), ast)
     }
-
     /// Evaluate an `AST` with own scope.
     ///
     /// # Example
@@ -1399,7 +1398,8 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, Box<EvalAltResult>> {
-        let mut mods = Default::default();
+        let mut mods = self.global_sub_modules.clone();
+
         let (result, _) = self.eval_ast_with_scope_raw(scope, &mut mods, ast)?;
 
         let typ = self.map_type_name(result.type_name());
@@ -1413,7 +1413,6 @@ impl Engine {
             .into()
         });
     }
-
     /// Evaluate an `AST` with own scope.
     #[inline(always)]
     pub(crate) fn eval_ast_with_scope_raw<'a>(
@@ -1424,7 +1423,6 @@ impl Engine {
     ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
         self.eval_statements_raw(scope, mods, ast.statements(), &[ast.lib()])
     }
-
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[cfg(not(feature = "no_std"))]
@@ -1433,7 +1431,6 @@ impl Engine {
     pub fn consume_file(&self, path: PathBuf) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.consume(&contents))
     }
-
     /// Evaluate a file with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[cfg(not(feature = "no_std"))]
@@ -1446,14 +1443,12 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.consume_with_scope(scope, &contents))
     }
-
     /// Evaluate a string, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[inline(always)]
     pub fn consume(&self, script: &str) -> Result<(), Box<EvalAltResult>> {
         self.consume_with_scope(&mut Default::default(), script)
     }
-
     /// Evaluate a string with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[inline]
@@ -1468,14 +1463,12 @@ impl Engine {
         let ast = self.parse(hash, &mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }
-
     /// Evaluate an AST, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[inline(always)]
     pub fn consume_ast(&self, ast: &AST) -> Result<(), Box<EvalAltResult>> {
         self.consume_ast_with_scope(&mut Default::default(), ast)
     }
-
     /// Evaluate an `AST` with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     #[inline(always)]
@@ -1484,11 +1477,11 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
-        let mut mods = Default::default();
+        let mut mods = self.global_sub_modules.clone();
+
         self.eval_statements_raw(scope, &mut mods, ast.statements(), &[ast.lib()])
             .map(|_| ())
     }
-
     /// Call a script function defined in an `AST` with multiple arguments.
     /// Arguments are passed as a tuple.
     ///
@@ -1527,7 +1520,7 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub fn call_fn<A: FuncArgs, T: Variant + Clone>(
+    pub fn call_fn<A: crate::fn_args::FuncArgs, T: Variant + Clone>(
         &self,
         scope: &mut Scope,
         ast: &AST,
@@ -1535,7 +1528,7 @@ impl Engine {
         args: A,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
-        let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
+        let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
         let result =
             self.call_fn_dynamic_raw(scope, &[ast.lib()], name, &mut None, args.as_mut())?;
@@ -1551,7 +1544,6 @@ impl Engine {
             .into()
         });
     }
-
     /// Call a script function defined in an `AST` with multiple `Dynamic` arguments
     /// and optionally a value for binding to the 'this' pointer.
     ///
@@ -1606,16 +1598,15 @@ impl Engine {
     pub fn call_fn_dynamic(
         &self,
         scope: &mut Scope,
-        lib: impl AsRef<Module>,
+        lib: impl AsRef<crate::Module>,
         name: &str,
         mut this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
+        let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
         self.call_fn_dynamic_raw(scope, &[lib.as_ref()], name, &mut this_ptr, args.as_mut())
     }
-
     /// Call a script function defined in an `AST` with multiple `Dynamic` arguments.
     ///
     /// ## WARNING
@@ -1629,7 +1620,7 @@ impl Engine {
     pub(crate) fn call_fn_dynamic_raw(
         &self,
         scope: &mut Scope,
-        lib: &[&Module],
+        lib: &[&crate::Module],
         name: &str,
         this_ptr: &mut Option<&mut Dynamic>,
         args: &mut FnCallArgs,
@@ -1640,16 +1631,15 @@ impl Engine {
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), NO_POS))?;
 
         let mut state = Default::default();
-        let mut mods = Default::default();
+        let mut mods = self.global_sub_modules.clone();
 
         // Check for data race.
         if cfg!(not(feature = "no_closure")) {
-            ensure_no_data_race(name, args, false)?;
+            crate::fn_call::ensure_no_data_race(name, args, false)?;
         }
 
         self.call_script_fn(scope, &mut mods, &mut state, lib, this_ptr, fn_def, args, 0)
     }
-
     /// Optimize the `AST` with constants defined in an external Scope.
     /// An optimized copy of the `AST` is returned while the original `AST` is consumed.
     ///
@@ -1680,10 +1670,9 @@ impl Engine {
         #[cfg(feature = "no_function")]
         let lib = Default::default();
 
-        let stmt = mem::take(ast.statements_mut());
-        optimize_into_ast(self, scope, stmt, lib, optimization_level)
+        let stmt = crate::stdlib::mem::take(ast.statements_mut());
+        crate::optimize::optimize_into_ast(self, scope, stmt, lib, optimization_level)
     }
-
     /// Provide a callback that will be invoked before each variable access.
     ///
     /// ## Return Value of Callback
@@ -1726,7 +1715,6 @@ impl Engine {
         self.resolve_var = Some(Box::new(callback));
         self
     }
-
     /// Register a callback for script evaluation progress.
     ///
     /// # Example
@@ -1769,7 +1757,6 @@ impl Engine {
         self.progress = Some(Box::new(callback));
         self
     }
-
     /// Override default action of `print` (print to stdout using `println!`)
     ///
     /// # Example
@@ -1799,7 +1786,6 @@ impl Engine {
         self.print = Box::new(callback);
         self
     }
-
     /// Override default action of `debug` (print to stdout using `println!`)
     ///
     /// # Example

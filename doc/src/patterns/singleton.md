@@ -131,7 +131,7 @@ pub mod bunny_api {
             Err("Bunny is not yet going!".into())
         } else {
             b.borrow_mut().set_speed(speed);
-            Ok(().into())
+            Ok(Dynamic::UNIT)
         }
     }
     pub fn turn_left(bunny: &mut SharedBunny) {

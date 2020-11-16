@@ -8,9 +8,6 @@ use crate::utils::ImmutableString;
 use crate::StaticVec;
 use crate::INT;
 
-#[cfg(not(feature = "unchecked"))]
-use crate::{result::EvalAltResult, token::NO_POS};
-
 use crate::stdlib::{
     any::TypeId, boxed::Box, format, mem, string::String, string::ToString, vec::Vec,
 };
@@ -255,11 +252,15 @@ mod string_functions {
         s: &mut ImmutableString,
         len: INT,
         ch: char,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> Result<Dynamic, Box<crate::EvalAltResult>> {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
-            return EvalAltResult::ErrorDataTooLarge("Length of string".to_string(), NO_POS).into();
+            return crate::EvalAltResult::ErrorDataTooLarge(
+                "Length of string".to_string(),
+                crate::NO_POS,
+            )
+            .into();
         }
 
         if len > 0 {
@@ -275,16 +276,16 @@ mod string_functions {
                 #[cfg(not(feature = "unchecked"))]
                 if _ctx.engine().max_string_size() > 0 && s.len() > _ctx.engine().max_string_size()
                 {
-                    return EvalAltResult::ErrorDataTooLarge(
+                    return crate::EvalAltResult::ErrorDataTooLarge(
                         "Length of string".to_string(),
-                        NO_POS,
+                        crate::NO_POS,
                     )
                     .into();
                 }
             }
         }
 
-        Ok(().into())
+        Ok(Dynamic::UNIT)
     }
     #[rhai_fn(name = "pad", return_raw)]
     pub fn pad_with_string(
@@ -292,11 +293,15 @@ mod string_functions {
         s: &mut ImmutableString,
         len: INT,
         padding: &str,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> Result<Dynamic, Box<crate::EvalAltResult>> {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
-            return EvalAltResult::ErrorDataTooLarge("Length of string".to_string(), NO_POS).into();
+            return crate::EvalAltResult::ErrorDataTooLarge(
+                "Length of string".to_string(),
+                crate::NO_POS,
+            )
+            .into();
         }
 
         if len > 0 {
@@ -319,21 +324,21 @@ mod string_functions {
                 #[cfg(not(feature = "unchecked"))]
                 if _ctx.engine().max_string_size() > 0 && s.len() > _ctx.engine().max_string_size()
                 {
-                    return EvalAltResult::ErrorDataTooLarge(
+                    return crate::EvalAltResult::ErrorDataTooLarge(
                         "Length of string".to_string(),
-                        NO_POS,
+                        crate::NO_POS,
                     )
                     .into();
                 }
             }
         }
 
-        Ok(().into())
+        Ok(Dynamic::UNIT)
     }
 
     #[cfg(not(feature = "no_index"))]
     pub mod arrays {
-        use crate::engine::Array;
+        use crate::Array;
 
         #[rhai_fn(name = "+")]
         pub fn append(x: &str, y: Array) -> String {
@@ -356,7 +361,7 @@ mod string_functions {
 
     #[cfg(not(feature = "no_object"))]
     pub mod maps {
-        use crate::engine::Map;
+        use crate::Map;
 
         #[rhai_fn(name = "+")]
         pub fn append(x: &str, y: Map) -> String {

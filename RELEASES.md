@@ -10,6 +10,12 @@ New features
 ------------
 
 * `switch` statement.
+* `Engine::register_module` to register a module as a sub-module in the global namespace, while at the same time exposing its method functions globally. This is convenient when registering an API for a custom type.
+
+Enhancements
+------------
+
+* New constant `Dynamic::UNIT`.
 
 
 Version 0.19.5

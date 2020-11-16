@@ -10,7 +10,7 @@ packages to be used.
 
 Packages typically contain Rust functions that are callable within a Rhai script.
 All functions registered in a package is loaded under the _global namespace_
-(i.e. they're available without module qualifiers).
+(i.e. they're available without namespace qualifiers).
 
 Once a package is created (e.g. via `Package::new`), it can be _shared_ (via `Package::get`)
 among multiple instances of [`Engine`], even across threads (under [`sync`]).

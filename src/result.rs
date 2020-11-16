@@ -6,9 +6,6 @@ use crate::token::{Position, NO_POS};
 use crate::utils::ImmutableString;
 use crate::INT;
 
-#[cfg(not(feature = "no_function"))]
-use crate::engine::is_anonymous_fn;
-
 use crate::stdlib::{
     boxed::Box,
     error::Error,
@@ -159,7 +156,7 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorParsing(p, _) => write!(f, "Syntax error: {}", p)?,
 
             #[cfg(not(feature = "no_function"))]
-            Self::ErrorInFunctionCall(s, err, _) if is_anonymous_fn(s) => {
+            Self::ErrorInFunctionCall(s, err, _) if crate::engine::is_anonymous_fn(s) => {
                 write!(f, "Error in call to closure: {}", err)?
             }
             Self::ErrorInFunctionCall(s, err, _) => {
@@ -303,7 +300,6 @@ impl EvalAltResult {
             Self::LoopBreak(_, _) | Self::Return(_, _) => unreachable!(),
         }
     }
-
     /// Is this error a system exception?
     pub fn is_system_exception(&self) -> bool {
         match self {
@@ -322,7 +318,6 @@ impl EvalAltResult {
             _ => false,
         }
     }
-
     /// Get the `Position` of this error.
     pub fn position(&self) -> Position {
         match self {
@@ -356,7 +351,6 @@ impl EvalAltResult {
             | Self::Return(_, pos) => *pos,
         }
     }
-
     /// Override the `Position` of this error.
     pub fn set_position(&mut self, new_position: Position) {
         match self {
@@ -390,7 +384,6 @@ impl EvalAltResult {
             | Self::Return(_, pos) => *pos = new_position,
         }
     }
-
     /// Consume the current `EvalAltResult` and return a new one with the specified `Position`
     /// if the current position is `Position::None`.
     #[inline(always)]

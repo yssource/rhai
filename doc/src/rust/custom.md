@@ -191,3 +191,10 @@ engine.register_fn("==",
 let item = new_ts();        // construct a new 'TestStruct'
 item in array;              // 'in' operator uses '=='
 ```
+
+
+Working With Enums
+------------------
+
+It is quite easy to use Rust enums with Rhai.
+See [this chapter]({{rootUrl}}/patterns/enums.md) for more details.

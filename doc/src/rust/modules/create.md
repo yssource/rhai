@@ -25,7 +25,8 @@ Make the `Module` Available to the `Engine`
 `Engine::load_package` supports loading a [module] as a [package].
 
 Since it acts as a [package], all functions will be registered into the _global_ namespace
-and can be accessed without _module qualifiers_.
+and can be accessed without _namespace qualifiers_.  This is by far the easiest way to expose
+a module's functionalities to Rhai.
 
 ```rust
 use rhai::{Engine, Module};
@@ -38,6 +39,44 @@ let mut engine = Engine::new();
 engine.load_package(module);
 
 engine.eval::<i64>("inc(41)")? == 42;       // no need to import module
+```
+
+
+Make the `Module` a Global Module
+------------------------------------
+
+`Engine::register_module` loads a [module] and makes it available globally under a specific namespace.
+
+```rust
+use rhai::{Engine, Module};
+
+let mut module = Module::new();             // new module
+module.set_fn_1("inc", |x: i64| Ok(x+1));   // use the 'set_fn_XXX' API to add functions
+
+// Load the module into the Engine as a sub-module named 'calc'
+let mut engine = Engine::new();
+engine.register_module("calc", module);
+
+engine.eval::<i64>("calc::inc(41)")? == 42; // refer to the 'Calc' module
+```
+
+`Engine::register_module` also exposes all _methods_ and _iterators_ from the module to the
+_global_ namespace, so [getters/setters] and [indexers] for [custom types] work as expected.
+
+```rust
+use rhai::{Engine, Module};
+
+let mut module = Module::new();             // new module
+module.set_fn_1_mut("inc",                  // add new method
+    |x: &mut i64| Ok(x+1)
+);
+
+// Load the module into the Engine as a sub-module named 'calc'
+let mut engine = Engine::new();
+engine.register_module("calc", module);
+
+// The method 'inc' works as expected because it is exposed to the global namespace
+engine.eval::<i64>("let x = 41; x.inc()")? == 42;
 ```
 
 

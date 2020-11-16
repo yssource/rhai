@@ -1,14 +1,25 @@
-use rhai::{Engine, INT};
+use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
-fn test_comments() {
+fn test_comments() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
-    assert!(engine
-        .eval::<INT>("let x = 5; x // I am a single line comment, yay!")
-        .is_ok());
+    assert_eq!(
+        engine.eval::<INT>("let x = 42; x // I am a single line comment, yay!")?,
+        42
+    );
 
-    assert!(engine
-        .eval::<INT>("let /* I am a multi-line comment, yay! */ x = 5; x")
-        .is_ok());
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+            let /* I am a
+                multi-line
+                    comment, yay!
+                */ x = 42; x
+            "#
+        )?,
+        42
+    );
+
+    Ok(())
 }

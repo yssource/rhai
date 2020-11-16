@@ -137,7 +137,7 @@ impl Handler {
                             // Default implementation of 'update' event handler
                             self.scope.set_value("state2", SomeType::new(42));
                             // Turn function-not-found into a success
-                            Ok(().into())
+                            Ok(Dynamic::UNIT)
                         }
                         _ => Err(err.into())
                     })

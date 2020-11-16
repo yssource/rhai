@@ -4,12 +4,6 @@ use crate::engine::Engine;
 use crate::packages::PackageLibrary;
 use crate::token::{is_valid_identifier, Token};
 
-#[cfg(not(feature = "no_module"))]
-use crate::module::ModuleResolver;
-
-#[cfg(not(feature = "no_optimize"))]
-use crate::optimize::OptimizationLevel;
-
 use crate::stdlib::{format, string::String};
 
 #[cfg(not(feature = "no_module"))]
@@ -23,31 +17,30 @@ impl Engine {
     /// In other words, loaded packages are searched in reverse order.
     #[inline(always)]
     pub fn load_package(&mut self, package: impl Into<PackageLibrary>) -> &mut Self {
-        // Push the package to the top - packages are searched in reverse order
-        self.packages.push(package.into());
+        self.packages.add(package.into());
         self
     }
-
     /// Control whether and how the `Engine` will optimize an AST after compilation.
     ///
     /// Not available under the `no_optimize` feature.
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
-    pub fn set_optimization_level(&mut self, optimization_level: OptimizationLevel) -> &mut Self {
+    pub fn set_optimization_level(
+        &mut self,
+        optimization_level: crate::OptimizationLevel,
+    ) -> &mut Self {
         self.optimization_level = optimization_level;
         self
     }
-
     /// The current optimization level.
     /// It controls whether and how the `Engine` will optimize an AST after compilation.
     ///
     /// Not available under the `no_optimize` feature.
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
-    pub fn optimization_level(&self) -> OptimizationLevel {
+    pub fn optimization_level(&self) -> crate::OptimizationLevel {
         self.optimization_level
     }
-
     /// Set the maximum levels of function calls allowed for a script in order to avoid
     /// infinite recursion and stack overflows.
     #[cfg(not(feature = "unchecked"))]
@@ -56,14 +49,12 @@ impl Engine {
         self.limits.max_call_stack_depth = levels;
         self
     }
-
     /// The maximum levels of function calls allowed for a script.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn max_call_levels(&self) -> usize {
         self.limits.max_call_stack_depth
     }
-
     /// Set the maximum number of operations allowed for a script to run to avoid
     /// consuming too much resources (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
@@ -76,14 +67,12 @@ impl Engine {
         };
         self
     }
-
     /// The maximum number of operations allowed for a script to run (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn max_operations(&self) -> u64 {
         self.limits.max_operations
     }
-
     /// Set the maximum number of imported modules allowed for a script.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_module"))]
@@ -92,7 +81,6 @@ impl Engine {
         self.limits.max_modules = modules;
         self
     }
-
     /// The maximum number of imported modules allowed for a script.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_module"))]
@@ -100,7 +88,6 @@ impl Engine {
     pub fn max_modules(&self) -> usize {
         self.limits.max_modules
     }
-
     /// Set the depth limits for expressions (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
@@ -124,14 +111,12 @@ impl Engine {
         }
         self
     }
-
     /// The depth limit for expressions (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn max_expr_depth(&self) -> usize {
         self.limits.max_expr_depth
     }
-
     /// The depth limit for expressions in functions (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_function"))]
@@ -139,7 +124,6 @@ impl Engine {
     pub fn max_function_expr_depth(&self) -> usize {
         self.limits.max_function_expr_depth
     }
-
     /// Set the maximum length of strings (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
@@ -147,14 +131,12 @@ impl Engine {
         self.limits.max_string_size = if max_size == usize::MAX { 0 } else { max_size };
         self
     }
-
     /// The maximum length of strings (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn max_string_size(&self) -> usize {
         self.limits.max_string_size
     }
-
     /// Set the maximum length of arrays (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_index"))]
@@ -163,7 +145,6 @@ impl Engine {
         self.limits.max_array_size = if max_size == usize::MAX { 0 } else { max_size };
         self
     }
-
     /// The maximum length of arrays (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_index"))]
@@ -171,7 +152,6 @@ impl Engine {
     pub fn max_array_size(&self) -> usize {
         self.limits.max_array_size
     }
-
     /// Set the maximum length of object maps (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_object"))]
@@ -180,7 +160,6 @@ impl Engine {
         self.limits.max_map_size = if max_size == usize::MAX { 0 } else { max_size };
         self
     }
-
     /// The maximum length of object maps (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_object"))]
@@ -188,7 +167,6 @@ impl Engine {
     pub fn max_map_size(&self) -> usize {
         self.limits.max_map_size
     }
-
     /// Set the module resolution service used by the `Engine`.
     ///
     /// Not available under the `no_module` feature.
@@ -196,12 +174,11 @@ impl Engine {
     #[inline(always)]
     pub fn set_module_resolver(
         &mut self,
-        resolver: Option<impl ModuleResolver + 'static>,
+        resolver: Option<impl crate::ModuleResolver + 'static>,
     ) -> &mut Self {
-        self.module_resolver = resolver.map(|f| Box::new(f) as Box<dyn ModuleResolver>);
+        self.module_resolver = resolver.map(|f| Box::new(f) as Box<dyn crate::ModuleResolver>);
         self
     }
-
     /// Disable a particular keyword or operator in the language.
     ///
     /// # Examples
@@ -243,7 +220,6 @@ impl Engine {
         self.disabled_symbols.insert(symbol.into());
         self
     }
-
     /// Register a custom operator into the language.
     ///
     /// The operator must be a valid identifier (i.e. it cannot be a symbol).

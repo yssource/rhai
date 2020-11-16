@@ -156,3 +156,61 @@ fn bench_eval_loop_strings_no_build(bench: &mut Bencher) {
 
     bench.iter(|| engine.consume_ast(&ast).unwrap());
 }
+
+#[bench]
+fn bench_eval_switch(bench: &mut Bencher) {
+    let script = r#"
+        let sum = 0;
+        let rem = 0;
+
+        for x in range(0, 10) {
+            rem = x % 5;
+
+            sum += switch rem {
+                0 => 10,
+                1 => 12,
+                2 => 42,
+                3 => 1,
+                _ => 9
+            }
+        }
+    "#;
+
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::None);
+
+    let ast = engine.compile(script).unwrap();
+
+    bench.iter(|| engine.consume_ast(&ast).unwrap());
+}
+
+#[bench]
+fn bench_eval_nested_if(bench: &mut Bencher) {
+    let script = r#"
+        let sum = 0;
+        let rem = 0;
+
+        for x in range(0, 10) {
+            rem = x % 5;
+
+            sum += if rem == 0 {
+                10
+            } else if rem == 1 {
+                12
+            } else if rem == 2 {
+                42
+            } else if rem == 3 {
+                1
+            } else{
+                9
+            };
+        }
+    "#;
+
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::None);
+
+    let ast = engine.compile(script).unwrap();
+
+    bench.iter(|| engine.consume_ast(&ast).unwrap());
+}

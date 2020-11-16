@@ -14,9 +14,6 @@ use crate::token::{is_valid_identifier, Position, NO_POS};
 use crate::utils::get_hasher;
 use crate::{calc_native_fn_hash, StaticVec};
 
-#[cfg(not(feature = "no_function"))]
-use crate::ast::ReturnType;
-
 use crate::stdlib::{
     boxed::Box,
     hash::{Hash, Hasher},
@@ -237,7 +234,7 @@ fn optimize_stmt_block(
         }
 
         match stmt {
-            Stmt::ReturnWithVal(_, _, _) | Stmt::Break(_) => dead_code = true,
+            Stmt::Return(_, _, _) | Stmt::Break(_) => dead_code = true,
             _ => (),
         }
 
@@ -285,20 +282,19 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                 optimize_expr(&mut x.2, state);
             }
         },
+
         // if false { if_block } -> Noop
-        Stmt::IfThenElse(Expr::False(pos), x, _) if x.1.is_none() => {
+        Stmt::If(Expr::False(pos), x, _) if x.1.is_none() => {
             state.set_dirty();
             *stmt = Stmt::Noop(*pos);
         }
         // if true { if_block } -> if_block
-        Stmt::IfThenElse(Expr::True(_), x, _) if x.1.is_none() => {
+        Stmt::If(Expr::True(_), x, _) if x.1.is_none() => {
             *stmt = mem::take(&mut x.0);
             optimize_stmt(stmt, state, true);
         }
         // if expr { Noop }
-        Stmt::IfThenElse(ref mut condition, x, _)
-            if x.1.is_none() && matches!(x.0, Stmt::Noop(_)) =>
-        {
+        Stmt::If(ref mut condition, x, _) if x.1.is_none() && matches!(x.0, Stmt::Noop(_)) => {
             state.set_dirty();
 
             let pos = condition.position();
@@ -317,28 +313,64 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             };
         }
         // if expr { if_block }
-        Stmt::IfThenElse(ref mut condition, ref mut x, _) if x.1.is_none() => {
+        Stmt::If(ref mut condition, ref mut x, _) if x.1.is_none() => {
             optimize_expr(condition, state);
             optimize_stmt(&mut x.0, state, true);
         }
         // if false { if_block } else { else_block } -> else_block
-        Stmt::IfThenElse(Expr::False(_), x, _) if x.1.is_some() => {
+        Stmt::If(Expr::False(_), x, _) if x.1.is_some() => {
             *stmt = mem::take(x.1.as_mut().unwrap());
             optimize_stmt(stmt, state, true);
         }
         // if true { if_block } else { else_block } -> if_block
-        Stmt::IfThenElse(Expr::True(_), x, _) => {
+        Stmt::If(Expr::True(_), x, _) => {
             *stmt = mem::take(&mut x.0);
             optimize_stmt(stmt, state, true);
         }
         // if expr { if_block } else { else_block }
-        Stmt::IfThenElse(ref mut condition, ref mut x, _) => {
+        Stmt::If(ref mut condition, ref mut x, _) => {
             optimize_expr(condition, state);
             optimize_stmt(&mut x.0, state, true);
             if let Some(else_block) = x.1.as_mut() {
                 optimize_stmt(else_block, state, true);
                 match else_block {
                     Stmt::Noop(_) => x.1 = None, // Noop -> no else block
+                    _ => (),
+                }
+            }
+        }
+
+        // switch const { ... }
+        Stmt::Switch(expr, x, pos) if expr.is_constant() => {
+            let value = expr.get_constant_value().unwrap();
+            let hasher = &mut get_hasher();
+            value.hash(hasher);
+            let hash = hasher.finish();
+
+            state.set_dirty();
+
+            let table = &mut x.0;
+
+            if let Some(stmt) = table.get_mut(&hash) {
+                optimize_stmt(stmt, state, true);
+                *expr = Expr::Stmt(Box::new(vec![mem::take(stmt)].into()), *pos);
+            } else if let Some(def_stmt) = x.1.as_mut() {
+                optimize_stmt(def_stmt, state, true);
+                *expr = Expr::Stmt(Box::new(vec![mem::take(def_stmt)].into()), *pos);
+            } else {
+                *expr = Expr::Unit(*pos);
+            }
+        }
+        // switch
+        Stmt::Switch(expr, x, _) => {
+            optimize_expr(expr, state);
+            x.0.values_mut()
+                .for_each(|stmt| optimize_stmt(stmt, state, true));
+            if let Some(def_stmt) = x.1.as_mut() {
+                optimize_stmt(def_stmt, state, true);
+
+                match def_stmt {
+                    Stmt::Noop(_) | Stmt::Expr(Expr::Unit(_)) => x.1 = None,
                     _ => (),
                 }
             }
@@ -435,7 +467,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         // expr;
         Stmt::Expr(ref mut expr) => optimize_expr(expr, state),
         // return expr;
-        Stmt::ReturnWithVal(_, Some(ref mut expr), _) => optimize_expr(expr, state),
+        Stmt::Return(_, Some(ref mut expr), _) => optimize_expr(expr, state),
 
         // All other statements - skip
         _ => (),
@@ -523,12 +555,24 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             // lhs[rhs]
             (lhs, rhs) => { optimize_expr(lhs, state); optimize_expr(rhs, state); }
         },
+        // [ constant .. ]
+        #[cfg(not(feature = "no_index"))]
+        Expr::Array(_, _) if expr.is_constant() => {
+            state.set_dirty();
+            *expr = Expr::DynamicConstant(Box::new(expr.get_constant_value().unwrap()), expr.position());
+        }
         // [ items .. ]
         #[cfg(not(feature = "no_index"))]
-        Expr::Array(a, _) => a.iter_mut().for_each(|expr| optimize_expr(expr, state)),
+        Expr::Array(x, _) => x.iter_mut().for_each(|expr| optimize_expr(expr, state)),
+        // #{ key:constant, .. }
+        #[cfg(not(feature = "no_object"))]
+        Expr::Map(_, _) if expr.is_constant()=> {
+            state.set_dirty();
+            *expr = Expr::DynamicConstant(Box::new(expr.get_constant_value().unwrap()), expr.position());
+        }
         // #{ key:value, .. }
         #[cfg(not(feature = "no_object"))]
-        Expr::Map(m, _) => m.iter_mut().for_each(|(_, expr)| optimize_expr(expr, state)),
+        Expr::Map(x, _) => x.iter_mut().for_each(|(_, expr)| optimize_expr(expr, state)),
         // lhs in rhs
         Expr::In(x, _) => match (&mut x.lhs, &mut x.rhs) {
             // "xxx" in "xxxxx"
@@ -626,7 +670,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
-            if !state.engine.has_override_by_name_and_arguments(state.lib, x.name.as_ref(), arg_types.as_ref(), false) {
+            if !state.engine.has_override_by_name_and_arguments(&state.engine.global_sub_modules, state.lib, x.name.as_ref(), arg_types.as_ref(), false) {
                 if let Some(result) = run_builtin_binary_op(x.name.as_ref(), &arg_values[0], &arg_values[1])
                                         .ok().flatten()
                                         .and_then(|result| map_dynamic_to_expr(result, *pos))
@@ -697,42 +741,6 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             *expr = result;
         }
 
-        // switch const { ... }
-        Expr::Switch(x, pos) if x.0.is_constant() => {
-            let value = x.0.get_constant_value().unwrap();
-            let hasher = &mut get_hasher();
-            value.hash(hasher);
-            let hash = hasher.finish();
-
-            state.set_dirty();
-
-            let table = &mut x.1;
-
-            if let Some(stmt) = table.get_mut(&hash) {
-                optimize_stmt(stmt, state, true);
-                *expr = Expr::Stmt(Box::new(vec![mem::take(stmt)].into()), *pos);
-            } else if let Some(def_stmt) = x.2.as_mut() {
-                optimize_stmt(def_stmt, state, true);
-                *expr = Expr::Stmt(Box::new(vec![mem::take(def_stmt)].into()), *pos);
-            } else {
-                *expr = Expr::Unit(*pos);
-            }
-        }
-
-        // switch
-        Expr::Switch(x, _) => {
-            optimize_expr(&mut x.0, state);
-            x.1.values_mut().for_each(|stmt| optimize_stmt(stmt, state, true));
-            if let Some(def_stmt) = x.2.as_mut() {
-                optimize_stmt(def_stmt, state, true);
-
-                match def_stmt {
-                    Stmt::Noop(_) | Stmt::Expr(Expr::Unit(_)) => x.2 = None,
-                    _ => ()
-                }
-            }
-        }
-
         // Custom syntax
         Expr::Custom(x, _) => x.keywords.iter_mut().for_each(|expr| optimize_expr(expr, state)),
 
@@ -742,7 +750,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
 }
 
 fn optimize(
-    statements: Vec<Stmt>,
+    mut statements: Vec<Stmt>,
     engine: &Engine,
     scope: &Scope,
     lib: &[&Module],
@@ -750,6 +758,7 @@ fn optimize(
 ) -> Vec<Stmt> {
     // If optimization level is None then skip optimizing
     if level == OptimizationLevel::None {
+        statements.shrink_to_fit();
         return statements;
     }
 
@@ -768,16 +777,14 @@ fn optimize(
 
     let orig_constants_len = state.constants.len();
 
-    let mut result = statements;
-
     // Optimization loop
     loop {
         state.reset();
         state.restore_constants(orig_constants_len);
 
-        let num_statements = result.len();
+        let num_statements = statements.len();
 
-        result.iter_mut().enumerate().for_each(|(i, stmt)| {
+        statements.iter_mut().enumerate().for_each(|(i, stmt)| {
             match stmt {
                 Stmt::Const(var_def, expr, _, _) if expr.is_some() => {
                     // Load constants
@@ -817,26 +824,27 @@ fn optimize(
     }
 
     // Eliminate code that is pure but always keep the last statement
-    let last_stmt = result.pop();
+    let last_stmt = statements.pop();
 
     // Remove all pure statements at global level
-    result.retain(|stmt| !stmt.is_pure());
+    statements.retain(|stmt| !stmt.is_pure());
 
     // Add back the last statement unless it is a lone No-op
     if let Some(stmt) = last_stmt {
-        if !result.is_empty() || !stmt.is_noop() {
-            result.push(stmt);
+        if !statements.is_empty() || !stmt.is_noop() {
+            statements.push(stmt);
         }
     }
 
-    result
+    statements.shrink_to_fit();
+    statements
 }
 
 /// Optimize an AST.
 pub fn optimize_into_ast(
     engine: &Engine,
     scope: &Scope,
-    statements: Vec<Stmt>,
+    mut statements: Vec<Stmt>,
     _functions: Vec<ScriptFnDef>,
     level: OptimizationLevel,
 ) -> AST {
@@ -886,11 +894,11 @@ pub fn optimize_into_ast(
                     // {} -> Noop
                     fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
                         // { return val; } -> val
-                        Stmt::ReturnWithVal((ReturnType::Return, _), Some(expr), _) => {
+                        Stmt::Return((crate::ast::ReturnType::Return, _), Some(expr), _) => {
                             Stmt::Expr(expr)
                         }
                         // { return; } -> ()
-                        Stmt::ReturnWithVal((ReturnType::Return, pos), None, _) => {
+                        Stmt::Return((crate::ast::ReturnType::Return, pos), None, _) => {
                             Stmt::Expr(Expr::Unit(pos))
                         }
                         // All others
@@ -912,6 +920,8 @@ pub fn optimize_into_ast(
 
     #[cfg(feature = "no_function")]
     let lib = Default::default();
+
+    statements.shrink_to_fit();
 
     AST::new(
         match level {

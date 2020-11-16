@@ -13,16 +13,12 @@ use crate::INT;
 use crate::FLOAT;
 
 #[cfg(not(feature = "no_index"))]
-use crate::engine::Array;
+use crate::Array;
 
 #[cfg(not(feature = "no_object"))]
-use crate::engine::Map;
-
-#[cfg(not(feature = "no_module"))]
-use crate::engine::Imports;
+use crate::Map;
 
 use crate::stdlib::{
-    any::TypeId,
     borrow::Cow,
     boxed::Box,
     collections::HashMap,
@@ -37,6 +33,9 @@ use crate::stdlib::{
 
 #[cfg(not(feature = "no_closure"))]
 use crate::stdlib::collections::HashSet;
+
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+use crate::stdlib::cmp::max;
 
 /// A type representing the access mode of a scripted function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -90,7 +89,7 @@ pub struct ScriptFnDef {
     pub lib: Option<Shared<Module>>,
     /// Encapsulated imported modules.
     #[cfg(not(feature = "no_module"))]
-    pub mods: Imports,
+    pub mods: crate::engine::Imports,
     /// Function name.
     pub name: ImmutableString,
     /// Function access mode.
@@ -127,7 +126,7 @@ impl fmt::Display for ScriptFnDef {
 /// # Thread Safety
 ///
 /// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct AST(
     /// Global statements.
     Vec<Stmt>,
@@ -135,20 +134,24 @@ pub struct AST(
     Module,
 );
 
+impl Default for AST {
+    fn default() -> Self {
+        Self(Vec::with_capacity(16), Default::default())
+    }
+}
+
 impl AST {
     /// Create a new `AST`.
     #[inline(always)]
-    pub fn new(statements: Vec<Stmt>, lib: Module) -> Self {
-        Self(statements, lib)
+    pub fn new(statements: impl IntoIterator<Item = Stmt>, lib: Module) -> Self {
+        Self(statements.into_iter().collect(), lib)
     }
-
     /// Get the statements.
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
     pub(crate) fn statements(&self) -> &[Stmt] {
         &self.0
     }
-
     /// _[INTERNALS]_ Get the statements.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
@@ -157,21 +160,18 @@ impl AST {
     pub fn statements(&self) -> &[Stmt] {
         &self.0
     }
-
     /// Get a mutable reference to the statements.
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
     pub(crate) fn statements_mut(&mut self) -> &mut Vec<Stmt> {
         &mut self.0
     }
-
     /// Get the internal `Module` containing all script-defined functions.
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
     pub(crate) fn lib(&self) -> &Module {
         &self.1
     }
-
     /// _[INTERNALS]_ Get the internal `Module` containing all script-defined functions.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
@@ -180,7 +180,6 @@ impl AST {
     pub fn lib(&self) -> &Module {
         &self.1
     }
-
     /// Clone the `AST`'s functions into a new `AST`.
     /// No statements are cloned.
     ///
@@ -190,7 +189,6 @@ impl AST {
     pub fn clone_functions_only(&self) -> Self {
         self.clone_functions_only_filtered(|_, _, _| true)
     }
-
     /// Clone the `AST`'s functions into a new `AST` based on a filter predicate.
     /// No statements are cloned.
     ///
@@ -205,14 +203,12 @@ impl AST {
         functions.merge_filtered(&self.1, &mut filter);
         Self(Default::default(), functions)
     }
-
     /// Clone the `AST`'s script statements into a new `AST`.
     /// No functions are cloned.
     #[inline(always)]
     pub fn clone_statements_only(&self) -> Self {
         Self(self.0.clone(), Default::default())
     }
-
     /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
     /// is returned.
     ///
@@ -266,7 +262,6 @@ impl AST {
     pub fn merge(&self, other: &Self) -> Self {
         self.merge_filtered(other, |_, _, _| true)
     }
-
     /// Combine one `AST` with another.  The second `AST` is consumed.
     ///
     /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
@@ -319,7 +314,6 @@ impl AST {
     pub fn combine(&mut self, other: Self) -> &mut Self {
         self.combine_filtered(other, |_, _, _| true)
     }
-
     /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
     /// is returned.
     ///
@@ -395,7 +389,6 @@ impl AST {
 
         Self::new(ast, functions)
     }
-
     /// Combine one `AST` with another.  The second `AST` is consumed.
     ///
     /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
@@ -457,7 +450,6 @@ impl AST {
         functions.merge_filtered(&other.1, &mut filter);
         self
     }
-
     /// Filter out the functions, retaining only some based on a filter predicate.
     ///
     /// # Example
@@ -486,7 +478,6 @@ impl AST {
     pub fn retain_functions(&mut self, filter: impl FnMut(FnAccess, &str, usize) -> bool) {
         self.1.retain_functions(filter);
     }
-
     /// Iterate through all functions
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
@@ -495,14 +486,12 @@ impl AST {
     ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
         self.1.iter_script_fn()
     }
-
     /// Clear all function definitions in the `AST`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clear_functions(&mut self) {
         self.1 = Default::default();
     }
-
     /// Clear all statements in the `AST`, leaving only function definitions.
     #[inline(always)]
     pub fn clear_statements(&mut self) {
@@ -605,7 +594,13 @@ pub enum Stmt {
     /// No-op.
     Noop(Position),
     /// if expr { stmt } else { stmt }
-    IfThenElse(Expr, Box<(Stmt, Option<Stmt>)>, Position),
+    If(Expr, Box<(Stmt, Option<Stmt>)>, Position),
+    /// switch expr { literal or _ => stmt, ... }
+    Switch(
+        Expr,
+        Box<(HashMap<u64, Stmt, StraightHasherBuilder>, Option<Stmt>)>,
+        Position,
+    ),
     /// while expr { stmt }
     While(Expr, Box<Stmt>, Position),
     /// loop { stmt }
@@ -629,7 +624,7 @@ pub enum Stmt {
     /// break
     Break(Position),
     /// return/throw
-    ReturnWithVal((ReturnType, Position), Option<Expr>, Position),
+    Return((ReturnType, Position), Option<Expr>, Position),
     /// import expr as var
     #[cfg(not(feature = "no_module"))]
     Import(Expr, Option<Box<IdentX>>, Position),
@@ -656,7 +651,6 @@ impl Stmt {
             _ => false,
         }
     }
-
     /// Get the `Position` of this statement.
     pub fn position(&self) -> Position {
         match self {
@@ -665,11 +659,12 @@ impl Stmt {
             | Self::Break(pos)
             | Self::Block(_, pos)
             | Self::Assignment(_, pos)
-            | Self::IfThenElse(_, _, pos)
+            | Self::If(_, _, pos)
+            | Self::Switch(_, _, pos)
             | Self::While(_, _, pos)
             | Self::Loop(_, pos)
             | Self::For(_, _, pos)
-            | Self::ReturnWithVal((_, pos), _, _)
+            | Self::Return((_, pos), _, _)
             | Self::Let(_, _, _, pos)
             | Self::Const(_, _, _, pos)
             | Self::TryCatch(_, pos, _) => *pos,
@@ -685,7 +680,6 @@ impl Stmt {
             Self::Share(x) => x.pos,
         }
     }
-
     /// Override the `Position` of this statement.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
@@ -694,11 +688,12 @@ impl Stmt {
             | Self::Break(pos)
             | Self::Block(_, pos)
             | Self::Assignment(_, pos)
-            | Self::IfThenElse(_, _, pos)
+            | Self::If(_, _, pos)
+            | Self::Switch(_, _, pos)
             | Self::While(_, _, pos)
             | Self::Loop(_, pos)
             | Self::For(_, _, pos)
-            | Self::ReturnWithVal((_, pos), _, _)
+            | Self::Return((_, pos), _, _)
             | Self::Let(_, _, _, pos)
             | Self::Const(_, _, _, pos)
             | Self::TryCatch(_, pos, _) => *pos = new_pos,
@@ -718,11 +713,11 @@ impl Stmt {
 
         self
     }
-
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     pub fn is_self_terminated(&self) -> bool {
         match self {
-            Self::IfThenElse(_, _, _)
+            Self::If(_, _, _)
+            | Self::Switch(_, _, _)
             | Self::While(_, _, _)
             | Self::Loop(_, _)
             | Self::For(_, _, _)
@@ -738,7 +733,7 @@ impl Stmt {
             | Self::Expr(_)
             | Self::Continue(_)
             | Self::Break(_)
-            | Self::ReturnWithVal(_, _, _) => false,
+            | Self::Return(_, _, _) => false,
 
             #[cfg(not(feature = "no_module"))]
             Self::Import(_, _, _) | Self::Export(_, _) => false,
@@ -747,22 +742,27 @@ impl Stmt {
             Self::Share(_) => false,
         }
     }
-
     /// Is this statement _pure_?
     pub fn is_pure(&self) -> bool {
         match self {
             Self::Noop(_) => true,
             Self::Expr(expr) => expr.is_pure(),
-            Self::IfThenElse(condition, x, _) if x.1.is_some() => {
-                condition.is_pure() && x.0.is_pure() && x.1.as_ref().unwrap().is_pure()
+            Self::If(condition, x, _) => {
+                condition.is_pure()
+                    && x.0.is_pure()
+                    && x.1.as_ref().map(Stmt::is_pure).unwrap_or(true)
             }
-            Self::IfThenElse(condition, x, _) => condition.is_pure() && x.0.is_pure(),
+            Self::Switch(expr, x, _) => {
+                expr.is_pure()
+                    && x.0.values().all(Stmt::is_pure)
+                    && x.1.as_ref().map(Stmt::is_pure).unwrap_or(true)
+            }
             Self::While(condition, block, _) => condition.is_pure() && block.is_pure(),
             Self::Loop(block, _) => block.is_pure(),
             Self::For(iterable, x, _) => iterable.is_pure() && x.1.is_pure(),
             Self::Let(_, _, _, _) | Self::Const(_, _, _, _) | Self::Assignment(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
-            Self::Continue(_) | Self::Break(_) | Self::ReturnWithVal(_, _, _) => false,
+            Self::Continue(_) | Self::Break(_) | Self::Return(_, _, _) => false,
             Self::TryCatch(x, _, _) => x.0.is_pure() && x.2.is_pure(),
 
             #[cfg(not(feature = "no_module"))]
@@ -860,6 +860,10 @@ pub struct FnCallExpr {
 /// This type is volatile and may change.
 #[derive(Debug, Clone)]
 pub enum Expr {
+    /// Dynamic constant.
+    /// Used to hold either an Array or Map literal for quick cloning.
+    /// All other primitive data types should use the appropriate variants for better speed.
+    DynamicConstant(Box<Dynamic>, Position),
     /// Integer constant.
     IntegerConstant(INT, Position),
     /// Floating-point constant.
@@ -895,15 +899,6 @@ pub enum Expr {
     Dot(Box<BinaryExpr>, Position),
     /// expr[expr]
     Index(Box<BinaryExpr>, Position),
-    /// switch expr { literal or _ => stmt, ... }
-    Switch(
-        Box<(
-            Expr,
-            HashMap<u64, Stmt, StraightHasherBuilder>,
-            Option<Stmt>,
-        )>,
-        Position,
-    ),
     /// lhs in rhs
     In(Box<BinaryExpr>, Position),
     /// lhs && rhs
@@ -922,34 +917,6 @@ impl Default for Expr {
 }
 
 impl Expr {
-    /// Get the type of an expression.
-    ///
-    /// Returns `None` if the expression's result type is not constant.
-    pub fn get_type_id(&self) -> Option<TypeId> {
-        Some(match self {
-            Self::Expr(x) => return x.get_type_id(),
-
-            Self::IntegerConstant(_, _) => TypeId::of::<INT>(),
-            #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(_, _) => TypeId::of::<FLOAT>(),
-            Self::CharConstant(_, _) => TypeId::of::<char>(),
-            Self::StringConstant(_, _) => TypeId::of::<ImmutableString>(),
-            Self::FnPointer(_, _) => TypeId::of::<FnPtr>(),
-            Self::True(_) | Self::False(_) | Self::In(_, _) | Self::And(_, _) | Self::Or(_, _) => {
-                TypeId::of::<bool>()
-            }
-            Self::Unit(_) => TypeId::of::<()>(),
-
-            #[cfg(not(feature = "no_index"))]
-            Self::Array(_, _) => TypeId::of::<Array>(),
-
-            #[cfg(not(feature = "no_object"))]
-            Self::Map(_, _) => TypeId::of::<Map>(),
-
-            _ => return None,
-        })
-    }
-
     /// Get the `Dynamic` value of a constant expression.
     ///
     /// Returns `None` if the expression is not constant.
@@ -957,6 +924,7 @@ impl Expr {
         Some(match self {
             Self::Expr(x) => return x.get_constant_value(),
 
+            Self::DynamicConstant(x, _) => x.as_ref().clone(),
             Self::IntegerConstant(x, _) => (*x).into(),
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(x, _) => (*x).into(),
@@ -971,23 +939,25 @@ impl Expr {
             Self::Unit(_) => ().into(),
 
             #[cfg(not(feature = "no_index"))]
-            Self::Array(x, _) if x.iter().all(Self::is_constant) => Dynamic(Union::Array(
-                Box::new(x.iter().map(|v| v.get_constant_value().unwrap()).collect()),
-            )),
+            Self::Array(x, _) if self.is_constant() => {
+                let mut arr = Array::with_capacity(max(crate::engine::TYPICAL_ARRAY_SIZE, x.len()));
+                arr.extend(x.iter().map(|v| v.get_constant_value().unwrap()));
+                Dynamic(Union::Array(Box::new(arr)))
+            }
 
             #[cfg(not(feature = "no_object"))]
-            Self::Map(x, _) if x.iter().all(|(_, v)| v.is_constant()) => {
-                Dynamic(Union::Map(Box::new(
+            Self::Map(x, _) if self.is_constant() => {
+                let mut map = Map::with_capacity(max(crate::engine::TYPICAL_MAP_SIZE, x.len()));
+                map.extend(
                     x.iter()
-                        .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap()))
-                        .collect(),
-                )))
+                        .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap())),
+                );
+                Dynamic(Union::Map(Box::new(map)))
             }
 
             _ => return None,
         })
     }
-
     /// Is the expression a simple variable access?
     pub(crate) fn get_variable_access(&self, non_qualified: bool) -> Option<&str> {
         match self {
@@ -995,7 +965,6 @@ impl Expr {
             _ => None,
         }
     }
-
     /// Get the `Position` of the expression.
     pub fn position(&self) -> Position {
         match self {
@@ -1004,6 +973,7 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, pos) => *pos,
 
+            Self::DynamicConstant(_, pos) => *pos,
             Self::IntegerConstant(_, pos) => *pos,
             Self::CharConstant(_, pos) => *pos,
             Self::StringConstant(_, pos) => *pos,
@@ -1014,7 +984,6 @@ impl Expr {
             Self::Stmt(_, pos) => *pos,
             Self::Variable(x) => (x.3).pos,
             Self::FnCall(_, pos) => *pos,
-            Self::Switch(_, pos) => *pos,
 
             Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => x.lhs.position(),
 
@@ -1025,7 +994,6 @@ impl Expr {
             Self::Custom(_, pos) => *pos,
         }
     }
-
     /// Override the `Position` of the expression.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
@@ -1036,6 +1004,7 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, pos) => *pos = new_pos,
 
+            Self::DynamicConstant(_, pos) => *pos = new_pos,
             Self::IntegerConstant(_, pos) => *pos = new_pos,
             Self::CharConstant(_, pos) => *pos = new_pos,
             Self::StringConstant(_, pos) => *pos = new_pos,
@@ -1046,7 +1015,6 @@ impl Expr {
             Self::Property(x) => (x.1).pos = new_pos,
             Self::Stmt(_, pos) => *pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
-            Self::Switch(_, pos) => *pos = new_pos,
             Self::And(_, pos) | Self::Or(_, pos) | Self::In(_, pos) => *pos = new_pos,
             Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos = new_pos,
             Self::Dot(_, pos) | Self::Index(_, pos) => *pos = new_pos,
@@ -1055,7 +1023,6 @@ impl Expr {
 
         self
     }
-
     /// Is the expression pure?
     ///
     /// A pure expression has no side effects.
@@ -1078,7 +1045,6 @@ impl Expr {
             _ => self.is_constant(),
         }
     }
-
     /// Is the expression the unit `()` literal?
     #[inline(always)]
     pub fn is_unit(&self) -> bool {
@@ -1087,7 +1053,6 @@ impl Expr {
             _ => false,
         }
     }
-
     /// Is the expression a constant?
     pub fn is_constant(&self) -> bool {
         match self {
@@ -1096,7 +1061,8 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, _) => true,
 
-            Self::IntegerConstant(_, _)
+            Self::DynamicConstant(_, _)
+            | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::StringConstant(_, _)
             | Self::FnPointer(_, _)
@@ -1120,7 +1086,6 @@ impl Expr {
             _ => false,
         }
     }
-
     /// Is a particular token allowed as a postfix operator to this expression?
     pub fn is_valid_postfix(&self, token: &Token) -> bool {
         match self {
@@ -1129,7 +1094,8 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, _) => false,
 
-            Self::IntegerConstant(_, _)
+            Self::DynamicConstant(_, _)
+            | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::FnPointer(_, _)
             | Self::In(_, _)
@@ -1142,7 +1108,6 @@ impl Expr {
             Self::StringConstant(_, _)
             | Self::Stmt(_, _)
             | Self::FnCall(_, _)
-            | Self::Switch(_, _)
             | Self::Dot(_, _)
             | Self::Index(_, _)
             | Self::Array(_, _)

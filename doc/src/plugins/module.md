@@ -123,6 +123,53 @@ x == 43;
 Notice that, when using a [module] as a [package], only functions registered at the _top level_
 can be accessed.  Variables as well as sub-modules are ignored.
 
+### Use `Engine::register_module`
+
+Another simple way to load this into an [`Engine`] is, again, to use the `exported_module!` macro
+to turn it into a normal Rhai [module], then use the `Engine::register_module` method on it:
+
+```rust
+fn main() {
+    let mut engine = Engine::new();
+
+    // The macro call creates a Rhai module from the plugin module.
+    let module = exported_module!(my_module);
+
+    // A module can simply be loaded as a globally-available module.
+    engine.register_module("service", module);
+}
+```
+
+The functions contained within the module definition (i.e. `greet`, `get_num` and `increment`),
+plus the constant `MY_NUMBER`, are automatically loaded under the module namespace `service`:
+
+```rust
+let x = service::greet("world");
+x == "hello, world!";
+
+service::MY_NUMBER == 42;
+
+let x = service::greet(service::get_num().to_string());
+x == "hello, 42!";
+
+let x = service::get_num();
+x == 42;
+
+service::increment(x);
+x == 43;
+```
+
+`Engine::register_module` also exposes all _methods_ and _iterators_ from the module to the
+_global_ namespace, so [getters/setters] and [indexers] for [custom types] work as expected.
+
+Therefore, in the example able, `increment` works fine when called in method-call style:
+
+```rust
+let x = 42;
+x.increment();
+x == 43;
+```
+
 ### Use as loadable `Module`
 
 Using this directly as a dynamically-loadable Rhai [module] is almost the same, except that a

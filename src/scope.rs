@@ -65,7 +65,7 @@ impl EntryType {
 //
 // Since `Dynamic` is reasonably small, packing it tightly improves cache locality when variables are accessed.
 // The variable type is packed separately into another array because it is even smaller.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Scope<'a> {
     /// Current value of the entry.
     values: Vec<Dynamic>,
@@ -73,6 +73,16 @@ pub struct Scope<'a> {
     types: Vec<EntryType>,
     /// (Name, aliases) of the entry. The list of aliases is Boxed because it occurs rarely.
     names: Vec<(Cow<'a, str>, Box<StaticVec<String>>)>,
+}
+
+impl Default for Scope<'_> {
+    fn default() -> Self {
+        Self {
+            values: Vec::with_capacity(16),
+            types: Vec::with_capacity(16),
+            names: Vec::with_capacity(16),
+        }
+    }
 }
 
 impl<'a> Scope<'a> {
@@ -417,6 +427,7 @@ impl<'a> Scope<'a> {
     }
     /// Get an iterator to entries in the Scope.
     #[inline(always)]
+    #[allow(dead_code)]
     pub(crate) fn into_iter(
         self,
     ) -> impl Iterator<Item = (Cow<'a, str>, EntryType, Dynamic, Vec<String>)> {

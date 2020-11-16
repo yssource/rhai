@@ -37,7 +37,7 @@ wrapping this value.
 The termination token is commonly used to provide information on the _reason_ or _source_
 behind the termination decision.
 
-If the termination token is not needed, simply return `Some(().into())` to terminate the script
+If the termination token is not needed, simply return `Some(Dynamic::UNIT)` to terminate the script
 run with [`()`] as the token.
 
 

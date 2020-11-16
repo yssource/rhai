@@ -94,7 +94,7 @@ The following _precedence table_ shows the built-in precedence of standard Rhai 
 | ------------------- | :-------------------------------------------------------------------------------------: | :----------------: |
 | Assignments         | `=`, `+=`, `-=`, `*=`, `/=`, `~=`, `%=`,<br/>`<<=`, `>>=`, `&=`, <code>\|=</code>, `^=` |         0          |
 | Logic and bit masks |                        <code>\|\|</code>,  <code>\|</code>, `^`                         |         30         |
-| Logic and bit masks |                                        `&`, `&&`                                        |         60         |
+| Logic and bit masks |                                        `&&`, `&`                                        |         60         |
 | Comparisons         |                                       `==`, `!=`                                        |         90         |
 |                     |                                          `in`                                           |        110         |
 | Comparisons         |                                  `>`, `>=`, `<`, `<=`                                   |        130         |

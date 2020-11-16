@@ -12,29 +12,17 @@ use crate::module::{Module, NamespaceRef};
 use crate::optimize::OptimizationLevel;
 use crate::parse_error::ParseErrorType;
 use crate::result::EvalAltResult;
-use crate::scope::Scope;
+use crate::scope::{EntryType as ScopeEntryType, Scope};
 use crate::stdlib::ops::Deref;
 use crate::token::NO_POS;
 use crate::utils::ImmutableString;
 use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec, INT};
 
-#[cfg(not(feature = "no_function"))]
-use crate::{
-    ast::ScriptFnDef, r#unsafe::unsafe_cast_var_name_to_lifetime,
-    scope::EntryType as ScopeEntryType,
-};
-
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
 
-#[cfg(not(feature = "no_index"))]
-use crate::engine::{FN_IDX_GET, FN_IDX_SET};
-
 #[cfg(not(feature = "no_object"))]
-use crate::engine::{Map, Target, FN_GET, FN_SET};
-
-#[cfg(not(feature = "no_closure"))]
-use crate::engine::KEYWORD_IS_SHARED;
+use crate::Map;
 
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -47,9 +35,6 @@ use crate::stdlib::{
     vec::Vec,
 };
 
-#[cfg(not(feature = "no_function"))]
-use crate::stdlib::borrow::Cow;
-
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]
 use num_traits::float::Float;
@@ -58,8 +43,8 @@ use num_traits::float::Float;
 #[inline(always)]
 fn extract_prop_from_getter(_fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
-    if _fn_name.starts_with(FN_GET) {
-        return Some(&_fn_name[FN_GET.len()..]);
+    if _fn_name.starts_with(crate::engine::FN_GET) {
+        return Some(&_fn_name[crate::engine::FN_GET.len()..]);
     }
 
     None
@@ -69,8 +54,8 @@ fn extract_prop_from_getter(_fn_name: &str) -> Option<&str> {
 #[inline(always)]
 fn extract_prop_from_setter(_fn_name: &str) -> Option<&str> {
     #[cfg(not(feature = "no_object"))]
-    if _fn_name.starts_with(FN_SET) {
-        return Some(&_fn_name[FN_SET.len()..]);
+    if _fn_name.starts_with(crate::engine::FN_SET) {
+        return Some(&_fn_name[crate::engine::FN_SET.len()..]);
     }
 
     None
@@ -178,7 +163,7 @@ impl Engine {
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     pub(crate) fn call_native_fn(
         &self,
-        mods: &mut Imports,
+        mods: &Imports,
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
@@ -195,7 +180,8 @@ impl Engine {
         // Then search packages
         let func = //lib.get_fn(hash_fn, pub_only)
             self.global_module.get_fn(hash_fn, pub_only)
-                .or_else(|| self.packages.get_fn(hash_fn, pub_only));
+                .or_else(|| self.packages.get_fn(hash_fn))
+                .or_else(|| mods.get_fn(hash_fn));
 
         if let Some(func) = func {
             assert!(func.is_native());
@@ -286,7 +272,7 @@ impl Engine {
 
         // index getter function not found?
         #[cfg(not(feature = "no_index"))]
-        if fn_name == FN_IDX_GET && args.len() == 2 {
+        if fn_name == crate::engine::FN_IDX_GET && args.len() == 2 {
             return EvalAltResult::ErrorFunctionNotFound(
                 format!(
                     "{} [{}]",
@@ -300,7 +286,7 @@ impl Engine {
 
         // index setter function not found?
         #[cfg(not(feature = "no_index"))]
-        if fn_name == FN_IDX_SET {
+        if fn_name == crate::engine::FN_IDX_SET {
             return EvalAltResult::ErrorFunctionNotFound(
                 format!(
                     "{} [{}]=",
@@ -347,7 +333,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        fn_def: &ScriptFnDef,
+        fn_def: &crate::ast::ScriptFnDef,
         args: &mut FnCallArgs,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -374,7 +360,8 @@ impl Engine {
                 .iter()
                 .zip(args.iter_mut().map(|v| mem::take(*v)))
                 .map(|(name, value)| {
-                    let var_name: Cow<'_, str> = unsafe_cast_var_name_to_lifetime(name).into();
+                    let var_name: crate::stdlib::borrow::Cow<'_, str> =
+                        crate::r#unsafe::unsafe_cast_var_name_to_lifetime(name).into();
                     (var_name, ScopeEntryType::Normal, value)
                 }),
         );
@@ -431,6 +418,7 @@ impl Engine {
     #[inline]
     pub(crate) fn has_override_by_name_and_arguments(
         &self,
+        mods: &Imports,
         lib: &[&Module],
         fn_name: &str,
         arg_types: impl AsRef<[TypeId]>,
@@ -440,13 +428,14 @@ impl Engine {
         let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_types.iter().cloned());
         let hash_script = calc_script_fn_hash(empty(), fn_name, arg_types.len());
 
-        self.has_override(lib, hash_fn, hash_script, pub_only)
+        self.has_override(mods, lib, hash_fn, hash_script, pub_only)
     }
 
     // Has a system function an override?
     #[inline(always)]
     pub(crate) fn has_override(
         &self,
+        mods: &Imports,
         lib: &[&Module],
         hash_fn: u64,
         hash_script: u64,
@@ -459,10 +448,13 @@ impl Engine {
             //|| lib.iter().any(|&m| m.contains_fn(hash_fn, pub_only))
             // Then check registered functions
             //|| self.global_module.contains_fn(hash_script, pub_only)
-            || self.global_module.contains_fn(hash_fn, pub_only)
+            || self.global_module.contains_fn(hash_fn, false)
             // Then check packages
-            || self.packages.contains_fn(hash_script, pub_only)
-            || self.packages.contains_fn(hash_fn, pub_only)
+            || self.packages.contains_fn(hash_script)
+            || self.packages.contains_fn(hash_fn)
+            // Then check imported modules
+            || mods.contains_fn(hash_script)
+            || mods.contains_fn(hash_fn)
     }
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
@@ -500,7 +492,8 @@ impl Engine {
         match fn_name {
             // type_of
             KEYWORD_TYPE_OF
-                if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
+                if args.len() == 1
+                    && !self.has_override(mods, lib, hash_fn, hash_script, pub_only) =>
             {
                 Ok((
                     self.map_type_name(args[0].type_name()).to_string().into(),
@@ -511,7 +504,8 @@ impl Engine {
             // Fn/eval - reaching this point it must be a method-style call, mostly like redirected
             //           by a function pointer so it isn't caught at parse time.
             KEYWORD_FN_PTR | KEYWORD_EVAL
-                if args.len() == 1 && !self.has_override(lib, hash_fn, hash_script, pub_only) =>
+                if args.len() == 1
+                    && !self.has_override(mods, lib, hash_fn, hash_script, pub_only) =>
             {
                 EvalAltResult::ErrorRuntime(
                     format!(
@@ -526,16 +520,14 @@ impl Engine {
 
             // Script-like function found
             #[cfg(not(feature = "no_function"))]
-            _ if lib.iter().any(|&m| m.contains_fn(hash_script, pub_only))
-                //|| self.global_module.contains_fn(hash_script, pub_only)
-                || self.packages.contains_fn(hash_script, pub_only) =>
-            {
+            _ if self.has_override(mods, lib, 0, hash_script, pub_only) => {
                 // Get function
                 let func = lib
                     .iter()
                     .find_map(|&m| m.get_fn(hash_script, pub_only))
                     //.or_else(|| self.global_module.get_fn(hash_script, pub_only))
-                    .or_else(|| self.packages.get_fn(hash_script, pub_only))
+                    .or_else(|| self.packages.get_fn(hash_script))
+                    //.or_else(|| mods.get_fn(hash_script))
                     .unwrap();
 
                 if func.is_script() {
@@ -654,7 +646,7 @@ impl Engine {
 
         let script = script.trim();
         if script.is_empty() {
-            return Ok(().into());
+            return Ok(Dynamic::UNIT);
         }
 
         // Check for stack overflow
@@ -696,7 +688,7 @@ impl Engine {
         lib: &[&Module],
         fn_name: &str,
         hash_script: u64,
-        target: &mut Target,
+        target: &mut crate::engine::Target,
         mut call_args: StaticVec<Dynamic>,
         def_val: Option<Dynamic>,
         native: bool,
@@ -779,7 +771,7 @@ impl Engine {
         } else if {
             #[cfg(not(feature = "no_closure"))]
             {
-                fn_name == KEYWORD_IS_SHARED && call_args.is_empty()
+                fn_name == crate::engine::KEYWORD_IS_SHARED && call_args.is_empty()
             }
             #[cfg(feature = "no_closure")]
             false
@@ -863,7 +855,7 @@ impl Engine {
             let hash_fn =
                 calc_native_fn_hash(empty(), fn_name, once(TypeId::of::<ImmutableString>()));
 
-            if !self.has_override(lib, hash_fn, hash_script, pub_only) {
+            if !self.has_override(mods, lib, hash_fn, hash_script, pub_only) {
                 // Fn - only in function call style
                 return self
                     .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
@@ -905,7 +897,7 @@ impl Engine {
 
         // Handle is_shared()
         #[cfg(not(feature = "no_closure"))]
-        if fn_name == KEYWORD_IS_SHARED && args_expr.len() == 1 {
+        if fn_name == crate::engine::KEYWORD_IS_SHARED && args_expr.len() == 1 {
             let value = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
             return Ok(value.is_shared().into());
@@ -919,7 +911,7 @@ impl Engine {
 
         if name == KEYWORD_FN_PTR_CALL
             && args_expr.len() >= 1
-            && !self.has_override(lib, 0, hash_script, pub_only)
+            && !self.has_override(mods, lib, 0, hash_script, pub_only)
         {
             let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
@@ -949,7 +941,7 @@ impl Engine {
         if name == KEYWORD_IS_DEF_VAR && args_expr.len() == 1 {
             let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
 
-            if !self.has_override(lib, hash_fn, hash_script, pub_only) {
+            if !self.has_override(mods, lib, hash_fn, hash_script, pub_only) {
                 let var_name =
                     self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
                 let var_name = var_name.as_str().map_err(|err| {
@@ -969,7 +961,7 @@ impl Engine {
                     .cloned(),
             );
 
-            if !self.has_override(lib, hash_fn, hash_script, pub_only) {
+            if !self.has_override(mods, lib, hash_fn, hash_script, pub_only) {
                 let fn_name =
                     self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
                 let num_params =
@@ -996,7 +988,7 @@ impl Engine {
         if name == KEYWORD_EVAL && args_expr.len() == 1 {
             let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
 
-            if !self.has_override(lib, hash_fn, hash_script, pub_only) {
+            if !self.has_override(mods, lib, hash_fn, hash_script, pub_only) {
                 // eval - only in function call style
                 let prev_len = scope.len();
                 let script =
@@ -1042,8 +1034,13 @@ impl Engine {
                     .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
                     .collect::<Result<_, _>>()?;
 
-                let (target, _, _, pos) =
+                let (target, _, typ, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, &args_expr[0])?;
+
+                let target = match typ {
+                    ScopeEntryType::Normal => target,
+                    ScopeEntryType::Constant => target.into_owned(),
+                };
 
                 self.inc_operations(state)
                     .map_err(|err| err.fill_position(pos))?;
@@ -1192,7 +1189,7 @@ impl Engine {
             Some(f) if f.is_plugin_fn() => f
                 .get_plugin_fn()
                 .clone()
-                .call((self, mods, lib).into(), args.as_mut()),
+                .call((self, &*mods, lib).into(), args.as_mut()),
             Some(f) if f.is_native() => {
                 if !f.is_method() {
                     // Clone first argument
@@ -1203,7 +1200,7 @@ impl Engine {
                     }
                 }
 
-                f.get_native_fn().clone()((self, mods, lib).into(), args.as_mut())
+                f.get_native_fn().clone()((self, &*mods, lib).into(), args.as_mut())
             }
             Some(_) => unreachable!(),
             None if def_val.is_some() => Ok(def_val.unwrap().into()),
