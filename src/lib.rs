@@ -141,11 +141,17 @@ pub use ast::FnAccess;
 #[cfg(not(feature = "no_function"))]
 pub use fn_func::Func;
 
+/// Variable-sized array of `Dynamic` values.
+///
+/// Not available under the `no_index` feature.
 #[cfg(not(feature = "no_index"))]
-pub use engine::Array;
+pub type Array = stdlib::vec::Vec<Dynamic>;
 
+/// Hash map of `Dynamic` values with `ImmutableString` keys.
+///
+/// Not available under the `no_object` feature.
 #[cfg(not(feature = "no_object"))]
-pub use engine::Map;
+pub type Map = stdlib::collections::HashMap<ImmutableString, Dynamic>;
 
 #[cfg(not(feature = "no_module"))]
 pub use module::ModuleResolver;

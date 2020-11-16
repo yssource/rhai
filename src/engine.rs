@@ -28,20 +28,14 @@ use crate::stdlib::{
     string::{String, ToString},
 };
 
-/// Variable-sized array of `Dynamic` values.
-///
-/// Not available under the `no_index` feature.
 #[cfg(not(feature = "no_index"))]
-pub type Array = crate::stdlib::vec::Vec<Dynamic>;
+use crate::Array;
 
 #[cfg(not(feature = "no_index"))]
 pub const TYPICAL_ARRAY_SIZE: usize = 8; // Small arrays are typical
 
-/// Hash map of `Dynamic` values with `ImmutableString` keys.
-///
-/// Not available under the `no_object` feature.
 #[cfg(not(feature = "no_object"))]
-pub type Map = HashMap<ImmutableString, Dynamic>;
+use crate::Map;
 
 #[cfg(not(feature = "no_object"))]
 pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical

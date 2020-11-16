@@ -2,10 +2,10 @@
 
 use crate::def_package;
 use crate::dynamic::Dynamic;
-use crate::engine::{Map, OP_EQUALS};
+use crate::engine::OP_EQUALS;
 use crate::plugin::*;
 use crate::utils::ImmutableString;
-use crate::INT;
+use crate::{Map, INT};
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;

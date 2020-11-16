@@ -40,25 +40,25 @@ use crate::stdlib::{
 use num_traits::float::Float;
 
 /// Extract the property name from a getter function name.
+#[cfg(not(feature = "no_object"))]
 #[inline(always)]
 fn extract_prop_from_getter(_fn_name: &str) -> Option<&str> {
-    #[cfg(not(feature = "no_object"))]
     if _fn_name.starts_with(crate::engine::FN_GET) {
-        return Some(&_fn_name[crate::engine::FN_GET.len()..]);
+        Some(&_fn_name[crate::engine::FN_GET.len()..])
+    } else {
+        None
     }
-
-    None
 }
 
 /// Extract the property name from a setter function name.
+#[cfg(not(feature = "no_object"))]
 #[inline(always)]
 fn extract_prop_from_setter(_fn_name: &str) -> Option<&str> {
-    #[cfg(not(feature = "no_object"))]
     if _fn_name.starts_with(crate::engine::FN_SET) {
-        return Some(&_fn_name[crate::engine::FN_SET.len()..]);
+        Some(&_fn_name[crate::engine::FN_SET.len()..])
+    } else {
+        None
     }
-
-    None
 }
 
 /// A type that temporarily stores a mutable reference to a `Dynamic`,
@@ -244,6 +244,7 @@ impl Engine {
         }
 
         // Getter function not found?
+        #[cfg(not(feature = "no_object"))]
         if let Some(prop) = extract_prop_from_getter(fn_name) {
             return EvalAltResult::ErrorDotExpr(
                 format!(
@@ -257,6 +258,7 @@ impl Engine {
         }
 
         // Setter function not found?
+        #[cfg(not(feature = "no_object"))]
         if let Some(prop) = extract_prop_from_setter(fn_name) {
             return EvalAltResult::ErrorDotExpr(
                 format!(

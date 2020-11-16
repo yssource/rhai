@@ -761,7 +761,7 @@ impl Engine {
         self.register_indexer_get(getter)
             .register_indexer_set(setter)
     }
-    /// Register a `Module` as a sub-module with the `Engine`.
+    /// Register a `Module` as a fixed module namespace with the `Engine`.
     ///
     /// # Example
     ///
@@ -775,7 +775,7 @@ impl Engine {
     /// let mut module = Module::new();
     /// module.set_fn_1("calc", |x: i64| Ok(x + 1));
     ///
-    /// // Register the module as a sub-module
+    /// // Register the module as a fixed sub-module
     /// engine.register_module("CalcService", module);
     ///
     /// assert_eq!(engine.eval::<i64>("CalcService::calc(41)")?, 42);

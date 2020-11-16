@@ -17,13 +17,6 @@ use crate::stdlib::rc::Rc;
 #[cfg(feature = "sync")]
 use crate::stdlib::sync::Arc;
 
-#[cfg(any(not(feature = "no_closure"), not(feature = "no_module")))]
-#[cfg(not(feature = "sync"))]
-use crate::stdlib::cell::RefCell;
-#[cfg(any(not(feature = "no_closure"), not(feature = "no_module")))]
-#[cfg(feature = "sync")]
-use crate::stdlib::sync::RwLock;
-
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
 pub trait SendSync: Send + Sync {}
@@ -48,11 +41,11 @@ pub type Shared<T> = Arc<T>;
 /// Synchronized shared object.
 #[cfg(any(not(feature = "no_closure"), not(feature = "no_module")))]
 #[cfg(not(feature = "sync"))]
-pub type Locked<T> = RefCell<T>;
+pub type Locked<T> = crate::stdlib::cell::RefCell<T>;
 /// Synchronized shared object.
 #[cfg(any(not(feature = "no_closure"), not(feature = "no_module")))]
 #[cfg(feature = "sync")]
-pub type Locked<T> = RwLock<T>;
+pub type Locked<T> = crate::stdlib::sync::RwLock<T>;
 
 /// Context of native Rust function call.
 #[derive(Debug, Copy, Clone)]

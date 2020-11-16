@@ -31,12 +31,6 @@ use crate::stdlib::{
     vec::Vec,
 };
 
-#[cfg(not(feature = "no_closure"))]
-use crate::stdlib::collections::HashSet;
-
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-use crate::stdlib::cmp::max;
-
 /// A type representing the access mode of a scripted function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum FnAccess {
@@ -98,7 +92,7 @@ pub struct ScriptFnDef {
     pub params: StaticVec<ImmutableString>,
     /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
-    pub externals: HashSet<ImmutableString>,
+    pub externals: crate::stdlib::collections::HashSet<ImmutableString>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -940,14 +934,20 @@ impl Expr {
 
             #[cfg(not(feature = "no_index"))]
             Self::Array(x, _) if self.is_constant() => {
-                let mut arr = Array::with_capacity(max(crate::engine::TYPICAL_ARRAY_SIZE, x.len()));
+                let mut arr = Array::with_capacity(crate::stdlib::cmp::max(
+                    crate::engine::TYPICAL_ARRAY_SIZE,
+                    x.len(),
+                ));
                 arr.extend(x.iter().map(|v| v.get_constant_value().unwrap()));
                 Dynamic(Union::Array(Box::new(arr)))
             }
 
             #[cfg(not(feature = "no_object"))]
             Self::Map(x, _) if self.is_constant() => {
-                let mut map = Map::with_capacity(max(crate::engine::TYPICAL_MAP_SIZE, x.len()));
+                let mut map = Map::with_capacity(crate::stdlib::cmp::max(
+                    crate::engine::TYPICAL_MAP_SIZE,
+                    x.len(),
+                ));
                 map.extend(
                     x.iter()
                         .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap())),

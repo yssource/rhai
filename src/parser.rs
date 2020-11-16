@@ -1418,7 +1418,9 @@ fn make_dot_expr(
         }
         // lhs.Fn() or lhs.eval()
         (_, Expr::FnCall(x, pos))
-            if x.args.len() == 0 && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL].contains(&x.name.as_ref()) =>
+            if x.args.len() == 0
+                && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL]
+                    .contains(&x.name.as_ref()) =>
         {
             return Err(PERR::BadInput(LexError::ImproperSymbol(format!(
                 "'{}' should not be called in method style. Try {}(...);",
@@ -2664,11 +2666,13 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<IdentX>, pos: P
         args.push(Expr::Variable(Box::new((None, None, 0, x.clone().into()))));
     });
 
-    let hash = calc_script_fn_hash(empty(), crate::engine::KEYWORD_FN_PTR_CURRY, num_externals + 1);
+    let curry_func = crate::engine::KEYWORD_FN_PTR_CURRY;
+
+    let hash = calc_script_fn_hash(empty(), curry_func, num_externals + 1);
 
     let expr = Expr::FnCall(
         Box::new(FnCallExpr {
-            name: crate::engine::KEYWORD_FN_PTR_CURRY.into(),
+            name: curry_func.into(),
             hash,
             args,
             ..Default::default()

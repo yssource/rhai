@@ -3,7 +3,7 @@
 ///! Test evaluating with scope
 extern crate test;
 
-use rhai::{module_resolvers::StaticModuleResolver, Engine, Module, OptimizationLevel};
+use rhai::{Engine, Module, OptimizationLevel};
 use test::Bencher;
 
 #[bench]
@@ -20,9 +20,7 @@ fn bench_eval_module(bench: &mut Bencher) {
 
     let module = Module::eval_ast_as_new(Default::default(), &ast, &engine).unwrap();
 
-    let mut resolver = StaticModuleResolver::new();
-    resolver.insert("testing", module);
-    engine.set_module_resolver(Some(resolver));
+    engine.register_module("testing", module);
 
     let ast = engine
         .compile(

@@ -15,12 +15,6 @@ use crate::stdlib::{
     string::{String, ToString},
 };
 
-#[cfg(not(feature = "no_std"))]
-use crate::stdlib::collections::hash_map::DefaultHasher;
-
-#[cfg(feature = "no_std")]
-use ahash::AHasher;
-
 /// A hasher that only takes one single `u64` and returns it as a hash key.
 ///
 /// # Panics
@@ -95,9 +89,9 @@ pub fn calc_script_fn_hash<'a>(
 /// Create an instance of the default hasher.
 pub fn get_hasher() -> impl Hasher {
     #[cfg(feature = "no_std")]
-    let s: AHasher = Default::default();
+    let s: ahash::AHasher = Default::default();
     #[cfg(not(feature = "no_std"))]
-    let s = DefaultHasher::new();
+    let s = crate::stdlib::collections::hash_map::DefaultHasher::new();
 
     s
 }
