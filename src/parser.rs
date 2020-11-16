@@ -2370,9 +2370,9 @@ fn parse_stmt(
         Token::Fn | Token::Private => {
             let access = if matches!(token, Token::Private) {
                 eat_token(input, Token::Private);
-                crate::FnAccess::Private
+                crate::ast::FnAccess::Private
             } else {
-                crate::FnAccess::Public
+                crate::ast::FnAccess::Public
             };
 
             match input.next().unwrap() {
@@ -2553,7 +2553,7 @@ fn parse_fn(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    access: crate::FnAccess,
+    access: crate::ast::FnAccess,
     mut settings: ParseSettings,
 ) -> Result<ScriptFnDef, ParseError> {
     #[cfg(not(feature = "unchecked"))]
@@ -2788,7 +2788,7 @@ fn parse_anon_fn(
     // Define the function
     let script = ScriptFnDef {
         name: fn_name.clone(),
-        access: crate::FnAccess::Public,
+        access: crate::ast::FnAccess::Public,
         params,
         #[cfg(not(feature = "no_closure"))]
         externals: Default::default(),

@@ -4,8 +4,8 @@
 #![allow(non_snake_case)]
 
 use crate::dynamic::Variant;
-use crate::{Engine, EvalAltResult, ParseError, Scope, AST};
 use crate::stdlib::{boxed::Box, string::ToString};
+use crate::{Engine, EvalAltResult, ParseError, Scope, AST};
 
 /// Trait to create a Rust closure from a script.
 pub trait Func<ARGS, RET> {

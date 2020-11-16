@@ -1,6 +1,6 @@
 //! Module defining external-loaded modules for Rhai.
 
-use crate::ast::IdentX;
+use crate::ast::{FnAccess, IdentX};
 use crate::dynamic::Variant;
 use crate::fn_native::{
     shared_make_mut, shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, SendSync,
@@ -20,7 +20,7 @@ use crate::stdlib::{
 use crate::token::Token;
 use crate::utils::StraightHasherBuilder;
 use crate::{
-    Dynamic, EvalAltResult, FnAccess, ImmutableString, NativeCallContext, Shared, StaticVec, NO_POS,
+    Dynamic, EvalAltResult, ImmutableString, NativeCallContext, Shared, StaticVec, NO_POS,
 };
 
 #[cfg(not(feature = "no_index"))]
