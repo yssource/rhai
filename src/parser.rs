@@ -147,7 +147,7 @@ impl<'e> ParseState<'e> {
     }
 
     /// Get an interned string, creating one if it is not yet interned.
-    pub fn get_interned_string<S>(
+    pub fn get_interned_string(
         &mut self,
         text: impl AsRef<str> + Into<ImmutableString>,
     ) -> ImmutableString {
