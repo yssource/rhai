@@ -1,10 +1,5 @@
-use crate::engine::Engine;
-use crate::fn_native::Shared;
-use crate::module::{Module, ModuleResolver};
-use crate::result::EvalAltResult;
-use crate::token::Position;
-
 use crate::stdlib::{boxed::Box, ops::AddAssign, vec::Vec};
+use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 
 /// Module resolution service that holds a collection of module resolves,
 /// to be searched in sequential order.

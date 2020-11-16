@@ -1,12 +1,9 @@
 //! Implement deserialization support of `Dynamic` for [`serde`](https://crates.io/crates/serde).
 
 use super::str::ImmutableStringDeserializer;
-use crate::dynamic::{Dynamic, Union};
-use crate::parse_error::{LexError, ParseErrorType};
-use crate::result::EvalAltResult;
-use crate::token::NO_POS;
-use crate::utils::ImmutableString;
-
+use crate::dynamic::Union;
+use crate::stdlib::{any::type_name, boxed::Box, fmt, string::ToString};
+use crate::{Dynamic, EvalAltResult, ImmutableString, LexError, ParseErrorType, NO_POS};
 use serde::de::{
     DeserializeSeed, Deserializer, Error, IntoDeserializer, MapAccess, SeqAccess, Visitor,
 };
@@ -17,8 +14,6 @@ use crate::Array;
 
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
-
-use crate::stdlib::{any::type_name, boxed::Box, fmt, string::ToString};
 
 /// Deserializer for `Dynamic` which is kept as a reference.
 ///

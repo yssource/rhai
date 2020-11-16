@@ -1,23 +1,7 @@
 //! Module defining the AST (abstract syntax tree).
 
-use crate::dynamic::{Dynamic, Union};
-use crate::fn_native::{FnPtr, Shared};
-use crate::module::{Module, NamespaceRef};
-use crate::syntax::FnCustomSyntaxEval;
-use crate::token::{Position, Token, NO_POS};
-use crate::utils::{ImmutableString, StraightHasherBuilder};
-use crate::StaticVec;
-use crate::INT;
-
-#[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
-
-#[cfg(not(feature = "no_index"))]
-use crate::Array;
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
+use crate::dynamic::Union;
+use crate::module::NamespaceRef;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
@@ -30,6 +14,19 @@ use crate::stdlib::{
     vec,
     vec::Vec,
 };
+use crate::syntax::FnCustomSyntaxEval;
+use crate::token::Token;
+use crate::utils::StraightHasherBuilder;
+use crate::{Dynamic, FnPtr, ImmutableString, Module, Position, Shared, StaticVec, INT, NO_POS};
+
+#[cfg(not(feature = "no_float"))]
+use crate::FLOAT;
+
+#[cfg(not(feature = "no_index"))]
+use crate::Array;
+
+#[cfg(not(feature = "no_object"))]
+use crate::Map;
 
 /// A type representing the access mode of a scripted function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -55,16 +52,16 @@ impl FnAccess {
     #[inline(always)]
     pub fn is_private(self) -> bool {
         match self {
-            Self::Public => false,
             Self::Private => true,
+            Self::Public => false,
         }
     }
     /// Is this access mode public?
     #[inline(always)]
     pub fn is_public(self) -> bool {
         match self {
-            Self::Public => true,
             Self::Private => false,
+            Self::Public => true,
         }
     }
 }

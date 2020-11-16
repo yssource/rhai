@@ -1,20 +1,13 @@
 //! Main module defining the script evaluation `Engine`.
 
 use crate::ast::{Expr, FnCallExpr, Ident, IdentX, ReturnType, Stmt};
-use crate::dynamic::{map_std_type_name, Dynamic, Union, Variant};
+use crate::dynamic::{map_std_type_name, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
-use crate::fn_native::{CallableFunction, Callback, FnPtr, IteratorFn, OnVarCallback, Shared};
-use crate::module::{Module, NamespaceRef};
-use crate::optimize::OptimizationLevel;
+use crate::fn_native::{CallableFunction, Callback, IteratorFn, OnVarCallback};
+use crate::module::NamespaceRef;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
-use crate::result::EvalAltResult;
-use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::syntax::CustomSyntax;
-use crate::token::{Position, NO_POS};
-use crate::utils::{get_hasher, ImmutableString};
-use crate::{calc_native_fn_hash, StaticVec};
-
+use crate::scope::EntryType as ScopeEntryType;
 use crate::stdlib::{
     any::{type_name, TypeId},
     borrow::Cow,
@@ -26,6 +19,12 @@ use crate::stdlib::{
     num::NonZeroUsize,
     ops::DerefMut,
     string::{String, ToString},
+};
+use crate::syntax::CustomSyntax;
+use crate::utils::get_hasher;
+use crate::{
+    calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, OptimizationLevel,
+    Position, Scope, Shared, StaticVec, NO_POS,
 };
 
 #[cfg(not(feature = "no_index"))]

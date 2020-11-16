@@ -2,15 +2,11 @@
 
 #![allow(non_snake_case)]
 
-use crate::ast::FnAccess;
-use crate::dynamic::{Dynamic, DynamicWriteLock, Variant};
-use crate::engine::Engine;
-use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, NativeCallContext, SendSync};
+use crate::dynamic::{DynamicWriteLock, Variant};
+use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
 use crate::r#unsafe::unsafe_cast_box;
-use crate::result::EvalAltResult;
-use crate::utils::ImmutableString;
-
 use crate::stdlib::{any::TypeId, boxed::Box, mem, string::String};
+use crate::{Dynamic, Engine, EvalAltResult, FnAccess, ImmutableString, NativeCallContext};
 
 /// Trait to register custom functions with the `Engine`.
 pub trait RegisterFn<FN, ARGS, RET> {

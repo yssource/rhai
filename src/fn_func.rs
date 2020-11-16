@@ -3,13 +3,8 @@
 #![cfg(not(feature = "no_function"))]
 #![allow(non_snake_case)]
 
-use crate::ast::AST;
 use crate::dynamic::Variant;
-use crate::engine::Engine;
-use crate::parse_error::ParseError;
-use crate::result::EvalAltResult;
-use crate::scope::Scope;
-
+use crate::{Engine, EvalAltResult, ParseError, Scope, AST};
 use crate::stdlib::{boxed::Box, string::ToString};
 
 /// Trait to create a Rust closure from a script.

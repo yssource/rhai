@@ -1,12 +1,9 @@
-use crate::def_package;
 use crate::dynamic::Variant;
-use crate::result::EvalAltResult;
-use crate::INT;
-
 use crate::stdlib::{
     boxed::Box,
     ops::{Add, Range},
 };
+use crate::{def_package, EvalAltResult, INT};
 
 fn get_range<T: Variant + Clone>(from: T, to: T) -> Result<Range<T>, Box<EvalAltResult>> {
     Ok(from..to)

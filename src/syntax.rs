@@ -1,19 +1,17 @@
 //! Module implementing custom syntax for `Engine`.
 
 use crate::ast::Expr;
-use crate::dynamic::Dynamic;
-use crate::engine::{Engine, EvalContext, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
-use crate::fn_native::{SendSync, Shared};
-use crate::parse_error::{LexError, ParseError};
-use crate::result::EvalAltResult;
-use crate::token::{is_valid_identifier, Position, Token, NO_POS};
-use crate::utils::ImmutableString;
-use crate::StaticVec;
-
+use crate::engine::{EvalContext, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+use crate::fn_native::SendSync;
 use crate::stdlib::{
     boxed::Box,
     format,
     string::{String, ToString},
+};
+use crate::token::{is_valid_identifier, Token};
+use crate::{
+    Dynamic, Engine, EvalAltResult, ImmutableString, LexError, ParseError, Position, Shared,
+    StaticVec, NO_POS,
 };
 
 /// A general expression evaluation trait object.

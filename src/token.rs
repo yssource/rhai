@@ -1,17 +1,9 @@
 //! Main module defining the lexer and parser.
 
 use crate::engine::{
-    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY,
+    KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY,
     KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
-
-use crate::parse_error::LexError;
-use crate::StaticVec;
-use crate::INT;
-
-#[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
-
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
@@ -20,6 +12,10 @@ use crate::stdlib::{
     str::{Chars, FromStr},
     string::{String, ToString},
 };
+use crate::{Engine, LexError, StaticVec, INT};
+
+#[cfg(not(feature = "no_float"))]
+use crate::FLOAT;
 
 type LERR = LexError;
 

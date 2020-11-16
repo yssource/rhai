@@ -1,14 +1,12 @@
 //! Module containing error definitions for the parsing process.
 
-use crate::result::EvalAltResult;
-use crate::token::{Position, NO_POS};
-
 use crate::stdlib::{
     boxed::Box,
     error::Error,
     fmt,
     string::{String, ToString},
 };
+use crate::{EvalAltResult, Position, NO_POS};
 
 /// _[INTERNALS]_ Error encountered when tokenizing the script text.
 /// Exported under the `internals` feature only.

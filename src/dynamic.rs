@@ -1,19 +1,7 @@
 //! Helper module which defines the `Any` trait to to allow dynamic value handling.
 
-use crate::fn_native::{FnPtr, SendSync};
+use crate::fn_native::SendSync;
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
-use crate::utils::ImmutableString;
-use crate::INT;
-
-#[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
-
-#[cfg(not(feature = "no_index"))]
-use crate::Array;
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
 use crate::stdlib::{
     any::{type_name, Any, TypeId},
     boxed::Box,
@@ -23,6 +11,16 @@ use crate::stdlib::{
     ops::{Deref, DerefMut},
     string::{String, ToString},
 };
+use crate::{FnPtr, ImmutableString, INT};
+
+#[cfg(not(feature = "no_float"))]
+use crate::FLOAT;
+
+#[cfg(not(feature = "no_index"))]
+use crate::Array;
+
+#[cfg(not(feature = "no_object"))]
+use crate::Map;
 
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(target_arch = "wasm32"))]

@@ -1,7 +1,6 @@
 //! A helper module containing unsafe utility functions.
 
 use crate::dynamic::Variant;
-
 use crate::stdlib::{
     any::{Any, TypeId},
     boxed::Box,

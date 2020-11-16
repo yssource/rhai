@@ -1,12 +1,7 @@
-use crate::engine::Engine;
-use crate::fn_native::{Locked, Shared};
-use crate::module::{Module, ModuleResolver};
-use crate::result::EvalAltResult;
-use crate::token::Position;
-
 use crate::stdlib::{
     boxed::Box, collections::HashMap, io::Error as IoError, path::PathBuf, string::String,
 };
+use crate::{Engine, EvalAltResult, Locked, Module, ModuleResolver, Position, Shared};
 
 /// Module resolution service that loads module script files from the file system.
 ///

@@ -1,24 +1,13 @@
 //! Main module defining the lexer and parser.
 
 use crate::ast::{
-    BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, ScriptFnDef, Stmt, AST,
+    BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, ScriptFnDef, Stmt,
 };
-use crate::dynamic::{Dynamic, Union};
-use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+use crate::dynamic::Union;
+use crate::engine::{KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::module::NamespaceRef;
-use crate::optimize::{optimize_into_ast, OptimizationLevel};
-use crate::parse_error::{LexError, ParseError, ParseErrorType};
-use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::syntax::CustomSyntax;
-use crate::token::{
-    is_keyword_function, is_valid_identifier, Position, Token, TokenStream, NO_POS,
-};
-use crate::utils::{get_hasher, ImmutableString, StraightHasherBuilder};
-use crate::{calc_script_fn_hash, StaticVec};
-
-#[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
-
+use crate::optimize::optimize_into_ast;
+use crate::scope::EntryType as ScopeEntryType;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
@@ -31,6 +20,16 @@ use crate::stdlib::{
     vec,
     vec::Vec,
 };
+use crate::syntax::CustomSyntax;
+use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
+use crate::utils::{get_hasher, StraightHasherBuilder};
+use crate::{
+    calc_script_fn_hash, Dynamic, Engine, ImmutableString, LexError, OptimizationLevel, ParseError,
+    ParseErrorType, Position, Scope, StaticVec, AST, NO_POS,
+};
+
+#[cfg(not(feature = "no_float"))]
+use crate::FLOAT;
 
 type PERR = ParseErrorType;
 
@@ -148,10 +147,10 @@ impl<'e> ParseState<'e> {
     }
 
     /// Get an interned string, creating one if it is not yet interned.
-    pub fn get_interned_string<S>(&mut self, text: S) -> ImmutableString
-    where
-        S: AsRef<str> + Into<ImmutableString>,
-    {
+    pub fn get_interned_string<S>(
+        &mut self,
+        text: impl AsRef<str> + Into<ImmutableString>,
+    ) -> ImmutableString {
         #[allow(clippy::map_entry)]
         if !self.strings.contains_key(text.as_ref()) {
             let value: ImmutableString = text.into();

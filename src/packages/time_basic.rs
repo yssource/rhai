@@ -1,17 +1,12 @@
 #![cfg(not(feature = "no_std"))]
 
 use super::{arithmetic::make_err as make_arithmetic_err, math_basic::MAX_INT};
-
-use crate::def_package;
-use crate::dynamic::Dynamic;
 use crate::plugin::*;
-use crate::result::EvalAltResult;
-use crate::INT;
+use crate::stdlib::boxed::Box;
+use crate::{def_package, Dynamic, EvalAltResult, INT};
 
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
-
-use crate::stdlib::boxed::Box;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::stdlib::time::{Duration, Instant};

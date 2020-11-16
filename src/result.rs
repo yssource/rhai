@@ -1,17 +1,12 @@
 //! Module containing error definitions for the evaluation process.
 
-use crate::dynamic::Dynamic;
-use crate::parse_error::ParseErrorType;
-use crate::token::{Position, NO_POS};
-use crate::utils::ImmutableString;
-use crate::INT;
-
 use crate::stdlib::{
     boxed::Box,
     error::Error,
     fmt,
     string::{String, ToString},
 };
+use crate::{Dynamic, ImmutableString, ParseErrorType, Position, INT, NO_POS};
 
 /// Evaluation result.
 ///

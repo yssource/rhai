@@ -1,12 +1,8 @@
 //! Implement deserialization support of `ImmutableString` for [`serde`](https://crates.io/crates/serde).
 
-use crate::result::EvalAltResult;
-use crate::token::NO_POS;
-use crate::utils::ImmutableString;
-
-use serde::de::{Deserializer, Visitor};
-
 use crate::stdlib::{any::type_name, boxed::Box};
+use crate::{EvalAltResult, ImmutableString, NO_POS};
+use serde::de::{Deserializer, Visitor};
 
 /// Deserializer for `ImmutableString`.
 pub struct ImmutableStringDeserializer<'a> {

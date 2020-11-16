@@ -1,10 +1,6 @@
-use crate::engine::Engine;
-use crate::fn_native::{SendSync, Shared};
-use crate::module::Module;
-use crate::result::EvalAltResult;
-use crate::token::Position;
-
+use crate::fn_native::SendSync;
 use crate::stdlib::boxed::Box;
+use crate::{Engine, EvalAltResult, Module, Position, Shared};
 
 mod collection;
 pub use collection::ModuleResolversCollection;

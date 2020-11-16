@@ -1,24 +1,11 @@
 //! Module defining external-loaded modules for Rhai.
 
-use crate::ast::{FnAccess, IdentX};
-use crate::dynamic::{Dynamic, Variant};
+use crate::ast::IdentX;
+use crate::dynamic::Variant;
 use crate::fn_native::{
-    shared_make_mut, shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn,
-    NativeCallContext, SendSync, Shared,
+    shared_make_mut, shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, SendSync,
 };
 use crate::fn_register::by_value as cast_arg;
-use crate::result::EvalAltResult;
-use crate::token::{Token, NO_POS};
-use crate::utils::{ImmutableString, StraightHasherBuilder};
-use crate::StaticVec;
-
-#[cfg(not(feature = "no_index"))]
-use crate::Array;
-
-#[cfg(not(feature = "no_index"))]
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
@@ -30,6 +17,18 @@ use crate::stdlib::{
     string::{String, ToString},
     vec::Vec,
 };
+use crate::token::Token;
+use crate::utils::StraightHasherBuilder;
+use crate::{
+    Dynamic, EvalAltResult, FnAccess, ImmutableString, NativeCallContext, Shared, StaticVec, NO_POS,
+};
+
+#[cfg(not(feature = "no_index"))]
+use crate::Array;
+
+#[cfg(not(feature = "no_index"))]
+#[cfg(not(feature = "no_object"))]
+use crate::Map;
 
 /// Data structure containing a single registered function.
 #[derive(Debug, Clone)]

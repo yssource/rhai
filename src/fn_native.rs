@@ -1,16 +1,14 @@
 //! Module defining interfaces to native-Rust functions.
 
-use crate::ast::{FnAccess, ScriptFnDef};
-use crate::dynamic::Dynamic;
-use crate::engine::{Engine, EvalContext, Imports};
-use crate::module::Module;
+use crate::ast::ScriptFnDef;
+use crate::engine::Imports;
 use crate::plugin::PluginFunction;
-use crate::result::EvalAltResult;
-use crate::token::{is_valid_identifier, NO_POS};
-use crate::utils::ImmutableString;
-use crate::{calc_script_fn_hash, StaticVec};
-
 use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, iter::empty, mem, string::String};
+use crate::token::is_valid_identifier;
+use crate::{
+    calc_script_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, FnAccess, ImmutableString,
+    Module, StaticVec, NO_POS,
+};
 
 #[cfg(not(feature = "sync"))]
 use crate::stdlib::rc::Rc;

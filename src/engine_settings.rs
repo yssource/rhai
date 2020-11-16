@@ -1,10 +1,9 @@
 //! Configuration settings for `Engine`.
 
-use crate::engine::Engine;
 use crate::packages::PackageLibrary;
-use crate::token::{is_valid_identifier, Token};
-
 use crate::stdlib::{format, string::String};
+use crate::token::{is_valid_identifier, Token};
+use crate::Engine;
 
 #[cfg(not(feature = "no_module"))]
 use crate::stdlib::boxed::Box;

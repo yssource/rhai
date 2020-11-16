@@ -1,11 +1,8 @@
 #![cfg(not(feature = "no_object"))]
 
-use crate::def_package;
-use crate::dynamic::Dynamic;
 use crate::engine::OP_EQUALS;
 use crate::plugin::*;
-use crate::utils::ImmutableString;
-use crate::{Map, INT};
+use crate::{def_package, Dynamic, ImmutableString, Map, INT};
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;

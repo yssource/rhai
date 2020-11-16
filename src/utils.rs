@@ -1,7 +1,6 @@
 //! Module containing various utility types and functions.
 
-use crate::fn_native::{shared_make_mut, shared_take, Shared};
-
+use crate::fn_native::{shared_make_mut, shared_take};
 use crate::stdlib::{
     any::TypeId,
     borrow::Borrow,
@@ -14,6 +13,7 @@ use crate::stdlib::{
     str::FromStr,
     string::{String, ToString},
 };
+use crate::Shared;
 
 /// A hasher that only takes one single `u64` and returns it as a hash key.
 ///

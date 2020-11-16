@@ -1,32 +1,25 @@
 //! Module that defines the extern API of `Engine`.
 
-use crate::ast::AST;
-use crate::dynamic::{Dynamic, Variant};
-use crate::engine::{Engine, EvalContext, Imports};
-use crate::fn_native::{FnCallArgs, NativeCallContext, SendSync};
-use crate::optimize::OptimizationLevel;
-use crate::parse_error::ParseError;
-use crate::result::EvalAltResult;
-use crate::scope::Scope;
-use crate::token::NO_POS;
-use crate::utils::get_hasher;
-
-#[cfg(not(feature = "no_index"))]
-use crate::Array;
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
+use crate::dynamic::Variant;
+use crate::engine::{EvalContext, Imports};
+use crate::fn_native::{FnCallArgs, SendSync};
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
     hash::{Hash, Hasher},
     string::String,
 };
+use crate::utils::get_hasher;
+use crate::{
+    scope::Scope, Dynamic, Engine, EvalAltResult, NativeCallContext, OptimizationLevel, ParseError,
+    AST, NO_POS,
+};
 
-#[cfg(not(feature = "no_std"))]
-#[cfg(not(target_arch = "wasm32"))]
-use crate::stdlib::{fs::File, io::prelude::*, path::PathBuf};
+#[cfg(not(feature = "no_index"))]
+use crate::Array;
+
+#[cfg(not(feature = "no_object"))]
+use crate::Map;
 
 /// Calculate a unique hash for a script.
 fn calc_hash_for_scripts<'a>(scripts: impl IntoIterator<Item = &'a &'a str>) -> u64 {
@@ -204,15 +197,11 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn register_get<T, U>(
+    pub fn register_get<T: Variant + Clone, U: Variant + Clone>(
         &mut self,
         name: &str,
         callback: impl Fn(&mut T) -> U + SendSync + 'static,
-    ) -> &mut Self
-    where
-        T: Variant + Clone,
-        U: Variant + Clone,
-    {
+    ) -> &mut Self {
         crate::RegisterFn::register_fn(self, &crate::engine::make_getter(name), callback)
     }
     /// Register a getter function for a member of a registered type with the `Engine`.
@@ -304,15 +293,11 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn register_set<T, U>(
+    pub fn register_set<T: Variant + Clone, U: Variant + Clone>(
         &mut self,
         name: &str,
         callback: impl Fn(&mut T, U) + SendSync + 'static,
-    ) -> &mut Self
-    where
-        T: Variant + Clone,
-        U: Variant + Clone,
-    {
+    ) -> &mut Self {
         crate::RegisterFn::register_fn(self, &crate::engine::make_setter(name), callback)
     }
     /// Register a setter function for a member of a registered type with the `Engine`.
@@ -357,15 +342,11 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn register_set_result<T, U>(
+    pub fn register_set_result<T: Variant + Clone, U: Variant + Clone>(
         &mut self,
         name: &str,
         callback: impl Fn(&mut T, U) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
-    ) -> &mut Self
-    where
-        T: Variant + Clone,
-        U: Variant + Clone,
-    {
+    ) -> &mut Self {
         crate::RegisterResultFn::register_result_fn(
             self,
             &crate::engine::make_setter(name),
@@ -412,16 +393,12 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn register_get_set<T, U>(
+    pub fn register_get_set<T: Variant + Clone, U: Variant + Clone>(
         &mut self,
         name: &str,
         get_fn: impl Fn(&mut T) -> U + SendSync + 'static,
         set_fn: impl Fn(&mut T, U) + SendSync + 'static,
-    ) -> &mut Self
-    where
-        T: Variant + Clone,
-        U: Variant + Clone,
-    {
+    ) -> &mut Self {
         self.register_get(name, get_fn).register_set(name, set_fn)
     }
     /// Register an index getter for a custom type with the `Engine`.
@@ -467,15 +444,10 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
-    pub fn register_indexer_get<T, X, U>(
+    pub fn register_indexer_get<T: Variant + Clone, X: Variant + Clone, U: Variant + Clone>(
         &mut self,
         callback: impl Fn(&mut T, X) -> U + SendSync + 'static,
-    ) -> &mut Self
-    where
-        T: Variant + Clone,
-        U: Variant + Clone,
-        X: Variant + Clone,
-    {
+    ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -538,14 +510,10 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
-    pub fn register_indexer_get_result<T, X>(
+    pub fn register_indexer_get_result<T: Variant + Clone, X: Variant + Clone>(
         &mut self,
         callback: impl Fn(&mut T, X) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
-    ) -> &mut Self
-    where
-        T: Variant + Clone,
-        X: Variant + Clone,
-    {
+    ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -605,15 +573,10 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
-    pub fn register_indexer_set<T, X, U>(
+    pub fn register_indexer_set<T: Variant + Clone, X: Variant + Clone, U: Variant + Clone>(
         &mut self,
         callback: impl Fn(&mut T, X, U) + SendSync + 'static,
-    ) -> &mut Self
-    where
-        T: Variant + Clone,
-        U: Variant + Clone,
-        X: Variant + Clone,
-    {
+    ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -677,15 +640,14 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
-    pub fn register_indexer_set_result<T, X, U>(
+    pub fn register_indexer_set_result<
+        T: Variant + Clone,
+        X: Variant + Clone,
+        U: Variant + Clone,
+    >(
         &mut self,
         callback: impl Fn(&mut T, X, U) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
-    ) -> &mut Self
-    where
-        T: Variant + Clone,
-        U: Variant + Clone,
-        X: Variant + Clone,
-    {
+    ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -748,16 +710,11 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
-    pub fn register_indexer_get_set<T, X, U>(
+    pub fn register_indexer_get_set<T: Variant + Clone, X: Variant + Clone, U: Variant + Clone>(
         &mut self,
         getter: impl Fn(&mut T, X) -> U + SendSync + 'static,
         setter: impl Fn(&mut T, X, U) -> () + SendSync + 'static,
-    ) -> &mut Self
-    where
-        T: Variant + Clone,
-        U: Variant + Clone,
-        X: Variant + Clone,
-    {
+    ) -> &mut Self {
         self.register_indexer_get(getter)
             .register_indexer_set(setter)
     }
@@ -935,8 +892,10 @@ impl Engine {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
     #[inline]
-    fn read_file(path: PathBuf) -> Result<String, Box<EvalAltResult>> {
-        let mut f = File::open(path.clone()).map_err(|err| {
+    fn read_file(path: crate::stdlib::path::PathBuf) -> Result<String, Box<EvalAltResult>> {
+        use crate::stdlib::io::Read;
+
+        let mut f = crate::stdlib::fs::File::open(path.clone()).map_err(|err| {
             EvalAltResult::ErrorSystem(
                 format!("Cannot open script file '{}'", path.to_string_lossy()),
                 err.into(),
@@ -977,7 +936,10 @@ impl Engine {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
     #[inline(always)]
-    pub fn compile_file(&self, path: PathBuf) -> Result<AST, Box<EvalAltResult>> {
+    pub fn compile_file(
+        &self,
+        path: crate::stdlib::path::PathBuf,
+    ) -> Result<AST, Box<EvalAltResult>> {
         self.compile_file_with_scope(&Default::default(), path)
     }
     /// Compile a script file into an `AST` using own scope, which can be used later for evaluation.
@@ -1017,7 +979,7 @@ impl Engine {
     pub fn compile_file_with_scope(
         &self,
         scope: &Scope,
-        path: PathBuf,
+        path: crate::stdlib::path::PathBuf,
     ) -> Result<AST, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| Ok(self.compile_with_scope(scope, &contents)?))
     }
@@ -1201,7 +1163,10 @@ impl Engine {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
     #[inline(always)]
-    pub fn eval_file<T: Variant + Clone>(&self, path: PathBuf) -> Result<T, Box<EvalAltResult>> {
+    pub fn eval_file<T: Variant + Clone>(
+        &self,
+        path: crate::stdlib::path::PathBuf,
+    ) -> Result<T, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
     /// Evaluate a script file with own scope.
@@ -1229,7 +1194,7 @@ impl Engine {
     pub fn eval_file_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
-        path: PathBuf,
+        path: crate::stdlib::path::PathBuf,
     ) -> Result<T, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.eval_with_scope::<T>(scope, &contents))
     }
@@ -1428,7 +1393,10 @@ impl Engine {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
     #[inline(always)]
-    pub fn consume_file(&self, path: PathBuf) -> Result<(), Box<EvalAltResult>> {
+    pub fn consume_file(
+        &self,
+        path: crate::stdlib::path::PathBuf,
+    ) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.consume(&contents))
     }
     /// Evaluate a file with own scope, but throw away the result and only return error (if any).
@@ -1439,7 +1407,7 @@ impl Engine {
     pub fn consume_file_with_scope(
         &self,
         scope: &mut Scope,
-        path: PathBuf,
+        path: crate::stdlib::path::PathBuf,
     ) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.consume_with_scope(scope, &contents))
     }

@@ -1,8 +1,5 @@
-use crate::def_package;
-use crate::dynamic::Dynamic;
 use crate::plugin::*;
-use crate::result::EvalAltResult;
-use crate::utils::ImmutableString;
+use crate::{def_package, Dynamic, EvalAltResult, ImmutableString};
 
 def_package!(crate:EvalPackage:"Disable 'eval'.", lib, {
     combine_with_exported_module!(lib, "eval", eval_override);
