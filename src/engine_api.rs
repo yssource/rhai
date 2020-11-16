@@ -28,10 +28,13 @@ use crate::{
 use crate::fn_register::{RegisterFn, RegisterResultFn};
 
 #[cfg(not(feature = "no_function"))]
-use crate::{fn_args::FuncArgs, fn_call::ensure_no_data_race, module::Module, StaticVec};
+use crate::{fn_args::FuncArgs, fn_call::ensure_no_data_race, StaticVec};
 
 #[cfg(not(feature = "no_module"))]
 use crate::fn_native::{shared_take_or_clone, Shared};
+
+#[cfg(any(not(feature = "no_function"), not(feature = "no_module")))]
+use crate::module::Module;
 
 #[cfg(not(feature = "no_optimize"))]
 use crate::optimize::optimize_into_ast;
