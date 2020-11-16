@@ -537,7 +537,27 @@ impl Default for Dynamic {
 }
 
 impl Dynamic {
+    /// A `Dynamic` containing a `()`.
     pub const UNIT: Dynamic = Self(Union::Unit(()));
+    /// A `Dynamic` containing a `true`.
+    pub const TRUE: Dynamic = Self(Union::Bool(true));
+    /// A `Dynamic` containing a `false`.
+    pub const FALSE: Dynamic = Self(Union::Bool(false));
+    /// A `Dynamic` containing the integer zero.
+    pub const ZERO: Dynamic = Self(Union::Int(0));
+    /// A `Dynamic` containing the integer one.
+    pub const ONE: Dynamic = Self(Union::Int(1));
+    /// A `Dynamic` containing the integer negative one.
+    pub const NEGATIVE_ONE: Dynamic = Self(Union::Int(-1));
+    /// A `Dynamic` containing the floating-point zero.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_ZERO: Dynamic = Self(Union::Float(0.0));
+    /// A `Dynamic` containing the floating-point one.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_ONE: Dynamic = Self(Union::Float(1.0));
+    /// A `Dynamic` containing the floating-point negative one.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_NEGATIVE_ONE: Dynamic = Self(Union::Float(-1.0));
 
     /// Create a `Dynamic` from any type.  A `Dynamic` value is simply returned as is.
     ///
