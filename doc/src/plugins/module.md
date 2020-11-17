@@ -161,9 +161,10 @@ service::increment(x);
 x == 43;
 ```
 
-Any functions (usually _methods_) defined in the module with `#[rhai_fn(global)]`, as well as
-all _type iterators_, are automatically exposed to the _global_ namespace, so iteration,
-[getters/setters] and [indexers] for [custom types] can work as expected.
+All functions (usually _methods_) defined in the module and marked with `#[rhai_fn(global)]`,
+as well as all _type iterators_, are automatically exposed to the _global_ namespace, so
+[iteration]({{rootUrl}}/language/for.md), [getters/setters] and [indexers] for [custom types]
+can work as expected.
 
 Therefore, in the example above, the `increment` method (defined with `#[rhai_fn(global)]`)
 works fine when called in method-call style:

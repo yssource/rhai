@@ -57,16 +57,10 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
     assert!(engine
         .eval::<INT>("inc(question::life::universe::answer)")
         .is_err());
-
-    #[cfg(not(feature = "no_object"))]
     assert_eq!(
         engine.eval::<INT>("super_inc(question::life::universe::answer)")?,
         42
     );
-    #[cfg(feature = "no_object")]
-    assert!(engine
-        .eval::<INT>("super_inc(question::life::universe::answer)")
-        .is_err());
 
     Ok(())
 }
