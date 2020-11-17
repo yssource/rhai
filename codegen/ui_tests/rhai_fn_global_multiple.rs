@@ -9,7 +9,7 @@ pub struct Point {
 #[export_module]
 pub mod test_module {
     pub use super::Point;
-    #[rhai_fn(global, global)]
+    #[rhai_fn(global, internal)]
     pub fn test_fn(input: Point) -> bool {
         input.x > input.y
     }
