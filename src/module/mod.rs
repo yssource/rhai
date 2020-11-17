@@ -42,6 +42,12 @@ pub enum FnNamespace {
     Internal,
 }
 
+impl Default for FnNamespace {
+    fn default() -> Self {
+        Self::Internal
+    }
+}
+
 impl FnNamespace {
     /// Is this namespace global?
     #[inline(always)]
@@ -545,8 +551,7 @@ impl Module {
     /// use rhai::{Module, FnNamespace, FnAccess};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_raw_fn("double_or_not",
-    ///                 FnNamespace::Internal, FnAccess::Public,
+    /// let hash = module.set_raw_fn("double_or_not", FnNamespace::Internal, FnAccess::Public,
     ///                 // Pass parameter types via a slice with TypeId's
     ///                 &[std::any::TypeId::of::<i64>(), std::any::TypeId::of::<bool>()],
     ///                 // Fixed closure signature
@@ -592,30 +597,6 @@ impl Module {
             arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
-    }
-
-    /// Get the namespace of a registered function.
-    /// Returns `None` if a function with the hash does not exist.
-    ///
-    /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash`.
-    #[inline(always)]
-    pub fn get_fn_namespace(&self, hash: u64) -> Option<FnNamespace> {
-        self.functions.get(&hash).map(|f| f.namespace)
-    }
-
-    /// Set the namespace of a registered function.
-    /// Returns the original namespace or `None` if a function with the hash does not exist.
-    ///
-    /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash`.
-    #[inline]
-    pub fn set_fn_namespace(&mut self, hash: u64, namespace: FnNamespace) -> Option<FnNamespace> {
-        if let Some(f) = self.functions.get_mut(&hash) {
-            let old_ns = f.namespace;
-            f.namespace = namespace;
-            Some(old_ns)
-        } else {
-            None
-        }
     }
 
     /// Set a Rust function taking no parameters into the module, returning a hash key.
@@ -687,16 +668,19 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
+    /// use rhai::{Module, FnNamespace};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_1_mut("calc", |x: &mut i64| { *x += 1; Ok(*x) });
+    /// let hash = module.set_fn_1_mut("calc", FnNamespace::Internal,
+    ///                 |x: &mut i64| { *x += 1; Ok(*x) }
+    ///            );
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[inline]
     pub fn set_fn_1_mut<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
+        namespace: FnNamespace,
         func: impl Fn(&mut A) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
@@ -705,7 +689,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>()];
         self.set_fn(
             name,
-            FnNamespace::Internal,
+            namespace,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
@@ -713,6 +697,7 @@ impl Module {
     }
 
     /// Set a Rust getter function taking one mutable parameter, returning a hash key.
+    /// This function is automatically exposed to the global namespace.
     ///
     /// If there is a similar existing Rust getter function, it is replaced.
     ///
@@ -732,7 +717,11 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(&mut A) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
-        self.set_fn_1_mut(crate::engine::make_getter(&name.into()), func)
+        self.set_fn_1_mut(
+            crate::engine::make_getter(&name.into()),
+            FnNamespace::Global,
+            func,
+        )
     }
 
     /// Set a Rust function taking two parameters into the module, returning a hash key.
@@ -780,18 +769,22 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Module, ImmutableString};
+    /// use rhai::{Module, FnNamespace, ImmutableString};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_2_mut("calc", |x: &mut i64, y: ImmutableString| {
-    ///     *x += y.len() as i64; Ok(*x)
-    /// });
+    /// let hash = module.set_fn_2_mut("calc", FnNamespace::Internal,
+    ///                 |x: &mut i64, y: ImmutableString| {
+    ///                     *x += y.len() as i64;
+    ///                     Ok(*x)
+    ///                 }
+    ///            );
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[inline]
     pub fn set_fn_2_mut<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
+        namespace: FnNamespace,
         func: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
@@ -803,7 +796,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
         self.set_fn(
             name,
-            FnNamespace::Internal,
+            namespace,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
@@ -812,6 +805,7 @@ impl Module {
 
     /// Set a Rust setter function taking two parameters (the first one mutable) into the module,
     /// returning a hash key.
+    /// This function is automatically exposed to the global namespace.
     ///
     /// If there is a similar existing setter Rust function, it is replaced.
     ///
@@ -834,11 +828,16 @@ impl Module {
         name: impl Into<String>,
         func: impl Fn(&mut A, B) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
-        self.set_fn_2_mut(crate::engine::make_setter(&name.into()), func)
+        self.set_fn_2_mut(
+            crate::engine::make_setter(&name.into()),
+            FnNamespace::Global,
+            func,
+        )
     }
 
     /// Set a Rust index getter taking two parameters (the first one mutable) into the module,
     /// returning a hash key.
+    /// This function is automatically exposed to the global namespace.
     ///
     /// If there is a similar existing setter Rust function, it is replaced.
     ///
@@ -878,7 +877,7 @@ impl Module {
             panic!("Cannot register indexer for strings.");
         }
 
-        self.set_fn_2_mut(crate::engine::FN_IDX_GET, func)
+        self.set_fn_2_mut(crate::engine::FN_IDX_GET, FnNamespace::Global, func)
     }
 
     /// Set a Rust function taking three parameters into the module, returning a hash key.
@@ -932,12 +931,15 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Module, ImmutableString};
+    /// use rhai::{Module, FnNamespace, ImmutableString};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_3_mut("calc", |x: &mut i64, y: ImmutableString, z: i64| {
-    ///     *x += y.len() as i64 + z; Ok(*x)
-    /// });
+    /// let hash = module.set_fn_3_mut("calc", FnNamespace::Internal,
+    ///                 |x: &mut i64, y: ImmutableString, z: i64| {
+    ///                     *x += y.len() as i64 + z;
+    ///                     Ok(*x)
+    ///                 }
+    ///            );
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[inline]
@@ -949,6 +951,7 @@ impl Module {
     >(
         &mut self,
         name: impl Into<String>,
+        namespace: FnNamespace,
         func: impl Fn(&mut A, B, C) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
@@ -961,7 +964,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
             name,
-            FnNamespace::Internal,
+            namespace,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
@@ -970,6 +973,7 @@ impl Module {
 
     /// Set a Rust index setter taking three parameters (the first one mutable) into the module,
     /// returning a hash key.
+    /// This function is automatically exposed to the global namespace.
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
@@ -1126,12 +1130,15 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Module, ImmutableString};
+    /// use rhai::{Module, FnNamespace, ImmutableString};
     ///
     /// let mut module = Module::new();
-    /// let hash = module.set_fn_4_mut("calc", |x: &mut i64, y: ImmutableString, z: i64, _w: ()| {
-    ///     *x += y.len() as i64 + z; Ok(*x)
-    /// });
+    /// let hash = module.set_fn_4_mut("calc", FnNamespace::Internal,
+    ///                 |x: &mut i64, y: ImmutableString, z: i64, _w: ()| {
+    ///                     *x += y.len() as i64 + z;
+    ///                     Ok(*x)
+    ///                 }
+    ///            );
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[inline]
@@ -1144,6 +1151,7 @@ impl Module {
     >(
         &mut self,
         name: impl Into<String>,
+        namespace: FnNamespace,
         func: impl Fn(&mut A, B, C, D) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     ) -> u64 {
         let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
@@ -1162,7 +1170,7 @@ impl Module {
         ];
         self.set_fn(
             name,
-            FnNamespace::Internal,
+            namespace,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
