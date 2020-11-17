@@ -365,7 +365,7 @@ pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream
 /// let mut module = Module::new();
 /// set_exported_global_fn!(module, "func", my_plugin_function);
 ///
-/// engine.load_module("test", module);
+/// engine.register_module("test", module);
 ///
 /// assert_eq!(engine.eval::<i64>("func(21)")?, 42);
 /// # Ok(())
