@@ -30,11 +30,44 @@ use crate::Array;
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
 
+#[cfg(not(feature = "no_function"))]
+pub type SharedScriptFnDef = Shared<crate::ast::ScriptFnDef>;
+
+/// A type representing the namespace of a function.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum FnNamespace {
+    /// Global namespace.
+    Global,
+    /// Internal only.
+    Internal,
+}
+
+impl FnNamespace {
+    /// Is this namespace global?
+    #[inline(always)]
+    pub fn is_global(self) -> bool {
+        match self {
+            Self::Global => true,
+            Self::Internal => false,
+        }
+    }
+    /// Is this namespace internal?
+    #[inline(always)]
+    pub fn is_internal(self) -> bool {
+        match self {
+            Self::Global => false,
+            Self::Internal => true,
+        }
+    }
+}
+
 /// Data structure containing a single registered function.
 #[derive(Debug, Clone)]
 pub struct FuncInfo {
     /// Function instance.
     pub func: CallableFunction,
+    /// Function namespace.
+    pub namespace: FnNamespace,
     /// Function access mode.
     pub access: FnAccess,
     /// Function name.
@@ -281,7 +314,7 @@ impl Module {
     /// If there is an existing function of the same name and number of arguments, it is replaced.
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub(crate) fn set_script_fn(&mut self, fn_def: Shared<crate::ast::ScriptFnDef>) -> u64 {
+    pub(crate) fn set_script_fn(&mut self, fn_def: SharedScriptFnDef) -> u64 {
         // None + function name + number of arguments.
         let num_params = fn_def.params.len();
         let hash_script = crate::calc_script_fn_hash(empty(), &fn_def.name, num_params);
@@ -289,6 +322,7 @@ impl Module {
             hash_script,
             FuncInfo {
                 name: fn_def.name.to_string(),
+                namespace: FnNamespace::Internal,
                 access: fn_def.access,
                 params: num_params,
                 types: None,
@@ -307,7 +341,7 @@ impl Module {
         name: &str,
         num_params: usize,
         public_only: bool,
-    ) -> Option<&Shared<crate::ast::ScriptFnDef>> {
+    ) -> Option<&SharedScriptFnDef> {
         self.functions
             .values()
             .find(
@@ -439,6 +473,7 @@ impl Module {
     pub fn set_fn(
         &mut self,
         name: impl Into<String>,
+        namespace: FnNamespace,
         access: FnAccess,
         arg_types: &[TypeId],
         func: CallableFunction,
@@ -463,6 +498,7 @@ impl Module {
             hash_fn,
             FuncInfo {
                 name,
+                namespace,
                 access,
                 params: params.len(),
                 types: Some(params),
@@ -506,10 +542,11 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
+    /// use rhai::{Module, FnNamespace, FnAccess};
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_raw_fn("double_or_not",
+    ///                 FnNamespace::Internal, FnAccess::Public,
     ///                 // Pass parameter types via a slice with TypeId's
     ///                 &[std::any::TypeId::of::<i64>(), std::any::TypeId::of::<bool>()],
     ///                 // Fixed closure signature
@@ -538,6 +575,8 @@ impl Module {
     pub fn set_raw_fn<T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
+        namespace: FnNamespace,
+        access: FnAccess,
         arg_types: &[TypeId],
         func: impl Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
             + SendSync
@@ -545,12 +584,38 @@ impl Module {
     ) -> u64 {
         let f =
             move |ctx: NativeCallContext, args: &mut FnCallArgs| func(ctx, args).map(Dynamic::from);
+
         self.set_fn(
             name,
-            FnAccess::Public,
+            namespace,
+            access,
             arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
+    }
+
+    /// Get the namespace of a registered function.
+    /// Returns `None` if a function with the hash does not exist.
+    ///
+    /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash`.
+    #[inline(always)]
+    pub fn get_fn_namespace(&self, hash: u64) -> Option<FnNamespace> {
+        self.functions.get(&hash).map(|f| f.namespace)
+    }
+
+    /// Set the namespace of a registered function.
+    /// Returns the original namespace or `None` if a function with the hash does not exist.
+    ///
+    /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash`.
+    #[inline]
+    pub fn set_fn_namespace(&mut self, hash: u64, namespace: FnNamespace) -> Option<FnNamespace> {
+        if let Some(f) = self.functions.get_mut(&hash) {
+            let old_ns = f.namespace;
+            f.namespace = namespace;
+            Some(old_ns)
+        } else {
+            None
+        }
     }
 
     /// Set a Rust function taking no parameters into the module, returning a hash key.
@@ -576,6 +641,7 @@ impl Module {
         let arg_types = [];
         self.set_fn(
             name,
+            FnNamespace::Internal,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
@@ -607,6 +673,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>()];
         self.set_fn(
             name,
+            FnNamespace::Internal,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
@@ -638,6 +705,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>()];
         self.set_fn(
             name,
+            FnNamespace::Internal,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
@@ -697,6 +765,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
         self.set_fn(
             name,
+            FnNamespace::Internal,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
@@ -734,6 +803,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>()];
         self.set_fn(
             name,
+            FnNamespace::Internal,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
@@ -847,6 +917,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
             name,
+            FnNamespace::Internal,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
@@ -890,6 +961,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
             name,
+            FnNamespace::Internal,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
@@ -948,6 +1020,7 @@ impl Module {
         let arg_types = [TypeId::of::<A>(), TypeId::of::<B>(), TypeId::of::<C>()];
         self.set_fn(
             crate::engine::FN_IDX_SET,
+            FnNamespace::Internal,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
@@ -1038,6 +1111,7 @@ impl Module {
         ];
         self.set_fn(
             name,
+            FnNamespace::Internal,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
@@ -1088,6 +1162,7 @@ impl Module {
         ];
         self.set_fn(
             name,
+            FnNamespace::Internal,
             FnAccess::Public,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
@@ -1195,14 +1270,14 @@ impl Module {
     /// Merge another module into this module.
     #[inline(always)]
     pub fn merge(&mut self, other: &Self) -> &mut Self {
-        self.merge_filtered(other, &mut |_, _, _| true)
+        self.merge_filtered(other, &mut |_, _, _, _, _| true)
     }
 
-    /// Merge another module into this module, with only selected script-defined functions based on a filter predicate.
+    /// Merge another module into this module based on a filter predicate.
     pub(crate) fn merge_filtered(
         &mut self,
         other: &Self,
-        mut _filter: &mut impl FnMut(FnAccess, &str, usize) -> bool,
+        mut _filter: &mut impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> &mut Self {
         #[cfg(not(feature = "no_function"))]
         other.modules.iter().for_each(|(k, v)| {
@@ -1220,13 +1295,27 @@ impl Module {
             other
                 .functions
                 .iter()
-                .filter(|(_, FuncInfo { func, .. })| match func {
-                    #[cfg(not(feature = "no_function"))]
-                    CallableFunction::Script(f) => {
-                        _filter(f.access, f.name.as_str(), f.params.len())
-                    }
-                    _ => true,
-                })
+                .filter(
+                    |(
+                        _,
+                        FuncInfo {
+                            namespace,
+                            access,
+                            name,
+                            params,
+                            func,
+                            ..
+                        },
+                    )| {
+                        _filter(
+                            *namespace,
+                            *access,
+                            func.is_script(),
+                            name.as_str(),
+                            *params,
+                        )
+                    },
+                )
                 .map(|(&k, v)| (k, v.clone())),
         );
 
@@ -1238,18 +1327,30 @@ impl Module {
         self
     }
 
-    /// Filter out the functions, retaining only some based on a filter predicate.
+    /// Filter out the functions, retaining only some script-defined functions based on a filter predicate.
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub(crate) fn retain_functions(
+    pub(crate) fn retain_script_functions(
         &mut self,
-        mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
+        mut filter: impl FnMut(FnNamespace, FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
-        self.functions
-            .retain(|_, FuncInfo { func, .. }| match func {
-                CallableFunction::Script(f) => filter(f.access, f.name.as_str(), f.params.len()),
-                _ => true,
-            });
+        self.functions.retain(
+            |_,
+             FuncInfo {
+                 namespace,
+                 access,
+                 name,
+                 params,
+                 func,
+                 ..
+             }| {
+                if func.is_script() {
+                    filter(*namespace, *access, name.as_str(), *params)
+                } else {
+                    false
+                }
+            },
+        );
 
         self.all_functions.clear();
         self.all_variables.clear();
@@ -1293,16 +1394,25 @@ impl Module {
     #[inline(always)]
     pub(crate) fn iter_script_fn<'a>(
         &'a self,
-    ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<crate::ast::ScriptFnDef>)> + 'a {
-        self.functions
-            .values()
-            .map(|f| &f.func)
-            .filter(|f| f.is_script())
-            .map(CallableFunction::get_fn_def)
-            .map(|f| {
-                let func = f.clone();
-                (f.access, f.name.as_str(), f.params.len(), func)
-            })
+    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, SharedScriptFnDef)> + 'a {
+        self.functions.values().filter(|f| f.func.is_script()).map(
+            |FuncInfo {
+                 namespace,
+                 access,
+                 name,
+                 params,
+                 func,
+                 ..
+             }| {
+                (
+                    *namespace,
+                    *access,
+                    name.as_str(),
+                    *params,
+                    func.get_fn_def().clone(),
+                )
+            },
+        )
     }
 
     /// Get an iterator over all script-defined functions in the module.
@@ -1314,14 +1424,17 @@ impl Module {
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
-    pub fn iter_script_fn_info(&self) -> impl Iterator<Item = (FnAccess, &str, usize)> {
+    pub fn iter_script_fn_info(
+        &self,
+    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize)> {
         self.functions.values().filter(|f| f.func.is_script()).map(
             |FuncInfo {
                  name,
+                 namespace,
                  access,
                  params,
                  ..
-             }| (*access, name.as_str(), *params),
+             }| (*namespace, *access, name.as_str(), *params),
         )
     }
 
@@ -1338,7 +1451,7 @@ impl Module {
     #[inline(always)]
     pub fn iter_script_fn_info(
         &self,
-    ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<crate::ast::ScriptFnDef>)> {
+    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, SharedScriptFnDef)> {
         self.iter_script_fn()
     }
 
@@ -1392,13 +1505,10 @@ impl Module {
         // Extra modules left in the scope become sub-modules
         let mut func_mods: crate::engine::Imports = Default::default();
 
-        mods.into_iter()
-            .skip(orig_mods_len)
-            .filter(|&(_, fixed, _)| !fixed)
-            .for_each(|(alias, _, m)| {
-                func_mods.push(alias.clone(), m.clone());
-                module.set_sub_module(alias, m);
-            });
+        mods.into_iter().skip(orig_mods_len).for_each(|(alias, m)| {
+            func_mods.push(alias.clone(), m.clone());
+            module.set_sub_module(alias, m);
+        });
 
         // Non-private functions defined become module functions
         #[cfg(not(feature = "no_function"))]
@@ -1406,8 +1516,8 @@ impl Module {
             let ast_lib: Shared<Module> = ast.lib().clone().into();
 
             ast.iter_functions()
-                .filter(|(access, _, _, _)| !access.is_private())
-                .for_each(|(_, _, _, func)| {
+                .filter(|(_, access, _, _, _)| !access.is_private())
+                .for_each(|(_, _, _, _, func)| {
                     // Encapsulate AST environment
                     let mut func = func.as_ref().clone();
                     func.lib = Some(ast_lib.clone());
@@ -1463,6 +1573,7 @@ impl Module {
                         &hash,
                         FuncInfo {
                             name,
+                            namespace,
                             params,
                             types,
                             func,
@@ -1470,10 +1581,13 @@ impl Module {
                         },
                     )| {
                         // Flatten all methods so they can be available without namespace qualifiers
-                        #[cfg(not(feature = "no_object"))]
-                        if func.is_method() {
+                        if namespace.is_global() {
                             functions.insert(hash, func.clone());
                         }
+
+                        // Qualifiers + function name + number of arguments.
+                        let hash_qualified_script =
+                            crate::calc_script_fn_hash(qualifiers.iter().cloned(), name, *params);
 
                         if let Some(param_types) = types {
                             assert_eq!(*params, param_types.len());
@@ -1481,11 +1595,6 @@ impl Module {
                             // Namespace-qualified Rust functions are indexed in two steps:
                             // 1) Calculate a hash in a similar manner to script-defined functions,
                             //    i.e. qualifiers + function name + number of arguments.
-                            let hash_qualified_script = crate::calc_script_fn_hash(
-                                qualifiers.iter().cloned(),
-                                name,
-                                *params,
-                            );
                             // 2) Calculate a second hash with no qualifiers, empty function name,
                             //    and the actual list of argument `TypeId`'.s
                             let hash_fn_args = crate::calc_native_fn_hash(
@@ -1498,17 +1607,6 @@ impl Module {
 
                             functions.insert(hash_qualified_fn, func.clone());
                         } else if cfg!(not(feature = "no_function")) {
-                            let hash_qualified_script =
-                                if cfg!(feature = "no_object") && qualifiers.is_empty() {
-                                    hash
-                                } else {
-                                    // Qualifiers + function name + number of arguments.
-                                    crate::calc_script_fn_hash(
-                                        qualifiers.iter().map(|&v| v),
-                                        &name,
-                                        *params,
-                                    )
-                                };
                             functions.insert(hash_qualified_script, func.clone());
                         }
                     },

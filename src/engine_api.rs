@@ -12,7 +12,8 @@ use crate::stdlib::{
 };
 use crate::utils::get_hasher;
 use crate::{
-    scope::Scope, Dynamic, Engine, EvalAltResult, NativeCallContext, ParseError, AST, NO_POS,
+    scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, NativeCallContext,
+    ParseError, AST, NO_POS,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -55,7 +56,8 @@ impl Engine {
             + SendSync
             + 'static,
     ) -> &mut Self {
-        self.global_module.set_raw_fn(name, arg_types, func);
+        self.global_module
+            .set_raw_fn(name, FnNamespace::Global, FnAccess::Public, arg_types, func);
         self
     }
     /// Register a custom type for use with the `Engine`.
@@ -751,9 +753,9 @@ impl Engine {
             // Index the module (making a clone copy if necessary) if it is not indexed
             let mut module = crate::fn_native::shared_take_or_clone(module);
             module.build_index();
-            self.global_sub_modules.push_fixed(name, module);
+            self.global_sub_modules.push(name, module);
         } else {
-            self.global_sub_modules.push_fixed(name, module);
+            self.global_sub_modules.push(name, module);
         }
         self
     }

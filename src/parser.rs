@@ -25,8 +25,8 @@ use crate::syntax::CustomSyntax;
 use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
-    calc_script_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType,
-    Position, Scope, StaticVec, AST, NO_POS,
+    calc_script_fn_hash, Dynamic, Engine, FnAccess, ImmutableString, LexError, ParseError,
+    ParseErrorType, Position, Scope, StaticVec, AST, NO_POS,
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -2371,9 +2371,9 @@ fn parse_stmt(
         Token::Fn | Token::Private => {
             let access = if matches!(token, Token::Private) {
                 eat_token(input, Token::Private);
-                crate::ast::FnAccess::Private
+                FnAccess::Private
             } else {
-                crate::ast::FnAccess::Public
+                FnAccess::Public
             };
 
             match input.next().unwrap() {
@@ -2554,7 +2554,7 @@ fn parse_fn(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    access: crate::ast::FnAccess,
+    access: FnAccess,
     mut settings: ParseSettings,
 ) -> Result<ScriptFnDef, ParseError> {
     #[cfg(not(feature = "unchecked"))]
@@ -2789,7 +2789,7 @@ fn parse_anon_fn(
     // Define the function
     let script = ScriptFnDef {
         name: fn_name.clone(),
-        access: crate::ast::FnAccess::Public,
+        access: FnAccess::Public,
         params,
         #[cfg(not(feature = "no_closure"))]
         externals: Default::default(),

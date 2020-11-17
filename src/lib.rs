@@ -111,12 +111,12 @@ pub type FLOAT = f64;
 #[cfg(feature = "f32_float")]
 pub type FLOAT = f32;
 
-pub use ast::AST;
+pub use ast::{FnAccess, AST};
 pub use dynamic::Dynamic;
 pub use engine::{Engine, EvalContext};
 pub use fn_native::{FnPtr, NativeCallContext};
 pub use fn_register::{RegisterFn, RegisterResultFn};
-pub use module::Module;
+pub use module::{FnNamespace, Module};
 pub use parse_error::{LexError, ParseError, ParseErrorType};
 pub use result::EvalAltResult;
 pub use scope::Scope;
@@ -134,9 +134,6 @@ pub use utils::{calc_native_fn_hash, calc_script_fn_hash};
 pub(crate) use utils::{calc_native_fn_hash, calc_script_fn_hash};
 
 pub use rhai_codegen::*;
-
-#[cfg(not(feature = "no_function"))]
-pub use ast::FnAccess;
 
 #[cfg(not(feature = "no_function"))]
 pub use fn_func::Func;

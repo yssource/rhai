@@ -54,6 +54,8 @@ mod my_module {
         mystic_number()
     }
     // This function will be registered as 'increment'.
+    // It will also be exposed to the global namespace since 'global' is set.
+    #[rhai_fn(global)]
     pub fn increment(num: &mut i64) {
         *num += 1;
     }
@@ -159,10 +161,12 @@ service::increment(x);
 x == 43;
 ```
 
-`Engine::register_module` also exposes all _methods_ and _iterators_ from the module to the
-_global_ namespace, so [getters/setters] and [indexers] for [custom types] work as expected.
+Any functions (usually _methods_) defined in the module with `#[rhai_fn(global)]`, as well as
+all _type iterators_, are automatically exposed to the _global_ namespace, so iteration,
+[getters/setters] and [indexers] for [custom types] can work as expected.
 
-Therefore, in the example able, `increment` works fine when called in method-call style:
+Therefore, in the example above, the `increment` method (defined with `#[rhai_fn(global)]`)
+works fine when called in method-call style:
 
 ```rust
 let x = 42;

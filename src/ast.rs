@@ -17,7 +17,9 @@ use crate::stdlib::{
 use crate::syntax::FnCustomSyntaxEval;
 use crate::token::Token;
 use crate::utils::StraightHasherBuilder;
-use crate::{Dynamic, FnPtr, ImmutableString, Module, Position, Shared, StaticVec, INT, NO_POS};
+use crate::{
+    Dynamic, FnNamespace, FnPtr, ImmutableString, Module, Position, Shared, StaticVec, INT, NO_POS,
+};
 
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
@@ -28,23 +30,13 @@ use crate::Array;
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
 
-/// A type representing the access mode of a scripted function.
+/// A type representing the access mode of a function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum FnAccess {
     /// Public function.
     Public,
     /// Private function.
     Private,
-}
-
-impl fmt::Display for FnAccess {
-    #[inline(always)]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Private => write!(f, "private"),
-            Self::Public => write!(f, "public"),
-        }
-    }
 }
 
 impl FnAccess {
@@ -178,7 +170,7 @@ impl AST {
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clone_functions_only(&self) -> Self {
-        self.clone_functions_only_filtered(|_, _, _| true)
+        self.clone_functions_only_filtered(|_, _, _, _, _| true)
     }
     /// Clone the `AST`'s functions into a new `AST` based on a filter predicate.
     /// No statements are cloned.
@@ -188,7 +180,7 @@ impl AST {
     #[inline(always)]
     pub fn clone_functions_only_filtered(
         &self,
-        mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
+        mut filter: impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> Self {
         let mut functions: Module = Default::default();
         functions.merge_filtered(&self.1, &mut filter);
@@ -251,7 +243,7 @@ impl AST {
     /// ```
     #[inline(always)]
     pub fn merge(&self, other: &Self) -> Self {
-        self.merge_filtered(other, |_, _, _| true)
+        self.merge_filtered(other, |_, _, _, _, _| true)
     }
     /// Combine one `AST` with another.  The second `AST` is consumed.
     ///
@@ -303,7 +295,7 @@ impl AST {
     /// ```
     #[inline(always)]
     pub fn combine(&mut self, other: Self) -> &mut Self {
-        self.combine_filtered(other, |_, _, _| true)
+        self.combine_filtered(other, |_, _, _, _, _| true)
     }
     /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
     /// is returned.
@@ -339,7 +331,8 @@ impl AST {
     ///             "#)?;
     ///
     /// // Merge 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
-    /// let ast = ast1.merge_filtered(&ast2, |_, name, params| name == "error" && params == 0);
+    /// let ast = ast1.merge_filtered(&ast2, |_, _, script, name, params|
+    ///                                 script && name == "error" && params == 0);
     ///
     /// // 'ast' is essentially:
     /// //
@@ -360,7 +353,7 @@ impl AST {
     pub fn merge_filtered(
         &self,
         other: &Self,
-        mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
+        mut filter: impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> Self {
         let Self(statements, functions) = self;
 
@@ -413,7 +406,8 @@ impl AST {
     ///             "#)?;
     ///
     /// // Combine 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
-    /// ast1.combine_filtered(ast2, |_, name, params| name == "error" && params == 0);
+    /// ast1.combine_filtered(ast2, |_, _, script, name, params|
+    ///                                 script && name == "error" && params == 0);
     ///
     /// // 'ast1' is essentially:
     /// //
@@ -434,7 +428,7 @@ impl AST {
     pub fn combine_filtered(
         &mut self,
         other: Self,
-        mut filter: impl FnMut(FnAccess, &str, usize) -> bool,
+        mut filter: impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> &mut Self {
         let Self(ref mut statements, ref mut functions) = self;
         statements.extend(other.0.into_iter());
@@ -459,22 +453,25 @@ impl AST {
     ///                     "#)?;
     ///
     /// // Remove all functions except 'foo(_)'
-    /// ast.retain_functions(|_, name, params| name == "foo" && params == 1);
+    /// ast.retain_functions(|_, _, name, params| name == "foo" && params == 1);
     /// # }
     /// # Ok(())
     /// # }
     /// ```
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
-    pub fn retain_functions(&mut self, filter: impl FnMut(FnAccess, &str, usize) -> bool) {
-        self.1.retain_functions(filter);
+    pub fn retain_functions(
+        &mut self,
+        filter: impl FnMut(FnNamespace, FnAccess, &str, usize) -> bool,
+    ) {
+        self.1.retain_script_functions(filter);
     }
     /// Iterate through all functions
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn iter_functions<'a>(
         &'a self,
-    ) -> impl Iterator<Item = (FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
+    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
         self.1.iter_script_fn()
     }
     /// Clear all function definitions in the `AST`.

@@ -1,11 +1,10 @@
 //! Module defining macros for developing _plugins_.
 
-pub use crate::ast::FnAccess;
 pub use crate::fn_native::{CallableFunction, FnCallArgs};
 pub use crate::stdlib::{any::TypeId, boxed::Box, format, mem, string::ToString, vec as new_vec};
 pub use crate::{
-    Dynamic, Engine, EvalAltResult, ImmutableString, Module, NativeCallContext, RegisterFn,
-    RegisterResultFn,
+    Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, ImmutableString, Module,
+    NativeCallContext, RegisterFn, RegisterResultFn,
 };
 
 #[cfg(not(features = "no_module"))]

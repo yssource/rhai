@@ -6,11 +6,16 @@ Version 0.19.6
 
 This version adds the `switch` statement.
 
+It also allows exposing selected module functions (usually methods) to the global namespace.
+
 New features
 ------------
 
 * `switch` statement.
-* `Engine::register_module` to register a module as a sub-module in the global namespace, while at the same time exposing its method functions globally. This is convenient when registering an API for a custom type.
+* `Engine::register_module` to register a module as a sub-module in the global namespace.
+* `Module::get_fn_namespace` and `Module::set_fn_namespace` can expose a module function to the global namespace. This is convenient when registering an API for a custom type.
+* `set_exported_global_fn!` macro to register a plugin function and expose it to the global namespace.
+* `#[rhai_fn(gobal)]` and `#[rhai_fn(internal)]` attributes to determine whether a function defined in a plugin module should be exposed to the global namespace. This is convenient when defining an API for a custom type.
 
 Enhancements
 ------------

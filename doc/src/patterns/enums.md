@@ -37,7 +37,7 @@ mod MyEnumModule {
         MyEnum::Baz(val1, val2)
     }
     // Access to fields
-    #[rhai_fn(get = "enum_type")]
+    #[rhai_fn(global, get = "enum_type")]
     pub fn get_type(a: &mut MyEnum) -> String {
         match a {
             MyEnum::Foo => "Foo".to_string(),
@@ -45,7 +45,7 @@ mod MyEnumModule {
             MyEnum::Baz(_, _) => "Baz".to_string()
         }
     }
-    #[rhai_fn(get = "field_0")]
+    #[rhai_fn(global, get = "field_0")]
     pub fn get_field_0(a: &mut MyEnum) -> Dynamic {
         match a {
             MyEnum::Foo => Dynamic::UNIT,
@@ -53,7 +53,7 @@ mod MyEnumModule {
             MyEnum::Baz(x, _) => Dynamic::from(x)
         }
     }
-    #[rhai_fn(get = "field_1")]
+    #[rhai_fn(global, get = "field_1")]
     pub fn get_field_1(a: &mut MyEnum) -> Dynamic {
         match a {
             MyEnum::Foo | MyEnum::Bar(_) => Dynamic::UNIT,
@@ -61,41 +61,41 @@ mod MyEnumModule {
         }
     }
     // Printing
-    #[rhai(name = "to_string", name = "print", name = "debug")]
+    #[rhai(global, name = "to_string", name = "print", name = "debug")]
     pub fn to_string(a: &mut MyEnum) -> String {
         format!("{:?}", a))
     }
-    #[rhai_fn(name = "+")]
+    #[rhai_fn(global, name = "+")]
     pub fn add_to_str(s: &str, a: MyEnum) -> String {
         format!("{}{:?}", s, a))
     }
-    #[rhai_fn(name = "+")]
+    #[rhai_fn(global, name = "+")]
     pub fn add_str(a: &mut MyEnum, s: &str) -> String {
         format!("{:?}", a).push_str(s))
     }
-    #[rhai_fn(name = "+=")]
+    #[rhai_fn(global, name = "+=")]
     pub fn append_to_str(s: &mut ImmutableString, a: MyEnum) -> String {
         s += a.to_string())
     }
     // '==' and '!=' operators
-    #[rhai_fn(name = "==")]
+    #[rhai_fn(global, name = "==")]
     pub fn eq(a: &mut MyEnum, b: MyEnum) -> bool {
         a == &b
     }
-    #[rhai_fn(name = "!=")]
+    #[rhai_fn(global, name = "!=")]
     pub fn neq(a: &mut MyEnum, b: MyEnum) -> bool {
         a != &b
     }
     // Array functions
-    #[rhai_fn(name = "push")]
+    #[rhai_fn(global, name = "push")]
     pub fn append_to_array(list: &mut Array, item: MyEnum) {
         list.push(Dynamic::from(item)));
     }
-    #[rhai_fn(name = "+=")]
+    #[rhai_fn(global, name = "+=")]
     pub fn append_to_array_op(list: &mut Array, item: MyEnum) {
         list.push(Dynamic::from(item)));
     }
-    #[rhai_fn(name = "insert")]
+    #[rhai_fn(global, name = "insert")]
     pub fn insert_to_array(list: &mut Array, position: i64, item: MyEnum) {
         if position <= 0 {
             list.insert(0, Dynamic::from(item));
@@ -105,7 +105,7 @@ mod MyEnumModule {
             list.insert(position as usize, Dynamic::from(item));
         }
     }
-    #[rhai_fn(name = "pad")]
+    #[rhai_fn(global, name = "pad")]
     pub fn pad_array(list: &mut Array, len: i64, item: MyEnum) {
         if len as usize > list.len() { list.resize(len as usize, item); }
     }

@@ -105,15 +105,17 @@ pub fn get_hasher() -> impl Hasher {
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 fn calc_fn_hash<'a>(
-    modules: impl Iterator<Item = &'a str>,
+    mut modules: impl Iterator<Item = &'a str>,
     fn_name: &str,
     num: Option<usize>,
     params: impl Iterator<Item = TypeId>,
 ) -> u64 {
     let s = &mut get_hasher();
 
+    // Hash a boolean indicating whether the hash is namespace-qualified.
+    modules.next().is_some().hash(s);
     // We always skip the first module
-    modules.skip(1).for_each(|m| m.hash(s));
+    modules.for_each(|m| m.hash(s));
     s.write(fn_name.as_bytes());
     if let Some(num) = num {
         s.write_usize(num);
