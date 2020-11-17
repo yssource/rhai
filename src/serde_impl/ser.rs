@@ -1,22 +1,18 @@
 //! Implement serialization support of `Dynamic` for [`serde`](https://crates.io/crates/serde).
 
-use crate::dynamic::Dynamic;
-use crate::result::EvalAltResult;
-use crate::token::NO_POS;
-
-#[cfg(not(feature = "no_index"))]
-use crate::Array;
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
+use crate::stdlib::{boxed::Box, fmt, string::ToString};
+use crate::{Dynamic, EvalAltResult, NO_POS};
 use serde::ser::{
     Error, SerializeMap, SerializeSeq, SerializeStruct, SerializeTuple, SerializeTupleStruct,
     Serializer,
 };
 use serde::Serialize;
 
-use crate::stdlib::{boxed::Box, fmt, string::ToString};
+#[cfg(not(feature = "no_index"))]
+use crate::Array;
+
+#[cfg(not(feature = "no_object"))]
+use crate::Map;
 
 /// Serializer for `Dynamic` which is kept as a reference.
 pub struct DynamicSerializer {

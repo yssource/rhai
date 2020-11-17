@@ -1,29 +1,15 @@
 //! Implement function-calling mechanism for `Engine`.
 
 use crate::ast::{Expr, Stmt};
-use crate::dynamic::Dynamic;
 use crate::engine::{
-    search_imports, Engine, Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
+    search_imports, Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
     KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR,
     KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
-use crate::fn_native::{FnCallArgs, FnPtr};
-use crate::module::{Module, NamespaceRef};
+use crate::fn_native::FnCallArgs;
+use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
-use crate::parse_error::ParseErrorType;
-use crate::result::EvalAltResult;
-use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::stdlib::ops::Deref;
-use crate::token::NO_POS;
-use crate::utils::ImmutableString;
-use crate::{calc_native_fn_hash, calc_script_fn_hash, StaticVec, INT};
-
-#[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
+use crate::scope::EntryType as ScopeEntryType;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
@@ -31,34 +17,45 @@ use crate::stdlib::{
     format,
     iter::{empty, once},
     mem,
+    ops::Deref,
     string::ToString,
     vec::Vec,
 };
+use crate::{
+    calc_native_fn_hash, calc_script_fn_hash, Dynamic, Engine, EvalAltResult, FnPtr,
+    ImmutableString, Module, ParseErrorType, Scope, StaticVec, INT, NO_POS,
+};
+
+#[cfg(not(feature = "no_float"))]
+use crate::FLOAT;
+
+#[cfg(not(feature = "no_object"))]
+use crate::Map;
 
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]
 use num_traits::float::Float;
 
 /// Extract the property name from a getter function name.
+#[cfg(not(feature = "no_object"))]
 #[inline(always)]
 fn extract_prop_from_getter(_fn_name: &str) -> Option<&str> {
-    #[cfg(not(feature = "no_object"))]
     if _fn_name.starts_with(crate::engine::FN_GET) {
-        return Some(&_fn_name[crate::engine::FN_GET.len()..]);
+        Some(&_fn_name[crate::engine::FN_GET.len()..])
+    } else {
+        None
     }
-
-    None
 }
 
 /// Extract the property name from a setter function name.
+#[cfg(not(feature = "no_object"))]
 #[inline(always)]
 fn extract_prop_from_setter(_fn_name: &str) -> Option<&str> {
-    #[cfg(not(feature = "no_object"))]
     if _fn_name.starts_with(crate::engine::FN_SET) {
-        return Some(&_fn_name[crate::engine::FN_SET.len()..]);
+        Some(&_fn_name[crate::engine::FN_SET.len()..])
+    } else {
+        None
     }
-
-    None
 }
 
 /// A type that temporarily stores a mutable reference to a `Dynamic`,
@@ -244,6 +241,7 @@ impl Engine {
         }
 
         // Getter function not found?
+        #[cfg(not(feature = "no_object"))]
         if let Some(prop) = extract_prop_from_getter(fn_name) {
             return EvalAltResult::ErrorDotExpr(
                 format!(
@@ -257,6 +255,7 @@ impl Engine {
         }
 
         // Setter function not found?
+        #[cfg(not(feature = "no_object"))]
         if let Some(prop) = extract_prop_from_setter(fn_name) {
             return EvalAltResult::ErrorDotExpr(
                 format!(

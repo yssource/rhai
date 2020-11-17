@@ -1,20 +1,14 @@
 //! Main module defining the script evaluation `Engine`.
 
 use crate::ast::{Expr, FnCallExpr, Ident, IdentX, ReturnType, Stmt};
-use crate::dynamic::{map_std_type_name, Dynamic, Union, Variant};
+use crate::dynamic::{map_std_type_name, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
-use crate::fn_native::{CallableFunction, Callback, FnPtr, IteratorFn, OnVarCallback, Shared};
-use crate::module::{Module, NamespaceRef};
+use crate::fn_native::{CallableFunction, Callback, IteratorFn, OnVarCallback};
+use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
-use crate::result::EvalAltResult;
-use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::syntax::CustomSyntax;
-use crate::token::{Position, NO_POS};
-use crate::utils::{get_hasher, ImmutableString};
-use crate::{calc_native_fn_hash, StaticVec};
-
+use crate::scope::EntryType as ScopeEntryType;
 use crate::stdlib::{
     any::{type_name, TypeId},
     borrow::Cow,
@@ -27,21 +21,21 @@ use crate::stdlib::{
     ops::DerefMut,
     string::{String, ToString},
 };
+use crate::syntax::CustomSyntax;
+use crate::utils::get_hasher;
+use crate::{
+    calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position, Scope,
+    Shared, StaticVec, NO_POS,
+};
 
-/// Variable-sized array of `Dynamic` values.
-///
-/// Not available under the `no_index` feature.
 #[cfg(not(feature = "no_index"))]
-pub type Array = crate::stdlib::vec::Vec<Dynamic>;
+use crate::Array;
 
 #[cfg(not(feature = "no_index"))]
 pub const TYPICAL_ARRAY_SIZE: usize = 8; // Small arrays are typical
 
-/// Hash map of `Dynamic` values with `ImmutableString` keys.
-///
-/// Not available under the `no_object` feature.
 #[cfg(not(feature = "no_object"))]
-pub type Map = HashMap<ImmutableString, Dynamic>;
+use crate::Map;
 
 #[cfg(not(feature = "no_object"))]
 pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
@@ -58,7 +52,7 @@ pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 // We cannot use &str or Cow<str> here because `eval` may load a module and the module name will live beyond
 // the AST of the eval script text. The best we can do is a shared reference.
 #[derive(Debug, Clone, Default)]
-pub struct Imports(StaticVec<(ImmutableString, bool, Shared<Module>)>);
+pub struct Imports(StaticVec<(ImmutableString, Shared<Module>)>);
 
 impl Imports {
     /// Get the length of this stack of imported modules.
@@ -71,7 +65,7 @@ impl Imports {
     }
     /// Get the imported module at a particular index.
     pub fn get(&self, index: usize) -> Option<Shared<Module>> {
-        self.0.get(index).map(|(_, _, m)| m).cloned()
+        self.0.get(index).map(|(_, m)| m).cloned()
     }
     /// Get the index of an imported module by name.
     pub fn find(&self, name: &str) -> Option<usize> {
@@ -79,21 +73,12 @@ impl Imports {
             .iter()
             .enumerate()
             .rev()
-            .find(|(_, (key, _, _))| key.as_str() == name)
+            .find(|(_, (key, _))| key.as_str() == name)
             .map(|(index, _)| index)
     }
     /// Push an imported module onto the stack.
     pub fn push(&mut self, name: impl Into<ImmutableString>, module: impl Into<Shared<Module>>) {
-        self.0.push((name.into(), false, module.into()));
-    }
-    /// Push a fixed module onto the stack.
-    #[cfg(not(feature = "no_module"))]
-    pub(crate) fn push_fixed(
-        &mut self,
-        name: impl Into<ImmutableString>,
-        module: impl Into<Shared<Module>>,
-    ) {
-        self.0.push((name.into(), true, module.into()));
+        self.0.push((name.into(), module.into()));
     }
     /// Truncate the stack of imported modules to a particular length.
     pub fn truncate(&mut self, size: usize) {
@@ -101,58 +86,49 @@ impl Imports {
     }
     /// Get an iterator to this stack of imported modules.
     #[allow(dead_code)]
-    pub fn iter(&self) -> impl Iterator<Item = (&str, bool, Shared<Module>)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
         self.0
             .iter()
-            .map(|(name, fixed, module)| (name.as_str(), *fixed, module.clone()))
+            .map(|(name, module)| (name.as_str(), module.clone()))
     }
     /// Get an iterator to this stack of imported modules.
     #[allow(dead_code)]
     pub(crate) fn iter_raw<'a>(
         &'a self,
-    ) -> impl Iterator<Item = (ImmutableString, bool, Shared<Module>)> + 'a {
+    ) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> + 'a {
         self.0.iter().cloned()
     }
     /// Get a consuming iterator to this stack of imported modules.
-    pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, bool, Shared<Module>)> {
+    pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
         self.0.into_iter()
     }
     /// Add a stream of imported modules.
-    pub fn extend(
-        &mut self,
-        stream: impl Iterator<Item = (ImmutableString, bool, Shared<Module>)>,
-    ) {
+    pub fn extend(&mut self, stream: impl Iterator<Item = (ImmutableString, Shared<Module>)>) {
         self.0.extend(stream)
     }
     /// Does the specified function hash key exist in this stack of imported modules?
     #[allow(dead_code)]
     pub fn contains_fn(&self, hash: u64) -> bool {
-        self.0
-            .iter()
-            .any(|(_, fixed, m)| *fixed && m.contains_qualified_fn(hash))
+        self.0.iter().any(|(_, m)| m.contains_qualified_fn(hash))
     }
     /// Get specified function via its hash key.
     pub fn get_fn(&self, hash: u64) -> Option<&CallableFunction> {
         self.0
             .iter()
             .rev()
-            .filter(|&&(_, fixed, _)| fixed)
-            .find_map(|(_, _, m)| m.get_qualified_fn(hash))
+            .find_map(|(_, m)| m.get_qualified_fn(hash))
     }
     /// Does the specified TypeId iterator exist in this stack of imported modules?
     #[allow(dead_code)]
     pub fn contains_iter(&self, id: TypeId) -> bool {
-        self.0
-            .iter()
-            .any(|(_, fixed, m)| *fixed && m.contains_qualified_iter(id))
+        self.0.iter().any(|(_, m)| m.contains_qualified_iter(id))
     }
     /// Get the specified TypeId iterator.
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.0
             .iter()
             .rev()
-            .filter(|&&(_, fixed, _)| fixed)
-            .find_map(|(_, _, m)| m.get_qualified_iter(id))
+            .find_map(|(_, m)| m.get_qualified_iter(id))
     }
 }
 

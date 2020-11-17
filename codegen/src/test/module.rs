@@ -295,7 +295,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("get_mystic_number", FnAccess::Public, &[],
+                    m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public, &[],
                              get_mystic_number_token().into());
                     if flatten {} else {}
                 }
@@ -331,6 +331,68 @@ mod generate_tests {
     }
 
     #[test]
+    fn one_single_arg_global_fn_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_global_fn {
+                #[rhai_fn(global)]
+                pub fn add_one_to(x: INT) -> INT {
+                    x + 1
+                }
+            }
+        };
+
+        let expected_tokens = quote! {
+            pub mod one_global_fn {
+                pub fn add_one_to(x: INT) -> INT {
+                    x + 1
+                }
+                #[allow(unused_imports)]
+                use super::*;
+
+                pub fn rhai_module_generate() -> Module {
+                    let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    m.set_fn("add_one_to", FnNamespace::Global, FnAccess::Public, &[core::any::TypeId::of::<INT>()],
+                             add_one_to_token().into());
+                    if flatten {} else {}
+                }
+                #[allow(non_camel_case_types)]
+                struct add_one_to_token();
+                impl PluginFunction for add_one_to_token {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
+                        debug_assert_eq!(args.len(), 1usize,
+                                            "wrong arg count: {} != {}", args.len(), 1usize);
+                        let arg0 = mem::take(args[0usize]).cast::<INT>();
+                        Ok(Dynamic::from(add_one_to(arg0)))
+                    }
+
+                    fn is_method_call(&self) -> bool { false }
+                    fn is_variadic(&self) -> bool { false }
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> {
+                        Box::new(add_one_to_token())
+                    }
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<INT>()].into_boxed_slice()
+                    }
+                }
+                pub fn add_one_to_token_callable() -> CallableFunction {
+                    add_one_to_token().into()
+                }
+                pub fn add_one_to_token_input_types() -> Box<[TypeId]> {
+                    add_one_to_token().input_types()
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert_streams_eq(item_mod.generate(), expected_tokens);
+    }
+
+    #[test]
     fn one_single_arg_fn_module() {
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
@@ -355,7 +417,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("add_one_to", FnAccess::Public, &[core::any::TypeId::of::<INT>()],
+                    m.set_fn("add_one_to", FnNamespace::Internal, FnAccess::Public, &[core::any::TypeId::of::<INT>()],
                              add_one_to_token().into());
                     if flatten {} else {}
                 }
@@ -427,10 +489,10 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("add_n", FnAccess::Public, &[core::any::TypeId::of::<INT>()],
+                    m.set_fn("add_n", FnNamespace::Internal, FnAccess::Public, &[core::any::TypeId::of::<INT>()],
                              add_one_to_token().into());
-                    m.set_fn("add_n", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
-                                                          core::any::TypeId::of::<INT>()],
+                    m.set_fn("add_n", FnNamespace::Internal, FnAccess::Public, &[core::any::TypeId::of::<INT>(),
+                                                                                 core::any::TypeId::of::<INT>()],
                              add_n_to_token().into());
                     if flatten {} else {}
                 }
@@ -519,8 +581,8 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("add_together", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
-                                                                 core::any::TypeId::of::<INT>()],
+                    m.set_fn("add_together", FnNamespace::Internal, FnAccess::Public, &[core::any::TypeId::of::<INT>(),
+                                                                                        core::any::TypeId::of::<INT>()],
                              add_together_token().into());
                     if flatten {} else {}
                 }
@@ -584,14 +646,14 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("add", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
-                                                                 core::any::TypeId::of::<INT>()],
+                    m.set_fn("add", FnNamespace::Internal, FnAccess::Public, &[core::any::TypeId::of::<INT>(),
+                                                                               core::any::TypeId::of::<INT>()],
                              add_together_token().into());
-                    m.set_fn("+", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
-                                                                 core::any::TypeId::of::<INT>()],
+                    m.set_fn("+", FnNamespace::Internal, FnAccess::Public, &[core::any::TypeId::of::<INT>(),
+                                                                             core::any::TypeId::of::<INT>()],
                              add_together_token().into());
-                    m.set_fn("add_together", FnAccess::Public, &[core::any::TypeId::of::<INT>(),
-                                                                 core::any::TypeId::of::<INT>()],
+                    m.set_fn("add_together", FnNamespace::Internal, FnAccess::Public, &[core::any::TypeId::of::<INT>(),
+                                                                                        core::any::TypeId::of::<INT>()],
                              add_together_token().into());
                     if flatten {} else {}
                 }
@@ -831,7 +893,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("get_mystic_number", FnAccess::Public, &[],
+                    m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public, &[],
                              get_mystic_number_token().into());
                     if flatten {} else {}
                 }
@@ -921,7 +983,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("print_out_to", FnAccess::Public,
+                    m.set_fn("print_out_to", FnNamespace::Internal, FnAccess::Public,
                              &[core::any::TypeId::of::<ImmutableString>()],
                              print_out_to_token().into());
                     if flatten {} else {}
@@ -983,7 +1045,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("print_out_to", FnAccess::Public,
+                    m.set_fn("print_out_to", FnNamespace::Internal, FnAccess::Public,
                              &[core::any::TypeId::of::<ImmutableString>()],
                              print_out_to_token().into());
                     if flatten {} else {}
@@ -1045,7 +1107,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("increment", FnAccess::Public,
+                    m.set_fn("increment", FnNamespace::Internal, FnAccess::Public,
                              &[core::any::TypeId::of::<FLOAT>()],
                              increment_token().into());
                     if flatten {} else {}
@@ -1110,7 +1172,7 @@ mod generate_tests {
                     }
                     #[allow(unused_mut)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                        m.set_fn("increment", FnAccess::Public,
+                        m.set_fn("increment", FnNamespace::Internal, FnAccess::Public,
                                  &[core::any::TypeId::of::<FLOAT>()],
                                  increment_token().into());
                         if flatten {} else {}
@@ -1195,7 +1257,7 @@ mod generate_tests {
                     }
                     #[allow(unused_mut)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                        m.set_fn("increment", FnAccess::Public,
+                        m.set_fn("increment", FnNamespace::Internal, FnAccess::Public,
                                  &[core::any::TypeId::of::<FLOAT>()],
                                  increment_token().into());
                         if flatten {} else {}
@@ -1279,7 +1341,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("get$square", FnAccess::Public, &[core::any::TypeId::of::<u64>()],
+                    m.set_fn("get$square", FnNamespace::Internal, FnAccess::Public, &[core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
                 }
@@ -1341,9 +1403,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("square", FnAccess::Public, &[core::any::TypeId::of::<u64>()],
+                    m.set_fn("square", FnNamespace::Internal, FnAccess::Public, &[core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
-                    m.set_fn("get$square", FnAccess::Public, &[core::any::TypeId::of::<u64>()],
+                    m.set_fn("get$square", FnNamespace::Internal, FnAccess::Public, &[core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
                 }
@@ -1405,7 +1467,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("set$squared", FnAccess::Public,
+                    m.set_fn("set$squared", FnNamespace::Internal, FnAccess::Public,
                              &[core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
@@ -1470,11 +1532,11 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("set_sq", FnAccess::Public,
+                    m.set_fn("set_sq", FnNamespace::Internal, FnAccess::Public,
                              &[core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
-                    m.set_fn("set$squared", FnAccess::Public,
+                    m.set_fn("set$squared", FnNamespace::Internal, FnAccess::Public,
                              &[core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
@@ -1539,7 +1601,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("index$get$", FnAccess::Public,
+                    m.set_fn("index$get$", FnNamespace::Internal, FnAccess::Public,
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
                              get_by_index_token().into());
@@ -1605,11 +1667,11 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("get", FnAccess::Public,
+                    m.set_fn("get", FnNamespace::Internal, FnAccess::Public,
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
                              get_by_index_token().into());
-                    m.set_fn("index$get$", FnAccess::Public,
+                    m.set_fn("index$get$", FnNamespace::Internal, FnAccess::Public,
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
                              get_by_index_token().into());
@@ -1675,7 +1737,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("index$set$", FnAccess::Public,
+                    m.set_fn("index$set$", FnNamespace::Internal, FnAccess::Public,
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<FLOAT>()],
@@ -1744,12 +1806,12 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("set", FnAccess::Public,
+                    m.set_fn("set", FnNamespace::Internal, FnAccess::Public,
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<FLOAT>()],
                              set_by_index_token().into());
-                    m.set_fn("index$set$", FnAccess::Public,
+                    m.set_fn("index$set$", FnNamespace::Internal, FnAccess::Public,
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<FLOAT>()],

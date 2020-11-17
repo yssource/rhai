@@ -54,6 +54,8 @@ mod my_module {
         mystic_number()
     }
     // This function will be registered as 'increment'.
+    // It will also be exposed to the global namespace since 'global' is set.
+    #[rhai_fn(global)]
     pub fn increment(num: &mut i64) {
         *num += 1;
     }
@@ -159,10 +161,13 @@ service::increment(x);
 x == 43;
 ```
 
-`Engine::register_module` also exposes all _methods_ and _iterators_ from the module to the
-_global_ namespace, so [getters/setters] and [indexers] for [custom types] work as expected.
+All functions (usually _methods_) defined in the module and marked with `#[rhai_fn(global)]`,
+as well as all _type iterators_, are automatically exposed to the _global_ namespace, so
+[iteration]({{rootUrl}}/language/for.md), [getters/setters] and [indexers] for [custom types]
+can work as expected.
 
-Therefore, in the example able, `increment` works fine when called in method-call style:
+Therefore, in the example above, the `increment` method (defined with `#[rhai_fn(global)]`)
+works fine when called in method-call style:
 
 ```rust
 let x = 42;
@@ -481,12 +486,14 @@ Inner attributes can be applied to the inner items of a module to tweak the expo
 
 Parameters should be set on inner attributes to specify the desired behavior.
 
-| Attribute Parameter | Use with                    | Apply to                                              | Description                                            |
-| ------------------- | --------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
-| `skip`              | `#[rhai_fn]`, `#[rhai_mod]` | function or sub-module                                | do not export this function/sub-module                 |
-| `name = "..."`      | `#[rhai_fn]`, `#[rhai_mod]` | function or sub-module                                | registers function/sub-module under the specified name |
-| `get = "..."`       | `#[rhai_fn]`                | `pub fn (&mut Type) -> Value`                         | registers a getter for the named property              |
-| `set = "..."`       | `#[rhai_fn]`                | `pub fn (&mut Type, Value)`                           | registers a setter for the named property              |
-| `index_get`         | `#[rhai_fn]`                | `pub fn (&mut Type, INT) -> Value`                    | registers an index getter                              |
-| `index_set`         | `#[rhai_fn]`                | `pub fn (&mut Type, INT, Value)`                      | registers an index setter                              |
-| `return_raw`        | `#[rhai_fn]`                | `pub fn (...) -> Result<Dynamic, Box<EvalAltResult>>` | marks this as a [fallible function]                    |
+| Attribute Parameter | Use with                    | Apply to                                              | Description                                             |
+| ------------------- | --------------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| `skip`              | `#[rhai_fn]`, `#[rhai_mod]` | function or sub-module                                | do not export this function/sub-module                  |
+| `global`            | `#[rhai_fn]`                | function                                              | expose this function to the global namespace            |
+| `internal`          | `#[rhai_fn]`                | function                                              | keep this function within the internal module namespace |
+| `name = "..."`      | `#[rhai_fn]`, `#[rhai_mod]` | function or sub-module                                | registers function/sub-module under the specified name  |
+| `get = "..."`       | `#[rhai_fn]`                | `pub fn (&mut Type) -> Value`                         | registers a getter for the named property               |
+| `set = "..."`       | `#[rhai_fn]`                | `pub fn (&mut Type, Value)`                           | registers a setter for the named property               |
+| `index_get`         | `#[rhai_fn]`                | `pub fn (&mut Type, INT) -> Value`                    | registers an index getter                               |
+| `index_set`         | `#[rhai_fn]`                | `pub fn (&mut Type, INT, Value)`                      | registers an index setter                               |
+| `return_raw`        | `#[rhai_fn]`                | `pub fn (...) -> Result<Dynamic, Box<EvalAltResult>>` | marks this as a [fallible function]                     |

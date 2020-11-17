@@ -1,20 +1,16 @@
 #![cfg(not(feature = "no_index"))]
 #![allow(non_snake_case)]
 
-use crate::def_package;
-use crate::dynamic::Dynamic;
-use crate::engine::{Array, OP_EQUALS, TYPICAL_ARRAY_SIZE};
-use crate::fn_native::{FnPtr, NativeCallContext};
+use crate::engine::{OP_EQUALS, TYPICAL_ARRAY_SIZE};
 use crate::plugin::*;
-use crate::result::EvalAltResult;
-use crate::token::NO_POS;
-use crate::utils::ImmutableString;
-use crate::INT;
+use crate::stdlib::{any::TypeId, boxed::Box, cmp::max, cmp::Ordering, string::ToString};
+use crate::{
+    def_package, Array, Dynamic, EvalAltResult, FnPtr, ImmutableString, NativeCallContext, INT,
+    NO_POS,
+};
 
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
-
-use crate::stdlib::{any::TypeId, boxed::Box, cmp::max, cmp::Ordering, string::ToString};
 
 pub type Unit = ();
 

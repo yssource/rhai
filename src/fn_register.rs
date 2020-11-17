@@ -2,15 +2,13 @@
 
 #![allow(non_snake_case)]
 
-use crate::ast::FnAccess;
-use crate::dynamic::{Dynamic, DynamicWriteLock, Variant};
-use crate::engine::Engine;
-use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, NativeCallContext, SendSync};
+use crate::dynamic::{DynamicWriteLock, Variant};
+use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
 use crate::r#unsafe::unsafe_cast_box;
-use crate::result::EvalAltResult;
-use crate::utils::ImmutableString;
-
 use crate::stdlib::{any::TypeId, boxed::Box, mem, string::String};
+use crate::{
+    Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, ImmutableString, NativeCallContext,
+};
 
 /// Trait to register custom functions with the `Engine`.
 pub trait RegisterFn<FN, ARGS, RET> {
@@ -189,7 +187,7 @@ macro_rules! def_register {
         {
             #[inline]
             fn register_fn(&mut self, name: &str, f: FN) -> &mut Self {
-                self.global_module.set_fn(name, FnAccess::Public,
+                self.global_module.set_fn(name, FnNamespace::Global, FnAccess::Public,
                     &[$(map_type_id::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_dynamic ; $($par => $let => $clone => $arg),*))
                 );
@@ -204,7 +202,7 @@ macro_rules! def_register {
         {
             #[inline]
             fn register_result_fn(&mut self, name: &str, f: FN) -> &mut Self {
-                self.global_module.set_fn(name, FnAccess::Public,
+                self.global_module.set_fn(name, FnNamespace::Global, FnAccess::Public,
                     &[$(map_type_id::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_result ; $($par => $let => $clone => $arg),*))
                 );

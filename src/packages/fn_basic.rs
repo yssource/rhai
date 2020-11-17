@@ -1,6 +1,5 @@
-use crate::def_package;
-use crate::fn_native::FnPtr;
 use crate::plugin::*;
+use crate::{def_package, FnPtr};
 
 def_package!(crate:BasicFnPackage:"Basic Fn functions.", lib, {
     combine_with_exported_module!(lib, "FnPtr", fn_ptr_functions);

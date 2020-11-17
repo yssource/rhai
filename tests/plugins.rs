@@ -1,6 +1,5 @@
 #![cfg(not(any(feature = "no_index", feature = "no_module")))]
 
-use rhai::module_resolvers::StaticModuleResolver;
 use rhai::plugin::*;
 use rhai::{Engine, EvalAltResult, INT};
 
@@ -96,14 +95,9 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
         "6 kitties"
     );
 
-    let mut resolver = StaticModuleResolver::new();
-    resolver.insert("test", exported_module!(test::special_array_package));
+    engine.register_module("test", exported_module!(test::special_array_package));
 
-    engine.set_module_resolver(Some(resolver));
-    assert_eq!(
-        engine.eval::<INT>(r#"import "test" as test; test::MYSTIC_NUMBER"#)?,
-        42
-    );
+    assert_eq!(engine.eval::<INT>("test::MYSTIC_NUMBER")?, 42);
 
     Ok(())
 }

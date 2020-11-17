@@ -11,11 +11,12 @@ individual functions instead of a full-blown [plugin module].
 Macros
 ------
 
-| Macro                   | Signature                                                          | Description                                                     |
-| ----------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------- |
-| `#[export_fn]`          | apply to rust function defined in a Rust module                    | exports the function                                            |
-| `register_exported_fn!` | `register_exported_fn!(&mut `_engine_`, "`_name_`", `_function_`)` | registers the function into an [`Engine`] under a specific name |
-| `set_exported_fn!`      | `set_exported_fn!(&mut `_module_`, "`_name_`", `_function_`)`      | registers the function into a [`Module`] under a specific name  |
+| Macro                     | Signature                                                            | Description                                                                                         |
+| ------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `#[export_fn]`            | apply to rust function defined in a Rust module                      | exports the function                                                                                |
+| `register_exported_fn!`   | `register_exported_fn!(&mut `_engine_`, "`_name_`", `_function_`)`   | registers the function into an [`Engine`] under a specific name                                     |
+| `set_exported_fn!`        | `set_exported_fn!(&mut `_module_`, "`_name_`", `_function_`)`        | registers the function into a [`Module`] under a specific name                                      |
+| `set_exported_global_fn!` | `set_exported_global_fn!(&mut `_module_`, "`_name_`", `_function_`)` | registers the function into a [`Module`] under a specific name, exposing it to the global namespace |
 
 
 `#[export_fn]` and `register_exported_fn!`

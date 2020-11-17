@@ -1,24 +1,14 @@
 //! Main module defining the lexer and parser.
 
 use crate::ast::{
-    BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, ScriptFnDef, Stmt, AST,
+    BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, ScriptFnDef, Stmt,
 };
-use crate::dynamic::{Dynamic, Union};
-use crate::engine::{Engine, KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+use crate::dynamic::Union;
+use crate::engine::{KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::module::NamespaceRef;
-use crate::optimize::{optimize_into_ast, OptimizationLevel};
-use crate::parse_error::{LexError, ParseError, ParseErrorType};
-use crate::scope::{EntryType as ScopeEntryType, Scope};
-use crate::syntax::CustomSyntax;
-use crate::token::{
-    is_keyword_function, is_valid_identifier, Position, Token, TokenStream, NO_POS,
-};
-use crate::utils::{get_hasher, ImmutableString, StraightHasherBuilder};
-use crate::{calc_script_fn_hash, StaticVec};
-
-#[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
-
+use crate::optimize::optimize_into_ast;
+use crate::optimize::OptimizationLevel;
+use crate::scope::EntryType as ScopeEntryType;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
@@ -31,6 +21,16 @@ use crate::stdlib::{
     vec,
     vec::Vec,
 };
+use crate::syntax::CustomSyntax;
+use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
+use crate::utils::{get_hasher, StraightHasherBuilder};
+use crate::{
+    calc_script_fn_hash, Dynamic, Engine, FnAccess, ImmutableString, LexError, ParseError,
+    ParseErrorType, Position, Scope, StaticVec, AST, NO_POS,
+};
+
+#[cfg(not(feature = "no_float"))]
+use crate::FLOAT;
 
 type PERR = ParseErrorType;
 
@@ -148,10 +148,10 @@ impl<'e> ParseState<'e> {
     }
 
     /// Get an interned string, creating one if it is not yet interned.
-    pub fn get_interned_string<S>(&mut self, text: S) -> ImmutableString
-    where
-        S: AsRef<str> + Into<ImmutableString>,
-    {
+    pub fn get_interned_string(
+        &mut self,
+        text: impl AsRef<str> + Into<ImmutableString>,
+    ) -> ImmutableString {
         #[allow(clippy::map_entry)]
         if !self.strings.contains_key(text.as_ref()) {
             let value: ImmutableString = text.into();
@@ -1418,7 +1418,9 @@ fn make_dot_expr(
         }
         // lhs.Fn() or lhs.eval()
         (_, Expr::FnCall(x, pos))
-            if x.args.len() == 0 && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL].contains(&x.name.as_ref()) =>
+            if x.args.len() == 0
+                && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL]
+                    .contains(&x.name.as_ref()) =>
         {
             return Err(PERR::BadInput(LexError::ImproperSymbol(format!(
                 "'{}' should not be called in method style. Try {}(...);",
@@ -2369,9 +2371,9 @@ fn parse_stmt(
         Token::Fn | Token::Private => {
             let access = if matches!(token, Token::Private) {
                 eat_token(input, Token::Private);
-                crate::FnAccess::Private
+                FnAccess::Private
             } else {
-                crate::FnAccess::Public
+                FnAccess::Public
             };
 
             match input.next().unwrap() {
@@ -2552,7 +2554,7 @@ fn parse_fn(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    access: crate::FnAccess,
+    access: FnAccess,
     mut settings: ParseSettings,
 ) -> Result<ScriptFnDef, ParseError> {
     #[cfg(not(feature = "unchecked"))]
@@ -2664,11 +2666,13 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<IdentX>, pos: P
         args.push(Expr::Variable(Box::new((None, None, 0, x.clone().into()))));
     });
 
-    let hash = calc_script_fn_hash(empty(), crate::engine::KEYWORD_FN_PTR_CURRY, num_externals + 1);
+    let curry_func = crate::engine::KEYWORD_FN_PTR_CURRY;
+
+    let hash = calc_script_fn_hash(empty(), curry_func, num_externals + 1);
 
     let expr = Expr::FnCall(
         Box::new(FnCallExpr {
-            name: crate::engine::KEYWORD_FN_PTR_CURRY.into(),
+            name: curry_func.into(),
             hash,
             args,
             ..Default::default()
@@ -2785,7 +2789,7 @@ fn parse_anon_fn(
     // Define the function
     let script = ScriptFnDef {
         name: fn_name.clone(),
-        access: crate::FnAccess::Public,
+        access: FnAccess::Public,
         params,
         #[cfg(not(feature = "no_closure"))]
         externals: Default::default(),

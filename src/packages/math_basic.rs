@@ -1,9 +1,7 @@
 #![allow(non_snake_case)]
 
-use crate::def_package;
 use crate::plugin::*;
-use crate::token::NO_POS;
-use crate::INT;
+use crate::{def_package, INT, NO_POS};
 
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;

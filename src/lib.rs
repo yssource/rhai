@@ -111,12 +111,12 @@ pub type FLOAT = f64;
 #[cfg(feature = "f32_float")]
 pub type FLOAT = f32;
 
-pub use ast::AST;
+pub use ast::{FnAccess, AST};
 pub use dynamic::Dynamic;
 pub use engine::{Engine, EvalContext};
 pub use fn_native::{FnPtr, NativeCallContext};
 pub use fn_register::{RegisterFn, RegisterResultFn};
-pub use module::Module;
+pub use module::{FnNamespace, Module};
 pub use parse_error::{LexError, ParseError, ParseErrorType};
 pub use result::EvalAltResult;
 pub use scope::Scope;
@@ -136,16 +136,19 @@ pub(crate) use utils::{calc_native_fn_hash, calc_script_fn_hash};
 pub use rhai_codegen::*;
 
 #[cfg(not(feature = "no_function"))]
-pub use ast::FnAccess;
-
-#[cfg(not(feature = "no_function"))]
 pub use fn_func::Func;
 
+/// Variable-sized array of `Dynamic` values.
+///
+/// Not available under the `no_index` feature.
 #[cfg(not(feature = "no_index"))]
-pub use engine::Array;
+pub type Array = stdlib::vec::Vec<Dynamic>;
 
+/// Hash map of `Dynamic` values with `ImmutableString` keys.
+///
+/// Not available under the `no_object` feature.
 #[cfg(not(feature = "no_object"))]
-pub use engine::Map;
+pub type Map = stdlib::collections::HashMap<ImmutableString, Dynamic>;
 
 #[cfg(not(feature = "no_module"))]
 pub use module::ModuleResolver;

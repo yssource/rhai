@@ -1,7 +1,6 @@
 //! Module containing various utility types and functions.
 
-use crate::fn_native::{shared_make_mut, shared_take, Shared};
-
+use crate::fn_native::{shared_make_mut, shared_take};
 use crate::stdlib::{
     any::TypeId,
     borrow::Borrow,
@@ -14,12 +13,7 @@ use crate::stdlib::{
     str::FromStr,
     string::{String, ToString},
 };
-
-#[cfg(not(feature = "no_std"))]
-use crate::stdlib::collections::hash_map::DefaultHasher;
-
-#[cfg(feature = "no_std")]
-use ahash::AHasher;
+use crate::Shared;
 
 /// A hasher that only takes one single `u64` and returns it as a hash key.
 ///
@@ -95,9 +89,9 @@ pub fn calc_script_fn_hash<'a>(
 /// Create an instance of the default hasher.
 pub fn get_hasher() -> impl Hasher {
     #[cfg(feature = "no_std")]
-    let s: AHasher = Default::default();
+    let s: ahash::AHasher = Default::default();
     #[cfg(not(feature = "no_std"))]
-    let s = DefaultHasher::new();
+    let s = crate::stdlib::collections::hash_map::DefaultHasher::new();
 
     s
 }
@@ -111,15 +105,17 @@ pub fn get_hasher() -> impl Hasher {
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 fn calc_fn_hash<'a>(
-    modules: impl Iterator<Item = &'a str>,
+    mut modules: impl Iterator<Item = &'a str>,
     fn_name: &str,
     num: Option<usize>,
     params: impl Iterator<Item = TypeId>,
 ) -> u64 {
     let s = &mut get_hasher();
 
+    // Hash a boolean indicating whether the hash is namespace-qualified.
+    modules.next().is_some().hash(s);
     // We always skip the first module
-    modules.skip(1).for_each(|m| m.hash(s));
+    modules.for_each(|m| m.hash(s));
     s.write(fn_name.as_bytes());
     if let Some(num) = num {
         s.write_usize(num);

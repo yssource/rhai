@@ -1,10 +1,8 @@
 //! Module containing all built-in _packages_ available to Rhai, plus facilities to define custom packages.
 
-use crate::fn_native::{CallableFunction, IteratorFn, Shared};
-use crate::module::Module;
-use crate::StaticVec;
-
+use crate::fn_native::{CallableFunction, IteratorFn};
 use crate::stdlib::any::TypeId;
+use crate::{Module, Shared, StaticVec};
 
 pub(crate) mod arithmetic;
 mod array_basic;

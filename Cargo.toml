@@ -24,7 +24,7 @@ categories = [ "no-std", "embedded", "wasm", "parser-implementations" ]
 
 [dependencies]
 smallvec = { version = "1.4.2", default-features = false }
-rhai_codegen = { version = "0.2", path = "codegen" }
+rhai_codegen = { version = "0.3", path = "codegen" }
 
 [features]
 default = []

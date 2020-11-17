@@ -91,7 +91,7 @@ Many script-oriented exceptions can be caught via `try` ... `catch`:
 | [Array]/[string] indexing out-of-bounds       |   error message [string]   |
 | Indexing with an inappropriate data type      |   error message [string]   |
 | Error in a dot expression                     |   error message [string]   |
-| `for` statement without an iterator           |   error message [string]   |
+| `for` statement without an type iterator      |   error message [string]   |
 | Error in an `in` expression                   |   error message [string]   |
 | Data race detected                            |   error message [string]   |
 

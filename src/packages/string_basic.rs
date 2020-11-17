@@ -1,23 +1,19 @@
 #![allow(non_snake_case)]
 
-use crate::def_package;
 use crate::engine::{FN_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
-use crate::fn_native::FnPtr;
 use crate::plugin::*;
-use crate::utils::ImmutableString;
-use crate::INT;
+use crate::stdlib::{
+    fmt::{Debug, Display},
+    format,
+    string::ToString,
+};
+use crate::{def_package, FnPtr, ImmutableString, INT};
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
 
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
-
-use crate::stdlib::{
-    fmt::{Debug, Display},
-    format,
-    string::ToString,
-};
 
 type Unit = ();
 

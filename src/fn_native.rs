@@ -1,28 +1,19 @@
 //! Module defining interfaces to native-Rust functions.
 
 use crate::ast::{FnAccess, ScriptFnDef};
-use crate::dynamic::Dynamic;
-use crate::engine::{Engine, EvalContext, Imports};
-use crate::module::Module;
+use crate::engine::Imports;
 use crate::plugin::PluginFunction;
-use crate::result::EvalAltResult;
-use crate::token::{is_valid_identifier, NO_POS};
-use crate::utils::ImmutableString;
-use crate::{calc_script_fn_hash, StaticVec};
-
 use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, iter::empty, mem, string::String};
+use crate::token::is_valid_identifier;
+use crate::{
+    calc_script_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ImmutableString, Module,
+    StaticVec, NO_POS,
+};
 
 #[cfg(not(feature = "sync"))]
 use crate::stdlib::rc::Rc;
 #[cfg(feature = "sync")]
 use crate::stdlib::sync::Arc;
-
-#[cfg(any(not(feature = "no_closure"), not(feature = "no_module")))]
-#[cfg(not(feature = "sync"))]
-use crate::stdlib::cell::RefCell;
-#[cfg(any(not(feature = "no_closure"), not(feature = "no_module")))]
-#[cfg(feature = "sync")]
-use crate::stdlib::sync::RwLock;
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
@@ -48,11 +39,11 @@ pub type Shared<T> = Arc<T>;
 /// Synchronized shared object.
 #[cfg(any(not(feature = "no_closure"), not(feature = "no_module")))]
 #[cfg(not(feature = "sync"))]
-pub type Locked<T> = RefCell<T>;
+pub type Locked<T> = crate::stdlib::cell::RefCell<T>;
 /// Synchronized shared object.
 #[cfg(any(not(feature = "no_closure"), not(feature = "no_module")))]
 #[cfg(feature = "sync")]
-pub type Locked<T> = RwLock<T>;
+pub type Locked<T> = crate::stdlib::sync::RwLock<T>;
 
 /// Context of native Rust function call.
 #[derive(Debug, Copy, Clone)]

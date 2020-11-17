@@ -339,7 +339,48 @@ pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream
     };
     let gen_mod_path = crate::register::generated_module_path(&rust_modpath);
     let tokens = quote! {
-        #module_expr.set_fn(#export_name, FnAccess::Public,
+        #module_expr.set_fn(#export_name, FnNamespace::Internal, FnAccess::Public,
+                            #gen_mod_path::token_input_types().as_ref(),
+                            #gen_mod_path::token_callable());
+    };
+    proc_macro::TokenStream::from(tokens)
+}
+
+/// Macro to register a _plugin function_ into a Rhai `Module` and expose it globally.
+///
+/// # Usage
+///
+/// ```
+/// # use rhai::{Engine, EvalAltResult};
+/// use rhai::plugin::*;
+///
+/// #[export_fn]
+/// fn my_plugin_function(x: i64) -> i64 {
+///     x * 2
+/// }
+///
+/// # fn main() -> Result<(), Box<EvalAltResult>> {
+/// let mut engine = Engine::new();
+///
+/// let mut module = Module::new();
+/// set_exported_global_fn!(module, "func", my_plugin_function);
+///
+/// engine.register_module("test", module);
+///
+/// assert_eq!(engine.eval::<i64>("func(21)")?, 42);
+/// # Ok(())
+/// # }
+/// ```
+#[proc_macro]
+pub fn set_exported_global_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let (module_expr, export_name, rust_modpath) = match crate::register::parse_register_macro(args)
+    {
+        Ok(triple) => triple,
+        Err(e) => return e.to_compile_error().into(),
+    };
+    let gen_mod_path = crate::register::generated_module_path(&rust_modpath);
+    let tokens = quote! {
+        #module_expr.set_fn(#export_name, FnNamespace::Global, FnAccess::Public,
                             #gen_mod_path::token_input_types().as_ref(),
                             #gen_mod_path::token_callable());
     };

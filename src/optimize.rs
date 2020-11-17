@@ -1,19 +1,12 @@
 //! Module implementing the AST optimizer.
 
-use crate::ast::{Expr, ScriptFnDef, Stmt, AST};
-use crate::dynamic::Dynamic;
+use crate::ast::{Expr, ScriptFnDef, Stmt};
 use crate::engine::{
-    Engine, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT,
+    KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT,
     KEYWORD_TYPE_OF,
 };
 use crate::fn_call::run_builtin_binary_op;
-use crate::module::Module;
 use crate::parser::map_dynamic_to_expr;
-use crate::scope::Scope;
-use crate::token::{is_valid_identifier, Position, NO_POS};
-use crate::utils::get_hasher;
-use crate::{calc_native_fn_hash, StaticVec};
-
 use crate::stdlib::{
     boxed::Box,
     hash::{Hash, Hasher},
@@ -22,6 +15,11 @@ use crate::stdlib::{
     string::{String, ToString},
     vec,
     vec::Vec,
+};
+use crate::token::is_valid_identifier;
+use crate::utils::get_hasher;
+use crate::{
+    calc_native_fn_hash, Dynamic, Engine, Module, Position, Scope, StaticVec, AST, NO_POS,
 };
 
 /// Level of optimization performed.

@@ -1,10 +1,5 @@
-use crate::engine::Engine;
-use crate::fn_native::Shared;
-use crate::module::{Module, ModuleResolver};
-use crate::result::EvalAltResult;
-use crate::token::Position;
-
 use crate::stdlib::{boxed::Box, collections::HashMap, ops::AddAssign, string::String};
+use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 
 /// Module resolution service that serves modules added into it.
 ///

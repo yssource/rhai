@@ -1,9 +1,8 @@
 //! Module that defines the `Scope` type representing a function call-stack scope.
 
-use crate::dynamic::{Dynamic, Variant};
-use crate::StaticVec;
-
+use crate::dynamic::Variant;
 use crate::stdlib::{borrow::Cow, boxed::Box, iter, string::String, vec::Vec};
+use crate::{Dynamic, StaticVec};
 
 /// Type of an entry in the Scope.
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]

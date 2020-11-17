@@ -267,7 +267,7 @@ fn test_closures_external() -> Result<(), Box<EvalAltResult>> {
     let fn_ptr = engine.eval_ast::<FnPtr>(&ast)?;
 
     // Get rid of the script, retaining only functions
-    ast.retain_functions(|_, _, _| true);
+    ast.retain_functions(|_, _, _, _| true);
 
     // Closure 'f' captures: the engine, the AST, and the curried function pointer
     let f = move |x: INT| fn_ptr.call_dynamic((&engine, &[ast.as_ref()]).into(), None, [x.into()]);

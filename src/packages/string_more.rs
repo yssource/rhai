@@ -1,16 +1,10 @@
 #![allow(non_snake_case)]
 
-use crate::def_package;
-use crate::dynamic::Dynamic;
-use crate::fn_native::FnPtr;
 use crate::plugin::*;
-use crate::utils::ImmutableString;
-use crate::StaticVec;
-use crate::INT;
-
 use crate::stdlib::{
     any::TypeId, boxed::Box, format, mem, string::String, string::ToString, vec::Vec,
 };
+use crate::{def_package, Dynamic, FnPtr, ImmutableString, StaticVec, INT};
 
 macro_rules! gen_concat_functions {
     ($root:ident => $($arg_type:ident),+ ) => {

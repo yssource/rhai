@@ -1,10 +1,8 @@
 #![allow(non_snake_case)]
 
-use crate::def_package;
 use crate::plugin::*;
-use crate::INT;
-
-use crate::{result::EvalAltResult, token::NO_POS};
+use crate::stdlib::{format, string::String};
+use crate::{def_package, EvalAltResult, INT, NO_POS};
 
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
@@ -12,8 +10,6 @@ use crate::FLOAT;
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]
 use num_traits::float::Float;
-
-use crate::stdlib::{format, string::String};
 
 #[inline(always)]
 pub fn make_err(msg: impl Into<String>) -> Box<EvalAltResult> {
