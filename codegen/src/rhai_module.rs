@@ -4,7 +4,7 @@ use quote::{quote, ToTokens};
 
 use crate::attrs::ExportScope;
 use crate::function::flatten_type_groups;
-use crate::function::{ExportedFn, FnSpecialAccess};
+use crate::function::{ExportedFn, FnNamespaceAccess, FnSpecialAccess};
 use crate::module::Module;
 
 pub(crate) type ExportedConst = (String, Box<syn::Type>, syn::Expr);
@@ -80,6 +80,7 @@ pub(crate) fn generate_body(
             function.name().span(),
         );
         let reg_names = function.exported_names();
+        let mut namespace = FnNamespaceAccess::Internal;
 
         let fn_input_types: Vec<syn::Expr> = function
             .arg_list()
@@ -123,12 +124,22 @@ pub(crate) fn generate_body(
             })
             .collect();
 
+        if let Some(ns) = function.params().namespace {
+            namespace = ns;
+        }
+
         for fn_literal in reg_names {
             set_fn_stmts.push(
-                syn::parse2::<syn::Stmt>(quote! {
-                    m.set_fn(#fn_literal, FnAccess::Public, &[#(#fn_input_types),*],
-                             #fn_token_name().into());
-                })
+                match namespace {
+                    FnNamespaceAccess::Global => syn::parse2::<syn::Stmt>(quote! {
+                        m.set_fn(#fn_literal, FnNamespace::Global, FnAccess::Public, &[#(#fn_input_types),*],
+                                 #fn_token_name().into());
+                    }),
+                    FnNamespaceAccess::Internal => syn::parse2::<syn::Stmt>(quote! {
+                        m.set_fn(#fn_literal, FnNamespace::Internal, FnAccess::Public, &[#(#fn_input_types),*],
+                                 #fn_token_name().into());
+                    }),
+                }
                 .unwrap(),
             );
         }

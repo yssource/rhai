@@ -481,12 +481,14 @@ Inner attributes can be applied to the inner items of a module to tweak the expo
 
 Parameters should be set on inner attributes to specify the desired behavior.
 
-| Attribute Parameter | Use with                    | Apply to                                              | Description                                            |
-| ------------------- | --------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
-| `skip`              | `#[rhai_fn]`, `#[rhai_mod]` | function or sub-module                                | do not export this function/sub-module                 |
-| `name = "..."`      | `#[rhai_fn]`, `#[rhai_mod]` | function or sub-module                                | registers function/sub-module under the specified name |
-| `get = "..."`       | `#[rhai_fn]`                | `pub fn (&mut Type) -> Value`                         | registers a getter for the named property              |
-| `set = "..."`       | `#[rhai_fn]`                | `pub fn (&mut Type, Value)`                           | registers a setter for the named property              |
-| `index_get`         | `#[rhai_fn]`                | `pub fn (&mut Type, INT) -> Value`                    | registers an index getter                              |
-| `index_set`         | `#[rhai_fn]`                | `pub fn (&mut Type, INT, Value)`                      | registers an index setter                              |
-| `return_raw`        | `#[rhai_fn]`                | `pub fn (...) -> Result<Dynamic, Box<EvalAltResult>>` | marks this as a [fallible function]                    |
+| Attribute Parameter | Use with                    | Apply to                                              | Description                                             |
+| ------------------- | --------------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| `skip`              | `#[rhai_fn]`, `#[rhai_mod]` | function or sub-module                                | do not export this function/sub-module                  |
+| `global`            | `#[rhai_fn]`                | function                                              | expose this function to the global namespace            |
+| `internal`          | `#[rhai_fn]`                | function                                              | keep this function within the internal module namespace |
+| `name = "..."`      | `#[rhai_fn]`, `#[rhai_mod]` | function or sub-module                                | registers function/sub-module under the specified name  |
+| `get = "..."`       | `#[rhai_fn]`                | `pub fn (&mut Type) -> Value`                         | registers a getter for the named property               |
+| `set = "..."`       | `#[rhai_fn]`                | `pub fn (&mut Type, Value)`                           | registers a setter for the named property               |
+| `index_get`         | `#[rhai_fn]`                | `pub fn (&mut Type, INT) -> Value`                    | registers an index getter                               |
+| `index_set`         | `#[rhai_fn]`                | `pub fn (&mut Type, INT, Value)`                      | registers an index setter                               |
+| `return_raw`        | `#[rhai_fn]`                | `pub fn (...) -> Result<Dynamic, Box<EvalAltResult>>` | marks this as a [fallible function]                     |
