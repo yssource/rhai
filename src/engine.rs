@@ -224,7 +224,7 @@ impl IndexChainValue {
     #[cfg(not(feature = "no_index"))]
     pub fn as_value(self) -> Dynamic {
         match self {
-            Self::None | Self::FnCallArgs(_) => panic!("expecting IndexChainValue::Value"),
+            Self::None | Self::FnCallArgs(_) => unreachable!("expecting IndexChainValue::Value"),
             Self::Value(value) => value,
         }
     }
@@ -236,7 +236,7 @@ impl IndexChainValue {
     #[cfg(not(feature = "no_object"))]
     pub fn as_fn_call_args(self) -> StaticVec<Dynamic> {
         match self {
-            Self::None | Self::Value(_) => panic!("expecting IndexChainValue::FnCallArgs"),
+            Self::None | Self::Value(_) => unreachable!("expecting IndexChainValue::FnCallArgs"),
             Self::FnCallArgs(value) => value,
         }
     }
@@ -939,7 +939,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         target: &mut Target,
         rhs: &Expr,
-        mut idx_values: StaticVec<IndexChainValue>,
+        idx_values: &mut StaticVec<IndexChainValue>,
         chain_type: ChainType,
         level: usize,
         new_val: Option<(Dynamic, Position)>,
@@ -1261,19 +1261,10 @@ impl Engine {
             _ => unreachable!(),
         };
 
-        let mut idx_values = StaticVec::new();
+        let idx_values = &mut Default::default();
 
         self.eval_indexed_chain(
-            scope,
-            mods,
-            state,
-            lib,
-            this_ptr,
-            rhs,
-            chain_type,
-            &mut idx_values,
-            0,
-            level,
+            scope, mods, state, lib, this_ptr, rhs, chain_type, idx_values, 0, level,
         )?;
 
         match lhs {
