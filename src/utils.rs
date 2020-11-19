@@ -116,9 +116,9 @@ fn calc_fn_hash<'a>(
     modules.next().is_some().hash(s);
     // We always skip the first module
     modules.for_each(|m| m.hash(s));
-    s.write(fn_name.as_bytes());
+    fn_name.hash(s);
     if let Some(num) = num {
-        s.write_usize(num);
+        num.hash(s);
     } else {
         params.for_each(|t| t.hash(s));
     }

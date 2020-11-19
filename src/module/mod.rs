@@ -1588,7 +1588,7 @@ impl Module {
                             ..
                         },
                     )| {
-                        // Flatten all methods so they can be available without namespace qualifiers
+                        // Flatten all functions with global namespace
                         if namespace.is_global() {
                             functions.insert(hash, func.clone());
                         }

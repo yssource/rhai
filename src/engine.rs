@@ -52,83 +52,97 @@ pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 // We cannot use &str or Cow<str> here because `eval` may load a module and the module name will live beyond
 // the AST of the eval script text. The best we can do is a shared reference.
 #[derive(Debug, Clone, Default)]
-pub struct Imports(StaticVec<(ImmutableString, Shared<Module>)>);
+pub struct Imports(Option<StaticVec<(ImmutableString, Shared<Module>)>>);
 
 impl Imports {
     /// Get the length of this stack of imported modules.
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.0.as_ref().map_or(0, StaticVec::len)
     }
     /// Is this stack of imported modules empty?
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.0.as_ref().map_or(true, StaticVec::is_empty)
     }
     /// Get the imported module at a particular index.
     pub fn get(&self, index: usize) -> Option<Shared<Module>> {
-        self.0.get(index).map(|(_, m)| m).cloned()
+        self.0
+            .as_ref()
+            .and_then(|x| x.get(index))
+            .map(|(_, m)| m)
+            .cloned()
     }
     /// Get the index of an imported module by name.
     pub fn find(&self, name: &str) -> Option<usize> {
-        self.0
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|(_, (key, _))| key.as_str() == name)
-            .map(|(index, _)| index)
+        self.0.as_ref().and_then(|x| {
+            x.iter()
+                .enumerate()
+                .rev()
+                .find(|(_, (key, _))| key.as_str() == name)
+                .map(|(index, _)| index)
+        })
     }
     /// Push an imported module onto the stack.
     pub fn push(&mut self, name: impl Into<ImmutableString>, module: impl Into<Shared<Module>>) {
-        self.0.push((name.into(), module.into()));
+        if self.0.is_none() {
+            self.0 = Some(Default::default());
+        }
+
+        self.0.as_mut().unwrap().push((name.into(), module.into()));
     }
     /// Truncate the stack of imported modules to a particular length.
     pub fn truncate(&mut self, size: usize) {
-        self.0.truncate(size);
+        if self.0.is_some() {
+            self.0.as_mut().unwrap().truncate(size);
+        }
     }
     /// Get an iterator to this stack of imported modules.
     #[allow(dead_code)]
     pub fn iter(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
-        self.0
-            .iter()
-            .map(|(name, module)| (name.as_str(), module.clone()))
+        self.0.iter().flat_map(|lib| {
+            lib.iter()
+                .map(|(name, module)| (name.as_str(), module.clone()))
+        })
     }
     /// Get an iterator to this stack of imported modules.
     #[allow(dead_code)]
     pub(crate) fn iter_raw<'a>(
         &'a self,
     ) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> + 'a {
-        self.0.iter().cloned()
+        self.0.iter().flat_map(|lib| lib.iter().cloned())
     }
     /// Get a consuming iterator to this stack of imported modules.
     pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
-        self.0.into_iter()
+        self.0.into_iter().flat_map(|lib| lib.into_iter())
     }
     /// Add a stream of imported modules.
     pub fn extend(&mut self, stream: impl Iterator<Item = (ImmutableString, Shared<Module>)>) {
-        self.0.extend(stream)
+        self.0.as_mut().unwrap().extend(stream)
     }
     /// Does the specified function hash key exist in this stack of imported modules?
     #[allow(dead_code)]
     pub fn contains_fn(&self, hash: u64) -> bool {
-        self.0.iter().any(|(_, m)| m.contains_qualified_fn(hash))
+        self.0.as_ref().map_or(false, |x| {
+            x.iter().any(|(_, m)| m.contains_qualified_fn(hash))
+        })
     }
     /// Get specified function via its hash key.
     pub fn get_fn(&self, hash: u64) -> Option<&CallableFunction> {
         self.0
-            .iter()
-            .rev()
-            .find_map(|(_, m)| m.get_qualified_fn(hash))
+            .as_ref()
+            .and_then(|x| x.iter().rev().find_map(|(_, m)| m.get_qualified_fn(hash)))
     }
     /// Does the specified TypeId iterator exist in this stack of imported modules?
     #[allow(dead_code)]
     pub fn contains_iter(&self, id: TypeId) -> bool {
-        self.0.iter().any(|(_, m)| m.contains_qualified_iter(id))
+        self.0.as_ref().map_or(false, |x| {
+            x.iter().any(|(_, m)| m.contains_qualified_iter(id))
+        })
     }
     /// Get the specified TypeId iterator.
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.0
-            .iter()
-            .rev()
-            .find_map(|(_, m)| m.get_qualified_iter(id))
+            .as_ref()
+            .and_then(|x| x.iter().rev().find_map(|(_, m)| m.get_qualified_iter(id)))
     }
 }
 
