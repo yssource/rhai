@@ -1521,14 +1521,12 @@ impl Module {
         // Non-private functions defined become module functions
         #[cfg(not(feature = "no_function"))]
         {
-            let ast_lib: Shared<Module> = ast.lib().clone().into();
-
             ast.iter_functions()
                 .filter(|(_, access, _, _, _)| !access.is_private())
                 .for_each(|(_, _, _, _, func)| {
                     // Encapsulate AST environment
                     let mut func = func.as_ref().clone();
-                    func.lib = Some(ast_lib.clone());
+                    func.lib = Some(ast.shared_lib());
                     func.mods = func_mods.clone();
                     module.set_script_fn(func.into());
                 });

@@ -150,6 +150,12 @@ impl AST {
     pub(crate) fn statements_mut(&mut self) -> &mut Vec<Stmt> {
         &mut self.0
     }
+    /// Get the internal shared `Module` containing all script-defined functions.
+    #[cfg(not(feature = "internals"))]
+    #[inline(always)]
+    pub(crate) fn shared_lib(&self) -> Shared<Module> {
+        self.1.clone()
+    }
     /// Get the internal `Module` containing all script-defined functions.
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
