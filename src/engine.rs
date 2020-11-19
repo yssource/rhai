@@ -1815,8 +1815,7 @@ impl Engine {
                 .into())
             }
 
-            Expr::True(_) => Ok(true.into()),
-            Expr::False(_) => Ok(false.into()),
+            Expr::BoolConstant(x, _) => Ok((*x).into()),
             Expr::Unit(_) => Ok(Dynamic::UNIT),
 
             Expr::Custom(custom, _) => {

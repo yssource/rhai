@@ -464,8 +464,7 @@ fn parse_index_chain(
             | Expr::And(_, _)
             | Expr::Or(_, _)
             | Expr::In(_, _)
-            | Expr::True(_)
-            | Expr::False(_)
+            | Expr::BoolConstant(_, _)
             | Expr::Unit(_) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
@@ -499,8 +498,7 @@ fn parse_index_chain(
             | Expr::And(_, _)
             | Expr::Or(_, _)
             | Expr::In(_, _)
-            | Expr::True(_)
-            | Expr::False(_)
+            | Expr::BoolConstant(_, _)
             | Expr::Unit(_) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Only arrays, object maps and strings can be indexed".into(),
@@ -541,7 +539,7 @@ fn parse_index_chain(
             .into_err(x.position()))
         }
         // lhs[true], lhs[false]
-        x @ Expr::True(_) | x @ Expr::False(_) => {
+        x @ Expr::BoolConstant(_, _) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a boolean".into(),
             )
@@ -999,8 +997,8 @@ fn parse_primary(
         Token::LeftBracket => parse_array_literal(input, state, lib, settings.level_up())?,
         #[cfg(not(feature = "no_object"))]
         Token::MapStart => parse_map_literal(input, state, lib, settings.level_up())?,
-        Token::True => Expr::True(settings.pos),
-        Token::False => Expr::False(settings.pos),
+        Token::True => Expr::BoolConstant(true, settings.pos),
+        Token::False => Expr::BoolConstant(false, settings.pos),
         Token::LexError(err) => return Err(err.into_err(settings.pos)),
 
         _ => {
@@ -1451,8 +1449,7 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
         | (_, x @ Expr::And(_, _))
         | (_, x @ Expr::Or(_, _))
         | (_, x @ Expr::In(_, _))
-        | (_, x @ Expr::True(_))
-        | (_, x @ Expr::False(_))
+        | (_, x @ Expr::BoolConstant(_, _))
         | (_, x @ Expr::Unit(_)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression expects a string, array or object map".into(),
@@ -1492,8 +1489,7 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
         (x @ Expr::And(_, _), Expr::StringConstant(_, _))
         | (x @ Expr::Or(_, _), Expr::StringConstant(_, _))
         | (x @ Expr::In(_, _), Expr::StringConstant(_, _))
-        | (x @ Expr::True(_), Expr::StringConstant(_, _))
-        | (x @ Expr::False(_), Expr::StringConstant(_, _)) => {
+        | (x @ Expr::BoolConstant(_, _), Expr::StringConstant(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for a string expects a string, not a boolean".into(),
             )
@@ -1545,8 +1541,7 @@ fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseErr
         (x @ Expr::And(_, _), Expr::Map(_, _))
         | (x @ Expr::Or(_, _), Expr::Map(_, _))
         | (x @ Expr::In(_, _), Expr::Map(_, _))
-        | (x @ Expr::True(_), Expr::Map(_, _))
-        | (x @ Expr::False(_), Expr::Map(_, _)) => {
+        | (x @ Expr::BoolConstant(_, _), Expr::Map(_, _)) => {
             return Err(PERR::MalformedInExpr(
                 "'in' expression for an object map expects a string, not a boolean".into(),
             )
@@ -2961,8 +2956,7 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         Union::Int(value) => Some(Expr::IntegerConstant(value, pos)),
         Union::Char(value) => Some(Expr::CharConstant(value, pos)),
         Union::Str(value) => Some(Expr::StringConstant(value, pos)),
-        Union::Bool(true) => Some(Expr::True(pos)),
-        Union::Bool(false) => Some(Expr::False(pos)),
+        Union::Bool(value) => Some(Expr::BoolConstant(value, pos)),
         #[cfg(not(feature = "no_index"))]
         Union::Array(array) => {
             let items: Vec<_> = array

@@ -862,6 +862,8 @@ pub enum Expr {
     /// Used to hold either an Array or Map literal for quick cloning.
     /// All other primitive data types should use the appropriate variants for better speed.
     DynamicConstant(Box<Dynamic>, Position),
+    /// Boolean constant.
+    BoolConstant(bool, Position),
     /// Integer constant.
     IntegerConstant(INT, Position),
     /// Floating-point constant.
@@ -877,10 +879,6 @@ pub enum Expr {
     Array(Box<StaticVec<Expr>>, Position),
     /// #{ name:expr, ... }
     Map(Box<StaticVec<(IdentX, Expr)>>, Position),
-    /// true
-    True(Position),
-    /// false
-    False(Position),
     /// ()
     Unit(Position),
     /// Variable access - (optional index, optional modules, hash, variable name)
@@ -932,8 +930,7 @@ impl Expr {
                 x.clone(),
                 Default::default(),
             )))),
-            Self::True(_) => true.into(),
-            Self::False(_) => false.into(),
+            Self::BoolConstant(x, _) => (*x).into(),
             Self::Unit(_) => ().into(),
 
             #[cfg(not(feature = "no_index"))]
@@ -978,6 +975,7 @@ impl Expr {
             Self::FloatConstant(_, pos) => *pos,
 
             Self::DynamicConstant(_, pos) => *pos,
+            Self::BoolConstant(_, pos) => *pos,
             Self::IntegerConstant(_, pos) => *pos,
             Self::CharConstant(_, pos) => *pos,
             Self::StringConstant(_, pos) => *pos,
@@ -991,7 +989,7 @@ impl Expr {
 
             Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => x.lhs.position(),
 
-            Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos,
+            Self::Unit(pos) => *pos,
 
             Self::Dot(x, _) | Self::Index(x, _) => x.lhs.position(),
 
@@ -1009,6 +1007,7 @@ impl Expr {
             Self::FloatConstant(_, pos) => *pos = new_pos,
 
             Self::DynamicConstant(_, pos) => *pos = new_pos,
+            Self::BoolConstant(_, pos) => *pos = new_pos,
             Self::IntegerConstant(_, pos) => *pos = new_pos,
             Self::CharConstant(_, pos) => *pos = new_pos,
             Self::StringConstant(_, pos) => *pos = new_pos,
@@ -1020,7 +1019,7 @@ impl Expr {
             Self::Stmt(_, pos) => *pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
             Self::And(_, pos) | Self::Or(_, pos) | Self::In(_, pos) => *pos = new_pos,
-            Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos = new_pos,
+            Self::Unit(pos) => *pos = new_pos,
             Self::Dot(_, pos) | Self::Index(_, pos) => *pos = new_pos,
             Self::Custom(_, pos) => *pos = new_pos,
         }
@@ -1066,12 +1065,11 @@ impl Expr {
             Self::FloatConstant(_, _) => true,
 
             Self::DynamicConstant(_, _)
+            | Self::BoolConstant(_, _)
             | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::StringConstant(_, _)
             | Self::FnPointer(_, _)
-            | Self::True(_)
-            | Self::False(_)
             | Self::Unit(_) => true,
 
             // An array literal is constant if all items are constant
@@ -1099,14 +1097,13 @@ impl Expr {
             Self::FloatConstant(_, _) => false,
 
             Self::DynamicConstant(_, _)
+            | Self::BoolConstant(_, _)
             | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::FnPointer(_, _)
             | Self::In(_, _)
             | Self::And(_, _)
             | Self::Or(_, _)
-            | Self::True(_)
-            | Self::False(_)
             | Self::Unit(_) => false,
 
             Self::StringConstant(_, _)
