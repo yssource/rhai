@@ -1,6 +1,7 @@
 //! Module defining the AST (abstract syntax tree).
 
 use crate::dynamic::Union;
+use crate::fn_native::shared_make_mut;
 use crate::module::NamespaceRef;
 use crate::stdlib::{
     borrow::Cow,
@@ -114,7 +115,7 @@ pub struct AST(
     /// Global statements.
     Vec<Stmt>,
     /// Script-defined functions.
-    Module,
+    Shared<Module>,
 );
 
 impl Default for AST {
@@ -126,8 +127,8 @@ impl Default for AST {
 impl AST {
     /// Create a new `AST`.
     #[inline(always)]
-    pub fn new(statements: impl IntoIterator<Item = Stmt>, lib: Module) -> Self {
-        Self(statements.into_iter().collect(), lib)
+    pub fn new(statements: impl IntoIterator<Item = Stmt>, lib: impl Into<Shared<Module>>) -> Self {
+        Self(statements.into_iter().collect(), lib.into())
     }
     /// Get the statements.
     #[cfg(not(feature = "internals"))]
@@ -184,7 +185,7 @@ impl AST {
     ) -> Self {
         let mut functions: Module = Default::default();
         functions.merge_filtered(&self.1, &mut filter);
-        Self(Default::default(), functions)
+        Self(Default::default(), functions.into())
     }
     /// Clone the `AST`'s script statements into a new `AST`.
     /// No functions are cloned.
@@ -368,7 +369,7 @@ impl AST {
             (true, true) => vec![],
         };
 
-        let mut functions = functions.clone();
+        let mut functions = functions.as_ref().clone();
         functions.merge_filtered(&other.1, &mut filter);
 
         Self::new(ast, functions)
@@ -430,9 +431,10 @@ impl AST {
         other: Self,
         mut filter: impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> &mut Self {
-        let Self(ref mut statements, ref mut functions) = self;
-        statements.extend(other.0.into_iter());
-        functions.merge_filtered(&other.1, &mut filter);
+        self.0.extend(other.0.into_iter());
+        if !other.1.is_empty() {
+            shared_make_mut(&mut self.1).merge_filtered(&other.1, &mut filter);
+        }
         self
     }
     /// Filter out the functions, retaining only some based on a filter predicate.
@@ -463,8 +465,11 @@ impl AST {
     pub fn retain_functions(
         &mut self,
         filter: impl FnMut(FnNamespace, FnAccess, &str, usize) -> bool,
-    ) {
-        self.1.retain_script_functions(filter);
+    ) -> &mut Self {
+        if !self.1.is_empty() {
+            shared_make_mut(&mut self.1).retain_script_functions(filter);
+        }
+        self
     }
     /// Iterate through all functions
     #[cfg(not(feature = "no_function"))]
