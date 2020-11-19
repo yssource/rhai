@@ -176,7 +176,7 @@ impl Engine {
         // First search registered functions (can override packages)
         // Then search packages
         let func = //lib.get_fn(hash_fn, pub_only)
-            self.global_module.get_fn(hash_fn, pub_only)
+            self.global_namespace.get_fn(hash_fn, pub_only)
                 .or_else(|| self.packages.get_fn(hash_fn))
                 .or_else(|| mods.get_fn(hash_fn));
 
@@ -440,14 +440,14 @@ impl Engine {
         hash_script: u64,
         pub_only: bool,
     ) -> bool {
-        // NOTE: We skip script functions for global_module and packages, and native functions for lib
+        // NOTE: We skip script functions for global_namespace and packages, and native functions for lib
 
         // First check script-defined functions
         lib.iter().any(|&m| m.contains_fn(hash_script, pub_only))
             //|| lib.iter().any(|&m| m.contains_fn(hash_fn, pub_only))
             // Then check registered functions
-            //|| self.global_module.contains_fn(hash_script, pub_only)
-            || self.global_module.contains_fn(hash_fn, false)
+            //|| self.global_namespace.contains_fn(hash_script, pub_only)
+            || self.global_namespace.contains_fn(hash_fn, false)
             // Then check packages
             || self.packages.contains_fn(hash_script)
             || self.packages.contains_fn(hash_fn)
@@ -524,7 +524,7 @@ impl Engine {
                 let func = lib
                     .iter()
                     .find_map(|&m| m.get_fn(hash_script, pub_only))
-                    //.or_else(|| self.global_module.get_fn(hash_script, pub_only))
+                    //.or_else(|| self.global_namespace.get_fn(hash_script, pub_only))
                     .or_else(|| self.packages.get_fn(hash_script))
                     //.or_else(|| mods.get_fn(hash_script))
                     .unwrap();

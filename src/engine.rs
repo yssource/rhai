@@ -599,7 +599,7 @@ pub struct Engine {
     pub id: String,
 
     /// A module containing all functions directly loaded into the Engine.
-    pub(crate) global_module: Module,
+    pub(crate) global_namespace: Module,
     /// A collection of all library packages loaded into the Engine.
     pub(crate) packages: PackagesCollection,
     /// A collection of all sub-modules directly loaded into the Engine.
@@ -718,7 +718,7 @@ impl Engine {
             id: Default::default(),
 
             packages: Default::default(),
-            global_module: Default::default(),
+            global_namespace: Default::default(),
             global_sub_modules: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
@@ -781,7 +781,7 @@ impl Engine {
             id: Default::default(),
 
             packages: Default::default(),
-            global_module: Default::default(),
+            global_namespace: Default::default(),
             global_sub_modules: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
@@ -1944,7 +1944,7 @@ impl Engine {
                         let hash_fn = calc_native_fn_hash(empty(), op, arg_types);
 
                         match self
-                            .global_module
+                            .global_namespace
                             .get_fn(hash_fn, false)
                             .or_else(|| self.packages.get_fn(hash_fn))
                             .or_else(|| mods.get_fn(hash_fn))
@@ -2141,7 +2141,7 @@ impl Engine {
                 let iter_type = iter_obj.type_id();
 
                 let func = self
-                    .global_module
+                    .global_namespace
                     .get_iter(iter_type)
                     .or_else(|| self.packages.get_iter(iter_type))
                     .or_else(|| mods.get_iter(iter_type));

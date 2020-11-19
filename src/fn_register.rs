@@ -187,7 +187,7 @@ macro_rules! def_register {
         {
             #[inline]
             fn register_fn(&mut self, name: &str, f: FN) -> &mut Self {
-                self.global_module.set_fn(name, FnNamespace::Global, FnAccess::Public,
+                self.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public,
                     &[$(map_type_id::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_dynamic ; $($par => $let => $clone => $arg),*))
                 );
@@ -202,7 +202,7 @@ macro_rules! def_register {
         {
             #[inline]
             fn register_result_fn(&mut self, name: &str, f: FN) -> &mut Self {
-                self.global_module.set_fn(name, FnNamespace::Global, FnAccess::Public,
+                self.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public,
                     &[$(map_type_id::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_result ; $($par => $let => $clone => $arg),*))
                 );

@@ -56,8 +56,13 @@ impl Engine {
             + SendSync
             + 'static,
     ) -> &mut Self {
-        self.global_module
-            .set_raw_fn(name, FnNamespace::Global, FnAccess::Public, arg_types, func);
+        self.global_namespace.set_raw_fn(
+            name,
+            FnNamespace::Global,
+            FnAccess::Public,
+            arg_types,
+            func,
+        );
         self
     }
     /// Register a custom type for use with the `Engine`.
@@ -159,7 +164,7 @@ impl Engine {
         T: Variant + Clone + Iterator,
         <T as Iterator>::Item: Variant + Clone,
     {
-        self.global_module.set_iterable::<T>();
+        self.global_namespace.set_iterable::<T>();
         self
     }
     /// Register a getter function for a member of a registered type with the `Engine`.
