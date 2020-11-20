@@ -1028,7 +1028,7 @@ impl Engine {
                             })?;
                         }
 
-                        Ok(Default::default())
+                        Ok((Dynamic::UNIT, true))
                     }
                     // xxx[rhs]
                     _ => {
@@ -1193,7 +1193,7 @@ impl Engine {
                                         |err| match *err {
                                             // If there is no setter, no need to feed it back because the property is read-only
                                             EvalAltResult::ErrorDotExpr(_, _) => {
-                                                Ok(Default::default())
+                                                Ok((Dynamic::UNIT, false))
                                             }
                                             _ => Err(err.fill_position(*x_pos)),
                                         },
@@ -1902,7 +1902,7 @@ impl Engine {
 
         let result = match stmt {
             // No-op
-            Stmt::Noop(_) => Ok(Default::default()),
+            Stmt::Noop(_) => Ok(Dynamic::UNIT),
 
             // Expression as statement
             Stmt::Expr(expr) => self.eval_expr(scope, mods, state, lib, this_ptr, expr, level),
@@ -1935,7 +1935,7 @@ impl Engine {
                         } else {
                             *lhs_ptr.as_mut() = rhs_val;
                         }
-                        Ok(Default::default())
+                        Ok(Dynamic::UNIT)
                     }
                     // Op-assignment - in order of precedence:
                     ScopeEntryType::Normal => {
@@ -2003,7 +2003,7 @@ impl Engine {
                                 }
                             }
                         }
-                        Ok(Default::default())
+                        Ok(Dynamic::UNIT)
                     }
                 }
             }
@@ -2045,7 +2045,7 @@ impl Engine {
                         self.eval_dot_index_chain(
                             scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
-                        Ok(Default::default())
+                        Ok(Dynamic::UNIT)
                     }
                     // dot_lhs.dot_rhs op= rhs
                     #[cfg(not(feature = "no_object"))]
@@ -2053,7 +2053,7 @@ impl Engine {
                         self.eval_dot_index_chain(
                             scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
-                        Ok(Default::default())
+                        Ok(Dynamic::UNIT)
                     }
                     // Non-lvalue expression (should be caught during parsing)
                     _ => unreachable!(),
@@ -2077,7 +2077,7 @@ impl Engine {
                         } else if let Some(stmt) = else_block {
                             self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
                         } else {
-                            Ok(Default::default())
+                            Ok(Dynamic::UNIT)
                         }
                     })
             }
@@ -2115,27 +2115,39 @@ impl Engine {
                             Ok(_) => (),
                             Err(err) => match *err {
                                 EvalAltResult::LoopBreak(false, _) => (),
-                                EvalAltResult::LoopBreak(true, _) => return Ok(Default::default()),
+                                EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
                                 _ => return Err(err),
                             },
                         }
                     }
-                    Ok(false) => return Ok(Default::default()),
+                    Ok(false) => return Ok(Dynamic::UNIT),
                     Err(err) => {
                         return Err(self.make_type_mismatch_err::<bool>(err, expr.position()))
                     }
                 }
             },
 
-            // Loop statement
-            Stmt::Loop(block, _) => loop {
-                match self.eval_stmt(scope, mods, state, lib, this_ptr, block, level) {
+            // Do loop
+            Stmt::Do(body, expr, is_while, _) => loop {
+                match self.eval_stmt(scope, mods, state, lib, this_ptr, body, level) {
                     Ok(_) => (),
                     Err(err) => match *err {
-                        EvalAltResult::LoopBreak(false, _) => (),
-                        EvalAltResult::LoopBreak(true, _) => return Ok(Default::default()),
+                        EvalAltResult::LoopBreak(false, _) => continue,
+                        EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
                         _ => return Err(err),
                     },
+                }
+
+                match self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .as_bool()
+                {
+                    Ok(true) if !*is_while => return Ok(Dynamic::UNIT),
+                    Ok(false) if *is_while => return Ok(Dynamic::UNIT),
+                    Ok(_) => (),
+                    Err(err) => {
+                        return Err(self.make_type_mismatch_err::<bool>(err, expr.position()))
+                    }
                 }
             },
 
@@ -2187,7 +2199,7 @@ impl Engine {
 
                     state.scope_level -= 1;
                     scope.rewind(scope.len() - 1);
-                    Ok(Default::default())
+                    Ok(Dynamic::UNIT)
                 } else {
                     EvalAltResult::ErrorFor(expr.position()).into()
                 }
@@ -2312,7 +2324,7 @@ impl Engine {
                 if let Some(alias) = _alias {
                     scope.add_entry_alias(scope.len() - 1, alias);
                 }
-                Ok(Default::default())
+                Ok(Dynamic::UNIT)
             }
 
             // Import statement
@@ -2344,7 +2356,7 @@ impl Engine {
 
                         state.modules += 1;
 
-                        Ok(Default::default())
+                        Ok(Dynamic::UNIT)
                     } else {
                         Err(
                             EvalAltResult::ErrorModuleNotFound(path.to_string(), expr.position())
@@ -2369,7 +2381,7 @@ impl Engine {
                             .into();
                     }
                 }
-                Ok(Default::default())
+                Ok(Dynamic::UNIT)
             }
 
             // Share statement
@@ -2386,7 +2398,7 @@ impl Engine {
                     }
                     _ => (),
                 }
-                Ok(Default::default())
+                Ok(Dynamic::UNIT)
             }
         };
 

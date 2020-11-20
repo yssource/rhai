@@ -271,7 +271,7 @@ fn optimize_stmt_block(
 fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
     match stmt {
         // expr op= expr
-        Stmt::Assignment(ref mut x, _) => match x.0 {
+        Stmt::Assignment(x, _) => match x.0 {
             Expr::Variable(_) => optimize_expr(&mut x.2, state),
             _ => {
                 optimize_expr(&mut x.0, state);
@@ -290,7 +290,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             optimize_stmt(stmt, state, true);
         }
         // if expr { Noop }
-        Stmt::If(ref mut condition, x, _) if x.1.is_none() && matches!(x.0, Stmt::Noop(_)) => {
+        Stmt::If(condition, x, _) if x.1.is_none() && matches!(x.0, Stmt::Noop(_)) => {
             state.set_dirty();
 
             let pos = condition.position();
@@ -309,7 +309,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             };
         }
         // if expr { if_block }
-        Stmt::If(ref mut condition, ref mut x, _) if x.1.is_none() => {
+        Stmt::If(condition, x, _) if x.1.is_none() => {
             optimize_expr(condition, state);
             optimize_stmt(&mut x.0, state, true);
         }
@@ -324,7 +324,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             optimize_stmt(stmt, state, true);
         }
         // if expr { if_block } else { else_block }
-        Stmt::If(ref mut condition, ref mut x, _) => {
+        Stmt::If(condition, x, _) => {
             optimize_expr(condition, state);
             optimize_stmt(&mut x.0, state, true);
             if let Some(else_block) = x.1.as_mut() {
@@ -377,11 +377,6 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             state.set_dirty();
             *stmt = Stmt::Noop(*pos)
         }
-        // while true { block } -> loop { block }
-        Stmt::While(Expr::BoolConstant(true, _), block, pos) => {
-            optimize_stmt(block, state, false);
-            *stmt = Stmt::Loop(Box::new(mem::take(block)), *pos)
-        }
         // while expr { block }
         Stmt::While(condition, block, _) => {
             optimize_stmt(block, state, false);
@@ -402,32 +397,30 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                 _ => (),
             }
         }
-        // loop { block }
-        Stmt::Loop(block, _) => {
-            optimize_stmt(block, state, false);
-
-            match **block {
-                // loop { break; } -> Noop
-                Stmt::Break(pos) => {
-                    // Only a single break statement
-                    state.set_dirty();
-                    *stmt = Stmt::Noop(pos)
-                }
-                _ => (),
-            }
+        // do { block } while false | do { block } until true -> { block }
+        Stmt::Do(block, Expr::BoolConstant(true, _), false, _)
+        | Stmt::Do(block, Expr::BoolConstant(false, _), true, _) => {
+            state.set_dirty();
+            optimize_stmt(block.as_mut(), state, false);
+            *stmt = mem::take(block.as_mut());
+        }
+        // do { block } while|until expr
+        Stmt::Do(block, condition, _, _) => {
+            optimize_stmt(block.as_mut(), state, false);
+            optimize_expr(condition, state);
         }
         // for id in expr { block }
-        Stmt::For(ref mut iterable, ref mut x, _) => {
+        Stmt::For(iterable, x, _) => {
             optimize_expr(iterable, state);
             optimize_stmt(&mut x.1, state, false);
         }
         // let id = expr;
-        Stmt::Let(_, Some(ref mut expr), _, _) => optimize_expr(expr, state),
+        Stmt::Let(_, Some(expr), _, _) => optimize_expr(expr, state),
         // let id;
         Stmt::Let(_, None, _, _) => (),
         // import expr as var;
         #[cfg(not(feature = "no_module"))]
-        Stmt::Import(ref mut expr, _, _) => optimize_expr(expr, state),
+        Stmt::Import(expr, _, _) => optimize_expr(expr, state),
         // { block }
         Stmt::Block(statements, pos) => {
             *stmt = optimize_stmt_block(mem::take(statements), *pos, state, preserve_result, true);
@@ -446,7 +439,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             *stmt = Stmt::Block(statements, pos);
         }
         // try { block } catch ( var ) { block }
-        Stmt::TryCatch(ref mut x, _, _) => {
+        Stmt::TryCatch(x, _, _) => {
             optimize_stmt(&mut x.0, state, false);
             optimize_stmt(&mut x.2, state, false);
         }
@@ -461,7 +454,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             *stmt = Stmt::Block(mem::take(x).into_vec(), *pos);
         }
         // expr;
-        Stmt::Expr(ref mut expr) => optimize_expr(expr, state),
+        Stmt::Expr(expr) => optimize_expr(expr, state),
         // return expr;
         Stmt::Return(_, Some(ref mut expr), _) => optimize_expr(expr, state),
 

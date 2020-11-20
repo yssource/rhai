@@ -79,6 +79,7 @@ The Rhai Scripting Language
    9. [If Statement](language/if.md)
    10. [Switch Expression](language/switch.md)
    11. [While Loop](language/while.md)
+   11. [Do Loop](language/do.md)
    12. [Loop Statement](language/loop.md)
    13. [For Loop](language/for.md)
    14. [Return Values](language/return.md)

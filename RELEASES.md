@@ -14,11 +14,13 @@ Breaking changes
 ----------------
 
 * `Module::set_fn`, `Module::set_raw_fn` and `Module::set_fn_XXX_mut` all take an additional parameter of `FnNamespace`.
+* `unless` is now a reserved keyword.
 
 New features
 ------------
 
 * `switch` statement.
+* `do ... while` and `do ... until` statement.
 * `Engine::register_module` to register a module as a sub-module in the global namespace.
 * `set_exported_global_fn!` macro to register a plugin function and expose it to the global namespace.
 * `Module::set_fn_XXX_mut` can expose a module function to the global namespace. This is convenient when registering an API for a custom type.

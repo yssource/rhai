@@ -1970,49 +1970,68 @@ fn parse_if(
 }
 
 /// Parse a while loop.
-fn parse_while(
+fn parse_while_loop(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    // while ...
-    let token_pos = eat_token(input, Token::While);
-    settings.pos = token_pos;
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    // while guard { body }
-    ensure_not_statement_expr(input, "a boolean")?;
-    let guard = parse_expr(input, state, lib, settings.level_up())?;
-    ensure_not_assignment(input)?;
+    // while|loops ...
+    let (guard, token_pos) = match input.next().unwrap() {
+        (Token::While, pos) => {
+            ensure_not_statement_expr(input, "a boolean")?;
+            (parse_expr(input, state, lib, settings.level_up())?, pos)
+        }
+        (Token::Loop, pos) => (Expr::BoolConstant(true, pos), pos),
+        _ => unreachable!(),
+    };
+    settings.pos = token_pos;
 
+    ensure_not_assignment(input)?;
     settings.is_breakable = true;
     let body = Box::new(parse_block(input, state, lib, settings.level_up())?);
 
     Ok(Stmt::While(guard, body, token_pos))
 }
 
-/// Parse a loop statement.
-fn parse_loop(
+/// Parse a do loop.
+fn parse_do(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    // loop ...
-    let token_pos = eat_token(input, Token::Loop);
+    // do ...
+    let token_pos = eat_token(input, Token::Do);
     settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    // loop { body }
+    // do { body } [while|until] guard
     settings.is_breakable = true;
     let body = Box::new(parse_block(input, state, lib, settings.level_up())?);
 
-    Ok(Stmt::Loop(body, token_pos))
+    let is_while = match input.next().unwrap() {
+        (Token::While, _) => true,
+        (Token::Until, _) => false,
+        (_, pos) => {
+            return Err(
+                PERR::MissingToken(Token::While.into(), "for the do statement".into())
+                    .into_err(pos),
+            )
+        }
+    };
+
+    ensure_not_statement_expr(input, "a boolean")?;
+    settings.is_breakable = false;
+    let guard = parse_expr(input, state, lib, settings.level_up())?;
+    ensure_not_assignment(input)?;
+
+    Ok(Stmt::Do(body, guard, is_while, token_pos))
 }
 
 /// Parse a for loop.
@@ -2413,8 +2432,10 @@ fn parse_stmt(
         }
 
         Token::If => parse_if(input, state, lib, settings.level_up()).map(Some),
-        Token::While => parse_while(input, state, lib, settings.level_up()).map(Some),
-        Token::Loop => parse_loop(input, state, lib, settings.level_up()).map(Some),
+        Token::While | Token::Loop => {
+            parse_while_loop(input, state, lib, settings.level_up()).map(Some)
+        }
+        Token::Do => parse_do(input, state, lib, settings.level_up()).map(Some),
         Token::For => parse_for(input, state, lib, settings.level_up()).map(Some),
 
         Token::Continue if settings.is_breakable => {

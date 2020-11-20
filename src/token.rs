@@ -232,8 +232,12 @@ pub enum Token {
     Else,
     /// `switch`
     Switch,
+    /// `do`
+    Do,
     /// `while`
     While,
+    /// `until`
+    Until,
     /// `loop`
     Loop,
     /// `for`
@@ -380,7 +384,9 @@ impl Token {
                 If => "if",
                 Else => "else",
                 Switch => "switch",
+                Do => "do",
                 While => "while",
+                Until => "until",
                 Loop => "loop",
                 For => "for",
                 In => "in",
@@ -467,7 +473,9 @@ impl Token {
             "if" => If,
             "else" => Else,
             "switch" => Switch,
+            "do" => Do,
             "while" => While,
+            "until" => Until,
             "loop" => Loop,
             "for" => For,
             "in" => In,
@@ -524,8 +532,8 @@ impl Token {
             "import" | "export" | "as" => Reserved(syntax.into()),
 
             "===" | "!==" | "->" | "<-" | ":=" | "::<" | "(*" | "*)" | "#" | "public" | "new"
-            | "use" | "module" | "package" | "var" | "static" | "shared" | "with" | "do"
-            | "each" | "then" | "goto" | "exit" | "match" | "case" | "default" | "void"
+            | "use" | "module" | "package" | "var" | "static" | "shared" | "with" | "each"
+            | "then" | "goto" | "unless" | "exit" | "match" | "case" | "default" | "void"
             | "null" | "nil" | "spawn" | "thread" | "go" | "sync" | "async" | "await" | "yield" => {
                 Reserved(syntax.into())
             }
@@ -586,7 +594,9 @@ impl Token {
             Ampersand        |
             And              |
             If               |
+            Do               |
             While            |
+            Until            |
             PlusAssign       |
             MinusAssign      |
             MultiplyAssign   |
@@ -690,8 +700,8 @@ impl Token {
             #[cfg(not(feature = "no_module"))]
             Import | Export | As => true,
 
-            True | False | Let | Const | If | Else | While | Loop | For | In | Continue | Break
-            | Return | Throw | Try | Catch => true,
+            True | False | Let | Const | If | Else | Do | While | Until | Loop | For | In
+            | Continue | Break | Return | Throw | Try | Catch => true,
 
             _ => false,
         }

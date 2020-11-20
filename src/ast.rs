@@ -601,8 +601,8 @@ pub enum Stmt {
     ),
     /// `while` expr `{` stmt `}`
     While(Expr, Box<Stmt>, Position),
-    /// `loop` `{` stmt `}`
-    Loop(Box<Stmt>, Position),
+    /// `do` `{` stmt `}` `while`|`until` expr
+    Do(Box<Stmt>, Expr, bool, Position),
     /// `for` id `in` expr `{` stmt `}`
     For(Expr, Box<(String, Stmt)>, Position),
     /// \[`export`\] `let` id `=` expr
@@ -660,7 +660,7 @@ impl Stmt {
             | Self::If(_, _, pos)
             | Self::Switch(_, _, pos)
             | Self::While(_, _, pos)
-            | Self::Loop(_, pos)
+            | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
             | Self::Return((_, pos), _, _)
             | Self::Let(_, _, _, pos)
@@ -689,7 +689,7 @@ impl Stmt {
             | Self::If(_, _, pos)
             | Self::Switch(_, _, pos)
             | Self::While(_, _, pos)
-            | Self::Loop(_, pos)
+            | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
             | Self::Return((_, pos), _, _)
             | Self::Let(_, _, _, pos)
@@ -717,7 +717,6 @@ impl Stmt {
             Self::If(_, _, _)
             | Self::Switch(_, _, _)
             | Self::While(_, _, _)
-            | Self::Loop(_, _)
             | Self::For(_, _, _)
             | Self::Block(_, _)
             | Self::TryCatch(_, _, _) => true,
@@ -729,6 +728,7 @@ impl Stmt {
             | Self::Const(_, _, _, _)
             | Self::Assignment(_, _)
             | Self::Expr(_)
+            | Self::Do(_, _, _, _)
             | Self::Continue(_)
             | Self::Break(_)
             | Self::Return(_, _, _) => false,
@@ -737,7 +737,7 @@ impl Stmt {
             Self::Import(_, _, _) | Self::Export(_, _) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => false,
+            Self::Share(_) => unreachable!(),
         }
     }
     /// Is this statement _pure_?
@@ -755,8 +755,9 @@ impl Stmt {
                     && x.0.values().all(Stmt::is_pure)
                     && x.1.as_ref().map(Stmt::is_pure).unwrap_or(true)
             }
-            Self::While(condition, block, _) => condition.is_pure() && block.is_pure(),
-            Self::Loop(block, _) => block.is_pure(),
+            Self::While(condition, block, _) | Self::Do(block, condition, _, _) => {
+                condition.is_pure() && block.is_pure()
+            }
             Self::For(iterable, x, _) => iterable.is_pure() && x.1.is_pure(),
             Self::Let(_, _, _, _) | Self::Const(_, _, _, _) | Self::Assignment(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
