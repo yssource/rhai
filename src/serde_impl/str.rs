@@ -1,7 +1,7 @@
 //! Implement deserialization support of [`ImmutableString`][crate::ImmutableString] for [`serde`].
 
 use crate::stdlib::{any::type_name, boxed::Box};
-use crate::{EvalAltResult, ImmutableString, Position::NONE};
+use crate::{EvalAltResult, ImmutableString, Position};
 use serde::de::{Deserializer, Visitor};
 
 /// Deserializer for `ImmutableString`.
