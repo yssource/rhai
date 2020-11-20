@@ -252,7 +252,7 @@ mod string_functions {
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
             return crate::EvalAltResult::ErrorDataTooLarge(
                 "Length of string".to_string(),
-                crate::NO_POS,
+                crate::Position::NONE,
             )
             .into();
         }
@@ -272,7 +272,7 @@ mod string_functions {
                 {
                     return crate::EvalAltResult::ErrorDataTooLarge(
                         "Length of string".to_string(),
-                        crate::NO_POS,
+                        crate::Position::NONE,
                     )
                     .into();
                 }
@@ -293,7 +293,7 @@ mod string_functions {
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
             return crate::EvalAltResult::ErrorDataTooLarge(
                 "Length of string".to_string(),
-                crate::NO_POS,
+                crate::Position::NONE,
             )
             .into();
         }
@@ -320,7 +320,7 @@ mod string_functions {
                 {
                     return crate::EvalAltResult::ErrorDataTooLarge(
                         "Length of string".to_string(),
-                        crate::NO_POS,
+                        crate::Position::NONE,
                     )
                     .into();
                 }

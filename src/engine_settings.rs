@@ -1,4 +1,4 @@
-//! Configuration settings for `Engine`.
+//! Configuration settings for [`Engine`].
 
 use crate::packages::PackageLibrary;
 use crate::stdlib::{format, string::String};
@@ -9,8 +9,8 @@ use crate::Engine;
 use crate::stdlib::boxed::Box;
 
 impl Engine {
-    /// Load a new package into the `Engine`.
-    /// Anything that can be converted into a `PackageLibrary` is accepted, including a simple `Module`.
+    /// Load a new package into the [`Engine`].
+    /// A simple [`Module`][crate::Module] is automatically converted into a package.
     ///
     /// When searching for functions, packages loaded later are preferred.
     /// In other words, loaded packages are searched in reverse order.
@@ -19,7 +19,7 @@ impl Engine {
         self.packages.add(package.into());
         self
     }
-    /// Control whether and how the `Engine` will optimize an AST after compilation.
+    /// Control whether and how the [`Engine`] will optimize an [`AST`][crate::AST] after compilation.
     ///
     /// Not available under the `no_optimize` feature.
     #[cfg(not(feature = "no_optimize"))]
@@ -32,7 +32,7 @@ impl Engine {
         self
     }
     /// The current optimization level.
-    /// It controls whether and how the `Engine` will optimize an AST after compilation.
+    /// It controls whether and how the [`Engine`] will optimize an [`AST`][crate::AST] after compilation.
     ///
     /// Not available under the `no_optimize` feature.
     #[cfg(not(feature = "no_optimize"))]
@@ -166,7 +166,7 @@ impl Engine {
     pub fn max_map_size(&self) -> usize {
         self.limits.max_map_size
     }
-    /// Set the module resolution service used by the `Engine`.
+    /// Set the module resolution service used by the [`Engine`].
     ///
     /// Not available under the `no_module` feature.
     #[cfg(not(feature = "no_module"))]

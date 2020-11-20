@@ -6,15 +6,16 @@ use crate::stdlib::{
     fmt,
     string::{String, ToString},
 };
-use crate::{Dynamic, ImmutableString, ParseErrorType, Position, INT, NO_POS};
+use crate::{Dynamic, ImmutableString, ParseErrorType, Position, INT};
 
 /// Evaluation result.
 ///
-/// All wrapped `Position` values represent the location in the script where the error occurs.
+/// All wrapped [`Position`] values represent the location in the script where the error occurs.
 ///
 /// # Thread Safety
 ///
-/// Currently, `EvalAltResult` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
+/// Currently, [`EvalAltResult`] is neither [`Send`] nor [`Sync`].
+/// Turn on the `sync` feature to make it [`Send`] `+` [`Sync`].
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum EvalAltResult {
@@ -246,7 +247,7 @@ impl fmt::Display for EvalAltResult {
 impl<T: AsRef<str>> From<T> for EvalAltResult {
     #[inline(always)]
     fn from(err: T) -> Self {
-        Self::ErrorRuntime(err.as_ref().to_string().into(), NO_POS)
+        Self::ErrorRuntime(err.as_ref().to_string().into(), Position::NONE)
     }
 }
 
@@ -255,7 +256,7 @@ impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
     fn from(err: T) -> Self {
         Box::new(EvalAltResult::ErrorRuntime(
             err.as_ref().to_string().into(),
-            NO_POS,
+            Position::NONE,
         ))
     }
 }
@@ -313,10 +314,10 @@ impl EvalAltResult {
             _ => false,
         }
     }
-    /// Get the `Position` of this error.
+    /// Get the [`Position`] of this error.
     pub fn position(&self) -> Position {
         match self {
-            Self::ErrorSystem(_, _) => NO_POS,
+            Self::ErrorSystem(_, _) => Position::NONE,
 
             Self::ErrorParsing(_, pos)
             | Self::ErrorFunctionNotFound(_, pos)
@@ -346,7 +347,7 @@ impl EvalAltResult {
             | Self::Return(_, pos) => *pos,
         }
     }
-    /// Override the `Position` of this error.
+    /// Override the [`Position`] of this error.
     pub fn set_position(&mut self, new_position: Position) {
         match self {
             Self::ErrorSystem(_, _) => (),
@@ -379,8 +380,8 @@ impl EvalAltResult {
             | Self::Return(_, pos) => *pos = new_position,
         }
     }
-    /// Consume the current `EvalAltResult` and return a new one with the specified `Position`
-    /// if the current position is `Position::None`.
+    /// Consume the current [`EvalAltResult`] and return a new one with the specified [`Position`]
+    /// if the current position is [`Position::None`].
     #[inline(always)]
     pub(crate) fn fill_position(mut self: Box<Self>, new_position: Position) -> Box<Self> {
         if self.position().is_none() {

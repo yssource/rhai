@@ -1,4 +1,4 @@
-//! Implement function-calling mechanism for `Engine`.
+//! Implement function-calling mechanism for [`Engine`].
 
 use crate::ast::{Expr, Stmt};
 use crate::engine::{
@@ -23,7 +23,7 @@ use crate::stdlib::{
 };
 use crate::{
     calc_native_fn_hash, calc_script_fn_hash, Dynamic, Engine, EvalAltResult, FnPtr,
-    ImmutableString, Module, ParseErrorType, Scope, StaticVec, INT, NO_POS,
+    ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec, INT,
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -140,7 +140,7 @@ pub fn ensure_no_data_race(
         {
             return EvalAltResult::ErrorDataRace(
                 format!("argument #{} of function '{}'", n + 1 + skip, fn_name),
-                NO_POS,
+                Position::NONE,
             )
             .into();
         }
@@ -150,8 +150,8 @@ pub fn ensure_no_data_race(
 }
 
 impl Engine {
-    /// Call a native Rust function registered with the `Engine`.
-    /// Position in `EvalAltResult` is `None` and must be set afterwards.
+    /// Call a native Rust function registered with the [`Engine`].
+    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     ///
     /// ## WARNING
     ///
@@ -168,7 +168,7 @@ impl Engine {
         args: &mut FnCallArgs,
         is_ref: bool,
         pub_only: bool,
-        def_val: Option<Dynamic>,
+        def_val: Option<&Dynamic>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state)?;
 
@@ -206,7 +206,7 @@ impl Engine {
                         EvalAltResult::ErrorMismatchOutputType(
                             self.map_type_name(type_name::<ImmutableString>()).into(),
                             typ.into(),
-                            NO_POS,
+                            Position::NONE,
                         )
                     })?)
                     .into(),
@@ -217,7 +217,7 @@ impl Engine {
                         EvalAltResult::ErrorMismatchOutputType(
                             self.map_type_name(type_name::<ImmutableString>()).into(),
                             typ.into(),
-                            NO_POS,
+                            Position::NONE,
                         )
                     })?)
                     .into(),
@@ -237,7 +237,7 @@ impl Engine {
 
         // Return default value (if any)
         if let Some(val) = def_val {
-            return Ok((val, false));
+            return Ok((val.clone(), false));
         }
 
         // Getter function not found?
@@ -249,7 +249,7 @@ impl Engine {
                     prop,
                     self.map_type_name(args[0].type_name())
                 ),
-                NO_POS,
+                Position::NONE,
             )
             .into();
         }
@@ -264,7 +264,7 @@ impl Engine {
                     self.map_type_name(args[0].type_name()),
                     self.map_type_name(args[1].type_name()),
                 ),
-                NO_POS,
+                Position::NONE,
             )
             .into();
         }
@@ -278,7 +278,7 @@ impl Engine {
                     self.map_type_name(args[0].type_name()),
                     self.map_type_name(args[1].type_name()),
                 ),
-                NO_POS,
+                Position::NONE,
             )
             .into();
         }
@@ -292,7 +292,7 @@ impl Engine {
                     self.map_type_name(args[0].type_name()),
                     self.map_type_name(args[1].type_name()),
                 ),
-                NO_POS,
+                Position::NONE,
             )
             .into();
         }
@@ -311,13 +311,13 @@ impl Engine {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            NO_POS,
+            Position::NONE,
         )
         .into()
     }
 
     /// Call a script-defined function.
-    /// Position in `EvalAltResult` is `None` and must be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     ///
     /// ## WARNING
     ///
@@ -342,7 +342,7 @@ impl Engine {
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
         if level > self.max_call_levels() {
-            return Err(Box::new(EvalAltResult::ErrorStackOverflow(NO_POS)));
+            return Err(Box::new(EvalAltResult::ErrorStackOverflow(Position::NONE)));
         }
 
         let orig_scope_level = state.scope_level;
@@ -385,25 +385,27 @@ impl Engine {
         // Evaluate the function at one higher level of call depth
         let stmt = &fn_def.body;
 
-        let result =
-            self.eval_stmt(scope, mods, state, unified_lib, this_ptr, stmt, level + 1)
-                .or_else(|err| match *err {
-                    // Convert return statement to return value
-                    EvalAltResult::Return(x, _) => Ok(x),
-                    EvalAltResult::ErrorInFunctionCall(name, err, _) => {
-                        EvalAltResult::ErrorInFunctionCall(
-                            format!("{} > {}", fn_def.name, name),
-                            err,
-                            NO_POS,
-                        )
+        let result = self
+            .eval_stmt(scope, mods, state, unified_lib, this_ptr, stmt, level + 1)
+            .or_else(|err| match *err {
+                // Convert return statement to return value
+                EvalAltResult::Return(x, _) => Ok(x),
+                EvalAltResult::ErrorInFunctionCall(name, err, _) => {
+                    EvalAltResult::ErrorInFunctionCall(
+                        format!("{} > {}", fn_def.name, name),
+                        err,
+                        Position::NONE,
+                    )
+                    .into()
+                }
+                // System errors are passed straight-through
+                err if err.is_system_exception() => Err(Box::new(err)),
+                // Other errors are wrapped in `ErrorInFunctionCall`
+                _ => {
+                    EvalAltResult::ErrorInFunctionCall(fn_def.name.to_string(), err, Position::NONE)
                         .into()
-                    }
-                    // System errors are passed straight-through
-                    err if err.is_system_exception() => Err(Box::new(err)),
-                    // Other errors are wrapped in `ErrorInFunctionCall`
-                    _ => EvalAltResult::ErrorInFunctionCall(fn_def.name.to_string(), err, NO_POS)
-                        .into(),
-                });
+                }
+            });
 
         // Remove all local variables
         scope.rewind(prev_scope_len);
@@ -457,7 +459,7 @@ impl Engine {
     }
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
-    /// Position in `EvalAltResult` is `None` and must be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     ///
     /// ## WARNING
     ///
@@ -476,7 +478,7 @@ impl Engine {
         _is_method: bool,
         pub_only: bool,
         _capture_scope: Option<Scope>,
-        def_val: Option<Dynamic>,
+        def_val: Option<&Dynamic>,
         _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         // Check for data race.
@@ -512,7 +514,7 @@ impl Engine {
                         fn_name, fn_name
                     )
                     .into(),
-                    NO_POS,
+                    Position::NONE,
                 )
                 .into()
             }
@@ -606,7 +608,7 @@ impl Engine {
     }
 
     /// Evaluate a list of statements with an empty state and no `this` pointer.
-    /// This is commonly used to evaluate a list of statements in an `AST` or a script function body.
+    /// This is commonly used to evaluate a list of statements in an [`AST`] or a script function body.
     #[inline]
     pub(crate) fn eval_statements_raw<'a>(
         &self,
@@ -631,7 +633,7 @@ impl Engine {
     }
 
     /// Evaluate a text string as a script - used primarily for 'eval'.
-    /// Position in `EvalAltResult` is `None` and must be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     fn eval_script_expr(
         &self,
         scope: &mut Scope,
@@ -652,7 +654,7 @@ impl Engine {
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
         if _level > self.max_call_levels() {
-            return Err(Box::new(EvalAltResult::ErrorStackOverflow(NO_POS)));
+            return Err(Box::new(EvalAltResult::ErrorStackOverflow(Position::NONE)));
         }
 
         // Compile the script text
@@ -678,7 +680,7 @@ impl Engine {
     }
 
     /// Call a dot method.
-    /// Position in `EvalAltResult` is `None` and must be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     #[cfg(not(feature = "no_object"))]
     pub(crate) fn make_method_call(
         &self,
@@ -689,7 +691,7 @@ impl Engine {
         hash_script: u64,
         target: &mut crate::engine::Target,
         mut call_args: StaticVec<Dynamic>,
-        def_val: Option<Dynamic>,
+        def_val: Option<&Dynamic>,
         native: bool,
         pub_only: bool,
         level: usize,
@@ -830,7 +832,7 @@ impl Engine {
     }
 
     /// Call a function in normal function-call style.
-    /// Position in `EvalAltResult` is `None` and must be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     pub(crate) fn make_function_call(
         &self,
         scope: &mut Scope,
@@ -840,7 +842,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         fn_name: &str,
         args_expr: impl AsRef<[Expr]>,
-        def_val: Option<Dynamic>,
+        def_val: Option<&Dynamic>,
         mut hash_script: u64,
         native: bool,
         pub_only: bool,
@@ -1075,7 +1077,7 @@ impl Engine {
     }
 
     /// Call a namespace-qualified function in normal function-call style.
-    /// Position in `EvalAltResult` is `None` and must be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     pub(crate) fn make_qualified_function_call(
         &self,
         scope: &mut Scope,
@@ -1086,7 +1088,7 @@ impl Engine {
         namespace: Option<&NamespaceRef>,
         fn_name: &str,
         args_expr: impl AsRef<[Expr]>,
-        def_val: Option<bool>,
+        def_val: Option<&Dynamic>,
         hash_script: u64,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -1202,7 +1204,7 @@ impl Engine {
                 f.get_native_fn().clone()((self, &*mods, lib).into(), args.as_mut())
             }
             Some(_) => unreachable!(),
-            None if def_val.is_some() => Ok(def_val.unwrap().into()),
+            None if def_val.is_some() => Ok(def_val.unwrap().clone()),
             None => EvalAltResult::ErrorFunctionNotFound(
                 format!(
                     "{}{} ({})",
@@ -1217,7 +1219,7 @@ impl Engine {
                         .collect::<Vec<_>>()
                         .join(", ")
                 ),
-                NO_POS,
+                Position::NONE,
             )
             .into(),
         }

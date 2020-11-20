@@ -1,4 +1,4 @@
-//! Main module defining the script evaluation `Engine`.
+//! Main module defining the script evaluation [`Engine`].
 
 use crate::ast::{Expr, FnCallExpr, Ident, IdentX, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, Union, Variant};
@@ -25,7 +25,7 @@ use crate::syntax::CustomSyntax;
 use crate::utils::get_hasher;
 use crate::{
     calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position, Scope,
-    Shared, StaticVec, NO_POS,
+    Shared, StaticVec,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -40,7 +40,7 @@ use crate::Map;
 #[cfg(not(feature = "no_object"))]
 pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 
-/// _[INTERNALS]_ A stack of imported modules.
+/// _(INTERNALS)_ A stack of imported modules.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -369,7 +369,7 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => {
                 let char_value = ch.clone();
-                self.set_value((char_value, NO_POS)).unwrap();
+                self.set_value((char_value, Position::NONE)).unwrap();
             }
         }
     }
@@ -463,7 +463,7 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
     }
 }
 
-/// _[INTERNALS]_ A type that holds all the current states of the Engine.
+/// _(INTERNALS)_ A type that holds all the current states of the Engine.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -492,7 +492,7 @@ impl State {
     }
 }
 
-/// _[INTERNALS]_ A type containing all the limits imposed by the `Engine`.
+/// _(INTERNALS)_ A type containing all the limits imposed by the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -542,12 +542,12 @@ pub struct EvalContext<'e, 'x, 'px: 'x, 'a, 's, 'm, 'pm: 'm, 't, 'pt: 't> {
 }
 
 impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> {
-    /// The current `Engine`.
+    /// The current [`Engine`].
     #[inline(always)]
     pub fn engine(&self) -> &'e Engine {
         self.engine
     }
-    /// _[INTERNALS]_ The current set of modules imported via `import` statements.
+    /// _(INTERNALS)_ The current set of modules imported via `import` statements.
     /// Available under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
@@ -576,9 +576,10 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
 ///
 /// # Thread Safety
 ///
-/// `Engine` is re-entrant.
+/// [`Engine`] is re-entrant.
 ///
-/// Currently, `Engine` is neither `Send` nor `Sync`. Use the `sync` feature to make it `Send + Sync`.
+/// Currently, [`Engine`] is neither [`Send`] nor [`Sync`].
+/// Use the [`Sync`] feature to make it [`Send`] `+` [`Sync`].
 ///
 /// # Example
 ///
@@ -595,7 +596,7 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
 /// # }
 /// ```
 pub struct Engine {
-    /// A unique ID identifying this scripting `Engine`.
+    /// A unique ID identifying this scripting [`Engine`].
     pub id: String,
 
     /// A module containing all functions directly loaded into the Engine.
@@ -684,7 +685,7 @@ fn default_print(_s: &str) {
 }
 
 /// Search for a module within an imports stack.
-/// Position in `EvalAltResult` is `None` and must be set afterwards.
+/// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
 pub fn search_imports(
     mods: &Imports,
     state: &mut State,
@@ -710,7 +711,7 @@ pub fn search_imports(
 }
 
 impl Engine {
-    /// Create a new `Engine`
+    /// Create a new [`Engine`]
     #[inline]
     pub fn new() -> Self {
         // Create the new scripting Engine
@@ -773,8 +774,8 @@ impl Engine {
         engine
     }
 
-    /// Create a new `Engine` with minimal built-in functions.
-    /// Use the `load_package` method to load additional packages of functions.
+    /// Create a new [`Engine`] with minimal built-in functions.
+    /// Use the [`load_package`][Engine::load_package] method to load additional packages of functions.
     #[inline]
     pub fn new_raw() -> Self {
         Self {
@@ -929,7 +930,7 @@ impl Engine {
     }
 
     /// Chain-evaluate a dot/index chain.
-    /// Position in `EvalAltResult` is `None` and must be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_dot_index_chain_helper(
         &self,
@@ -1020,7 +1021,7 @@ impl Engine {
                                 {
                                     EvalAltResult::ErrorIndexingType(
                                         self.map_type_name(val_type_name).into(),
-                                        NO_POS,
+                                        Position::NONE,
                                     )
                                 }
                                 err => err,
@@ -1052,7 +1053,7 @@ impl Engine {
                             def_value,
                             ..
                         } = x.as_ref();
-                        let def_value = def_value.map(Into::<Dynamic>::into);
+                        let def_value = def_value.as_ref();
                         let args = idx_val.as_fn_call_args();
                         self.make_method_call(
                             mods, state, lib, name, *hash, target, args, def_value, *native, false,
@@ -1126,7 +1127,7 @@ impl Engine {
                                     def_value,
                                     ..
                                 } = x.as_ref();
-                                let def_value = def_value.map(Into::<Dynamic>::into);
+                                let def_value = def_value.as_ref();
                                 let args = idx_val.as_fn_call_args();
                                 let (val, _) = self
                                     .make_method_call(
@@ -1210,7 +1211,7 @@ impl Engine {
                                     def_value,
                                     ..
                                 } = f.as_ref();
-                                let def_value = def_value.map(Into::<Dynamic>::into);
+                                let def_value = def_value.as_ref();
                                 let args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self
                                     .make_method_call(
@@ -1314,8 +1315,8 @@ impl Engine {
         }
     }
 
-    /// Evaluate a chain of indexes and store the results in a StaticVec.
-    /// StaticVec is used to avoid an allocation in the overwhelming cases of just a few levels of indexing.
+    /// Evaluate a chain of indexes and store the results in a [`StaticVec`].
+    /// [`StaticVec`] is used to avoid an allocation in the overwhelming cases of just a few levels of indexing.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_indexed_chain(
         &self,
@@ -1389,8 +1390,8 @@ impl Engine {
         Ok(())
     }
 
-    /// Get the value at the indexed position of a base type
-    /// Position in `EvalAltResult` may be None and should be set afterwards.
+    /// Get the value at the indexed position of a base type.
+    /// [`Position`] in [`EvalAltResult`] may be None and should be set afterwards.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn get_indexed_mut<'t>(
         &self,
@@ -1479,7 +1480,10 @@ impl Engine {
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _) if fn_sig.ends_with(']') => {
-                        Box::new(EvalAltResult::ErrorIndexingType(type_name.into(), NO_POS))
+                        Box::new(EvalAltResult::ErrorIndexingType(
+                            type_name.into(),
+                            Position::NONE,
+                        ))
                     }
                     _ => err,
                 })
@@ -1487,13 +1491,13 @@ impl Engine {
 
             _ => EvalAltResult::ErrorIndexingType(
                 self.map_type_name(target.type_name()).into(),
-                NO_POS,
+                Position::NONE,
             )
             .into(),
         }
     }
 
-    // Evaluate an 'in' expression
+    // Evaluate an 'in' expression.
     fn eval_in_expr(
         &self,
         scope: &mut Scope,
@@ -1516,10 +1520,10 @@ impl Engine {
             Dynamic(Union::Array(mut rhs_value)) => {
                 // Call the `==` operator to compare each value
                 let def_value = Some(false.into());
+                let def_value = def_value.as_ref();
 
                 for value in rhs_value.iter_mut() {
                     let args = &mut [&mut lhs_value.clone(), value];
-                    let def_value = def_value.clone();
 
                     // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
                     let hash =
@@ -1557,7 +1561,7 @@ impl Engine {
         }
     }
 
-    /// Get a `Target` from an expression.
+    /// Get a [`Target`] from an expression.
     pub(crate) fn eval_expr_as_target<'s>(
         &self,
         scope: &'s mut Scope,
@@ -1670,7 +1674,7 @@ impl Engine {
         }
     }
 
-    /// Evaluate an expression
+    /// Evaluate an expression.
     pub(crate) fn eval_expr(
         &self,
         scope: &mut Scope,
@@ -1759,7 +1763,7 @@ impl Engine {
                     def_value,
                     ..
                 } = x.as_ref();
-                let def_value = def_value.map(Into::<Dynamic>::into);
+                let def_value = def_value.as_ref();
                 self.make_function_call(
                     scope, mods, state, lib, this_ptr, name, args, def_value, *hash, *native,
                     false, *cap_scope, level,
@@ -1778,8 +1782,9 @@ impl Engine {
                     ..
                 } = x.as_ref();
                 let namespace = namespace.as_ref().map(|v| v.as_ref());
+                let def_value = def_value.as_ref();
                 self.make_qualified_function_call(
-                    scope, mods, state, lib, this_ptr, namespace, name, args, *def_value, *hash,
+                    scope, mods, state, lib, this_ptr, namespace, name, args, def_value, *hash,
                     level,
                 )
                 .map_err(|err| err.fill_position(*pos))
@@ -1843,6 +1848,7 @@ impl Engine {
             .map_err(|err| err.fill_position(expr.position()))
     }
 
+    /// Evaluate a list of statements.
     pub(crate) fn eval_statements<'a>(
         &self,
         scope: &mut Scope,
@@ -1874,7 +1880,7 @@ impl Engine {
         result
     }
 
-    /// Evaluate a statement
+    /// Evaluate a statement.
     ///
     ///
     /// # Safety
@@ -2210,7 +2216,7 @@ impl Engine {
                             let value = if let EvalAltResult::ErrorRuntime(ref x, _) = err {
                                 x.clone()
                             } else {
-                                err.set_position(NO_POS);
+                                err.set_position(Position::NONE);
                                 err.to_string().into()
                             };
 
@@ -2389,7 +2395,7 @@ impl Engine {
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
-    /// Position in `EvalAltResult` may be None and should be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] may be None and should be set afterwards.
     #[cfg(feature = "unchecked")]
     #[inline(always)]
     fn check_data_size(
@@ -2400,7 +2406,7 @@ impl Engine {
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
-    /// Position in `EvalAltResult` may be None and should be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] may be None and should be set afterwards.
     #[cfg(not(feature = "unchecked"))]
     fn check_data_size(
         &self,
@@ -2493,39 +2499,47 @@ impl Engine {
         let (_arr, _map, s) = calc_size(result.as_ref().unwrap());
 
         if s > self.max_string_size() {
-            return EvalAltResult::ErrorDataTooLarge("Length of string".to_string(), NO_POS).into();
+            return EvalAltResult::ErrorDataTooLarge(
+                "Length of string".to_string(),
+                Position::NONE,
+            )
+            .into();
         }
 
         #[cfg(not(feature = "no_index"))]
         if _arr > self.max_array_size() {
-            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), NO_POS).into();
+            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), Position::NONE)
+                .into();
         }
 
         #[cfg(not(feature = "no_object"))]
         if _map > self.max_map_size() {
-            return EvalAltResult::ErrorDataTooLarge("Size of object map".to_string(), NO_POS)
-                .into();
+            return EvalAltResult::ErrorDataTooLarge(
+                "Size of object map".to_string(),
+                Position::NONE,
+            )
+            .into();
         }
 
         result
     }
 
     /// Check if the number of operations stay within limit.
-    /// Position in `EvalAltResult` is `None` and must be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     pub(crate) fn inc_operations(&self, state: &mut State) -> Result<(), Box<EvalAltResult>> {
         state.operations += 1;
 
         #[cfg(not(feature = "unchecked"))]
         // Guard against too many operations
         if self.max_operations() > 0 && state.operations > self.max_operations() {
-            return EvalAltResult::ErrorTooManyOperations(NO_POS).into();
+            return EvalAltResult::ErrorTooManyOperations(Position::NONE).into();
         }
 
         // Report progress - only in steps
         if let Some(progress) = &self.progress {
             if let Some(token) = progress(&state.operations) {
                 // Terminate script if progress returns a termination token
-                return EvalAltResult::ErrorTerminated(token, NO_POS).into();
+                return EvalAltResult::ErrorTerminated(token, Position::NONE).into();
             }
         }
 
@@ -2541,7 +2555,7 @@ impl Engine {
             .unwrap_or_else(|| map_std_type_name(name))
     }
 
-    /// Make a Box<EvalAltResult<ErrorMismatchDataType>>.
+    /// Make a `Box<`[`EvalAltResult<ErrorMismatchDataType>`][EvalAltResult::ErrorMismatchDataType]`>`.
     #[inline(always)]
     pub(crate) fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
         EvalAltResult::ErrorMismatchDataType(

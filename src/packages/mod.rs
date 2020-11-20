@@ -44,16 +44,16 @@ pub trait Package {
     fn get(&self) -> PackageLibrary;
 }
 
-/// A sharable `Module` to facilitate sharing library instances.
+/// A sharable [`Module`][crate::Module] to facilitate sharing library instances.
 pub type PackageLibrary = Shared<Module>;
 
-/// Type containing a collection of `PackageLibrary` instances.
+/// Type containing a collection of [`PackageLibrary`] instances.
 /// All function and type iterator keys in the loaded packages are indexed for fast access.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct PackagesCollection(Option<StaticVec<PackageLibrary>>);
 
 impl PackagesCollection {
-    /// Add a `PackageLibrary` into the `PackagesCollection`.
+    /// Add a [`PackageLibrary`] into the [`PackagesCollection`].
     ///
     /// Packages are searched in reverse order.
     pub fn add(&mut self, package: PackageLibrary) {
@@ -63,7 +63,7 @@ impl PackagesCollection {
         // Later packages override previous ones.
         self.0.as_mut().unwrap().insert(0, package);
     }
-    /// Does the specified function hash key exist in the `PackagesCollection`?
+    /// Does the specified function hash key exist in the [`PackagesCollection`]?
     #[allow(dead_code)]
     pub fn contains_fn(&self, hash: u64) -> bool {
         self.0
@@ -76,14 +76,14 @@ impl PackagesCollection {
             .as_ref()
             .and_then(|x| x.iter().find_map(|p| p.get_fn(hash, false)))
     }
-    /// Does the specified TypeId iterator exist in the `PackagesCollection`?
+    /// Does the specified [`TypeId`] iterator exist in the [`PackagesCollection`]?
     #[allow(dead_code)]
     pub fn contains_iter(&self, id: TypeId) -> bool {
         self.0
             .as_ref()
             .map_or(false, |x| x.iter().any(|p| p.contains_iter(id)))
     }
-    /// Get the specified TypeId iterator.
+    /// Get the specified [`TypeId`] iterator.
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.0
             .as_ref()
@@ -95,7 +95,7 @@ impl PackagesCollection {
 /// and register functions into it.
 ///
 /// Functions can be added to the package using the standard module methods such as
-/// `set_fn_2`, `set_fn_3_mut`, `set_fn_0` etc.
+/// [`set_fn_2`][Module::set_fn_2], [`set_fn_3_mut`][Module::set_fn_3_mut], [`set_fn_0`][Module::set_fn_0] etc.
 ///
 /// # Example
 ///

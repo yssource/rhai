@@ -26,7 +26,7 @@ use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream}
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
     calc_script_fn_hash, Dynamic, Engine, FnAccess, ImmutableString, LexError, ParseError,
-    ParseErrorType, Position, Scope, StaticVec, AST, NO_POS,
+    ParseErrorType, Position, Scope, StaticVec, AST,
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -1195,7 +1195,7 @@ fn parse_unary(
                     native_only: true,
                     hash,
                     args,
-                    def_value: Some(false), // NOT operator, when operating on invalid operand, defaults to false
+                    def_value: Some(false.into()), // NOT operator, when operating on invalid operand, defaults to false
                     ..Default::default()
                 }),
                 pos,
@@ -1652,7 +1652,7 @@ fn parse_binary_op(
         #[cfg(not(feature = "unchecked"))]
         settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-        let cmp_def = Some(false);
+        let cmp_def = Some(false.into());
         let op = op_token.syntax();
         let hash = calc_script_fn_hash(empty(), &op, 2);
 
@@ -1692,7 +1692,7 @@ fn parse_binary_op(
                 Box::new(FnCallExpr {
                     hash,
                     args,
-                    def_value: Some(true),
+                    def_value: Some(true.into()),
                     ..op_base
                 }),
                 pos,
@@ -2833,7 +2833,7 @@ impl Engine {
             is_function_scope: false,
             is_breakable: false,
             level: 0,
-            pos: NO_POS,
+            pos: Position::NONE,
         };
         let expr = parse_expr(input, &mut state, &mut functions, settings)?;
 
@@ -2886,7 +2886,7 @@ impl Engine {
                 is_function_scope: false,
                 is_breakable: false,
                 level: 0,
-                pos: NO_POS,
+                pos: Position::NONE,
             };
 
             let stmt = match parse_stmt(input, &mut state, &mut functions, settings)? {

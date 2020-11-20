@@ -1,4 +1,4 @@
-use rhai::{Dynamic, Engine, EvalAltResult, LexError, ParseError, ParseErrorType, INT, NO_POS};
+use rhai::{Dynamic, Engine, EvalAltResult, LexError, ParseError, ParseErrorType, Position, INT};
 
 #[test]
 fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
@@ -91,7 +91,7 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
                     Box::new(ParseErrorType::BadInput(LexError::ImproperSymbol(
                         s.to_string(),
                     ))),
-                    NO_POS,
+                    Position::NONE,
                 )),
             },
             _ => unreachable!(),

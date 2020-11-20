@@ -7,7 +7,7 @@ use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, iter::empty, mem, string:
 use crate::token::is_valid_identifier;
 use crate::{
     calc_script_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ImmutableString, Module,
-    StaticVec, NO_POS,
+    Position, StaticVec,
 };
 
 #[cfg(not(feature = "sync"))]
@@ -78,7 +78,7 @@ impl<'e, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized> From<(&'e Engine, &'m M)
 }
 
 impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
-    /// Create a new `NativeCallContext`.
+    /// Create a new [`NativeCallContext`].
     #[inline(always)]
     pub fn new(engine: &'e Engine, lib: &'m impl AsRef<[&'pm Module]>) -> Self {
         Self {
@@ -87,7 +87,7 @@ impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
             lib: lib.as_ref(),
         }
     }
-    /// _[INTERNALS]_ Create a new `NativeCallContext`.
+    /// _(INTERNALS)_ Create a new [`NativeCallContext`].
     /// Available under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
@@ -103,12 +103,12 @@ impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
             lib: lib.as_ref(),
         }
     }
-    /// The current `Engine`.
+    /// The current [`Engine`].
     #[inline(always)]
     pub fn engine(&self) -> &'e Engine {
         self.engine
     }
-    /// _[INTERNALS]_ The current set of modules imported via `import` statements.
+    /// _(INTERNALS)_ The current set of modules imported via `import` statements.
     /// Available under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
@@ -127,10 +127,11 @@ impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
     ///
     /// All arguments may be _consumed_, meaning that they may be replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
+    ///
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
     ///
-    /// If `is_method` is `true`, the first argument is assumed to be passed
+    /// If `is_method` is [`true`], the first argument is assumed to be passed
     /// by reference and is not consumed.
     pub fn call_fn_dynamic_raw(
         &mut self,
@@ -138,7 +139,7 @@ impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
         is_method: bool,
         public_only: bool,
         args: &mut [&mut Dynamic],
-        def_value: Option<Dynamic>,
+        def_value: Option<&Dynamic>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut mods = self.mods.cloned().unwrap_or_default();
 
@@ -171,7 +172,7 @@ impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
     }
 }
 
-/// Consume a `Shared` resource and return a mutable reference to the wrapped value.
+/// Consume a [`Shared`] resource and return a mutable reference to the wrapped value.
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
 #[inline(always)]
 pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
@@ -181,13 +182,13 @@ pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
     return Arc::make_mut(value);
 }
 
-/// Consume a `Shared` resource if is unique (i.e. not shared), or clone it otherwise.
+/// Consume a [`Shared`] resource if is unique (i.e. not shared), or clone it otherwise.
 #[inline(always)]
 pub fn shared_take_or_clone<T: Clone>(value: Shared<T>) -> T {
     shared_try_take(value).unwrap_or_else(|v| v.as_ref().clone())
 }
 
-/// Consume a `Shared` resource if is unique (i.e. not shared).
+/// Consume a [`Shared`] resource if is unique (i.e. not shared).
 #[inline(always)]
 pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
     #[cfg(not(feature = "sync"))]
@@ -196,7 +197,7 @@ pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
     return Arc::try_unwrap(value);
 }
 
-/// Consume a `Shared` resource, assuming that it is unique (i.e. not shared).
+/// Consume a [`Shared`] resource, assuming that it is unique (i.e. not shared).
 ///
 /// # Panics
 ///
@@ -300,7 +301,7 @@ impl TryFrom<ImmutableString> for FnPtr {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, Default::default()))
         } else {
-            EvalAltResult::ErrorFunctionNotFound(value.into(), NO_POS).into()
+            EvalAltResult::ErrorFunctionNotFound(value.into(), Position::NONE).into()
         }
     }
 }
@@ -485,7 +486,8 @@ impl CallableFunction {
     ///
     /// # Panics
     ///
-    /// Panics if the `CallableFunction` is not `Pure` or `Method`.
+    /// Panics if the [`CallableFunction`] is not [`Pure`][CallableFunction::Pure] or
+    /// [`Method`][CallableFunction::Method].
     pub fn get_native_fn(&self) -> &Shared<FnAny> {
         match self {
             Self::Pure(f) | Self::Method(f) => f,
@@ -499,7 +501,7 @@ impl CallableFunction {
     ///
     /// # Panics
     ///
-    /// Panics if the `CallableFunction` is not `Script`.
+    /// Panics if the [`CallableFunction`] is not [`Script`][CallableFunction::Script].
     #[cfg(not(feature = "no_function"))]
     pub fn get_fn_def(&self) -> &Shared<ScriptFnDef> {
         match self {
@@ -511,7 +513,7 @@ impl CallableFunction {
     ///
     /// # Panics
     ///
-    /// Panics if the `CallableFunction` is not `Iterator`.
+    /// Panics if the [`CallableFunction`] is not [`Iterator`][CallableFunction::Iterator].
     pub fn get_iter_fn(&self) -> IteratorFn {
         match self {
             Self::Iterator(f) => *f,
@@ -525,7 +527,7 @@ impl CallableFunction {
     ///
     /// # Panics
     ///
-    /// Panics if the `CallableFunction` is not `Plugin`.
+    /// Panics if the [`CallableFunction`] is not [`Plugin`][CallableFunction::Plugin].
     pub fn get_plugin_fn<'s>(&'s self) -> &Shared<FnPlugin> {
         match self {
             Self::Plugin(f) => f,
@@ -535,17 +537,17 @@ impl CallableFunction {
             Self::Script(_) => unreachable!(),
         }
     }
-    /// Create a new `CallableFunction::Pure`.
+    /// Create a new [`CallableFunction::Pure`].
     #[inline(always)]
     pub fn from_pure(func: Box<FnAny>) -> Self {
         Self::Pure(func.into())
     }
-    /// Create a new `CallableFunction::Method`.
+    /// Create a new [`CallableFunction::Method`].
     #[inline(always)]
     pub fn from_method(func: Box<FnAny>) -> Self {
         Self::Method(func.into())
     }
-    /// Create a new `CallableFunction::Plugin`.
+    /// Create a new [`CallableFunction::Plugin`].
     #[inline(always)]
     pub fn from_plugin(func: impl PluginFunction + 'static + SendSync) -> Self {
         Self::Plugin((Box::new(func) as Box<FnPlugin>).into())

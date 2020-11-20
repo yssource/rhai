@@ -18,9 +18,7 @@ use crate::stdlib::{
 };
 use crate::token::is_valid_identifier;
 use crate::utils::get_hasher;
-use crate::{
-    calc_native_fn_hash, Dynamic, Engine, Module, Position, Scope, StaticVec, AST, NO_POS,
-};
+use crate::{calc_native_fn_hash, Dynamic, Engine, Module, Position, Scope, StaticVec, AST};
 
 /// Level of optimization performed.
 ///
@@ -703,7 +701,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                                                 Some(arg_for_type_of.to_string().into())
                                             } else {
                                                 // Otherwise use the default value, if any
-                                                x.def_value.map(|v| v.into())
+                                                x.def_value.clone()
                                             }
                                         })
                                         .and_then(|result| map_dynamic_to_expr(result, *pos))
@@ -759,7 +757,7 @@ fn optimize(
         .iter()
         .filter(|(_, typ, _)| *typ)
         .for_each(|(name, _, value)| {
-            if let Some(val) = map_dynamic_to_expr(value, NO_POS) {
+            if let Some(val) = map_dynamic_to_expr(value, Position::NONE) {
                 state.push_constant(name, val);
             }
         });

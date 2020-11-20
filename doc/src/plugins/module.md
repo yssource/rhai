@@ -428,7 +428,7 @@ mod my_module {
 The native call context is also useful in another scenario: protecting a function from malicious scripts.
 
 ```rust
-use rhai::{Dynamic, Array, NativeCallContext, EvalAltResult, NO_POS};
+use rhai::{Dynamic, Array, NativeCallContext, EvalAltResult, Position};
 use rhai::plugin::*;        // a "prelude" import for macros
 
 #[export_module]
@@ -449,7 +449,7 @@ mod my_module {
                 "Size to grow".to_string(),
                 context.engine().max_array_size(),
                 size as usize,
-                NO_POS,
+                Position::NONE,
             ).into();
         }
 

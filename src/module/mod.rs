@@ -20,7 +20,7 @@ use crate::stdlib::{
 use crate::token::Token;
 use crate::utils::StraightHasherBuilder;
 use crate::{
-    Dynamic, EvalAltResult, ImmutableString, NativeCallContext, Shared, StaticVec, NO_POS,
+    Dynamic, EvalAltResult, ImmutableString, NativeCallContext, Position, Shared, StaticVec,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -264,7 +264,7 @@ impl Module {
         self.get_var(name).and_then(Dynamic::try_cast::<T>)
     }
 
-    /// Get a module variable as a `Dynamic`.
+    /// Get a module variable as a [`Dynamic`][crate::Dynamic].
     ///
     /// # Example
     ///
@@ -303,15 +303,15 @@ impl Module {
     /// Get a reference to a namespace-qualified variable.
     /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
-    /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash`.
+    /// The [`u64`] hash is calculated by the function [`crate::calc_native_fn_hash`].
     #[inline(always)]
     pub(crate) fn get_qualified_var(&self, hash_var: u64) -> Result<&Dynamic, Box<EvalAltResult>> {
         if hash_var == 0 {
-            Err(EvalAltResult::ErrorVariableNotFound(String::new(), NO_POS).into())
+            Err(EvalAltResult::ErrorVariableNotFound(String::new(), Position::NONE).into())
         } else {
-            self.all_variables
-                .get(&hash_var)
-                .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(String::new(), NO_POS).into())
+            self.all_variables.get(&hash_var).ok_or_else(|| {
+                EvalAltResult::ErrorVariableNotFound(String::new(), Position::NONE).into()
+            })
         }
     }
 
@@ -443,7 +443,7 @@ impl Module {
 
     /// Does the particular Rust function exist in the module?
     ///
-    /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash`.
+    /// The [`u64`] hash is calculated by the function [`crate::calc_native_fn_hash`].
     /// It is also returned by the `set_fn_XXX` calls.
     ///
     /// # Example
@@ -517,12 +517,13 @@ impl Module {
         hash_fn
     }
 
-    /// Set a Rust function taking a reference to the scripting `Engine`, the current set of functions,
-    /// plus a list of mutable `Dynamic` references into the module, returning a hash key.
+    /// Set a Rust function taking a reference to the scripting [`Engine`][crate::Engine],
+    /// the current set of functions, plus a list of mutable [`Dynamic`][crate::Dynamic] references
+    /// into the module, returning a hash key.
     ///
     /// Use this to register a built-in function which must reference settings on the scripting
-    /// `Engine` (e.g. to prevent growing an array beyond the allowed maximum size), or to call a
-    /// script-defined function in the current evaluation context.
+    /// [`Engine`][crate::Engine] (e.g. to prevent growing an array beyond the allowed maximum size),
+    /// or to call a script-defined function in the current evaluation context.
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
@@ -530,9 +531,9 @@ impl Module {
     ///
     /// This function is very low level.
     ///
-    /// A list of `TypeId`'s is taken as the argument types.
+    /// A list of [`TypeId`]'s is taken as the argument types.
     ///
-    /// Arguments are simply passed in as a mutable array of `&mut Dynamic`,
+    /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`][crate::Dynamic],
     /// which is guaranteed to contain enough arguments of the correct types.
     ///
     /// The function is assumed to be a _method_, meaning that the first argument should not be consumed.
@@ -843,7 +844,7 @@ impl Module {
     ///
     /// # Panics
     ///
-    /// Panics if the type is `Array` or `Map`.
+    /// Panics if the type is [`Array`] or [`Map`].
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Example
@@ -979,7 +980,7 @@ impl Module {
     ///
     /// # Panics
     ///
-    /// Panics if the type is `Array` or `Map`.
+    /// Panics if the type is [`Array`] or [`Map`].
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Example
@@ -1032,13 +1033,14 @@ impl Module {
     }
 
     /// Set a pair of Rust index getter and setter functions, returning both hash keys.
-    /// This is a short-hand for `set_indexer_get_fn` and `set_indexer_set_fn`.
+    /// This is a short-hand for [`set_indexer_get_fn`][Module::set_indexer_get_fn] and
+    /// [`set_indexer_set_fn`][Module::set_indexer_set_fn].
     ///
     /// If there are similar existing Rust functions, they are replaced.
     ///
     /// # Panics
     ///
-    /// Panics if the type is `Array` or `Map`.
+    /// Panics if the type is [`Array`] or [`Map`].
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Example
@@ -1179,7 +1181,7 @@ impl Module {
 
     /// Get a Rust function.
     ///
-    /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash`.
+    /// The [`u64`] hash is calculated by the function [`crate::calc_native_fn_hash`].
     /// It is also returned by the `set_fn_XXX` calls.
     #[inline(always)]
     pub(crate) fn get_fn(&self, hash_fn: u64, public_only: bool) -> Option<&CallableFunction> {
@@ -1198,8 +1200,8 @@ impl Module {
 
     /// Does the particular namespace-qualified function exist in the module?
     ///
-    /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash` and must match
-    /// the hash calculated by `build_index`.
+    /// The [`u64`] hash is calculated by the function [`crate::calc_native_fn_hash`] and must match
+    /// the hash calculated by [`build_index`][Module::build_index].
     #[inline]
     pub fn contains_qualified_fn(&self, hash_fn: u64) -> bool {
         self.all_functions.contains_key(&hash_fn)
@@ -1208,8 +1210,8 @@ impl Module {
     /// Get a namespace-qualified function.
     /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
-    /// The `u64` hash is calculated by the function `crate::calc_native_fn_hash` and must match
-    /// the hash calculated by `build_index`.
+    /// The [`u64`] hash is calculated by the function [`crate::calc_native_fn_hash`] and must match
+    /// the hash calculated by [`build_index`][Module::build_index].
     #[inline(always)]
     pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
         self.all_functions.get(&hash_qualified_fn)
@@ -1394,10 +1396,11 @@ impl Module {
     /// Get an iterator over all script-defined functions in the module.
     ///
     /// Function metadata includes:
-    /// 1) Access mode (`FnAccess::Public` or `FnAccess::Private`).
-    /// 2) Function name (as string slice).
-    /// 3) Number of parameters.
-    /// 4) Shared reference to function definition `ScriptFnDef`.
+    /// 1) Namespace ([`FnNamespace::Global`] or [`FnNamespace::Internal`]).
+    /// 2) Access mode ([`FnAccess::Public`] or [`FnAccess::Private`]).
+    /// 3) Function name (as string slice).
+    /// 4) Number of parameters.
+    /// 5) Shared reference to function definition [`ScriptFnDef`][crate::ScriptFnDef].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub(crate) fn iter_script_fn<'a>(
@@ -1426,9 +1429,10 @@ impl Module {
     /// Get an iterator over all script-defined functions in the module.
     ///
     /// Function metadata includes:
-    /// 1) Access mode (`FnAccess::Public` or `FnAccess::Private`).
-    /// 2) Function name (as string slice).
-    /// 3) Number of parameters.
+    /// 1) Namespace ([`FnNamespace::Global`] or [`FnNamespace::Internal`]).
+    /// 2) Access mode ([`FnAccess::Public`] or [`FnAccess::Private`]).
+    /// 3) Function name (as string slice).
+    /// 4) Number of parameters.
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
@@ -1449,11 +1453,12 @@ impl Module {
     /// Get an iterator over all script-defined functions in the module.
     ///
     /// Function metadata includes:
-    /// 1) Access mode (`FnAccess::Public` or `FnAccess::Private`).
-    /// 2) Function name (as string slice).
-    /// 3) Number of parameters.
-    /// 4) _[INTERNALS]_ Shared reference to function definition `ScriptFnDef`.
-    ///    Exported under the internals feature only.
+    /// 1) Namespace ([`FnNamespace::Global`] or [`FnNamespace::Internal`]).
+    /// 2) Access mode ([`FnAccess::Public`] or [`FnAccess::Private`]).
+    /// 3) Function name (as string slice).
+    /// 4) Number of parameters.
+    /// 5) _(INTERNALS)_ Shared reference to function definition [`ScriptFnDef`][crate::ScriptFnDef].
+    ///    Exported under the `internals` feature only.
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "internals")]
     #[inline(always)]
@@ -1463,9 +1468,9 @@ impl Module {
         self.iter_script_fn()
     }
 
-    /// Create a new `Module` by evaluating an `AST`.
+    /// Create a new module by evaluating an [`AST`][crate::AST].
     ///
-    /// The entire `AST` is encapsulated into each function, allowing functions
+    /// The entire [`AST`][crate::AST] is encapsulated into each function, allowing functions
     /// to cross-call each other.  Functions in the global namespace, plus all functions
     /// defined in the module, are _merged_ into a _unified_ namespace before each call.
     /// Therefore, all functions will be found.
@@ -1602,7 +1607,7 @@ impl Module {
                             // 1) Calculate a hash in a similar manner to script-defined functions,
                             //    i.e. qualifiers + function name + number of arguments.
                             // 2) Calculate a second hash with no qualifiers, empty function name,
-                            //    and the actual list of argument `TypeId`'.s
+                            //    and the actual list of argument [`TypeId`]'.s
                             let hash_fn_args = crate::calc_native_fn_hash(
                                 empty(),
                                 "",
@@ -1692,13 +1697,13 @@ impl Module {
     }
 }
 
-/// _[INTERNALS]_ A chain of module names to namespace-qualify a variable or function call.
+/// _(INTERNALS)_ A chain of module names to namespace-qualify a variable or function call.
 /// Exported under the `internals` feature only.
 ///
-/// A `u64` hash key is cached for quick search purposes.
+/// A [`u64`] hash key is cached for quick search purposes.
 ///
-/// A `StaticVec` is used because most namespace-qualified access contains only one level,
-/// and it is wasteful to always allocate a `Vec` with one element.
+/// A [`StaticVec`] is used because most namespace-qualified access contains only one level,
+/// and it is wasteful to always allocate a [`Vec`] with one element.
 ///
 /// ## WARNING
 ///

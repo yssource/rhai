@@ -7,6 +7,8 @@ Version 0.19.6
 This version adds the `switch` statement.
 
 It also allows exposing selected module functions (usually methods) to the global namespace.
+This is very convenient when encapsulating the API of a custom Rust type into a module while having methods
+and iterators registered on the custom type work normally.
 
 Breaking changes
 ----------------
@@ -26,7 +28,7 @@ New features
 Enhancements
 ------------
 
-* New constant `Dynamic::UNIT`.
+* New constants under `Dynamic` including `UNIT`, `TRUE`, `FALSE`, `ZERO`, `ONE` etc.
 
 
 Version 0.19.5

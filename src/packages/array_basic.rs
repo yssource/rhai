@@ -5,8 +5,8 @@ use crate::engine::{OP_EQUALS, TYPICAL_ARRAY_SIZE};
 use crate::plugin::*;
 use crate::stdlib::{any::TypeId, boxed::Box, cmp::max, cmp::Ordering, string::ToString};
 use crate::{
-    def_package, Array, Dynamic, EvalAltResult, FnPtr, ImmutableString, NativeCallContext, INT,
-    NO_POS,
+    def_package, Array, Dynamic, EvalAltResult, FnPtr, ImmutableString, NativeCallContext,
+    Position, INT,
 };
 
 #[cfg(not(feature = "no_object"))]
@@ -42,7 +42,7 @@ macro_rules! gen_array_functions {
                     #[cfg(not(feature = "unchecked"))]
                     if _ctx.engine().max_array_size() > 0 && len > 0 && (len as usize) > _ctx.engine().max_array_size() {
                         return EvalAltResult::ErrorDataTooLarge(
-                            "Size of array".to_string(), NO_POS
+                            "Size of array".to_string(), Position::NONE
                         ).into();
                     }
 
@@ -215,7 +215,7 @@ mod array_functions {
                         Box::new(EvalAltResult::ErrorInFunctionCall(
                             "map".to_string(),
                             err,
-                            NO_POS,
+                            Position::NONE,
                         ))
                     })?,
             );
@@ -246,7 +246,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "filter".to_string(),
                         err,
-                        NO_POS,
+                        Position::NONE,
                     ))
                 })?
                 .as_bool()
@@ -279,7 +279,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "index_of".to_string(),
                         err,
-                        NO_POS,
+                        Position::NONE,
                     ))
                 })?
                 .as_bool()
@@ -312,7 +312,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "some".to_string(),
                         err,
-                        NO_POS,
+                        Position::NONE,
                     ))
                 })?
                 .as_bool()
@@ -345,7 +345,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "all".to_string(),
                         err,
-                        NO_POS,
+                        Position::NONE,
                     ))
                 })?
                 .as_bool()
@@ -380,7 +380,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "reduce".to_string(),
                         err,
-                        NO_POS,
+                        Position::NONE,
                     ))
                 })?;
         }
@@ -398,7 +398,7 @@ mod array_functions {
             Box::new(EvalAltResult::ErrorInFunctionCall(
                 "reduce".to_string(),
                 err,
-                NO_POS,
+                Position::NONE,
             ))
         })?;
 
@@ -417,7 +417,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "reduce".to_string(),
                         err,
-                        NO_POS,
+                        Position::NONE,
                     ))
                 })?;
         }
@@ -447,7 +447,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "reduce_rev".to_string(),
                         err,
-                        NO_POS,
+                        Position::NONE,
                     ))
                 })?;
         }
@@ -465,7 +465,7 @@ mod array_functions {
             Box::new(EvalAltResult::ErrorInFunctionCall(
                 "reduce_rev".to_string(),
                 err,
-                NO_POS,
+                Position::NONE,
             ))
         })?;
 
@@ -484,7 +484,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "reduce_rev".to_string(),
                         err,
-                        NO_POS,
+                        Position::NONE,
                     ))
                 })?;
         }
@@ -554,7 +554,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "drain".to_string(),
                         err,
-                        NO_POS,
+                        Position::NONE,
                     ))
                 })?
                 .as_bool()
@@ -613,7 +613,7 @@ mod array_functions {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "retain".to_string(),
                         err,
-                        NO_POS,
+                        Position::NONE,
                     ))
                 })?
                 .as_bool()
@@ -665,7 +665,7 @@ mod array_functions {
 
         for (a1, a2) in arr1.iter_mut().zip(arr2.iter_mut()) {
             let equals = ctx
-                .call_fn_dynamic_raw(OP_EQUALS, true, false, &mut [a1, a2], def_value.clone())
+                .call_fn_dynamic_raw(OP_EQUALS, true, false, &mut [a1, a2], def_value.as_ref())
                 .map(|v| v.as_bool().unwrap_or(false))?;
 
             if !equals {

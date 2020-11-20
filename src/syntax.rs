@@ -1,4 +1,4 @@
-//! Module implementing custom syntax for `Engine`.
+//! Module implementing custom syntax for [`Engine`].
 
 use crate::ast::Expr;
 use crate::engine::{EvalContext, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
@@ -11,7 +11,7 @@ use crate::stdlib::{
 use crate::token::{is_valid_identifier, Token};
 use crate::{
     Dynamic, Engine, EvalAltResult, ImmutableString, LexError, ParseError, Position, Shared,
-    StaticVec, NO_POS,
+    StaticVec,
 };
 
 /// A general expression evaluation trait object.
@@ -31,7 +31,7 @@ pub type FnCustomSyntaxParse = dyn Fn(&[String]) -> Result<Option<String>, Parse
 pub type FnCustomSyntaxParse =
     dyn Fn(&[String]) -> Result<Option<String>, ParseError> + Send + Sync;
 
-/// An expression sub-tree in an AST.
+/// An expression sub-tree in an [`AST`][crate::AST].
 #[derive(Debug, Clone)]
 pub struct Expression<'a>(&'a Expr);
 
@@ -43,7 +43,7 @@ impl<'a> From<&'a Expr> for Expression<'a> {
 }
 
 impl Expression<'_> {
-    /// If this expression is a variable name, return it.  Otherwise `None`.
+    /// If this expression is a variable name, return it.  Otherwise [`None`].
     #[inline(always)]
     pub fn get_variable_name(&self) -> Option<&str> {
         self.0.get_variable_access(true)
@@ -65,7 +65,7 @@ impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_, '_> {
     ///
     /// ## WARNING - Low Level API
     ///
-    /// This function is very low level.  It evaluates an expression from an AST.
+    /// This function is very low level.  It evaluates an expression from an [`AST`][crate::AST].
     #[inline(always)]
     pub fn eval_expression_tree(
         &mut self,
@@ -95,10 +95,10 @@ pub struct CustomSyntax {
 }
 
 impl Engine {
-    /// Register a custom syntax with the `Engine`.
+    /// Register a custom syntax with the [`Engine`].
     ///
     /// * `keywords` holds a slice of strings that define the custom syntax.  
-    /// * `new_vars` is the number of new variables declared by this custom syntax, or the number of variables removed (if negative).  
+    /// * `new_vars` is the number of new variables declared by this custom syntax, or the number of variables removed (if negative).
     /// * `func` is the implementation function.
     pub fn register_custom_syntax<S: AsRef<str> + ToString>(
         &mut self,
@@ -142,7 +142,7 @@ impl Engine {
                         segments.len() + 1,
                         s
                     ))
-                    .into_err(NO_POS)
+                    .into_err(Position::NONE)
                     .into());
                 }
                 // Identifier in first position
@@ -159,7 +159,7 @@ impl Engine {
                         segments.len() + 1,
                         s
                     ))
-                    .into_err(NO_POS)
+                    .into_err(Position::NONE)
                     .into());
                 }
             };
@@ -191,17 +191,17 @@ impl Engine {
 
         Ok(self)
     }
-    /// Register a custom syntax with the `Engine`.
+    /// Register a custom syntax with the [`Engine`].
     ///
     /// ## WARNING - Low Level API
     ///
     /// This function is very low level.
     ///
-    /// * `new_vars` is the number of new variables declared by this custom syntax, or the number of variables removed (if negative).  
+    /// * `new_vars` is the number of new variables declared by this custom syntax, or the number of variables removed (if negative).
     /// * `parse` is the parsing function.
     /// * `func` is the implementation function.
     ///
-    /// All custom keywords must be manually registered via `Engine::register_custom_operator`.
+    /// All custom keywords must be manually registered via [`register_custom_operator`][Engine::register_custom_operator].
     /// Otherwise, custom keywords won't be recognized.
     pub fn register_custom_syntax_raw(
         &mut self,

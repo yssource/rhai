@@ -2,7 +2,7 @@
 
 use crate::plugin::*;
 use crate::stdlib::{format, string::String};
-use crate::{def_package, EvalAltResult, INT, NO_POS};
+use crate::{def_package, EvalAltResult, Position, INT};
 
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
@@ -13,7 +13,7 @@ use num_traits::float::Float;
 
 #[inline(always)]
 pub fn make_err(msg: impl Into<String>) -> Box<EvalAltResult> {
-    EvalAltResult::ErrorArithmetic(msg.into(), NO_POS).into()
+    EvalAltResult::ErrorArithmetic(msg.into(), Position::NONE).into()
 }
 
 macro_rules! gen_arithmetic_functions {

@@ -7,7 +7,8 @@ use crate::{Engine, EvalAltResult, Locked, Module, ModuleResolver, Position, Sha
 ///
 /// Script files are cached so they are are not reloaded and recompiled in subsequent requests.
 ///
-/// The `new_with_path` and `new_with_path_and_extension` constructor functions
+/// The [`new_with_path`][FileModuleResolver::new_with_path] and
+/// [`new_with_path_and_extension`][FileModuleResolver::new_with_path_and_extension] constructor functions
 /// allow specification of a base directory with module path used as a relative path offset
 /// to the base directory. The script file is then forced to be in a specified extension
 /// (default `.rhai`).
@@ -47,7 +48,7 @@ impl Default for FileModuleResolver {
 }
 
 impl FileModuleResolver {
-    /// Create a new `FileModuleResolver` with a specific base path.
+    /// Create a new [`FileModuleResolver`] with a specific base path.
     ///
     /// # Example
     ///
@@ -67,7 +68,7 @@ impl FileModuleResolver {
         Self::new_with_path_and_extension(path, "rhai")
     }
 
-    /// Create a new `FileModuleResolver` with a specific base path and file extension.
+    /// Create a new [`FileModuleResolver`] with a specific base path and file extension.
     ///
     /// The default extension is `.rhai`.
     ///
@@ -96,7 +97,7 @@ impl FileModuleResolver {
         }
     }
 
-    /// Create a new `FileModuleResolver` with the current directory as base path.
+    /// Create a new [`FileModuleResolver`] with the current directory as base path.
     ///
     /// # Example
     ///

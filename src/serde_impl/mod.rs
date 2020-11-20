@@ -1,4 +1,4 @@
-//! Helper module defining serialization/deserialization support for [`serde`](https://crates.io/crates/serde).
+//! Helper module defining serialization/deserialization support for [`serde`].
 
 pub mod de;
 pub mod ser;

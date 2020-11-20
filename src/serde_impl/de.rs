@@ -1,9 +1,9 @@
-//! Implement deserialization support of `Dynamic` for [`serde`](https://crates.io/crates/serde).
+//! Implement deserialization support of [`Dynamic`][crate::Dynamic] for [`serde`].
 
 use super::str::ImmutableStringDeserializer;
 use crate::dynamic::Union;
 use crate::stdlib::{any::type_name, boxed::Box, fmt, string::ToString};
-use crate::{Dynamic, EvalAltResult, ImmutableString, LexError, ParseErrorType, NO_POS};
+use crate::{Dynamic, EvalAltResult, ImmutableString, LexError, ParseErrorType, Position::NONE};
 use serde::de::{
     DeserializeSeed, Deserializer, Error, IntoDeserializer, MapAccess, SeqAccess, Visitor,
 };
@@ -15,19 +15,19 @@ use crate::Array;
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
 
-/// Deserializer for `Dynamic` which is kept as a reference.
+/// Deserializer for [`Dynamic`][crate::Dynamic] which is kept as a reference.
 ///
 /// The reference is necessary because the deserialized type may hold references
-/// (especially `&str`) to the source `Dynamic`.
+/// (especially `&str`) to the source [`Dynamic`][crate::Dynamic].
 pub struct DynamicDeserializer<'a> {
     value: &'a Dynamic,
 }
 
 impl<'de> DynamicDeserializer<'de> {
-    /// Create a `DynamicDeserializer` from a reference to a `Dynamic` value.
+    /// Create a [`DynamicDeserializer`] from a reference to a [`Dynamic`][crate::Dynamic] value.
     ///
     /// The reference is necessary because the deserialized type may hold references
-    /// (especially `&str`) to the source `Dynamic`.
+    /// (especially `&str`) to the source [`Dynamic`][crate::Dynamic].
     pub fn from_dynamic(value: &'de Dynamic) -> Self {
         Self { value }
     }
@@ -37,8 +37,12 @@ impl<'de> DynamicDeserializer<'de> {
     }
     /// Shortcut for a type conversion error.
     fn type_error_str<T>(&self, error: &str) -> Result<T, Box<EvalAltResult>> {
-        EvalAltResult::ErrorMismatchOutputType(error.into(), self.value.type_name().into(), NO_POS)
-            .into()
+        EvalAltResult::ErrorMismatchOutputType(
+            error.into(),
+            self.value.type_name().into(),
+            Position::NONE,
+        )
+        .into()
     }
     fn deserialize_int<V: Visitor<'de>>(
         &mut self,
@@ -56,7 +60,7 @@ impl<'de> DynamicDeserializer<'de> {
     }
 }
 
-/// Deserialize a `Dynamic` value into a Rust type that implements `serde::Deserialize`.
+/// Deserialize a [`Dynamic`][crate::Dynamic] value into a Rust type that implements [`serde::Deserialize`].
 ///
 /// # Example
 ///
@@ -117,7 +121,7 @@ impl Error for Box<EvalAltResult> {
     fn custom<T: fmt::Display>(err: T) -> Self {
         EvalAltResult::ErrorParsing(
             ParseErrorType::BadInput(LexError::ImproperSymbol(err.to_string())),
-            NO_POS,
+            Position::NONE,
         )
         .into()
     }
@@ -445,7 +449,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 
 /// `SeqAccess` implementation for arrays.
 struct IterateArray<'a, ITER: Iterator<Item = &'a Dynamic>> {
-    /// Iterator for a stream of `Dynamic` values.
+    /// Iterator for a stream of [`Dynamic`][crate::Dynamic] values.
     iter: ITER,
 }
 
@@ -479,9 +483,9 @@ where
     KEYS: Iterator<Item = &'a ImmutableString>,
     VALUES: Iterator<Item = &'a Dynamic>,
 {
-    // Iterator for a stream of `Dynamic` keys.
+    // Iterator for a stream of [`Dynamic`][crate::Dynamic] keys.
     keys: KEYS,
-    // Iterator for a stream of `Dynamic` values.
+    // Iterator for a stream of [`Dynamic`][crate::Dynamic] values.
     values: VALUES,
 }
 
