@@ -55,6 +55,16 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval::<INT>(
             r"
+                let x = 0;
+                exec |x| -> { x += 1 } while x < 42;
+                x
+            "
+        )?,
+        42
+    );
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
                 exec |x| -> { x += 1 } while x < 42;
                 x
             "
@@ -96,8 +106,10 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
             },
             _ => unreachable!(),
         },
-        0,
-        |_, inputs| {
+        1,
+        |context, inputs| {
+            context.scope.push("foo", 999 as INT);
+
             Ok(match inputs[0].get_variable_name().unwrap() {
                 "world" => 123 as INT,
                 "kitty" => 42 as INT,
@@ -109,6 +121,11 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(engine.eval::<INT>("hello world")?, 123);
     assert_eq!(engine.eval::<INT>("hello kitty")?, 42);
+    assert_eq!(
+        engine.eval::<INT>("let foo = 0; (hello kitty) + foo")?,
+        1041
+    );
+    assert_eq!(engine.eval::<INT>("(hello kitty) + foo")?, 1041);
     assert_eq!(
         *engine.compile("hello hey").expect_err("should error").0,
         ParseErrorType::BadInput(LexError::ImproperSymbol("hey".to_string()))

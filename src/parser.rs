@@ -49,6 +49,8 @@ struct ParseState<'e> {
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
     externals: HashMap<ImmutableString, Position>,
+    /// Always search for variables instead of direct indexing into the scope.
+    always_search: bool,
     /// An indicator that disables variable capturing into externals one single time
     /// up until the nearest consumed Identifier token.
     /// If set to false the next call to `access_var` will not capture the variable.
@@ -92,6 +94,7 @@ impl<'e> ParseState<'e> {
             allow_capture: true,
             strings: HashMap::with_capacity(64),
             stack: Vec::with_capacity(16),
+            always_search: false,
             #[cfg(not(feature = "no_module"))]
             modules: Default::default(),
         }
@@ -103,6 +106,7 @@ impl<'e> ParseState<'e> {
     ///
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
+    ///
     /// Return `None` when the variable name is not found in the `stack`.
     #[inline]
     fn access_var(&mut self, name: &str, _pos: Position) -> Option<NonZeroUsize> {
@@ -123,7 +127,11 @@ impl<'e> ParseState<'e> {
             self.allow_capture = true
         }
 
-        index
+        if self.always_search {
+            None
+        } else {
+            index
+        }
     }
 
     /// Find a module by name in the `ParseState`, searching in reverse.
@@ -1785,6 +1793,7 @@ fn parse_custom_syntax(
                 state.stack.len() + delta as usize,
                 ("".into(), ScopeEntryType::Normal),
             );
+            state.always_search = true;
         }
         delta if delta < 0 && state.stack.len() <= delta.abs() as usize => state.stack.clear(),
         delta if delta < 0 => state
@@ -2284,6 +2293,7 @@ fn parse_block(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut statements = Vec::with_capacity(8);
+    let prev_always_search = state.always_search;
     let prev_stack_len = state.stack.len();
 
     #[cfg(not(feature = "no_module"))]
@@ -2333,6 +2343,10 @@ fn parse_block(
     #[cfg(not(feature = "no_module"))]
     state.modules.truncate(prev_mods_len);
 
+    // The impact of new local variables goes away at the end of a block
+    // because any new variables introduced will go out of scope
+    state.always_search = prev_always_search;
+
     Ok(Stmt::Block(statements, settings.pos))
 }
 
@@ -2372,10 +2386,11 @@ fn parse_stmt(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     match token {
-        // Semicolon - empty statement
+        // ; - empty statement
         Token::SemiColon => Ok(Some(Stmt::Noop(settings.pos))),
 
-        Token::LeftBrace => parse_block(input, state, lib, settings.level_up()).map(Some),
+        // { - statements block
+        Token::LeftBrace => Ok(Some(parse_block(input, state, lib, settings.level_up())?)),
 
         // fn ...
         #[cfg(not(feature = "no_function"))]

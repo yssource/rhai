@@ -10,6 +10,11 @@ It also allows exposing selected module functions (usually methods) to the globa
 This is very convenient when encapsulating the API of a custom Rust type into a module while having methods
 and iterators registered on the custom type work normally.
 
+Bug fixes
+---------
+
+* Custom syntax that introduces a shadowing variable now works properly.
+
 Breaking changes
 ----------------
 
