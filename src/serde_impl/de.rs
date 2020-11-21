@@ -120,7 +120,7 @@ pub fn from_dynamic<'de, T: Deserialize<'de>>(
 impl Error for Box<EvalAltResult> {
     fn custom<T: fmt::Display>(err: T) -> Self {
         EvalAltResult::ErrorParsing(
-            ParseErrorType::BadInput(LexError::ImproperSymbol(err.to_string())),
+            ParseErrorType::BadInput(LexError::ImproperSymbol("".to_string(), err.to_string())),
             Position::NONE,
         )
         .into()

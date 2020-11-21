@@ -79,6 +79,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
             .expect_err("should error")
             .0,
         ParseErrorType::BadInput(LexError::ImproperSymbol(
+            "!".to_string(),
             "Improper symbol for custom syntax at position #1: '!'".to_string()
         ))
     );
@@ -100,6 +101,7 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
                 s => Err(ParseError(
                     Box::new(ParseErrorType::BadInput(LexError::ImproperSymbol(
                         s.to_string(),
+                        "".to_string(),
                     ))),
                     Position::NONE,
                 )),
@@ -128,7 +130,7 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<INT>("(hello kitty) + foo")?, 1041);
     assert_eq!(
         *engine.compile("hello hey").expect_err("should error").0,
-        ParseErrorType::BadInput(LexError::ImproperSymbol("hey".to_string()))
+        ParseErrorType::BadInput(LexError::ImproperSymbol("hey".to_string(), "".to_string()))
     );
 
     Ok(())
