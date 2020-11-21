@@ -49,6 +49,8 @@ Reserved Keywords
 | --------- | --------------------- |
 | `var`     | variable declaration  |
 | `static`  | variable declaration  |
+| `begin`   | block scope           |
+| `end`     | block scope           |
 | `shared`  | share value           |
 | `each`    | looping               |
 | `then`    | control flow          |

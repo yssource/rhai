@@ -19,7 +19,7 @@ Breaking changes
 ----------------
 
 * `Module::set_fn`, `Module::set_raw_fn` and `Module::set_fn_XXX_mut` all take an additional parameter of `FnNamespace`.
-* `unless` is now a reserved keyword.
+* `begin`, `end`, `unless` are now reserved keywords.
 * `EvalPackage` is removed in favor of `Engine::disable_symbol`.
 
 New features

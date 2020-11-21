@@ -1,4 +1,4 @@
-`eval` Statement
+`eval` Function
 ===============
 
 {{#include ../links.md}}

@@ -9,7 +9,7 @@ Terminated by '`;`'
 Statements are terminated by semicolons '`;`' and they are mandatory,
 except for the _last_ statement in a _block_ (enclosed by '`{`' .. '`}`' pairs) where it can be omitted.
 
-Semicolons can also be omitted if the statement contains a block itself
+Semicolons can also be omitted if the statement ends with a block itself
 (e.g. the `if`, `while`, `for` and `loop` statements).
 
 ```rust
@@ -35,6 +35,8 @@ Statement Expression
 A statement can be used anywhere where an expression is expected. These are called, for lack of a more
 creative name, "statement expressions."
 
-The _last_ statement of a statement block is _always_ the block's return value when used as a statement.
+The _last_ statement of a statement block is _always_ the block's return value when used as a statement,
+_regardless_ of whether it is terminated by a semicolon or not. This is different from Rust where,
+if the last statement is terminated by a semicolon, the block's return value is taken to be `()`.
 
 If the last statement has no return value (e.g. variable definitions, assignments) then it is assumed to be [`()`].
