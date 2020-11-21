@@ -11,8 +11,8 @@ use crate::{Engine, EvalAltResult, ParseError, Scope, AST};
 pub trait Func<ARGS, RET> {
     type Output;
 
-    /// Create a Rust closure from an `AST`.
-    /// The `Engine` and `AST` are consumed and basically embedded into the closure.
+    /// Create a Rust closure from an [`AST`].
+    /// The [`Engine`] and [`AST`] are consumed and basically embedded into the closure.
     ///
     /// # Example
     ///
@@ -43,7 +43,7 @@ pub trait Func<ARGS, RET> {
     fn create_from_ast(self, ast: AST, entry_point: &str) -> Self::Output;
 
     /// Create a Rust closure from a script.
-    /// The `Engine` is consumed and basically embedded into the closure.
+    /// The [`Engine`] is consumed and basically embedded into the closure.
     ///
     /// # Example
     ///

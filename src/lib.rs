@@ -50,7 +50,7 @@
 //!
 //! # Documentation
 //!
-//! See [The Rhai Book](https://schungx.github.io/rhai) for details on the Rhai script engine and language.
+//! See [The Rhai Book](https://schungx.github.io/rhai) for details on the Rhai scripting engine and language.
 
 #![cfg_attr(feature = "no_std", no_std)]
 
@@ -121,7 +121,7 @@ pub use parse_error::{LexError, ParseError, ParseErrorType};
 pub use result::EvalAltResult;
 pub use scope::Scope;
 pub use syntax::Expression;
-pub use token::{Position, NO_POS};
+pub use token::Position;
 pub use utils::ImmutableString;
 
 #[allow(dead_code)]
@@ -157,7 +157,7 @@ pub use module::ModuleResolver;
 #[cfg(not(feature = "no_module"))]
 pub use crate::module::resolvers as module_resolvers;
 
-/// _[SERDE]_ Serialization and deserialization support for [`serde`](https://crates.io/crates/serde).
+/// _(SERDE)_ Serialization and deserialization support for [`serde`](https://crates.io/crates/serde).
 /// Exported under the `serde` feature.
 #[cfg(feature = "serde")]
 pub mod serde {
@@ -187,13 +187,13 @@ pub use engine::{Imports, Limits, State as EvalState};
 #[deprecated(note = "this type is volatile and may change")]
 pub use module::NamespaceRef;
 
-/// _[INTERNALS]_ Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
+/// _(INTERNALS)_ Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
 /// which is a specialized `Vec` backed by a small, fixed-size array when there are <= 4 items stored.
 /// Exported under the `internals` feature only.
 #[cfg(not(feature = "internals"))]
 type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 
-/// _[INTERNALS]_ Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
+/// _(INTERNALS)_ Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
 /// which is a specialized `Vec` backed by a small, fixed-size array when there are <= 4 items stored.
 /// Exported under the `internals` feature only.
 #[cfg(feature = "internals")]

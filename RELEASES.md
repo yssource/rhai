@@ -7,20 +7,35 @@ Version 0.19.6
 This version adds the `switch` statement.
 
 It also allows exposing selected module functions (usually methods) to the global namespace.
+This is very convenient when encapsulating the API of a custom Rust type into a module while having methods
+and iterators registered on the custom type work normally.
+
+Bug fixes
+---------
+
+* Custom syntax that introduces a shadowing variable now works properly.
+
+Breaking changes
+----------------
+
+* `Module::set_fn`, `Module::set_raw_fn` and `Module::set_fn_XXX_mut` all take an additional parameter of `FnNamespace`.
+* `unless` is now a reserved keyword.
 
 New features
 ------------
 
 * `switch` statement.
+* `do ... while` and `do ... until` statement.
 * `Engine::register_module` to register a module as a sub-module in the global namespace.
-* `Module::get_fn_namespace` and `Module::set_fn_namespace` can expose a module function to the global namespace. This is convenient when registering an API for a custom type.
 * `set_exported_global_fn!` macro to register a plugin function and expose it to the global namespace.
-* `#[rhai_fn(gobal)]` and `#[rhai_fn(internal)]` attributes to determine whether a function defined in a plugin module should be exposed to the global namespace. This is convenient when defining an API for a custom type.
+* `Module::set_fn_XXX_mut` can expose a module function to the global namespace. This is convenient when registering an API for a custom type.
+* `Module::set_getter_fn`, `Module::set_setter_fn`, `Module::set_indexer_get_fn`, `Module::set_indexer_set_fn` all expose the function to the global namespace by default. This is convenient when registering an API for a custom type.
+* `#[rhai_fn(global)]` and `#[rhai_fn(internal)]` attributes to determine whether a function defined in a plugin module should be exposed to the global namespace. This is convenient when defining an API for a custom type.
 
 Enhancements
 ------------
 
-* New constant `Dynamic::UNIT`.
+* New constants under `Dynamic` including `UNIT`, `TRUE`, `FALSE`, `ZERO`, `ONE` etc.
 
 
 Version 0.19.5

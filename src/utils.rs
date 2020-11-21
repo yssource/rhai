@@ -15,11 +15,11 @@ use crate::stdlib::{
 };
 use crate::Shared;
 
-/// A hasher that only takes one single `u64` and returns it as a hash key.
+/// A hasher that only takes one single [`u64`] and returns it as a hash key.
 ///
 /// # Panics
 ///
-/// Panics when hashing any data type other than a `u64`.
+/// Panics when hashing any data type other than a [`u64`].
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
 pub struct StraightHasher(u64);
 
@@ -49,11 +49,11 @@ impl BuildHasher for StraightHasherBuilder {
     }
 }
 
-/// _[INTERNALS]_ Calculate a `u64` hash key from a namespace-qualified function name and parameter types.
+/// _(INTERNALS)_ Calculate a [`u64`] hash key from a namespace-qualified function name and parameter types.
 /// Exported under the `internals` feature only.
 ///
 /// Module names are passed in via `&str` references from an iterator.
-/// Parameter types are passed in via `TypeId` values from an iterator.
+/// Parameter types are passed in via [`TypeId`] values from an iterator.
 ///
 /// # Note
 ///
@@ -67,12 +67,12 @@ pub fn calc_native_fn_hash<'a>(
     calc_fn_hash(modules, fn_name, None, params)
 }
 
-/// _[INTERNALS]_ Calculate a `u64` hash key from a namespace-qualified function name
+/// _(INTERNALS)_ Calculate a [`u64`] hash key from a namespace-qualified function name
 /// and the number of parameters, but no parameter types.
 /// Exported under the `internals` feature only.
 ///
 /// Module names are passed in via `&str` references from an iterator.
-/// Parameter types are passed in via `TypeId` values from an iterator.
+/// Parameter types are passed in via [`TypeId`] values from an iterator.
 ///
 /// # Note
 ///
@@ -96,10 +96,10 @@ pub fn get_hasher() -> impl Hasher {
     s
 }
 
-/// Calculate a `u64` hash key from a namespace-qualified function name and parameter types.
+/// Calculate a [`u64`] hash key from a namespace-qualified function name and parameter types.
 ///
 /// Module names are passed in via `&str` references from an iterator.
-/// Parameter types are passed in via `TypeId` values from an iterator.
+/// Parameter types are passed in via [`TypeId`] values from an iterator.
 ///
 /// # Note
 ///
@@ -116,9 +116,9 @@ fn calc_fn_hash<'a>(
     modules.next().is_some().hash(s);
     // We always skip the first module
     modules.for_each(|m| m.hash(s));
-    s.write(fn_name.as_bytes());
+    fn_name.hash(s);
     if let Some(num) = num {
-        s.write_usize(num);
+        num.hash(s);
     } else {
         params.for_each(|t| t.hash(s));
     }
@@ -127,7 +127,8 @@ fn calc_fn_hash<'a>(
 
 /// The system immutable string type.
 ///
-/// An `ImmutableString` wraps an `Rc<String>` (or `Arc<String>` under the `sync` feature)
+/// An [`ImmutableString`] wraps an [`Rc`][std::rc::Rc]`<`[`String`]`>`
+///  (or [`Arc`][std::sync::Arc]`<`[`String`]`>` under the `sync` feature)
 /// so that it can be simply shared and not cloned.
 ///
 /// # Example
@@ -469,15 +470,15 @@ impl PartialOrd<ImmutableString> for String {
 }
 
 impl ImmutableString {
-    /// Consume the `ImmutableString` and convert it into a `String`.
+    /// Consume the [`ImmutableString`] and convert it into a [`String`].
     /// If there are other references to the same string, a cloned copy is returned.
     #[inline(always)]
     pub fn into_owned(mut self) -> String {
         self.make_mut(); // Make sure it is unique reference
         shared_take(self.0) // Should succeed
     }
-    /// Make sure that the `ImmutableString` is unique (i.e. no other outstanding references).
-    /// Then return a mutable reference to the `String`.
+    /// Make sure that the [`ImmutableString`] is unique (i.e. no other outstanding references).
+    /// Then return a mutable reference to the [`String`].
     #[inline(always)]
     pub fn make_mut(&mut self) -> &mut String {
         shared_make_mut(&mut self.0)

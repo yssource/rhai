@@ -37,19 +37,16 @@ pub struct Position {
     pos: u16,
 }
 
-/// No `Position`.
-pub const NO_POS: Position = Position::NONE;
-
 impl Position {
-    /// A `Position` representing no position.
+    /// A [`Position`] representing no position.
     pub const NONE: Self = Self { line: 0, pos: 0 };
-    /// A `Position` representing the first position.
+    /// A [`Position`] representing the first position.
     pub const START: Self = Self { line: 1, pos: 0 };
 
-    /// Create a new `Position`.
+    /// Create a new [`Position`].
     ///
     /// `line` must not be zero.
-    /// If `position` is zero, then it is at the beginning of a line.
+    /// If [`Position`] is zero, then it is at the beginning of a line.
     ///
     /// # Panics
     ///
@@ -63,7 +60,7 @@ impl Position {
             pos: position,
         }
     }
-    /// Get the line number (1-based), or `None` if there is no position.
+    /// Get the line number (1-based), or [`None`] if there is no position.
     #[inline(always)]
     pub fn line(self) -> Option<usize> {
         if self.is_none() {
@@ -72,7 +69,7 @@ impl Position {
             Some(self.line as usize)
         }
     }
-    /// Get the character position (1-based), or `None` if at beginning of a line.
+    /// Get the character position (1-based), or [`None`] if at beginning of a line.
     #[inline(always)]
     pub fn position(self) -> Option<usize> {
         if self.is_none() || self.pos == 0 {
@@ -113,12 +110,12 @@ impl Position {
             self.pos = 0;
         }
     }
-    /// Is this `Position` at the beginning of a line?
+    /// Is this [`Position`] at the beginning of a line?
     #[inline(always)]
     pub fn is_beginning_of_line(self) -> bool {
         self.line == 0 && !self.is_none()
     }
-    /// Is there no `Position`?
+    /// Is there no [`Position`]?
     #[inline(always)]
     pub fn is_none(self) -> bool {
         self == Self::NONE
@@ -150,7 +147,7 @@ impl fmt::Debug for Position {
     }
 }
 
-/// _[INTERNALS]_ A Rhai language token.
+/// _(INTERNALS)_ A Rhai language token.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -235,8 +232,12 @@ pub enum Token {
     Else,
     /// `switch`
     Switch,
+    /// `do`
+    Do,
     /// `while`
     While,
+    /// `until`
+    Until,
     /// `loop`
     Loop,
     /// `for`
@@ -383,7 +384,9 @@ impl Token {
                 If => "if",
                 Else => "else",
                 Switch => "switch",
+                Do => "do",
                 While => "while",
+                Until => "until",
                 Loop => "loop",
                 For => "for",
                 In => "in",
@@ -470,7 +473,9 @@ impl Token {
             "if" => If,
             "else" => Else,
             "switch" => Switch,
+            "do" => Do,
             "while" => While,
+            "until" => Until,
             "loop" => Loop,
             "for" => For,
             "in" => In,
@@ -527,8 +532,8 @@ impl Token {
             "import" | "export" | "as" => Reserved(syntax.into()),
 
             "===" | "!==" | "->" | "<-" | ":=" | "::<" | "(*" | "*)" | "#" | "public" | "new"
-            | "use" | "module" | "package" | "var" | "static" | "shared" | "with" | "do"
-            | "each" | "then" | "goto" | "exit" | "match" | "case" | "default" | "void"
+            | "use" | "module" | "package" | "var" | "static" | "shared" | "with" | "each"
+            | "then" | "goto" | "unless" | "exit" | "match" | "case" | "default" | "void"
             | "null" | "nil" | "spawn" | "thread" | "go" | "sync" | "async" | "await" | "yield" => {
                 Reserved(syntax.into())
             }
@@ -544,7 +549,7 @@ impl Token {
         })
     }
 
-    // Is this token EOF?
+    // Is this token [`EOF`][Token::EOF]?
     #[inline(always)]
     pub fn is_eof(&self) -> bool {
         use Token::*;
@@ -556,7 +561,7 @@ impl Token {
     }
 
     // If another operator is after these, it's probably an unary operator
-    // (not sure about fn name).
+    // (not sure about `fn` name).
     pub fn is_next_unary(&self) -> bool {
         use Token::*;
 
@@ -589,7 +594,9 @@ impl Token {
             Ampersand        |
             And              |
             If               |
+            Do               |
             While            |
+            Until            |
             PlusAssign       |
             MinusAssign      |
             MultiplyAssign   |
@@ -693,8 +700,8 @@ impl Token {
             #[cfg(not(feature = "no_module"))]
             Import | Export | As => true,
 
-            True | False | Let | Const | If | Else | While | Loop | For | In | Continue | Break
-            | Return | Throw | Try | Catch => true,
+            True | False | Let | Const | If | Else | Do | While | Until | Loop | For | In
+            | Continue | Break | Return | Throw | Try | Catch => true,
 
             _ => false,
         }
@@ -736,7 +743,7 @@ impl From<Token> for String {
     }
 }
 
-/// _[INTERNALS]_ State of the tokenizer.
+/// _(INTERNALS)_ State of the tokenizer.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -750,13 +757,13 @@ pub struct TokenizeState {
     pub non_unary: bool,
     /// Is the tokenizer currently inside a block comment?
     pub comment_level: usize,
-    /// Return `None` at the end of the stream instead of `Some(Token::EOF)`?
+    /// Return [`None`] at the end of the stream instead of [`Some(Token::EOF)`][Token::EOF]?
     pub end_with_none: bool,
     /// Include comments?
     pub include_comments: bool,
 }
 
-/// _[INTERNALS]_ Trait that encapsulates a peekable character input stream.
+/// _(INTERNALS)_ Trait that encapsulates a peekable character input stream.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -770,7 +777,7 @@ pub trait InputStream {
     fn peek_next(&mut self) -> Option<char>;
 }
 
-/// _[INTERNALS]_ Parse a string literal wrapped by `enclosing_char`.
+/// _(INTERNALS)_ Parse a string literal wrapped by `enclosing_char`.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -959,7 +966,7 @@ fn scan_comment(
     }
 }
 
-/// _[INTERNALS]_ Get the next token from the `InputStream`.
+/// _(INTERNALS)_ Get the next token from the `stream`.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -1528,6 +1535,7 @@ pub fn can_override_keyword(name: &str) -> bool {
     }
 }
 
+/// Is a text string a valid identifier?
 pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     let mut first_alphabetic = false;
 
@@ -1568,7 +1576,7 @@ fn is_id_continue(x: char) -> bool {
     x.is_ascii_alphanumeric() || x == '_'
 }
 
-/// A type that implements the `InputStream` trait.
+/// A type that implements the [`InputStream`] trait.
 /// Multiple character streams are jointed together to form one single stream.
 pub struct MultiInputsStream<'a> {
     /// Buffered character, if any.
@@ -1625,7 +1633,7 @@ impl InputStream for MultiInputsStream<'_> {
     }
 }
 
-/// An iterator on a `Token` stream.
+/// An iterator on a [`Token`] stream.
 pub struct TokenIterator<'a, 'e> {
     /// Reference to the scripting `Engine`.
     engine: &'e Engine,

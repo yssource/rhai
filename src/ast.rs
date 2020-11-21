@@ -1,6 +1,7 @@
 //! Module defining the AST (abstract syntax tree).
 
 use crate::dynamic::Union;
+use crate::fn_native::shared_make_mut;
 use crate::module::NamespaceRef;
 use crate::stdlib::{
     borrow::Cow,
@@ -18,7 +19,7 @@ use crate::syntax::FnCustomSyntaxEval;
 use crate::token::Token;
 use crate::utils::StraightHasherBuilder;
 use crate::{
-    Dynamic, FnNamespace, FnPtr, ImmutableString, Module, Position, Shared, StaticVec, INT, NO_POS,
+    Dynamic, FnNamespace, FnPtr, ImmutableString, Module, Position, Shared, StaticVec, INT,
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -58,7 +59,7 @@ impl FnAccess {
     }
 }
 
-/// _[INTERNALS]_ A type containing information on a scripted function.
+/// _(INTERNALS)_ A type containing information on a scripted function.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -108,13 +109,13 @@ impl fmt::Display for ScriptFnDef {
 ///
 /// # Thread Safety
 ///
-/// Currently, `AST` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
+/// Currently, [`AST`] is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug, Clone)]
 pub struct AST(
     /// Global statements.
     Vec<Stmt>,
     /// Script-defined functions.
-    Module,
+    Shared<Module>,
 );
 
 impl Default for AST {
@@ -124,10 +125,10 @@ impl Default for AST {
 }
 
 impl AST {
-    /// Create a new `AST`.
+    /// Create a new [`AST`].
     #[inline(always)]
-    pub fn new(statements: impl IntoIterator<Item = Stmt>, lib: Module) -> Self {
-        Self(statements.into_iter().collect(), lib)
+    pub fn new(statements: impl IntoIterator<Item = Stmt>, lib: impl Into<Shared<Module>>) -> Self {
+        Self(statements.into_iter().collect(), lib.into())
     }
     /// Get the statements.
     #[cfg(not(feature = "internals"))]
@@ -135,7 +136,7 @@ impl AST {
     pub(crate) fn statements(&self) -> &[Stmt] {
         &self.0
     }
-    /// _[INTERNALS]_ Get the statements.
+    /// _(INTERNALS)_ Get the statements.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[deprecated(note = "this method is volatile and may change")]
@@ -149,13 +150,18 @@ impl AST {
     pub(crate) fn statements_mut(&mut self) -> &mut Vec<Stmt> {
         &mut self.0
     }
-    /// Get the internal `Module` containing all script-defined functions.
+    /// Get the internal shared [`Module`] containing all script-defined functions.
+    #[inline(always)]
+    pub(crate) fn shared_lib(&self) -> Shared<Module> {
+        self.1.clone()
+    }
+    /// Get the internal [`Module`] containing all script-defined functions.
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
     pub(crate) fn lib(&self) -> &Module {
         &self.1
     }
-    /// _[INTERNALS]_ Get the internal `Module` containing all script-defined functions.
+    /// _(INTERNALS)_ Get the internal [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[deprecated(note = "this method is volatile and may change")]
@@ -163,7 +169,7 @@ impl AST {
     pub fn lib(&self) -> &Module {
         &self.1
     }
-    /// Clone the `AST`'s functions into a new `AST`.
+    /// Clone the [`AST`]'s functions into a new [`AST`].
     /// No statements are cloned.
     ///
     /// This operation is cheap because functions are shared.
@@ -172,7 +178,7 @@ impl AST {
     pub fn clone_functions_only(&self) -> Self {
         self.clone_functions_only_filtered(|_, _, _, _, _| true)
     }
-    /// Clone the `AST`'s functions into a new `AST` based on a filter predicate.
+    /// Clone the [`AST`]'s functions into a new [`AST`] based on a filter predicate.
     /// No statements are cloned.
     ///
     /// This operation is cheap because functions are shared.
@@ -184,24 +190,24 @@ impl AST {
     ) -> Self {
         let mut functions: Module = Default::default();
         functions.merge_filtered(&self.1, &mut filter);
-        Self(Default::default(), functions)
+        Self(Default::default(), functions.into())
     }
-    /// Clone the `AST`'s script statements into a new `AST`.
+    /// Clone the [`AST`]'s script statements into a new [`AST`].
     /// No functions are cloned.
     #[inline(always)]
     pub fn clone_statements_only(&self) -> Self {
         Self(self.0.clone(), Default::default())
     }
-    /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
+    /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged, version
     /// is returned.
     ///
-    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
-    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
-    /// Of course, if the first `AST` uses a `return` statement at the end, then
-    /// the second `AST` will essentially be dead code.
+    /// Statements in the second [`AST`] are simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first [`AST`] (if using expression-statement syntax) is buried.
+    /// Of course, if the first [`AST`] uses a `return` statement at the end, then
+    /// the second [`AST`] will essentially be dead code.
     ///
-    /// All script-defined functions in the second `AST` overwrite similarly-named functions
-    /// in the first `AST` with the same number of parameters.
+    /// All script-defined functions in the second [`AST`] overwrite similarly-named functions
+    /// in the first [`AST`] with the same number of parameters.
     ///
     /// # Example
     ///
@@ -245,15 +251,15 @@ impl AST {
     pub fn merge(&self, other: &Self) -> Self {
         self.merge_filtered(other, |_, _, _, _, _| true)
     }
-    /// Combine one `AST` with another.  The second `AST` is consumed.
+    /// Combine one [`AST`] with another.  The second [`AST`] is consumed.
     ///
-    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
-    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
-    /// Of course, if the first `AST` uses a `return` statement at the end, then
-    /// the second `AST` will essentially be dead code.
+    /// Statements in the second [`AST`] are simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first [`AST`] (if using expression-statement syntax) is buried.
+    /// Of course, if the first [`AST`] uses a `return` statement at the end, then
+    /// the second [`AST`] will essentially be dead code.
     ///
-    /// All script-defined functions in the second `AST` overwrite similarly-named functions
-    /// in the first `AST` with the same number of parameters.
+    /// All script-defined functions in the second [`AST`] overwrite similarly-named functions
+    /// in the first [`AST`] with the same number of parameters.
     ///
     /// # Example
     ///
@@ -297,16 +303,16 @@ impl AST {
     pub fn combine(&mut self, other: Self) -> &mut Self {
         self.combine_filtered(other, |_, _, _, _, _| true)
     }
-    /// Merge two `AST` into one.  Both `AST`'s are untouched and a new, merged, version
+    /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged, version
     /// is returned.
     ///
-    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
-    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
-    /// Of course, if the first `AST` uses a `return` statement at the end, then
-    /// the second `AST` will essentially be dead code.
+    /// Statements in the second [`AST`] are simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first [`AST`] (if using expression-statement syntax) is buried.
+    /// Of course, if the first [`AST`] uses a `return` statement at the end, then
+    /// the second [`AST`] will essentially be dead code.
     ///
-    /// All script-defined functions in the second `AST` are first selected based on a filter
-    /// predicate, then overwrite similarly-named functions in the first `AST` with the
+    /// All script-defined functions in the second [`AST`] are first selected based on a filter
+    /// predicate, then overwrite similarly-named functions in the first [`AST`] with the
     /// same number of parameters.
     ///
     /// # Example
@@ -368,20 +374,20 @@ impl AST {
             (true, true) => vec![],
         };
 
-        let mut functions = functions.clone();
+        let mut functions = functions.as_ref().clone();
         functions.merge_filtered(&other.1, &mut filter);
 
         Self::new(ast, functions)
     }
-    /// Combine one `AST` with another.  The second `AST` is consumed.
+    /// Combine one [`AST`] with another.  The second [`AST`] is consumed.
     ///
-    /// Statements in the second `AST` are simply appended to the end of the first _without any processing_.
-    /// Thus, the return value of the first `AST` (if using expression-statement syntax) is buried.
-    /// Of course, if the first `AST` uses a `return` statement at the end, then
-    /// the second `AST` will essentially be dead code.
+    /// Statements in the second [`AST`] are simply appended to the end of the first _without any processing_.
+    /// Thus, the return value of the first [`AST`] (if using expression-statement syntax) is buried.
+    /// Of course, if the first [`AST`] uses a `return` statement at the end, then
+    /// the second [`AST`] will essentially be dead code.
     ///
-    /// All script-defined functions in the second `AST` are first selected based on a filter
-    /// predicate, then overwrite similarly-named functions in the first `AST` with the
+    /// All script-defined functions in the second [`AST`] are first selected based on a filter
+    /// predicate, then overwrite similarly-named functions in the first [`AST`] with the
     /// same number of parameters.
     ///
     /// # Example
@@ -430,9 +436,10 @@ impl AST {
         other: Self,
         mut filter: impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> &mut Self {
-        let Self(ref mut statements, ref mut functions) = self;
-        statements.extend(other.0.into_iter());
-        functions.merge_filtered(&other.1, &mut filter);
+        self.0.extend(other.0.into_iter());
+        if !other.1.is_empty() {
+            shared_make_mut(&mut self.1).merge_filtered(&other.1, &mut filter);
+        }
         self
     }
     /// Filter out the functions, retaining only some based on a filter predicate.
@@ -463,8 +470,11 @@ impl AST {
     pub fn retain_functions(
         &mut self,
         filter: impl FnMut(FnNamespace, FnAccess, &str, usize) -> bool,
-    ) {
-        self.1.retain_script_functions(filter);
+    ) -> &mut Self {
+        if !self.1.is_empty() {
+            shared_make_mut(&mut self.1).retain_script_functions(filter);
+        }
+        self
     }
     /// Iterate through all functions
     #[cfg(not(feature = "no_function"))]
@@ -474,13 +484,13 @@ impl AST {
     ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
         self.1.iter_script_fn()
     }
-    /// Clear all function definitions in the `AST`.
+    /// Clear all function definitions in the [`AST`].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clear_functions(&mut self) {
         self.1 = Default::default();
     }
-    /// Clear all statements in the `AST`, leaving only function definitions.
+    /// Clear all statements in the [`AST`], leaving only function definitions.
     #[inline(always)]
     pub fn clear_statements(&mut self) {
         self.0 = vec![];
@@ -557,7 +567,7 @@ impl IdentX {
     }
 }
 
-/// _[INTERNALS]_ A type encapsulating the mode of a `return`/`throw` statement.
+/// _(INTERNALS)_ A type encapsulating the mode of a `return`/`throw` statement.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -571,7 +581,7 @@ pub enum ReturnType {
     Exception,
 }
 
-/// _[INTERNALS]_ A statement.
+/// _(INTERNALS)_ A statement.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -581,42 +591,42 @@ pub enum ReturnType {
 pub enum Stmt {
     /// No-op.
     Noop(Position),
-    /// if expr { stmt } else { stmt }
+    /// `if` expr `{` stmt `}` `else` `{` stmt `}`
     If(Expr, Box<(Stmt, Option<Stmt>)>, Position),
-    /// switch expr { literal or _ => stmt, ... }
+    /// `switch` expr `{` literal or _ `=>` stmt `,` ... `}`
     Switch(
         Expr,
         Box<(HashMap<u64, Stmt, StraightHasherBuilder>, Option<Stmt>)>,
         Position,
     ),
-    /// while expr { stmt }
+    /// `while` expr `{` stmt `}`
     While(Expr, Box<Stmt>, Position),
-    /// loop { stmt }
-    Loop(Box<Stmt>, Position),
-    /// for id in expr { stmt }
+    /// `do` `{` stmt `}` `while`|`until` expr
+    Do(Box<Stmt>, Expr, bool, Position),
+    /// `for` id `in` expr `{` stmt `}`
     For(Expr, Box<(String, Stmt)>, Position),
-    /// [export] let id = expr
+    /// \[`export`\] `let` id `=` expr
     Let(Box<Ident>, Option<Expr>, bool, Position),
-    /// [export] const id = expr
+    /// \[`export`\] `const` id `=` expr
     Const(Box<Ident>, Option<Expr>, bool, Position),
-    /// expr op= expr
+    /// expr op`=` expr
     Assignment(Box<(Expr, Cow<'static, str>, Expr)>, Position),
-    /// { stmt; ... }
+    /// `{` stmt`;` ... `}`
     Block(Vec<Stmt>, Position),
-    /// try { stmt; ... } catch ( var ) { stmt; ... }
+    /// `try` `{` stmt; ... `}` `catch` `(` var `)` `{` stmt; ... `}`
     TryCatch(Box<(Stmt, Option<Ident>, Stmt)>, Position, Position),
-    /// expr
+    /// [expression][Expr]
     Expr(Expr),
-    /// continue
+    /// `continue`
     Continue(Position),
-    /// break
+    /// `break`
     Break(Position),
-    /// return/throw
+    /// `return`/`throw`
     Return((ReturnType, Position), Option<Expr>, Position),
-    /// import expr as var
+    /// `import` expr `as` var
     #[cfg(not(feature = "no_module"))]
     Import(Expr, Option<Box<IdentX>>, Position),
-    /// export var as var, ...
+    /// `export` var `as` var `,` ...
     #[cfg(not(feature = "no_module"))]
     Export(Vec<(IdentX, Option<IdentX>)>, Position),
     /// Convert a variable to shared.
@@ -627,19 +637,19 @@ pub enum Stmt {
 impl Default for Stmt {
     #[inline(always)]
     fn default() -> Self {
-        Self::Noop(NO_POS)
+        Self::Noop(Position::NONE)
     }
 }
 
 impl Stmt {
-    /// Is this statement `Noop`?
+    /// Is this statement [`Noop`][Stmt::Noop]?
     pub fn is_noop(&self) -> bool {
         match self {
             Self::Noop(_) => true,
             _ => false,
         }
     }
-    /// Get the `Position` of this statement.
+    /// Get the [`Position`] of this statement.
     pub fn position(&self) -> Position {
         match self {
             Self::Noop(pos)
@@ -650,7 +660,7 @@ impl Stmt {
             | Self::If(_, _, pos)
             | Self::Switch(_, _, pos)
             | Self::While(_, _, pos)
-            | Self::Loop(_, pos)
+            | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
             | Self::Return((_, pos), _, _)
             | Self::Let(_, _, _, pos)
@@ -668,7 +678,7 @@ impl Stmt {
             Self::Share(x) => x.pos,
         }
     }
-    /// Override the `Position` of this statement.
+    /// Override the [`Position`] of this statement.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
             Self::Noop(pos)
@@ -679,7 +689,7 @@ impl Stmt {
             | Self::If(_, _, pos)
             | Self::Switch(_, _, pos)
             | Self::While(_, _, pos)
-            | Self::Loop(_, pos)
+            | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
             | Self::Return((_, pos), _, _)
             | Self::Let(_, _, _, pos)
@@ -707,7 +717,6 @@ impl Stmt {
             Self::If(_, _, _)
             | Self::Switch(_, _, _)
             | Self::While(_, _, _)
-            | Self::Loop(_, _)
             | Self::For(_, _, _)
             | Self::Block(_, _)
             | Self::TryCatch(_, _, _) => true,
@@ -719,6 +728,7 @@ impl Stmt {
             | Self::Const(_, _, _, _)
             | Self::Assignment(_, _)
             | Self::Expr(_)
+            | Self::Do(_, _, _, _)
             | Self::Continue(_)
             | Self::Break(_)
             | Self::Return(_, _, _) => false,
@@ -727,7 +737,7 @@ impl Stmt {
             Self::Import(_, _, _) | Self::Export(_, _) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => false,
+            Self::Share(_) => unreachable!(),
         }
     }
     /// Is this statement _pure_?
@@ -745,8 +755,9 @@ impl Stmt {
                     && x.0.values().all(Stmt::is_pure)
                     && x.1.as_ref().map(Stmt::is_pure).unwrap_or(true)
             }
-            Self::While(condition, block, _) => condition.is_pure() && block.is_pure(),
-            Self::Loop(block, _) => block.is_pure(),
+            Self::While(condition, block, _) | Self::Do(block, condition, _, _) => {
+                condition.is_pure() && block.is_pure()
+            }
             Self::For(iterable, x, _) => iterable.is_pure() && x.1.is_pure(),
             Self::Let(_, _, _, _) | Self::Const(_, _, _, _) | Self::Assignment(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
@@ -764,7 +775,7 @@ impl Stmt {
     }
 }
 
-/// _[INTERNALS]_ A custom syntax definition.
+/// _(INTERNALS)_ A custom syntax definition.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -786,19 +797,19 @@ impl fmt::Debug for CustomExpr {
 }
 
 impl CustomExpr {
-    /// Get the keywords for this `CustomExpr`.
+    /// Get the keywords for this custom syntax.
     #[inline(always)]
     pub fn keywords(&self) -> &[Expr] {
         &self.keywords
     }
-    /// Get the implementation function for this `CustomExpr`.
+    /// Get the implementation function for this custom syntax.
     #[inline(always)]
     pub fn func(&self) -> &FnCustomSyntaxEval {
         self.func.as_ref()
     }
 }
 
-/// _[INTERNALS]_ A binary expression.
+/// _(INTERNALS)_ A binary expression.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -812,7 +823,7 @@ pub struct BinaryExpr {
     pub rhs: Expr,
 }
 
-/// _[INTERNALS]_ A function call.
+/// _(INTERNALS)_ A function call.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -822,25 +833,24 @@ pub struct BinaryExpr {
 pub struct FnCallExpr {
     /// Pre-calculated hash for a script-defined function of the same name and number of parameters.
     pub hash: u64,
-    /// Call native functions only? Set to `true` to skip searching for script-defined function overrides
+    /// Call native functions only? Set to [`true`] to skip searching for script-defined function overrides
     /// when it is certain that the function must be native (e.g. an operator).
     pub native_only: bool,
     /// Does this function call capture the parent scope?
     pub capture: bool,
     /// Default value when the function is not found, mostly used to provide a default for comparison functions.
-    /// Type is `bool` in order for `FnCallInfo` to be `Hash`
-    pub def_value: Option<bool>,
+    pub def_value: Option<Dynamic>,
     /// Namespace of the function, if any. Boxed because it occurs rarely.
     pub namespace: Option<Box<NamespaceRef>>,
     /// Function name.
-    /// Use `Cow<'static, str>` because a lot of operators (e.g. `==`, `>=`) are implemented as function calls
-    /// and the function names are predictable, so no need to allocate a new `String`.
+    /// Use [`Cow<'static, str>`][Cow] because a lot of operators (e.g. `==`, `>=`) are implemented as
+    /// function calls and the function names are predictable, so no need to allocate a new [`String`].
     pub name: Cow<'static, str>,
     /// List of function call arguments.
     pub args: StaticVec<Expr>,
 }
 
-/// _[INTERNALS]_ An expression sub-tree.
+/// _(INTERNALS)_ An expression sub-tree.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -849,9 +859,11 @@ pub struct FnCallExpr {
 #[derive(Debug, Clone)]
 pub enum Expr {
     /// Dynamic constant.
-    /// Used to hold either an Array or Map literal for quick cloning.
+    /// Used to hold either an [`Array`] or [`Map`] literal for quick cloning.
     /// All other primitive data types should use the appropriate variants for better speed.
     DynamicConstant(Box<Dynamic>, Position),
+    /// Boolean constant.
+    BoolConstant(bool, Position),
     /// Integer constant.
     IntegerConstant(INT, Position),
     /// Floating-point constant.
@@ -859,39 +871,35 @@ pub enum Expr {
     FloatConstant(FLOAT, Position),
     /// Character constant.
     CharConstant(char, Position),
-    /// String constant.
+    /// [String][ImmutableString] constant.
     StringConstant(ImmutableString, Position),
-    /// FnPtr constant.
+    /// [`FnPtr`] constant.
     FnPointer(ImmutableString, Position),
     /// [ expr, ... ]
     Array(Box<StaticVec<Expr>>, Position),
     /// #{ name:expr, ... }
     Map(Box<StaticVec<(IdentX, Expr)>>, Position),
-    /// true
-    True(Position),
-    /// false
-    False(Position),
     /// ()
     Unit(Position),
     /// Variable access - (optional index, optional modules, hash, variable name)
     Variable(Box<(Option<NonZeroUsize>, Option<Box<NamespaceRef>>, u64, IdentX)>),
     /// Property access - (getter, setter), prop
     Property(Box<((ImmutableString, ImmutableString), IdentX)>),
-    /// { stmt }
+    /// { [statement][Stmt] }
     Stmt(Box<StaticVec<Stmt>>, Position),
-    /// Wrapped expression - should not be optimized away.
+    /// Wrapped [expression][`Expr`] - should not be optimized away.
     Expr(Box<Expr>),
-    /// func(expr, ... )
+    /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
-    /// lhs.rhs
+    /// lhs `.` rhs
     Dot(Box<BinaryExpr>, Position),
-    /// expr[expr]
+    /// expr `[` expr `]`
     Index(Box<BinaryExpr>, Position),
-    /// lhs in rhs
+    /// lhs `in` rhs
     In(Box<BinaryExpr>, Position),
-    /// lhs && rhs
+    /// lhs `&&` rhs
     And(Box<BinaryExpr>, Position),
-    /// lhs || rhs
+    /// lhs `||` rhs
     Or(Box<BinaryExpr>, Position),
     /// Custom syntax
     Custom(Box<CustomExpr>, Position),
@@ -900,14 +908,14 @@ pub enum Expr {
 impl Default for Expr {
     #[inline(always)]
     fn default() -> Self {
-        Self::Unit(NO_POS)
+        Self::Unit(Position::NONE)
     }
 }
 
 impl Expr {
-    /// Get the `Dynamic` value of a constant expression.
+    /// Get the [`Dynamic`] value of a constant expression.
     ///
-    /// Returns `None` if the expression is not constant.
+    /// Returns [`None`] if the expression is not constant.
     pub fn get_constant_value(&self) -> Option<Dynamic> {
         Some(match self {
             Self::Expr(x) => return x.get_constant_value(),
@@ -922,8 +930,7 @@ impl Expr {
                 x.clone(),
                 Default::default(),
             )))),
-            Self::True(_) => true.into(),
-            Self::False(_) => false.into(),
+            Self::BoolConstant(x, _) => (*x).into(),
             Self::Unit(_) => ().into(),
 
             #[cfg(not(feature = "no_index"))]
@@ -959,7 +966,7 @@ impl Expr {
             _ => None,
         }
     }
-    /// Get the `Position` of the expression.
+    /// Get the [`Position`] of the expression.
     pub fn position(&self) -> Position {
         match self {
             Self::Expr(x) => x.position(),
@@ -968,6 +975,7 @@ impl Expr {
             Self::FloatConstant(_, pos) => *pos,
 
             Self::DynamicConstant(_, pos) => *pos,
+            Self::BoolConstant(_, pos) => *pos,
             Self::IntegerConstant(_, pos) => *pos,
             Self::CharConstant(_, pos) => *pos,
             Self::StringConstant(_, pos) => *pos,
@@ -981,14 +989,14 @@ impl Expr {
 
             Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => x.lhs.position(),
 
-            Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos,
+            Self::Unit(pos) => *pos,
 
             Self::Dot(x, _) | Self::Index(x, _) => x.lhs.position(),
 
             Self::Custom(_, pos) => *pos,
         }
     }
-    /// Override the `Position` of the expression.
+    /// Override the [`Position`] of the expression.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
             Self::Expr(x) => {
@@ -999,6 +1007,7 @@ impl Expr {
             Self::FloatConstant(_, pos) => *pos = new_pos,
 
             Self::DynamicConstant(_, pos) => *pos = new_pos,
+            Self::BoolConstant(_, pos) => *pos = new_pos,
             Self::IntegerConstant(_, pos) => *pos = new_pos,
             Self::CharConstant(_, pos) => *pos = new_pos,
             Self::StringConstant(_, pos) => *pos = new_pos,
@@ -1010,7 +1019,7 @@ impl Expr {
             Self::Stmt(_, pos) => *pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
             Self::And(_, pos) | Self::Or(_, pos) | Self::In(_, pos) => *pos = new_pos,
-            Self::True(pos) | Self::False(pos) | Self::Unit(pos) => *pos = new_pos,
+            Self::Unit(pos) => *pos = new_pos,
             Self::Dot(_, pos) | Self::Index(_, pos) => *pos = new_pos,
             Self::Custom(_, pos) => *pos = new_pos,
         }
@@ -1056,12 +1065,11 @@ impl Expr {
             Self::FloatConstant(_, _) => true,
 
             Self::DynamicConstant(_, _)
+            | Self::BoolConstant(_, _)
             | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::StringConstant(_, _)
             | Self::FnPointer(_, _)
-            | Self::True(_)
-            | Self::False(_)
             | Self::Unit(_) => true,
 
             // An array literal is constant if all items are constant
@@ -1089,14 +1097,13 @@ impl Expr {
             Self::FloatConstant(_, _) => false,
 
             Self::DynamicConstant(_, _)
+            | Self::BoolConstant(_, _)
             | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::FnPointer(_, _)
             | Self::In(_, _)
             | Self::And(_, _)
             | Self::Or(_, _)
-            | Self::True(_)
-            | Self::False(_)
             | Self::Unit(_) => false,
 
             Self::StringConstant(_, _)

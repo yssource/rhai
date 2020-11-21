@@ -22,7 +22,7 @@ use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 pub struct StaticModuleResolver(HashMap<String, Shared<Module>>);
 
 impl StaticModuleResolver {
-    /// Create a new `StaticModuleResolver`.
+    /// Create a new [`StaticModuleResolver`].
     ///
     /// # Example
     ///
@@ -83,18 +83,18 @@ impl StaticModuleResolver {
     pub fn clear(&mut self) {
         self.0.clear();
     }
-    /// Is this `StaticModuleResolver` empty?
+    /// Is this [`StaticModuleResolver`] empty?
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-    /// Get the number of modules in this `StaticModuleResolver`.
+    /// Get the number of modules in this [`StaticModuleResolver`].
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.0.len()
     }
-    /// Merge another `StaticModuleResolver` into this.
-    /// The other `StaticModuleResolver` is consumed.
+    /// Merge another [`StaticModuleResolver`] into this.
+    /// The other [`StaticModuleResolver`] is consumed.
     #[inline(always)]
     pub fn merge(&mut self, other: Self) {
         if !other.is_empty() {

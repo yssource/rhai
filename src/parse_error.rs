@@ -6,9 +6,9 @@ use crate::stdlib::{
     fmt,
     string::{String, ToString},
 };
-use crate::{EvalAltResult, Position, NO_POS};
+use crate::{EvalAltResult, Position};
 
-/// _[INTERNALS]_ Error encountered when tokenizing the script text.
+/// _(INTERNALS)_ Error encountered when tokenizing the script text.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -65,7 +65,7 @@ impl LexError {
             Self::ImproperSymbol(_) => "Invalid symbol encountered",
         }
     }
-    /// Convert a `&LexError` into a `ParseError`.
+    /// Convert a `&LexError` into a [`ParseError`].
     #[inline(always)]
     pub fn into_err(&self, pos: Position) -> ParseError {
         ParseError(Box::new(self.clone().into()), pos)
@@ -160,7 +160,7 @@ pub enum ParseErrorType {
 }
 
 impl ParseErrorType {
-    /// Make a `ParseError` using the current type and position.
+    /// Make a [`ParseError`] using the current type and position.
     #[inline(always)]
     pub(crate) fn into_err(self, pos: Position) -> ParseError {
         ParseError(Box::new(self), pos)
@@ -281,7 +281,7 @@ impl fmt::Display for ParseError {
 impl From<ParseErrorType> for Box<EvalAltResult> {
     #[inline(always)]
     fn from(err: ParseErrorType) -> Self {
-        Box::new(EvalAltResult::ErrorParsing(err, NO_POS))
+        Box::new(EvalAltResult::ErrorParsing(err, Position::NONE))
     }
 }
 

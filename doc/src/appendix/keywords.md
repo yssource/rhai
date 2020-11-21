@@ -14,7 +14,9 @@ Keywords List
 |         `if`          | if statement                                |                 |      no      |              |
 |        `else`         | else block of if statement                  |                 |      no      |              |
 |       `switch`        | matching                                    |                 |      no      |              |
-|        `while`        | while loop                                  |                 |      no      |              |
+|         `do`          | looping                                     |                 |      no      |              |
+|        `while`        | 1) while loop<br/>2) condition for do loop  |                 |      no      |              |
+|        `until`        | do loop                                     |                 |      no      |              |
 |        `loop`         | infinite loop                               |                 |      no      |              |
 |         `for`         | for loop                                    |                 |      no      |              |
 |         `in`          | 1) containment test<br/>2) part of for loop |                 |      no      |              |
@@ -48,11 +50,11 @@ Reserved Keywords
 | `var`     | variable declaration  |
 | `static`  | variable declaration  |
 | `shared`  | share value           |
-| `do`      | looping               |
 | `each`    | looping               |
 | `then`    | control flow          |
 | `goto`    | control flow          |
 | `exit`    | control flow          |
+| `unless`  | control flow          |
 | `match`   | matching              |
 | `case`    | matching              |
 | `public`  | function/field access |

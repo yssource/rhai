@@ -215,14 +215,18 @@ impl ExportedParams for ExportedFnParams {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
                 }
                 ("global", None) => {
-                    if namespace.is_some() {
-                        return Err(syn::Error::new(key.span(), "conflicting namespace"));
+                    if let Some(ns) = namespace {
+                        if ns != FnNamespaceAccess::Global {
+                            return Err(syn::Error::new(key.span(), "conflicting namespace"));
+                        }
                     }
                     namespace = Some(FnNamespaceAccess::Global);
                 }
                 ("internal", None) => {
-                    if namespace.is_some() {
-                        return Err(syn::Error::new(key.span(), "conflicting namespace"));
+                    if let Some(ns) = namespace {
+                        if ns != FnNamespaceAccess::Internal {
+                            return Err(syn::Error::new(key.span(), "conflicting namespace"));
+                        }
                     }
                     namespace = Some(FnNamespaceAccess::Internal);
                 }

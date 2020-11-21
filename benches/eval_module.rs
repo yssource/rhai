@@ -26,8 +26,7 @@ fn bench_eval_module(bench: &mut Bencher) {
         .compile(
             r#"
                 fn foo(x) { x - 1 }
-                import "testing" as t;
-                t::bar(41)
+                testing::bar(41)
     "#,
         )
         .unwrap();

@@ -60,7 +60,7 @@ engine.register_module("calc", module);
 engine.eval::<i64>("calc::inc(41)")? == 42; // refer to the 'Calc' module
 ```
 
-`Module::set_fn_namespace` can expose functions (usually _methods_) in the module
+`Module::set_fn_XXX_mut` can expose functions (usually _methods_) in the module
 to the _global_ namespace, so [getters/setters] and [indexers] for [custom types] can work as expected.
 
 Type iterators, because of their special nature, are always exposed to the _global_ namespace.
@@ -69,12 +69,11 @@ Type iterators, because of their special nature, are always exposed to the _glob
 use rhai::{Engine, Module, FnNamespace};
 
 let mut module = Module::new();             // new module
-let hash = module.set_fn_1_mut("inc",       // add new method
+
+// Expose method 'inc' to the global namespace (default is 'Internal')
+module.set_fn_1_mut("inc", FnNamespace::Global,
     |x: &mut i64| Ok(x+1)
 );
-
-// Expose 'inc' to the global namespace (default is 'Internal')
-module.set_fn_namespace(hash, FnNamespace::Global);
 
 // Load the module into the Engine as a sub-module named 'calc'
 let mut engine = Engine::new();

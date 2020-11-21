@@ -1,4 +1,4 @@
-//! Main module defining the script evaluation `Engine`.
+//! Main module defining the script evaluation [`Engine`].
 
 use crate::ast::{Expr, FnCallExpr, Ident, IdentX, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, Union, Variant};
@@ -25,7 +25,7 @@ use crate::syntax::CustomSyntax;
 use crate::utils::get_hasher;
 use crate::{
     calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position, Scope,
-    Shared, StaticVec, NO_POS,
+    Shared, StaticVec,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -40,7 +40,7 @@ use crate::Map;
 #[cfg(not(feature = "no_object"))]
 pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 
-/// _[INTERNALS]_ A stack of imported modules.
+/// _(INTERNALS)_ A stack of imported modules.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -52,83 +52,97 @@ pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 // We cannot use &str or Cow<str> here because `eval` may load a module and the module name will live beyond
 // the AST of the eval script text. The best we can do is a shared reference.
 #[derive(Debug, Clone, Default)]
-pub struct Imports(StaticVec<(ImmutableString, Shared<Module>)>);
+pub struct Imports(Option<StaticVec<(ImmutableString, Shared<Module>)>>);
 
 impl Imports {
     /// Get the length of this stack of imported modules.
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.0.as_ref().map_or(0, StaticVec::len)
     }
     /// Is this stack of imported modules empty?
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.0.as_ref().map_or(true, StaticVec::is_empty)
     }
     /// Get the imported module at a particular index.
     pub fn get(&self, index: usize) -> Option<Shared<Module>> {
-        self.0.get(index).map(|(_, m)| m).cloned()
+        self.0
+            .as_ref()
+            .and_then(|x| x.get(index))
+            .map(|(_, m)| m)
+            .cloned()
     }
     /// Get the index of an imported module by name.
     pub fn find(&self, name: &str) -> Option<usize> {
-        self.0
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|(_, (key, _))| key.as_str() == name)
-            .map(|(index, _)| index)
+        self.0.as_ref().and_then(|x| {
+            x.iter()
+                .enumerate()
+                .rev()
+                .find(|(_, (key, _))| key.as_str() == name)
+                .map(|(index, _)| index)
+        })
     }
     /// Push an imported module onto the stack.
     pub fn push(&mut self, name: impl Into<ImmutableString>, module: impl Into<Shared<Module>>) {
-        self.0.push((name.into(), module.into()));
+        if self.0.is_none() {
+            self.0 = Some(Default::default());
+        }
+
+        self.0.as_mut().unwrap().push((name.into(), module.into()));
     }
     /// Truncate the stack of imported modules to a particular length.
     pub fn truncate(&mut self, size: usize) {
-        self.0.truncate(size);
+        if self.0.is_some() {
+            self.0.as_mut().unwrap().truncate(size);
+        }
     }
     /// Get an iterator to this stack of imported modules.
     #[allow(dead_code)]
     pub fn iter(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
-        self.0
-            .iter()
-            .map(|(name, module)| (name.as_str(), module.clone()))
+        self.0.iter().flat_map(|lib| {
+            lib.iter()
+                .map(|(name, module)| (name.as_str(), module.clone()))
+        })
     }
     /// Get an iterator to this stack of imported modules.
     #[allow(dead_code)]
     pub(crate) fn iter_raw<'a>(
         &'a self,
     ) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> + 'a {
-        self.0.iter().cloned()
+        self.0.iter().flat_map(|lib| lib.iter().cloned())
     }
     /// Get a consuming iterator to this stack of imported modules.
     pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
-        self.0.into_iter()
+        self.0.into_iter().flat_map(|lib| lib.into_iter())
     }
     /// Add a stream of imported modules.
     pub fn extend(&mut self, stream: impl Iterator<Item = (ImmutableString, Shared<Module>)>) {
-        self.0.extend(stream)
+        self.0.as_mut().unwrap().extend(stream)
     }
     /// Does the specified function hash key exist in this stack of imported modules?
     #[allow(dead_code)]
     pub fn contains_fn(&self, hash: u64) -> bool {
-        self.0.iter().any(|(_, m)| m.contains_qualified_fn(hash))
+        self.0.as_ref().map_or(false, |x| {
+            x.iter().any(|(_, m)| m.contains_qualified_fn(hash))
+        })
     }
     /// Get specified function via its hash key.
     pub fn get_fn(&self, hash: u64) -> Option<&CallableFunction> {
         self.0
-            .iter()
-            .rev()
-            .find_map(|(_, m)| m.get_qualified_fn(hash))
+            .as_ref()
+            .and_then(|x| x.iter().rev().find_map(|(_, m)| m.get_qualified_fn(hash)))
     }
     /// Does the specified TypeId iterator exist in this stack of imported modules?
     #[allow(dead_code)]
     pub fn contains_iter(&self, id: TypeId) -> bool {
-        self.0.iter().any(|(_, m)| m.contains_qualified_iter(id))
+        self.0.as_ref().map_or(false, |x| {
+            x.iter().any(|(_, m)| m.contains_qualified_iter(id))
+        })
     }
     /// Get the specified TypeId iterator.
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.0
-            .iter()
-            .rev()
-            .find_map(|(_, m)| m.get_qualified_iter(id))
+            .as_ref()
+            .and_then(|x| x.iter().rev().find_map(|(_, m)| m.get_qualified_iter(id)))
     }
 }
 
@@ -210,7 +224,7 @@ impl IndexChainValue {
     #[cfg(not(feature = "no_index"))]
     pub fn as_value(self) -> Dynamic {
         match self {
-            Self::None | Self::FnCallArgs(_) => panic!("expecting IndexChainValue::Value"),
+            Self::None | Self::FnCallArgs(_) => unreachable!("expecting IndexChainValue::Value"),
             Self::Value(value) => value,
         }
     }
@@ -222,7 +236,7 @@ impl IndexChainValue {
     #[cfg(not(feature = "no_object"))]
     pub fn as_fn_call_args(self) -> StaticVec<Dynamic> {
         match self {
-            Self::None | Self::Value(_) => panic!("expecting IndexChainValue::FnCallArgs"),
+            Self::None | Self::Value(_) => unreachable!("expecting IndexChainValue::FnCallArgs"),
             Self::FnCallArgs(value) => value,
         }
     }
@@ -355,7 +369,7 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => {
                 let char_value = ch.clone();
-                self.set_value((char_value, NO_POS)).unwrap();
+                self.set_value((char_value, Position::NONE)).unwrap();
             }
         }
     }
@@ -449,7 +463,7 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
     }
 }
 
-/// _[INTERNALS]_ A type that holds all the current states of the Engine.
+/// _(INTERNALS)_ A type that holds all the current states of the Engine.
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -478,7 +492,7 @@ impl State {
     }
 }
 
-/// _[INTERNALS]_ A type containing all the limits imposed by the `Engine`.
+/// _(INTERNALS)_ A type containing all the limits imposed by the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -528,12 +542,12 @@ pub struct EvalContext<'e, 'x, 'px: 'x, 'a, 's, 'm, 'pm: 'm, 't, 'pt: 't> {
 }
 
 impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> {
-    /// The current `Engine`.
+    /// The current [`Engine`].
     #[inline(always)]
     pub fn engine(&self) -> &'e Engine {
         self.engine
     }
-    /// _[INTERNALS]_ The current set of modules imported via `import` statements.
+    /// _(INTERNALS)_ The current set of modules imported via `import` statements.
     /// Available under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
@@ -562,9 +576,10 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
 ///
 /// # Thread Safety
 ///
-/// `Engine` is re-entrant.
+/// [`Engine`] is re-entrant.
 ///
-/// Currently, `Engine` is neither `Send` nor `Sync`. Use the `sync` feature to make it `Send + Sync`.
+/// Currently, [`Engine`] is neither [`Send`] nor [`Sync`].
+/// Use the [`Sync`] feature to make it [`Send`] `+` [`Sync`].
 ///
 /// # Example
 ///
@@ -581,11 +596,11 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
 /// # }
 /// ```
 pub struct Engine {
-    /// A unique ID identifying this scripting `Engine`.
+    /// A unique ID identifying this scripting [`Engine`].
     pub id: String,
 
     /// A module containing all functions directly loaded into the Engine.
-    pub(crate) global_module: Module,
+    pub(crate) global_namespace: Module,
     /// A collection of all library packages loaded into the Engine.
     pub(crate) packages: PackagesCollection,
     /// A collection of all sub-modules directly loaded into the Engine.
@@ -670,7 +685,7 @@ fn default_print(_s: &str) {
 }
 
 /// Search for a module within an imports stack.
-/// Position in `EvalAltResult` is `None` and must be set afterwards.
+/// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
 pub fn search_imports(
     mods: &Imports,
     state: &mut State,
@@ -696,7 +711,7 @@ pub fn search_imports(
 }
 
 impl Engine {
-    /// Create a new `Engine`
+    /// Create a new [`Engine`]
     #[inline]
     pub fn new() -> Self {
         // Create the new scripting Engine
@@ -704,7 +719,7 @@ impl Engine {
             id: Default::default(),
 
             packages: Default::default(),
-            global_module: Default::default(),
+            global_namespace: Default::default(),
             global_sub_modules: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
@@ -759,15 +774,15 @@ impl Engine {
         engine
     }
 
-    /// Create a new `Engine` with minimal built-in functions.
-    /// Use the `load_package` method to load additional packages of functions.
+    /// Create a new [`Engine`] with minimal built-in functions.
+    /// Use the [`load_package`][Engine::load_package] method to load additional packages of functions.
     #[inline]
     pub fn new_raw() -> Self {
         Self {
             id: Default::default(),
 
             packages: Default::default(),
-            global_module: Default::default(),
+            global_namespace: Default::default(),
             global_sub_modules: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
@@ -915,7 +930,7 @@ impl Engine {
     }
 
     /// Chain-evaluate a dot/index chain.
-    /// Position in `EvalAltResult` is `None` and must be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_dot_index_chain_helper(
         &self,
@@ -925,7 +940,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         target: &mut Target,
         rhs: &Expr,
-        mut idx_values: StaticVec<IndexChainValue>,
+        idx_values: &mut StaticVec<IndexChainValue>,
         chain_type: ChainType,
         level: usize,
         new_val: Option<(Dynamic, Position)>,
@@ -1006,14 +1021,14 @@ impl Engine {
                                 {
                                     EvalAltResult::ErrorIndexingType(
                                         self.map_type_name(val_type_name).into(),
-                                        NO_POS,
+                                        Position::NONE,
                                     )
                                 }
                                 err => err,
                             })?;
                         }
 
-                        Ok(Default::default())
+                        Ok((Dynamic::UNIT, true))
                     }
                     // xxx[rhs]
                     _ => {
@@ -1038,7 +1053,7 @@ impl Engine {
                             def_value,
                             ..
                         } = x.as_ref();
-                        let def_value = def_value.map(Into::<Dynamic>::into);
+                        let def_value = def_value.as_ref();
                         let args = idx_val.as_fn_call_args();
                         self.make_method_call(
                             mods, state, lib, name, *hash, target, args, def_value, *native, false,
@@ -1112,7 +1127,7 @@ impl Engine {
                                     def_value,
                                     ..
                                 } = x.as_ref();
-                                let def_value = def_value.map(Into::<Dynamic>::into);
+                                let def_value = def_value.as_ref();
                                 let args = idx_val.as_fn_call_args();
                                 let (val, _) = self
                                     .make_method_call(
@@ -1178,7 +1193,7 @@ impl Engine {
                                         |err| match *err {
                                             // If there is no setter, no need to feed it back because the property is read-only
                                             EvalAltResult::ErrorDotExpr(_, _) => {
-                                                Ok(Default::default())
+                                                Ok((Dynamic::UNIT, false))
                                             }
                                             _ => Err(err.fill_position(*x_pos)),
                                         },
@@ -1196,7 +1211,7 @@ impl Engine {
                                     def_value,
                                     ..
                                 } = f.as_ref();
-                                let def_value = def_value.map(Into::<Dynamic>::into);
+                                let def_value = def_value.as_ref();
                                 let args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self
                                     .make_method_call(
@@ -1247,19 +1262,10 @@ impl Engine {
             _ => unreachable!(),
         };
 
-        let mut idx_values = StaticVec::new();
+        let idx_values = &mut Default::default();
 
         self.eval_indexed_chain(
-            scope,
-            mods,
-            state,
-            lib,
-            this_ptr,
-            rhs,
-            chain_type,
-            &mut idx_values,
-            0,
-            level,
+            scope, mods, state, lib, this_ptr, rhs, chain_type, idx_values, 0, level,
         )?;
 
         match lhs {
@@ -1309,8 +1315,8 @@ impl Engine {
         }
     }
 
-    /// Evaluate a chain of indexes and store the results in a StaticVec.
-    /// StaticVec is used to avoid an allocation in the overwhelming cases of just a few levels of indexing.
+    /// Evaluate a chain of indexes and store the results in a [`StaticVec`].
+    /// [`StaticVec`] is used to avoid an allocation in the overwhelming cases of just a few levels of indexing.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_indexed_chain(
         &self,
@@ -1384,8 +1390,8 @@ impl Engine {
         Ok(())
     }
 
-    /// Get the value at the indexed position of a base type
-    /// Position in `EvalAltResult` may be None and should be set afterwards.
+    /// Get the value at the indexed position of a base type.
+    /// [`Position`] in [`EvalAltResult`] may be None and should be set afterwards.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn get_indexed_mut<'t>(
         &self,
@@ -1474,7 +1480,10 @@ impl Engine {
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _) if fn_sig.ends_with(']') => {
-                        Box::new(EvalAltResult::ErrorIndexingType(type_name.into(), NO_POS))
+                        Box::new(EvalAltResult::ErrorIndexingType(
+                            type_name.into(),
+                            Position::NONE,
+                        ))
                     }
                     _ => err,
                 })
@@ -1482,13 +1491,13 @@ impl Engine {
 
             _ => EvalAltResult::ErrorIndexingType(
                 self.map_type_name(target.type_name()).into(),
-                NO_POS,
+                Position::NONE,
             )
             .into(),
         }
     }
 
-    // Evaluate an 'in' expression
+    // Evaluate an 'in' expression.
     fn eval_in_expr(
         &self,
         scope: &mut Scope,
@@ -1511,10 +1520,10 @@ impl Engine {
             Dynamic(Union::Array(mut rhs_value)) => {
                 // Call the `==` operator to compare each value
                 let def_value = Some(false.into());
+                let def_value = def_value.as_ref();
 
                 for value in rhs_value.iter_mut() {
                     let args = &mut [&mut lhs_value.clone(), value];
-                    let def_value = def_value.clone();
 
                     // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
                     let hash =
@@ -1552,7 +1561,7 @@ impl Engine {
         }
     }
 
-    /// Get a `Target` from an expression.
+    /// Get a [`Target`] from an expression.
     pub(crate) fn eval_expr_as_target<'s>(
         &self,
         scope: &'s mut Scope,
@@ -1665,7 +1674,7 @@ impl Engine {
         }
     }
 
-    /// Evaluate an expression
+    /// Evaluate an expression.
     pub(crate) fn eval_expr(
         &self,
         scope: &mut Scope,
@@ -1705,7 +1714,7 @@ impl Engine {
 
             // Statement block
             Expr::Stmt(x, _) => {
-                self.eval_statements(scope, mods, state, lib, this_ptr, x.as_ref(), level)
+                self.eval_stmt_block(scope, mods, state, lib, this_ptr, x.as_ref(), level)
             }
 
             // lhs[idx_expr]
@@ -1754,7 +1763,7 @@ impl Engine {
                     def_value,
                     ..
                 } = x.as_ref();
-                let def_value = def_value.map(Into::<Dynamic>::into);
+                let def_value = def_value.as_ref();
                 self.make_function_call(
                     scope, mods, state, lib, this_ptr, name, args, def_value, *hash, *native,
                     false, *cap_scope, level,
@@ -1773,8 +1782,9 @@ impl Engine {
                     ..
                 } = x.as_ref();
                 let namespace = namespace.as_ref().map(|v| v.as_ref());
+                let def_value = def_value.as_ref();
                 self.make_qualified_function_call(
-                    scope, mods, state, lib, this_ptr, namespace, name, args, *def_value, *hash,
+                    scope, mods, state, lib, this_ptr, namespace, name, args, def_value, *hash,
                     level,
                 )
                 .map_err(|err| err.fill_position(*pos))
@@ -1810,8 +1820,7 @@ impl Engine {
                 .into())
             }
 
-            Expr::True(_) => Ok(true.into()),
-            Expr::False(_) => Ok(false.into()),
+            Expr::BoolConstant(x, _) => Ok((*x).into()),
             Expr::Unit(_) => Ok(Dynamic::UNIT),
 
             Expr::Custom(custom, _) => {
@@ -1839,7 +1848,8 @@ impl Engine {
             .map_err(|err| err.fill_position(expr.position()))
     }
 
-    pub(crate) fn eval_statements<'a>(
+    /// Evaluate a statements block.
+    pub(crate) fn eval_stmt_block<'a>(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
@@ -1849,6 +1859,7 @@ impl Engine {
         statements: impl IntoIterator<Item = &'a Stmt>,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let prev_always_search = state.always_search;
         let prev_scope_len = scope.len();
         let prev_mods_len = mods.len();
         state.scope_level += 1;
@@ -1863,15 +1874,14 @@ impl Engine {
         mods.truncate(prev_mods_len);
         state.scope_level -= 1;
 
-        // The impact of an eval statement goes away at the end of a block
+        // The impact of new local variables goes away at the end of a block
         // because any new variables introduced will go out of scope
-        state.always_search = false;
+        state.always_search = prev_always_search;
 
         result
     }
 
-    /// Evaluate a statement
-    ///
+    /// Evaluate a statement.
     ///
     /// # Safety
     ///
@@ -1892,7 +1902,7 @@ impl Engine {
 
         let result = match stmt {
             // No-op
-            Stmt::Noop(_) => Ok(Default::default()),
+            Stmt::Noop(_) => Ok(Dynamic::UNIT),
 
             // Expression as statement
             Stmt::Expr(expr) => self.eval_expr(scope, mods, state, lib, this_ptr, expr, level),
@@ -1925,7 +1935,7 @@ impl Engine {
                         } else {
                             *lhs_ptr.as_mut() = rhs_val;
                         }
-                        Ok(Default::default())
+                        Ok(Dynamic::UNIT)
                     }
                     // Op-assignment - in order of precedence:
                     ScopeEntryType::Normal => {
@@ -1939,7 +1949,7 @@ impl Engine {
                         let hash_fn = calc_native_fn_hash(empty(), op, arg_types);
 
                         match self
-                            .global_module
+                            .global_namespace
                             .get_fn(hash_fn, false)
                             .or_else(|| self.packages.get_fn(hash_fn))
                             .or_else(|| mods.get_fn(hash_fn))
@@ -1993,7 +2003,7 @@ impl Engine {
                                 }
                             }
                         }
-                        Ok(Default::default())
+                        Ok(Dynamic::UNIT)
                     }
                 }
             }
@@ -2035,7 +2045,7 @@ impl Engine {
                         self.eval_dot_index_chain(
                             scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
-                        Ok(Default::default())
+                        Ok(Dynamic::UNIT)
                     }
                     // dot_lhs.dot_rhs op= rhs
                     #[cfg(not(feature = "no_object"))]
@@ -2043,7 +2053,7 @@ impl Engine {
                         self.eval_dot_index_chain(
                             scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
-                        Ok(Default::default())
+                        Ok(Dynamic::UNIT)
                     }
                     // Non-lvalue expression (should be caught during parsing)
                     _ => unreachable!(),
@@ -2052,7 +2062,7 @@ impl Engine {
 
             // Block scope
             Stmt::Block(statements, _) => {
-                self.eval_statements(scope, mods, state, lib, this_ptr, statements, level)
+                self.eval_stmt_block(scope, mods, state, lib, this_ptr, statements, level)
             }
 
             // If statement
@@ -2067,7 +2077,7 @@ impl Engine {
                         } else if let Some(stmt) = else_block {
                             self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
                         } else {
-                            Ok(Default::default())
+                            Ok(Dynamic::UNIT)
                         }
                     })
             }
@@ -2105,27 +2115,39 @@ impl Engine {
                             Ok(_) => (),
                             Err(err) => match *err {
                                 EvalAltResult::LoopBreak(false, _) => (),
-                                EvalAltResult::LoopBreak(true, _) => return Ok(Default::default()),
+                                EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
                                 _ => return Err(err),
                             },
                         }
                     }
-                    Ok(false) => return Ok(Default::default()),
+                    Ok(false) => return Ok(Dynamic::UNIT),
                     Err(err) => {
                         return Err(self.make_type_mismatch_err::<bool>(err, expr.position()))
                     }
                 }
             },
 
-            // Loop statement
-            Stmt::Loop(block, _) => loop {
-                match self.eval_stmt(scope, mods, state, lib, this_ptr, block, level) {
+            // Do loop
+            Stmt::Do(body, expr, is_while, _) => loop {
+                match self.eval_stmt(scope, mods, state, lib, this_ptr, body, level) {
                     Ok(_) => (),
                     Err(err) => match *err {
-                        EvalAltResult::LoopBreak(false, _) => (),
-                        EvalAltResult::LoopBreak(true, _) => return Ok(Default::default()),
+                        EvalAltResult::LoopBreak(false, _) => continue,
+                        EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
                         _ => return Err(err),
                     },
+                }
+
+                match self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .as_bool()
+                {
+                    Ok(true) if !*is_while => return Ok(Dynamic::UNIT),
+                    Ok(false) if *is_while => return Ok(Dynamic::UNIT),
+                    Ok(_) => (),
+                    Err(err) => {
+                        return Err(self.make_type_mismatch_err::<bool>(err, expr.position()))
+                    }
                 }
             },
 
@@ -2136,7 +2158,7 @@ impl Engine {
                 let iter_type = iter_obj.type_id();
 
                 let func = self
-                    .global_module
+                    .global_namespace
                     .get_iter(iter_type)
                     .or_else(|| self.packages.get_iter(iter_type))
                     .or_else(|| mods.get_iter(iter_type));
@@ -2177,7 +2199,7 @@ impl Engine {
 
                     state.scope_level -= 1;
                     scope.rewind(scope.len() - 1);
-                    Ok(Default::default())
+                    Ok(Dynamic::UNIT)
                 } else {
                     EvalAltResult::ErrorFor(expr.position()).into()
                 }
@@ -2206,7 +2228,7 @@ impl Engine {
                             let value = if let EvalAltResult::ErrorRuntime(ref x, _) = err {
                                 x.clone()
                             } else {
-                                err.set_position(NO_POS);
+                                err.set_position(Position::NONE);
                                 err.to_string().into()
                             };
 
@@ -2302,7 +2324,7 @@ impl Engine {
                 if let Some(alias) = _alias {
                     scope.add_entry_alias(scope.len() - 1, alias);
                 }
-                Ok(Default::default())
+                Ok(Dynamic::UNIT)
             }
 
             // Import statement
@@ -2334,7 +2356,7 @@ impl Engine {
 
                         state.modules += 1;
 
-                        Ok(Default::default())
+                        Ok(Dynamic::UNIT)
                     } else {
                         Err(
                             EvalAltResult::ErrorModuleNotFound(path.to_string(), expr.position())
@@ -2359,7 +2381,7 @@ impl Engine {
                             .into();
                     }
                 }
-                Ok(Default::default())
+                Ok(Dynamic::UNIT)
             }
 
             // Share statement
@@ -2376,7 +2398,7 @@ impl Engine {
                     }
                     _ => (),
                 }
-                Ok(Default::default())
+                Ok(Dynamic::UNIT)
             }
         };
 
@@ -2385,7 +2407,7 @@ impl Engine {
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
-    /// Position in `EvalAltResult` may be None and should be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] may be None and should be set afterwards.
     #[cfg(feature = "unchecked")]
     #[inline(always)]
     fn check_data_size(
@@ -2396,7 +2418,7 @@ impl Engine {
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
-    /// Position in `EvalAltResult` may be None and should be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] may be None and should be set afterwards.
     #[cfg(not(feature = "unchecked"))]
     fn check_data_size(
         &self,
@@ -2489,39 +2511,47 @@ impl Engine {
         let (_arr, _map, s) = calc_size(result.as_ref().unwrap());
 
         if s > self.max_string_size() {
-            return EvalAltResult::ErrorDataTooLarge("Length of string".to_string(), NO_POS).into();
+            return EvalAltResult::ErrorDataTooLarge(
+                "Length of string".to_string(),
+                Position::NONE,
+            )
+            .into();
         }
 
         #[cfg(not(feature = "no_index"))]
         if _arr > self.max_array_size() {
-            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), NO_POS).into();
+            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), Position::NONE)
+                .into();
         }
 
         #[cfg(not(feature = "no_object"))]
         if _map > self.max_map_size() {
-            return EvalAltResult::ErrorDataTooLarge("Size of object map".to_string(), NO_POS)
-                .into();
+            return EvalAltResult::ErrorDataTooLarge(
+                "Size of object map".to_string(),
+                Position::NONE,
+            )
+            .into();
         }
 
         result
     }
 
     /// Check if the number of operations stay within limit.
-    /// Position in `EvalAltResult` is `None` and must be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     pub(crate) fn inc_operations(&self, state: &mut State) -> Result<(), Box<EvalAltResult>> {
         state.operations += 1;
 
         #[cfg(not(feature = "unchecked"))]
         // Guard against too many operations
         if self.max_operations() > 0 && state.operations > self.max_operations() {
-            return EvalAltResult::ErrorTooManyOperations(NO_POS).into();
+            return EvalAltResult::ErrorTooManyOperations(Position::NONE).into();
         }
 
         // Report progress - only in steps
         if let Some(progress) = &self.progress {
             if let Some(token) = progress(&state.operations) {
                 // Terminate script if progress returns a termination token
-                return EvalAltResult::ErrorTerminated(token, NO_POS).into();
+                return EvalAltResult::ErrorTerminated(token, Position::NONE).into();
             }
         }
 
@@ -2537,7 +2567,7 @@ impl Engine {
             .unwrap_or_else(|| map_std_type_name(name))
     }
 
-    /// Make a Box<EvalAltResult<ErrorMismatchDataType>>.
+    /// Make a `Box<`[`EvalAltResult<ErrorMismatchDataType>`][EvalAltResult::ErrorMismatchDataType]`>`.
     #[inline(always)]
     pub(crate) fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
         EvalAltResult::ErrorMismatchDataType(

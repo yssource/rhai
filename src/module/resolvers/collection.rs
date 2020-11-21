@@ -22,7 +22,7 @@ use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 pub struct ModuleResolversCollection(Vec<Box<dyn ModuleResolver>>);
 
 impl ModuleResolversCollection {
-    /// Create a new `ModuleResolversCollection`.
+    /// Create a new [`ModuleResolversCollection`].
     ///
     /// # Example
     ///
@@ -62,18 +62,18 @@ impl ModuleResolversCollection {
     pub fn clear(&mut self) {
         self.0.clear();
     }
-    /// Is this `ModuleResolversCollection` empty?
+    /// Is this [`ModuleResolversCollection`] empty?
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-    /// Get the number of module resolvers in this `ModuleResolversCollection`.
+    /// Get the number of module resolvers in this [`ModuleResolversCollection`].
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.0.len()
     }
-    /// Add another `ModuleResolversCollection` to the end of this collection.
-    /// The other `ModuleResolversCollection` is consumed.
+    /// Add another [`ModuleResolversCollection`] to the end of this collection.
+    /// The other [`ModuleResolversCollection`] is consumed.
     #[inline(always)]
     pub fn append(&mut self, other: Self) {
         self.0.extend(other.0.into_iter());

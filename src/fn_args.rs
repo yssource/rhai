@@ -1,4 +1,4 @@
-//! Helper module which defines `FuncArgs` to make function calling easier.
+//! Helper module which defines [`FuncArgs`] to make function calling easier.
 
 #![allow(non_snake_case)]
 
@@ -9,12 +9,12 @@ use crate::{Dynamic, StaticVec};
 /// Any data type that can be converted into a `Vec<Dynamic>` can be used
 /// as arguments to a function call.
 pub trait FuncArgs {
-    /// Convert to a `StaticVec<Dynamic>` of the function call arguments.
+    /// Convert to a [`StaticVec`]`<`[`Dynamic`]`>` of the function call arguments.
     fn into_vec(self) -> StaticVec<Dynamic>;
 }
 
-/// Macro to implement `FuncArgs` for tuples of standard types (each can be
-/// converted into `Dynamic`).
+/// Macro to implement [`FuncArgs`] for tuples of standard types (each can be
+/// converted into a [`Dynamic`]).
 macro_rules! impl_args {
     ($($p:ident),*) => {
         impl<$($p: Variant + Clone),*> FuncArgs for ($($p,)*)

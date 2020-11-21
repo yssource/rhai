@@ -129,17 +129,18 @@ pub(crate) fn generate_body(
         }
 
         for fn_literal in reg_names {
-            set_fn_stmts.push(
+            let ns_str = syn::Ident::new(
                 match namespace {
-                    FnNamespaceAccess::Global => syn::parse2::<syn::Stmt>(quote! {
-                        m.set_fn(#fn_literal, FnNamespace::Global, FnAccess::Public, &[#(#fn_input_types),*],
-                                 #fn_token_name().into());
-                    }),
-                    FnNamespaceAccess::Internal => syn::parse2::<syn::Stmt>(quote! {
-                        m.set_fn(#fn_literal, FnNamespace::Internal, FnAccess::Public, &[#(#fn_input_types),*],
-                                 #fn_token_name().into());
-                    }),
-                }
+                    FnNamespaceAccess::Global => "Global",
+                    FnNamespaceAccess::Internal => "Internal",
+                },
+                fn_literal.span(),
+            );
+            set_fn_stmts.push(
+                syn::parse2::<syn::Stmt>(quote! {
+                    m.set_fn(#fn_literal, FnNamespace::#ns_str, FnAccess::Public, &[#(#fn_input_types),*],
+                                #fn_token_name().into());
+                })
                 .unwrap(),
             );
         }

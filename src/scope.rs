@@ -1,4 +1,4 @@
-//! Module that defines the `Scope` type representing a function call-stack scope.
+//! Module that defines the [`Scope`] type representing a function call-stack scope.
 
 use crate::dynamic::Variant;
 use crate::stdlib::{borrow::Cow, boxed::Box, iter, string::String, vec::Vec};
@@ -25,11 +25,12 @@ impl EntryType {
 }
 
 /// Type containing information about the current scope.
-/// Useful for keeping state between `Engine` evaluation runs.
+/// Useful for keeping state between [`Engine`][crate::Engine] evaluation runs.
 ///
 /// # Thread Safety
 ///
-/// Currently, `Scope` is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
+/// Currently, [`Scope`] is neither [`Send`] nor [`Sync`].
+/// Turn on the [`Sync`] feature to make it [`Send`] `+` [`Sync`].
 ///
 /// # Example
 ///
@@ -57,12 +58,12 @@ impl EntryType {
 //
 // # Implementation Notes
 //
-// `Scope` is implemented as three `Vec`'s of exactly the same length.  Variables data (name, type, etc.)
+// [`Scope`] is implemented as three [`Vec`]'s of exactly the same length.  Variables data (name, type, etc.)
 // is manually split into three equal-length arrays.  That's because variable names take up the most space,
-// with `Cow<str>` being four words long, but in the vast majority of cases the name is NOT used to look up
+// with [`Cow<str>`][Cow] being four words long, but in the vast majority of cases the name is NOT used to look up
 // a variable's value.  Variable lookup is usually via direct index, by-passing the name altogether.
 //
-// Since `Dynamic` is reasonably small, packing it tightly improves cache locality when variables are accessed.
+// Since [`Dynamic`] is reasonably small, packing it tightly improves cache locality when variables are accessed.
 // The variable type is packed separately into another array because it is even smaller.
 #[derive(Debug, Clone)]
 pub struct Scope<'a> {
@@ -85,7 +86,7 @@ impl Default for Scope<'_> {
 }
 
 impl<'a> Scope<'a> {
-    /// Create a new Scope.
+    /// Create a new [`Scope`].
     ///
     /// # Example
     ///
@@ -101,7 +102,7 @@ impl<'a> Scope<'a> {
     pub fn new() -> Self {
         Default::default()
     }
-    /// Empty the Scope.
+    /// Empty the [`Scope`].
     ///
     /// # Example
     ///
@@ -127,7 +128,7 @@ impl<'a> Scope<'a> {
         self.values.clear();
         self
     }
-    /// Get the number of entries inside the Scope.
+    /// Get the number of entries inside the [`Scope`].
     ///
     /// # Example
     ///
@@ -144,7 +145,7 @@ impl<'a> Scope<'a> {
     pub fn len(&self) -> usize {
         self.values.len()
     }
-    /// Is the Scope empty?
+    /// Is the [`Scope`] empty?
     ///
     /// # Example
     ///
@@ -161,7 +162,7 @@ impl<'a> Scope<'a> {
     pub fn is_empty(&self) -> bool {
         self.values.len() == 0
     }
-    /// Add (push) a new entry to the Scope.
+    /// Add (push) a new entry to the [`Scope`].
     ///
     /// # Example
     ///
@@ -181,7 +182,7 @@ impl<'a> Scope<'a> {
     ) -> &mut Self {
         self.push_dynamic_value(name, EntryType::Normal, Dynamic::from(value))
     }
-    /// Add (push) a new `Dynamic` entry to the Scope.
+    /// Add (push) a new [`Dynamic`] entry to the [`Scope`].
     ///
     /// # Example
     ///
@@ -197,13 +198,10 @@ impl<'a> Scope<'a> {
     pub fn push_dynamic(&mut self, name: impl Into<Cow<'a, str>>, value: Dynamic) -> &mut Self {
         self.push_dynamic_value(name, EntryType::Normal, value)
     }
-    /// Add (push) a new constant to the Scope.
+    /// Add (push) a new constant to the [`Scope`].
     ///
     /// Constants are immutable and cannot be assigned to.  Their values never change.
-    /// Constants propagation is a technique used to optimize an AST.
-    ///
-    /// However, in order to be used for optimization, constants must be in one of the recognized types:
-    /// `INT` (default to `i64`, `i32` if `only_i32`), `f64`, `String`, `char` and `bool`.
+    /// Constants propagation is a technique used to optimize an [`AST`][crate::AST].
     ///
     /// # Example
     ///
@@ -223,14 +221,10 @@ impl<'a> Scope<'a> {
     ) -> &mut Self {
         self.push_dynamic_value(name, EntryType::Constant, Dynamic::from(value))
     }
-    /// Add (push) a new constant with a `Dynamic` value to the Scope.
+    /// Add (push) a new constant with a [`Dynamic`] value to the Scope.
     ///
     /// Constants are immutable and cannot be assigned to.  Their values never change.
-    /// Constants propagation is a technique used to optimize an AST.
-    ///
-    /// However, in order to be used for optimization, the `Dynamic` value must be in one of the
-    /// recognized types:
-    /// `INT` (default to `i64`, `i32` if `only_i32`), `f64`, `String`, `char` and `bool`.
+    /// Constants propagation is a technique used to optimize an [`AST`][crate::AST].
     ///
     /// # Example
     ///
@@ -250,7 +244,7 @@ impl<'a> Scope<'a> {
     ) -> &mut Self {
         self.push_dynamic_value(name, EntryType::Constant, value)
     }
-    /// Add (push) a new entry with a `Dynamic` value to the Scope.
+    /// Add (push) a new entry with a [`Dynamic`] value to the [`Scope`].
     #[inline]
     pub(crate) fn push_dynamic_value(
         &mut self,
@@ -263,7 +257,7 @@ impl<'a> Scope<'a> {
         self.values.push(value.into());
         self
     }
-    /// Truncate (rewind) the Scope to a previous size.
+    /// Truncate (rewind) the [`Scope`] to a previous size.
     ///
     /// # Example
     ///
@@ -296,7 +290,7 @@ impl<'a> Scope<'a> {
         self.values.truncate(size);
         self
     }
-    /// Does the scope contain the entry?
+    /// Does the [`Scope`] contain the entry?
     ///
     /// # Example
     ///
@@ -316,7 +310,7 @@ impl<'a> Scope<'a> {
             .rev() // Always search a Scope in reverse order
             .any(|(key, _)| name == key.as_ref())
     }
-    /// Find an entry in the Scope, starting from the last.
+    /// Find an entry in the [`Scope`], starting from the last.
     #[inline(always)]
     pub(crate) fn get_index(&self, name: &str) -> Option<(usize, EntryType)> {
         self.names
@@ -331,7 +325,7 @@ impl<'a> Scope<'a> {
                 }
             })
     }
-    /// Get the value of an entry in the Scope, starting from the last.
+    /// Get the value of an entry in the [`Scope`], starting from the last.
     ///
     /// # Example
     ///
@@ -352,7 +346,8 @@ impl<'a> Scope<'a> {
             .find(|(_, (key, _))| name == key.as_ref())
             .and_then(|(index, _)| self.values[index].flatten_clone().try_cast())
     }
-    /// Update the value of the named entry.
+    /// Update the value of the named entry in the [`Scope`].
+    ///
     /// Search starts backwards from the last, and only the first entry matching the specified name is updated.
     /// If no entry matching the specified name is found, a new one is added.
     ///
@@ -386,7 +381,7 @@ impl<'a> Scope<'a> {
         }
         self
     }
-    /// Get a mutable reference to an entry in the Scope.
+    /// Get a mutable reference to an entry in the [`Scope`].
     #[inline(always)]
     pub(crate) fn get_mut(&mut self, index: usize) -> (&mut Dynamic, EntryType) {
         (
@@ -394,7 +389,7 @@ impl<'a> Scope<'a> {
             self.types[index],
         )
     }
-    /// Update the access type of an entry in the Scope.
+    /// Update the access type of an entry in the [`Scope`].
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub(crate) fn add_entry_alias(&mut self, index: usize, alias: String) -> &mut Self {
@@ -404,7 +399,7 @@ impl<'a> Scope<'a> {
         }
         self
     }
-    /// Clone the Scope, keeping only the last instances of each variable name.
+    /// Clone the [`Scope`], keeping only the last instances of each variable name.
     /// Shadowed variables are omitted in the copy.
     #[inline]
     pub(crate) fn clone_visible(&self) -> Self {
@@ -424,7 +419,7 @@ impl<'a> Scope<'a> {
 
         entries
     }
-    /// Get an iterator to entries in the Scope.
+    /// Get an iterator to entries in the [`Scope`].
     #[inline(always)]
     #[allow(dead_code)]
     pub(crate) fn into_iter(
@@ -435,7 +430,7 @@ impl<'a> Scope<'a> {
             .zip(self.types.into_iter().zip(self.values.into_iter()))
             .map(|((name, alias), (typ, value))| (name, typ, value, alias.to_vec()))
     }
-    /// Get an iterator to entries in the Scope.
+    /// Get an iterator to entries in the [`Scope`].
     /// Shared values are flatten-cloned.
     ///
     /// # Example
@@ -465,7 +460,7 @@ impl<'a> Scope<'a> {
         self.iter_raw()
             .map(|(name, constant, value)| (name, constant, value.flatten_clone()))
     }
-    /// Get an iterator to entries in the Scope.
+    /// Get an iterator to entries in the [`Scope`].
     /// Shared values are not expanded.
     #[inline(always)]
     pub fn iter_raw<'x: 'a>(&'x self) -> impl Iterator<Item = (&'a str, bool, &'x Dynamic)> + 'x {

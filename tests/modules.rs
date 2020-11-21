@@ -22,9 +22,11 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
     let mut sub_module2 = Module::new();
     sub_module2.set_var("answer", 41 as INT);
 
-    let hash_inc = sub_module2.set_fn_1("inc", |x: INT| Ok(x + 1));
-    let hash_super_inc = sub_module2.set_fn_1_mut("super_inc", |x: &mut INT| Ok(*x + 1));
-    sub_module2.set_fn_namespace(hash_super_inc, FnNamespace::Global);
+    let hash_inc = sub_module2.set_fn_1_mut("inc", FnNamespace::Internal, |x: &mut INT| Ok(*x + 1));
+    sub_module2.set_fn_1_mut("super_inc", FnNamespace::Global, |x: &mut INT| Ok(*x + 1));
+
+    #[cfg(not(feature = "no_object"))]
+    sub_module2.set_getter_fn("doubled", |x: &mut INT| Ok(*x * 2));
 
     sub_module.set_sub_module("universe", sub_module2);
     module.set_sub_module("life", sub_module);
@@ -57,6 +59,11 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
     assert!(engine
         .eval::<INT>("inc(question::life::universe::answer)")
         .is_err());
+    #[cfg(not(feature = "no_object"))]
+    assert_eq!(
+        engine.eval::<INT>("question::life::universe::answer.doubled")?,
+        82
+    );
     assert_eq!(
         engine.eval::<INT>("super_inc(question::life::universe::answer)")?,
         42
@@ -72,17 +79,16 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
     let mut module = Module::new();
 
     module.set_var("answer", 42 as INT);
-    module.set_fn_4("sum".to_string(), |x: INT, y: INT, z: INT, w: INT| {
-        Ok(x + y + z + w)
-    });
-    module.set_fn_1_mut("double".to_string(), |x: &mut INT| {
+    module.set_fn_4("sum", |x: INT, y: INT, z: INT, w: INT| Ok(x + y + z + w));
+    module.set_fn_1_mut("double", FnNamespace::Global, |x: &mut INT| {
         *x *= 2;
         Ok(())
     });
 
     #[cfg(not(feature = "no_float"))]
     module.set_fn_4_mut(
-        "sum_of_three_args".to_string(),
+        "sum_of_three_args",
+        FnNamespace::Internal,
         |target: &mut INT, a: INT, b: INT, c: rhai::FLOAT| {
             *target = a + b + c as INT;
             Ok(())
@@ -104,6 +110,15 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
         )?,
         42
     );
+
+    assert!(engine
+        .eval::<INT>(
+            r#"
+                import "hello" as h;
+                sum(h::answer, -10, 3, 7)
+            "#
+        )
+        .is_err());
 
     assert_eq!(
         engine.eval::<INT>(
@@ -136,6 +151,17 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
                 import "hello" as h;
                 let x = 21;
                 h::double(x);
+                x
+            "#
+        )?,
+        42
+    );
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                import "hello" as h;
+                let x = 21;
+                double(x);
                 x
             "#
         )?,

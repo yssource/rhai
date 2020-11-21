@@ -1,7 +1,7 @@
-//! Implement deserialization support of `ImmutableString` for [`serde`](https://crates.io/crates/serde).
+//! Implement deserialization support of [`ImmutableString`][crate::ImmutableString] for [`serde`].
 
 use crate::stdlib::{any::type_name, boxed::Box};
-use crate::{EvalAltResult, ImmutableString, NO_POS};
+use crate::{EvalAltResult, ImmutableString, Position};
 use serde::de::{Deserializer, Visitor};
 
 /// Deserializer for `ImmutableString`.
@@ -16,8 +16,12 @@ impl<'a> ImmutableStringDeserializer<'a> {
     }
     /// Shortcut for a type conversion error.
     fn type_error<T>(&self) -> Result<T, Box<EvalAltResult>> {
-        EvalAltResult::ErrorMismatchOutputType(type_name::<T>().into(), "string".into(), NO_POS)
-            .into()
+        EvalAltResult::ErrorMismatchOutputType(
+            type_name::<T>().into(),
+            "string".into(),
+            Position::NONE,
+        )
+        .into()
     }
 }
 

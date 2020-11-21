@@ -8,9 +8,36 @@ fn test_eval() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<INT>(
             r#"
                 eval("40 + 2")
-    "#
+            "#
         )?,
         42
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_eval_blocks() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let x = 999;
+
+                eval("let x = x + 123");
+
+                let y = if x > 0 {
+                    eval("let x = 42");
+                    x
+                } else {
+                    0
+                };
+
+                x + y
+            "#
+        )?,
+        1164
     );
 
     Ok(())
