@@ -46,6 +46,8 @@ struct ParseState<'e> {
     strings: HashMap<String, ImmutableString>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(ImmutableString, ScopeEntryType)>,
+    /// Size of the local variables stack upon entry of the current block scope.
+    entry_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
     externals: HashMap<ImmutableString, Position>,
@@ -92,6 +94,7 @@ impl<'e> ParseState<'e> {
             allow_capture: true,
             strings: HashMap::with_capacity(64),
             stack: Vec::with_capacity(16),
+            entry_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
             modules: Default::default(),
         }
@@ -103,15 +106,26 @@ impl<'e> ParseState<'e> {
     ///
     /// The return value is the offset to be deducted from `Stack::len`,
     /// i.e. the top element of the `ParseState` is offset 1.
+    ///
     /// Return `None` when the variable name is not found in the `stack`.
     #[inline]
     fn access_var(&mut self, name: &str, _pos: Position) -> Option<NonZeroUsize> {
+        let mut barrier = false;
+
         let index = self
             .stack
             .iter()
             .rev()
             .enumerate()
-            .find(|(_, (n, _))| *n == name)
+            .find(|(_, (n, _))| {
+                if n.is_empty() {
+                    // Do not go beyond empty variable names
+                    barrier = true;
+                    false
+                } else {
+                    *n == name
+                }
+            })
             .and_then(|(i, _)| NonZeroUsize::new(i + 1));
 
         #[cfg(not(feature = "no_closure"))]
@@ -123,7 +137,11 @@ impl<'e> ParseState<'e> {
             self.allow_capture = true
         }
 
-        index
+        if barrier {
+            None
+        } else {
+            index
+        }
     }
 
     /// Find a module by name in the `ParseState`, searching in reverse.
@@ -1781,6 +1799,9 @@ fn parse_custom_syntax(
     // Adjust the variables stack
     match syntax.scope_delta {
         delta if delta > 0 => {
+            // Add enough empty variable names to the stack.
+            // Empty variable names act as a barrier so earlier variables will not be matched.
+            // Variable searches stop at the first empty variable name.
             state.stack.resize(
                 state.stack.len() + delta as usize,
                 ("".into(), ScopeEntryType::Normal),
@@ -2284,7 +2305,9 @@ fn parse_block(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut statements = Vec::with_capacity(8);
-    let prev_stack_len = state.stack.len();
+
+    let prev_entry_stack_len = state.entry_stack_len;
+    state.entry_stack_len = state.stack.len();
 
     #[cfg(not(feature = "no_module"))]
     let prev_mods_len = state.modules.len();
@@ -2328,7 +2351,8 @@ fn parse_block(
         }
     }
 
-    state.stack.truncate(prev_stack_len);
+    state.stack.truncate(state.entry_stack_len);
+    state.entry_stack_len = prev_entry_stack_len;
 
     #[cfg(not(feature = "no_module"))]
     state.modules.truncate(prev_mods_len);
@@ -2372,10 +2396,11 @@ fn parse_stmt(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     match token {
-        // Semicolon - empty statement
+        // ; - empty statement
         Token::SemiColon => Ok(Some(Stmt::Noop(settings.pos))),
 
-        Token::LeftBrace => parse_block(input, state, lib, settings.level_up()).map(Some),
+        // { - statements block
+        Token::LeftBrace => Ok(Some(parse_block(input, state, lib, settings.level_up())?)),
 
         // fn ...
         #[cfg(not(feature = "no_function"))]
