@@ -995,11 +995,8 @@ fn parse_primary(
         // Access to `this` as a variable is OK
         Token::Reserved(s) if s == KEYWORD_THIS && *next_token != Token::LeftParen => {
             if !settings.is_function_scope {
-                return Err(PERR::BadInput(LexError::ImproperSymbol(format!(
-                    "'{}' can only be used in functions",
-                    s
-                )))
-                .into_err(settings.pos));
+                let msg = format!("'{}' can only be used in functions", s);
+                return Err(PERR::BadInput(LexError::ImproperSymbol(s, msg)).into_err(settings.pos));
             } else {
                 let var_name_def = IdentX::new(state.get_interned_string(s), settings.pos);
                 Expr::Variable(Box::new((None, None, 0, var_name_def)))
@@ -1045,6 +1042,7 @@ fn parse_primary(
                     LexError::UnexpectedInput(Token::Bang.syntax().to_string()).into_err(token_pos)
                 } else {
                     PERR::BadInput(LexError::ImproperSymbol(
+                        "!".to_string(),
                         "'!' cannot be used to call module functions".to_string(),
                     ))
                     .into_err(token_pos)
@@ -1333,6 +1331,7 @@ fn make_assignment_stmt<'a>(
         }
         // ??? && ??? = rhs, ??? || ??? = rhs
         Expr::And(_, _) | Expr::Or(_, _) => Err(PERR::BadInput(LexError::ImproperSymbol(
+            "=".to_string(),
             "Possibly a typo of '=='?".to_string(),
         ))
         .into_err(pos)),
@@ -1438,10 +1437,13 @@ fn make_dot_expr(
                 && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL]
                     .contains(&x.name.as_ref()) =>
         {
-            return Err(PERR::BadInput(LexError::ImproperSymbol(format!(
-                "'{}' should not be called in method style. Try {}(...);",
-                x.name, x.name
-            )))
+            return Err(PERR::BadInput(LexError::ImproperSymbol(
+                x.name.to_string(),
+                format!(
+                    "'{}' should not be called in method style. Try {}(...);",
+                    x.name, x.name
+                ),
+            ))
             .into_err(pos));
         }
         // lhs.func!(...)
@@ -1932,20 +1934,22 @@ fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result
 fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
     match input.peek().unwrap() {
         (Token::Equals, pos) => Err(PERR::BadInput(LexError::ImproperSymbol(
+            "=".to_string(),
             "Possibly a typo of '=='?".to_string(),
         ))
         .into_err(*pos)),
-        (Token::PlusAssign, pos)
-        | (Token::MinusAssign, pos)
-        | (Token::MultiplyAssign, pos)
-        | (Token::DivideAssign, pos)
-        | (Token::LeftShiftAssign, pos)
-        | (Token::RightShiftAssign, pos)
-        | (Token::ModuloAssign, pos)
-        | (Token::PowerOfAssign, pos)
-        | (Token::AndAssign, pos)
-        | (Token::OrAssign, pos)
-        | (Token::XOrAssign, pos) => Err(PERR::BadInput(LexError::ImproperSymbol(
+        (token @ Token::PlusAssign, pos)
+        | (token @ Token::MinusAssign, pos)
+        | (token @ Token::MultiplyAssign, pos)
+        | (token @ Token::DivideAssign, pos)
+        | (token @ Token::LeftShiftAssign, pos)
+        | (token @ Token::RightShiftAssign, pos)
+        | (token @ Token::ModuloAssign, pos)
+        | (token @ Token::PowerOfAssign, pos)
+        | (token @ Token::AndAssign, pos)
+        | (token @ Token::OrAssign, pos)
+        | (token @ Token::XOrAssign, pos) => Err(PERR::BadInput(LexError::ImproperSymbol(
+            token.syntax().to_string(),
             "Expecting a boolean expression, not an assignment".to_string(),
         ))
         .into_err(*pos)),

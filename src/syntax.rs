@@ -137,11 +137,14 @@ impl Engine {
                         .map(|v| v.is_keyword() || v.is_reserved())
                         .unwrap_or(false) =>
                 {
-                    return Err(LexError::ImproperSymbol(format!(
-                        "Improper symbol for custom syntax at position #{}: '{}'",
-                        segments.len() + 1,
-                        s
-                    ))
+                    return Err(LexError::ImproperSymbol(
+                        s.to_string(),
+                        format!(
+                            "Improper symbol for custom syntax at position #{}: '{}'",
+                            segments.len() + 1,
+                            s
+                        ),
+                    )
                     .into_err(Position::NONE)
                     .into());
                 }
@@ -154,11 +157,14 @@ impl Engine {
                 }
                 // Anything else is an error
                 _ => {
-                    return Err(LexError::ImproperSymbol(format!(
-                        "Improper symbol for custom syntax at position #{}: '{}'",
-                        segments.len() + 1,
-                        s
-                    ))
+                    return Err(LexError::ImproperSymbol(
+                        s.to_string(),
+                        format!(
+                            "Improper symbol for custom syntax at position #{}: '{}'",
+                            segments.len() + 1,
+                            s
+                        ),
+                    )
                     .into_err(Position::NONE)
                     .into());
                 }

@@ -6,7 +6,6 @@ use crate::{Module, Shared, StaticVec};
 
 pub(crate) mod arithmetic;
 mod array_basic;
-mod eval;
 mod fn_basic;
 mod iter_basic;
 mod logic;
@@ -21,7 +20,6 @@ mod time_basic;
 pub use arithmetic::ArithmeticPackage;
 #[cfg(not(feature = "no_index"))]
 pub use array_basic::BasicArrayPackage;
-pub use eval::EvalPackage;
 pub use fn_basic::BasicFnPackage;
 pub use iter_basic::BasicIteratorPackage;
 pub use logic::LogicPackage;

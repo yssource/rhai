@@ -60,7 +60,13 @@ print(x);
 --------------
 
 For those who subscribe to the (very sensible) motto of ["`eval` is evil"](http://linterrors.com/js/eval-is-evil),
-disable `eval` by overloading it, probably with something that throws.
+disable `eval` using [`Engine::disable_symbol`][disable keywords and operators]:
+
+```rust
+engine.disable_symbol("eval");  // disable usage of 'eval'
+```
+
+`eval` can also be disabled by overloading it, probably with something that throws:
 
 ```rust
 fn eval(script) { throw "eval is evil! I refuse to run " + script }
@@ -74,21 +80,4 @@ Or overload it from Rust:
 engine.register_result_fn("eval", |script: String| -> Result<(), Box<EvalAltResult>> {
     Err(format!("eval is evil! I refuse to run {}", script).into())
 });
-```
-
-
-`EvalPackage`
--------------
-
-There is even a package named [`EvalPackage`][packages] which implements the disabling override:
-
-```rust
-use rhai::Engine;
-use rhai::packages::Package             // load the 'Package' trait to use packages
-use rhai::packages::EvalPackage;        // the 'eval' package disables 'eval'
-
-let mut engine = Engine::new();
-let package = EvalPackage::new();       // create the package
-
-engine.load_package(package.get());     // load the package
 ```

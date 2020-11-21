@@ -1658,39 +1658,41 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
             Some((Token::Reserved(s), pos)) => Some((match
                 (s.as_str(), self.engine.custom_keywords.contains_key(&s))
             {
-                ("===", false) => Token::LexError(LERR::ImproperSymbol(
+                ("===", false) => Token::LexError(LERR::ImproperSymbol(s,
                     "'===' is not a valid operator. This is not JavaScript! Should it be '=='?".to_string(),
                 )),
-                ("!==", false) => Token::LexError(LERR::ImproperSymbol(
+                ("!==", false) => Token::LexError(LERR::ImproperSymbol(s,
                     "'!==' is not a valid operator. This is not JavaScript! Should it be '!='?".to_string(),
                 )),
-                ("->", false) => Token::LexError(LERR::ImproperSymbol(
+                ("->", false) => Token::LexError(LERR::ImproperSymbol(s,
                     "'->' is not a valid symbol. This is not C or C++!".to_string())),
-                ("<-", false) => Token::LexError(LERR::ImproperSymbol(
+                ("<-", false) => Token::LexError(LERR::ImproperSymbol(s,
                     "'<-' is not a valid symbol. This is not Go! Should it be '<='?".to_string(),
                 )),
-                (":=", false) => Token::LexError(LERR::ImproperSymbol(
+                (":=", false) => Token::LexError(LERR::ImproperSymbol(s,
                     "':=' is not a valid assignment operator. This is not Go! Should it be simply '='?".to_string(),
                 )),
-                ("::<", false) => Token::LexError(LERR::ImproperSymbol(
+                ("::<", false) => Token::LexError(LERR::ImproperSymbol(s,
                     "'::<>' is not a valid symbol. This is not Rust! Should it be '::'?".to_string(),
                 )),
-                ("(*", false) | ("*)", false) => Token::LexError(LERR::ImproperSymbol(
+                ("(*", false) | ("*)", false) => Token::LexError(LERR::ImproperSymbol(s,
                     "'(* .. *)' is not a valid comment format. This is not Pascal! Should it be '/* .. */'?".to_string(),
                 )),
-                ("#", false) => Token::LexError(LERR::ImproperSymbol(
+                ("#", false) => Token::LexError(LERR::ImproperSymbol(s,
                     "'#' is not a valid symbol. Should it be '#{'?".to_string(),
                 )),
                 // Reserved keyword/operator that is custom.
                 (_, true) => Token::Custom(s),
                 // Reserved operator that is not custom.
-                (token, false) if !is_valid_identifier(token.chars()) => Token::LexError(LERR::ImproperSymbol(
-                    format!("'{}' is a reserved symbol", token)
-                )),
+                (token, false) if !is_valid_identifier(token.chars()) => {
+                    let msg = format!("'{}' is a reserved symbol", token);
+                    Token::LexError(LERR::ImproperSymbol(s, msg))
+                },
                 // Reserved keyword that is not custom and disabled.
-                (token, false) if self.engine.disabled_symbols.contains(token) => Token::LexError(LERR::ImproperSymbol(
-                    format!("reserved symbol '{}' is disabled", token)
-                )),
+                (token, false) if self.engine.disabled_symbols.contains(token) => {
+                    let msg = format!("reserved symbol '{}' is disabled", token);
+                    Token::LexError(LERR::ImproperSymbol(s, msg))
+                },
                 // Reserved keyword/operator that is not custom.
                 (_, false) => Token::Reserved(s),
             }, pos)),
