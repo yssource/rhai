@@ -131,6 +131,7 @@ macro_rules! def_package {
             pub fn new() -> Self {
                 let mut module = $root::Module::new_with_capacity(1024);
                 <Self as $root::packages::Package>::init(&mut module);
+                module.build_index();
                 Self(module.into())
             }
         }

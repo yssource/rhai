@@ -257,6 +257,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -291,6 +292,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -352,6 +354,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -413,6 +416,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -485,6 +489,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -577,6 +582,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -642,6 +648,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -714,6 +721,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -745,6 +753,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -778,6 +787,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -813,6 +823,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -848,6 +859,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -889,6 +901,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -945,6 +958,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -979,6 +993,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -1041,6 +1056,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -1103,6 +1119,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -1168,6 +1185,7 @@ mod generate_tests {
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         rhai_generate_into_module(&mut m, false);
+                        m.build_index();
                         m
                     }
                     #[allow(unused_mut)]
@@ -1209,6 +1227,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -1253,6 +1272,7 @@ mod generate_tests {
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         rhai_generate_into_module(&mut m, false);
+                        m.build_index();
                         m
                     }
                     #[allow(unused_mut)]
@@ -1294,6 +1314,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -1337,6 +1358,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -1399,6 +1421,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -1463,6 +1486,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -1528,6 +1552,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -1597,6 +1622,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -1663,6 +1689,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -1733,6 +1760,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -1802,6 +1830,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -1874,6 +1903,7 @@ mod generate_tests {
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         rhai_generate_into_module(&mut m, false);
+                        m.build_index();
                         m
                     }
                     #[allow(unused_mut)]
@@ -1888,6 +1918,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -1928,6 +1959,7 @@ mod generate_tests {
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         rhai_generate_into_module(&mut m, false);
+                        m.build_index();
                         m
                     }
                     #[allow(unused_mut)]
@@ -1944,6 +1976,7 @@ mod generate_tests {
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         rhai_generate_into_module(&mut m, false);
+                        m.build_index();
                         m
                     }
                     #[allow(unused_mut)]
@@ -1958,6 +1991,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]
@@ -2024,6 +2058,7 @@ mod generate_tests {
                             pub fn rhai_module_generate() -> Module {
                                 let mut m = Module::new();
                                 rhai_generate_into_module(&mut m, false);
+                                m.build_index();
                                 m
                             }
                             #[allow(unused_mut)]
@@ -2040,6 +2075,7 @@ mod generate_tests {
                             pub fn rhai_module_generate() -> Module {
                                 let mut m = Module::new();
                                 rhai_generate_into_module(&mut m, false);
+                                m.build_index();
                                 m
                             }
                             #[allow(unused_mut)]
@@ -2054,6 +2090,7 @@ mod generate_tests {
                         pub fn rhai_module_generate() -> Module {
                             let mut m = Module::new();
                             rhai_generate_into_module(&mut m, false);
+                            m.build_index();
                             m
                         }
                         #[allow(unused_mut)]
@@ -2077,6 +2114,7 @@ mod generate_tests {
                         pub fn rhai_module_generate() -> Module {
                             let mut m = Module::new();
                             rhai_generate_into_module(&mut m, false);
+                            m.build_index();
                             m
                         }
                         #[allow(unused_mut)]
@@ -2091,6 +2129,7 @@ mod generate_tests {
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         rhai_generate_into_module(&mut m, false);
+                        m.build_index();
                         m
                     }
                     #[allow(unused_mut)]
@@ -2116,6 +2155,7 @@ mod generate_tests {
                         pub fn rhai_module_generate() -> Module {
                             let mut m = Module::new();
                             rhai_generate_into_module(&mut m, false);
+                            m.build_index();
                             m
                         }
                         #[allow(unused_mut)]
@@ -2132,6 +2172,7 @@ mod generate_tests {
                         pub fn rhai_module_generate() -> Module {
                             let mut m = Module::new();
                             rhai_generate_into_module(&mut m, false);
+                            m.build_index();
                             m
                         }
                         #[allow(unused_mut)]
@@ -2146,6 +2187,7 @@ mod generate_tests {
                     pub fn rhai_module_generate() -> Module {
                         let mut m = Module::new();
                         rhai_generate_into_module(&mut m, false);
+                        m.build_index();
                         m
                     }
                     #[allow(unused_mut)]
@@ -2167,6 +2209,7 @@ mod generate_tests {
                 pub fn rhai_module_generate() -> Module {
                     let mut m = Module::new();
                     rhai_generate_into_module(&mut m, false);
+                    m.build_index();
                     m
                 }
                 #[allow(unused_mut)]

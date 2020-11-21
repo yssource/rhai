@@ -2,9 +2,7 @@
 
 use crate::ast::{FnAccess, IdentX};
 use crate::dynamic::Variant;
-use crate::fn_native::{
-    shared_make_mut, shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, SendSync,
-};
+use crate::fn_native::{shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::fn_register::by_value as cast_arg;
 use crate::stdlib::{
     any::TypeId,
@@ -397,23 +395,6 @@ impl Module {
     #[inline(always)]
     pub fn get_sub_module(&self, name: &str) -> Option<&Module> {
         self.modules.get(name).map(|m| m.as_ref())
-    }
-
-    /// Get a mutable reference to a sub-module.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use rhai::Module;
-    ///
-    /// let mut module = Module::new();
-    /// let sub_module = Module::new();
-    /// module.set_sub_module("question", sub_module);
-    /// assert!(module.get_sub_module_mut("question").is_some());
-    /// ```
-    #[inline(always)]
-    pub fn get_sub_module_mut(&mut self, name: &str) -> Option<&mut Module> {
-        self.modules.get_mut(name).map(shared_make_mut)
     }
 
     /// Set a sub-module into the module.
@@ -1537,6 +1518,8 @@ impl Module {
                 });
         }
 
+        module.build_index();
+
         Ok(module)
     }
 
@@ -1545,7 +1528,7 @@ impl Module {
     ///
     /// If the module is already indexed, this method has no effect.
     #[cfg(not(feature = "no_module"))]
-    pub fn build_index(&mut self) {
+    pub fn build_index(&mut self) -> &mut Self {
         // Collect a particular module.
         fn index_module<'a>(
             module: &'a Module,
@@ -1645,6 +1628,8 @@ impl Module {
             self.all_type_iterators = type_iterators;
             self.indexed = true;
         }
+
+        self
     }
 
     /// Does a type iterator exist in the entire module tree?
