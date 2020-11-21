@@ -1714,7 +1714,7 @@ impl Engine {
 
             // Statement block
             Expr::Stmt(x, _) => {
-                self.eval_statements(scope, mods, state, lib, this_ptr, x.as_ref(), level)
+                self.eval_stmt_block(scope, mods, state, lib, this_ptr, x.as_ref(), level)
             }
 
             // lhs[idx_expr]
@@ -1848,8 +1848,8 @@ impl Engine {
             .map_err(|err| err.fill_position(expr.position()))
     }
 
-    /// Evaluate a list of statements.
-    pub(crate) fn eval_statements<'a>(
+    /// Evaluate a statements block.
+    pub(crate) fn eval_stmt_block<'a>(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
@@ -1859,6 +1859,7 @@ impl Engine {
         statements: impl IntoIterator<Item = &'a Stmt>,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let prev_always_search = state.always_search;
         let prev_scope_len = scope.len();
         let prev_mods_len = mods.len();
         state.scope_level += 1;
@@ -1873,15 +1874,14 @@ impl Engine {
         mods.truncate(prev_mods_len);
         state.scope_level -= 1;
 
-        // The impact of an eval statement goes away at the end of a block
+        // The impact of new local variables goes away at the end of a block
         // because any new variables introduced will go out of scope
-        state.always_search = false;
+        state.always_search = prev_always_search;
 
         result
     }
 
     /// Evaluate a statement.
-    ///
     ///
     /// # Safety
     ///
@@ -2062,7 +2062,7 @@ impl Engine {
 
             // Block scope
             Stmt::Block(statements, _) => {
-                self.eval_statements(scope, mods, state, lib, this_ptr, statements, level)
+                self.eval_stmt_block(scope, mods, state, lib, this_ptr, statements, level)
             }
 
             // If statement
