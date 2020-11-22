@@ -22,7 +22,7 @@ Breaking changes
 ----------------
 
 * `Module::set_fn`, `Module::set_raw_fn` and `Module::set_fn_XXX_mut` all take an additional parameter of `FnNamespace`.
-* `Module::set_fn` takes a further parameter with a list of parameter names and types, if any.
+* `Module::set_fn` takes a further parameter with a list of parameter names/types plus the function return type, if any.
 * `Module::get_sub_module_mut` is removed.
 * `begin`, `end`, `unless` are now reserved keywords.
 * `EvalPackage` is removed in favor of `Engine::disable_symbol`.
@@ -37,7 +37,7 @@ New features
 * New `set_exported_global_fn!` macro to register a plugin function and expose it to the global namespace.
 * `Module::set_fn_XXX_mut` can expose a module function to the global namespace. This is convenient when registering an API for a custom type.
 * `Module::set_getter_fn`, `Module::set_setter_fn`, `Module::set_indexer_get_fn`, `Module::set_indexer_set_fn` all expose the function to the global namespace by default. This is convenient when registering an API for a custom type.
-* New `Module::update_fn_param_names` to update a module function's parameter names and types.
+* New `Module::update_fn_metadata` to update a module function's parameter names and types.
 * New `#[rhai_fn(global)]` and `#[rhai_fn(internal)]` attributes to determine whether a function defined in a plugin module should be exposed to the global namespace. This is convenient when defining an API for a custom type.
 
 Enhancements

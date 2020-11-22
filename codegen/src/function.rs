@@ -84,7 +84,15 @@ pub(crate) fn flatten_type_groups(ty: &syn::Type) -> &syn::Type {
 }
 
 pub(crate) fn print_type(ty: &syn::Type) -> String {
-    ty.to_token_stream().to_string().replace("& ", "&")
+    ty.to_token_stream()
+        .to_string()
+        .replace(" , ", ", ")
+        .replace("& ", "&")
+        .replace(" :: ", "::")
+        .replace(" ( ", "(")
+        .replace(" ) ", ")")
+        .replace(" < ", "<")
+        .replace(" > ", ">")
 }
 
 #[derive(Debug, Default)]
@@ -582,6 +590,7 @@ impl ExportedFn {
         let callable_block = self.generate_callable("Token");
         let input_names_block = self.generate_input_names("Token");
         let input_types_block = self.generate_input_types("Token");
+        let return_type_block = self.generate_return_type("Token");
         let dyn_result_fn_block = self.generate_dynamic_fn();
         quote! {
             #[allow(unused)]
@@ -592,6 +601,7 @@ impl ExportedFn {
                 #callable_block
                 #input_names_block
                 #input_types_block
+                #return_type_block
                 #dyn_result_fn_block
             }
         }
@@ -687,6 +697,19 @@ impl ExportedFn {
         }
     }
 
+    pub fn generate_return_type(&self, on_type_name: &str) -> proc_macro2::TokenStream {
+        let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
+        let return_type_fn_name: syn::Ident = syn::Ident::new(
+            format!("{}_return_type", on_type_name.to_lowercase()).as_str(),
+            self.name().span(),
+        );
+        quote! {
+            pub fn #return_type_fn_name() -> &'static str {
+                #token_name().return_type()
+            }
+        }
+    }
+
     pub fn generate_impl(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let sig_name = self.name().clone();
         let name = self.params.name.as_ref().map_or_else(
@@ -701,6 +724,12 @@ impl ExportedFn {
         let mut unpack_exprs: Vec<syn::Expr> = Vec::new();
         let mut input_type_names: Vec<String> = Vec::new();
         let mut input_type_exprs: Vec<syn::Expr> = Vec::new();
+
+        let return_type = self
+            .return_type()
+            .map(print_type)
+            .unwrap_or_else(|| "()".to_string());
+
         let skip_first_arg;
 
         if self.pass_context {
@@ -866,6 +895,9 @@ impl ExportedFn {
                 }
                 fn input_types(&self) -> Box<[TypeId]> {
                     new_vec![#(#input_type_exprs),*].into_boxed_slice()
+                }
+                fn return_type(&self) -> &'static str {
+                    #return_type
                 }
             }
         }
