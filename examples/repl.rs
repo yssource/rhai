@@ -141,7 +141,7 @@ fn main() {
                     .into_iter()
                     .for_each(|f| println!("{}", f));
 
-                #[cfg(not(feature = "no_functions"))]
+                #[cfg(not(feature = "no_function"))]
                 main_ast
                     .iter_functions()
                     .for_each(|(_, _, _, _, f)| println!("{}", f));
