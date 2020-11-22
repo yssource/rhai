@@ -95,24 +95,25 @@ impl Imports {
             self.0.as_mut().unwrap().truncate(size);
         }
     }
-    /// Get an iterator to this stack of imported modules.
+    /// Get an iterator to this stack of imported modules in reverse order.
     #[allow(dead_code)]
     pub fn iter(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
         self.0.iter().flat_map(|lib| {
             lib.iter()
+                .rev()
                 .map(|(name, module)| (name.as_str(), module.clone()))
         })
     }
-    /// Get an iterator to this stack of imported modules.
+    /// Get an iterator to this stack of imported modules in reverse order.
     #[allow(dead_code)]
     pub(crate) fn iter_raw<'a>(
         &'a self,
     ) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> + 'a {
-        self.0.iter().flat_map(|lib| lib.iter().cloned())
+        self.0.iter().flat_map(|lib| lib.iter().rev().cloned())
     }
-    /// Get a consuming iterator to this stack of imported modules.
+    /// Get a consuming iterator to this stack of imported modules in reverse order.
     pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
-        self.0.into_iter().flat_map(|lib| lib.into_iter())
+        self.0.into_iter().flat_map(|lib| lib.into_iter().rev())
     }
     /// Add a stream of imported modules.
     pub fn extend(&mut self, stream: impl Iterator<Item = (ImmutableString, Shared<Module>)>) {

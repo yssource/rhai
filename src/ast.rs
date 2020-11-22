@@ -100,7 +100,7 @@ impl fmt::Display for ScriptFnDef {
                 .iter()
                 .map(|s| s.as_str())
                 .collect::<Vec<_>>()
-                .join(",")
+                .join(", ")
         )
     }
 }

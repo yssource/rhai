@@ -2,7 +2,7 @@
 
 use crate::engine::{
     KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY,
-    KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
+    KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 use crate::stdlib::{
     borrow::Cow,
@@ -538,11 +538,7 @@ impl Token {
             | "async" | "await" | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
-            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_DEF_VAR
-            | KEYWORD_IS_DEF_FN | KEYWORD_THIS => Reserved(syntax.into()),
-
-            #[cfg(not(feature = "no_closure"))]
-            crate::engine::KEYWORD_IS_SHARED => Reserved(syntax.into()),
+            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_THIS => Reserved(syntax.into()),
 
             _ => return None,
         })
@@ -1513,12 +1509,8 @@ fn get_identifier(
 #[inline(always)]
 pub fn is_keyword_function(name: &str) -> bool {
     match name {
-        #[cfg(not(feature = "no_closure"))]
-        crate::engine::KEYWORD_IS_SHARED => true,
         KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
-        | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_DEF_VAR | KEYWORD_IS_DEF_FN => {
-            true
-        }
+        | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY => true,
         _ => false,
     }
 }
@@ -1528,8 +1520,7 @@ pub fn is_keyword_function(name: &str) -> bool {
 #[inline(always)]
 pub fn can_override_keyword(name: &str) -> bool {
     match name {
-        KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
-        | KEYWORD_IS_DEF_VAR | KEYWORD_IS_DEF_FN => true,
+        KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR => true,
         _ => false,
     }
 }

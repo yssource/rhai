@@ -87,6 +87,15 @@ impl PackagesCollection {
             .as_ref()
             .and_then(|x| x.iter().find_map(|p| p.get_iter(id)))
     }
+    /// Get an iterator over all the packages in the [`PackagesCollection`].
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &PackageLibrary> {
+        self.0.iter().flat_map(|p| p.iter())
+    }
+
+    /// Generate signatures for all the functions in the [`PackagesCollection`].
+    pub fn gen_fn_signatures<'a>(&'a self) -> impl Iterator<Item = String> + 'a {
+        self.iter().flat_map(|m| m.gen_fn_signatures())
+    }
 }
 
 /// Macro that makes it easy to define a _package_ (which is basically a shared module)
