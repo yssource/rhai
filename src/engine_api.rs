@@ -7,8 +7,10 @@ use crate::optimize::OptimizationLevel;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
+    format,
     hash::{Hash, Hasher},
     string::String,
+    vec::Vec,
 };
 use crate::utils::get_hasher;
 use crate::{

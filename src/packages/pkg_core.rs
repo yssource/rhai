@@ -5,7 +5,7 @@ use super::logic::LogicPackage;
 use super::string_basic::BasicStringPackage;
 
 use crate::fn_native::{CallableFunction, FnCallArgs};
-use crate::stdlib::{any::TypeId, iter::empty};
+use crate::stdlib::{any::TypeId, boxed::Box, iter::empty};
 use crate::{
     calc_script_fn_hash, def_package, FnAccess, FnNamespace, ImmutableString, NativeCallContext,
     INT,
