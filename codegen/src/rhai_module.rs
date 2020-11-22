@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use quote::{quote, ToTokens};
 
 use crate::attrs::ExportScope;
-use crate::function::flatten_type_groups;
-use crate::function::{ExportedFn, FnNamespaceAccess, FnSpecialAccess};
+use crate::function::{
+    flatten_type_groups, print_type, ExportedFn, FnNamespaceAccess, FnSpecialAccess,
+};
 use crate::module::Module;
 
 pub(crate) type ExportedConst = (String, Box<syn::Type>, syn::Expr);
@@ -82,6 +83,16 @@ pub(crate) fn generate_body(
         let reg_names = function.exported_names();
         let mut namespace = FnNamespaceAccess::Internal;
 
+        let fn_input_names: Vec<String> = function
+            .arg_list()
+            .map(|fnarg| match fnarg {
+                syn::FnArg::Receiver(_) => panic!("internal error: receiver fn outside impl!?"),
+                syn::FnArg::Typed(syn::PatType { pat, ty, .. }) => {
+                    format!("{}: {}", pat.to_token_stream(), print_type(ty))
+                }
+            })
+            .collect();
+
         let fn_input_types: Vec<syn::Expr> = function
             .arg_list()
             .map(|fnarg| match fnarg {
@@ -117,6 +128,7 @@ pub(crate) fn generate_body(
                         },
                         t => t.clone(),
                     };
+
                     syn::parse2::<syn::Expr>(quote! {
                     core::any::TypeId::of::<#arg_type>()})
                     .unwrap()
@@ -138,7 +150,8 @@ pub(crate) fn generate_body(
             );
             set_fn_stmts.push(
                 syn::parse2::<syn::Stmt>(quote! {
-                    m.set_fn(#fn_literal, FnNamespace::#ns_str, FnAccess::Public, &[#(#fn_input_types),*],
+                    m.set_fn(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
+                                Some(&[#(#fn_input_names),*]), &[#(#fn_input_types),*],
                                 #fn_token_name().into());
                 })
                 .unwrap(),
@@ -151,6 +164,7 @@ pub(crate) fn generate_body(
         });
         gen_fn_tokens.push(function.generate_impl(&fn_token_name.to_string()));
         gen_fn_tokens.push(function.generate_callable(&fn_token_name.to_string()));
+        gen_fn_tokens.push(function.generate_input_names(&fn_token_name.to_string()));
         gen_fn_tokens.push(function.generate_input_types(&fn_token_name.to_string()));
     }
 
@@ -162,6 +176,7 @@ pub(crate) fn generate_body(
             pub fn rhai_module_generate() -> Module {
                 let mut m = Module::new();
                 rhai_generate_into_module(&mut m, false);
+                m.build_index();
                 m
             }
             #[allow(unused_mut)]
@@ -194,9 +209,7 @@ pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::
             .fold(name.to_string(), |mut argstr, fnarg| {
                 let type_string: String = match fnarg {
                     syn::FnArg::Receiver(_) => unimplemented!("receiver rhai_fns not implemented"),
-                    syn::FnArg::Typed(syn::PatType { ref ty, .. }) => {
-                        ty.as_ref().to_token_stream().to_string()
-                    }
+                    syn::FnArg::Typed(syn::PatType { ref ty, .. }) => print_type(ty),
                 };
                 argstr.push('.');
                 argstr.push_str(&type_string);

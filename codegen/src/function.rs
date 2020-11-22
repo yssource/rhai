@@ -12,7 +12,7 @@ use std::format;
 
 use std::borrow::Cow;
 
-use quote::{quote, quote_spanned};
+use quote::{quote, quote_spanned, ToTokens};
 use syn::{
     parse::{Parse, ParseStream, Parser},
     spanned::Spanned,
@@ -81,6 +81,10 @@ pub(crate) fn flatten_type_groups(ty: &syn::Type) -> &syn::Type {
         | syn::Type::Paren(syn::TypeParen { ref elem, .. }) => flatten_type_groups(elem.as_ref()),
         _ => ty,
     }
+}
+
+pub(crate) fn print_type(ty: &syn::Type) -> String {
+    ty.to_token_stream().to_string().replace("& ", "&")
 }
 
 #[derive(Debug, Default)]
@@ -576,6 +580,7 @@ impl ExportedFn {
             syn::Ident::new(&format!("rhai_fn_{}", self.name()), self.name().span());
         let impl_block = self.generate_impl("Token");
         let callable_block = self.generate_callable("Token");
+        let input_names_block = self.generate_input_names("Token");
         let input_types_block = self.generate_input_types("Token");
         let dyn_result_fn_block = self.generate_dynamic_fn();
         quote! {
@@ -585,6 +590,7 @@ impl ExportedFn {
                 struct Token();
                 #impl_block
                 #callable_block
+                #input_names_block
                 #input_types_block
                 #dyn_result_fn_block
             }
@@ -655,6 +661,19 @@ impl ExportedFn {
         }
     }
 
+    pub fn generate_input_names(&self, on_type_name: &str) -> proc_macro2::TokenStream {
+        let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
+        let input_names_fn_name: syn::Ident = syn::Ident::new(
+            format!("{}_input_names", on_type_name.to_lowercase()).as_str(),
+            self.name().span(),
+        );
+        quote! {
+            pub fn #input_names_fn_name() -> Box<[&'static str]> {
+                #token_name().input_names()
+            }
+        }
+    }
+
     pub fn generate_input_types(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
         let input_types_fn_name: syn::Ident = syn::Ident::new(
@@ -680,6 +699,7 @@ impl ExportedFn {
 
         let mut unpack_stmts: Vec<syn::Stmt> = Vec::new();
         let mut unpack_exprs: Vec<syn::Expr> = Vec::new();
+        let mut input_type_names: Vec<String> = Vec::new();
         let mut input_type_exprs: Vec<syn::Expr> = Vec::new();
         let skip_first_arg;
 
@@ -693,8 +713,9 @@ impl ExportedFn {
             let first_arg = self.arg_list().next().unwrap();
             let var = syn::Ident::new("arg0", proc_macro2::Span::call_site());
             match first_arg {
-                syn::FnArg::Typed(pattern) => {
-                    let arg_type = match flatten_type_groups(pattern.ty.as_ref()) {
+                syn::FnArg::Typed(syn::PatType { pat, ty, .. }) => {
+                    let arg_name = format!("{}: {}", pat.to_token_stream(), print_type(ty));
+                    let arg_type = match flatten_type_groups(ty.as_ref()) {
                         syn::Type::Reference(syn::TypeReference { ref elem, .. }) => elem.as_ref(),
                         p => p,
                     };
@@ -706,6 +727,7 @@ impl ExportedFn {
                         })
                         .unwrap(),
                     );
+                    input_type_names.push(arg_name);
                     input_type_exprs.push(
                         syn::parse2::<syn::Expr>(quote_spanned!(
                             arg_type.span()=> TypeId::of::<#arg_type>()
@@ -731,9 +753,10 @@ impl ExportedFn {
             let is_string;
             let is_ref;
             match arg {
-                syn::FnArg::Typed(pattern) => {
-                    let arg_type = pattern.ty.as_ref();
-                    let downcast_span = match flatten_type_groups(pattern.ty.as_ref()) {
+                syn::FnArg::Typed(syn::PatType { pat, ty, .. }) => {
+                    let arg_name = format!("{}: {}", pat.to_token_stream(), print_type(ty));
+                    let arg_type = ty.as_ref();
+                    let downcast_span = match flatten_type_groups(arg_type) {
                         syn::Type::Reference(syn::TypeReference {
                             mutability: None,
                             ref elem,
@@ -767,6 +790,7 @@ impl ExportedFn {
                         })
                         .unwrap(),
                     );
+                    input_type_names.push(arg_name);
                     if !is_string {
                         input_type_exprs.push(
                             syn::parse2::<syn::Expr>(quote_spanned!(
@@ -837,6 +861,9 @@ impl ExportedFn {
                 fn is_method_call(&self) -> bool { #is_method_call }
                 fn is_variadic(&self) -> bool { false }
                 fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(#type_name()) }
+                fn input_names(&self) -> Box<[&'static str]> {
+                    new_vec![#(#input_type_names),*].into_boxed_slice()
+                }
                 fn input_types(&self) -> Box<[TypeId]> {
                     new_vec![#(#input_type_exprs),*].into_boxed_slice()
                 }

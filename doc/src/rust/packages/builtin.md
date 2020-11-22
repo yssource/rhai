@@ -19,7 +19,6 @@ Built-In Packages
 | `BasicArrayPackage`    | basic [array] functions (not available under `no_index`)                                               |    no     |      yes      |
 | `BasicMapPackage`      | basic [object map] functions (not available under `no_object`)                                         |    no     |      yes      |
 | `BasicFnPackage`       | basic methods for [function pointers].                                                                 |    yes    |      yes      |
-| `EvalPackage`          | disable [`eval`]                                                                                       |    no     |      no       |
 | `CorePackage`          | basic essentials                                                                                       |    yes    |      yes      |
 | `StandardPackage`      | standard library (default for `Engine::new`)                                                           |    no     |      yes      |
 

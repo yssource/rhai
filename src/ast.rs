@@ -100,7 +100,7 @@ impl fmt::Display for ScriptFnDef {
                 .iter()
                 .map(|s| s.as_str())
                 .collect::<Vec<_>>()
-                .join(",")
+                .join(", ")
         )
     }
 }
@@ -1154,8 +1154,8 @@ mod tests {
         assert_eq!(size_of::<crate::ast::Stmt>(), 32);
         assert_eq!(size_of::<Option<crate::ast::Stmt>>(), 32);
         assert_eq!(size_of::<crate::Scope>(), 72);
-        assert_eq!(size_of::<crate::LexError>(), 32);
+        assert_eq!(size_of::<crate::LexError>(), 56);
         assert_eq!(size_of::<crate::ParseError>(), 16);
-        assert_eq!(size_of::<crate::EvalAltResult>(), 64);
+        assert_eq!(size_of::<crate::EvalAltResult>(), 72);
     }
 }

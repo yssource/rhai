@@ -95,24 +95,25 @@ impl Imports {
             self.0.as_mut().unwrap().truncate(size);
         }
     }
-    /// Get an iterator to this stack of imported modules.
+    /// Get an iterator to this stack of imported modules in reverse order.
     #[allow(dead_code)]
     pub fn iter(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
         self.0.iter().flat_map(|lib| {
             lib.iter()
+                .rev()
                 .map(|(name, module)| (name.as_str(), module.clone()))
         })
     }
-    /// Get an iterator to this stack of imported modules.
+    /// Get an iterator to this stack of imported modules in reverse order.
     #[allow(dead_code)]
     pub(crate) fn iter_raw<'a>(
         &'a self,
     ) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> + 'a {
-        self.0.iter().flat_map(|lib| lib.iter().cloned())
+        self.0.iter().flat_map(|lib| lib.iter().rev().cloned())
     }
-    /// Get a consuming iterator to this stack of imported modules.
+    /// Get a consuming iterator to this stack of imported modules in reverse order.
     pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
-        self.0.into_iter().flat_map(|lib| lib.into_iter())
+        self.0.into_iter().flat_map(|lib| lib.into_iter().rev())
     }
     /// Add a stream of imported modules.
     pub fn extend(&mut self, stream: impl Iterator<Item = (ImmutableString, Shared<Module>)>) {
@@ -178,9 +179,7 @@ pub const KEYWORD_FN_PTR_CURRY: &str = "curry";
 #[cfg(not(feature = "no_closure"))]
 pub const KEYWORD_IS_SHARED: &str = "is_shared";
 pub const KEYWORD_IS_DEF_VAR: &str = "is_def_var";
-pub const KEYWORD_IS_DEF_FN: &str = "is_def_fn";
 pub const KEYWORD_THIS: &str = "this";
-pub const FN_TO_STRING: &str = "to_string";
 #[cfg(not(feature = "no_object"))]
 pub const FN_GET: &str = "get$";
 #[cfg(not(feature = "no_object"))]

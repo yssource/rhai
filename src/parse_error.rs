@@ -32,7 +32,7 @@ pub enum LexError {
     /// An identifier is in an invalid format.
     MalformedIdentifier(String),
     /// Bad symbol encountered when tokenizing the script text.
-    ImproperSymbol(String),
+    ImproperSymbol(String, String),
 }
 
 impl Error for LexError {}
@@ -47,7 +47,10 @@ impl fmt::Display for LexError {
             Self::MalformedIdentifier(s) => write!(f, "{}: '{}'", self.desc(), s),
             Self::UnterminatedString => f.write_str(self.desc()),
             Self::StringTooLong(max) => write!(f, "{} ({})", self.desc(), max),
-            Self::ImproperSymbol(s) => f.write_str(s),
+            Self::ImproperSymbol(s, d) if d.is_empty() => {
+                write!(f, "Invalid symbol encountered: '{}'", s)
+            }
+            Self::ImproperSymbol(_, d) => f.write_str(d),
         }
     }
 }
@@ -62,7 +65,7 @@ impl LexError {
             Self::MalformedNumber(_) => "Invalid number",
             Self::MalformedChar(_) => "Invalid character",
             Self::MalformedIdentifier(_) => "Variable name is not proper",
-            Self::ImproperSymbol(_) => "Invalid symbol encountered",
+            Self::ImproperSymbol(_, _) => "Invalid symbol encountered",
         }
     }
     /// Convert a `&LexError` into a [`ParseError`].

@@ -46,11 +46,11 @@ struct ParseState<'e> {
     strings: HashMap<String, ImmutableString>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(ImmutableString, ScopeEntryType)>,
+    /// Size of the local variables stack upon entry of the current block scope.
+    entry_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
     externals: HashMap<ImmutableString, Position>,
-    /// Always search for variables instead of direct indexing into the scope.
-    always_search: bool,
     /// An indicator that disables variable capturing into externals one single time
     /// up until the nearest consumed Identifier token.
     /// If set to false the next call to `access_var` will not capture the variable.
@@ -94,7 +94,7 @@ impl<'e> ParseState<'e> {
             allow_capture: true,
             strings: HashMap::with_capacity(64),
             stack: Vec::with_capacity(16),
-            always_search: false,
+            entry_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
             modules: Default::default(),
         }
@@ -110,12 +110,22 @@ impl<'e> ParseState<'e> {
     /// Return `None` when the variable name is not found in the `stack`.
     #[inline]
     fn access_var(&mut self, name: &str, _pos: Position) -> Option<NonZeroUsize> {
+        let mut barrier = false;
+
         let index = self
             .stack
             .iter()
             .rev()
             .enumerate()
-            .find(|(_, (n, _))| *n == name)
+            .find(|(_, (n, _))| {
+                if n.is_empty() {
+                    // Do not go beyond empty variable names
+                    barrier = true;
+                    false
+                } else {
+                    *n == name
+                }
+            })
             .and_then(|(i, _)| NonZeroUsize::new(i + 1));
 
         #[cfg(not(feature = "no_closure"))]
@@ -127,7 +137,7 @@ impl<'e> ParseState<'e> {
             self.allow_capture = true
         }
 
-        if self.always_search {
+        if barrier {
             None
         } else {
             index
@@ -985,11 +995,8 @@ fn parse_primary(
         // Access to `this` as a variable is OK
         Token::Reserved(s) if s == KEYWORD_THIS && *next_token != Token::LeftParen => {
             if !settings.is_function_scope {
-                return Err(PERR::BadInput(LexError::ImproperSymbol(format!(
-                    "'{}' can only be used in functions",
-                    s
-                )))
-                .into_err(settings.pos));
+                let msg = format!("'{}' can only be used in functions", s);
+                return Err(PERR::BadInput(LexError::ImproperSymbol(s, msg)).into_err(settings.pos));
             } else {
                 let var_name_def = IdentX::new(state.get_interned_string(s), settings.pos);
                 Expr::Variable(Box::new((None, None, 0, var_name_def)))
@@ -1035,6 +1042,7 @@ fn parse_primary(
                     LexError::UnexpectedInput(Token::Bang.syntax().to_string()).into_err(token_pos)
                 } else {
                     PERR::BadInput(LexError::ImproperSymbol(
+                        "!".to_string(),
                         "'!' cannot be used to call module functions".to_string(),
                     ))
                     .into_err(token_pos)
@@ -1323,6 +1331,7 @@ fn make_assignment_stmt<'a>(
         }
         // ??? && ??? = rhs, ??? || ??? = rhs
         Expr::And(_, _) | Expr::Or(_, _) => Err(PERR::BadInput(LexError::ImproperSymbol(
+            "=".to_string(),
             "Possibly a typo of '=='?".to_string(),
         ))
         .into_err(pos)),
@@ -1428,10 +1437,13 @@ fn make_dot_expr(
                 && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL]
                     .contains(&x.name.as_ref()) =>
         {
-            return Err(PERR::BadInput(LexError::ImproperSymbol(format!(
-                "'{}' should not be called in method style. Try {}(...);",
-                x.name, x.name
-            )))
+            return Err(PERR::BadInput(LexError::ImproperSymbol(
+                x.name.to_string(),
+                format!(
+                    "'{}' should not be called in method style. Try {}(...);",
+                    x.name, x.name
+                ),
+            ))
             .into_err(pos));
         }
         // lhs.func!(...)
@@ -1789,11 +1801,13 @@ fn parse_custom_syntax(
     // Adjust the variables stack
     match syntax.scope_delta {
         delta if delta > 0 => {
+            // Add enough empty variable names to the stack.
+            // Empty variable names act as a barrier so earlier variables will not be matched.
+            // Variable searches stop at the first empty variable name.
             state.stack.resize(
                 state.stack.len() + delta as usize,
                 ("".into(), ScopeEntryType::Normal),
             );
-            state.always_search = true;
         }
         delta if delta < 0 && state.stack.len() <= delta.abs() as usize => state.stack.clear(),
         delta if delta < 0 => state
@@ -1920,20 +1934,22 @@ fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result
 fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
     match input.peek().unwrap() {
         (Token::Equals, pos) => Err(PERR::BadInput(LexError::ImproperSymbol(
+            "=".to_string(),
             "Possibly a typo of '=='?".to_string(),
         ))
         .into_err(*pos)),
-        (Token::PlusAssign, pos)
-        | (Token::MinusAssign, pos)
-        | (Token::MultiplyAssign, pos)
-        | (Token::DivideAssign, pos)
-        | (Token::LeftShiftAssign, pos)
-        | (Token::RightShiftAssign, pos)
-        | (Token::ModuloAssign, pos)
-        | (Token::PowerOfAssign, pos)
-        | (Token::AndAssign, pos)
-        | (Token::OrAssign, pos)
-        | (Token::XOrAssign, pos) => Err(PERR::BadInput(LexError::ImproperSymbol(
+        (token @ Token::PlusAssign, pos)
+        | (token @ Token::MinusAssign, pos)
+        | (token @ Token::MultiplyAssign, pos)
+        | (token @ Token::DivideAssign, pos)
+        | (token @ Token::LeftShiftAssign, pos)
+        | (token @ Token::RightShiftAssign, pos)
+        | (token @ Token::ModuloAssign, pos)
+        | (token @ Token::PowerOfAssign, pos)
+        | (token @ Token::AndAssign, pos)
+        | (token @ Token::OrAssign, pos)
+        | (token @ Token::XOrAssign, pos) => Err(PERR::BadInput(LexError::ImproperSymbol(
+            token.syntax().to_string(),
             "Expecting a boolean expression, not an assignment".to_string(),
         ))
         .into_err(*pos)),
@@ -2293,8 +2309,9 @@ fn parse_block(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut statements = Vec::with_capacity(8);
-    let prev_always_search = state.always_search;
-    let prev_stack_len = state.stack.len();
+
+    let prev_entry_stack_len = state.entry_stack_len;
+    state.entry_stack_len = state.stack.len();
 
     #[cfg(not(feature = "no_module"))]
     let prev_mods_len = state.modules.len();
@@ -2338,14 +2355,11 @@ fn parse_block(
         }
     }
 
-    state.stack.truncate(prev_stack_len);
+    state.stack.truncate(state.entry_stack_len);
+    state.entry_stack_len = prev_entry_stack_len;
 
     #[cfg(not(feature = "no_module"))]
     state.modules.truncate(prev_mods_len);
-
-    // The impact of new local variables goes away at the end of a block
-    // because any new variables introduced will go out of scope
-    state.always_search = prev_always_search;
 
     Ok(Stmt::Block(statements, settings.pos))
 }

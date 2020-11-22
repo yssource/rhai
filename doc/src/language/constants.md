@@ -34,23 +34,28 @@ It is very useful to have a constant value hold a [custom type], which essential
 as a [_singleton_](../patterns/singleton.md).
 
 ```rust
-use rhai::{Engine, Scope};
+use rhai::{Engine, Scope, RegisterFn};
 
+#[derive(Debug, Clone)]
 struct TestStruct(i64);                                     // custom type
 
-let engine = Engine::new()
+let mut engine = Engine::new();
+
+engine
     .register_type_with_name::<TestStruct>("TestStruct")    // register custom type
-    .register_get_set("value",
-        |obj: &mut TestStruct| obj.0,                       // property getter
-        |obj: &mut TestStruct, value: i64| obj.0 = value    // property setter
+    .register_get("value", |obj: &mut TestStruct| obj.0),   // property getter
+    .register_fn("update_value",
+        |obj: &mut TestStruct, value: i64| obj.0 = value    // mutating method
     );
 
 let mut scope = Scope::new();                               // create custom scope
 
 scope.push_constant("MY_NUMBER", TestStruct(123_i64));      // add constant variable
 
-engine.consume_with_scope(&mut scope, r"
-    MY_NUMBER.value = 42;                                   // constant objects can be modified
+// Beware: constant objects can still be modified via a method call!
+engine.consume_with_scope(&mut scope,
+r"
+    MY_NUMBER.update_value(42);
     print(MY_NUMBER.value);                                 // prints 42
 ")?;
 ```

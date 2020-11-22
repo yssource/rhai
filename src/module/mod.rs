@@ -2,9 +2,7 @@
 
 use crate::ast::{FnAccess, IdentX};
 use crate::dynamic::Variant;
-use crate::fn_native::{
-    shared_make_mut, shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, SendSync,
-};
+use crate::fn_native::{shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::fn_register::by_value as cast_arg;
 use crate::stdlib::{
     any::TypeId,
@@ -81,7 +79,31 @@ pub struct FuncInfo {
     /// Number of parameters.
     pub params: usize,
     /// Parameter types (if applicable).
-    pub types: Option<StaticVec<TypeId>>,
+    pub param_types: Option<StaticVec<TypeId>>,
+    /// Parameter names (if available).
+    pub param_names: Option<StaticVec<ImmutableString>>,
+}
+
+impl FuncInfo {
+    /// Generate a signature of the function.
+    pub fn gen_signature(&self) -> String {
+        let mut sig = format!("{}(", self.name);
+
+        if let Some(ref names) = self.param_names {
+            let params: Vec<_> = names.iter().map(ImmutableString::to_string).collect();
+            sig.push_str(&params.join(", "));
+        } else {
+            for x in 0..self.params {
+                sig.push_str("_");
+                if x < self.params - 1 {
+                    sig.push_str(", ");
+                }
+            }
+        }
+
+        sig.push_str(")");
+        sig
+    }
 }
 
 /// A module which may contain variables, sub-modules, external Rust functions,
@@ -232,6 +254,14 @@ impl Module {
         self.indexed
     }
 
+    /// Generate signatures for all the functions in the module.
+    pub fn gen_fn_signatures<'a>(&'a self) -> impl Iterator<Item = String> + 'a {
+        self.functions
+            .values()
+            .filter(|FuncInfo { access, .. }| !access.is_private())
+            .map(FuncInfo::gen_signature)
+    }
+
     /// Does a variable exist in the module?
     ///
     /// # Example
@@ -331,7 +361,8 @@ impl Module {
                 namespace: FnNamespace::Internal,
                 access: fn_def.access,
                 params: num_params,
-                types: None,
+                param_types: None,
+                param_names: Some(fn_def.params.clone()),
                 func: fn_def.into(),
             },
         );
@@ -399,23 +430,6 @@ impl Module {
         self.modules.get(name).map(|m| m.as_ref())
     }
 
-    /// Get a mutable reference to a sub-module.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use rhai::Module;
-    ///
-    /// let mut module = Module::new();
-    /// let sub_module = Module::new();
-    /// module.set_sub_module("question", sub_module);
-    /// assert!(module.get_sub_module_mut("question").is_some());
-    /// ```
-    #[inline(always)]
-    pub fn get_sub_module_mut(&mut self, name: &str) -> Option<&mut Module> {
-        self.modules.get_mut(name).map(shared_make_mut)
-    }
-
     /// Set a sub-module into the module.
     ///
     /// If there is an existing sub-module of the same name, it is replaced.
@@ -469,6 +483,17 @@ impl Module {
         }
     }
 
+    /// Update the parameter names and types in a registered function.
+    ///
+    /// The [`u64`] hash is calculated either by the function [`crate::calc_native_fn_hash`] or
+    /// the function [`crate::calc_script_fn_hash`].
+    pub fn update_fn_param_names(&mut self, hash_fn: u64, arg_names: &[&str]) -> &mut Self {
+        if let Some(f) = self.functions.get_mut(&hash_fn) {
+            f.param_names = Some(arg_names.iter().map(|&n| n.into()).collect());
+        }
+        self
+    }
+
     /// Set a Rust function into the module, returning a hash key.
     ///
     /// If there is an existing Rust function of the same hash, it is replaced.
@@ -481,6 +506,7 @@ impl Module {
         name: impl Into<String>,
         namespace: FnNamespace,
         access: FnAccess,
+        arg_names: Option<&[&str]>,
         arg_types: &[TypeId],
         func: CallableFunction,
     ) -> u64 {
@@ -507,7 +533,8 @@ impl Module {
                 namespace,
                 access,
                 params: params.len(),
-                types: Some(params),
+                param_types: Some(params),
+                param_names: arg_names.map(|p| p.iter().map(|&v| v.into()).collect()),
                 func: func.into(),
             },
         );
@@ -595,6 +622,7 @@ impl Module {
             name,
             namespace,
             access,
+            None,
             arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -625,6 +653,7 @@ impl Module {
             name,
             FnNamespace::Internal,
             FnAccess::Public,
+            None,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -657,6 +686,7 @@ impl Module {
             name,
             FnNamespace::Internal,
             FnAccess::Public,
+            None,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -692,6 +722,7 @@ impl Module {
             name,
             namespace,
             FnAccess::Public,
+            None,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -757,6 +788,7 @@ impl Module {
             name,
             FnNamespace::Internal,
             FnAccess::Public,
+            None,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -799,6 +831,7 @@ impl Module {
             name,
             namespace,
             FnAccess::Public,
+            None,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -919,6 +952,7 @@ impl Module {
             name,
             FnNamespace::Internal,
             FnAccess::Public,
+            None,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -967,6 +1001,7 @@ impl Module {
             name,
             namespace,
             FnAccess::Public,
+            None,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -1027,6 +1062,7 @@ impl Module {
             crate::engine::FN_IDX_SET,
             FnNamespace::Internal,
             FnAccess::Public,
+            None,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -1119,6 +1155,7 @@ impl Module {
             name,
             FnNamespace::Internal,
             FnAccess::Public,
+            None,
             &arg_types,
             CallableFunction::from_pure(Box::new(f)),
         )
@@ -1174,6 +1211,7 @@ impl Module {
             name,
             namespace,
             FnAccess::Public,
+            None,
             &arg_types,
             CallableFunction::from_method(Box::new(f)),
         )
@@ -1537,6 +1575,8 @@ impl Module {
                 });
         }
 
+        module.build_index();
+
         Ok(module)
     }
 
@@ -1544,8 +1584,7 @@ impl Module {
     /// variables and functions as one flattened namespace.
     ///
     /// If the module is already indexed, this method has no effect.
-    #[cfg(not(feature = "no_module"))]
-    pub fn build_index(&mut self) {
+    pub fn build_index(&mut self) -> &mut Self {
         // Collect a particular module.
         fn index_module<'a>(
             module: &'a Module,
@@ -1586,7 +1625,7 @@ impl Module {
                             name,
                             namespace,
                             params,
-                            types,
+                            param_types: types,
                             func,
                             ..
                         },
@@ -1645,6 +1684,8 @@ impl Module {
             self.all_type_iterators = type_iterators;
             self.indexed = true;
         }
+
+        self
     }
 
     /// Does a type iterator exist in the entire module tree?

@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, ParseErrorType, Scope, INT};
+use rhai::{Engine, EvalAltResult, ParseErrorType, RegisterFn, Scope, INT};
 
 #[test]
 fn test_constant() -> Result<(), Box<EvalAltResult>> {
@@ -59,6 +59,39 @@ fn test_var_is_def() -> Result<(), Box<EvalAltResult>> {
             is_def_var("x")
     "#
     )?);
+
+    Ok(())
+}
+
+#[cfg(not(feature = "no_object"))]
+#[test]
+fn test_constant_mut() -> Result<(), Box<EvalAltResult>> {
+    #[derive(Debug, Clone)]
+    struct TestStruct(INT); // custom type
+
+    let mut engine = Engine::new();
+
+    engine
+        .register_type_with_name::<TestStruct>("TestStruct")
+        .register_get("value", |obj: &mut TestStruct| obj.0)
+        .register_fn("update_value", |obj: &mut TestStruct, value: INT| {
+            obj.0 = value
+        });
+
+    let mut scope = Scope::new();
+
+    scope.push_constant("MY_NUMBER", TestStruct(123));
+
+    assert_eq!(
+        engine.eval_with_scope::<INT>(
+            &mut scope,
+            r"
+                MY_NUMBER.update_value(42);
+                MY_NUMBER.value
+            ",
+        )?,
+        42
+    );
 
     Ok(())
 }

@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, Scope, INT};
+use rhai::{Engine, EvalAltResult, LexError, ParseErrorType, RegisterFn, Scope, INT};
 
 #[test]
 fn test_eval() -> Result<(), Box<EvalAltResult>> {
@@ -98,10 +98,34 @@ fn test_eval_override() -> Result<(), Box<EvalAltResult>> {
                 fn eval(x) { x }    // reflect the script back
 
                 eval("40 + 2")
-    "#
+            "#
         )?,
         "40 + 2"
     );
+
+    let mut engine = Engine::new();
+
+    // Reflect the script back
+    engine.register_fn("eval", |script: &str| script.to_string());
+
+    assert_eq!(engine.eval::<String>(r#"eval("40 + 2")"#)?, "40 + 2");
+
+    Ok(())
+}
+
+#[test]
+fn test_eval_disabled() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    engine.disable_symbol("eval");
+
+    assert!(matches!(
+        *engine
+            .compile(r#"eval("40 + 2")"#)
+            .expect_err("should error")
+            .0,
+        ParseErrorType::BadInput(LexError::ImproperSymbol(err, _)) if err == "eval"
+    ));
 
     Ok(())
 }

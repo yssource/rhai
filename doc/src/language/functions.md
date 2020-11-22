@@ -104,7 +104,7 @@ This is similar to Rust and many other modern languages, such as JavaScript's `f
 `is_def_fn`
 -----------
 
-Use `is_def_fn` to detect if a function is defined (and therefore callable), based on its name
+Use `is_def_fn` to detect if a Rhai function is defined (and therefore callable), based on its name
 and the number of parameters.
 
 ```rust

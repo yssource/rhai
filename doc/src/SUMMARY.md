@@ -97,7 +97,7 @@ The Rhai Scripting Language
    19. [Modules](language/modules/index.md)
        1. [Export Variables, Functions and Sub-Modules](language/modules/export.md)
        2. [Import Modules](language/modules/import.md)
-   20. [Eval Statement](language/eval.md)
+   20. [Eval Function](language/eval.md)
 6. [Safety and Protection](safety/index.md)
    1. [Checked Arithmetic](safety/checked.md)
    2. [Sand-Boxing](safety/sandbox.md)

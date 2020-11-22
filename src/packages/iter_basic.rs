@@ -48,7 +48,8 @@ macro_rules! reg_range {
     ($lib:expr, $x:expr, $( $y:ty ),*) => (
         $(
             $lib.set_iterator::<Range<$y>>();
-            $lib.set_fn_2($x, get_range::<$y>);
+            let hash = $lib.set_fn_2($x, get_range::<$y>);
+            $lib.update_fn_param_names(hash, &[concat!("from: ", stringify!($y)), concat!("to: ", stringify!($y))]);
         )*
     )
 }
@@ -59,14 +60,16 @@ macro_rules! reg_step {
     ($lib:expr, $x:expr, $( $y:ty ),*) => (
         $(
             $lib.set_iterator::<StepRange<$y>>();
-            $lib.set_fn_3($x, get_step_range::<$y>);
+            let hash = $lib.set_fn_3($x, get_step_range::<$y>);
+            $lib.update_fn_param_names(hash, &[concat!("from: ", stringify!($y)), concat!("to: ", stringify!($y)), concat!("step: ", stringify!($y))]);
         )*
     )
 }
 
 def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
     lib.set_iterator::<Range<INT>>();
-    lib.set_fn_2("range", get_range::<INT>);
+    let hash = lib.set_fn_2("range", get_range::<INT>);
+    lib.update_fn_param_names(hash, &["from: INT", "to: INT"]);
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
@@ -79,7 +82,8 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
     }
 
     lib.set_iterator::<StepRange<INT>>();
-    lib.set_fn_3("range", get_step_range::<INT>);
+    let hash = lib.set_fn_3("range", get_step_range::<INT>);
+    lib.update_fn_param_names(hash, &["from: INT", "to: INT", "step: INT"]);
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]

@@ -7,8 +7,10 @@ use crate::optimize::OptimizationLevel;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
+    format,
     hash::{Hash, Hasher},
     string::String,
+    vec::Vec,
 };
 use crate::utils::get_hasher;
 use crate::{
@@ -1515,7 +1517,7 @@ impl Engine {
             .into()
         });
     }
-    /// Call a script function defined in an [`AST`] with multiple `Dynamic` arguments
+    /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments
     /// and optionally a value for binding to the `this` pointer.
     ///
     /// ## WARNING
@@ -1578,7 +1580,7 @@ impl Engine {
 
         self.call_fn_dynamic_raw(scope, &[lib.as_ref()], name, &mut this_ptr, args.as_mut())
     }
-    /// Call a script function defined in an [`AST`] with multiple `Dynamic` arguments.
+    /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments.
     ///
     /// ## WARNING
     ///
@@ -1645,6 +1647,27 @@ impl Engine {
 
         let stmt = crate::stdlib::mem::take(ast.statements_mut());
         crate::optimize::optimize_into_ast(self, scope, stmt, lib, optimization_level)
+    }
+    /// Generate a list of all registered functions.
+    ///
+    /// The ordering is:
+    /// 1) Functions registered into the global namespace
+    /// 2) Functions in registered sub-modules
+    /// 3) Functions in packages
+    pub fn gen_fn_signatures(&self, include_packages: bool) -> Vec<String> {
+        let mut signatures: Vec<_> = Default::default();
+
+        signatures.extend(self.global_namespace.gen_fn_signatures());
+
+        self.global_sub_modules.iter().for_each(|(name, m)| {
+            signatures.extend(m.gen_fn_signatures().map(|f| format!("{}::{}", name, f)))
+        });
+
+        if include_packages {
+            signatures.extend(self.packages.gen_fn_signatures());
+        }
+
+        signatures
     }
     /// Provide a callback that will be invoked before each variable access.
     ///

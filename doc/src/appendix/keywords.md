@@ -9,8 +9,6 @@ Keywords List
 |        `false`        | boolean false literal                       |                 |      no      |              |
 |         `let`         | variable declaration                        |                 |      no      |              |
 |        `const`        | constant declaration                        |                 |      no      |              |
-|     `is_def_var`      | is a variable declared?                     |                 |     yes      |     yes      |
-|      `is_shared`      | is a value shared?                          | [`no_closure`]  |     yes      |      no      |
 |         `if`          | if statement                                |                 |      no      |              |
 |        `else`         | else block of if statement                  |                 |      no      |              |
 |       `switch`        | matching                                    |                 |      no      |              |
@@ -35,7 +33,6 @@ Keywords List
 |        `call`         | call a [function pointer]                   |                 |     yes      |      no      |
 |        `curry`        | curry a [function pointer]                  |                 |     yes      |      no      |
 |        `this`         | reference to base object for method call    | [`no_function`] |      no      |              |
-|      `is_def_fn`      | is a scripted function defined?             | [`no_function`] |     yes      |     yes      |
 |       `type_of`       | get type name of value                      |                 |     yes      |     yes      |
 |        `print`        | print value                                 |                 |     yes      |     yes      |
 |        `debug`        | print value in debug format                 |                 |     yes      |     yes      |
@@ -49,6 +46,8 @@ Reserved Keywords
 | --------- | --------------------- |
 | `var`     | variable declaration  |
 | `static`  | variable declaration  |
+| `begin`   | block scope           |
+| `end`     | block scope           |
 | `shared`  | share value           |
 | `each`    | looping               |
 | `then`    | control flow          |

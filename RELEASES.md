@@ -10,6 +10,9 @@ It also allows exposing selected module functions (usually methods) to the globa
 This is very convenient when encapsulating the API of a custom Rust type into a module while having methods
 and iterators registered on the custom type work normally.
 
+A new `gen_fn_signatures` API enables enumerating the registered functions of an `Engine` for documentation purposes.
+It also prepares the way for a future reflection API.
+
 Bug fixes
 ---------
 
@@ -19,18 +22,23 @@ Breaking changes
 ----------------
 
 * `Module::set_fn`, `Module::set_raw_fn` and `Module::set_fn_XXX_mut` all take an additional parameter of `FnNamespace`.
-* `unless` is now a reserved keyword.
+* `Module::set_fn` takes a further parameter with a list of parameter names and types, if any.
+* `Module::get_sub_module_mut` is removed.
+* `begin`, `end`, `unless` are now reserved keywords.
+* `EvalPackage` is removed in favor of `Engine::disable_symbol`.
 
 New features
 ------------
 
-* `switch` statement.
-* `do ... while` and `do ... until` statement.
-* `Engine::register_module` to register a module as a sub-module in the global namespace.
-* `set_exported_global_fn!` macro to register a plugin function and expose it to the global namespace.
+* New `switch` statement.
+* New `do ... while` and `do ... until` statements.
+* New `Engine::gen_fn_signatures`, `Module::gen_fn_signatures` and `PackagesCollection::gen_fn_signatures` to generate a list of signatures for functions registered.
+* New `Engine::register_module` to register a module as a sub-module in the global namespace.
+* New `set_exported_global_fn!` macro to register a plugin function and expose it to the global namespace.
 * `Module::set_fn_XXX_mut` can expose a module function to the global namespace. This is convenient when registering an API for a custom type.
 * `Module::set_getter_fn`, `Module::set_setter_fn`, `Module::set_indexer_get_fn`, `Module::set_indexer_set_fn` all expose the function to the global namespace by default. This is convenient when registering an API for a custom type.
-* `#[rhai_fn(global)]` and `#[rhai_fn(internal)]` attributes to determine whether a function defined in a plugin module should be exposed to the global namespace. This is convenient when defining an API for a custom type.
+* New `Module::update_fn_param_names` to update a module function's parameter names and types.
+* New `#[rhai_fn(global)]` and `#[rhai_fn(internal)]` attributes to determine whether a function defined in a plugin module should be exposed to the global namespace. This is convenient when defining an API for a custom type.
 
 Enhancements
 ------------

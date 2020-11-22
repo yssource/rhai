@@ -42,6 +42,7 @@ fn print_help() {
     println!("help       => print this help");
     println!("quit, exit => quit");
     println!("scope      => print all variables in the scope");
+    println!("functions  => print all functions defined");
     println!("ast        => print the last AST");
     println!("astu       => print the last raw, un-optimized AST");
     println!(r"end a line with '\' to continue to the next line.");
@@ -131,6 +132,21 @@ fn main() {
             "ast" => {
                 // print the last AST
                 println!("{:#?}\n", &ast);
+                continue;
+            }
+            "functions" => {
+                // print a list of all registered functions
+                engine
+                    .gen_fn_signatures(false)
+                    .into_iter()
+                    .for_each(|f| println!("{}", f));
+
+                #[cfg(not(feature = "no_function"))]
+                main_ast
+                    .iter_functions()
+                    .for_each(|(_, _, _, _, f)| println!("{}", f));
+
+                println!();
                 continue;
             }
             _ => (),

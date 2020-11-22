@@ -50,7 +50,7 @@ impl ModuleResolver for MyModuleResolver {
                         // Return EvalAltResult::ErrorInModule upon loading error
                         EvalAltResult::ErrorInModule(path.into(), Box::new(err), pos).into()
                     )?;
-            my_module.build_index();  // index it
+            my_module.build_index();            // index it
             Rc::new(my_module)                  // make it shared
         } else {
             // Return EvalAltResult::ErrorModuleNotFound if the path is invalid
