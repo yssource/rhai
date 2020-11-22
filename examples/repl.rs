@@ -140,9 +140,12 @@ fn main() {
                     .gen_fn_signatures(false)
                     .into_iter()
                     .for_each(|f| println!("{}", f));
+
+                #[cfg(not(feature = "no_functions"))]
                 main_ast
                     .iter_functions()
                     .for_each(|(_, _, _, _, f)| println!("{}", f));
+
                 println!();
                 continue;
             }

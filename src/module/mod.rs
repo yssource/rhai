@@ -1584,7 +1584,6 @@ impl Module {
     /// variables and functions as one flattened namespace.
     ///
     /// If the module is already indexed, this method has no effect.
-    #[cfg(not(feature = "no_module"))]
     pub fn build_index(&mut self) -> &mut Self {
         // Collect a particular module.
         fn index_module<'a>(
