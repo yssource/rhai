@@ -49,8 +49,8 @@ pub type Locked<T> = crate::stdlib::sync::RwLock<T>;
 #[derive(Debug, Copy, Clone)]
 pub struct NativeCallContext<'e, 'a, 'm, 'pm: 'm> {
     engine: &'e Engine,
-    mods: Option<&'a Imports>,
-    lib: &'m [&'pm Module],
+    pub(crate) mods: Option<&'a Imports>,
+    pub(crate) lib: &'m [&'pm Module],
 }
 
 impl<'e, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized> From<(&'e Engine, &'a Imports, &'m M)>

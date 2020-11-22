@@ -1,10 +1,7 @@
 //! Module implementing the AST optimizer.
 
 use crate::ast::{Expr, ScriptFnDef, Stmt};
-use crate::engine::{
-    KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_IS_DEF_FN, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT,
-    KEYWORD_TYPE_OF,
-};
+use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_call::run_builtin_binary_op;
 use crate::parser::map_dynamic_to_expr;
 use crate::stdlib::{
@@ -467,11 +464,9 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
 fn optimize_expr(expr: &mut Expr, state: &mut State) {
     // These keywords are handled specially
     const DONT_EVAL_KEYWORDS: &[&str] = &[
-        KEYWORD_PRINT,      // side effects
-        KEYWORD_DEBUG,      // side effects
-        KEYWORD_EVAL,       // arbitrary scripts
-        KEYWORD_IS_DEF_FN,  // functions collection is volatile
-        KEYWORD_IS_DEF_VAR, // variables scope is volatile
+        KEYWORD_PRINT, // side effects
+        KEYWORD_DEBUG, // side effects
+        KEYWORD_EVAL,  // arbitrary scripts
     ];
 
     match expr {
@@ -650,7 +645,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
-            if !state.engine.has_override_by_name_and_arguments(&state.engine.global_sub_modules, state.lib, x.name.as_ref(), arg_types.as_ref(), false) {
+            if !state.engine.has_override_by_name_and_arguments(Some(&state.engine.global_sub_modules), state.lib, x.name.as_ref(), arg_types.as_ref(), false) {
                 if let Some(result) = run_builtin_binary_op(x.name.as_ref(), &arg_values[0], &arg_values[1])
                                         .ok().flatten()
                                         .and_then(|result| map_dynamic_to_expr(result, *pos))

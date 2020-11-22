@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use crate::engine::{FN_TO_STRING, KEYWORD_DEBUG, KEYWORD_PRINT};
+use crate::engine::{KEYWORD_DEBUG, KEYWORD_PRINT};
 use crate::plugin::*;
 use crate::stdlib::{
     fmt::{Debug, Display},
@@ -32,7 +32,7 @@ macro_rules! gen_functions {
 
 macro_rules! reg_print_functions {
     ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => { $(
-        set_exported_fn!($mod_name, FN_TO_STRING, $root::$arg_type::to_string_func);
+        set_exported_fn!($mod_name, "to_string", $root::$arg_type::to_string_func);
         set_exported_fn!($mod_name, KEYWORD_PRINT, $root::$arg_type::to_string_func);
     )* }
 }
