@@ -39,6 +39,7 @@ New features
 * `Module::set_getter_fn`, `Module::set_setter_fn`, `Module::set_indexer_get_fn`, `Module::set_indexer_set_fn` all expose the function to the global namespace by default. This is convenient when registering an API for a custom type.
 * New `Module::update_fn_metadata` to update a module function's parameter names and types.
 * New `#[rhai_fn(global)]` and `#[rhai_fn(internal)]` attributes to determine whether a function defined in a plugin module should be exposed to the global namespace. This is convenient when defining an API for a custom type.
+* New `get_fn_metadata_list` to get the metadata of all script-defined functions in scope.
 
 Enhancements
 ------------

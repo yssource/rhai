@@ -97,11 +97,11 @@ impl Imports {
     }
     /// Get an iterator to this stack of imported modules in reverse order.
     #[allow(dead_code)]
-    pub fn iter(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> + 'a {
         self.0.iter().flat_map(|lib| {
             lib.iter()
                 .rev()
-                .map(|(name, module)| (name.as_str(), module.clone()))
+                .map(|(name, module)| (name.clone(), module.clone()))
         })
     }
     /// Get an iterator to this stack of imported modules in reverse order.

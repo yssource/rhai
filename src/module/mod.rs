@@ -1500,10 +1500,16 @@ impl Module {
         )
     }
 
+    /// Get an iterator to the sub-modules in the module.
+    #[inline(always)]
+    pub fn iter_sub_modules(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
+        self.modules.iter().map(|(k, m)| (k.as_str(), m.clone()))
+    }
+
     /// Get an iterator to the variables in the module.
     #[inline(always)]
-    pub fn iter_var(&self) -> impl Iterator<Item = (&String, &Dynamic)> {
-        self.variables.iter()
+    pub fn iter_var(&self) -> impl Iterator<Item = (&str, &Dynamic)> {
+        self.variables.iter().map(|(k, v)| (k.as_str(), v))
     }
 
     /// Get an iterator to the functions in the module.
