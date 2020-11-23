@@ -101,21 +101,6 @@ a statement in the script can freely call a function defined afterwards.
 This is similar to Rust and many other modern languages, such as JavaScript's `function` keyword.
 
 
-`is_def_fn`
------------
-
-Use `is_def_fn` to detect if a Rhai function is defined (and therefore callable), based on its name
-and the number of parameters.
-
-```rust
-fn foo(x) { x + 1 }
-
-is_def_fn("foo", 1) == true;
-
-is_def_fn("bar", 1) == false;
-```
-
-
 Arguments are Passed by Value
 ----------------------------
 
@@ -159,3 +144,43 @@ x == 42;            // 'x' is changed!
 
 change();           // <- error: `this` is unbound
 ```
+
+
+`is_def_fn`
+-----------
+
+Use `is_def_fn` to detect if a Rhai function is defined (and therefore callable), based on its name
+and the number of parameters.
+
+```rust
+fn foo(x) { x + 1 }
+
+is_def_fn("foo", 1) == true;
+
+is_def_fn("bar", 1) == false;
+```
+
+
+Metadata
+--------
+
+The function `get_fn_metadata_list` is a _reflection_ API that returns an array of the metadata
+of all script-defined functions in scope.
+
+Functions from the following sources are returned, in order:
+
+1) Encapsulated script environment (e.g. when loading a [module] from a script file),
+2) Current script,
+3) [Modules] imported via the [`import`] statement (latest imports first),
+4) [Modules] added via [`Engine::register_module`]({{rootUrl}}/rust/modules/create.md) (latest registrations first)
+
+The return value is an [array] of [object maps] (so `get_fn_metadata_list` is not available under
+[`no_index`] or [`no_object`]), containing the following fields:
+
+| Field          |         Type         | Optional? | Description                                                            |
+| -------------- | :------------------: | :-------: | ---------------------------------------------------------------------- |
+| `namespace`    |       [string]       |    yes    | the module _namespace_ if the function is defined within a module      |
+| `access`       |       [string]       |    no     | `"public"` if the function is public,<br/>`"private"` if it is private |
+| `name`         |       [string]       |    no     | function name                                                          |
+| `params`       | [array] of [strings] |    no     | parameter names                                                        |
+| `is_anonymous` |        `bool`        |    no     | is this function an anonymous function?                                |

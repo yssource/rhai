@@ -1650,10 +1650,10 @@ impl Engine {
     }
     /// Generate a list of all registered functions.
     ///
-    /// The ordering is:
+    /// Functions from the following sources are included, in order:
     /// 1) Functions registered into the global namespace
     /// 2) Functions in registered sub-modules
-    /// 3) Functions in packages
+    /// 3) Functions in packages (optional)
     pub fn gen_fn_signatures(&self, include_packages: bool) -> Vec<String> {
         let mut signatures: Vec<_> = Default::default();
 

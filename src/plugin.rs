@@ -38,4 +38,7 @@ pub trait PluginFunction {
 
     /// Return a boxed slice of type ID's of the function's parameters.
     fn input_types(&self) -> Box<[TypeId]>;
+
+    /// Return a string slice of the function's return type.
+    fn return_type(&self) -> &'static str;
 }

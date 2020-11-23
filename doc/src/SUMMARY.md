@@ -135,6 +135,7 @@ The Rhai Scripting Language
       2. [Custom Operators](engine/custom-op.md)
       3. [Extending with Custom Syntax](engine/custom-syntax.md)
    5. [Multiple Instantiation](patterns/multiple.md)
+   6. [Get Function Signatures](engine/get_fn_sig.md)
 10. [Appendix](appendix/index.md)
     1. [Keywords](appendix/keywords.md)
     2. [Operators and Symbols](appendix/operators.md)

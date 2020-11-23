@@ -297,7 +297,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public, Some(&[]), &[],
+                    m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public, Some(&["INT"]), &[],
                              get_mystic_number_token().into());
                     if flatten {} else {}
                 }
@@ -321,6 +321,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "INT"
+                    }
                 }
                 pub fn get_mystic_number_token_callable() -> CallableFunction {
                     get_mystic_number_token().into()
@@ -330,6 +333,9 @@ mod generate_tests {
                 }
                 pub fn get_mystic_number_token_input_types() -> Box<[TypeId]> {
                     get_mystic_number_token().input_types()
+                }
+                pub fn get_mystic_number_token_return_type() -> &'static str {
+                    get_mystic_number_token().return_type()
                 }
             }
         };
@@ -365,7 +371,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("add_one_to", FnNamespace::Global, FnAccess::Public, Some(&["x: INT"]), &[core::any::TypeId::of::<INT>()],
+                    m.set_fn("add_one_to", FnNamespace::Global, FnAccess::Public, Some(&["x: INT", "INT"]), &[core::any::TypeId::of::<INT>()],
                              add_one_to_token().into());
                     if flatten {} else {}
                 }
@@ -390,6 +396,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<INT>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "INT"
+                    }
                 }
                 pub fn add_one_to_token_callable() -> CallableFunction {
                     add_one_to_token().into()
@@ -399,6 +408,9 @@ mod generate_tests {
                 }
                 pub fn add_one_to_token_input_types() -> Box<[TypeId]> {
                     add_one_to_token().input_types()
+                }
+                pub fn add_one_to_token_return_type() -> &'static str {
+                    add_one_to_token().return_type()
                 }
             }
         };
@@ -433,7 +445,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("add_one_to", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT"]), &[core::any::TypeId::of::<INT>()],
+                    m.set_fn("add_one_to", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "INT"]), &[core::any::TypeId::of::<INT>()],
                              add_one_to_token().into());
                     if flatten {} else {}
                 }
@@ -458,6 +470,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<INT>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "INT"
+                    }
                 }
                 pub fn add_one_to_token_callable() -> CallableFunction {
                     add_one_to_token().into()
@@ -467,6 +482,9 @@ mod generate_tests {
                 }
                 pub fn add_one_to_token_input_types() -> Box<[TypeId]> {
                     add_one_to_token().input_types()
+                }
+                pub fn add_one_to_token_return_type() -> &'static str {
+                    add_one_to_token().return_type()
                 }
             }
         };
@@ -512,9 +530,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("add_n", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT"]), &[core::any::TypeId::of::<INT>()],
+                    m.set_fn("add_n", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "INT"]), &[core::any::TypeId::of::<INT>()],
                              add_one_to_token().into());
-                    m.set_fn("add_n", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT"]),
+                    m.set_fn("add_n", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT", "INT"]),
                              &[core::any::TypeId::of::<INT>(), core::any::TypeId::of::<INT>()],
                              add_n_to_token().into());
                     if flatten {} else {}
@@ -540,6 +558,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<INT>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "INT"
+                    }
                 }
                 pub fn add_one_to_token_callable() -> CallableFunction {
                     add_one_to_token().into()
@@ -549,6 +570,9 @@ mod generate_tests {
                 }
                 pub fn add_one_to_token_input_types() -> Box<[TypeId]> {
                     add_one_to_token().input_types()
+                }
+                pub fn add_one_to_token_return_type() -> &'static str {
+                    add_one_to_token().return_type()
                 }
 
                 #[allow(non_camel_case_types)]
@@ -574,6 +598,9 @@ mod generate_tests {
                         new_vec![TypeId::of::<INT>(),
                                  TypeId::of::<INT>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "INT"
+                    }
                 }
                 pub fn add_n_to_token_callable() -> CallableFunction {
                     add_n_to_token().into()
@@ -583,6 +610,9 @@ mod generate_tests {
                 }
                 pub fn add_n_to_token_input_types() -> Box<[TypeId]> {
                     add_n_to_token().input_types()
+                }
+                pub fn add_n_to_token_return_type() -> &'static str {
+                    add_n_to_token().return_type()
                 }
             }
         };
@@ -617,7 +647,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("add_together", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT"]),
+                    m.set_fn("add_together", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT", "INT"]),
                              &[core::any::TypeId::of::<INT>(), core::any::TypeId::of::<INT>()],
                              add_together_token().into());
                     if flatten {} else {}
@@ -645,6 +675,9 @@ mod generate_tests {
                         new_vec![TypeId::of::<INT>(),
                              TypeId::of::<INT>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "INT"
+                    }
                 }
                 pub fn add_together_token_callable() -> CallableFunction {
                     add_together_token().into()
@@ -654,6 +687,9 @@ mod generate_tests {
                 }
                 pub fn add_together_token_input_types() -> Box<[TypeId]> {
                     add_together_token().input_types()
+                }
+                pub fn add_together_token_return_type() -> &'static str {
+                    add_together_token().return_type()
                 }
             }
         };
@@ -689,13 +725,13 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("add", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT"]),
+                    m.set_fn("add", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT", "INT"]),
                              &[core::any::TypeId::of::<INT>(), core::any::TypeId::of::<INT>()],
                              add_together_token().into());
-                    m.set_fn("+", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT"]),
+                    m.set_fn("+", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT", "INT"]),
                              &[core::any::TypeId::of::<INT>(), core::any::TypeId::of::<INT>()],
                              add_together_token().into());
-                    m.set_fn("add_together", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT"]),
+                    m.set_fn("add_together", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT", "INT"]),
                              &[core::any::TypeId::of::<INT>(), core::any::TypeId::of::<INT>()],
                              add_together_token().into());
                     if flatten {} else {}
@@ -723,6 +759,9 @@ mod generate_tests {
                         new_vec![TypeId::of::<INT>(),
                              TypeId::of::<INT>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "INT"
+                    }
                 }
                 pub fn add_together_token_callable() -> CallableFunction {
                     add_together_token().into()
@@ -732,6 +771,9 @@ mod generate_tests {
                 }
                 pub fn add_together_token_input_types() -> Box<[TypeId]> {
                     add_together_token().input_types()
+                }
+                pub fn add_together_token_return_type() -> &'static str {
+                    add_together_token().return_type()
                 }
             }
         };
@@ -948,7 +990,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public, Some(&[]), &[],
+                    m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public, Some(&["INT"]), &[],
                              get_mystic_number_token().into());
                     if flatten {} else {}
                 }
@@ -972,6 +1014,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "INT"
+                    }
                 }
                 pub fn get_mystic_number_token_callable() -> CallableFunction {
                     get_mystic_number_token().into()
@@ -981,6 +1026,9 @@ mod generate_tests {
                 }
                 pub fn get_mystic_number_token_input_types() -> Box<[TypeId]> {
                     get_mystic_number_token().input_types()
+                }
+                pub fn get_mystic_number_token_return_type() -> &'static str {
+                    get_mystic_number_token().return_type()
                 }
             }
         };
@@ -1047,7 +1095,7 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("print_out_to", FnNamespace::Internal, FnAccess::Public,
-                             Some(&["x: &str"]), &[core::any::TypeId::of::<ImmutableString>()],
+                             Some(&["x: &str", "()"]), &[core::any::TypeId::of::<ImmutableString>()],
                              print_out_to_token().into());
                     if flatten {} else {}
                 }
@@ -1072,6 +1120,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<ImmutableString>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "()"
+                    }
                 }
                 pub fn print_out_to_token_callable() -> CallableFunction {
                     print_out_to_token().into()
@@ -1081,6 +1132,9 @@ mod generate_tests {
                 }
                 pub fn print_out_to_token_input_types() -> Box<[TypeId]> {
                     print_out_to_token().input_types()
+                }
+                pub fn print_out_to_token_return_type() -> &'static str {
+                    print_out_to_token().return_type()
                 }
             }
         };
@@ -1116,7 +1170,7 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("print_out_to", FnNamespace::Internal, FnAccess::Public,
-                             Some(&["x: String"]), &[core::any::TypeId::of::<ImmutableString>()],
+                             Some(&["x: String", "()"]), &[core::any::TypeId::of::<ImmutableString>()],
                              print_out_to_token().into());
                     if flatten {} else {}
                 }
@@ -1141,6 +1195,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<ImmutableString>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "()"
+                    }
                 }
                 pub fn print_out_to_token_callable() -> CallableFunction {
                     print_out_to_token().into()
@@ -1150,6 +1207,9 @@ mod generate_tests {
                 }
                 pub fn print_out_to_token_input_types() -> Box<[TypeId]> {
                     print_out_to_token().input_types()
+                }
+                pub fn print_out_to_token_return_type() -> &'static str {
+                    print_out_to_token().return_type()
                 }
             }
         };
@@ -1185,7 +1245,7 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("increment", FnNamespace::Internal, FnAccess::Public,
-                             Some(&["x: &mut FLOAT"]), &[core::any::TypeId::of::<FLOAT>()],
+                             Some(&["x: &mut FLOAT", "()"]), &[core::any::TypeId::of::<FLOAT>()],
                              increment_token().into());
                     if flatten {} else {}
                 }
@@ -1210,6 +1270,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<FLOAT>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "()"
+                    }
                 }
                 pub fn increment_token_callable() -> CallableFunction {
                     increment_token().into()
@@ -1219,6 +1282,9 @@ mod generate_tests {
                 }
                 pub fn increment_token_input_types() -> Box<[TypeId]> {
                     increment_token().input_types()
+                }
+                pub fn increment_token_return_type() -> &'static str {
+                    increment_token().return_type()
                 }
             }
         };
@@ -1257,7 +1323,7 @@ mod generate_tests {
                     #[allow(unused_mut)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                         m.set_fn("increment", FnNamespace::Internal, FnAccess::Public,
-                                 Some(&["x: &mut FLOAT"]), &[core::any::TypeId::of::<FLOAT>()],
+                                 Some(&["x: &mut FLOAT", "()"]), &[core::any::TypeId::of::<FLOAT>()],
                                  increment_token().into());
                         if flatten {} else {}
                     }
@@ -1282,6 +1348,9 @@ mod generate_tests {
                         fn input_types(&self) -> Box<[TypeId]> {
                             new_vec![TypeId::of::<FLOAT>()].into_boxed_slice()
                         }
+                        fn return_type(&self) -> &'static str {
+                            "()"
+                        }
                     }
                     pub fn increment_token_callable() -> CallableFunction {
                         increment_token().into()
@@ -1291,6 +1360,9 @@ mod generate_tests {
                     }
                     pub fn increment_token_input_types() -> Box<[TypeId]> {
                         increment_token().input_types()
+                    }
+                    pub fn increment_token_return_type() -> &'static str {
+                        increment_token().return_type()
                     }
                 }
                 #[allow(unused_imports)]
@@ -1350,7 +1422,7 @@ mod generate_tests {
                     #[allow(unused_mut)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                         m.set_fn("increment", FnNamespace::Internal, FnAccess::Public,
-                                 Some(&["x: &mut FLOAT"]), &[core::any::TypeId::of::<FLOAT>()],
+                                 Some(&["x: &mut FLOAT", "()"]), &[core::any::TypeId::of::<FLOAT>()],
                                  increment_token().into());
                         if flatten {} else {}
                     }
@@ -1375,6 +1447,9 @@ mod generate_tests {
                         fn input_types(&self) -> Box<[TypeId]> {
                             new_vec![TypeId::of::<FLOAT>()].into_boxed_slice()
                         }
+                        fn return_type(&self) -> &'static str {
+                            "()"
+                        }
                     }
                     pub fn increment_token_callable() -> CallableFunction {
                         increment_token().into()
@@ -1384,6 +1459,9 @@ mod generate_tests {
                     }
                     pub fn increment_token_input_types() -> Box<[TypeId]> {
                         increment_token().input_types()
+                    }
+                    pub fn increment_token_return_type() -> &'static str {
+                        increment_token().return_type()
                     }
                 }
                 #[allow(unused_imports)]
@@ -1441,7 +1519,8 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("get$square", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64"]), &[core::any::TypeId::of::<u64>()],
+                    m.set_fn("get$square", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "u64"]),
+                             &[core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
                 }
@@ -1466,6 +1545,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<u64>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "u64"
+                    }
                 }
                 pub fn int_foo_token_callable() -> CallableFunction {
                     int_foo_token().into()
@@ -1475,6 +1557,9 @@ mod generate_tests {
                 }
                 pub fn int_foo_token_input_types() -> Box<[TypeId]> {
                     int_foo_token().input_types()
+                }
+                pub fn int_foo_token_return_type() -> &'static str {
+                    int_foo_token().return_type()
                 }
             }
         };
@@ -1510,9 +1595,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("square", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64"]), &[core::any::TypeId::of::<u64>()],
+                    m.set_fn("square", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "u64"]), &[core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
-                    m.set_fn("get$square", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64"]), &[core::any::TypeId::of::<u64>()],
+                    m.set_fn("get$square", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "u64"]), &[core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
                 }
@@ -1537,6 +1622,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<u64>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "u64"
+                    }
                 }
                 pub fn int_foo_token_callable() -> CallableFunction {
                     int_foo_token().into()
@@ -1546,6 +1634,9 @@ mod generate_tests {
                 }
                 pub fn int_foo_token_input_types() -> Box<[TypeId]> {
                     int_foo_token().input_types()
+                }
+                pub fn int_foo_token_return_type() -> &'static str {
+                    int_foo_token().return_type()
                 }
             }
         };
@@ -1581,7 +1672,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("set$squared", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "y: u64"]),
+                    m.set_fn("set$squared", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "y: u64", "()"]),
                              &[core::any::TypeId::of::<u64>(), core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
@@ -1608,6 +1699,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<u64>(), TypeId::of::<u64>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "()"
+                    }
                 }
                 pub fn int_foo_token_callable() -> CallableFunction {
                     int_foo_token().into()
@@ -1617,6 +1711,9 @@ mod generate_tests {
                 }
                 pub fn int_foo_token_input_types() -> Box<[TypeId]> {
                     int_foo_token().input_types()
+                }
+                pub fn int_foo_token_return_type() -> &'static str {
+                    int_foo_token().return_type()
                 }
             }
         };
@@ -1652,10 +1749,10 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("set_sq", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "y: u64"]),
+                    m.set_fn("set_sq", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "y: u64", "()"]),
                              &[core::any::TypeId::of::<u64>(), core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
-                    m.set_fn("set$squared", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "y: u64"]),
+                    m.set_fn("set$squared", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "y: u64", "()"]),
                              &[core::any::TypeId::of::<u64>(), core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
@@ -1682,6 +1779,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<u64>(), TypeId::of::<u64>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "()"
+                    }
                 }
                 pub fn int_foo_token_callable() -> CallableFunction {
                     int_foo_token().into()
@@ -1691,6 +1791,9 @@ mod generate_tests {
                 }
                 pub fn int_foo_token_input_types() -> Box<[TypeId]> {
                     int_foo_token().input_types()
+                }
+                pub fn int_foo_token_return_type() -> &'static str {
+                    int_foo_token().return_type()
                 }
             }
         };
@@ -1727,7 +1830,7 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("index$get$", FnNamespace::Internal, FnAccess::Public,
-                             Some(&["x: &mut MyCollection", "i: u64"]),
+                             Some(&["x: &mut MyCollection", "i: u64", "FLOAT"]),
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
                              get_by_index_token().into());
@@ -1756,6 +1859,9 @@ mod generate_tests {
                         new_vec![TypeId::of::<MyCollection>(),
                                  TypeId::of::<u64>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "FLOAT"
+                    }
                 }
                 pub fn get_by_index_token_callable() -> CallableFunction {
                     get_by_index_token().into()
@@ -1765,6 +1871,9 @@ mod generate_tests {
                 }
                 pub fn get_by_index_token_input_types() -> Box<[TypeId]> {
                     get_by_index_token().input_types()
+                }
+                pub fn get_by_index_token_return_type() -> &'static str {
+                    get_by_index_token().return_type()
                 }
             }
         };
@@ -1801,12 +1910,12 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("get", FnNamespace::Internal, FnAccess::Public,
-                             Some(&["x: &mut MyCollection", "i: u64"]),
+                             Some(&["x: &mut MyCollection", "i: u64", "FLOAT"]),
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
                              get_by_index_token().into());
                     m.set_fn("index$get$", FnNamespace::Internal, FnAccess::Public,
-                             Some(&["x: &mut MyCollection", "i: u64"]),
+                             Some(&["x: &mut MyCollection", "i: u64", "FLOAT"]),
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
                              get_by_index_token().into());
@@ -1835,6 +1944,9 @@ mod generate_tests {
                         new_vec![TypeId::of::<MyCollection>(),
                                  TypeId::of::<u64>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "FLOAT"
+                    }
                 }
                 pub fn get_by_index_token_callable() -> CallableFunction {
                     get_by_index_token().into()
@@ -1844,6 +1956,9 @@ mod generate_tests {
                 }
                 pub fn get_by_index_token_input_types() -> Box<[TypeId]> {
                     get_by_index_token().input_types()
+                }
+                pub fn get_by_index_token_return_type() -> &'static str {
+                    get_by_index_token().return_type()
                 }
             }
         };
@@ -1880,7 +1995,7 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("index$set$", FnNamespace::Internal, FnAccess::Public,
-                             Some(&["x: &mut MyCollection", "i: u64", "item: FLOAT"]),
+                             Some(&["x: &mut MyCollection", "i: u64", "item: FLOAT", "()"]),
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<FLOAT>()],
@@ -1912,6 +2027,9 @@ mod generate_tests {
                                  TypeId::of::<u64>(),
                                  TypeId::of::<FLOAT>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "()"
+                    }
                 }
                 pub fn set_by_index_token_callable() -> CallableFunction {
                     set_by_index_token().into()
@@ -1921,6 +2039,9 @@ mod generate_tests {
                 }
                 pub fn set_by_index_token_input_types() -> Box<[TypeId]> {
                     set_by_index_token().input_types()
+                }
+                pub fn set_by_index_token_return_type() -> &'static str {
+                    set_by_index_token().return_type()
                 }
             }
         };
@@ -1957,13 +2078,13 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("set", FnNamespace::Internal, FnAccess::Public,
-                             Some(&["x: &mut MyCollection", "i: u64", "item: FLOAT"]),
+                             Some(&["x: &mut MyCollection", "i: u64", "item: FLOAT", "()"]),
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<FLOAT>()],
                              set_by_index_token().into());
                     m.set_fn("index$set$", FnNamespace::Internal, FnAccess::Public,
-                             Some(&["x: &mut MyCollection", "i: u64", "item: FLOAT"]),
+                             Some(&["x: &mut MyCollection", "i: u64", "item: FLOAT", "()"]),
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<FLOAT>()],
@@ -1995,6 +2116,9 @@ mod generate_tests {
                                  TypeId::of::<u64>(),
                                  TypeId::of::<FLOAT>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "()"
+                    }
                 }
                 pub fn set_by_index_token_callable() -> CallableFunction {
                     set_by_index_token().into()
@@ -2004,6 +2128,9 @@ mod generate_tests {
                 }
                 pub fn set_by_index_token_input_types() -> Box<[TypeId]> {
                     set_by_index_token().input_types()
+                }
+                pub fn set_by_index_token_return_type() -> &'static str {
+                    set_by_index_token().return_type()
                 }
             }
         };

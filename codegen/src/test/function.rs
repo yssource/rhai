@@ -292,6 +292,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "()"
+                    }
                 }
                 pub fn token_callable() -> CallableFunction {
                     Token().into()
@@ -301,6 +304,9 @@ mod generate_tests {
                 }
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
+                }
+                pub fn token_return_type() -> &'static str {
+                    Token().return_type()
                 }
                 pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(do_nothing()))
@@ -340,6 +346,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<usize>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "()"
+                    }
                 }
                 pub fn token_callable() -> CallableFunction {
                     Token().into()
@@ -349,6 +358,9 @@ mod generate_tests {
                 }
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
+                }
+                pub fn token_return_type() -> &'static str {
+                    Token().return_type()
                 }
                 pub fn dynamic_result_fn(x: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(do_something(x)))
@@ -388,6 +400,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<usize>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "()"
+                    }
                 }
                 pub fn token_callable() -> CallableFunction {
                     Token().into()
@@ -397,6 +412,9 @@ mod generate_tests {
                 }
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
+                }
+                pub fn token_return_type() -> &'static str {
+                    Token().return_type()
                 }
                 pub fn dynamic_result_fn(context: NativeCallContext, x: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(do_something(context, x)))
@@ -438,6 +456,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "rhai::Dynamic"
+                    }
                 }
                 pub fn token_callable() -> CallableFunction {
                     Token().into()
@@ -447,6 +468,9 @@ mod generate_tests {
                 }
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
+                }
+                pub fn token_return_type() -> &'static str {
+                    Token().return_type()
                 }
                 pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(return_dynamic())
@@ -482,7 +506,10 @@ mod generate_tests {
                 fn input_types(&self) -> Box<[TypeId]> {
                     new_vec![TypeId::of::<usize>()].into_boxed_slice()
                 }
-            }
+                fn return_type(&self) -> &'static str {
+                    "()"
+                }
+        }
         };
 
         let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
@@ -519,6 +546,9 @@ mod generate_tests {
                         new_vec![TypeId::of::<usize>(),
                              TypeId::of::<usize>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "usize"
+                    }
                 }
                 pub fn token_callable() -> CallableFunction {
                     Token().into()
@@ -528,6 +558,9 @@ mod generate_tests {
                 }
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
+                }
+                pub fn token_return_type() -> &'static str {
+                    Token().return_type()
                 }
                 pub fn dynamic_result_fn(x: usize, y: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(add_together(x, y)))
@@ -569,6 +602,9 @@ mod generate_tests {
                         new_vec![TypeId::of::<usize>(),
                              TypeId::of::<usize>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "()"
+                    }
                 }
                 pub fn token_callable() -> CallableFunction {
                     Token().into()
@@ -578,6 +614,9 @@ mod generate_tests {
                 }
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
+                }
+                pub fn token_return_type() -> &'static str {
+                    Token().return_type()
                 }
                 pub fn dynamic_result_fn(x: &mut usize, y: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(increment(x, y)))
@@ -618,6 +657,9 @@ mod generate_tests {
                     fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<ImmutableString>()].into_boxed_slice()
                     }
+                    fn return_type(&self) -> &'static str {
+                        "()"
+                    }
                 }
                 pub fn token_callable() -> CallableFunction {
                     Token().into()
@@ -627,6 +669,9 @@ mod generate_tests {
                 }
                 pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
+                }
+                pub fn token_return_type() -> &'static str {
+                    Token().return_type()
                 }
                 pub fn dynamic_result_fn(message: &str) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(special_print(message)))

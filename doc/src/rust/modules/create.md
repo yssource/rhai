@@ -32,7 +32,13 @@ a module's functionalities to Rhai.
 use rhai::{Engine, Module};
 
 let mut module = Module::new();             // new module
-module.set_fn_1("inc", |x: i64| Ok(x+1));   // use the 'set_fn_XXX' API to add functions
+
+// Use the 'set_fn_XXX' API to add functions.
+let hash = module.set_fn_1("inc", |x: i64| Ok(x+1));
+
+// Remember to update the parameter names/types and return type metadata.
+// 'set_fn_XXX' by default does not set function metadata.
+module.update_fn_metadata(hash, ["x: i64", "i64"]);
 
 // Load the module into the Engine as a new package.
 let mut engine = Engine::new();
@@ -51,7 +57,13 @@ Make the `Module` a Global Module
 use rhai::{Engine, Module};
 
 let mut module = Module::new();             // new module
-module.set_fn_1("inc", |x: i64| Ok(x+1));   // use the 'set_fn_XXX' API to add functions
+
+// Use the 'set_fn_XXX' API to add functions.
+let hash = module.set_fn_1("inc", |x: i64| Ok(x+1));
+
+// Remember to update the parameter names/types and return type metadata.
+// 'set_fn_XXX' by default does not set function metadata.
+module.update_fn_metadata(hash, ["x: i64", "i64"]);
 
 // Load the module into the Engine as a sub-module named 'calc'
 let mut engine = Engine::new();
@@ -71,9 +83,11 @@ use rhai::{Engine, Module, FnNamespace};
 let mut module = Module::new();             // new module
 
 // Expose method 'inc' to the global namespace (default is 'Internal')
-module.set_fn_1_mut("inc", FnNamespace::Global,
-    |x: &mut i64| Ok(x+1)
-);
+let hash = module.set_fn_1_mut("inc", FnNamespace::Global, |x: &mut i64| Ok(x+1));
+
+// Remember to update the parameter names/types and return type metadata.
+// 'set_fn_XXX' by default does not set function metadata.
+module.update_fn_metadata(hash, ["x: &mut i64", "i64"]);
 
 // Load the module into the Engine as a sub-module named 'calc'
 let mut engine = Engine::new();

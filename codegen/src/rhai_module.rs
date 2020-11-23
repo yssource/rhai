@@ -136,6 +136,11 @@ pub(crate) fn generate_body(
             })
             .collect();
 
+        let return_type = function
+            .return_type()
+            .map(print_type)
+            .unwrap_or_else(|| "()".to_string());
+
         if let Some(ns) = function.params().namespace {
             namespace = ns;
         }
@@ -151,7 +156,7 @@ pub(crate) fn generate_body(
             set_fn_stmts.push(
                 syn::parse2::<syn::Stmt>(quote! {
                     m.set_fn(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
-                                Some(&[#(#fn_input_names),*]), &[#(#fn_input_types),*],
+                                Some(&[#(#fn_input_names,)* #return_type]), &[#(#fn_input_types),*],
                                 #fn_token_name().into());
                 })
                 .unwrap(),
@@ -166,6 +171,7 @@ pub(crate) fn generate_body(
         gen_fn_tokens.push(function.generate_callable(&fn_token_name.to_string()));
         gen_fn_tokens.push(function.generate_input_names(&fn_token_name.to_string()));
         gen_fn_tokens.push(function.generate_input_types(&fn_token_name.to_string()));
+        gen_fn_tokens.push(function.generate_return_type(&fn_token_name.to_string()));
     }
 
     let mut generate_fncall = syn::parse2::<syn::ItemMod>(quote! {

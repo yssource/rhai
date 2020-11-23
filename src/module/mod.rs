@@ -9,7 +9,7 @@ use crate::stdlib::{
     boxed::Box,
     collections::HashMap,
     fmt, format,
-    iter::empty,
+    iter::{empty, once},
     num::NonZeroUsize,
     ops::{Add, AddAssign, Deref, DerefMut},
     string::{String, ToString},
@@ -90,8 +90,15 @@ impl FuncInfo {
         let mut sig = format!("{}(", self.name);
 
         if let Some(ref names) = self.param_names {
-            let params: Vec<_> = names.iter().map(ImmutableString::to_string).collect();
+            let mut params: Vec<_> = names.iter().map(ImmutableString::to_string).collect();
+            let return_type = params.pop().unwrap_or_else(|| "()".to_string());
             sig.push_str(&params.join(", "));
+            if return_type != "()" {
+                sig.push_str(") -> ");
+                sig.push_str(&return_type);
+            } else {
+                sig.push_str(")");
+            }
         } else {
             for x in 0..self.params {
                 sig.push_str("_");
@@ -99,9 +106,9 @@ impl FuncInfo {
                     sig.push_str(", ");
                 }
             }
+            sig.push_str(") -> Dynamic");
         }
 
-        sig.push_str(")");
         sig
     }
 }
@@ -362,7 +369,14 @@ impl Module {
                 access: fn_def.access,
                 params: num_params,
                 param_types: None,
-                param_names: Some(fn_def.params.clone()),
+                param_names: Some(
+                    fn_def
+                        .params
+                        .iter()
+                        .cloned()
+                        .chain(once("Dynamic".into()))
+                        .collect(),
+                ),
                 func: fn_def.into(),
             },
         );
@@ -483,13 +497,22 @@ impl Module {
         }
     }
 
-    /// Update the parameter names and types in a registered function.
+    /// Update the metadata (parameter names/types and return type) of a registered function.
     ///
     /// The [`u64`] hash is calculated either by the function [`crate::calc_native_fn_hash`] or
     /// the function [`crate::calc_script_fn_hash`].
-    pub fn update_fn_param_names(&mut self, hash_fn: u64, arg_names: &[&str]) -> &mut Self {
+    ///
+    /// Each parameter name/type pair should be a single string of the format: `var_name: type`.
+    ///
+    /// The last entry in the list should be the return type of the function.
+    /// In other words, the number of entries should be one larger than the number of parameters.
+    pub fn update_fn_metadata<'a>(
+        &mut self,
+        hash_fn: u64,
+        arg_names: impl AsRef<[&'a str]>,
+    ) -> &mut Self {
         if let Some(f) = self.functions.get_mut(&hash_fn) {
-            f.param_names = Some(arg_names.iter().map(|&n| n.into()).collect());
+            f.param_names = Some(arg_names.as_ref().iter().map(|&n| n.into()).collect());
         }
         self
     }
@@ -573,6 +596,10 @@ impl Module {
     ///
     /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
     ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
+    ///
     /// # Example
     ///
     /// ```
@@ -632,6 +659,10 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
+    ///
     /// # Example
     ///
     /// ```
@@ -662,6 +693,10 @@ impl Module {
     /// Set a Rust function taking one parameter into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
     ///
     /// # Example
     ///
@@ -695,6 +730,10 @@ impl Module {
     /// Set a Rust function taking one mutable parameter into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
     ///
     /// # Example
     ///
@@ -733,6 +772,10 @@ impl Module {
     ///
     /// If there is a similar existing Rust getter function, it is replaced.
     ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
+    ///
     /// # Example
     ///
     /// ```
@@ -759,6 +802,10 @@ impl Module {
     /// Set a Rust function taking two parameters into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
     ///
     /// # Example
     ///
@@ -798,6 +845,10 @@ impl Module {
     /// returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
     ///
     /// # Example
     ///
@@ -843,6 +894,10 @@ impl Module {
     ///
     /// If there is a similar existing setter Rust function, it is replaced.
     ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
+    ///
     /// # Example
     ///
     /// ```
@@ -879,6 +934,10 @@ impl Module {
     ///
     /// Panics if the type is [`Array`] or [`Map`].
     /// Indexers for arrays, object maps and strings cannot be registered.
+    ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
     ///
     /// # Example
     ///
@@ -917,6 +976,10 @@ impl Module {
     /// Set a Rust function taking three parameters into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
     ///
     /// # Example
     ///
@@ -962,6 +1025,10 @@ impl Module {
     /// returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
     ///
     /// # Example
     ///
@@ -1017,6 +1084,10 @@ impl Module {
     ///
     /// Panics if the type is [`Array`] or [`Map`].
     /// Indexers for arrays, object maps and strings cannot be registered.
+    ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
     ///
     /// # Example
     ///
@@ -1079,6 +1150,10 @@ impl Module {
     /// Panics if the type is [`Array`] or [`Map`].
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
+    ///
     /// # Example
     ///
     /// ```
@@ -1113,6 +1188,10 @@ impl Module {
     /// Set a Rust function taking four parameters into the module, returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
     ///
     /// # Example
     ///
@@ -1165,6 +1244,10 @@ impl Module {
     /// returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
+    ///
+    /// # Function Metadata
+    ///
+    /// No metadata for the function is registered. Use `update_fn_metadata` to add metadata.
     ///
     /// # Example
     ///
@@ -1417,10 +1500,16 @@ impl Module {
         )
     }
 
+    /// Get an iterator to the sub-modules in the module.
+    #[inline(always)]
+    pub fn iter_sub_modules(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
+        self.modules.iter().map(|(k, m)| (k.as_str(), m.clone()))
+    }
+
     /// Get an iterator to the variables in the module.
     #[inline(always)]
-    pub fn iter_var(&self) -> impl Iterator<Item = (&String, &Dynamic)> {
-        self.variables.iter()
+    pub fn iter_var(&self) -> impl Iterator<Item = (&str, &Dynamic)> {
+        self.variables.iter().map(|(k, v)| (k.as_str(), v))
     }
 
     /// Get an iterator to the functions in the module.
