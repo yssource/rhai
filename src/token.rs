@@ -1056,14 +1056,31 @@ fn get_next_token_inner(
                         '.' => {
                             stream.get_next().unwrap();
 
-                            // Check if followed by digits (or _)
+                            // Check if followed by digits or something that cannot start a property name
                             match stream.peek_next().unwrap_or('\0') {
-                                '0'..='9' | '_' => {
+                                // digits after period - accept the period
+                                '0'..='9' => {
                                     result.push(next_char);
                                     pos.advance()
                                 }
+                                // _ - cannot follow a decimal point
+                                '_' => {
+                                    stream.unread(next_char);
+                                    break;
+                                }
+                                // .. - reserved symbol, not a floating-point number
+                                '.' => {
+                                    stream.unread(next_char);
+                                    break;
+                                }
+                                // symbol after period - probably a float
+                                ch @ _ if !is_id_first_alphabetic(ch) => {
+                                    result.push(next_char);
+                                    pos.advance();
+                                    result.push('0');
+                                }
+                                // Not a floating-point number
                                 _ => {
-                                    // Not a floating-point number
                                     stream.unread(next_char);
                                     break;
                                 }

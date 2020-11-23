@@ -15,6 +15,7 @@ fn test_float() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<bool>("let x = 0.0; let y = 1.0; x > y")?,
         false
     );
+    assert_eq!(engine.eval::<bool>("let x = 0.; let y = 1.; x > y")?, false);
     assert!((engine.eval::<FLOAT>("let x = 9.9999; x")? - 9.9999 as FLOAT).abs() < EPSILON);
 
     Ok(())
