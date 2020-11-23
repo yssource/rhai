@@ -52,7 +52,7 @@ mod fn_ptr_functions {
 fn collect_fn_metadata(ctx: NativeCallContext) -> Array {
     // Create a metadata record for a function.
     fn make_metadata(
-        dict: &HashMap<String, ImmutableString>,
+        dict: &HashMap<&str, ImmutableString>,
         namespace: Option<ImmutableString>,
         f: SharedScriptFnDef,
     ) -> Map {
@@ -90,7 +90,7 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> Array {
     // Recursively scan modules for script-defined functions.
     fn scan_module(
         list: &mut Array,
-        dict: &HashMap<String, ImmutableString>,
+        dict: &HashMap<&str, ImmutableString>,
         namespace: ImmutableString,
         module: &Module,
     ) {
@@ -104,14 +104,20 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> Array {
     }
 
     // Intern strings
-    let mut dict = HashMap::<String, ImmutableString>::with_capacity(8);
-    dict.insert("namespace".into(), "namespace".into());
-    dict.insert("name".into(), "name".into());
-    dict.insert("access".into(), "access".into());
-    dict.insert("public".into(), "public".into());
-    dict.insert("private".into(), "private".into());
-    dict.insert("is_anonymous".into(), "is_anonymous".into());
-    dict.insert("params".into(), "params".into());
+    let mut dict = HashMap::<&str, ImmutableString>::with_capacity(8);
+    [
+        "namespace",
+        "name",
+        "access",
+        "public",
+        "private",
+        "is_anonymous",
+        "params",
+    ]
+    .iter()
+    .for_each(|&s| {
+        dict.insert(s, s.into());
+    });
 
     let mut list: Array = Default::default();
 
