@@ -1,4 +1,3 @@
-use crate::module::SharedScriptFnDef;
 use crate::plugin::*;
 use crate::stdlib::iter::empty;
 use crate::{calc_script_fn_hash, def_package, FnPtr, ImmutableString, NativeCallContext, INT};
@@ -6,7 +5,7 @@ use crate::{calc_script_fn_hash, def_package, FnPtr, ImmutableString, NativeCall
 #[cfg(not(feature = "no_function"))]
 #[cfg(not(feature = "no_index"))]
 #[cfg(not(feature = "no_object"))]
-use crate::{stdlib::collections::HashMap, Array, Map};
+use crate::{module::SharedScriptFnDef, stdlib::collections::HashMap, Array, Map};
 
 def_package!(crate:BasicFnPackage:"Basic Fn functions.", lib, {
     combine_with_exported_module!(lib, "FnPtr", fn_ptr_functions);
