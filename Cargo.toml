@@ -6,7 +6,7 @@ members = [
 
 [package]
 name = "rhai"
-version = "0.19.6"
+version = "0.19.7"
 edition = "2018"
 authors = ["Jonathan Turner", "Lukáš Hozda", "Stephen Chung", "jhwgh1968"]
 description = "Embedded scripting for Rust"

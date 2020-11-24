@@ -1,6 +1,10 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.7
+==============
+
+
 Version 0.19.6
 ==============
 
@@ -45,6 +49,7 @@ Enhancements
 ------------
 
 * New constants under `Dynamic` including `UNIT`, `TRUE`, `FALSE`, `ZERO`, `ONE` etc.
+* Floating-point numbers ending with a decimal point without a trailing `0` are supported.
 
 
 Version 0.19.5
