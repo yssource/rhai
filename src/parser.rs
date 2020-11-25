@@ -36,9 +36,10 @@ type PERR = ParseErrorType;
 
 type FunctionsLib = HashMap<u64, ScriptFnDef, StraightHasherBuilder>;
 
+/// A type that encapsulates the current state of the parser.
 #[derive(Debug)]
 struct ParseState<'e> {
-    /// Reference to the scripting `Engine`.
+    /// Reference to the scripting [`Engine`].
     engine: &'e Engine,
     /// Hash that uniquely identifies a script.
     script_hash: u64,
@@ -57,7 +58,7 @@ struct ParseState<'e> {
     /// All consequent calls to `access_var` will not be affected
     #[cfg(not(feature = "no_closure"))]
     allow_capture: bool,
-    /// Encapsulates a local stack with imported module names.
+    /// Encapsulates a local stack with imported [module][crate::Module] names.
     #[cfg(not(feature = "no_module"))]
     modules: StaticVec<ImmutableString>,
     /// Maximum levels of expression nesting.
@@ -70,7 +71,7 @@ struct ParseState<'e> {
 }
 
 impl<'e> ParseState<'e> {
-    /// Create a new `ParseState`.
+    /// Create a new [`ParseState`].
     #[inline(always)]
     pub fn new(
         engine: &'e Engine,
@@ -100,12 +101,12 @@ impl<'e> ParseState<'e> {
         }
     }
 
-    /// Find explicitly declared variable by name in the `ParseState`, searching in reverse order.
+    /// Find explicitly declared variable by name in the [`ParseState`], searching in reverse order.
     ///
     /// If the variable is not present in the scope adds it to the list of external variables
     ///
     /// The return value is the offset to be deducted from `Stack::len`,
-    /// i.e. the top element of the `ParseState` is offset 1.
+    /// i.e. the top element of the [`ParseState`] is offset 1.
     ///
     /// Return `None` when the variable name is not found in the `stack`.
     #[inline]
@@ -144,12 +145,12 @@ impl<'e> ParseState<'e> {
         }
     }
 
-    /// Find a module by name in the `ParseState`, searching in reverse.
+    /// Find a module by name in the [`ParseState`], searching in reverse.
     ///
     /// Returns the offset to be deducted from `Stack::len`,
-    /// i.e. the top element of the `ParseState` is offset 1.
+    /// i.e. the top element of the [`ParseState`] is offset 1.
     ///
-    /// Returns `None` when the variable name is not found in the `ParseState`.
+    /// Returns `None` when the variable name is not found in the [`ParseState`].
     ///
     /// # Panics
     ///
@@ -183,8 +184,8 @@ impl<'e> ParseState<'e> {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 /// A type that encapsulates all the settings for a particular parsing function.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 struct ParseSettings {
     /// Current position.
     pos: Position,
@@ -230,7 +231,8 @@ impl ParseSettings {
 }
 
 impl Expr {
-    /// Convert a `Variable` into a `Property`.  All other variants are untouched.
+    /// Convert a [`Variable`][Expr::Variable] into a [`Property`][Expr::Property].
+    /// All other variants are untouched.
     #[cfg(not(feature = "no_object"))]
     #[inline]
     fn into_property(self, state: &mut ParseState) -> Self {
@@ -246,7 +248,7 @@ impl Expr {
     }
 }
 
-/// Consume a particular token, checking that it is the expected one.
+/// Consume a particular [token][Token], checking that it is the expected one.
 fn eat_token(input: &mut TokenStream, token: Token) -> Position {
     let (t, pos) = input.next().unwrap();
 
@@ -261,7 +263,7 @@ fn eat_token(input: &mut TokenStream, token: Token) -> Position {
     pos
 }
 
-/// Match a particular token, consuming it if matched.
+/// Match a particular [token][Token], consuming it if matched.
 fn match_token(input: &mut TokenStream, token: Token) -> (bool, Position) {
     let (t, pos) = input.peek().unwrap();
     if *t == token {
@@ -328,7 +330,7 @@ fn parse_fn_call(
             .into_err(*token_pos))
         }
         // id( <error>
-        Token::LexError(err) => return Err(err.into_err(*token_pos)),
+        Token::LexError(err) => return Err(err.clone().into_err(*token_pos)),
         // id()
         Token::RightParen => {
             eat_token(input, Token::RightParen);
@@ -422,7 +424,7 @@ fn parse_fn_call(
                 .into_err(*pos))
             }
             // id(...args <error>
-            (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
+            (Token::LexError(err), pos) => return Err(err.clone().into_err(*pos)),
             // id(...args ???
             (_, pos) => {
                 return Err(PERR::MissingToken(
@@ -610,7 +612,7 @@ fn parse_index_chain(
                 }
             }
         }
-        (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
+        (Token::LexError(err), pos) => return Err(err.clone().into_err(*pos)),
         (_, pos) => Err(PERR::MissingToken(
             Token::RightBracket.into(),
             "for a matching [ in this index expression".into(),
@@ -672,7 +674,7 @@ fn parse_array_literal(
                         .into_err(*pos),
                 )
             }
-            (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
+            (Token::LexError(err), pos) => return Err(err.clone().into_err(*pos)),
             (_, pos) => {
                 return Err(PERR::MissingToken(
                     Token::Comma.into(),
@@ -781,7 +783,7 @@ fn parse_map_literal(
                 )
                 .into_err(*pos))
             }
-            (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
+            (Token::LexError(err), pos) => return Err(err.clone().into_err(*pos)),
             (_, pos) => {
                 return Err(
                     PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
@@ -899,7 +901,7 @@ fn parse_switch(
                         .into_err(*pos),
                 )
             }
-            (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
+            (Token::LexError(err), pos) => return Err(err.clone().into_err(*pos)),
             (_, pos) if need_comma => {
                 return Err(PERR::MissingToken(
                     Token::Comma.into(),
@@ -2342,7 +2344,7 @@ fn parse_block(
             // { ... { stmt } ???
             (_, _) if !need_semicolon => (),
             // { ... stmt <error>
-            (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
+            (Token::LexError(err), pos) => return Err(err.clone().into_err(*pos)),
             // { ... stmt ???
             (_, pos) => {
                 // Semicolons are not optional between statements
@@ -2960,7 +2962,7 @@ impl Engine {
                 // { stmt } ???
                 (_, _) if !need_semicolon => (),
                 // stmt <error>
-                (Token::LexError(err), pos) => return Err(err.into_err(*pos)),
+                (Token::LexError(err), pos) => return Err(err.clone().into_err(*pos)),
                 // stmt ???
                 (_, pos) => {
                     // Semicolons are not optional between statements

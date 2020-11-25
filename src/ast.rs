@@ -41,7 +41,7 @@ pub enum FnAccess {
 }
 
 impl FnAccess {
-    /// Is this access mode private?
+    /// Is this access mode [private][FnAccess::Private]?
     #[inline(always)]
     pub fn is_private(self) -> bool {
         match self {
@@ -49,7 +49,7 @@ impl FnAccess {
             Self::Public => false,
         }
     }
-    /// Is this access mode public?
+    /// Is this access mode [public][FnAccess::Public]?
     #[inline(always)]
     pub fn is_public(self) -> bool {
         match self {
@@ -482,7 +482,7 @@ impl AST {
     #[inline(always)]
     pub fn iter_functions<'a>(
         &'a self,
-    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, Shared<ScriptFnDef>)> + 'a {
+    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &ScriptFnDef)> + 'a {
         self.1.iter_script_fn()
     }
     /// Clear all function definitions in the [`AST`].
@@ -528,7 +528,12 @@ impl AsRef<Module> for AST {
     }
 }
 
-/// An identifier containing a string name and a position.
+/// _(INTERNALS)_ An identifier containing a [string][String] name and a [position][Position].
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Ident {
     pub name: String,
@@ -542,7 +547,12 @@ impl Ident {
     }
 }
 
-/// An identifier containing an immutable name and a position.
+/// _(INTERNALS)_ An identifier containing an [immutable string][ImmutableString] name and a [position][Position].
+/// Exported under the `internals` feature only.
+///
+/// ## WARNING
+///
+/// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct IdentX {
     pub name: ImmutableString,
@@ -650,7 +660,7 @@ impl Stmt {
             _ => false,
         }
     }
-    /// Get the [`Position`] of this statement.
+    /// Get the [position][`Position`] of this statement.
     pub fn position(&self) -> Position {
         match self {
             Self::Noop(pos)
@@ -679,7 +689,7 @@ impl Stmt {
             Self::Share(x) => x.pos,
         }
     }
-    /// Override the [`Position`] of this statement.
+    /// Override the [position][`Position`] of this statement.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
             Self::Noop(pos)
@@ -742,6 +752,8 @@ impl Stmt {
         }
     }
     /// Is this statement _pure_?
+    ///
+    /// A pure statement has no side effects.
     pub fn is_pure(&self) -> bool {
         match self {
             Self::Noop(_) => true,
@@ -967,7 +979,7 @@ impl Expr {
             _ => None,
         }
     }
-    /// Get the [`Position`] of the expression.
+    /// Get the [position][`Position`] of the expression.
     pub fn position(&self) -> Position {
         match self {
             Self::Expr(x) => x.position(),
@@ -997,7 +1009,7 @@ impl Expr {
             Self::Custom(_, pos) => *pos,
         }
     }
-    /// Override the [`Position`] of the expression.
+    /// Override the [position][`Position`] of the expression.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
             Self::Expr(x) => {
@@ -1089,7 +1101,7 @@ impl Expr {
             _ => false,
         }
     }
-    /// Is a particular token allowed as a postfix operator to this expression?
+    /// Is a particular [token][Token] allowed as a postfix operator to this expression?
     pub fn is_valid_postfix(&self, token: &Token) -> bool {
         match self {
             Self::Expr(x) => x.is_valid_postfix(token),

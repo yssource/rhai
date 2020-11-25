@@ -72,7 +72,7 @@ impl Engine {
     pub fn max_operations(&self) -> u64 {
         self.limits.max_operations
     }
-    /// Set the maximum number of imported modules allowed for a script.
+    /// Set the maximum number of imported [modules][crate::Module] allowed for a script.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
@@ -80,7 +80,7 @@ impl Engine {
         self.limits.max_modules = modules;
         self
     }
-    /// The maximum number of imported modules allowed for a script.
+    /// The maximum number of imported [modules][crate::Module] allowed for a script.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
@@ -123,20 +123,20 @@ impl Engine {
     pub fn max_function_expr_depth(&self) -> usize {
         self.limits.max_function_expr_depth
     }
-    /// Set the maximum length of strings (0 for unlimited).
+    /// Set the maximum length of [strings][crate::ImmutableString] (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn set_max_string_size(&mut self, max_size: usize) -> &mut Self {
         self.limits.max_string_size = if max_size == usize::MAX { 0 } else { max_size };
         self
     }
-    /// The maximum length of strings (0 for unlimited).
+    /// The maximum length of [strings][crate::ImmutableString] (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn max_string_size(&self) -> usize {
         self.limits.max_string_size
     }
-    /// Set the maximum length of arrays (0 for unlimited).
+    /// Set the maximum length of [arrays][crate::Array] (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
@@ -144,14 +144,14 @@ impl Engine {
         self.limits.max_array_size = if max_size == usize::MAX { 0 } else { max_size };
         self
     }
-    /// The maximum length of arrays (0 for unlimited).
+    /// The maximum length of [arrays][crate::Array] (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
     pub fn max_array_size(&self) -> usize {
         self.limits.max_array_size
     }
-    /// Set the maximum length of object maps (0 for unlimited).
+    /// Set the maximum length of [object maps][crate::Map] (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
@@ -159,7 +159,7 @@ impl Engine {
         self.limits.max_map_size = if max_size == usize::MAX { 0 } else { max_size };
         self
     }
-    /// The maximum length of object maps (0 for unlimited).
+    /// The maximum length of [object maps][crate::Map] (0 for unlimited).
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]

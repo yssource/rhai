@@ -45,7 +45,7 @@ pub type Locked<T> = crate::stdlib::cell::RefCell<T>;
 #[cfg(feature = "sync")]
 pub type Locked<T> = crate::stdlib::sync::RwLock<T>;
 
-/// Context of native Rust function call.
+/// Context of a native Rust function call.
 #[derive(Debug, Copy, Clone)]
 pub struct NativeCallContext<'e, 'a, 'm, 'pm: 'm> {
     engine: &'e Engine,
@@ -207,6 +207,7 @@ pub fn shared_take<T>(value: Shared<T>) -> T {
     shared_try_take(value).map_err(|_| ()).unwrap()
 }
 
+/// Arguments to a function call, which is a list of [`&mut Dynamic`][Dynamic].
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
 /// A general function pointer, which may carry additional (i.e. curried) argument values
@@ -488,9 +489,9 @@ impl CallableFunction {
     ///
     /// Panics if the [`CallableFunction`] is not [`Pure`][CallableFunction::Pure] or
     /// [`Method`][CallableFunction::Method].
-    pub fn get_native_fn(&self) -> &Shared<FnAny> {
+    pub fn get_native_fn(&self) -> &FnAny {
         match self {
-            Self::Pure(f) | Self::Method(f) => f,
+            Self::Pure(f) | Self::Method(f) => f.as_ref(),
             Self::Iterator(_) | Self::Plugin(_) => unreachable!(),
 
             #[cfg(not(feature = "no_function"))]
@@ -503,10 +504,10 @@ impl CallableFunction {
     ///
     /// Panics if the [`CallableFunction`] is not [`Script`][CallableFunction::Script].
     #[cfg(not(feature = "no_function"))]
-    pub fn get_fn_def(&self) -> &Shared<ScriptFnDef> {
+    pub fn get_fn_def(&self) -> &ScriptFnDef {
         match self {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => unreachable!(),
-            Self::Script(f) => f,
+            Self::Script(f) => f.as_ref(),
         }
     }
     /// Get a reference to an iterator function.
@@ -528,9 +529,9 @@ impl CallableFunction {
     /// # Panics
     ///
     /// Panics if the [`CallableFunction`] is not [`Plugin`][CallableFunction::Plugin].
-    pub fn get_plugin_fn<'s>(&'s self) -> &Shared<FnPlugin> {
+    pub fn get_plugin_fn<'s>(&'s self) -> &FnPlugin {
         match self {
-            Self::Plugin(f) => f,
+            Self::Plugin(f) => f.as_ref(),
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => unreachable!(),
 
             #[cfg(not(feature = "no_function"))]

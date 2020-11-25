@@ -26,7 +26,7 @@ where
     fn next(&mut self) -> Option<T> {
         if self.0 < self.1 {
             let v = self.0.clone();
-            self.0 = &v + &self.2;
+            self.0 = self.0.add(&self.2);
             Some(v)
         } else {
             None

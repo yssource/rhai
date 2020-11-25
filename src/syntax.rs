@@ -61,7 +61,7 @@ impl Expression<'_> {
 }
 
 impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_, '_> {
-    /// Evaluate an expression tree.
+    /// Evaluate an [expression tree][Expression].
     ///
     /// ## WARNING - Low Level API
     ///

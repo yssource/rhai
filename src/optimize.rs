@@ -1,4 +1,4 @@
-//! Module implementing the AST optimizer.
+//! Module implementing the [`AST`] optimizer.
 
 use crate::ast::{Expr, ScriptFnDef, Stmt};
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
@@ -32,18 +32,18 @@ pub enum OptimizationLevel {
 }
 
 impl OptimizationLevel {
-    /// Is the `OptimizationLevel` None.
+    /// Is the `OptimizationLevel` [`None`][OptimizationLevel::None]?
     #[inline(always)]
     pub fn is_none(self) -> bool {
         self == Self::None
     }
-    /// Is the `OptimizationLevel` Simple.
+    /// Is the `OptimizationLevel` [`Simple`][OptimizationLevel::Simple]?
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
     pub fn is_simple(self) -> bool {
         self == Self::Simple
     }
-    /// Is the `OptimizationLevel` Full.
+    /// Is the `OptimizationLevel` [`Full`][OptimizationLevel::Full]?
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
     pub fn is_full(self) -> bool {
@@ -54,13 +54,13 @@ impl OptimizationLevel {
 /// Mutable state throughout an optimization pass.
 #[derive(Debug, Clone)]
 struct State<'a> {
-    /// Has the AST been changed during this pass?
+    /// Has the [`AST`] been changed during this pass?
     changed: bool,
     /// Collection of constants to use for eager function evaluations.
     constants: Vec<(String, Expr)>,
-    /// An `Engine` instance for eager function evaluation.
+    /// An [`Engine`] instance for eager function evaluation.
     engine: &'a Engine,
-    /// Library of script-defined functions.
+    /// [Module] containing script-defined functions.
     lib: &'a [&'a Module],
     /// Optimization level.
     optimization_level: OptimizationLevel,
@@ -83,12 +83,12 @@ impl<'a> State<'a> {
     pub fn reset(&mut self) {
         self.changed = false;
     }
-    /// Set the AST state to be dirty (i.e. changed).
+    /// Set the [`AST`] state to be dirty (i.e. changed).
     #[inline(always)]
     pub fn set_dirty(&mut self) {
         self.changed = true;
     }
-    /// Is the AST dirty (i.e. changed)?
+    /// Is the [`AST`] dirty (i.e. changed)?
     #[inline(always)]
     pub fn is_dirty(&self) -> bool {
         self.changed
@@ -147,7 +147,7 @@ fn call_fn_with_constant_arguments(
         .map(|(v, _)| v)
 }
 
-/// Optimize a block of statements.
+/// Optimize a block of [statements][crate::ast::Stmt].
 fn optimize_stmt_block(
     mut statements: Vec<Stmt>,
     pos: Position,
@@ -264,7 +264,7 @@ fn optimize_stmt_block(
     }
 }
 
-/// Optimize a statement.
+/// Optimize a [statement][crate::ast::Stmt].
 fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
     match stmt {
         // expr op= expr
@@ -460,7 +460,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
     }
 }
 
-/// Optimize an expression.
+/// Optimize an [expression][crate::ast::Expr].
 fn optimize_expr(expr: &mut Expr, state: &mut State) {
     // These keywords are handled specially
     const DONT_EVAL_KEYWORDS: &[&str] = &[
@@ -724,7 +724,8 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
     }
 }
 
-fn optimize(
+/// Optimize a block of [statements][crate::ast::Stmt] at top level.
+fn optimize_top_level(
     mut statements: Vec<Stmt>,
     engine: &Engine,
     scope: &Scope,
@@ -815,7 +816,7 @@ fn optimize(
     statements
 }
 
-/// Optimize an AST.
+/// Optimize an [`AST`].
 pub fn optimize_into_ast(
     engine: &Engine,
     scope: &Scope,
@@ -839,19 +840,16 @@ pub fn optimize_into_ast(
 
             _functions
                 .iter()
-                .map(|fn_def| {
-                    ScriptFnDef {
-                        name: fn_def.name.clone(),
-                        access: fn_def.access,
-                        body: Default::default(),
-                        params: fn_def.params.clone(),
-                        #[cfg(not(feature = "no_closure"))]
-                        externals: fn_def.externals.clone(),
-                        lib: None,
-                        #[cfg(not(feature = "no_module"))]
-                        mods: Default::default(),
-                    }
-                    .into()
+                .map(|fn_def| ScriptFnDef {
+                    name: fn_def.name.clone(),
+                    access: fn_def.access,
+                    body: Default::default(),
+                    params: fn_def.params.clone(),
+                    #[cfg(not(feature = "no_closure"))]
+                    externals: fn_def.externals.clone(),
+                    lib: None,
+                    #[cfg(not(feature = "no_module"))]
+                    mods: Default::default(),
                 })
                 .for_each(|fn_def| {
                     lib2.set_script_fn(fn_def);
@@ -863,8 +861,13 @@ pub fn optimize_into_ast(
                     let pos = fn_def.body.position();
 
                     // Optimize the function body
-                    let mut body =
-                        optimize(vec![fn_def.body], engine, &Scope::new(), &[&lib2], level);
+                    let mut body = optimize_top_level(
+                        vec![fn_def.body],
+                        engine,
+                        &Scope::new(),
+                        &[&lib2],
+                        level,
+                    );
 
                     // {} -> Noop
                     fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
@@ -879,14 +882,14 @@ pub fn optimize_into_ast(
                         // All others
                         stmt => stmt,
                     };
-                    fn_def.into()
+                    fn_def
                 })
                 .for_each(|fn_def| {
                     module.set_script_fn(fn_def);
                 });
         } else {
             _functions.into_iter().for_each(|fn_def| {
-                module.set_script_fn(fn_def.into());
+                module.set_script_fn(fn_def);
             });
         }
 
@@ -902,7 +905,7 @@ pub fn optimize_into_ast(
         match level {
             OptimizationLevel::None => statements,
             OptimizationLevel::Simple | OptimizationLevel::Full => {
-                optimize(statements, engine, &scope, &[&lib], level)
+                optimize_top_level(statements, engine, &scope, &[&lib], level)
             }
         },
         lib,

@@ -30,7 +30,7 @@ impl EntryType {
 /// # Thread Safety
 ///
 /// Currently, [`Scope`] is neither [`Send`] nor [`Sync`].
-/// Turn on the [`Sync`] feature to make it [`Send`] `+` [`Sync`].
+/// Turn on the `sync` feature to make it [`Send`] `+` [`Sync`].
 ///
 /// # Example
 ///

@@ -5,7 +5,7 @@ use crate::{calc_script_fn_hash, def_package, FnPtr, ImmutableString, NativeCall
 #[cfg(not(feature = "no_function"))]
 #[cfg(not(feature = "no_index"))]
 #[cfg(not(feature = "no_object"))]
-use crate::{module::SharedScriptFnDef, stdlib::collections::HashMap, Array, Map};
+use crate::{ast::ScriptFnDef, stdlib::collections::HashMap, Array, Map};
 
 def_package!(crate:BasicFnPackage:"Basic Fn functions.", lib, {
     combine_with_exported_module!(lib, "FnPtr", fn_ptr_functions);
@@ -54,7 +54,7 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> Array {
     fn make_metadata(
         dict: &HashMap<&str, ImmutableString>,
         namespace: Option<ImmutableString>,
-        f: SharedScriptFnDef,
+        f: &ScriptFnDef,
     ) -> Map {
         let mut map = Map::with_capacity(6);
 
