@@ -25,12 +25,15 @@ use crate::syntax::CustomSyntax;
 use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
-    calc_script_fn_hash, Dynamic, Engine, FnAccess, ImmutableString, LexError, ParseError,
-    ParseErrorType, Position, Scope, StaticVec, AST,
+    calc_script_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType,
+    Position, Scope, StaticVec, AST,
 };
 
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
+
+#[cfg(not(feature = "no_function"))]
+use crate::FnAccess;
 
 type PERR = ParseErrorType;
 

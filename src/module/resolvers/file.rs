@@ -1,7 +1,7 @@
 use crate::stdlib::{
     boxed::Box, collections::HashMap, io::Error as IoError, path::PathBuf, string::String,
 };
-use crate::{Engine, EvalAltResult, Locked, Module, ModuleResolver, Position, Shared};
+use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 
 /// Module resolution service that loads module script files from the file system.
 ///
@@ -37,7 +37,11 @@ use crate::{Engine, EvalAltResult, Locked, Module, ModuleResolver, Position, Sha
 pub struct FileModuleResolver {
     path: PathBuf,
     extension: String,
-    cache: Locked<HashMap<PathBuf, Shared<Module>>>,
+
+    #[cfg(not(feature = "sync"))]
+    cache: crate::stdlib::cell::RefCell<HashMap<PathBuf, Shared<Module>>>,
+    #[cfg(feature = "sync")]
+    cache: crate::stdlib::sync::RwLock<HashMap<PathBuf, Shared<Module>>>,
 }
 
 impl Default for FileModuleResolver {

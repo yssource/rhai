@@ -37,11 +37,11 @@ pub type Shared<T> = Rc<T>;
 pub type Shared<T> = Arc<T>;
 
 /// Synchronized shared object.
-#[cfg(any(not(feature = "no_closure"), not(feature = "no_module")))]
+#[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "sync"))]
 pub type Locked<T> = crate::stdlib::cell::RefCell<T>;
 /// Synchronized shared object.
-#[cfg(any(not(feature = "no_closure"), not(feature = "no_module")))]
+#[cfg(not(feature = "no_closure"))]
 #[cfg(feature = "sync")]
 pub type Locked<T> = crate::stdlib::sync::RwLock<T>;
 

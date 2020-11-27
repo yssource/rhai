@@ -151,6 +151,7 @@ impl AST {
         &mut self.0
     }
     /// Get the internal shared [`Module`] containing all script-defined functions.
+    #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub(crate) fn shared_lib(&self) -> Shared<Module> {

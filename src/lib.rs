@@ -118,7 +118,7 @@ pub type FLOAT = f32;
 pub use ast::{FnAccess, AST};
 pub use dynamic::Dynamic;
 pub use engine::{Engine, EvalContext};
-pub use fn_native::{FnPtr, NativeCallContext};
+pub use fn_native::{FnPtr, NativeCallContext, Shared};
 pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::{FnNamespace, Module};
 pub use parse_error::{LexError, ParseError, ParseErrorType};
@@ -128,8 +128,8 @@ pub use syntax::Expression;
 pub use token::Position;
 pub use utils::ImmutableString;
 
-#[allow(dead_code)]
-use fn_native::{Locked, Shared};
+#[cfg(not(feature = "no_closure"))]
+use fn_native::Locked;
 
 #[cfg(feature = "internals")]
 pub use utils::{calc_native_fn_hash, calc_script_fn_hash};
@@ -185,7 +185,11 @@ pub use ast::{
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
-pub use engine::{Imports, Limits, State as EvalState};
+pub use engine::{Imports, State as EvalState};
+
+#[cfg(feature = "internals")]
+#[cfg(not(feature = "unchecked"))]
+pub use engine::Limits;
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]

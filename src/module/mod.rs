@@ -9,7 +9,7 @@ use crate::stdlib::{
     boxed::Box,
     collections::HashMap,
     fmt, format,
-    iter::{empty, once},
+    iter::empty,
     num::NonZeroUsize,
     ops::{Add, AddAssign, Deref, DerefMut},
     string::{String, ToString},
@@ -363,6 +363,8 @@ impl Module {
         // None + function name + number of arguments.
         let num_params = fn_def.params.len();
         let hash_script = crate::calc_script_fn_hash(empty(), &fn_def.name, num_params);
+        let mut param_names: StaticVec<_> = fn_def.params.iter().cloned().collect();
+        param_names.push("Dynamic".into());
         self.functions.insert(
             hash_script,
             FuncInfo {
@@ -371,14 +373,7 @@ impl Module {
                 access: fn_def.access,
                 params: num_params,
                 param_types: None,
-                param_names: Some(
-                    fn_def
-                        .params
-                        .iter()
-                        .cloned()
-                        .chain(once("Dynamic".into()))
-                        .collect(),
-                ),
+                param_names: Some(param_names),
                 func: fn_def.into(),
             },
         );
