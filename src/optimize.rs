@@ -33,18 +33,19 @@ pub enum OptimizationLevel {
 
 impl OptimizationLevel {
     /// Is the `OptimizationLevel` [`None`][OptimizationLevel::None]?
+    #[allow(dead_code)]
     #[inline(always)]
     pub fn is_none(self) -> bool {
         self == Self::None
     }
     /// Is the `OptimizationLevel` [`Simple`][OptimizationLevel::Simple]?
-    #[cfg(not(feature = "no_optimize"))]
+    #[allow(dead_code)]
     #[inline(always)]
     pub fn is_simple(self) -> bool {
         self == Self::Simple
     }
     /// Is the `OptimizationLevel` [`Full`][OptimizationLevel::Full]?
-    #[cfg(not(feature = "no_optimize"))]
+    #[allow(dead_code)]
     #[inline(always)]
     pub fn is_full(self) -> bool {
         self == Self::Full
