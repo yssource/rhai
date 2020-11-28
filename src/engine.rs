@@ -40,7 +40,7 @@ use crate::Map;
 #[cfg(not(feature = "no_object"))]
 pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 
-/// _(INTERNALS)_ A stack of imported modules.
+/// _(INTERNALS)_ A stack of imported [modules][Module].
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -49,21 +49,22 @@ pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 //
 // # Implementation Notes
 //
-// We cannot use &str or Cow<str> here because `eval` may load a module and the module name will live beyond
-// the AST of the eval script text. The best we can do is a shared reference.
+// We cannot use &str or Cow<str> here because `eval` may load a [module][Module] and
+// the module name will live beyond the AST of the eval script text.
+// The best we can do is a shared reference.
 #[derive(Debug, Clone, Default)]
 pub struct Imports(Option<StaticVec<(ImmutableString, Shared<Module>)>>);
 
 impl Imports {
-    /// Get the length of this stack of imported modules.
+    /// Get the length of this stack of imported [modules][Module].
     pub fn len(&self) -> usize {
         self.0.as_ref().map_or(0, StaticVec::len)
     }
-    /// Is this stack of imported modules empty?
+    /// Is this stack of imported [modules][Module] empty?
     pub fn is_empty(&self) -> bool {
         self.0.as_ref().map_or(true, StaticVec::is_empty)
     }
-    /// Get the imported module at a particular index.
+    /// Get the imported [modules][Module] at a particular index.
     pub fn get(&self, index: usize) -> Option<Shared<Module>> {
         self.0
             .as_ref()
@@ -71,7 +72,7 @@ impl Imports {
             .map(|(_, m)| m)
             .cloned()
     }
-    /// Get the index of an imported module by name.
+    /// Get the index of an imported [modules][Module] by name.
     pub fn find(&self, name: &str) -> Option<usize> {
         self.0.as_ref().and_then(|x| {
             x.iter()
@@ -81,7 +82,7 @@ impl Imports {
                 .map(|(index, _)| index)
         })
     }
-    /// Push an imported module onto the stack.
+    /// Push an imported [modules][Module] onto the stack.
     pub fn push(&mut self, name: impl Into<ImmutableString>, module: impl Into<Shared<Module>>) {
         if self.0.is_none() {
             self.0 = Some(Default::default());
@@ -89,13 +90,13 @@ impl Imports {
 
         self.0.as_mut().unwrap().push((name.into(), module.into()));
     }
-    /// Truncate the stack of imported modules to a particular length.
+    /// Truncate the stack of imported [modules][Module] to a particular length.
     pub fn truncate(&mut self, size: usize) {
         if self.0.is_some() {
             self.0.as_mut().unwrap().truncate(size);
         }
     }
-    /// Get an iterator to this stack of imported modules in reverse order.
+    /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> + 'a {
         self.0.iter().flat_map(|lib| {
@@ -104,22 +105,22 @@ impl Imports {
                 .map(|(name, module)| (name.clone(), module.clone()))
         })
     }
-    /// Get an iterator to this stack of imported modules in reverse order.
+    /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     pub(crate) fn iter_raw<'a>(
         &'a self,
     ) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> + 'a {
         self.0.iter().flat_map(|lib| lib.iter().rev().cloned())
     }
-    /// Get a consuming iterator to this stack of imported modules in reverse order.
+    /// Get a consuming iterator to this stack of imported [modules][Module] in reverse order.
     pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
         self.0.into_iter().flat_map(|lib| lib.into_iter().rev())
     }
-    /// Add a stream of imported modules.
+    /// Add a stream of imported [modules][Module].
     pub fn extend(&mut self, stream: impl Iterator<Item = (ImmutableString, Shared<Module>)>) {
         self.0.as_mut().unwrap().extend(stream)
     }
-    /// Does the specified function hash key exist in this stack of imported modules?
+    /// Does the specified function hash key exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
     pub fn contains_fn(&self, hash: u64) -> bool {
         self.0.as_ref().map_or(false, |x| {
@@ -132,14 +133,14 @@ impl Imports {
             .as_ref()
             .and_then(|x| x.iter().rev().find_map(|(_, m)| m.get_qualified_fn(hash)))
     }
-    /// Does the specified TypeId iterator exist in this stack of imported modules?
+    /// Does the specified [`TypeId`][std::any::TypeId] iterator exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
     pub fn contains_iter(&self, id: TypeId) -> bool {
         self.0.as_ref().map_or(false, |x| {
             x.iter().any(|(_, m)| m.contains_qualified_iter(id))
         })
     }
-    /// Get the specified TypeId iterator.
+    /// Get the specified [`TypeId`][std::any::TypeId] iterator.
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.0
             .as_ref()
@@ -462,7 +463,7 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
     }
 }
 
-/// _(INTERNALS)_ A type that holds all the current states of the Engine.
+/// _(INTERNALS)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
 /// ## WARNING
@@ -512,17 +513,17 @@ pub struct Limits {
     pub max_function_expr_depth: usize,
     /// Maximum number of operations allowed to run (0 = unlimited).
     pub max_operations: u64,
-    /// Maximum number of modules allowed to load.
+    /// Maximum number of [modules][Module] allowed to load.
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     pub max_modules: usize,
-    /// Maximum length of a string (0 = unlimited).
+    /// Maximum length of a [string][ImmutableString] (0 = unlimited).
     pub max_string_size: usize,
-    /// Maximum length of an array (0 = unlimited).
+    /// Maximum length of an [array][Array] (0 = unlimited).
     /// Not available under `no_index`.
     #[cfg(not(feature = "no_index"))]
     pub max_array_size: usize,
-    /// Maximum number of properties in a map (0 = unlimited).
+    /// Maximum number of properties in an [object map][Map] (0 = unlimited).
     /// Not available under `no_object`.
     #[cfg(not(feature = "no_object"))]
     pub max_map_size: usize,
@@ -578,7 +579,7 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
 /// [`Engine`] is re-entrant.
 ///
 /// Currently, [`Engine`] is neither [`Send`] nor [`Sync`].
-/// Use the [`Sync`] feature to make it [`Send`] `+` [`Sync`].
+/// Use the `sync` feature to make it [`Send`] `+` [`Sync`].
 ///
 /// # Example
 ///

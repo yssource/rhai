@@ -83,20 +83,22 @@ mod token;
 mod r#unsafe;
 mod utils;
 
-/// The system integer type. It is defined as `i64`.
+/// The system integer type. It is defined as [`i64`].
 ///
-/// If the `only_i32` feature is enabled, this will be `i32` instead.
+/// If the `only_i32` feature is enabled, this will be [`i32`] instead.
 #[cfg(not(feature = "only_i32"))]
 pub type INT = i64;
 
 /// The system integer type.
-/// It is defined as `i32` since the `only_i32` feature is used.
+/// It is defined as [`i32`] since the `only_i32` feature is used.
 ///
-/// If the `only_i32` feature is not enabled, this will be `i64` instead.
+/// If the `only_i32` feature is not used, this will be `i64` instead.
 #[cfg(feature = "only_i32")]
 pub type INT = i32;
 
-/// The system floating-point type. It is defined as `f64`.
+/// The system floating-point type. It is defined as [`f64`].
+///
+/// If the `f32_float` feature is enabled, this will be [`i32`] instead.
 ///
 /// Not available under the `no_float` feature.
 #[cfg(not(feature = "no_float"))]
@@ -104,7 +106,9 @@ pub type INT = i32;
 pub type FLOAT = f64;
 
 /// The system floating-point type.
-/// It is defined as `f32` since the `f32_float` feature is used.
+/// It is defined as [`f32`] since the `f32_float` feature is used.
+///
+/// If the `f32_float` feature is not used, this will be `f64` instead.
 ///
 /// Not available under the `no_float` feature.
 #[cfg(not(feature = "no_float"))]
@@ -114,7 +118,7 @@ pub type FLOAT = f32;
 pub use ast::{FnAccess, AST};
 pub use dynamic::Dynamic;
 pub use engine::{Engine, EvalContext};
-pub use fn_native::{FnPtr, NativeCallContext};
+pub use fn_native::{FnPtr, NativeCallContext, Shared};
 pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::{FnNamespace, Module};
 pub use parse_error::{LexError, ParseError, ParseErrorType};
@@ -124,8 +128,8 @@ pub use syntax::Expression;
 pub use token::Position;
 pub use utils::ImmutableString;
 
-#[allow(dead_code)]
-use fn_native::{Locked, Shared};
+#[cfg(not(feature = "no_closure"))]
+use fn_native::Locked;
 
 #[cfg(feature = "internals")]
 pub use utils::{calc_native_fn_hash, calc_script_fn_hash};
@@ -138,13 +142,13 @@ pub use rhai_codegen::*;
 #[cfg(not(feature = "no_function"))]
 pub use fn_func::Func;
 
-/// Variable-sized array of `Dynamic` values.
+/// Variable-sized array of [`Dynamic`] values.
 ///
 /// Not available under the `no_index` feature.
 #[cfg(not(feature = "no_index"))]
 pub type Array = stdlib::vec::Vec<Dynamic>;
 
-/// Hash map of `Dynamic` values with `ImmutableString` keys.
+/// Hash map of [`Dynamic`] values with [`ImmutableString`] keys.
 ///
 /// Not available under the `no_object` feature.
 #[cfg(not(feature = "no_object"))]
@@ -181,20 +185,24 @@ pub use ast::{
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
-pub use engine::{Imports, Limits, State as EvalState};
+pub use engine::{Imports, State as EvalState};
+
+#[cfg(feature = "internals")]
+#[cfg(not(feature = "unchecked"))]
+pub use engine::Limits;
 
 #[cfg(feature = "internals")]
 #[deprecated(note = "this type is volatile and may change")]
 pub use module::NamespaceRef;
 
 /// _(INTERNALS)_ Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
-/// which is a specialized `Vec` backed by a small, fixed-size array when there are <= 4 items stored.
+/// which is a specialized [`Vec`] backed by a small, fixed-size array when there are <= 4 items stored.
 /// Exported under the `internals` feature only.
 #[cfg(not(feature = "internals"))]
 type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 
 /// _(INTERNALS)_ Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
-/// which is a specialized `Vec` backed by a small, fixed-size array when there are <= 4 items stored.
+/// which is a specialized [`Vec`] backed by a small, fixed-size array when there are <= 4 items stored.
 /// Exported under the `internals` feature only.
 #[cfg(feature = "internals")]
 pub type StaticVec<T> = smallvec::SmallVec<[T; 4]>;

@@ -10,9 +10,9 @@ use crate::{
     Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, ImmutableString, NativeCallContext,
 };
 
-/// Trait to register custom functions with the `Engine`.
+/// Trait to register custom functions with the [`Engine`].
 pub trait RegisterFn<FN, ARGS, RET> {
-    /// Register a custom function with the `Engine`.
+    /// Register a custom function with the [`Engine`].
     ///
     /// # Example
     ///
@@ -42,9 +42,9 @@ pub trait RegisterFn<FN, ARGS, RET> {
     fn register_fn(&mut self, name: &str, f: FN) -> &mut Self;
 }
 
-/// Trait to register fallible custom functions returning `Result<Dynamic, Box<EvalAltResult>>` with the `Engine`.
+/// Trait to register fallible custom functions returning [`Result`]`<`[`Dynamic`]`, `[`Box`]`<`[`EvalAltResult`]`>>` with the [`Engine`].
 pub trait RegisterResultFn<FN, ARGS> {
-    /// Register a custom fallible function with the `Engine`.
+    /// Register a custom fallible function with the [`Engine`].
     ///
     /// # Example
     ///
@@ -75,7 +75,7 @@ pub trait RegisterResultFn<FN, ARGS> {
 // These types are used to build a unique _marker_ tuple type for each combination
 // of function parameter types in order to make each trait implementation unique.
 // That is because stable Rust currently does not allow distinguishing implementations
-// based purely on parameter types of traits (Fn, FnOnce and FnMut).
+// based purely on parameter types of traits (`Fn`, `FnOnce` and `FnMut`).
 //
 // For example:
 //

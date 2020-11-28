@@ -43,7 +43,7 @@ mod private {
 /// Trait to represent any type.
 ///
 /// Currently, [`Variant`] is not [`Send`] nor [`Sync`], so it can practically be any type.
-/// Turn on the [`Sync`] feature to restrict it to only types that implement [`Send`] `+` [`Sync`].
+/// Turn on the `sync` feature to restrict it to only types that implement [`Send`] `+` [`Sync`].
 #[cfg(not(feature = "sync"))]
 pub trait Variant: Any + private::Sealed {
     /// Convert this [`Variant`] trait object to [`&dyn Any`][Any].
@@ -268,7 +268,7 @@ impl Dynamic {
     ///
     /// # Panics or Deadlocks When Value is Shared
     ///
-    /// Under the [`Sync`] feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
+    /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     pub fn type_id(&self) -> TypeId {
         match &self.0 {
@@ -301,7 +301,7 @@ impl Dynamic {
     ///
     /// # Panics or Deadlocks When Value is Shared
     ///
-    /// Under the [`Sync`] feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
+    /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     pub fn type_name(&self) -> &'static str {
         match &self.0 {
@@ -654,7 +654,7 @@ impl Dynamic {
         Self(Union::Variant(Box::new(boxed)))
     }
     /// Turn the [`Dynamic`] value into a shared [`Dynamic`] value backed by an [`Rc`][std::rc::Rc]`<`[`RefCell`][std::cell::RefCell]`<`[`Dynamic`]`>>`
-    /// or [`Arc`][std::sync::Arc]`<`[`RwLock`][std::sync::RwLock]`<`[`Dynamic`]`>>` depending on the [`Sync`] feature.
+    /// or [`Arc`][std::sync::Arc]`<`[`RwLock`][std::sync::RwLock]`<`[`Dynamic`]`>>` depending on the `sync` feature.
     ///
     /// Shared [`Dynamic`] values are relatively cheap to clone as they simply increment the
     /// reference counts.
@@ -686,7 +686,7 @@ impl Dynamic {
     ///
     /// # Panics or Deadlocks
     ///
-    /// Under the [`Sync`] feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
+    /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     ///
     /// These normally shouldn't occur since most operations in Rhai is single-threaded.
@@ -819,7 +819,7 @@ impl Dynamic {
     /// Panics if the cast fails (e.g. the type of the actual value is not the
     /// same as the specified type).
     ///
-    /// Under the [`Sync`] feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
+    /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     ///
     /// These normally shouldn't occur since most operations in Rhai is single-threaded.
@@ -900,7 +900,7 @@ impl Dynamic {
     ///
     /// ## Note
     ///
-    /// Under the [`Sync`] feature, shared values use [`RwLock`][std::sync::RwLock] and they are never locked.
+    /// Under the `sync` feature, shared values use [`RwLock`][std::sync::RwLock] and they are never locked.
     /// Access just waits until the [`RwLock`][std::sync::RwLock] is released.
     /// So this method always returns [`false`] under [`Sync`].
     #[inline(always)]
@@ -924,7 +924,7 @@ impl Dynamic {
     ///
     /// # Panics or Deadlocks When Value is Shared
     ///
-    /// Under the [`Sync`] feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
+    /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     #[inline(always)]
     pub fn read_lock<T: Variant + Clone>(&self) -> Option<DynamicReadLock<T>> {
@@ -956,7 +956,7 @@ impl Dynamic {
     ///
     /// # Panics or Deadlocks When Value is Shared
     ///
-    /// Under the [`Sync`] feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
+    /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     #[inline(always)]
     pub fn write_lock<T: Variant + Clone>(&mut self) -> Option<DynamicWriteLock<T>> {

@@ -1,11 +1,10 @@
 use crate::plugin::*;
-use crate::stdlib::iter::empty;
-use crate::{calc_script_fn_hash, def_package, FnPtr, ImmutableString, NativeCallContext, INT};
+use crate::{def_package, FnPtr, ImmutableString, NativeCallContext};
 
 #[cfg(not(feature = "no_function"))]
 #[cfg(not(feature = "no_index"))]
 #[cfg(not(feature = "no_object"))]
-use crate::{module::SharedScriptFnDef, stdlib::collections::HashMap, Array, Map};
+use crate::{ast::ScriptFnDef, stdlib::collections::HashMap, Array, Map};
 
 def_package!(crate:BasicFnPackage:"Basic Fn functions.", lib, {
     combine_with_exported_module!(lib, "FnPtr", fn_ptr_functions);
@@ -20,6 +19,8 @@ mod fn_ptr_functions {
 
     #[cfg(not(feature = "no_function"))]
     pub mod functions {
+        use crate::{calc_script_fn_hash, stdlib::iter::empty, INT};
+
         #[rhai_fn(name = "is_anonymous", get = "is_anonymous")]
         pub fn is_anonymous(f: &mut FnPtr) -> bool {
             f.is_anonymous()
@@ -54,7 +55,7 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> Array {
     fn make_metadata(
         dict: &HashMap<&str, ImmutableString>,
         namespace: Option<ImmutableString>,
-        f: SharedScriptFnDef,
+        f: &ScriptFnDef,
     ) -> Map {
         let mut map = Map::with_capacity(6);
 

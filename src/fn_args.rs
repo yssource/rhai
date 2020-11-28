@@ -6,7 +6,7 @@ use crate::dynamic::Variant;
 use crate::{Dynamic, StaticVec};
 
 /// Trait that represents arguments to a function call.
-/// Any data type that can be converted into a `Vec<Dynamic>` can be used
+/// Any data type that can be converted into a [`Vec`]`<`[`Dynamic`]`>` can be used
 /// as arguments to a function call.
 pub trait FuncArgs {
     /// Convert to a [`StaticVec`]`<`[`Dynamic`]`>` of the function call arguments.

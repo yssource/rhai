@@ -9,7 +9,7 @@ use crate::stdlib::{
     boxed::Box,
     collections::HashMap,
     fmt, format,
-    iter::{empty, once},
+    iter::empty,
     num::NonZeroUsize,
     ops::{Add, AddAssign, Deref, DerefMut},
     string::{String, ToString},
@@ -21,15 +21,15 @@ use crate::{
     Dynamic, EvalAltResult, ImmutableString, NativeCallContext, Position, Shared, StaticVec,
 };
 
+#[cfg(not(feature = "no_function"))]
+use crate::ast::ScriptFnDef;
+
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
 
 #[cfg(not(feature = "no_index"))]
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
-
-#[cfg(not(feature = "no_function"))]
-pub type SharedScriptFnDef = Shared<crate::ast::ScriptFnDef>;
 
 /// A type representing the namespace of a function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -47,7 +47,7 @@ impl Default for FnNamespace {
 }
 
 impl FnNamespace {
-    /// Is this namespace global?
+    /// Is this namespace [global][FnNamespace::Global]?
     #[inline(always)]
     pub fn is_global(self) -> bool {
         match self {
@@ -55,7 +55,7 @@ impl FnNamespace {
             Self::Internal => false,
         }
     }
-    /// Is this namespace internal?
+    /// Is this namespace [internal][FnNamespace::Internal]?
     #[inline(always)]
     pub fn is_internal(self) -> bool {
         match self {
@@ -357,10 +357,14 @@ impl Module {
     /// If there is an existing function of the same name and number of arguments, it is replaced.
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub(crate) fn set_script_fn(&mut self, fn_def: SharedScriptFnDef) -> u64 {
+    pub(crate) fn set_script_fn(&mut self, fn_def: impl Into<Shared<ScriptFnDef>>) -> u64 {
+        let fn_def = fn_def.into();
+
         // None + function name + number of arguments.
         let num_params = fn_def.params.len();
         let hash_script = crate::calc_script_fn_hash(empty(), &fn_def.name, num_params);
+        let mut param_names: StaticVec<_> = fn_def.params.iter().cloned().collect();
+        param_names.push("Dynamic".into());
         self.functions.insert(
             hash_script,
             FuncInfo {
@@ -369,14 +373,7 @@ impl Module {
                 access: fn_def.access,
                 params: num_params,
                 param_types: None,
-                param_names: Some(
-                    fn_def
-                        .params
-                        .iter()
-                        .cloned()
-                        .chain(once("Dynamic".into()))
-                        .collect(),
-                ),
+                param_names: Some(param_names),
                 func: fn_def.into(),
             },
         );
@@ -392,7 +389,7 @@ impl Module {
         name: &str,
         num_params: usize,
         public_only: bool,
-    ) -> Option<&SharedScriptFnDef> {
+    ) -> Option<&ScriptFnDef> {
         self.functions
             .values()
             .find(
@@ -1527,12 +1524,12 @@ impl Module {
     /// 2) Access mode ([`FnAccess::Public`] or [`FnAccess::Private`]).
     /// 3) Function name (as string slice).
     /// 4) Number of parameters.
-    /// 5) Shared reference to function definition [`ScriptFnDef`][crate::ScriptFnDef].
+    /// 5) Shared reference to function definition [`ScriptFnDef`][crate::ast::ScriptFnDef].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub(crate) fn iter_script_fn<'a>(
         &'a self,
-    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, SharedScriptFnDef)> + 'a {
+    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &ScriptFnDef)> + 'a {
         self.functions.values().filter(|f| f.func.is_script()).map(
             |FuncInfo {
                  namespace,
@@ -1547,7 +1544,7 @@ impl Module {
                     *access,
                     name.as_str(),
                     *params,
-                    func.get_fn_def().clone(),
+                    func.get_fn_def(),
                 )
             },
         )
@@ -1584,14 +1581,14 @@ impl Module {
     /// 2) Access mode ([`FnAccess::Public`] or [`FnAccess::Private`]).
     /// 3) Function name (as string slice).
     /// 4) Number of parameters.
-    /// 5) _(INTERNALS)_ Shared reference to function definition [`ScriptFnDef`][crate::ScriptFnDef].
+    /// 5) _(INTERNALS)_ Shared reference to function definition [`ScriptFnDef`][crate::ast::ScriptFnDef].
     ///    Exported under the `internals` feature only.
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "internals")]
     #[inline(always)]
     pub fn iter_script_fn_info(
         &self,
-    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, SharedScriptFnDef)> {
+    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &ScriptFnDef)> {
         self.iter_script_fn()
     }
 
@@ -1653,14 +1650,16 @@ impl Module {
         // Non-private functions defined become module functions
         #[cfg(not(feature = "no_function"))]
         {
-            ast.iter_functions()
-                .filter(|(_, access, _, _, _)| !access.is_private())
-                .for_each(|(_, _, _, _, func)| {
+            ast.lib()
+                .functions
+                .values()
+                .filter(|FuncInfo { access, func, .. }| !access.is_private() && func.is_script())
+                .for_each(|FuncInfo { func, .. }| {
                     // Encapsulate AST environment
-                    let mut func = func.as_ref().clone();
+                    let mut func = func.get_fn_def().clone();
                     func.lib = Some(ast.shared_lib());
                     func.mods = func_mods.clone();
-                    module.set_script_fn(func.into());
+                    module.set_script_fn(func);
                 });
         }
 
@@ -1827,7 +1826,7 @@ impl Module {
     }
 }
 
-/// _(INTERNALS)_ A chain of module names to namespace-qualify a variable or function call.
+/// _(INTERNALS)_ A chain of [module][Module] names to namespace-qualify a variable or function call.
 /// Exported under the `internals` feature only.
 ///
 /// A [`u64`] hash key is cached for quick search purposes.

@@ -1166,7 +1166,7 @@ impl Engine {
                     }
                 }
 
-                f.get_native_fn().clone()((self, &*mods, lib).into(), args.as_mut())
+                f.get_native_fn()((self, &*mods, lib).into(), args.as_mut())
             }
             Some(_) => unreachable!(),
             None if def_val.is_some() => Ok(def_val.unwrap().clone()),

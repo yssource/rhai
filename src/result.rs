@@ -36,10 +36,10 @@ pub enum EvalAltResult {
     /// An error has occurred inside a called function.
     /// Wrapped values are the function name and the interior error.
     ErrorInFunctionCall(String, Box<EvalAltResult>, Position),
-    /// Usage of an unknown module. Wrapped value is the module name.
+    /// Usage of an unknown [module][crate::Module]. Wrapped value is the [module][crate::Module] name.
     ErrorModuleNotFound(String, Position),
-    /// An error has occurred while loading a module.
-    /// Wrapped value are the module name and the interior error.
+    /// An error has occurred while loading a [module][crate::Module].
+    /// Wrapped value are the [module][crate::Module] name and the interior error.
     ErrorInModule(String, Box<EvalAltResult>, Position),
     /// Access to `this` that is not bound.
     ErrorUnboundThis(Position),
@@ -72,7 +72,7 @@ pub enum EvalAltResult {
     ErrorArithmetic(String, Position),
     /// Number of operations over maximum limit.
     ErrorTooManyOperations(Position),
-    /// Modules over maximum limit.
+    /// [Modules][crate::Module] over maximum limit.
     ErrorTooManyModules(Position),
     /// Call stack over maximum limit.
     ErrorStackOverflow(Position),
@@ -314,7 +314,7 @@ impl EvalAltResult {
             _ => false,
         }
     }
-    /// Get the [`Position`] of this error.
+    /// Get the [position][Position] of this error.
     pub fn position(&self) -> Position {
         match self {
             Self::ErrorSystem(_, _) => Position::NONE,
@@ -347,7 +347,7 @@ impl EvalAltResult {
             | Self::Return(_, pos) => *pos,
         }
     }
-    /// Override the [`Position`] of this error.
+    /// Override the [position][Position] of this error.
     pub fn set_position(&mut self, new_position: Position) {
         match self {
             Self::ErrorSystem(_, _) => (),

@@ -68,10 +68,10 @@ impl LexError {
             Self::ImproperSymbol(_, _) => "Invalid symbol encountered",
         }
     }
-    /// Convert a `&LexError` into a [`ParseError`].
+    /// Convert a [`LexError`] into a [`ParseError`].
     #[inline(always)]
-    pub fn into_err(&self, pos: Position) -> ParseError {
-        ParseError(Box::new(self.clone().into()), pos)
+    pub fn into_err(self, pos: Position) -> ParseError {
+        ParseError(Box::new(self.into()), pos)
     }
 }
 

@@ -37,10 +37,10 @@ impl Engine {
     ///
     /// ## WARNING - Low Level API
     ///
-    /// This function is very low level.  It takes a list of [`TypeId`]'s indicating the actual types of the parameters.
+    /// This function is very low level.  It takes a list of [`TypeId`][std::any::TypeId]'s indicating the actual types of the parameters.
     ///
     /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`][Dynamic],
-    /// The arguments are guaranteed to be of the correct types matching the [`TypeId`]'s.
+    /// The arguments are guaranteed to be of the correct types matching the [`TypeId`][std::any::TypeId]'s.
     ///
     /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
     ///
@@ -1639,7 +1639,7 @@ impl Engine {
             .lib()
             .iter_fn()
             .filter(|f| f.func.is_script())
-            .map(|f| (**f.func.get_fn_def()).clone())
+            .map(|f| f.func.get_fn_def().clone())
             .collect();
 
         #[cfg(feature = "no_function")]
