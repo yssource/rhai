@@ -4,7 +4,8 @@ use quote::{quote, ToTokens};
 
 use crate::attrs::ExportScope;
 use crate::function::{
-    flatten_type_groups, print_type, ExportedFn, FnNamespaceAccess, FnSpecialAccess,
+    flatten_type_groups, print_type, ExportedFn, FnNamespaceAccess, FnSpecialAccess, FN_GET,
+    FN_IDX_GET, FN_IDX_SET, FN_SET,
 };
 use crate::module::Module;
 
@@ -81,7 +82,6 @@ pub(crate) fn generate_body(
             function.name().span(),
         );
         let reg_names = function.exported_names();
-        let mut namespace = FnNamespaceAccess::Internal;
 
         let fn_input_names: Vec<String> = function
             .arg_list()
@@ -141,11 +141,27 @@ pub(crate) fn generate_body(
             .map(print_type)
             .unwrap_or_else(|| "()".to_string());
 
-        if let Some(ns) = function.params().namespace {
-            namespace = ns;
-        }
-
         for fn_literal in reg_names {
+            let mut namespace = FnNamespaceAccess::Internal;
+
+            match function.params().special {
+                FnSpecialAccess::None => {}
+                FnSpecialAccess::Index(_) | FnSpecialAccess::Property(_) => {
+                    let reg_name = fn_literal.value();
+                    if reg_name.starts_with(FN_GET)
+                        || reg_name.starts_with(FN_SET)
+                        || reg_name == FN_IDX_GET
+                        || reg_name == FN_IDX_SET
+                    {
+                        namespace = FnNamespaceAccess::Global;
+                    }
+                }
+            }
+
+            if let Some(ns) = function.params().namespace {
+                namespace = ns;
+            }
+
             let ns_str = syn::Ident::new(
                 match namespace {
                     FnNamespaceAccess::Global => "Global",

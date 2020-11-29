@@ -1519,7 +1519,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("get$square", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "u64"]),
+                    m.set_fn("get$square", FnNamespace::Global, FnAccess::Public, Some(&["x: &mut u64", "u64"]),
                              &[core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
@@ -1597,7 +1597,7 @@ mod generate_tests {
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("square", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "u64"]), &[core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
-                    m.set_fn("get$square", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "u64"]), &[core::any::TypeId::of::<u64>()],
+                    m.set_fn("get$square", FnNamespace::Global, FnAccess::Public, Some(&["x: &mut u64", "u64"]), &[core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
                 }

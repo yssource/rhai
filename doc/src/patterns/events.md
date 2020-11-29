@@ -54,6 +54,33 @@ struct Handler {
 }
 ```
 
+### Register API for Any Custom Type
+
+[Custom types] are often used to hold state. The easiest way to register an entire API is via a [plugin module].
+
+```rust
+use rhai::plugin::*;
+
+// A custom type to a hold state value.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
+pub struct SomeType {
+    data: i64;
+}
+
+#[export_module]
+mod SomeTypeAPI {
+    #[rhai_fn(global)]
+    pub func1(obj: &mut SomeType) -> bool { ... }
+    #[rhai_fn(global)]
+    pub func2(obj: &mut SomeType) -> bool { ... }
+    pub process(data: i64) -> i64 { ... }
+    #[rhai_fn(get = "value")]
+    pub get_value(obj: &mut SomeType) -> i64 { obj.data }
+    #[rhai_fn(set = "value")]
+    pub set_value(obj: &mut SomeType, value: i64) { obj.data = value; }
+}
+```
+
 ### Initialize Handler Object
 
 Steps to initialize the event handler:
@@ -70,16 +97,10 @@ impl Handler {
     pub new(path: impl Into<PathBuf>) -> Self {
         let mut engine = Engine::new();
 
-        // Register API functions here
+        // Register custom types and API's
         engine
-            .register_fn("func1", func1)
-            .register_fn("func2", func2)
-            .register_fn("func3", func3)
             .register_type_with_name::<SomeType>("SomeType")
-            .register_get_set("value",
-                |obj: &mut SomeType| obj.data,
-                |obj: &mut SomeType, value: i64| obj.data = value
-            );
+            .load_package(exported_module!(SomeTypeAPI));
 
         // Create a custom 'Scope' to hold state
         let mut scope = Scope::new();
@@ -112,36 +133,30 @@ Mapping an event from the system into a scripted handler is straight-forward:
 impl Handler {
     // Say there are three events: 'start', 'end', 'update'.
     // In a real application you'd be handling errors...
-    pub fn on_event(&mut self, event_name: &str, event_data: i64) {
+    pub fn on_event(&mut self, event_name: &str, event_data: i64) -> Result<(), Error> {
         match event_name {
             // The 'start' event maps to function 'start'.
             // In a real application you'd be handling errors...
-            "start" =>
-                self.engine
-                    .call_fn(&mut self.scope, &self.ast, "start", (event_data,)).unwrap(),
+            "start" => self.engine.call_fn(&mut self.scope, &self.ast, "start", (event_data,))?,
 
             // The 'end' event maps to function 'end'.
             // In a real application you'd be handling errors...
-            "end" =>
-                self.engine
-                    .call_fn(&mut self.scope, &self.ast, "end", (event_data,)).unwrap(),
+            "end" => self.engine.call_fn(&mut self.scope, &self.ast, "end", (event_data,))?,
 
             // The 'update' event maps to function 'update'.
             // This event provides a default implementation when the scripted function
             // is not found.
-            "update" =>
-                self.engine
-                    .call_fn(&mut self.scope, &self.ast, "update", (event_data,))
-                    .or_else(|err| match *err {
-                        EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "update" => {
-                            // Default implementation of 'update' event handler
-                            self.scope.set_value("state2", SomeType::new(42));
-                            // Turn function-not-found into a success
-                            Ok(Dynamic::UNIT)
-                        }
-                        _ => Err(err.into())
-                    })
-                    .unwrap()
+            "update" => self.engine
+                            .call_fn(&mut self.scope, &self.ast, "update", (event_data,))
+                            .or_else(|err| match *err {
+                                EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "update" => {
+                                    // Default implementation of 'update' event handler
+                                    self.scope.set_value("state2", SomeType::new(42));
+                                    // Turn function-not-found into a success
+                                    Ok(Dynamic::UNIT)
+                                }
+                                _ => Err(err.into())
+                            })?
         }
     }
 }
@@ -159,24 +174,25 @@ fn start(data) {
     if state1 {
         throw "Already started!";
     }
-    if func1(state2) || func2() {
+    if state2.func1() || state2.func2() {
         throw "Conditions not yet ready to start!";
     }
     state1 = true;
-    state2.value = 0;
+    state2.value = data;
 }
 
 fn end(data) {
     if !state1 {
         throw "Not yet started!";
     }
-    if func1(state2) || func2() {
+    if state2.func1() || state2.func2() {
         throw "Conditions not yet ready to start!";
     }
     state1 = false;
+    state2.value = data;
 }
 
 fn update(data) {
-    state2.value += func3(data);
+    state2.value += process(data);
 }
 ```

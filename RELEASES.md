@@ -4,6 +4,16 @@ Rhai Release Notes
 Version 0.19.7
 ==============
 
+Bug fixes
+---------
+
+* Fixes compilation errors with certain feature flag combinations.
+
+Enhancements
+------------
+
+* Property getters/setters and indexers defined in a plugin module are by default `#[rhai_fn(global)]`.
+
 
 Version 0.19.6
 ==============
