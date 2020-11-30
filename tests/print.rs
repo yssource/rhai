@@ -73,6 +73,6 @@ fn test_print_custom_type() -> Result<(), Box<EvalAltResult>> {
                 x.to_string()
             "#
         )?
-        .contains("e: hello: 42"));
+        .contains(r#""e": hello: 42"#));
     Ok(())
 }
