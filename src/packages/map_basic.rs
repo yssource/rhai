@@ -45,7 +45,7 @@ mod map_functions {
     }
     #[rhai_fn(name = "==", return_raw)]
     pub fn equals(
-        mut ctx: NativeCallContext,
+        ctx: NativeCallContext,
         map1: &mut Map,
         mut map2: Map,
     ) -> Result<Dynamic, Box<EvalAltResult>> {

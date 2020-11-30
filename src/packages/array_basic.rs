@@ -650,7 +650,7 @@ mod array_functions {
     }
     #[rhai_fn(name = "==", return_raw)]
     pub fn equals(
-        mut ctx: NativeCallContext,
+        ctx: NativeCallContext,
         arr1: &mut Array,
         mut arr2: Array,
     ) -> Result<Dynamic, Box<EvalAltResult>> {

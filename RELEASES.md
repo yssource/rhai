@@ -13,6 +13,8 @@ Enhancements
 ------------
 
 * Property getters/setters and indexers defined in a plugin module are by default `#[rhai_fn(global)]`.
+* `to_debug` is a new standard function for converting a value into debug format.
+* Arrays and object maps now print values using `to_debug` (if available).
 
 
 Version 0.19.6

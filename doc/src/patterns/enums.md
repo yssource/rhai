@@ -61,7 +61,7 @@ mod MyEnumModule {
         }
     }
     // Printing
-    #[rhai(global, name = "to_string", name = "print", name = "debug")]
+    #[rhai(global, name = "to_string", name = "print", name = "to_debug", name = "debug")]
     pub fn to_string(a: &mut MyEnum) -> String {
         format!("{:?}", a))
     }

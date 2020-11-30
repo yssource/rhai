@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult};
+use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 use std::sync::{Arc, RwLock};
 
 #[test]
@@ -28,5 +28,51 @@ fn test_print() -> Result<(), Box<EvalAltResult>> {
         println!("{}", entry);
     }
 
+    Ok(())
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
+struct MyStruct {
+    field: INT,
+}
+
+impl std::fmt::Display for MyStruct {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "hello: {}", self.field)
+    }
+}
+
+#[test]
+fn test_print_custom_type() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    engine
+        .register_type_with_name::<MyStruct>("MyStruct")
+        .register_fn("to_debug", |x: &mut MyStruct| x.to_string())
+        .register_fn("debug", |x: &mut MyStruct| x.to_string())
+        .register_fn("new_ts", || MyStruct { field: 42 });
+
+    engine.consume("let x = new_ts(); debug(x);")?;
+
+    #[cfg(not(feature = "no_index"))]
+    assert_eq!(
+        engine.eval::<String>(
+            r#"
+                let x = [ 123, true, (), "world", new_ts() ];
+                x.to_string()
+            "#
+        )?,
+        r#"[123, true, (), "world", hello: 42]"#
+    );
+
+    #[cfg(not(feature = "no_object"))]
+    assert!(engine
+        .eval::<String>(
+            r#"
+                let x = #{ a:123, b:true, c:(), d:"world", e:new_ts() };
+                x.to_string()
+            "#
+        )?
+        .contains("e: hello: 42"));
     Ok(())
 }
