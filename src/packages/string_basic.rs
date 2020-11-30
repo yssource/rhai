@@ -109,7 +109,7 @@ gen_functions!(debug_float => to_debug(f32, f64));
 
 // Register print and debug
 
-#[cfg(not(feature = "no_index"))]
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 #[inline(always)]
 fn print_with_func(fn_name: &str, ctx: &NativeCallContext, value: &mut Dynamic) -> ImmutableString {
     match ctx.call_fn_dynamic_raw(fn_name, true, false, &mut [value], None) {
@@ -144,7 +144,7 @@ mod print_debug_functions {
 
         #[rhai_fn(name = "print", name = "to_string", name = "to_debug", name = "debug")]
         pub fn format_array(ctx: NativeCallContext, arr: &mut Array) -> ImmutableString {
-            let mut result = String::with_capacity(16);
+            let mut result = crate::stdlib::string::String::with_capacity(16);
             result.push_str("[");
 
             let len = arr.len();
@@ -166,7 +166,7 @@ mod print_debug_functions {
 
         #[rhai_fn(name = "print", name = "to_string", name = "to_debug", name = "debug")]
         pub fn format_map(ctx: NativeCallContext, map: &mut Map) -> ImmutableString {
-            let mut result = String::with_capacity(16);
+            let mut result = crate::stdlib::string::String::with_capacity(16);
             result.push_str("#{");
 
             let len = map.len();

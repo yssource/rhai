@@ -42,6 +42,7 @@ impl std::fmt::Display for MyStruct {
     }
 }
 
+#[cfg(not(feature = "no_object"))]
 #[test]
 fn test_print_custom_type() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
@@ -65,7 +66,6 @@ fn test_print_custom_type() -> Result<(), Box<EvalAltResult>> {
         r#"[123, true, (), "world", hello: 42]"#
     );
 
-    #[cfg(not(feature = "no_object"))]
     assert!(engine
         .eval::<String>(
             r#"
