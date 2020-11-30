@@ -37,7 +37,7 @@ mod MyEnumModule {
         MyEnum::Baz(val1, val2)
     }
     // Access to fields
-    #[rhai_fn(global, get = "enum_type")]
+    #[rhai_fn(get = "enum_type")]
     pub fn get_type(a: &mut MyEnum) -> String {
         match a {
             MyEnum::Foo => "Foo".to_string(),
@@ -45,7 +45,7 @@ mod MyEnumModule {
             MyEnum::Baz(_, _) => "Baz".to_string()
         }
     }
-    #[rhai_fn(global, get = "field_0")]
+    #[rhai_fn(get = "field_0")]
     pub fn get_field_0(a: &mut MyEnum) -> Dynamic {
         match a {
             MyEnum::Foo => Dynamic::UNIT,
@@ -53,7 +53,7 @@ mod MyEnumModule {
             MyEnum::Baz(x, _) => Dynamic::from(x)
         }
     }
-    #[rhai_fn(global, get = "field_1")]
+    #[rhai_fn(get = "field_1")]
     pub fn get_field_1(a: &mut MyEnum) -> Dynamic {
         match a {
             MyEnum::Foo | MyEnum::Bar(_) => Dynamic::UNIT,
@@ -61,7 +61,7 @@ mod MyEnumModule {
         }
     }
     // Printing
-    #[rhai(global, name = "to_string", name = "print", name = "debug")]
+    #[rhai(global, name = "to_string", name = "print", name = "to_debug", name = "debug")]
     pub fn to_string(a: &mut MyEnum) -> String {
         format!("{:?}", a))
     }

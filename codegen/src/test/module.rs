@@ -1519,7 +1519,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("get$square", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "u64"]),
+                    m.set_fn("get$square", FnNamespace::Global, FnAccess::Public, Some(&["x: &mut u64", "u64"]),
                              &[core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
@@ -1597,7 +1597,7 @@ mod generate_tests {
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     m.set_fn("square", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "u64"]), &[core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
-                    m.set_fn("get$square", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "u64"]), &[core::any::TypeId::of::<u64>()],
+                    m.set_fn("get$square", FnNamespace::Global, FnAccess::Public, Some(&["x: &mut u64", "u64"]), &[core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
                 }
@@ -1672,7 +1672,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("set$squared", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "y: u64", "()"]),
+                    m.set_fn("set$squared", FnNamespace::Global, FnAccess::Public, Some(&["x: &mut u64", "y: u64", "()"]),
                              &[core::any::TypeId::of::<u64>(), core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
@@ -1752,7 +1752,7 @@ mod generate_tests {
                     m.set_fn("set_sq", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "y: u64", "()"]),
                              &[core::any::TypeId::of::<u64>(), core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
-                    m.set_fn("set$squared", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "y: u64", "()"]),
+                    m.set_fn("set$squared", FnNamespace::Global, FnAccess::Public, Some(&["x: &mut u64", "y: u64", "()"]),
                              &[core::any::TypeId::of::<u64>(), core::any::TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
@@ -1829,7 +1829,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("index$get$", FnNamespace::Internal, FnAccess::Public,
+                    m.set_fn("index$get$", FnNamespace::Global, FnAccess::Public,
                              Some(&["x: &mut MyCollection", "i: u64", "FLOAT"]),
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
@@ -1914,7 +1914,7 @@ mod generate_tests {
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
                              get_by_index_token().into());
-                    m.set_fn("index$get$", FnNamespace::Internal, FnAccess::Public,
+                    m.set_fn("index$get$", FnNamespace::Global, FnAccess::Public,
                              Some(&["x: &mut MyCollection", "i: u64", "FLOAT"]),
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>()],
@@ -1994,7 +1994,7 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("index$set$", FnNamespace::Internal, FnAccess::Public,
+                    m.set_fn("index$set$", FnNamespace::Global, FnAccess::Public,
                              Some(&["x: &mut MyCollection", "i: u64", "item: FLOAT", "()"]),
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>(),
@@ -2083,7 +2083,7 @@ mod generate_tests {
                                core::any::TypeId::of::<u64>(),
                                core::any::TypeId::of::<FLOAT>()],
                              set_by_index_token().into());
-                    m.set_fn("index$set$", FnNamespace::Internal, FnAccess::Public,
+                    m.set_fn("index$set$", FnNamespace::Global, FnAccess::Public,
                              Some(&["x: &mut MyCollection", "i: u64", "item: FLOAT", "()"]),
                              &[core::any::TypeId::of::<MyCollection>(),
                                core::any::TypeId::of::<u64>(),

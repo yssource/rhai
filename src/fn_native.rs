@@ -134,7 +134,7 @@ impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
     /// If `is_method` is [`true`], the first argument is assumed to be passed
     /// by reference and is not consumed.
     pub fn call_fn_dynamic_raw(
-        &mut self,
+        &self,
         fn_name: &str,
         is_method: bool,
         public_only: bool,
@@ -262,7 +262,7 @@ impl FnPtr {
     /// clone them _before_ calling this function.
     pub fn call_dynamic(
         &self,
-        mut ctx: NativeCallContext,
+        ctx: NativeCallContext,
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {

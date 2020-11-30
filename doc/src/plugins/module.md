@@ -166,6 +166,9 @@ as well as all _type iterators_, are automatically exposed to the _global_ names
 [iteration]({{rootUrl}}/language/for.md), [getters/setters] and [indexers] for [custom types]
 can work as expected.
 
+In fact, the default for all [getters/setters] and [indexers] defined in a plugin module
+is `#[rhai_fn(global)]` unless specifically overridden by `#[rhai_fn(internal)]`.
+
 Therefore, in the example above, the `increment` method (defined with `#[rhai_fn(global)]`)
 works fine when called in method-call style:
 
