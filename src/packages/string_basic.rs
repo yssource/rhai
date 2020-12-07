@@ -172,11 +172,12 @@ mod print_debug_functions {
             let len = map.len();
 
             map.iter_mut().enumerate().for_each(|(i, (k, v))| {
-                result.push_str(&format!("{:?}: ", k));
-                result.push_str(&print_with_func(FUNC_TO_DEBUG, &ctx, v));
-                if i < len - 1 {
-                    result.push_str(", ");
-                }
+                result.push_str(&format!(
+                    "{:?}: {}{}",
+                    k,
+                    &print_with_func(FUNC_TO_DEBUG, &ctx, v),
+                    if i < len - 1 { ", " } else { "" }
+                ));
             });
 
             result.push_str("}");
