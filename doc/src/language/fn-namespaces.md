@@ -15,28 +15,51 @@ allow combining all functions in one [`AST`] into another, forming a new, unifie
 
 In general, there are two types of _namespaces_ where functions are looked up:
 
-| Namespace | Source                                                                                | Lookup method                     | Sub-modules? | Variables? |
-| --------- | ------------------------------------------------------------------------------------- | --------------------------------- | :----------: | :--------: |
-| Global    | 1) `Engine::register_XXX` API<br/>2) [`AST`] being evaluated<br/>3) [packages] loaded | simple function name              |   ignored    |  ignored   |
-| Module    | [`Module`]                                                                            | namespace-qualified function name |     yes      |    yes     |
+| Namespace | How Many | Source                                                                                                                                                                       | Lookup method                     | Sub-modules? | Variables? |
+| --------- | :------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | :----------: | :--------: |
+| Global    |   One    | 1) [`AST`] being evaluated<br/>2) `Engine::register_XXX` API<br/>3) [packages] loaded<br/>4) functions in [modules] loaded via `Engine::register_module` and marked _global_ | simple function name              |   ignored    |  ignored   |
+| Module    |   Many   | [`Module`]                                                                                                                                                                   | namespace-qualified function name |     yes      |    yes     |
+
+
+Module Namespace
+----------------
+
+There can be multiple module namespaces at any time during a script evaluation, loaded via the
+[`import`] statement.
+
+Functions and variables in module namespaces are isolated and encapsulated within their own environments.
+
+They must be called or accessed in a _namespace-qualified_ manner.
+
+```rust
+import "my_module" as m;            // new module namespace 'm' created via 'import'
+
+let x = m::calc_result();           // namespace-qualified function call
+
+let y = m::MY_NUMBER;               // namespace-qualified variable (constant) access
+
+let x = calc_result();              // <- error: function 'calc_result' not found
+                                    //    in global namespace!
+```
 
 
 Global Namespace
 ----------------
 
-There is one _global_ namespace for every [`Engine`], which includes:
+There is one _global_ namespace for every [`Engine`], which includes (in the following search order):
 
-* All the native Rust functions registered via the `Engine::register_XXX` API.
+* All functions defined in the [`AST`] currently being evaluated.
 
-* All the Rust functions defined in [packages] that are loaded into the [`Engine`].
+* All native Rust functions and iterators registered via the `Engine::register_XXX` API.
 
-* All the [modules] imported via [`import`] statements.
+* All functions and iterators defined in [packages] that are loaded into the [`Engine`].
 
-In addition, during evaluation of an [`AST`], all script-defined functions bundled together within
-the [`AST`] are added to the global namespace and override any existing registered functions of
-the same names and number of parameters.
+* Functions defined in [modules] loaded via `Engine::register_module` that are specifically marked
+  for exposure to the global namespace (e.g. via the `#[rhai(global)]` attribute in a [plugin module]).
 
-Anywhere in a Rhai script, when a function call is made, it is searched within the global namespace.
+Anywhere in a Rhai script, when a function call is made, the function is searched within the
+global namespace, in the above search order.
+
 Therefore, function calls in Rhai are _late_ bound - meaning that the function called cannot be
 determined or guaranteed and there is no way to _lock down_ the function being called.
 This aspect is very similar to JavaScript before ES6 modules.

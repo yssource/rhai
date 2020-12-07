@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, ParseErrorType, INT};
+use rhai::{Engine, EvalAltResult, FnNamespace, Module, ParseErrorType, RegisterFn, INT};
 
 #[test]
 fn test_functions() -> Result<(), Box<EvalAltResult>> {
@@ -47,6 +47,31 @@ fn test_functions() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<INT>("fn mul2() { this *= 2; } let x = 21; x.mul2(); x")?,
         42
     );
+
+    Ok(())
+}
+
+#[cfg(not(feature = "no_function"))]
+#[test]
+fn test_functions_namespaces() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    #[cfg(not(feature = "no_module"))]
+    {
+        let mut m = Module::new();
+        let hash = m.set_fn_0("test", || Ok(999 as INT));
+        m.update_fn_namespace(hash, FnNamespace::Global);
+
+        engine.register_module("hello", m);
+
+        assert_eq!(engine.eval::<INT>("test()")?, 999);
+        assert_eq!(engine.eval::<INT>("fn test() { 123 } test()")?, 123);
+    }
+
+    engine.register_fn("test", || 42 as INT);
+
+    assert_eq!(engine.eval::<INT>("test()")?, 42);
+    assert_eq!(engine.eval::<INT>("fn test() { 123 } test()")?, 123);
 
     Ok(())
 }
