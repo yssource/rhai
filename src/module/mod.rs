@@ -514,6 +514,18 @@ impl Module {
         self
     }
 
+    /// Update the namespace of a registered function.
+    ///
+    /// The [`u64`] hash is calculated either by the function [`crate::calc_native_fn_hash`] or
+    /// the function [`crate::calc_script_fn_hash`].
+    pub fn update_fn_namespace(&mut self, hash_fn: u64, namespace: FnNamespace) -> &mut Self {
+        if let Some(f) = self.functions.get_mut(&hash_fn) {
+            f.namespace = namespace;
+        }
+        self.indexed = false;
+        self
+    }
+
     /// Set a Rust function into the module, returning a hash key.
     ///
     /// If there is an existing Rust function of the same hash, it is replaced.
