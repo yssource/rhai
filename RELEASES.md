@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.8
+==============
+
+Bug fixes
+---------
+
+* Constants are no longer propagated by the optimizer if shadowed by a non-constant variable.
+
+
 Version 0.19.7
 ==============
 

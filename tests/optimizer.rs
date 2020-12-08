@@ -53,15 +53,19 @@ fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.set_optimization_level(OptimizationLevel::Simple);
 
-    let ast = engine.compile("{ const DECISION = false; if DECISION { 42 } }")?;
+    let ast = engine.compile("{ const DECISION = false; if DECISION { 42 } else { 123 } }")?;
+
+    assert!(format!("{:?}", ast).starts_with(r#"AST([Block([Const(Ident { name: "DECISION", pos: 1:9 }, Some(Unit(0:0)), false, 1:3), Expr(IntegerConstant(123, 1:53))], 1:1)]"#));
+
+    let ast = engine.compile("if 1 == 2 { 42 }")?;
 
     assert!(format!("{:?}", ast).starts_with("AST([], Module("));
 
     engine.set_optimization_level(OptimizationLevel::Full);
 
-    let ast = engine.compile("if 1 == 2 { 42 }")?;
+    let ast = engine.compile("abs(-42)")?;
 
-    assert!(format!("{:?}", ast).starts_with("AST([], Module("));
+    assert!(format!("{:?}", ast).starts_with(r"AST([Expr(IntegerConstant(42, 1:1))]"));
 
     Ok(())
 }
