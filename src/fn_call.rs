@@ -997,7 +997,7 @@ impl Engine {
                 let (mut target, _, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, &args_expr[0])?;
 
-                if target.as_ref().is_constant() {
+                if target.as_ref().is_read_only() {
                     target = target.into_owned();
                 }
 

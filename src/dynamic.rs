@@ -569,13 +569,19 @@ impl Dynamic {
             | Union::Str(_, access)
             | Union::Char(_, access)
             | Union::Int(_, access)
-            | Union::Float(_, access)
-            | Union::Array(_, access)
-            | Union::Map(_, access)
             | Union::FnPtr(_, access)
-            | Union::TimeStamp(_, access)
-            | Union::Variant(_, access)
-            | Union::Shared(_, access) => access,
+            | Union::Variant(_, access) => access,
+
+            #[cfg(not(feature = "no_float"))]
+            Union::Float(_, access) => access,
+            #[cfg(not(feature = "no_index"))]
+            Union::Array(_, access) => access,
+            #[cfg(not(feature = "no_object"))]
+            Union::Map(_, access) => access,
+            #[cfg(not(feature = "no_std"))]
+            Union::TimeStamp(_, access) => access,
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(_, access) => access,
         }
     }
     /// Set the [`AccessType`] for this [`Dynamic`].
@@ -586,17 +592,29 @@ impl Dynamic {
             | Union::Str(_, access)
             | Union::Char(_, access)
             | Union::Int(_, access)
-            | Union::Float(_, access)
-            | Union::Array(_, access)
-            | Union::Map(_, access)
             | Union::FnPtr(_, access)
-            | Union::TimeStamp(_, access)
-            | Union::Variant(_, access)
-            | Union::Shared(_, access) => *access = typ,
+            | Union::Variant(_, access) => *access = typ,
+
+            #[cfg(not(feature = "no_float"))]
+            Union::Float(_, access) => *access = typ,
+            #[cfg(not(feature = "no_index"))]
+            Union::Array(_, access) => *access = typ,
+            #[cfg(not(feature = "no_object"))]
+            Union::Map(_, access) => *access = typ,
+            #[cfg(not(feature = "no_std"))]
+            Union::TimeStamp(_, access) => *access = typ,
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(_, access) => *access = typ,
         }
     }
-    /// Is this [`Dynamic`] constant?
-    pub(crate) fn is_constant(&self) -> bool {
+    /// Is this [`Dynamic`] read-only?
+    ///
+    /// Constant [`Dynamic`] values are read-only. If a [`&mut Dynamic`][Dynamic] to such a constant
+    /// is passed to a Rust function, the function can use this information to return an error of
+    /// [`EvalAltResult::ErrorAssignmentToConstant`][crate::EvalAltResult::ErrorAssignmentToConstant]
+    /// if its value is going to be modified. This safe-guards constant values from being modified
+    /// from within Rust functions.
+    pub fn is_read_only(&self) -> bool {
         self.access_type().is_constant()
     }
     /// Create a [`Dynamic`] from any type.  A [`Dynamic`] value is simply returned as is.

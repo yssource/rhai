@@ -1285,7 +1285,7 @@ impl Engine {
                     self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
 
                 // Constants cannot be modified
-                if target.as_ref().is_constant() && new_val.is_some() {
+                if target.as_ref().is_read_only() && new_val.is_some() {
                     return EvalAltResult::ErrorAssignmentToConstant(var_name.to_string(), pos)
                         .into();
                 }
@@ -1569,7 +1569,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
-        no_const: bool,
+        _no_const: bool,
         level: usize,
     ) -> Result<(Target<'s>, Position), Box<EvalAltResult>> {
         match expr {
@@ -1579,7 +1579,7 @@ impl Engine {
                     self.search_namespace(scope, mods, state, lib, this_ptr, expr)?;
 
                 // If necessary, constants are cloned
-                if target.as_ref().is_constant() {
+                if target.as_ref().is_read_only() {
                     target = target.into_owned();
                 }
 
@@ -1598,7 +1598,7 @@ impl Engine {
                     let idx = self.eval_expr(scope, mods, state, lib, this_ptr, &x.rhs, level)?;
                     let idx_pos = x.rhs.position();
                     let (mut target, pos) = self.eval_expr_as_target(
-                        scope, mods, state, lib, this_ptr, &x.lhs, no_const, level,
+                        scope, mods, state, lib, this_ptr, &x.lhs, _no_const, level,
                     )?;
 
                     let is_ref = target.is_ref();
@@ -1625,7 +1625,7 @@ impl Engine {
                 // var.prop
                 Expr::Property(ref p) => {
                     let (mut target, _) = self.eval_expr_as_target(
-                        scope, mods, state, lib, this_ptr, &x.lhs, no_const, level,
+                        scope, mods, state, lib, this_ptr, &x.lhs, _no_const, level,
                     )?;
                     let is_ref = target.is_ref();
 
@@ -1919,7 +1919,7 @@ impl Engine {
                 self.inc_operations(state)
                     .map_err(|err| err.fill_position(pos))?;
 
-                if lhs_ptr.as_ref().is_constant() {
+                if lhs_ptr.as_ref().is_read_only() {
                     // Assignment to constant variable
                     Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
                         name.to_string(),

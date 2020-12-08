@@ -436,7 +436,7 @@ impl<'a> Scope<'a> {
         self.names
             .iter()
             .zip(self.values.iter())
-            .map(|((name, _), value)| (name.as_ref(), value.is_constant(), value))
+            .map(|((name, _), value)| (name.as_ref(), value.is_read_only(), value))
     }
 }
 
