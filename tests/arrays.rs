@@ -178,7 +178,10 @@ fn test_arrays_map_reduce() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<INT>(
             r#"
                 let x = [1, 2, 3];
-                x.reduce(|sum, v, i| { if i == 0 { sum = 10 } sum + v * v })
+                x.reduce(|sum, v, i| {
+                    if i == 0 { sum = 10 }
+                    sum + v * v
+                })
             "#
         )?,
         24

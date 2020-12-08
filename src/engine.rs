@@ -1,14 +1,13 @@
 //! Main module defining the script evaluation [`Engine`].
 
 use crate::ast::{Expr, FnCallExpr, Ident, IdentX, ReturnType, Stmt};
-use crate::dynamic::{map_std_type_name, Union, Variant};
+use crate::dynamic::{map_std_type_name, AccessType, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{CallableFunction, Callback, IteratorFn, OnVarCallback};
 use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
-use crate::scope::EntryType as ScopeEntryType;
 use crate::stdlib::{
     any::{type_name, TypeId},
     borrow::Cow,
@@ -833,7 +832,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &'a Expr,
-    ) -> Result<(Target<'s>, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
+    ) -> Result<(Target<'s>, &'a str, Position), Box<EvalAltResult>> {
         match expr {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
@@ -850,7 +849,9 @@ impl Engine {
                     })?;
 
                     // Module variables are constant
-                    Ok((target.clone().into(), name, ScopeEntryType::Constant, *pos))
+                    let mut target = target.clone();
+                    target.set_access_type(AccessType::Constant);
+                    Ok((target.into(), name, *pos))
                 }
                 // Normal variable access
                 _ => self.search_scope_only(scope, mods, state, lib, this_ptr, expr),
@@ -868,7 +869,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &'a Expr,
-    ) -> Result<(Target<'s>, &'a str, ScopeEntryType, Position), Box<EvalAltResult>> {
+    ) -> Result<(Target<'s>, &'a str, Position), Box<EvalAltResult>> {
         let (index, _, _, IdentX { name, pos }) = match expr {
             Expr::Variable(v) => v.as_ref(),
             _ => unreachable!(),
@@ -877,7 +878,7 @@ impl Engine {
         // Check if the variable is `this`
         if name.as_str() == KEYWORD_THIS {
             if let Some(val) = this_ptr {
-                return Ok(((*val).into(), KEYWORD_THIS, ScopeEntryType::Normal, *pos));
+                return Ok(((*val).into(), KEYWORD_THIS, *pos));
             } else {
                 return EvalAltResult::ErrorUnboundThis(*pos).into();
             }
@@ -901,10 +902,11 @@ impl Engine {
                 this_ptr,
                 level: 0,
             };
-            if let Some(result) =
+            if let Some(mut result) =
                 resolve_var(name, index, &context).map_err(|err| err.fill_position(*pos))?
             {
-                return Ok((result.into(), name, ScopeEntryType::Constant, *pos));
+                result.set_access_type(AccessType::Constant);
+                return Ok((result.into(), name, *pos));
             }
         }
 
@@ -918,7 +920,7 @@ impl Engine {
                 .0
         };
 
-        let (val, typ) = scope.get_mut(index);
+        let val = scope.get_mut(index);
 
         // Check for data race - probably not necessary because the only place it should conflict is in a method call
         //                       when the object variable is also used as a parameter.
@@ -926,7 +928,7 @@ impl Engine {
         //     return EvalAltResult::ErrorDataRace(name.into(), *pos).into();
         // }
 
-        Ok((val.into(), name, typ, *pos))
+        Ok((val.into(), name, *pos))
     }
 
     /// Chain-evaluate a dot/index chain.
@@ -1279,16 +1281,13 @@ impl Engine {
                 self.inc_operations(state)
                     .map_err(|err| err.fill_position(*var_pos))?;
 
-                let (target, _, typ, pos) =
+                let (target, _, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
 
                 // Constants cannot be modified
-                match typ {
-                    ScopeEntryType::Constant if new_val.is_some() => {
-                        return EvalAltResult::ErrorAssignmentToConstant(var_name.to_string(), pos)
-                            .into();
-                    }
-                    ScopeEntryType::Constant | ScopeEntryType::Normal => (),
+                if target.as_ref().is_constant() && new_val.is_some() {
+                    return EvalAltResult::ErrorAssignmentToConstant(var_name.to_string(), pos)
+                        .into();
                 }
 
                 let obj_ptr = &mut target.into();
@@ -1410,7 +1409,7 @@ impl Engine {
 
         match target {
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Array(arr)) => {
+            Dynamic(Union::Array(arr, _)) => {
                 // val_array[idx]
                 let index = idx
                     .as_int()
@@ -1430,7 +1429,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_object"))]
-            Dynamic(Union::Map(map)) => {
+            Dynamic(Union::Map(map, _)) => {
                 // val_map[idx]
                 Ok(if _create {
                     let index = idx.take_immutable_string().map_err(|err| {
@@ -1450,7 +1449,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Str(s)) => {
+            Dynamic(Union::Str(s, _)) => {
                 // val_string[idx]
                 let chars_len = s.chars().count();
                 let index = idx
@@ -1517,7 +1516,7 @@ impl Engine {
 
         match rhs_value {
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Array(mut rhs_value)) => {
+            Dynamic(Union::Array(mut rhs_value, _)) => {
                 // Call the `==` operator to compare each value
                 let def_value = Some(false.into());
                 let def_value = def_value.as_ref();
@@ -1545,16 +1544,16 @@ impl Engine {
                 Ok(false.into())
             }
             #[cfg(not(feature = "no_object"))]
-            Dynamic(Union::Map(rhs_value)) => match lhs_value {
+            Dynamic(Union::Map(rhs_value, _)) => match lhs_value {
                 // Only allows string or char
-                Dynamic(Union::Str(s)) => Ok(rhs_value.contains_key(&s).into()),
-                Dynamic(Union::Char(c)) => Ok(rhs_value.contains_key(&c.to_string()).into()),
+                Dynamic(Union::Str(s, _)) => Ok(rhs_value.contains_key(&s).into()),
+                Dynamic(Union::Char(c, _)) => Ok(rhs_value.contains_key(&c.to_string()).into()),
                 _ => EvalAltResult::ErrorInExpr(lhs.position()).into(),
             },
-            Dynamic(Union::Str(rhs_value)) => match lhs_value {
+            Dynamic(Union::Str(rhs_value, _)) => match lhs_value {
                 // Only allows string or char
-                Dynamic(Union::Str(s)) => Ok(rhs_value.contains(s.as_str()).into()),
-                Dynamic(Union::Char(c)) => Ok(rhs_value.contains(c).into()),
+                Dynamic(Union::Str(s, _)) => Ok(rhs_value.contains(s.as_str()).into()),
+                Dynamic(Union::Char(c, _)) => Ok(rhs_value.contains(c).into()),
                 _ => EvalAltResult::ErrorInExpr(lhs.position()).into(),
             },
             _ => EvalAltResult::ErrorInExpr(rhs.position()).into(),
@@ -1576,17 +1575,15 @@ impl Engine {
         match expr {
             // var - point directly to the value
             Expr::Variable(_) => {
-                let (target, _, typ, pos) =
+                let (mut target, _, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, expr)?;
 
-                Ok((
-                    match typ {
-                        // If necessary, constants are cloned
-                        ScopeEntryType::Constant if no_const => target.into_owned(),
-                        _ => target,
-                    },
-                    pos,
-                ))
+                // If necessary, constants are cloned
+                if target.as_ref().is_constant() {
+                    target = target.into_owned();
+                }
+
+                Ok((target, pos))
             }
             // var[...]
             #[cfg(not(feature = "no_index"))]
@@ -1706,8 +1703,7 @@ impl Engine {
                 }
             }
             Expr::Variable(_) => {
-                let (val, _, _, _) =
-                    self.search_namespace(scope, mods, state, lib, this_ptr, expr)?;
+                let (val, _, _) = self.search_namespace(scope, mods, state, lib, this_ptr, expr)?;
                 Ok(val.take_or_clone())
             }
             Expr::Property(_) => unreachable!(),
@@ -1736,7 +1732,7 @@ impl Engine {
                 for item in x.as_ref() {
                     arr.push(self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?);
                 }
-                Ok(Dynamic(Union::Array(Box::new(arr))))
+                Ok(Dynamic(Union::Array(Box::new(arr), AccessType::Normal)))
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -1749,7 +1745,7 @@ impl Engine {
                         self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
                     );
                 }
-                Ok(Dynamic(Union::Map(Box::new(map))))
+                Ok(Dynamic(Union::Map(Box::new(map), AccessType::Normal)))
             }
 
             // Normal function call
@@ -1913,7 +1909,7 @@ impl Engine {
                 let mut rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
                     .flatten();
-                let (mut lhs_ptr, name, typ, pos) =
+                let (mut lhs_ptr, name, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, lhs_expr)?;
 
                 if !lhs_ptr.is_ref() {
@@ -1923,88 +1919,86 @@ impl Engine {
                 self.inc_operations(state)
                     .map_err(|err| err.fill_position(pos))?;
 
-                match typ {
+                if lhs_ptr.as_ref().is_constant() {
                     // Assignment to constant variable
-                    ScopeEntryType::Constant => Err(Box::new(
-                        EvalAltResult::ErrorAssignmentToConstant(name.to_string(), pos),
-                    )),
+                    Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
+                        name.to_string(),
+                        pos,
+                    )))
+                } else if op.is_empty() {
                     // Normal assignment
-                    ScopeEntryType::Normal if op.is_empty() => {
-                        if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
-                            *lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap() = rhs_val;
-                        } else {
-                            *lhs_ptr.as_mut() = rhs_val;
-                        }
-                        Ok(Dynamic::UNIT)
+                    if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
+                        *lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap() = rhs_val;
+                    } else {
+                        *lhs_ptr.as_mut() = rhs_val;
                     }
+                    Ok(Dynamic::UNIT)
+                } else {
                     // Op-assignment - in order of precedence:
-                    ScopeEntryType::Normal => {
-                        // 1) Native registered overriding function
-                        // 2) Built-in implementation
-                        // 3) Map to `var = var op rhs`
+                    // 1) Native registered overriding function
+                    // 2) Built-in implementation
+                    // 3) Map to `var = var op rhs`
 
-                        // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
-                        let arg_types =
-                            once(lhs_ptr.as_mut().type_id()).chain(once(rhs_val.type_id()));
-                        let hash_fn = calc_native_fn_hash(empty(), op, arg_types);
+                    // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
+                    let arg_types = once(lhs_ptr.as_mut().type_id()).chain(once(rhs_val.type_id()));
+                    let hash_fn = calc_native_fn_hash(empty(), op, arg_types);
 
-                        match self
-                            .global_namespace
-                            .get_fn(hash_fn, false)
-                            .or_else(|| self.packages.get_fn(hash_fn))
-                            .or_else(|| mods.get_fn(hash_fn))
-                        {
-                            // op= function registered as method
-                            Some(func) if func.is_method() => {
-                                let mut lock_guard;
-                                let lhs_ptr_inner;
+                    match self
+                        .global_namespace
+                        .get_fn(hash_fn, false)
+                        .or_else(|| self.packages.get_fn(hash_fn))
+                        .or_else(|| mods.get_fn(hash_fn))
+                    {
+                        // op= function registered as method
+                        Some(func) if func.is_method() => {
+                            let mut lock_guard;
+                            let lhs_ptr_inner;
 
-                                if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
-                                    lock_guard = lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap();
-                                    lhs_ptr_inner = lock_guard.deref_mut();
-                                } else {
-                                    lhs_ptr_inner = lhs_ptr.as_mut();
-                                }
-
-                                let args = &mut [lhs_ptr_inner, &mut rhs_val];
-
-                                // Overriding exact implementation
-                                if func.is_plugin_fn() {
-                                    func.get_plugin_fn()
-                                        .call((self, &*mods, lib).into(), args)?;
-                                } else {
-                                    func.get_native_fn()((self, &*mods, lib).into(), args)?;
-                                }
+                            if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
+                                lock_guard = lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap();
+                                lhs_ptr_inner = lock_guard.deref_mut();
+                            } else {
+                                lhs_ptr_inner = lhs_ptr.as_mut();
                             }
-                            // Built-in op-assignment function
-                            _ if run_builtin_op_assignment(op, lhs_ptr.as_mut(), &rhs_val)?
-                                .is_some() => {}
-                            // Not built-in: expand to `var = var op rhs`
-                            _ => {
-                                let op = &op[..op.len() - 1]; // extract operator without =
 
-                                // Clone the LHS value
-                                let args = &mut [&mut lhs_ptr.as_mut().clone(), &mut rhs_val];
+                            let args = &mut [lhs_ptr_inner, &mut rhs_val];
 
-                                // Run function
-                                let (value, _) = self
-                                    .exec_fn_call(
-                                        mods, state, lib, op, 0, args, false, false, false, None,
-                                        None, level,
-                                    )
-                                    .map_err(|err| err.fill_position(*op_pos))?;
-
-                                let value = value.flatten();
-
-                                if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
-                                    *lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap() = value;
-                                } else {
-                                    *lhs_ptr.as_mut() = value;
-                                }
+                            // Overriding exact implementation
+                            if func.is_plugin_fn() {
+                                func.get_plugin_fn()
+                                    .call((self, &*mods, lib).into(), args)?;
+                            } else {
+                                func.get_native_fn()((self, &*mods, lib).into(), args)?;
                             }
                         }
-                        Ok(Dynamic::UNIT)
+                        // Built-in op-assignment function
+                        _ if run_builtin_op_assignment(op, lhs_ptr.as_mut(), &rhs_val)?
+                            .is_some() => {}
+                        // Not built-in: expand to `var = var op rhs`
+                        _ => {
+                            let op = &op[..op.len() - 1]; // extract operator without =
+
+                            // Clone the LHS value
+                            let args = &mut [&mut lhs_ptr.as_mut().clone(), &mut rhs_val];
+
+                            // Run function
+                            let (value, _) = self
+                                .exec_fn_call(
+                                    mods, state, lib, op, 0, args, false, false, false, None, None,
+                                    level,
+                                )
+                                .map_err(|err| err.fill_position(*op_pos))?;
+
+                            let value = value.flatten();
+
+                            if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
+                                *lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap() = value;
+                            } else {
+                                *lhs_ptr.as_mut() = value;
+                            }
+                        }
                     }
+                    Ok(Dynamic::UNIT)
                 }
             }
 
@@ -2175,7 +2169,7 @@ impl Engine {
                     state.scope_level += 1;
 
                     for iter_value in func(iter_obj) {
-                        let (loop_var, _) = scope.get_mut(index);
+                        let loop_var = scope.get_mut(index);
 
                         let value = iter_value.flatten();
                         if cfg!(not(feature = "no_closure")) && loop_var.is_shared() {
@@ -2249,8 +2243,10 @@ impl Engine {
                                 .map(|_| ().into());
 
                             if let Some(result_err) = result.as_ref().err() {
-                                if let EvalAltResult::ErrorRuntime(Dynamic(Union::Unit(_)), pos) =
-                                    result_err.as_ref()
+                                if let EvalAltResult::ErrorRuntime(
+                                    Dynamic(Union::Unit(_, _)),
+                                    pos,
+                                ) = result_err.as_ref()
                                 {
                                     err.set_position(*pos);
                                     result = Err(Box::new(err));
@@ -2293,8 +2289,8 @@ impl Engine {
             // Let/const statement
             Stmt::Let(var_def, expr, export, _) | Stmt::Const(var_def, expr, export, _) => {
                 let entry_type = match stmt {
-                    Stmt::Let(_, _, _, _) => ScopeEntryType::Normal,
-                    Stmt::Const(_, _, _, _) => ScopeEntryType::Constant,
+                    Stmt::Let(_, _, _, _) => AccessType::Normal,
+                    Stmt::Const(_, _, _, _) => AccessType::Constant,
                     _ => unreachable!(),
                 };
 
@@ -2388,8 +2384,8 @@ impl Engine {
             #[cfg(not(feature = "no_closure"))]
             Stmt::Share(x) => {
                 match scope.get_index(&x.name) {
-                    Some((index, ScopeEntryType::Normal)) => {
-                        let (val, _) = scope.get_mut(index);
+                    Some((index, AccessType::Normal)) => {
+                        let val = scope.get_mut(index);
 
                         if !val.is_shared() {
                             // Replace the variable with a shared value.
@@ -2445,18 +2441,18 @@ impl Engine {
         fn calc_size(value: &Dynamic) -> (usize, usize, usize) {
             match value {
                 #[cfg(not(feature = "no_index"))]
-                Dynamic(Union::Array(arr)) => {
+                Dynamic(Union::Array(arr, _)) => {
                     let mut arrays = 0;
                     let mut maps = 0;
 
                     arr.iter().for_each(|value| match value {
-                        Dynamic(Union::Array(_)) => {
+                        Dynamic(Union::Array(_, _)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
                         }
                         #[cfg(not(feature = "no_object"))]
-                        Dynamic(Union::Map(_)) => {
+                        Dynamic(Union::Map(_, _)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
@@ -2467,18 +2463,18 @@ impl Engine {
                     (arrays, maps, 0)
                 }
                 #[cfg(not(feature = "no_object"))]
-                Dynamic(Union::Map(map)) => {
+                Dynamic(Union::Map(map, _)) => {
                     let mut arrays = 0;
                     let mut maps = 0;
 
                     map.values().for_each(|value| match value {
                         #[cfg(not(feature = "no_index"))]
-                        Dynamic(Union::Array(_)) => {
+                        Dynamic(Union::Array(_, _)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
                         }
-                        Dynamic(Union::Map(_)) => {
+                        Dynamic(Union::Map(_, _)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
@@ -2488,7 +2484,7 @@ impl Engine {
 
                     (arrays, maps, 0)
                 }
-                Dynamic(Union::Str(s)) => (0, 0, s.len()),
+                Dynamic(Union::Str(s, _)) => (0, 0, s.len()),
                 _ => (0, 0, 0),
             }
         }
@@ -2497,13 +2493,13 @@ impl Engine {
             // Simply return all errors
             Err(_) => return result,
             // String with limit
-            Ok(Dynamic(Union::Str(_))) if self.max_string_size() > 0 => (),
+            Ok(Dynamic(Union::Str(_, _))) if self.max_string_size() > 0 => (),
             // Array with limit
             #[cfg(not(feature = "no_index"))]
-            Ok(Dynamic(Union::Array(_))) if self.max_array_size() > 0 => (),
+            Ok(Dynamic(Union::Array(_, _))) if self.max_array_size() > 0 => (),
             // Map with limit
             #[cfg(not(feature = "no_object"))]
-            Ok(Dynamic(Union::Map(_))) if self.max_map_size() > 0 => (),
+            Ok(Dynamic(Union::Map(_, _))) if self.max_map_size() > 0 => (),
             // Everything else is simply returned
             Ok(_) => return result,
         };

@@ -75,7 +75,7 @@ The Rhai Scripting Language
    5. [Variables](language/variables.md)
    6. [Constants](language/constants.md)
    7. [Logic Operators](language/logic.md)
-   8. [Other Operators](language/other-op.md)
+   8. [Assignment Operators](language/assignment-op.md)
    9. [If Statement](language/if.md)
    10. [Switch Expression](language/switch.md)
    11. [While Loop](language/while.md)

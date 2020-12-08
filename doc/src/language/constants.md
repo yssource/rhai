@@ -61,9 +61,31 @@ r"
 ```
 
 
-Constants Can be Modified, Just Not Reassigned
----------------------------------------------
+Constants Can be Modified via Rust
+---------------------------------
 
-A custom type stored as a constant can be modified via its registered API -
-being a constant only prevents it from being re-assigned or operated upon by Rhai;
-mutating it via a Rust function is still allowed.
+A custom type stored as a constant cannot be modified via script, but _can_ be modified via
+a registered Rust function that takes a first `&mut` parameter - because there is no way for
+Rhai to know whether the Rust function modifies its argument!
+
+```rust
+const x = 42;       // a constant
+
+x.increment();      // call 'increment' defined in Rust with '&mut' first parameter
+
+x == 43;            // value of 'x' is changed!
+
+fn double() {
+    this *= 2;      // function squares 'this'
+}
+
+x.double();         // <- error: cannot modify constant 'this'
+
+x == 43;            // value of 'x' is unchanged by script
+```
+
+This is important to keep in mind because the script [optimizer][script optimization]
+by default does _constant propagation_ as a operation.
+
+If a constant is eventually modified by a Rust function, the optimizer will not see
+the updated value and will propagate the original initialization value instead.

@@ -1,6 +1,6 @@
 //! Module defining the AST (abstract syntax tree).
 
-use crate::dynamic::Union;
+use crate::dynamic::{AccessType, Union};
 use crate::fn_native::shared_make_mut;
 use crate::module::NamespaceRef;
 use crate::stdlib::{
@@ -940,10 +940,10 @@ impl Expr {
             Self::FloatConstant(x, _) => (*x).into(),
             Self::CharConstant(x, _) => (*x).into(),
             Self::StringConstant(x, _) => x.clone().into(),
-            Self::FnPointer(x, _) => Dynamic(Union::FnPtr(Box::new(FnPtr::new_unchecked(
-                x.clone(),
-                Default::default(),
-            )))),
+            Self::FnPointer(x, _) => Dynamic(Union::FnPtr(
+                Box::new(FnPtr::new_unchecked(x.clone(), Default::default())),
+                AccessType::Constant,
+            )),
             Self::BoolConstant(x, _) => (*x).into(),
             Self::Unit(_) => ().into(),
 
@@ -954,7 +954,7 @@ impl Expr {
                     x.len(),
                 ));
                 arr.extend(x.iter().map(|v| v.get_constant_value().unwrap()));
-                Dynamic(Union::Array(Box::new(arr)))
+                Dynamic(Union::Array(Box::new(arr), AccessType::Constant))
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -967,7 +967,7 @@ impl Expr {
                     x.iter()
                         .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap())),
                 );
-                Dynamic(Union::Map(Box::new(map)))
+                Dynamic(Union::Map(Box::new(map), AccessType::Constant))
             }
 
             _ => return None,
@@ -1167,7 +1167,7 @@ mod tests {
         assert_eq!(size_of::<Option<crate::ast::Expr>>(), 16);
         assert_eq!(size_of::<crate::ast::Stmt>(), 32);
         assert_eq!(size_of::<Option<crate::ast::Stmt>>(), 32);
-        assert_eq!(size_of::<crate::Scope>(), 72);
+        assert_eq!(size_of::<crate::Scope>(), 48);
         assert_eq!(size_of::<crate::LexError>(), 56);
         assert_eq!(size_of::<crate::ParseError>(), 16);
         assert_eq!(size_of::<crate::EvalAltResult>(), 72);

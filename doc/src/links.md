@@ -68,6 +68,8 @@
 
 [variable]: {{rootUrl}}/language/variables.md
 [variables]: {{rootUrl}}/language/variables.md
+[constant]: {{rootUrl}}/language/constants.md
+[constants]: {{rootUrl}}/language/constants.md
 
 [string]: {{rootUrl}}/language/strings-chars.md
 [strings]: {{rootUrl}}/language/strings-chars.md

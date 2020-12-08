@@ -8,7 +8,6 @@ use crate::engine::{
 use crate::fn_native::FnCallArgs;
 use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
-use crate::scope::EntryType as ScopeEntryType;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
@@ -360,7 +359,7 @@ impl Engine {
                 .map(|(name, value)| {
                     let var_name: crate::stdlib::borrow::Cow<'_, str> =
                         crate::r#unsafe::unsafe_cast_var_name_to_lifetime(name).into();
-                    (var_name, ScopeEntryType::Normal, value)
+                    (var_name, value)
                 }),
         );
 
@@ -540,15 +539,10 @@ impl Engine {
                         if !func.externals.is_empty() {
                             captured
                                 .into_iter()
-                                .filter(|(name, _, _, _)| func.externals.contains(name.as_ref()))
-                                .for_each(|(name, typ, value, _)| {
+                                .filter(|(name, _, _)| func.externals.contains(name.as_ref()))
+                                .for_each(|(name, value, _)| {
                                     // Consume the scope values.
-                                    match typ {
-                                        ScopeEntryType::Normal => scope.push(name, value),
-                                        ScopeEntryType::Constant => {
-                                            scope.push_constant(name, value)
-                                        }
-                                    };
+                                    scope.push_dynamic(name, value);
                                 });
                         }
                     }
@@ -1000,13 +994,12 @@ impl Engine {
                     .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
                     .collect::<Result<_, _>>()?;
 
-                let (target, _, typ, pos) =
+                let (mut target, _, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, &args_expr[0])?;
 
-                let target = match typ {
-                    ScopeEntryType::Normal => target,
-                    ScopeEntryType::Constant => target.into_owned(),
-                };
+                if target.as_ref().is_constant() {
+                    target = target.into_owned();
+                }
 
                 self.inc_operations(state)
                     .map_err(|err| err.fill_position(pos))?;
@@ -1087,7 +1080,7 @@ impl Engine {
                     .collect::<Result<_, _>>()?;
 
                 // Get target reference to first argument
-                let (target, _, _, pos) =
+                let (target, _, pos) =
                     self.search_scope_only(scope, mods, state, lib, this_ptr, &args_expr[0])?;
 
                 self.inc_operations(state)

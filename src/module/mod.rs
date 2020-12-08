@@ -1640,7 +1640,7 @@ impl Module {
         // Create new module
         let mut module = Module::new();
 
-        scope.into_iter().for_each(|(_, _, value, mut aliases)| {
+        scope.into_iter().for_each(|(_, value, mut aliases)| {
             // Variables with an alias left in the scope become module variables
             if aliases.len() > 1 {
                 aliases.into_iter().for_each(|alias| {
