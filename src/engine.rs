@@ -1,7 +1,7 @@
 //! Main module defining the script evaluation [`Engine`].
 
 use crate::ast::{Expr, FnCallExpr, Ident, IdentX, ReturnType, Stmt};
-use crate::dynamic::{map_std_type_name, AccessType, Union, Variant};
+use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{CallableFunction, Callback, IteratorFn, OnVarCallback};
 use crate::module::NamespaceRef;
@@ -850,7 +850,7 @@ impl Engine {
 
                     // Module variables are constant
                     let mut target = target.clone();
-                    target.set_access_type(AccessType::Constant);
+                    target.set_access_mode(AccessMode::ReadOnly);
                     Ok((target.into(), name, *pos))
                 }
                 // Normal variable access
@@ -905,7 +905,7 @@ impl Engine {
             if let Some(mut result) =
                 resolve_var(name, index, &context).map_err(|err| err.fill_position(*pos))?
             {
-                result.set_access_type(AccessType::Constant);
+                result.set_access_mode(AccessMode::ReadOnly);
                 return Ok((result.into(), name, *pos));
             }
         }
@@ -1732,7 +1732,7 @@ impl Engine {
                 for item in x.as_ref() {
                     arr.push(self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?);
                 }
-                Ok(Dynamic(Union::Array(Box::new(arr), AccessType::Normal)))
+                Ok(Dynamic(Union::Array(Box::new(arr), AccessMode::ReadWrite)))
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -1745,7 +1745,7 @@ impl Engine {
                         self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
                     );
                 }
-                Ok(Dynamic(Union::Map(Box::new(map), AccessType::Normal)))
+                Ok(Dynamic(Union::Map(Box::new(map), AccessMode::ReadWrite)))
             }
 
             // Normal function call
@@ -2289,8 +2289,8 @@ impl Engine {
             // Let/const statement
             Stmt::Let(var_def, expr, export, _) | Stmt::Const(var_def, expr, export, _) => {
                 let entry_type = match stmt {
-                    Stmt::Let(_, _, _, _) => AccessType::Normal,
-                    Stmt::Const(_, _, _, _) => AccessType::Constant,
+                    Stmt::Let(_, _, _, _) => AccessMode::ReadWrite,
+                    Stmt::Const(_, _, _, _) => AccessMode::ReadOnly,
                     _ => unreachable!(),
                 };
 
@@ -2384,7 +2384,7 @@ impl Engine {
             #[cfg(not(feature = "no_closure"))]
             Stmt::Share(x) => {
                 match scope.get_index(&x.name) {
-                    Some((index, AccessType::Normal)) => {
+                    Some((index, AccessMode::ReadWrite)) => {
                         let val = scope.get_mut(index);
 
                         if !val.is_shared() {

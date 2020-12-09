@@ -1,7 +1,7 @@
 //! Module implementing the [`AST`] optimizer.
 
 use crate::ast::{Expr, ScriptFnDef, Stmt};
-use crate::dynamic::AccessType;
+use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_call::run_builtin_binary_op;
 use crate::parser::map_dynamic_to_expr;
@@ -59,7 +59,7 @@ struct State<'a> {
     /// Has the [`AST`] been changed during this pass?
     changed: bool,
     /// Collection of constants to use for eager function evaluations.
-    variables: Vec<(String, AccessType, Expr)>,
+    variables: Vec<(String, AccessMode, Expr)>,
     /// An [`Engine`] instance for eager function evaluation.
     engine: &'a Engine,
     /// [Module] containing script-defined functions.
@@ -102,7 +102,7 @@ impl<'a> State<'a> {
     }
     /// Add a new constant to the list.
     #[inline(always)]
-    pub fn push_var(&mut self, name: &str, access: AccessType, value: Expr) {
+    pub fn push_var(&mut self, name: &str, access: AccessMode, value: Expr) {
         self.variables.push((name.into(), access, value))
     }
     /// Look up a constant from the list.
@@ -110,7 +110,7 @@ impl<'a> State<'a> {
     pub fn find_constant(&self, name: &str) -> Option<&Expr> {
         for (n, access, expr) in self.variables.iter().rev() {
             if n == name {
-                return if access.is_constant() {
+                return if access.is_read_only() {
                     Some(expr)
                 } else {
                     None
@@ -163,14 +163,18 @@ fn optimize_stmt_block(
     statements.iter_mut().for_each(|stmt| match stmt {
         // Add constant literals into the state
         Stmt::Const(var_def, Some(expr), _, _) if expr.is_constant() => {
-            state.push_var(&var_def.name, AccessType::Constant, mem::take(expr));
+            state.push_var(&var_def.name, AccessMode::ReadOnly, mem::take(expr));
         }
         Stmt::Const(var_def, None, _, _) => {
-            state.push_var(&var_def.name, AccessType::Constant, Expr::Unit(var_def.pos));
+            state.push_var(&var_def.name, AccessMode::ReadOnly, Expr::Unit(var_def.pos));
         }
         // Add variables into the state
         Stmt::Let(var_def, _, _, _) => {
-            state.push_var(&var_def.name, AccessType::Normal, Expr::Unit(var_def.pos));
+            state.push_var(
+                &var_def.name,
+                AccessMode::ReadWrite,
+                Expr::Unit(var_def.pos),
+            );
         }
         // Optimize the statement
         _ => optimize_stmt(stmt, state, preserve_result),
@@ -749,11 +753,11 @@ fn optimize_top_level(
     // Add constants and variables from the scope
     scope.iter().for_each(|(name, constant, value)| {
         if !constant {
-            state.push_var(name, AccessType::Normal, Expr::Unit(Position::NONE));
+            state.push_var(name, AccessMode::ReadWrite, Expr::Unit(Position::NONE));
         } else if let Some(val) = map_dynamic_to_expr(value, Position::NONE) {
-            state.push_var(name, AccessType::Constant, val);
+            state.push_var(name, AccessMode::ReadOnly, val);
         } else {
-            state.push_var(name, AccessType::Constant, Expr::Unit(Position::NONE));
+            state.push_var(name, AccessMode::ReadOnly, Expr::Unit(Position::NONE));
         }
     });
 
@@ -774,7 +778,7 @@ fn optimize_top_level(
                     optimize_expr(value_expr, &mut state);
 
                     if value_expr.is_constant() {
-                        state.push_var(&var_def.name, AccessType::Constant, value_expr.clone());
+                        state.push_var(&var_def.name, AccessMode::ReadOnly, value_expr.clone());
                     }
 
                     // Keep it in the global scope
@@ -784,10 +788,14 @@ fn optimize_top_level(
                     }
                 }
                 Stmt::Const(var_def, None, _, _) => {
-                    state.push_var(&var_def.name, AccessType::Constant, Expr::Unit(var_def.pos));
+                    state.push_var(&var_def.name, AccessMode::ReadOnly, Expr::Unit(var_def.pos));
                 }
                 Stmt::Let(var_def, _, _, _) => {
-                    state.push_var(&var_def.name, AccessType::Normal, Expr::Unit(var_def.pos));
+                    state.push_var(
+                        &var_def.name,
+                        AccessMode::ReadWrite,
+                        Expr::Unit(var_def.pos),
+                    );
                 }
                 _ => {
                     // Keep all variable declarations at this level

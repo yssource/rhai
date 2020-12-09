@@ -1,6 +1,6 @@
 //! Module that defines the [`Scope`] type representing a function call-stack scope.
 
-use crate::dynamic::{AccessType, Variant};
+use crate::dynamic::{AccessMode, Variant};
 use crate::stdlib::{borrow::Cow, boxed::Box, iter, string::String, vec::Vec};
 use crate::{Dynamic, StaticVec};
 
@@ -156,7 +156,7 @@ impl<'a> Scope<'a> {
         name: impl Into<Cow<'a, str>>,
         value: impl Variant + Clone,
     ) -> &mut Self {
-        self.push_dynamic_value(name, AccessType::Normal, Dynamic::from(value))
+        self.push_dynamic_value(name, AccessMode::ReadWrite, Dynamic::from(value))
     }
     /// Add (push) a new [`Dynamic`] entry to the [`Scope`].
     ///
@@ -172,7 +172,7 @@ impl<'a> Scope<'a> {
     /// ```
     #[inline(always)]
     pub fn push_dynamic(&mut self, name: impl Into<Cow<'a, str>>, value: Dynamic) -> &mut Self {
-        self.push_dynamic_value(name, value.access_type(), value)
+        self.push_dynamic_value(name, value.access_mode(), value)
     }
     /// Add (push) a new constant to the [`Scope`].
     ///
@@ -195,7 +195,7 @@ impl<'a> Scope<'a> {
         name: impl Into<Cow<'a, str>>,
         value: impl Variant + Clone,
     ) -> &mut Self {
-        self.push_dynamic_value(name, AccessType::Constant, Dynamic::from(value))
+        self.push_dynamic_value(name, AccessMode::ReadOnly, Dynamic::from(value))
     }
     /// Add (push) a new constant with a [`Dynamic`] value to the Scope.
     ///
@@ -218,18 +218,18 @@ impl<'a> Scope<'a> {
         name: impl Into<Cow<'a, str>>,
         value: Dynamic,
     ) -> &mut Self {
-        self.push_dynamic_value(name, AccessType::Constant, value)
+        self.push_dynamic_value(name, AccessMode::ReadOnly, value)
     }
     /// Add (push) a new entry with a [`Dynamic`] value to the [`Scope`].
     #[inline]
     pub(crate) fn push_dynamic_value(
         &mut self,
         name: impl Into<Cow<'a, str>>,
-        access: AccessType,
+        access: AccessMode,
         mut value: Dynamic,
     ) -> &mut Self {
         self.names.push((name.into(), Box::new(Default::default())));
-        value.set_access_type(access);
+        value.set_access_mode(access);
         self.values.push(value.into());
         self
     }
@@ -287,14 +287,14 @@ impl<'a> Scope<'a> {
     }
     /// Find an entry in the [`Scope`], starting from the last.
     #[inline(always)]
-    pub(crate) fn get_index(&self, name: &str) -> Option<(usize, AccessType)> {
+    pub(crate) fn get_index(&self, name: &str) -> Option<(usize, AccessMode)> {
         self.names
             .iter()
             .enumerate()
             .rev() // Always search a Scope in reverse order
             .find_map(|(index, (key, _))| {
                 if name == key.as_ref() {
-                    Some((index, self.values[index].access_type()))
+                    Some((index, self.values[index].access_mode()))
                 } else {
                     None
                 }
@@ -349,8 +349,8 @@ impl<'a> Scope<'a> {
             None => {
                 self.push(name, value);
             }
-            Some((_, AccessType::Constant)) => panic!("variable {} is constant", name),
-            Some((index, AccessType::Normal)) => {
+            Some((_, AccessMode::ReadOnly)) => panic!("variable {} is constant", name),
+            Some((index, AccessMode::ReadWrite)) => {
                 *self.values.get_mut(index).unwrap() = Dynamic::from(value);
             }
         }

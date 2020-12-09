@@ -1,6 +1,6 @@
 //! Module defining the AST (abstract syntax tree).
 
-use crate::dynamic::{AccessType, Union};
+use crate::dynamic::{AccessMode, Union};
 use crate::fn_native::shared_make_mut;
 use crate::module::NamespaceRef;
 use crate::stdlib::{
@@ -942,7 +942,7 @@ impl Expr {
             Self::StringConstant(x, _) => x.clone().into(),
             Self::FnPointer(x, _) => Dynamic(Union::FnPtr(
                 Box::new(FnPtr::new_unchecked(x.clone(), Default::default())),
-                AccessType::Constant,
+                AccessMode::ReadOnly,
             )),
             Self::BoolConstant(x, _) => (*x).into(),
             Self::Unit(_) => ().into(),
@@ -954,7 +954,7 @@ impl Expr {
                     x.len(),
                 ));
                 arr.extend(x.iter().map(|v| v.get_constant_value().unwrap()));
-                Dynamic(Union::Array(Box::new(arr), AccessType::Constant))
+                Dynamic(Union::Array(Box::new(arr), AccessMode::ReadOnly))
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -967,7 +967,7 @@ impl Expr {
                     x.iter()
                         .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap())),
                 );
-                Dynamic(Union::Map(Box::new(map), AccessType::Constant))
+                Dynamic(Union::Map(Box::new(map), AccessMode::ReadOnly))
             }
 
             _ => return None,

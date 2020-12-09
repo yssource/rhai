@@ -116,21 +116,21 @@ impl dyn Variant {
     }
 }
 
-/// Type of an entry in the Scope.
+/// Modes of access.
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
-pub enum AccessType {
-    /// Normal value.
-    Normal,
-    /// Immutable constant value.
-    Constant,
+pub enum AccessMode {
+    /// Mutable.
+    ReadWrite,
+    /// Immutable.
+    ReadOnly,
 }
 
-impl AccessType {
-    /// Is the access type [`Constant`]?
-    pub fn is_constant(self) -> bool {
+impl AccessMode {
+    /// Is the access type [`ReadOnly`]?
+    pub fn is_read_only(self) -> bool {
         match self {
-            Self::Normal => false,
-            Self::Constant => true,
+            Self::ReadWrite => false,
+            Self::ReadOnly => true,
         }
     }
 }
@@ -142,25 +142,25 @@ pub struct Dynamic(pub(crate) Union);
 ///
 /// Most variants are boxed to reduce the size.
 pub enum Union {
-    Unit((), AccessType),
-    Bool(bool, AccessType),
-    Str(ImmutableString, AccessType),
-    Char(char, AccessType),
-    Int(INT, AccessType),
+    Unit((), AccessMode),
+    Bool(bool, AccessMode),
+    Str(ImmutableString, AccessMode),
+    Char(char, AccessMode),
+    Int(INT, AccessMode),
     #[cfg(not(feature = "no_float"))]
-    Float(FLOAT, AccessType),
+    Float(FLOAT, AccessMode),
     #[cfg(not(feature = "no_index"))]
-    Array(Box<Array>, AccessType),
+    Array(Box<Array>, AccessMode),
     #[cfg(not(feature = "no_object"))]
-    Map(Box<Map>, AccessType),
-    FnPtr(Box<FnPtr>, AccessType),
+    Map(Box<Map>, AccessMode),
+    FnPtr(Box<FnPtr>, AccessMode),
     #[cfg(not(feature = "no_std"))]
-    TimeStamp(Box<Instant>, AccessType),
+    TimeStamp(Box<Instant>, AccessMode),
 
-    Variant(Box<Box<dyn Variant>>, AccessType),
+    Variant(Box<Box<dyn Variant>>, AccessMode),
 
     #[cfg(not(feature = "no_closure"))]
-    Shared(crate::Shared<crate::Locked<Dynamic>>, AccessType),
+    Shared(crate::Shared<crate::Locked<Dynamic>>, AccessMode),
 }
 
 /// Underlying [`Variant`] read guard for [`Dynamic`].
@@ -506,27 +506,27 @@ impl Clone for Dynamic {
     /// The cloned copy is marked [`AccessType::Normal`] even if the original is constant.
     fn clone(&self) -> Self {
         match self.0 {
-            Union::Unit(value, _) => Self(Union::Unit(value, AccessType::Normal)),
-            Union::Bool(value, _) => Self(Union::Bool(value, AccessType::Normal)),
-            Union::Str(ref value, _) => Self(Union::Str(value.clone(), AccessType::Normal)),
-            Union::Char(value, _) => Self(Union::Char(value, AccessType::Normal)),
-            Union::Int(value, _) => Self(Union::Int(value, AccessType::Normal)),
+            Union::Unit(value, _) => Self(Union::Unit(value, AccessMode::ReadWrite)),
+            Union::Bool(value, _) => Self(Union::Bool(value, AccessMode::ReadWrite)),
+            Union::Str(ref value, _) => Self(Union::Str(value.clone(), AccessMode::ReadWrite)),
+            Union::Char(value, _) => Self(Union::Char(value, AccessMode::ReadWrite)),
+            Union::Int(value, _) => Self(Union::Int(value, AccessMode::ReadWrite)),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(value, _) => Self(Union::Float(value, AccessType::Normal)),
+            Union::Float(value, _) => Self(Union::Float(value, AccessMode::ReadWrite)),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(ref value, _) => Self(Union::Array(value.clone(), AccessType::Normal)),
+            Union::Array(ref value, _) => Self(Union::Array(value.clone(), AccessMode::ReadWrite)),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(ref value, _) => Self(Union::Map(value.clone(), AccessType::Normal)),
-            Union::FnPtr(ref value, _) => Self(Union::FnPtr(value.clone(), AccessType::Normal)),
+            Union::Map(ref value, _) => Self(Union::Map(value.clone(), AccessMode::ReadWrite)),
+            Union::FnPtr(ref value, _) => Self(Union::FnPtr(value.clone(), AccessMode::ReadWrite)),
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(ref value, _) => {
-                Self(Union::TimeStamp(value.clone(), AccessType::Normal))
+                Self(Union::TimeStamp(value.clone(), AccessMode::ReadWrite))
             }
 
             Union::Variant(ref value, _) => (***value).clone_into_dynamic(),
 
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(ref cell, _) => Self(Union::Shared(cell.clone(), AccessType::Normal)),
+            Union::Shared(ref cell, _) => Self(Union::Shared(cell.clone(), AccessMode::ReadWrite)),
         }
     }
 }
@@ -540,29 +540,29 @@ impl Default for Dynamic {
 
 impl Dynamic {
     /// A [`Dynamic`] containing a `()`.
-    pub const UNIT: Dynamic = Self(Union::Unit((), AccessType::Normal));
+    pub const UNIT: Dynamic = Self(Union::Unit((), AccessMode::ReadWrite));
     /// A [`Dynamic`] containing a `true`.
-    pub const TRUE: Dynamic = Self(Union::Bool(true, AccessType::Normal));
+    pub const TRUE: Dynamic = Self(Union::Bool(true, AccessMode::ReadWrite));
     /// A [`Dynamic`] containing a [`false`].
-    pub const FALSE: Dynamic = Self(Union::Bool(false, AccessType::Normal));
+    pub const FALSE: Dynamic = Self(Union::Bool(false, AccessMode::ReadWrite));
     /// A [`Dynamic`] containing the integer zero.
-    pub const ZERO: Dynamic = Self(Union::Int(0, AccessType::Normal));
+    pub const ZERO: Dynamic = Self(Union::Int(0, AccessMode::ReadWrite));
     /// A [`Dynamic`] containing the integer one.
-    pub const ONE: Dynamic = Self(Union::Int(1, AccessType::Normal));
+    pub const ONE: Dynamic = Self(Union::Int(1, AccessMode::ReadWrite));
     /// A [`Dynamic`] containing the integer negative one.
-    pub const NEGATIVE_ONE: Dynamic = Self(Union::Int(-1, AccessType::Normal));
+    pub const NEGATIVE_ONE: Dynamic = Self(Union::Int(-1, AccessMode::ReadWrite));
     /// A [`Dynamic`] containing the floating-point zero.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_ZERO: Dynamic = Self(Union::Float(0.0, AccessType::Normal));
+    pub const FLOAT_ZERO: Dynamic = Self(Union::Float(0.0, AccessMode::ReadWrite));
     /// A [`Dynamic`] containing the floating-point one.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_ONE: Dynamic = Self(Union::Float(1.0, AccessType::Normal));
+    pub const FLOAT_ONE: Dynamic = Self(Union::Float(1.0, AccessMode::ReadWrite));
     /// A [`Dynamic`] containing the floating-point negative one.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_NEGATIVE_ONE: Dynamic = Self(Union::Float(-1.0, AccessType::Normal));
+    pub const FLOAT_NEGATIVE_ONE: Dynamic = Self(Union::Float(-1.0, AccessMode::ReadWrite));
 
-    /// Get the [`AccessType`] for this [`Dynamic`].
-    pub(crate) fn access_type(&self) -> AccessType {
+    /// Get the [`AccessMode`] for this [`Dynamic`].
+    pub(crate) fn access_mode(&self) -> AccessMode {
         match self.0 {
             Union::Unit(_, access)
             | Union::Bool(_, access)
@@ -584,8 +584,8 @@ impl Dynamic {
             Union::Shared(_, access) => access,
         }
     }
-    /// Set the [`AccessType`] for this [`Dynamic`].
-    pub(crate) fn set_access_type(&mut self, typ: AccessType) {
+    /// Set the [`AccessMode`] for this [`Dynamic`].
+    pub(crate) fn set_access_mode(&mut self, typ: AccessMode) {
         match &mut self.0 {
             Union::Unit(_, access)
             | Union::Bool(_, access)
@@ -615,7 +615,7 @@ impl Dynamic {
     /// if its value is going to be modified. This safe-guards constant values from being modified
     /// from within Rust functions.
     pub fn is_read_only(&self) -> bool {
-        self.access_type().is_constant()
+        self.access_mode().is_read_only()
     }
     /// Create a [`Dynamic`] from any type.  A [`Dynamic`] value is simply returned as is.
     ///
@@ -733,7 +733,7 @@ impl Dynamic {
             }
         }
 
-        Self(Union::Variant(Box::new(boxed), AccessType::Normal))
+        Self(Union::Variant(Box::new(boxed), AccessMode::ReadWrite))
     }
     /// Turn the [`Dynamic`] value into a shared [`Dynamic`] value backed by an [`Rc`][std::rc::Rc]`<`[`RefCell`][std::cell::RefCell]`<`[`Dynamic`]`>>`
     /// or [`Arc`][std::sync::Arc]`<`[`RwLock`][std::sync::RwLock]`<`[`Dynamic`]`>>` depending on the `sync` feature.
@@ -750,7 +750,7 @@ impl Dynamic {
     /// Panics under the `no_closure` feature.
     #[inline(always)]
     pub fn into_shared(self) -> Self {
-        let _access = self.access_type();
+        let _access = self.access_mode();
 
         #[cfg(not(feature = "no_closure"))]
         return match self.0 {
@@ -1338,38 +1338,38 @@ impl Dynamic {
 impl From<()> for Dynamic {
     #[inline(always)]
     fn from(value: ()) -> Self {
-        Self(Union::Unit(value, AccessType::Normal))
+        Self(Union::Unit(value, AccessMode::ReadWrite))
     }
 }
 impl From<bool> for Dynamic {
     #[inline(always)]
     fn from(value: bool) -> Self {
-        Self(Union::Bool(value, AccessType::Normal))
+        Self(Union::Bool(value, AccessMode::ReadWrite))
     }
 }
 impl From<INT> for Dynamic {
     #[inline(always)]
     fn from(value: INT) -> Self {
-        Self(Union::Int(value, AccessType::Normal))
+        Self(Union::Int(value, AccessMode::ReadWrite))
     }
 }
 #[cfg(not(feature = "no_float"))]
 impl From<FLOAT> for Dynamic {
     #[inline(always)]
     fn from(value: FLOAT) -> Self {
-        Self(Union::Float(value, AccessType::Normal))
+        Self(Union::Float(value, AccessMode::ReadWrite))
     }
 }
 impl From<char> for Dynamic {
     #[inline(always)]
     fn from(value: char) -> Self {
-        Self(Union::Char(value, AccessType::Normal))
+        Self(Union::Char(value, AccessMode::ReadWrite))
     }
 }
 impl<S: Into<ImmutableString>> From<S> for Dynamic {
     #[inline(always)]
     fn from(value: S) -> Self {
-        Self(Union::Str(value.into(), AccessType::Normal))
+        Self(Union::Str(value.into(), AccessMode::ReadWrite))
     }
 }
 #[cfg(not(feature = "no_index"))]
@@ -1378,7 +1378,7 @@ impl<T: Variant + Clone> From<crate::stdlib::vec::Vec<T>> for Dynamic {
     fn from(value: crate::stdlib::vec::Vec<T>) -> Self {
         Self(Union::Array(
             Box::new(value.into_iter().map(Dynamic::from).collect()),
-            AccessType::Normal,
+            AccessMode::ReadWrite,
         ))
     }
 }
@@ -1388,7 +1388,7 @@ impl<T: Variant + Clone> From<&[T]> for Dynamic {
     fn from(value: &[T]) -> Self {
         Self(Union::Array(
             Box::new(value.iter().cloned().map(Dynamic::from).collect()),
-            AccessType::Normal,
+            AccessMode::ReadWrite,
         ))
     }
 }
@@ -1405,26 +1405,26 @@ impl<K: Into<ImmutableString>, T: Variant + Clone> From<crate::stdlib::collectio
                     .map(|(k, v)| (k.into(), Dynamic::from(v)))
                     .collect(),
             ),
-            AccessType::Normal,
+            AccessMode::ReadWrite,
         ))
     }
 }
 impl From<FnPtr> for Dynamic {
     #[inline(always)]
     fn from(value: FnPtr) -> Self {
-        Self(Union::FnPtr(Box::new(value), AccessType::Normal))
+        Self(Union::FnPtr(Box::new(value), AccessMode::ReadWrite))
     }
 }
 impl From<Box<FnPtr>> for Dynamic {
     #[inline(always)]
     fn from(value: Box<FnPtr>) -> Self {
-        Self(Union::FnPtr(value, AccessType::Normal))
+        Self(Union::FnPtr(value, AccessMode::ReadWrite))
     }
 }
 #[cfg(not(feature = "no_std"))]
 impl From<Instant> for Dynamic {
     #[inline(always)]
     fn from(value: Instant) -> Self {
-        Self(Union::TimeStamp(Box::new(value), AccessType::Normal))
+        Self(Union::TimeStamp(Box::new(value), AccessMode::ReadWrite))
     }
 }

@@ -8,6 +8,7 @@ Bug fixes
 ---------
 
 * Constants are no longer propagated by the optimizer if shadowed by a non-constant variable.
+* Constants passed as the `this` parameter to Rhai functions now throws an error if assigned to.
 
 
 Version 0.19.7

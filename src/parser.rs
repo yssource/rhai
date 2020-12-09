@@ -3,7 +3,7 @@
 use crate::ast::{
     BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, ScriptFnDef, Stmt,
 };
-use crate::dynamic::{AccessType, Union};
+use crate::dynamic::{AccessMode, Union};
 use crate::engine::{KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::module::NamespaceRef;
 use crate::optimize::optimize_into_ast;
@@ -48,7 +48,7 @@ struct ParseState<'e> {
     /// Interned strings.
     strings: HashMap<String, ImmutableString>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
-    stack: Vec<(ImmutableString, AccessType)>,
+    stack: Vec<(ImmutableString, AccessMode)>,
     /// Size of the local variables stack upon entry of the current block scope.
     entry_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
@@ -1290,11 +1290,11 @@ fn make_assignment_stmt<'a>(
                 },
             ) = x.as_ref();
             match state.stack[(state.stack.len() - index.unwrap().get())].1 {
-                AccessType::Normal => {
+                AccessMode::ReadWrite => {
                     Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
                 }
                 // Constant values cannot be assigned to
-                AccessType::Constant => {
+                AccessMode::ReadOnly => {
                     Err(PERR::AssignmentToConstant(name.to_string()).into_err(*name_pos))
                 }
             }
@@ -1317,11 +1317,11 @@ fn make_assignment_stmt<'a>(
                     },
                 ) = x.as_ref();
                 match state.stack[(state.stack.len() - index.unwrap().get())].1 {
-                    AccessType::Normal => {
+                    AccessMode::ReadWrite => {
                         Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
                     }
                     // Constant values cannot be assigned to
-                    AccessType::Constant => {
+                    AccessMode::ReadOnly => {
                         Err(PERR::AssignmentToConstant(name.to_string()).into_err(*name_pos))
                     }
                 }
@@ -1810,7 +1810,7 @@ fn parse_custom_syntax(
             // Variable searches stop at the first empty variable name.
             state.stack.resize(
                 state.stack.len() + delta as usize,
-                ("".into(), AccessType::Normal),
+                ("".into(), AccessMode::ReadWrite),
             );
         }
         delta if delta < 0 && state.stack.len() <= delta.abs() as usize => state.stack.clear(),
@@ -2109,7 +2109,7 @@ fn parse_for(
 
     let loop_var = state.get_interned_string(name.clone());
     let prev_stack_len = state.stack.len();
-    state.stack.push((loop_var, AccessType::Normal));
+    state.stack.push((loop_var, AccessMode::ReadWrite));
 
     settings.is_breakable = true;
     let body = parse_block(input, state, lib, settings.level_up())?;
@@ -2124,7 +2124,7 @@ fn parse_let(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    var_type: AccessType,
+    var_type: AccessMode,
     export: bool,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
@@ -2155,16 +2155,16 @@ fn parse_let(
 
     match var_type {
         // let name = expr
-        AccessType::Normal => {
+        AccessMode::ReadWrite => {
             let var_name = state.get_interned_string(name.clone());
-            state.stack.push((var_name, AccessType::Normal));
+            state.stack.push((var_name, AccessMode::ReadWrite));
             let var_def = Ident::new(name, pos);
             Ok(Stmt::Let(Box::new(var_def), init_expr, export, token_pos))
         }
         // const name = { expr:constant }
-        AccessType::Constant => {
+        AccessMode::ReadOnly => {
             let var_name = state.get_interned_string(name.clone());
-            state.stack.push((var_name, AccessType::Constant));
+            state.stack.push((var_name, AccessMode::ReadOnly));
             let var_def = Ident::new(name, pos);
             Ok(Stmt::Const(Box::new(var_def), init_expr, export, token_pos))
         }
@@ -2231,13 +2231,13 @@ fn parse_export(
     match input.peek().unwrap() {
         (Token::Let, pos) => {
             let pos = *pos;
-            let mut stmt = parse_let(input, state, lib, AccessType::Normal, true, settings)?;
+            let mut stmt = parse_let(input, state, lib, AccessMode::ReadWrite, true, settings)?;
             stmt.set_position(pos);
             return Ok(stmt);
         }
         (Token::Const, pos) => {
             let pos = *pos;
-            let mut stmt = parse_let(input, state, lib, AccessType::Constant, true, settings)?;
+            let mut stmt = parse_let(input, state, lib, AccessMode::ReadOnly, true, settings)?;
             stmt.set_position(pos);
             return Ok(stmt);
         }
@@ -2392,7 +2392,7 @@ fn parse_stmt(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Option<Stmt>, ParseError> {
-    use AccessType::{Constant, Normal};
+    use AccessMode::{ReadOnly, ReadWrite};
 
     let (token, token_pos) = match input.peek().unwrap() {
         (Token::EOF, pos) => return Ok(Some(Stmt::Noop(*pos))),
@@ -2520,9 +2520,9 @@ fn parse_stmt(
 
         Token::Try => parse_try_catch(input, state, lib, settings.level_up()).map(Some),
 
-        Token::Let => parse_let(input, state, lib, Normal, false, settings.level_up()).map(Some),
+        Token::Let => parse_let(input, state, lib, ReadWrite, false, settings.level_up()).map(Some),
         Token::Const => {
-            parse_let(input, state, lib, Constant, false, settings.level_up()).map(Some)
+            parse_let(input, state, lib, ReadOnly, false, settings.level_up()).map(Some)
         }
 
         #[cfg(not(feature = "no_module"))]
@@ -2636,7 +2636,7 @@ fn parse_fn(
                         return Err(PERR::FnDuplicatedParam(name, s).into_err(pos));
                     }
                     let s = state.get_interned_string(s);
-                    state.stack.push((s.clone(), AccessType::Normal));
+                    state.stack.push((s.clone(), AccessMode::ReadWrite));
                     params.push((s, pos))
                 }
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
@@ -2769,7 +2769,7 @@ fn parse_anon_fn(
                             return Err(PERR::FnDuplicatedParam("".to_string(), s).into_err(pos));
                         }
                         let s = state.get_interned_string(s);
-                        state.stack.push((s.clone(), AccessType::Normal));
+                        state.stack.push((s.clone(), AccessMode::ReadWrite));
                         params.push((s, pos))
                     }
                     (Token::LexError(err), pos) => return Err(err.into_err(pos)),
