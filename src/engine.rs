@@ -2383,16 +2383,13 @@ impl Engine {
             // Share statement
             #[cfg(not(feature = "no_closure"))]
             Stmt::Share(x) => {
-                match scope.get_index(&x.name) {
-                    Some((index, AccessMode::ReadWrite)) => {
-                        let val = scope.get_mut(index);
+                if let Some((index, _)) = scope.get_index(&x.name) {
+                    let val = scope.get_mut(index);
 
-                        if !val.is_shared() {
-                            // Replace the variable with a shared value.
-                            *val = crate::stdlib::mem::take(val).into_shared();
-                        }
+                    if !val.is_shared() {
+                        // Replace the variable with a shared value.
+                        *val = crate::stdlib::mem::take(val).into_shared();
                     }
-                    _ => (),
                 }
                 Ok(Dynamic::UNIT)
             }

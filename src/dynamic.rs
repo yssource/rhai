@@ -615,7 +615,20 @@ impl Dynamic {
     /// if its value is going to be modified. This safe-guards constant values from being modified
     /// from within Rust functions.
     pub fn is_read_only(&self) -> bool {
-        self.access_mode().is_read_only()
+        match self.0 {
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(_, access) if access.is_read_only() => true,
+
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(not(feature = "sync"))]
+            Union::Shared(ref cell, _) => cell.borrow().access_mode().is_read_only(),
+
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(feature = "sync")]
+            Union::Shared(ref cell, _) => cell.read().unwrap().access_mode().is_read_only(),
+
+            _ => self.access_mode().is_read_only(),
+        }
     }
     /// Create a [`Dynamic`] from any type.  A [`Dynamic`] value is simply returned as is.
     ///
