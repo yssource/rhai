@@ -2302,9 +2302,9 @@ impl Engine {
                 };
                 let (var_name, _alias): (Cow<'_, str>, _) = if state.is_global() {
                     (
-                        var_def.name.clone().into(),
+                        var_def.name.to_string().into(),
                         if *export {
-                            Some(var_def.name.to_string())
+                            Some(var_def.name.clone())
                         } else {
                             None
                         },
@@ -2371,7 +2371,7 @@ impl Engine {
                     // Mark scope variables as public
                     if let Some(index) = scope.get_index(name).map(|(i, _)| i) {
                         let alias = rename.as_ref().map(|x| &x.name).unwrap_or_else(|| name);
-                        scope.add_entry_alias(index, alias.to_string());
+                        scope.add_entry_alias(index, alias.clone());
                     } else {
                         return EvalAltResult::ErrorVariableNotFound(name.to_string(), *id_pos)
                             .into();

@@ -826,7 +826,7 @@ fn parse_switch(
         }
     }
 
-    let mut table = HashMap::with_capacity_and_hasher(16, StraightHasherBuilder);
+    let mut table = HashMap::new();
     let mut def_stmt = None;
 
     loop {
@@ -915,9 +915,12 @@ fn parse_switch(
         }
     }
 
+    let mut final_table = HashMap::with_capacity_and_hasher(table.len(), StraightHasherBuilder);
+    final_table.extend(table.into_iter());
+
     Ok(Stmt::Switch(
         item,
-        Box::new((table, def_stmt)),
+        Box::new((final_table, def_stmt)),
         settings.pos,
     ))
 }
@@ -2158,14 +2161,14 @@ fn parse_let(
         AccessMode::ReadWrite => {
             let var_name = state.get_interned_string(name.clone());
             state.stack.push((var_name, AccessMode::ReadWrite));
-            let var_def = Ident::new(name, pos);
+            let var_def = IdentX::new(name, pos);
             Ok(Stmt::Let(Box::new(var_def), init_expr, export, token_pos))
         }
         // const name = { expr:constant }
         AccessMode::ReadOnly => {
             let var_name = state.get_interned_string(name.clone());
             state.stack.push((var_name, AccessMode::ReadOnly));
-            let var_def = Ident::new(name, pos);
+            let var_def = IdentX::new(name, pos);
             Ok(Stmt::Const(Box::new(var_def), init_expr, export, token_pos))
         }
     }

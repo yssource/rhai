@@ -1,8 +1,8 @@
 //! Module that defines the [`Scope`] type representing a function call-stack scope.
 
 use crate::dynamic::{AccessMode, Variant};
-use crate::stdlib::{borrow::Cow, boxed::Box, iter, string::String, vec::Vec};
-use crate::{Dynamic, StaticVec};
+use crate::stdlib::{borrow::Cow, boxed::Box, iter, vec::Vec};
+use crate::{Dynamic, ImmutableString, StaticVec};
 
 /// Type containing information about the current scope.
 /// Useful for keeping state between [`Engine`][crate::Engine] evaluation runs.
@@ -50,7 +50,7 @@ pub struct Scope<'a> {
     /// Current value of the entry.
     values: Vec<Dynamic>,
     /// (Name, aliases) of the entry. The list of aliases is Boxed because it occurs rarely.
-    names: Vec<(Cow<'a, str>, Box<StaticVec<String>>)>,
+    names: Vec<(Cow<'a, str>, Box<StaticVec<ImmutableString>>)>,
 }
 
 impl Default for Scope<'_> {
@@ -364,10 +364,14 @@ impl<'a> Scope<'a> {
     /// Update the access type of an entry in the [`Scope`].
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    pub(crate) fn add_entry_alias(&mut self, index: usize, alias: String) -> &mut Self {
+    pub(crate) fn add_entry_alias(
+        &mut self,
+        index: usize,
+        alias: impl Into<ImmutableString> + PartialEq<ImmutableString>,
+    ) -> &mut Self {
         let entry = self.names.get_mut(index).expect("invalid index in Scope");
-        if !entry.1.contains(&alias) {
-            entry.1.push(alias);
+        if !entry.1.iter().any(|a| &alias == a) {
+            entry.1.push(alias.into());
         }
         self
     }
@@ -393,7 +397,9 @@ impl<'a> Scope<'a> {
     /// Get an iterator to entries in the [`Scope`].
     #[inline(always)]
     #[allow(dead_code)]
-    pub(crate) fn into_iter(self) -> impl Iterator<Item = (Cow<'a, str>, Dynamic, Vec<String>)> {
+    pub(crate) fn into_iter(
+        self,
+    ) -> impl Iterator<Item = (Cow<'a, str>, Dynamic, Vec<ImmutableString>)> {
         self.names
             .into_iter()
             .zip(self.values.into_iter())

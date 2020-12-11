@@ -618,9 +618,9 @@ pub enum Stmt {
     /// `for` id `in` expr `{` stmt `}`
     For(Expr, Box<(String, Stmt)>, Position),
     /// \[`export`\] `let` id `=` expr
-    Let(Box<Ident>, Option<Expr>, bool, Position),
+    Let(Box<IdentX>, Option<Expr>, bool, Position),
     /// \[`export`\] `const` id `=` expr
-    Const(Box<Ident>, Option<Expr>, bool, Position),
+    Const(Box<IdentX>, Option<Expr>, bool, Position),
     /// expr op`=` expr
     Assignment(Box<(Expr, Cow<'static, str>, Expr)>, Position),
     /// `{` stmt`;` ... `}`
