@@ -539,7 +539,7 @@ impl Engine {
                         if !func.externals.is_empty() {
                             captured
                                 .into_iter()
-                                .filter(|(name, _, _)| func.externals.contains(name.as_ref()))
+                                .filter(|(name, _, _)| func.externals.iter().any(|ex| ex == name))
                                 .for_each(|(name, value, _)| {
                                     // Consume the scope values.
                                     scope.push_dynamic(name, value);

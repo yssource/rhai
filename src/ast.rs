@@ -82,7 +82,7 @@ pub struct ScriptFnDef {
     pub params: StaticVec<ImmutableString>,
     /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
-    pub externals: crate::stdlib::collections::HashSet<ImmutableString>,
+    pub externals: Vec<ImmutableString>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -501,8 +501,18 @@ impl AST {
     #[inline(always)]
     pub fn iter_functions<'a>(
         &'a self,
-    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &ScriptFnDef)> + 'a {
-        self.functions.iter_script_fn()
+    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &[ImmutableString])> + 'a {
+        self.functions
+            .iter_script_fn()
+            .map(|(namespace, access, name, num_params, fn_def)| {
+                (
+                    namespace,
+                    access,
+                    name,
+                    num_params,
+                    fn_def.params.as_slice(),
+                )
+            })
     }
     /// Clear all function definitions in the [`AST`].
     #[cfg(not(feature = "no_function"))]

@@ -15,6 +15,7 @@ Breaking changes
 
 * `Engine::on_progress` now takes `u64` instead of `&u64`.
 * The closure for `Engine::on_debug` now takes an additional `Position` parameter.
+* `AST::iter_functions` returns a slice of parameter names instead of the internal `ScriptFnDef`.
 
 Enhancements
 ------------
