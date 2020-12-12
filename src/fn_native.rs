@@ -164,6 +164,7 @@ impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
                 is_method,
                 is_method,
                 public_only,
+                Position::NONE,
                 None,
                 def_value,
                 0,
