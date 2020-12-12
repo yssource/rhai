@@ -211,13 +211,16 @@ impl Engine {
                     false,
                 ),
                 KEYWORD_DEBUG => (
-                    (self.debug)(result.as_str().map_err(|typ| {
-                        EvalAltResult::ErrorMismatchOutputType(
-                            self.map_type_name(type_name::<ImmutableString>()).into(),
-                            typ.into(),
-                            pos,
-                        )
-                    })?)
+                    (self.debug)(
+                        result.as_str().map_err(|typ| {
+                            EvalAltResult::ErrorMismatchOutputType(
+                                self.map_type_name(type_name::<ImmutableString>()).into(),
+                                typ.into(),
+                                pos,
+                            )
+                        })?,
+                        pos,
+                    )
                     .into(),
                     false,
                 ),

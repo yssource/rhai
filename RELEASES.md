@@ -14,11 +14,13 @@ Breaking changes
 ----------------
 
 * `Engine::on_progress` now takes `u64` instead of `&u64`.
+* The closure for `Engine::on_debug` now takes an additional `Position` parameter.
 
 Enhancements
 ------------
 
 * Capturing a constant variable in a closure is now supported, with no cloning.
+* Provides position info for `debug` statements.
 
 
 Version 0.19.7

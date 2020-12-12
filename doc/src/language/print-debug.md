@@ -22,10 +22,12 @@ When embedding Rhai into an application, it is usually necessary to trap `print`
 (for logging into a tracking log, for example) with the `Engine::on_print` and `Engine::on_debug` methods:
 
 ```rust
-// Any function or closure that takes an '&str' argument can be used to override
-// 'print' and 'debug'
+// Any function or closure that takes an '&str' argument can be used to override 'print'.
 engine.on_print(|x| println!("hello: {}", x));
-engine.on_debug(|x| println!("DEBUG: {}", x));
+
+// Any function or closure that takes a '&str' and a 'Position' argument can be used to
+// override 'debug'.
+engine.on_debug(|x, pos| println!("DEBUG at {:?}: {}", pos, x));
 
 // Example: quick-'n-dirty logging
 let logbook = Arc::new(RwLock::new(Vec::<String>::new()));
@@ -35,7 +37,9 @@ let log = logbook.clone();
 engine.on_print(move |s| log.write().unwrap().push(format!("entry: {}", s)));
 
 let log = logbook.clone();
-engine.on_debug(move |s| log.write().unwrap().push(format!("DEBUG: {}", s)));
+engine.on_debug(move |s, pos| log.write().unwrap().push(
+                                    format!("DEBUG at {:?}: {}", pos, s)
+                              ));
 
 // Evaluate script
 engine.eval::<()>(script)?;

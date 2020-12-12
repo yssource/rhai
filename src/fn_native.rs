@@ -356,7 +356,14 @@ pub type OnProgressCallback = Box<dyn Fn(u64) -> Option<Dynamic> + Send + Sync +
 pub type OnPrintCallback = Box<dyn Fn(&str) + 'static>;
 /// A standard callback function for printing.
 #[cfg(feature = "sync")]
-pub type OnPrintCallback<T, R> = Box<dyn Fn(&str) + Send + Sync + 'static>;
+pub type OnPrintCallback = Box<dyn Fn(&str) + Send + Sync + 'static>;
+
+/// A standard callback function for debugging.
+#[cfg(not(feature = "sync"))]
+pub type OnDebugCallback = Box<dyn Fn(&str, Position) + 'static>;
+/// A standard callback function for debugging.
+#[cfg(feature = "sync")]
+pub type OnDebugCallback = Box<dyn Fn(&str, Position) + Send + Sync + 'static>;
 
 /// A standard callback function for variable access.
 #[cfg(not(feature = "sync"))]

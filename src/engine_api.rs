@@ -1808,16 +1808,21 @@ impl Engine {
     ///
     /// // Override action of 'print' function
     /// let logger = result.clone();
-    /// engine.on_debug(move |s| logger.write().unwrap().push_str(s));
+    /// engine.on_debug(move |s, pos| logger.write().unwrap().push_str(
+    ///                                 &format!("{:?} > {}", pos, s)
+    ///                               ));
     ///
-    /// engine.consume(r#"debug("hello");"#)?;
+    /// engine.consume(r#"let x = "hello"; debug(x);"#)?;
     ///
-    /// assert_eq!(*result.read().unwrap(), r#""hello""#);
+    /// assert_eq!(*result.read().unwrap(), r#"1:18 > "hello""#);
     /// # Ok(())
     /// # }
     /// ```
     #[inline(always)]
-    pub fn on_debug(&mut self, callback: impl Fn(&str) + SendSync + 'static) -> &mut Self {
+    pub fn on_debug(
+        &mut self,
+        callback: impl Fn(&str, Position) + SendSync + 'static,
+    ) -> &mut Self {
         self.debug = Box::new(callback);
         self
     }
