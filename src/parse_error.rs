@@ -121,6 +121,10 @@ pub enum ParseErrorType {
     Reserved(String),
     /// Missing an expression. Wrapped value is the expression type.
     ExprExpected(String),
+    /// Defining a doc-comment in an appropriate place (e.g. not at global level).
+    ///
+    /// Never appears under the `no_function` feature.
+    WrongDocComment,
     /// Defining a function `fn` in an appropriate place (e.g. inside another function).
     ///
     /// Never appears under the `no_function` feature.
@@ -189,6 +193,7 @@ impl ParseErrorType {
             Self::FnMissingParams(_) => "Expecting parameters in function declaration",
             Self::FnDuplicatedParam(_,_) => "Duplicated parameters in function declaration",
             Self::FnMissingBody(_) => "Expecting body statement block for function declaration",
+            Self::WrongDocComment => "Doc-comment must be followed immediately by a function definition",
             Self::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
             Self::WrongExport => "Export statement can only appear at global level",
             Self::AssignmentToConstant(_) => "Cannot assign to a constant value",
@@ -243,7 +248,9 @@ impl fmt::Display for ParseErrorType {
             Self::LiteralTooLarge(typ, max) => {
                 write!(f, "{} exceeds the maximum limit ({})", typ, max)
             }
+
             Self::Reserved(s) => write!(f, "'{}' is a reserved keyword", s),
+
             _ => f.write_str(self.desc()),
         }
     }

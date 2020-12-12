@@ -21,7 +21,7 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::syntax::CustomSyntax;
-use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
+use crate::token::{is_doc_comment, is_keyword_function, is_valid_identifier, Token, TokenStream};
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
     calc_script_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType,
@@ -54,8 +54,6 @@ struct ParseState<'e> {
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
     externals: HashMap<ImmutableString, Position>,
-    /// Latest global comments block.
-    comments: Vec<String>,
     /// An indicator that disables variable capturing into externals one single time
     /// up until the nearest consumed Identifier token.
     /// If set to false the next call to `access_var` will not capture the variable.
@@ -100,7 +98,6 @@ impl<'e> ParseState<'e> {
             strings: HashMap::with_capacity(64),
             stack: Vec::with_capacity(16),
             entry_stack_len: 0,
-            comments: Default::default(),
             #[cfg(not(feature = "no_module"))]
             modules: Default::default(),
         }
@@ -2400,6 +2397,37 @@ fn parse_stmt(
 ) -> Result<Option<Stmt>, ParseError> {
     use AccessMode::{ReadOnly, ReadWrite};
 
+    let mut fn_comments: Vec<String> = Default::default();
+    let mut fn_comments_pos = Position::NONE;
+
+    // Handle doc-comment.
+    #[cfg(not(feature = "no_function"))]
+    while let (Token::Comment(ref comment), comment_pos) = input.peek().unwrap() {
+        if fn_comments_pos.is_none() {
+            fn_comments_pos = *comment_pos;
+        }
+
+        if !is_doc_comment(comment) {
+            unreachable!();
+        }
+
+        if !settings.is_global {
+            return Err(PERR::WrongDocComment.into_err(fn_comments_pos));
+        }
+
+        if let Token::Comment(comment) = input.next().unwrap().0 {
+            fn_comments.push(comment);
+
+            match input.peek().unwrap() {
+                (Token::Fn, _) | (Token::Private, _) => break,
+                (Token::Comment(_), _) => (),
+                _ => return Err(PERR::WrongDocComment.into_err(fn_comments_pos)),
+            }
+        } else {
+            unreachable!();
+        }
+    }
+
     let (token, token_pos) = match input.peek().unwrap() {
         (Token::EOF, pos) => return Ok(Some(Stmt::Noop(*pos))),
         x => x,
@@ -2451,8 +2479,6 @@ fn parse_stmt(
                         level: 0,
                         pos: pos,
                     };
-
-                    let fn_comments = state.comments.clone();
 
                     let func = parse_fn(input, &mut new_state, lib, access, settings, fn_comments)?;
 

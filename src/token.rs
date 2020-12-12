@@ -355,6 +355,9 @@ impl Token {
             Custom(s) => s.clone().into(),
             LexError(err) => err.to_string().into(),
 
+            Comment(s) if is_doc_comment(s) => s[..3].to_string().into(),
+            Comment(s) => s[..2].to_string().into(),
+
             token => match token {
                 LeftBrace => "{",
                 RightBrace => "}",
@@ -917,36 +920,36 @@ fn eat_next(stream: &mut impl InputStream, pos: &mut Position) -> Option<char> {
 /// Scan for a block comment until the end.
 fn scan_comment(
     stream: &mut impl InputStream,
-    state: &mut TokenizeState,
+    mut level: usize,
     pos: &mut Position,
     comment: &mut String,
-) {
+) -> usize {
     while let Some(c) = stream.get_next() {
         pos.advance();
 
-        if state.include_comments {
+        if !comment.is_empty() {
             comment.push(c);
         }
 
         match c {
             '/' => {
                 if let Some(c2) = stream.get_next() {
-                    if state.include_comments {
+                    if !comment.is_empty() {
                         comment.push(c2);
                     }
                     if c2 == '*' {
-                        state.comment_level += 1;
+                        level += 1;
                     }
                 }
                 pos.advance();
             }
             '*' => {
                 if let Some(c2) = stream.get_next() {
-                    if state.include_comments {
+                    if !comment.is_empty() {
                         comment.push(c2);
                     }
                     if c2 == '/' {
-                        state.comment_level -= 1;
+                        level -= 1;
                     }
                 }
                 pos.advance();
@@ -955,10 +958,12 @@ fn scan_comment(
             _ => (),
         }
 
-        if state.comment_level == 0 {
+        if level == 0 {
             break;
         }
     }
+
+    level
 }
 
 /// _(INTERNALS)_ Get the next token from the `stream`.
@@ -1012,6 +1017,12 @@ fn is_binary_char(c: char) -> bool {
     }
 }
 
+/// Test if the comment block is a doc-comment.
+#[inline(always)]
+pub fn is_doc_comment(comment: &str) -> bool {
+    comment.starts_with("///") || comment.starts_with("/**")
+}
+
 /// Get the next token.
 fn get_next_token_inner(
     stream: &mut impl InputStream,
@@ -1022,9 +1033,9 @@ fn get_next_token_inner(
     if state.comment_level > 0 {
         let start_pos = *pos;
         let mut comment = String::new();
-        scan_comment(stream, state, pos, &mut comment);
+        state.comment_level = scan_comment(stream, state.comment_level, pos, &mut comment);
 
-        if state.include_comments {
+        if state.include_comments || is_doc_comment(&comment) {
             return Some((Token::Comment(comment), start_pos));
         }
     }
@@ -1271,10 +1282,10 @@ fn get_next_token_inner(
             ('/', '/') => {
                 eat_next(stream, pos);
 
-                let mut comment = if state.include_comments {
-                    "//".to_string()
-                } else {
-                    String::new()
+                let mut comment = match stream.peek_next().unwrap() {
+                    '/' => "///".to_string(),
+                    _ if state.include_comments => "//".to_string(),
+                    _ => String::new(),
                 };
 
                 while let Some(c) = stream.get_next() {
@@ -1283,13 +1294,13 @@ fn get_next_token_inner(
                         break;
                     }
 
-                    if state.include_comments {
+                    if !comment.is_empty() {
                         comment.push(c);
                     }
                     pos.advance();
                 }
 
-                if state.include_comments {
+                if state.include_comments || is_doc_comment(&comment) {
                     return Some((Token::Comment(comment), start_pos));
                 }
             }
@@ -1298,14 +1309,14 @@ fn get_next_token_inner(
 
                 eat_next(stream, pos);
 
-                let mut comment = if state.include_comments {
-                    "/*".to_string()
-                } else {
-                    String::new()
+                let mut comment = match stream.peek_next().unwrap() {
+                    '*' => "/**".to_string(),
+                    _ if state.include_comments => "/*".to_string(),
+                    _ => String::new(),
                 };
-                scan_comment(stream, state, pos, &mut comment);
+                state.comment_level = scan_comment(stream, state.comment_level, pos, &mut comment);
 
-                if state.include_comments {
+                if state.include_comments || is_doc_comment(&comment) {
                     return Some((Token::Comment(comment), start_pos));
                 }
             }
