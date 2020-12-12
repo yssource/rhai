@@ -1,11 +1,8 @@
-Other Operators
-===============
+Compound Assignment Operators
+=============================
 
 {{#include ../links.md}}
 
-
-Compound Assignment Operators
-----------------------------
 
 ```rust
 let number = 9;
@@ -64,3 +61,6 @@ my_obj += #{c:3, d:4, e:5};
 
 my_obj.len() == 5;
 ```
+
+In fact, the `+` and `+=` operators are usually [overloaded][function overloading] when
+something is to be _added_ to an existing type.

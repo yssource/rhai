@@ -120,9 +120,9 @@ impl FuncInfo {
 #[derive(Clone)]
 pub struct Module {
     /// Sub-modules.
-    modules: HashMap<String, Shared<Module>>,
+    modules: HashMap<ImmutableString, Shared<Module>>,
     /// Module variables.
-    variables: HashMap<String, Dynamic>,
+    variables: HashMap<ImmutableString, Dynamic>,
     /// Flattened collection of all module variables, including those in sub-modules.
     all_variables: HashMap<u64, Dynamic, StraightHasherBuilder>,
     /// External Rust functions.
@@ -160,7 +160,7 @@ impl fmt::Debug for Module {
             "Module(\n    modules: {}\n    vars: {}\n    functions: {}\n)",
             self.modules
                 .keys()
-                .map(String::as_str)
+                .map(|m| m.as_str())
                 .collect::<Vec<_>>()
                 .join(", "),
             self.variables
@@ -331,7 +331,11 @@ impl Module {
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// ```
     #[inline(always)]
-    pub fn set_var(&mut self, name: impl Into<String>, value: impl Variant + Clone) -> &mut Self {
+    pub fn set_var(
+        &mut self,
+        name: impl Into<ImmutableString>,
+        value: impl Variant + Clone,
+    ) -> &mut Self {
         self.variables.insert(name.into(), Dynamic::from(value));
         self.indexed = false;
         self
@@ -458,7 +462,7 @@ impl Module {
     #[inline(always)]
     pub fn set_sub_module(
         &mut self,
-        name: impl Into<String>,
+        name: impl Into<ImmutableString>,
         sub_module: impl Into<Shared<Module>>,
     ) -> &mut Self {
         self.modules.insert(name.into(), sub_module.into());
@@ -1423,7 +1427,7 @@ impl Module {
         other.modules.iter().for_each(|(k, v)| {
             let mut m = Self::new();
             m.merge_filtered(v, _filter);
-            self.set_sub_module(k, m);
+            self.set_sub_module(k.clone(), m);
         });
         #[cfg(feature = "no_function")]
         self.modules
@@ -1640,7 +1644,7 @@ impl Module {
         // Create new module
         let mut module = Module::new();
 
-        scope.into_iter().for_each(|(_, _, value, mut aliases)| {
+        scope.into_iter().for_each(|(_, value, mut aliases)| {
             // Variables with an alias left in the scope become module variables
             if aliases.len() > 1 {
                 aliases.into_iter().for_each(|alias| {

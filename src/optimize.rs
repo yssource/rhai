@@ -1,6 +1,7 @@
 //! Module implementing the [`AST`] optimizer.
 
 use crate::ast::{Expr, ScriptFnDef, Stmt};
+use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_call::run_builtin_binary_op;
 use crate::parser::map_dynamic_to_expr;
@@ -58,7 +59,7 @@ struct State<'a> {
     /// Has the [`AST`] been changed during this pass?
     changed: bool,
     /// Collection of constants to use for eager function evaluations.
-    constants: Vec<(String, Expr)>,
+    variables: Vec<(String, AccessMode, Expr)>,
     /// An [`Engine`] instance for eager function evaluation.
     engine: &'a Engine,
     /// [Module] containing script-defined functions.
@@ -73,7 +74,7 @@ impl<'a> State<'a> {
     pub fn new(engine: &'a Engine, lib: &'a [&'a Module], level: OptimizationLevel) -> Self {
         Self {
             changed: false,
-            constants: vec![],
+            variables: vec![],
             engine,
             lib,
             optimization_level: level,
@@ -94,27 +95,26 @@ impl<'a> State<'a> {
     pub fn is_dirty(&self) -> bool {
         self.changed
     }
-    /// Does a constant exist?
-    #[inline(always)]
-    pub fn contains_constant(&self, name: &str) -> bool {
-        self.constants.iter().any(|(n, _)| n == name)
-    }
     /// Prune the list of constants back to a specified size.
     #[inline(always)]
-    pub fn restore_constants(&mut self, len: usize) {
-        self.constants.truncate(len)
+    pub fn restore_var(&mut self, len: usize) {
+        self.variables.truncate(len)
     }
     /// Add a new constant to the list.
     #[inline(always)]
-    pub fn push_constant(&mut self, name: &str, value: Expr) {
-        self.constants.push((name.into(), value))
+    pub fn push_var(&mut self, name: &str, access: AccessMode, value: Expr) {
+        self.variables.push((name.into(), access, value))
     }
     /// Look up a constant from the list.
     #[inline]
     pub fn find_constant(&self, name: &str) -> Option<&Expr> {
-        for (n, expr) in self.constants.iter().rev() {
+        for (n, access, expr) in self.variables.iter().rev() {
             if n == name {
-                return Some(expr);
+                return if access.is_read_only() {
+                    Some(expr)
+                } else {
+                    None
+                };
             }
         }
 
@@ -142,6 +142,7 @@ fn call_fn_with_constant_arguments(
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
             false,
             true,
+            Position::NONE,
             None,
         )
         .ok()
@@ -157,20 +158,24 @@ fn optimize_stmt_block(
     count_promote_as_dirty: bool,
 ) -> Stmt {
     let orig_len = statements.len(); // Original number of statements in the block, for change detection
-    let orig_constants_len = state.constants.len(); // Original number of constants in the state, for restore later
+    let orig_constants_len = state.variables.len(); // Original number of constants in the state, for restore later
 
     // Optimize each statement in the block
     statements.iter_mut().for_each(|stmt| match stmt {
         // Add constant literals into the state
-        Stmt::Const(var_def, Some(expr), _, pos) if expr.is_constant() => {
-            state.set_dirty();
-            state.push_constant(&var_def.name, mem::take(expr));
-            *stmt = Stmt::Noop(*pos); // No need to keep constants
+        Stmt::Const(var_def, Some(expr), _, _) if expr.is_constant() => {
+            state.push_var(&var_def.name, AccessMode::ReadOnly, mem::take(expr));
         }
-        Stmt::Const(var_def, None, _, pos) => {
-            state.set_dirty();
-            state.push_constant(&var_def.name, Expr::Unit(var_def.pos));
-            *stmt = Stmt::Noop(*pos); // No need to keep constants
+        Stmt::Const(var_def, None, _, _) => {
+            state.push_var(&var_def.name, AccessMode::ReadOnly, Expr::Unit(var_def.pos));
+        }
+        // Add variables into the state
+        Stmt::Let(var_def, _, _, _) => {
+            state.push_var(
+                &var_def.name,
+                AccessMode::ReadWrite,
+                Expr::Unit(var_def.pos),
+            );
         }
         // Optimize the statement
         _ => optimize_stmt(stmt, state, preserve_result),
@@ -196,7 +201,9 @@ fn optimize_stmt_block(
 
     while let Some(expr) = statements.pop() {
         match expr {
-            Stmt::Let(_, expr, _, _) => removed = expr.as_ref().map(Expr::is_pure).unwrap_or(true),
+            Stmt::Let(_, expr, _, _) | Stmt::Const(_, expr, _, _) => {
+                removed = expr.as_ref().map(Expr::is_pure).unwrap_or(true)
+            }
             #[cfg(not(feature = "no_module"))]
             Stmt::Import(expr, _, _) => removed = expr.is_pure(),
             _ => {
@@ -241,7 +248,7 @@ fn optimize_stmt_block(
     }
 
     // Pop the stack and remove all the local constants
-    state.restore_constants(orig_constants_len);
+    state.restore_var(orig_constants_len);
 
     match &statements[..] {
         // No statements in block - change to No-op
@@ -251,6 +258,8 @@ fn optimize_stmt_block(
         }
         // Only one let statement - leave it alone
         [x] if matches!(x, Stmt::Let(_, _, _, _)) => Stmt::Block(statements, pos),
+        // Only one const statement - leave it alone
+        [x] if matches!(x, Stmt::Const(_, _, _, _)) => Stmt::Block(statements, pos),
         // Only one import statement - leave it alone
         #[cfg(not(feature = "no_module"))]
         [x] if matches!(x, Stmt::Import(_, _, _)) => Stmt::Block(statements, pos),
@@ -708,7 +717,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         Expr::FnCall(x, _) => x.args.iter_mut().for_each(|a| optimize_expr(a, state)),
 
         // constant-name
-        Expr::Variable(x) if x.1.is_none() && state.contains_constant(&x.3.name) => {
+        Expr::Variable(x) if x.1.is_none() && state.find_constant(&x.3.name).is_some() => {
             state.set_dirty();
 
             // Replace constant with value
@@ -742,22 +751,23 @@ fn optimize_top_level(
     // Set up the state
     let mut state = State::new(engine, lib, level);
 
-    // Add constants from the scope that can be made into a literal into the state
-    scope
-        .iter()
-        .filter(|(_, typ, _)| *typ)
-        .for_each(|(name, _, value)| {
-            if let Some(val) = map_dynamic_to_expr(value, Position::NONE) {
-                state.push_constant(name, val);
-            }
-        });
+    // Add constants and variables from the scope
+    scope.iter().for_each(|(name, constant, value)| {
+        if !constant {
+            state.push_var(name, AccessMode::ReadWrite, Expr::Unit(Position::NONE));
+        } else if let Some(val) = map_dynamic_to_expr(value, Position::NONE) {
+            state.push_var(name, AccessMode::ReadOnly, val);
+        } else {
+            state.push_var(name, AccessMode::ReadOnly, Expr::Unit(Position::NONE));
+        }
+    });
 
-    let orig_constants_len = state.constants.len();
+    let orig_constants_len = state.variables.len();
 
     // Optimization loop
     loop {
         state.reset();
-        state.restore_constants(orig_constants_len);
+        state.restore_var(orig_constants_len);
 
         let num_statements = statements.len();
 
@@ -769,7 +779,7 @@ fn optimize_top_level(
                     optimize_expr(value_expr, &mut state);
 
                     if value_expr.is_constant() {
-                        state.push_constant(&var_def.name, value_expr.clone());
+                        state.push_var(&var_def.name, AccessMode::ReadOnly, value_expr.clone());
                     }
 
                     // Keep it in the global scope
@@ -779,13 +789,20 @@ fn optimize_top_level(
                     }
                 }
                 Stmt::Const(var_def, None, _, _) => {
-                    state.push_constant(&var_def.name, Expr::Unit(var_def.pos));
+                    state.push_var(&var_def.name, AccessMode::ReadOnly, Expr::Unit(var_def.pos));
+                }
+                Stmt::Let(var_def, _, _, _) => {
+                    state.push_var(
+                        &var_def.name,
+                        AccessMode::ReadWrite,
+                        Expr::Unit(var_def.pos),
+                    );
                 }
                 _ => {
                     // Keep all variable declarations at this level
                     // and always keep the last return value
                     let keep = match stmt {
-                        Stmt::Let(_, _, _, _) => true,
+                        Stmt::Let(_, _, _, _) | Stmt::Const(_, _, _, _) => true,
                         #[cfg(not(feature = "no_module"))]
                         Stmt::Import(_, _, _) => true,
                         _ => i == num_statements - 1,
@@ -851,6 +868,7 @@ pub fn optimize_into_ast(
                     lib: None,
                     #[cfg(not(feature = "no_module"))]
                     mods: Default::default(),
+                    fn_comments: Default::default(),
                 })
                 .for_each(|fn_def| {
                     lib2.set_script_fn(fn_def);

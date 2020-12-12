@@ -13,7 +13,7 @@ the `Engine::on_progress` method:
 ```rust
 let mut engine = Engine::new();
 
-engine.on_progress(|&count| {   // parameter is '&u64' - number of operations already performed
+engine.on_progress(|count| {    // parameter is number of operations already performed
     if count % 1000 == 0 {
         println!("{}", count);  // print out a progress log every 1,000 operations
     }

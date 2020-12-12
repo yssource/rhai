@@ -2,7 +2,7 @@ use rhai::{Engine, EvalAltResult, RegisterFn, INT};
 use std::sync::{Arc, RwLock};
 
 #[test]
-fn test_print() -> Result<(), Box<EvalAltResult>> {
+fn test_print_debug() -> Result<(), Box<EvalAltResult>> {
     let logbook = Arc::new(RwLock::new(Vec::<String>::new()));
 
     // Redirect print/debug output to 'log'
@@ -13,16 +13,20 @@ fn test_print() -> Result<(), Box<EvalAltResult>> {
 
     engine
         .on_print(move |s| log1.write().unwrap().push(format!("entry: {}", s)))
-        .on_debug(move |s| log2.write().unwrap().push(format!("DEBUG: {}", s)));
+        .on_debug(move |s, pos| {
+            log2.write()
+                .unwrap()
+                .push(format!("DEBUG at {:?}: {}", pos, s))
+        });
 
     // Evaluate script
     engine.eval::<()>("print(40 + 2)")?;
-    engine.eval::<()>(r#"debug("hello!")"#)?;
+    engine.eval::<()>(r#"let x = "hello!"; debug(x)"#)?;
 
     // 'logbook' captures all the 'print' and 'debug' output
     assert_eq!(logbook.read().unwrap().len(), 2);
     assert_eq!(logbook.read().unwrap()[0], "entry: 42");
-    assert_eq!(logbook.read().unwrap()[1], r#"DEBUG: "hello!""#);
+    assert_eq!(logbook.read().unwrap()[1], r#"DEBUG at 1:19: "hello!""#);
 
     for entry in logbook.read().unwrap().iter() {
         println!("{}", entry);

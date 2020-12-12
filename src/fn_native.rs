@@ -164,6 +164,7 @@ impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
                 is_method,
                 is_method,
                 public_only,
+                Position::NONE,
                 None,
                 def_value,
                 0,
@@ -343,18 +344,32 @@ pub type FnPlugin = dyn PluginFunction;
 #[cfg(feature = "sync")]
 pub type FnPlugin = dyn PluginFunction + Send + Sync;
 
-/// A standard callback function.
+/// A standard callback function for progress reporting.
 #[cfg(not(feature = "sync"))]
-pub type Callback<T, R> = Box<dyn Fn(&T) -> R + 'static>;
-/// A standard callback function.
+pub type OnProgressCallback = Box<dyn Fn(u64) -> Option<Dynamic> + 'static>;
+/// A standard callback function for progress reporting.
 #[cfg(feature = "sync")]
-pub type Callback<T, R> = Box<dyn Fn(&T) -> R + Send + Sync + 'static>;
+pub type OnProgressCallback = Box<dyn Fn(u64) -> Option<Dynamic> + Send + Sync + 'static>;
 
-/// A standard callback function.
+/// A standard callback function for printing.
+#[cfg(not(feature = "sync"))]
+pub type OnPrintCallback = Box<dyn Fn(&str) + 'static>;
+/// A standard callback function for printing.
+#[cfg(feature = "sync")]
+pub type OnPrintCallback = Box<dyn Fn(&str) + Send + Sync + 'static>;
+
+/// A standard callback function for debugging.
+#[cfg(not(feature = "sync"))]
+pub type OnDebugCallback = Box<dyn Fn(&str, Position) + 'static>;
+/// A standard callback function for debugging.
+#[cfg(feature = "sync")]
+pub type OnDebugCallback = Box<dyn Fn(&str, Position) + Send + Sync + 'static>;
+
+/// A standard callback function for variable access.
 #[cfg(not(feature = "sync"))]
 pub type OnVarCallback =
     Box<dyn Fn(&str, usize, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>> + 'static>;
-/// A standard callback function.
+/// A standard callback function for variable access.
 #[cfg(feature = "sync")]
 pub type OnVarCallback = Box<
     dyn Fn(&str, usize, &EvalContext) -> Result<Option<Dynamic>, Box<EvalAltResult>>

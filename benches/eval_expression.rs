@@ -164,14 +164,19 @@ fn bench_eval_switch(bench: &mut Bencher) {
         let rem = 0;
 
         for x in range(0, 10) {
-            rem = x % 5;
+            rem = x % 10;
 
             sum += switch rem {
                 0 => 10,
                 1 => 12,
                 2 => 42,
                 3 => 1,
-                _ => 9
+                4 => 12,
+                5 => 42,
+                6 => 1,
+                7 => 12,
+                8 => 42,
+                9 => 1,
             }
         }
     "#;
@@ -191,19 +196,18 @@ fn bench_eval_nested_if(bench: &mut Bencher) {
         let rem = 0;
 
         for x in range(0, 10) {
-            rem = x % 5;
+            rem = x % 10;
 
-            sum += if rem == 0 {
-                10
-            } else if rem == 1 {
-                12
-            } else if rem == 2 {
-                42
-            } else if rem == 3 {
-                1
-            } else{
-                9
-            };
+            sum += if rem == 0 { 10 }
+            else if rem == 1 { 12 }
+            else if rem == 2 { 42 }
+            else if rem == 3 { 1 }
+            else if rem == 4 { 12 }
+            else if rem == 5 { 42 }
+            else if rem == 6 { 1 }
+            else if rem == 7 { 12 }
+            else if rem == 8 { 42 }
+            else if rem == 9 { 1 };
         }
     "#;
 

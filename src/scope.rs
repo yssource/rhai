@@ -1,28 +1,8 @@
 //! Module that defines the [`Scope`] type representing a function call-stack scope.
 
-use crate::dynamic::Variant;
-use crate::stdlib::{borrow::Cow, boxed::Box, iter, string::String, vec::Vec};
-use crate::{Dynamic, StaticVec};
-
-/// Type of an entry in the Scope.
-#[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
-pub enum EntryType {
-    /// Normal value.
-    Normal,
-    /// Immutable constant value.
-    Constant,
-}
-
-impl EntryType {
-    /// Is this entry constant?
-    #[inline(always)]
-    pub fn is_constant(&self) -> bool {
-        match self {
-            Self::Normal => false,
-            Self::Constant => true,
-        }
-    }
-}
+use crate::dynamic::{AccessMode, Variant};
+use crate::stdlib::{borrow::Cow, boxed::Box, iter, vec::Vec};
+use crate::{Dynamic, ImmutableString, StaticVec};
 
 /// Type containing information about the current scope.
 /// Useful for keeping state between [`Engine`][crate::Engine] evaluation runs.
@@ -58,28 +38,25 @@ impl EntryType {
 //
 // # Implementation Notes
 //
-// [`Scope`] is implemented as three [`Vec`]'s of exactly the same length.  Variables data (name, type, etc.)
+// [`Scope`] is implemented as two [`Vec`]'s of exactly the same length.  Variables data (name, type, etc.)
 // is manually split into three equal-length arrays.  That's because variable names take up the most space,
 // with [`Cow<str>`][Cow] being four words long, but in the vast majority of cases the name is NOT used to look up
 // a variable's value.  Variable lookup is usually via direct index, by-passing the name altogether.
 //
 // Since [`Dynamic`] is reasonably small, packing it tightly improves cache locality when variables are accessed.
 // The variable type is packed separately into another array because it is even smaller.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Scope<'a> {
     /// Current value of the entry.
     values: Vec<Dynamic>,
-    /// Type of the entry.
-    types: Vec<EntryType>,
     /// (Name, aliases) of the entry. The list of aliases is Boxed because it occurs rarely.
-    names: Vec<(Cow<'a, str>, Box<StaticVec<String>>)>,
+    names: Vec<(Cow<'a, str>, Box<StaticVec<ImmutableString>>)>,
 }
 
 impl Default for Scope<'_> {
     fn default() -> Self {
         Self {
             values: Vec::with_capacity(16),
-            types: Vec::with_capacity(16),
             names: Vec::with_capacity(16),
         }
     }
@@ -124,7 +101,6 @@ impl<'a> Scope<'a> {
     #[inline(always)]
     pub fn clear(&mut self) -> &mut Self {
         self.names.clear();
-        self.types.clear();
         self.values.clear();
         self
     }
@@ -180,7 +156,7 @@ impl<'a> Scope<'a> {
         name: impl Into<Cow<'a, str>>,
         value: impl Variant + Clone,
     ) -> &mut Self {
-        self.push_dynamic_value(name, EntryType::Normal, Dynamic::from(value))
+        self.push_dynamic_value(name, AccessMode::ReadWrite, Dynamic::from(value))
     }
     /// Add (push) a new [`Dynamic`] entry to the [`Scope`].
     ///
@@ -196,7 +172,7 @@ impl<'a> Scope<'a> {
     /// ```
     #[inline(always)]
     pub fn push_dynamic(&mut self, name: impl Into<Cow<'a, str>>, value: Dynamic) -> &mut Self {
-        self.push_dynamic_value(name, EntryType::Normal, value)
+        self.push_dynamic_value(name, value.access_mode(), value)
     }
     /// Add (push) a new constant to the [`Scope`].
     ///
@@ -219,7 +195,7 @@ impl<'a> Scope<'a> {
         name: impl Into<Cow<'a, str>>,
         value: impl Variant + Clone,
     ) -> &mut Self {
-        self.push_dynamic_value(name, EntryType::Constant, Dynamic::from(value))
+        self.push_dynamic_value(name, AccessMode::ReadOnly, Dynamic::from(value))
     }
     /// Add (push) a new constant with a [`Dynamic`] value to the Scope.
     ///
@@ -242,18 +218,18 @@ impl<'a> Scope<'a> {
         name: impl Into<Cow<'a, str>>,
         value: Dynamic,
     ) -> &mut Self {
-        self.push_dynamic_value(name, EntryType::Constant, value)
+        self.push_dynamic_value(name, AccessMode::ReadOnly, value)
     }
     /// Add (push) a new entry with a [`Dynamic`] value to the [`Scope`].
     #[inline]
     pub(crate) fn push_dynamic_value(
         &mut self,
         name: impl Into<Cow<'a, str>>,
-        entry_type: EntryType,
-        value: Dynamic,
+        access: AccessMode,
+        mut value: Dynamic,
     ) -> &mut Self {
         self.names.push((name.into(), Box::new(Default::default())));
-        self.types.push(entry_type);
+        value.set_access_mode(access);
         self.values.push(value.into());
         self
     }
@@ -286,7 +262,6 @@ impl<'a> Scope<'a> {
     #[inline(always)]
     pub fn rewind(&mut self, size: usize) -> &mut Self {
         self.names.truncate(size);
-        self.types.truncate(size);
         self.values.truncate(size);
         self
     }
@@ -312,14 +287,14 @@ impl<'a> Scope<'a> {
     }
     /// Find an entry in the [`Scope`], starting from the last.
     #[inline(always)]
-    pub(crate) fn get_index(&self, name: &str) -> Option<(usize, EntryType)> {
+    pub(crate) fn get_index(&self, name: &str) -> Option<(usize, AccessMode)> {
         self.names
             .iter()
             .enumerate()
             .rev() // Always search a Scope in reverse order
             .find_map(|(index, (key, _))| {
                 if name == key.as_ref() {
-                    Some((index, self.types[index]))
+                    Some((index, self.values[index].access_mode()))
                 } else {
                     None
                 }
@@ -374,8 +349,8 @@ impl<'a> Scope<'a> {
             None => {
                 self.push(name, value);
             }
-            Some((_, EntryType::Constant)) => panic!("variable {} is constant", name),
-            Some((index, EntryType::Normal)) => {
+            Some((_, AccessMode::ReadOnly)) => panic!("variable {} is constant", name),
+            Some((index, AccessMode::ReadWrite)) => {
                 *self.values.get_mut(index).unwrap() = Dynamic::from(value);
             }
         }
@@ -383,19 +358,20 @@ impl<'a> Scope<'a> {
     }
     /// Get a mutable reference to an entry in the [`Scope`].
     #[inline(always)]
-    pub(crate) fn get_mut(&mut self, index: usize) -> (&mut Dynamic, EntryType) {
-        (
-            self.values.get_mut(index).expect("invalid index in Scope"),
-            self.types[index],
-        )
+    pub(crate) fn get_mut(&mut self, index: usize) -> &mut Dynamic {
+        self.values.get_mut(index).expect("invalid index in Scope")
     }
     /// Update the access type of an entry in the [`Scope`].
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    pub(crate) fn add_entry_alias(&mut self, index: usize, alias: String) -> &mut Self {
+    pub(crate) fn add_entry_alias(
+        &mut self,
+        index: usize,
+        alias: impl Into<ImmutableString> + PartialEq<ImmutableString>,
+    ) -> &mut Self {
         let entry = self.names.get_mut(index).expect("invalid index in Scope");
-        if !entry.1.contains(&alias) {
-            entry.1.push(alias);
+        if !entry.1.iter().any(|a| &alias == a) {
+            entry.1.push(alias.into());
         }
         self
     }
@@ -412,7 +388,6 @@ impl<'a> Scope<'a> {
             .for_each(|(index, (name, alias))| {
                 if !entries.names.iter().any(|(key, _)| key == name) {
                     entries.names.push((name.clone(), alias.clone()));
-                    entries.types.push(self.types[index]);
                     entries.values.push(self.values[index].clone());
                 }
             });
@@ -424,11 +399,11 @@ impl<'a> Scope<'a> {
     #[allow(dead_code)]
     pub(crate) fn into_iter(
         self,
-    ) -> impl Iterator<Item = (Cow<'a, str>, EntryType, Dynamic, Vec<String>)> {
+    ) -> impl Iterator<Item = (Cow<'a, str>, Dynamic, Vec<ImmutableString>)> {
         self.names
             .into_iter()
-            .zip(self.types.into_iter().zip(self.values.into_iter()))
-            .map(|((name, alias), (typ, value))| (name, typ, value, alias.to_vec()))
+            .zip(self.values.into_iter())
+            .map(|((name, alias), value)| (name, value, alias.to_vec()))
     }
     /// Get an iterator to entries in the [`Scope`].
     /// Shared values are flatten-cloned.
@@ -466,17 +441,16 @@ impl<'a> Scope<'a> {
     pub fn iter_raw<'x: 'a>(&'x self) -> impl Iterator<Item = (&'a str, bool, &'x Dynamic)> + 'x {
         self.names
             .iter()
-            .zip(self.types.iter().zip(self.values.iter()))
-            .map(|((name, _), (typ, value))| (name.as_ref(), typ.is_constant(), value))
+            .zip(self.values.iter())
+            .map(|((name, _), value)| (name.as_ref(), value.is_read_only(), value))
     }
 }
 
-impl<'a, K: Into<Cow<'a, str>>> iter::Extend<(K, EntryType, Dynamic)> for Scope<'a> {
+impl<'a, K: Into<Cow<'a, str>>> iter::Extend<(K, Dynamic)> for Scope<'a> {
     #[inline(always)]
-    fn extend<T: IntoIterator<Item = (K, EntryType, Dynamic)>>(&mut self, iter: T) {
-        iter.into_iter().for_each(|(name, typ, value)| {
+    fn extend<T: IntoIterator<Item = (K, Dynamic)>>(&mut self, iter: T) {
+        iter.into_iter().for_each(|(name, value)| {
             self.names.push((name.into(), Box::new(Default::default())));
-            self.types.push(typ);
             self.values.push(value);
         });
     }

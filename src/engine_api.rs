@@ -1611,7 +1611,17 @@ impl Engine {
             crate::fn_call::ensure_no_data_race(name, args, false)?;
         }
 
-        self.call_script_fn(scope, &mut mods, &mut state, lib, this_ptr, fn_def, args, 0)
+        self.call_script_fn(
+            scope,
+            &mut mods,
+            &mut state,
+            lib,
+            this_ptr,
+            fn_def,
+            args,
+            Position::NONE,
+            0,
+        )
     }
     /// Optimize the [`AST`] with constants defined in an external Scope.
     /// An optimized copy of the [`AST`] is returned while the original [`AST`] is consumed.
@@ -1726,7 +1736,7 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// engine.on_progress(move |&ops| {
+    /// engine.on_progress(move |ops| {
     ///     if ops > 10000 {
     ///         Some("Over 10,000 operations!".into())
     ///     } else if ops % 800 == 0 {
@@ -1748,7 +1758,7 @@ impl Engine {
     #[inline(always)]
     pub fn on_progress(
         &mut self,
-        callback: impl Fn(&u64) -> Option<Dynamic> + SendSync + 'static,
+        callback: impl Fn(u64) -> Option<Dynamic> + SendSync + 'static,
     ) -> &mut Self {
         self.progress = Some(Box::new(callback));
         self
@@ -1798,16 +1808,21 @@ impl Engine {
     ///
     /// // Override action of 'print' function
     /// let logger = result.clone();
-    /// engine.on_debug(move |s| logger.write().unwrap().push_str(s));
+    /// engine.on_debug(move |s, pos| logger.write().unwrap().push_str(
+    ///                                 &format!("{:?} > {}", pos, s)
+    ///                               ));
     ///
-    /// engine.consume(r#"debug("hello");"#)?;
+    /// engine.consume(r#"let x = "hello"; debug(x);"#)?;
     ///
-    /// assert_eq!(*result.read().unwrap(), r#""hello""#);
+    /// assert_eq!(*result.read().unwrap(), r#"1:18 > "hello""#);
     /// # Ok(())
     /// # }
     /// ```
     #[inline(always)]
-    pub fn on_debug(&mut self, callback: impl Fn(&str) + SendSync + 'static) -> &mut Self {
+    pub fn on_debug(
+        &mut self,
+        callback: impl Fn(&str, Position) + SendSync + 'static,
+    ) -> &mut Self {
         self.debug = Box::new(callback);
         self
     }

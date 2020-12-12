@@ -64,6 +64,15 @@ are spliced into the script text in order to turn on/off certain sections.
 For fixed script texts, the constant values can be provided in a user-defined [`Scope`] object
 to the [`Engine`] for use in compilation and evaluation.
 
+### Caveat
+
+If the [constants] are modified later on (yes, it is possible, via Rust functions),
+the modified values will not show up in the optimized script.
+Only the initialization values of [constants] are ever retained.
+
+This is almost never a problem because real-world scripts seldom modify a constant,
+but the possibility is always there.
+
 
 Eager Operator Evaluations
 -------------------------

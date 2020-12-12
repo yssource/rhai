@@ -8,7 +8,6 @@ use crate::engine::{
 use crate::fn_native::FnCallArgs;
 use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
-use crate::scope::EntryType as ScopeEntryType;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
@@ -150,7 +149,6 @@ pub fn ensure_no_data_race(
 
 impl Engine {
     /// Call a native Rust function registered with the [`Engine`].
-    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     ///
     /// ## WARNING
     ///
@@ -167,6 +165,7 @@ impl Engine {
         args: &mut FnCallArgs,
         is_ref: bool,
         pub_only: bool,
+        pos: Position,
         def_val: Option<&Dynamic>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state)?;
@@ -205,20 +204,23 @@ impl Engine {
                         EvalAltResult::ErrorMismatchOutputType(
                             self.map_type_name(type_name::<ImmutableString>()).into(),
                             typ.into(),
-                            Position::NONE,
+                            pos,
                         )
                     })?)
                     .into(),
                     false,
                 ),
                 KEYWORD_DEBUG => (
-                    (self.debug)(result.as_str().map_err(|typ| {
-                        EvalAltResult::ErrorMismatchOutputType(
-                            self.map_type_name(type_name::<ImmutableString>()).into(),
-                            typ.into(),
-                            Position::NONE,
-                        )
-                    })?)
+                    (self.debug)(
+                        result.as_str().map_err(|typ| {
+                            EvalAltResult::ErrorMismatchOutputType(
+                                self.map_type_name(type_name::<ImmutableString>()).into(),
+                                typ.into(),
+                                pos,
+                            )
+                        })?,
+                        pos,
+                    )
                     .into(),
                     false,
                 ),
@@ -248,7 +250,7 @@ impl Engine {
                     prop,
                     self.map_type_name(args[0].type_name())
                 ),
-                Position::NONE,
+                pos,
             )
             .into();
         }
@@ -263,7 +265,7 @@ impl Engine {
                     self.map_type_name(args[0].type_name()),
                     self.map_type_name(args[1].type_name()),
                 ),
-                Position::NONE,
+                pos,
             )
             .into();
         }
@@ -277,7 +279,7 @@ impl Engine {
                     self.map_type_name(args[0].type_name()),
                     self.map_type_name(args[1].type_name()),
                 ),
-                Position::NONE,
+                pos,
             )
             .into();
         }
@@ -291,7 +293,7 @@ impl Engine {
                     self.map_type_name(args[0].type_name()),
                     self.map_type_name(args[1].type_name()),
                 ),
-                Position::NONE,
+                pos,
             )
             .into();
         }
@@ -310,13 +312,12 @@ impl Engine {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Position::NONE,
+            pos,
         )
         .into()
     }
 
     /// Call a script-defined function.
-    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     ///
     /// ## WARNING
     ///
@@ -333,6 +334,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         fn_def: &crate::ast::ScriptFnDef,
         args: &mut FnCallArgs,
+        pos: Position,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         self.inc_operations(state)?;
@@ -341,7 +343,7 @@ impl Engine {
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
         if level > self.max_call_levels() {
-            return Err(Box::new(EvalAltResult::ErrorStackOverflow(Position::NONE)));
+            return Err(Box::new(EvalAltResult::ErrorStackOverflow(pos)));
         }
 
         let orig_scope_level = state.scope_level;
@@ -360,7 +362,7 @@ impl Engine {
                 .map(|(name, value)| {
                     let var_name: crate::stdlib::borrow::Cow<'_, str> =
                         crate::r#unsafe::unsafe_cast_var_name_to_lifetime(name).into();
-                    (var_name, ScopeEntryType::Normal, value)
+                    (var_name, value)
                 }),
         );
 
@@ -393,17 +395,14 @@ impl Engine {
                     EvalAltResult::ErrorInFunctionCall(
                         format!("{} > {}", fn_def.name, name),
                         err,
-                        Position::NONE,
+                        pos,
                     )
                     .into()
                 }
                 // System errors are passed straight-through
                 err if err.is_system_exception() => Err(Box::new(err)),
                 // Other errors are wrapped in `ErrorInFunctionCall`
-                _ => {
-                    EvalAltResult::ErrorInFunctionCall(fn_def.name.to_string(), err, Position::NONE)
-                        .into()
-                }
+                _ => EvalAltResult::ErrorInFunctionCall(fn_def.name.to_string(), err, pos).into(),
             });
 
         // Remove all local variables
@@ -457,7 +456,6 @@ impl Engine {
     }
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
-    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     ///
     /// ## WARNING
     ///
@@ -475,6 +473,7 @@ impl Engine {
         is_ref: bool,
         _is_method: bool,
         pub_only: bool,
+        pos: Position,
         _capture_scope: Option<Scope>,
         def_val: Option<&Dynamic>,
         _level: usize,
@@ -512,7 +511,7 @@ impl Engine {
                         fn_name, fn_name
                     )
                     .into(),
-                    Position::NONE,
+                    pos,
                 )
                 .into()
             }
@@ -540,15 +539,10 @@ impl Engine {
                         if !func.externals.is_empty() {
                             captured
                                 .into_iter()
-                                .filter(|(name, _, _, _)| func.externals.contains(name.as_ref()))
-                                .for_each(|(name, typ, value, _)| {
+                                .filter(|(name, _, _)| func.externals.iter().any(|ex| ex == name))
+                                .for_each(|(name, value, _)| {
                                     // Consume the scope values.
-                                    match typ {
-                                        ScopeEntryType::Normal => scope.push(name, value),
-                                        ScopeEntryType::Constant => {
-                                            scope.push_constant(name, value)
-                                        }
-                                    };
+                                    scope.push_dynamic(name, value);
                                 });
                         }
                     }
@@ -564,6 +558,7 @@ impl Engine {
                             &mut Some(*first),
                             func,
                             rest,
+                            pos,
                             _level,
                         )?
                     } else {
@@ -572,8 +567,9 @@ impl Engine {
                         let mut backup: ArgBackup = Default::default();
                         backup.change_first_arg_to_copy(is_ref, args);
 
-                        let result = self
-                            .call_script_fn(scope, mods, state, lib, &mut None, func, args, _level);
+                        let result = self.call_script_fn(
+                            scope, mods, state, lib, &mut None, func, args, pos, _level,
+                        );
 
                         // Restore the original reference
                         backup.restore_first_arg(args);
@@ -593,6 +589,7 @@ impl Engine {
                         args,
                         is_ref,
                         pub_only,
+                        pos,
                         def_val,
                     )
                 }
@@ -600,7 +597,7 @@ impl Engine {
 
             // Normal native function call
             _ => self.call_native_fn(
-                mods, state, lib, fn_name, hash_fn, args, is_ref, pub_only, def_val,
+                mods, state, lib, fn_name, hash_fn, args, is_ref, pub_only, pos, def_val,
             ),
         }
     }
@@ -631,7 +628,6 @@ impl Engine {
     }
 
     /// Evaluate a text string as a script - used primarily for 'eval'.
-    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     fn eval_script_expr(
         &self,
         scope: &mut Scope,
@@ -639,6 +635,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         script: &str,
+        pos: Position,
         _level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         self.inc_operations(state)?;
@@ -652,7 +649,7 @@ impl Engine {
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
         if _level > self.max_call_levels() {
-            return Err(Box::new(EvalAltResult::ErrorStackOverflow(Position::NONE)));
+            return Err(Box::new(EvalAltResult::ErrorStackOverflow(pos)));
         }
 
         // Compile the script text
@@ -678,7 +675,6 @@ impl Engine {
     }
 
     /// Call a dot method.
-    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     #[cfg(not(feature = "no_object"))]
     pub(crate) fn make_method_call(
         &self,
@@ -692,6 +688,7 @@ impl Engine {
         def_val: Option<&Dynamic>,
         native: bool,
         pub_only: bool,
+        pos: Position,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         let is_ref = target.is_ref();
@@ -722,7 +719,8 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                mods, state, lib, fn_name, hash, args, false, false, pub_only, None, def_val, level,
+                mods, state, lib, fn_name, hash, args, false, false, pub_only, pos, None, def_val,
+                level,
             )
         } else if fn_name == KEYWORD_FN_PTR_CALL
             && call_args.len() > 0
@@ -749,7 +747,8 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                mods, state, lib, fn_name, hash, args, is_ref, true, pub_only, None, def_val, level,
+                mods, state, lib, fn_name, hash, args, is_ref, true, pub_only, pos, None, def_val,
+                level,
             )
         } else if fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
             // Curry call
@@ -817,7 +816,8 @@ impl Engine {
             let args = arg_values.as_mut();
 
             self.exec_fn_call(
-                mods, state, lib, fn_name, hash, args, is_ref, true, pub_only, None, def_val, level,
+                mods, state, lib, fn_name, hash, args, is_ref, true, pub_only, pos, None, def_val,
+                level,
             )
         }?;
 
@@ -830,7 +830,6 @@ impl Engine {
     }
 
     /// Call a function in normal function-call style.
-    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     pub(crate) fn make_function_call(
         &self,
         scope: &mut Scope,
@@ -844,6 +843,7 @@ impl Engine {
         mut hash_script: u64,
         native: bool,
         pub_only: bool,
+        pos: Position,
         capture_scope: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -962,9 +962,8 @@ impl Engine {
                 let script = script.as_str().map_err(|typ| {
                     self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
                 })?;
-                let result = self
-                    .eval_script_expr(scope, mods, state, lib, script, level + 1)
-                    .map_err(|err| err.fill_position(args_expr[0].position()));
+                let pos = args_expr[0].position();
+                let result = self.eval_script_expr(scope, mods, state, lib, script, pos, level + 1);
 
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
@@ -1000,13 +999,12 @@ impl Engine {
                     .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
                     .collect::<Result<_, _>>()?;
 
-                let (target, _, typ, pos) =
+                let (mut target, _, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, &args_expr[0])?;
 
-                let target = match typ {
-                    ScopeEntryType::Normal => target,
-                    ScopeEntryType::Constant => target.into_owned(),
-                };
+                if target.as_ref().is_read_only() {
+                    target = target.into_owned();
+                }
 
                 self.inc_operations(state)
                     .map_err(|err| err.fill_position(pos))?;
@@ -1036,13 +1034,13 @@ impl Engine {
         let args = args.as_mut();
 
         self.exec_fn_call(
-            mods, state, lib, name, hash, args, is_ref, false, pub_only, capture, def_val, level,
+            mods, state, lib, name, hash, args, is_ref, false, pub_only, pos, capture, def_val,
+            level,
         )
         .map(|(v, _)| v)
     }
 
     /// Call a namespace-qualified function in normal function-call style.
-    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
     pub(crate) fn make_qualified_function_call(
         &self,
         scope: &mut Scope,
@@ -1055,6 +1053,7 @@ impl Engine {
         args_expr: impl AsRef<[Expr]>,
         def_val: Option<&Dynamic>,
         hash_script: u64,
+        pos: Position,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let args_expr = args_expr.as_ref();
@@ -1087,7 +1086,7 @@ impl Engine {
                     .collect::<Result<_, _>>()?;
 
                 // Get target reference to first argument
-                let (target, _, _, pos) =
+                let (target, _, pos) =
                     self.search_scope_only(scope, mods, state, lib, this_ptr, &args_expr[0])?;
 
                 self.inc_operations(state)
@@ -1150,7 +1149,9 @@ impl Engine {
                 let args = args.as_mut();
                 let new_scope = &mut Default::default();
                 let fn_def = f.get_fn_def().clone();
-                self.call_script_fn(new_scope, mods, state, lib, &mut None, &fn_def, args, level)
+                self.call_script_fn(
+                    new_scope, mods, state, lib, &mut None, &fn_def, args, pos, level,
+                )
             }
             Some(f) if f.is_plugin_fn() => f
                 .get_plugin_fn()
@@ -1184,7 +1185,7 @@ impl Engine {
                         .collect::<Vec<_>>()
                         .join(", ")
                 ),
-                Position::NONE,
+                pos,
             )
             .into(),
         }

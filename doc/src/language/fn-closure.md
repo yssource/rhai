@@ -57,24 +57,6 @@ f.call(2) == 42;
 ```
 
 
-Constants are Not Captured
---------------------------
-
-Constants are never shared.  Their values are simply cloned.
-
-```rust
-const x = 42;                       // constant variable 'x'
-
-let f = |y| x += y;                 // constant 'x' is cloned and not captured
-
-x.is_shared() == false;             // 'x' is not shared
-
-f.call(10);                         // the cloned copy of 'x' is changed
-
-x == 42;                            // 'x' is not changed
-```
-
-
 Beware: Captured Variables are Truly Shared
 ------------------------------------------
 

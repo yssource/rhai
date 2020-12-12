@@ -1,6 +1,6 @@
 //! Module defining the AST (abstract syntax tree).
 
-use crate::dynamic::Union;
+use crate::dynamic::{AccessMode, Union};
 use crate::fn_native::shared_make_mut;
 use crate::module::NamespaceRef;
 use crate::stdlib::{
@@ -82,7 +82,9 @@ pub struct ScriptFnDef {
     pub params: StaticVec<ImmutableString>,
     /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
-    pub externals: crate::stdlib::collections::HashSet<ImmutableString>,
+    pub externals: Vec<ImmutableString>,
+    /// Comment block for function.
+    pub fn_comments: Vec<String>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -105,36 +107,85 @@ impl fmt::Display for ScriptFnDef {
     }
 }
 
+/// A type containing a script-defined function's metadata.
+#[derive(Debug, Clone, Hash)]
+pub struct ScriptFnMetadata {
+    pub comments: Vec<String>,
+    pub access: FnAccess,
+    pub fn_name: ImmutableString,
+    pub params: Vec<ImmutableString>,
+}
+
+impl fmt::Display for ScriptFnMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}{}({}) -> Dynamic",
+            if self.access.is_private() {
+                "private "
+            } else {
+                ""
+            },
+            self.fn_name,
+            self.params
+                .iter()
+                .map(|p| p.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
+impl Into<ScriptFnMetadata> for &ScriptFnDef {
+    fn into(self) -> ScriptFnMetadata {
+        ScriptFnMetadata {
+            comments: self.fn_comments.clone(),
+            access: self.access,
+            fn_name: self.name.clone(),
+            params: self.params.iter().cloned().collect(),
+        }
+    }
+}
+
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 ///
 /// # Thread Safety
 ///
 /// Currently, [`AST`] is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug, Clone)]
-pub struct AST(
+pub struct AST {
     /// Global statements.
-    Vec<Stmt>,
+    statements: Vec<Stmt>,
     /// Script-defined functions.
-    Shared<Module>,
-);
+    functions: Shared<Module>,
+}
 
 impl Default for AST {
     fn default() -> Self {
-        Self(Vec::with_capacity(16), Default::default())
+        Self {
+            statements: Vec::with_capacity(16),
+            functions: Default::default(),
+        }
     }
 }
 
 impl AST {
     /// Create a new [`AST`].
     #[inline(always)]
-    pub fn new(statements: impl IntoIterator<Item = Stmt>, lib: impl Into<Shared<Module>>) -> Self {
-        Self(statements.into_iter().collect(), lib.into())
+    pub fn new(
+        statements: impl IntoIterator<Item = Stmt>,
+        functions: impl Into<Shared<Module>>,
+    ) -> Self {
+        Self {
+            statements: statements.into_iter().collect(),
+            functions: functions.into(),
+        }
     }
     /// Get the statements.
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
     pub(crate) fn statements(&self) -> &[Stmt] {
-        &self.0
+        &self.statements
     }
     /// _(INTERNALS)_ Get the statements.
     /// Exported under the `internals` feature only.
@@ -142,26 +193,26 @@ impl AST {
     #[deprecated(note = "this method is volatile and may change")]
     #[inline(always)]
     pub fn statements(&self) -> &[Stmt] {
-        &self.0
+        &self.statements
     }
     /// Get a mutable reference to the statements.
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
     pub(crate) fn statements_mut(&mut self) -> &mut Vec<Stmt> {
-        &mut self.0
+        &mut self.statements
     }
     /// Get the internal shared [`Module`] containing all script-defined functions.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub(crate) fn shared_lib(&self) -> Shared<Module> {
-        self.1.clone()
+        self.functions.clone()
     }
     /// Get the internal [`Module`] containing all script-defined functions.
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
     pub(crate) fn lib(&self) -> &Module {
-        &self.1
+        &self.functions
     }
     /// _(INTERNALS)_ Get the internal [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
@@ -169,7 +220,7 @@ impl AST {
     #[deprecated(note = "this method is volatile and may change")]
     #[inline(always)]
     pub fn lib(&self) -> &Module {
-        &self.1
+        &self.functions
     }
     /// Clone the [`AST`]'s functions into a new [`AST`].
     /// No statements are cloned.
@@ -191,14 +242,20 @@ impl AST {
         mut filter: impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> Self {
         let mut functions: Module = Default::default();
-        functions.merge_filtered(&self.1, &mut filter);
-        Self(Default::default(), functions.into())
+        functions.merge_filtered(&self.functions, &mut filter);
+        Self {
+            statements: Default::default(),
+            functions: functions.into(),
+        }
     }
     /// Clone the [`AST`]'s script statements into a new [`AST`].
     /// No functions are cloned.
     #[inline(always)]
     pub fn clone_statements_only(&self) -> Self {
-        Self(self.0.clone(), Default::default())
+        Self {
+            statements: self.statements.clone(),
+            functions: Default::default(),
+        }
     }
     /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged, version
     /// is returned.
@@ -363,21 +420,24 @@ impl AST {
         other: &Self,
         mut filter: impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> Self {
-        let Self(statements, functions) = self;
+        let Self {
+            statements,
+            functions,
+        } = self;
 
-        let ast = match (statements.is_empty(), other.0.is_empty()) {
+        let ast = match (statements.is_empty(), other.statements.is_empty()) {
             (false, false) => {
                 let mut statements = statements.clone();
-                statements.extend(other.0.iter().cloned());
+                statements.extend(other.statements.iter().cloned());
                 statements
             }
             (false, true) => statements.clone(),
-            (true, false) => other.0.clone(),
+            (true, false) => other.statements.clone(),
             (true, true) => vec![],
         };
 
         let mut functions = functions.as_ref().clone();
-        functions.merge_filtered(&other.1, &mut filter);
+        functions.merge_filtered(&other.functions, &mut filter);
 
         Self::new(ast, functions)
     }
@@ -438,9 +498,9 @@ impl AST {
         other: Self,
         mut filter: impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> &mut Self {
-        self.0.extend(other.0.into_iter());
-        if !other.1.is_empty() {
-            shared_make_mut(&mut self.1).merge_filtered(&other.1, &mut filter);
+        self.statements.extend(other.statements.into_iter());
+        if !other.functions.is_empty() {
+            shared_make_mut(&mut self.functions).merge_filtered(&other.functions, &mut filter);
         }
         self
     }
@@ -473,29 +533,29 @@ impl AST {
         &mut self,
         filter: impl FnMut(FnNamespace, FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
-        if !self.1.is_empty() {
-            shared_make_mut(&mut self.1).retain_script_functions(filter);
+        if !self.functions.is_empty() {
+            shared_make_mut(&mut self.functions).retain_script_functions(filter);
         }
         self
     }
     /// Iterate through all functions
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
-    pub fn iter_functions<'a>(
-        &'a self,
-    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &ScriptFnDef)> + 'a {
-        self.1.iter_script_fn()
+    pub fn iter_functions<'a>(&'a self) -> impl Iterator<Item = ScriptFnMetadata> + 'a {
+        self.functions
+            .iter_script_fn()
+            .map(|(_, _, _, _, fn_def)| fn_def.into())
     }
     /// Clear all function definitions in the [`AST`].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clear_functions(&mut self) {
-        self.1 = Default::default();
+        self.functions = Default::default();
     }
     /// Clear all statements in the [`AST`], leaving only function definitions.
     #[inline(always)]
     pub fn clear_statements(&mut self) {
-        self.0 = vec![];
+        self.statements = vec![];
     }
 }
 
@@ -618,9 +678,9 @@ pub enum Stmt {
     /// `for` id `in` expr `{` stmt `}`
     For(Expr, Box<(String, Stmt)>, Position),
     /// \[`export`\] `let` id `=` expr
-    Let(Box<Ident>, Option<Expr>, bool, Position),
+    Let(Box<IdentX>, Option<Expr>, bool, Position),
     /// \[`export`\] `const` id `=` expr
-    Const(Box<Ident>, Option<Expr>, bool, Position),
+    Const(Box<IdentX>, Option<Expr>, bool, Position),
     /// expr op`=` expr
     Assignment(Box<(Expr, Cow<'static, str>, Expr)>, Position),
     /// `{` stmt`;` ... `}`
@@ -940,10 +1000,10 @@ impl Expr {
             Self::FloatConstant(x, _) => (*x).into(),
             Self::CharConstant(x, _) => (*x).into(),
             Self::StringConstant(x, _) => x.clone().into(),
-            Self::FnPointer(x, _) => Dynamic(Union::FnPtr(Box::new(FnPtr::new_unchecked(
-                x.clone(),
-                Default::default(),
-            )))),
+            Self::FnPointer(x, _) => Dynamic(Union::FnPtr(
+                Box::new(FnPtr::new_unchecked(x.clone(), Default::default())),
+                AccessMode::ReadOnly,
+            )),
             Self::BoolConstant(x, _) => (*x).into(),
             Self::Unit(_) => ().into(),
 
@@ -954,7 +1014,7 @@ impl Expr {
                     x.len(),
                 ));
                 arr.extend(x.iter().map(|v| v.get_constant_value().unwrap()));
-                Dynamic(Union::Array(Box::new(arr)))
+                Dynamic(Union::Array(Box::new(arr), AccessMode::ReadOnly))
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -967,7 +1027,7 @@ impl Expr {
                     x.iter()
                         .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap())),
                 );
-                Dynamic(Union::Map(Box::new(map)))
+                Dynamic(Union::Map(Box::new(map), AccessMode::ReadOnly))
             }
 
             _ => return None,
@@ -1167,7 +1227,7 @@ mod tests {
         assert_eq!(size_of::<Option<crate::ast::Expr>>(), 16);
         assert_eq!(size_of::<crate::ast::Stmt>(), 32);
         assert_eq!(size_of::<Option<crate::ast::Stmt>>(), 32);
-        assert_eq!(size_of::<crate::Scope>(), 72);
+        assert_eq!(size_of::<crate::Scope>(), 48);
         assert_eq!(size_of::<crate::LexError>(), 56);
         assert_eq!(size_of::<crate::ParseError>(), 16);
         assert_eq!(size_of::<crate::EvalAltResult>(), 72);

@@ -1,6 +1,29 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.8
+==============
+
+Bug fixes
+---------
+
+* Constants are no longer propagated by the optimizer if shadowed by a non-constant variable.
+* Constants passed as the `this` parameter to Rhai functions now throws an error if assigned to.
+
+Breaking changes
+----------------
+
+* `Engine::on_progress` now takes `u64` instead of `&u64`.
+* The closure for `Engine::on_debug` now takes an additional `Position` parameter.
+* `AST::iter_functions` now returns `ScriptFnMetadata`.
+
+Enhancements
+------------
+
+* Capturing a constant variable in a closure is now supported, with no cloning.
+* Provides position info for `debug` statements.
+
+
 Version 0.19.7
 ==============
 

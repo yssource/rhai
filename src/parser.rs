@@ -3,12 +3,11 @@
 use crate::ast::{
     BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, ScriptFnDef, Stmt,
 };
-use crate::dynamic::Union;
+use crate::dynamic::{AccessMode, Union};
 use crate::engine::{KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::module::NamespaceRef;
 use crate::optimize::optimize_into_ast;
 use crate::optimize::OptimizationLevel;
-use crate::scope::EntryType as ScopeEntryType;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
@@ -22,7 +21,7 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::syntax::CustomSyntax;
-use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
+use crate::token::{is_doc_comment, is_keyword_function, is_valid_identifier, Token, TokenStream};
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
     calc_script_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType,
@@ -49,7 +48,7 @@ struct ParseState<'e> {
     /// Interned strings.
     strings: HashMap<String, ImmutableString>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
-    stack: Vec<(ImmutableString, ScopeEntryType)>,
+    stack: Vec<(ImmutableString, AccessMode)>,
     /// Size of the local variables stack upon entry of the current block scope.
     entry_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
@@ -827,7 +826,7 @@ fn parse_switch(
         }
     }
 
-    let mut table = HashMap::with_capacity_and_hasher(16, StraightHasherBuilder);
+    let mut table = HashMap::new();
     let mut def_stmt = None;
 
     loop {
@@ -916,9 +915,12 @@ fn parse_switch(
         }
     }
 
+    let mut final_table = HashMap::with_capacity_and_hasher(table.len(), StraightHasherBuilder);
+    final_table.extend(table.into_iter());
+
     Ok(Stmt::Switch(
         item,
-        Box::new((table, def_stmt)),
+        Box::new((final_table, def_stmt)),
         settings.pos,
     ))
 }
@@ -1291,11 +1293,11 @@ fn make_assignment_stmt<'a>(
                 },
             ) = x.as_ref();
             match state.stack[(state.stack.len() - index.unwrap().get())].1 {
-                ScopeEntryType::Normal => {
+                AccessMode::ReadWrite => {
                     Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
                 }
                 // Constant values cannot be assigned to
-                ScopeEntryType::Constant => {
+                AccessMode::ReadOnly => {
                     Err(PERR::AssignmentToConstant(name.to_string()).into_err(*name_pos))
                 }
             }
@@ -1318,11 +1320,11 @@ fn make_assignment_stmt<'a>(
                     },
                 ) = x.as_ref();
                 match state.stack[(state.stack.len() - index.unwrap().get())].1 {
-                    ScopeEntryType::Normal => {
+                    AccessMode::ReadWrite => {
                         Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
                     }
                     // Constant values cannot be assigned to
-                    ScopeEntryType::Constant => {
+                    AccessMode::ReadOnly => {
                         Err(PERR::AssignmentToConstant(name.to_string()).into_err(*name_pos))
                     }
                 }
@@ -1811,7 +1813,7 @@ fn parse_custom_syntax(
             // Variable searches stop at the first empty variable name.
             state.stack.resize(
                 state.stack.len() + delta as usize,
-                ("".into(), ScopeEntryType::Normal),
+                ("".into(), AccessMode::ReadWrite),
             );
         }
         delta if delta < 0 && state.stack.len() <= delta.abs() as usize => state.stack.clear(),
@@ -2110,7 +2112,7 @@ fn parse_for(
 
     let loop_var = state.get_interned_string(name.clone());
     let prev_stack_len = state.stack.len();
-    state.stack.push((loop_var, ScopeEntryType::Normal));
+    state.stack.push((loop_var, AccessMode::ReadWrite));
 
     settings.is_breakable = true;
     let body = parse_block(input, state, lib, settings.level_up())?;
@@ -2125,7 +2127,7 @@ fn parse_let(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    var_type: ScopeEntryType,
+    var_type: AccessMode,
     export: bool,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
@@ -2156,17 +2158,17 @@ fn parse_let(
 
     match var_type {
         // let name = expr
-        ScopeEntryType::Normal => {
+        AccessMode::ReadWrite => {
             let var_name = state.get_interned_string(name.clone());
-            state.stack.push((var_name, ScopeEntryType::Normal));
-            let var_def = Ident::new(name, pos);
+            state.stack.push((var_name, AccessMode::ReadWrite));
+            let var_def = IdentX::new(name, pos);
             Ok(Stmt::Let(Box::new(var_def), init_expr, export, token_pos))
         }
         // const name = { expr:constant }
-        ScopeEntryType::Constant => {
+        AccessMode::ReadOnly => {
             let var_name = state.get_interned_string(name.clone());
-            state.stack.push((var_name, ScopeEntryType::Constant));
-            let var_def = Ident::new(name, pos);
+            state.stack.push((var_name, AccessMode::ReadOnly));
+            let var_def = IdentX::new(name, pos);
             Ok(Stmt::Const(Box::new(var_def), init_expr, export, token_pos))
         }
     }
@@ -2232,13 +2234,13 @@ fn parse_export(
     match input.peek().unwrap() {
         (Token::Let, pos) => {
             let pos = *pos;
-            let mut stmt = parse_let(input, state, lib, ScopeEntryType::Normal, true, settings)?;
+            let mut stmt = parse_let(input, state, lib, AccessMode::ReadWrite, true, settings)?;
             stmt.set_position(pos);
             return Ok(stmt);
         }
         (Token::Const, pos) => {
             let pos = *pos;
-            let mut stmt = parse_let(input, state, lib, ScopeEntryType::Constant, true, settings)?;
+            let mut stmt = parse_let(input, state, lib, AccessMode::ReadOnly, true, settings)?;
             stmt.set_position(pos);
             return Ok(stmt);
         }
@@ -2393,7 +2395,38 @@ fn parse_stmt(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Option<Stmt>, ParseError> {
-    use ScopeEntryType::{Constant, Normal};
+    use AccessMode::{ReadOnly, ReadWrite};
+
+    let mut fn_comments: Vec<String> = Default::default();
+    let mut fn_comments_pos = Position::NONE;
+
+    // Handle doc-comment.
+    #[cfg(not(feature = "no_function"))]
+    while let (Token::Comment(ref comment), comment_pos) = input.peek().unwrap() {
+        if fn_comments_pos.is_none() {
+            fn_comments_pos = *comment_pos;
+        }
+
+        if !is_doc_comment(comment) {
+            unreachable!();
+        }
+
+        if !settings.is_global {
+            return Err(PERR::WrongDocComment.into_err(fn_comments_pos));
+        }
+
+        if let Token::Comment(comment) = input.next().unwrap().0 {
+            fn_comments.push(comment);
+
+            match input.peek().unwrap() {
+                (Token::Fn, _) | (Token::Private, _) => break,
+                (Token::Comment(_), _) => (),
+                _ => return Err(PERR::WrongDocComment.into_err(fn_comments_pos)),
+            }
+        } else {
+            unreachable!();
+        }
+    }
 
     let (token, token_pos) = match input.peek().unwrap() {
         (Token::EOF, pos) => return Ok(Some(Stmt::Noop(*pos))),
@@ -2447,7 +2480,7 @@ fn parse_stmt(
                         pos: pos,
                     };
 
-                    let func = parse_fn(input, &mut new_state, lib, access, settings)?;
+                    let func = parse_fn(input, &mut new_state, lib, access, settings, fn_comments)?;
 
                     // Qualifiers (none) + function name + number of arguments.
                     let hash = calc_script_fn_hash(empty(), &func.name, func.params.len());
@@ -2521,9 +2554,9 @@ fn parse_stmt(
 
         Token::Try => parse_try_catch(input, state, lib, settings.level_up()).map(Some),
 
-        Token::Let => parse_let(input, state, lib, Normal, false, settings.level_up()).map(Some),
+        Token::Let => parse_let(input, state, lib, ReadWrite, false, settings.level_up()).map(Some),
         Token::Const => {
-            parse_let(input, state, lib, Constant, false, settings.level_up()).map(Some)
+            parse_let(input, state, lib, ReadOnly, false, settings.level_up()).map(Some)
         }
 
         #[cfg(not(feature = "no_module"))]
@@ -2606,6 +2639,7 @@ fn parse_fn(
     lib: &mut FunctionsLib,
     access: FnAccess,
     mut settings: ParseSettings,
+    fn_comments: Vec<String>,
 ) -> Result<ScriptFnDef, ParseError> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2637,7 +2671,7 @@ fn parse_fn(
                         return Err(PERR::FnDuplicatedParam(name, s).into_err(pos));
                     }
                     let s = state.get_interned_string(s);
-                    state.stack.push((s.clone(), ScopeEntryType::Normal));
+                    state.stack.push((s.clone(), AccessMode::ReadWrite));
                     params.push((s, pos))
                 }
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
@@ -2691,6 +2725,7 @@ fn parse_fn(
         lib: None,
         #[cfg(not(feature = "no_module"))]
         mods: Default::default(),
+        fn_comments,
     })
 }
 
@@ -2770,7 +2805,7 @@ fn parse_anon_fn(
                             return Err(PERR::FnDuplicatedParam("".to_string(), s).into_err(pos));
                         }
                         let s = state.get_interned_string(s);
-                        state.stack.push((s.clone(), ScopeEntryType::Normal));
+                        state.stack.push((s.clone(), AccessMode::ReadWrite));
                         params.push((s, pos))
                     }
                     (Token::LexError(err), pos) => return Err(err.into_err(pos)),
@@ -2847,6 +2882,7 @@ fn parse_anon_fn(
         lib: None,
         #[cfg(not(feature = "no_module"))]
         mods: Default::default(),
+        fn_comments: Default::default(),
     };
 
     let expr = Expr::FnPointer(fn_name, settings.pos);
@@ -3005,15 +3041,15 @@ impl Engine {
 pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
     match value.0 {
         #[cfg(not(feature = "no_float"))]
-        Union::Float(value) => Some(Expr::FloatConstant(value, pos)),
+        Union::Float(value, _) => Some(Expr::FloatConstant(value, pos)),
 
-        Union::Unit(_) => Some(Expr::Unit(pos)),
-        Union::Int(value) => Some(Expr::IntegerConstant(value, pos)),
-        Union::Char(value) => Some(Expr::CharConstant(value, pos)),
-        Union::Str(value) => Some(Expr::StringConstant(value, pos)),
-        Union::Bool(value) => Some(Expr::BoolConstant(value, pos)),
+        Union::Unit(_, _) => Some(Expr::Unit(pos)),
+        Union::Int(value, _) => Some(Expr::IntegerConstant(value, pos)),
+        Union::Char(value, _) => Some(Expr::CharConstant(value, pos)),
+        Union::Str(value, _) => Some(Expr::StringConstant(value, pos)),
+        Union::Bool(value, _) => Some(Expr::BoolConstant(value, pos)),
         #[cfg(not(feature = "no_index"))]
-        Union::Array(array) => {
+        Union::Array(array, _) => {
             let items: Vec<_> = array
                 .into_iter()
                 .map(|x| map_dynamic_to_expr(x, pos))
@@ -3029,7 +3065,7 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
             }
         }
         #[cfg(not(feature = "no_object"))]
-        Union::Map(map) => {
+        Union::Map(map, _) => {
             let items: Vec<_> = map
                 .into_iter()
                 .map(|(k, v)| (IdentX::new(k, pos), map_dynamic_to_expr(v, pos)))
