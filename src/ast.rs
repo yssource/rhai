@@ -83,6 +83,8 @@ pub struct ScriptFnDef {
     /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
     pub externals: Vec<ImmutableString>,
+    /// Comment block for function.
+    pub fn_comments: Vec<String>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -102,6 +104,46 @@ impl fmt::Display for ScriptFnDef {
                 .collect::<Vec<_>>()
                 .join(", ")
         )
+    }
+}
+
+/// A type containing a script-defined function's metadata.
+#[derive(Debug, Clone, Hash)]
+pub struct ScriptFnMetadata {
+    pub comments: Vec<String>,
+    pub access: FnAccess,
+    pub fn_name: ImmutableString,
+    pub params: Vec<ImmutableString>,
+}
+
+impl fmt::Display for ScriptFnMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}{}({}) -> Dynamic",
+            if self.access.is_private() {
+                "private "
+            } else {
+                ""
+            },
+            self.fn_name,
+            self.params
+                .iter()
+                .map(|p| p.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
+impl Into<ScriptFnMetadata> for &ScriptFnDef {
+    fn into(self) -> ScriptFnMetadata {
+        ScriptFnMetadata {
+            comments: self.fn_comments.clone(),
+            access: self.access,
+            fn_name: self.name.clone(),
+            params: self.params.iter().cloned().collect(),
+        }
     }
 }
 
@@ -499,20 +541,10 @@ impl AST {
     /// Iterate through all functions
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
-    pub fn iter_functions<'a>(
-        &'a self,
-    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &[ImmutableString])> + 'a {
+    pub fn iter_functions<'a>(&'a self) -> impl Iterator<Item = ScriptFnMetadata> + 'a {
         self.functions
             .iter_script_fn()
-            .map(|(namespace, access, name, num_params, fn_def)| {
-                (
-                    namespace,
-                    access,
-                    name,
-                    num_params,
-                    fn_def.params.as_slice(),
-                )
-            })
+            .map(|(_, _, _, _, fn_def)| fn_def.into())
     }
     /// Clear all function definitions in the [`AST`].
     #[cfg(not(feature = "no_function"))]

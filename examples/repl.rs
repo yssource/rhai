@@ -142,20 +142,7 @@ fn main() {
                     .for_each(|f| println!("{}", f));
 
                 #[cfg(not(feature = "no_function"))]
-                main_ast
-                    .iter_functions()
-                    .for_each(|(_, access, name, _, params)| {
-                        println!(
-                            "{}{}({}) -> Dynamic",
-                            if access.is_private() { "private " } else { "" },
-                            name,
-                            params
-                                .iter()
-                                .map(|s| s.as_str())
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )
-                    });
+                main_ast.iter_functions().for_each(|f| println!("{}", f));
 
                 println!();
                 continue;

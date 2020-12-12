@@ -115,7 +115,7 @@ pub type FLOAT = f64;
 #[cfg(feature = "f32_float")]
 pub type FLOAT = f32;
 
-pub use ast::{FnAccess, AST};
+pub use ast::{FnAccess, ScriptFnMetadata, AST};
 pub use dynamic::Dynamic;
 pub use engine::{Engine, EvalContext};
 pub use fn_native::{FnPtr, NativeCallContext, Shared};

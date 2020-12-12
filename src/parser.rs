@@ -54,6 +54,8 @@ struct ParseState<'e> {
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
     externals: HashMap<ImmutableString, Position>,
+    /// Latest global comments block.
+    comments: Vec<String>,
     /// An indicator that disables variable capturing into externals one single time
     /// up until the nearest consumed Identifier token.
     /// If set to false the next call to `access_var` will not capture the variable.
@@ -98,6 +100,7 @@ impl<'e> ParseState<'e> {
             strings: HashMap::with_capacity(64),
             stack: Vec::with_capacity(16),
             entry_stack_len: 0,
+            comments: Default::default(),
             #[cfg(not(feature = "no_module"))]
             modules: Default::default(),
         }
@@ -2449,7 +2452,9 @@ fn parse_stmt(
                         pos: pos,
                     };
 
-                    let func = parse_fn(input, &mut new_state, lib, access, settings)?;
+                    let fn_comments = state.comments.clone();
+
+                    let func = parse_fn(input, &mut new_state, lib, access, settings, fn_comments)?;
 
                     // Qualifiers (none) + function name + number of arguments.
                     let hash = calc_script_fn_hash(empty(), &func.name, func.params.len());
@@ -2608,6 +2613,7 @@ fn parse_fn(
     lib: &mut FunctionsLib,
     access: FnAccess,
     mut settings: ParseSettings,
+    fn_comments: Vec<String>,
 ) -> Result<ScriptFnDef, ParseError> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2693,6 +2699,7 @@ fn parse_fn(
         lib: None,
         #[cfg(not(feature = "no_module"))]
         mods: Default::default(),
+        fn_comments,
     })
 }
 
@@ -2849,6 +2856,7 @@ fn parse_anon_fn(
         lib: None,
         #[cfg(not(feature = "no_module"))]
         mods: Default::default(),
+        fn_comments: Default::default(),
     };
 
     let expr = Expr::FnPointer(fn_name, settings.pos);
