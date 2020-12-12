@@ -3,7 +3,9 @@
 use crate::ast::{Expr, FnCallExpr, Ident, IdentX, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
-use crate::fn_native::{CallableFunction, Callback, IteratorFn, OnVarCallback};
+use crate::fn_native::{
+    CallableFunction, IteratorFn, OnPrintCallback, OnProgressCallback, OnVarCallback,
+};
 use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, PackagesCollection, StandardPackage};
@@ -622,11 +624,11 @@ pub struct Engine {
     pub(crate) resolve_var: Option<OnVarCallback>,
 
     /// Callback closure for implementing the `print` command.
-    pub(crate) print: Callback<str, ()>,
+    pub(crate) print: OnPrintCallback,
     /// Callback closure for implementing the `debug` command.
-    pub(crate) debug: Callback<str, ()>,
+    pub(crate) debug: OnPrintCallback,
     /// Callback closure for progress reporting.
-    pub(crate) progress: Option<Callback<u64, Option<Dynamic>>>,
+    pub(crate) progress: Option<OnProgressCallback>,
 
     /// Optimize the AST after compilation.
     pub(crate) optimization_level: OptimizationLevel,
@@ -2542,7 +2544,7 @@ impl Engine {
 
         // Report progress - only in steps
         if let Some(progress) = &self.progress {
-            if let Some(token) = progress(&state.operations) {
+            if let Some(token) = progress(state.operations) {
                 // Terminate script if progress returns a termination token
                 return EvalAltResult::ErrorTerminated(token, Position::NONE).into();
             }
