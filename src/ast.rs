@@ -857,29 +857,40 @@ impl Stmt {
 /// This type is volatile and may change.
 #[derive(Clone)]
 pub struct CustomExpr {
-    /// List of keywords.
-    pub(crate) keywords: StaticVec<Expr>,
     /// Implementation function.
     pub(crate) func: Shared<FnCustomSyntaxEval>,
+    /// List of keywords.
+    pub(crate) keywords: StaticVec<Expr>,
+    /// List of tokens actually parsed.
+    pub(crate) tokens: Vec<ImmutableString>,
 }
 
 impl fmt::Debug for CustomExpr {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.keywords, f)
+        f.write_str("CustomExpr { keywords:")?;
+        fmt::Debug::fmt(&self.keywords, f)?;
+        f.write_str(", tokens:")?;
+        fmt::Debug::fmt(&self.tokens, f)?;
+        f.write_str("}")
     }
 }
 
 impl CustomExpr {
+    /// Get the implementation function for this custom syntax.
+    #[inline(always)]
+    pub fn func(&self) -> &FnCustomSyntaxEval {
+        self.func.as_ref()
+    }
     /// Get the keywords for this custom syntax.
     #[inline(always)]
     pub fn keywords(&self) -> &[Expr] {
         &self.keywords
     }
-    /// Get the implementation function for this custom syntax.
+    /// Get the actual parsed tokens for this custom syntax.
     #[inline(always)]
-    pub fn func(&self) -> &FnCustomSyntaxEval {
-        self.func.as_ref()
+    pub fn tokens(&self) -> &[ImmutableString] {
+        &self.tokens
     }
 }
 

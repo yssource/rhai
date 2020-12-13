@@ -195,9 +195,6 @@ pub const FN_IDX_SET: &str = "index$set$";
 pub const FN_ANONYMOUS: &str = "anon$";
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 pub const OP_EQUALS: &str = "==";
-pub const MARKER_EXPR: &str = "$expr$";
-pub const MARKER_BLOCK: &str = "$block$";
-pub const MARKER_IDENT: &str = "$ident$";
 
 /// A type specifying the method of chaining.
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]

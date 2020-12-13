@@ -4,6 +4,12 @@ Rhai Release Notes
 Version 0.19.8
 ==============
 
+This version makes it easier to generate documentation for a Rhai code base.
+
+Each function defined in an `AST` can optionally attach _doc-comments_ (which, as in Rust,
+are comments prefixed by either `///` or `/**`).  Doc-comments allow third-party tools to
+automatically generate documentation for functions defined in a Rhai script.
+
 Bug fixes
 ---------
 
@@ -16,6 +22,11 @@ Breaking changes
 * `Engine::on_progress` now takes `u64` instead of `&u64`.
 * The closure for `Engine::on_debug` now takes an additional `Position` parameter.
 * `AST::iter_functions` now returns `ScriptFnMetadata`.
+
+New features
+------------
+
+* `AST::iter_functions` now returns `ScriptFnMetadata` which includes, among others, _doc-comments_ for functions prefixed by `///` or `/**`.
 
 Enhancements
 ------------
