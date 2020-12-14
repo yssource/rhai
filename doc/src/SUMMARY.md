@@ -82,6 +82,7 @@ The Rhai Scripting Language
    11. [Do Loop](language/do.md)
    12. [Loop Statement](language/loop.md)
    13. [For Loop](language/for.md)
+       1. [Iterators for Custom Types](language/iterator.md)
    14. [Return Values](language/return.md)
    15. [Throw Exception on Error](language/throw.md)
    16. [Catch Exceptions](language/try-catch.md)

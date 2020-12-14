@@ -162,7 +162,7 @@ x == 43;
 ```
 
 All functions (usually _methods_) defined in the module and marked with `#[rhai_fn(global)]`,
-as well as all _type iterators_, are automatically exposed to the _global_ namespace, so
+as well as all [type iterators], are automatically exposed to the _global_ namespace, so
 [iteration]({{rootUrl}}/language/for.md), [getters/setters] and [indexers] for [custom types]
 can work as expected.
 

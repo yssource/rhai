@@ -44,8 +44,8 @@ It doesn't attempt to be a new language. For example:
 * **No formal language grammar** - Rhai uses a hand-coded lexer, a hand-coded top-down recursive-descent parser
   for statements, and a hand-coded Pratt parser for expressions.
   
-  This lack of formalism allows the _parser_ itself to be exposed as a service in order to support
-  [disabling keywords/operators][disable keywords and operators], adding [custom operators],
+  This lack of formalism allows the _tokenizer_ and _parser_ themselves to be exposed as services in order
+  to support [disabling keywords/operators][disable keywords and operators], adding [custom operators],
   and defining [custom syntax].
 
 

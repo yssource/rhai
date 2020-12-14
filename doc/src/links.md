@@ -57,6 +57,8 @@
 [custom types]: {{rootUrl}}/rust/custom.md
 [getters/setters]: {{rootUrl}}/rust/getters-setters.md
 [indexers]: {{rootUrl}}/rust/indexers.md
+[type iterator]: {{rootUrl}}/language/iterator.md
+[type iterators]: {{rootUrl}}/language/iterator.md
 
 [`instant::Instant`]: https://crates.io/crates/instant
 

@@ -21,7 +21,8 @@ rhai = "*"
 ```
 
 Crate versions are released on [`crates.io`](https:/crates.io/crates/rhai/) infrequently,
-so to track the latest features, enhancements and bug fixes, pull directly from GitHub:
+so to track the latest features, enhancements and bug fixes, pull directly from
+[GitHub](https://github.com/jonathandturner/rhai):
 
 ```toml
 [dependencies]

@@ -3,7 +3,7 @@
 
 {{#include ../links.md}}
 
-Iterating through a range or an [array], or any type with a registered _type iterator_,
+Iterating through a range or an [array], or any type with a registered [type iterator],
 is provided by the `for` ... `in` loop.
 
 Like C, `continue` can be used to skip to the next iteration, by-passing all following statements;

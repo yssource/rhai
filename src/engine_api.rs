@@ -158,13 +158,13 @@ impl Engine {
         self.type_names.insert(type_name::<T>().into(), name.into());
         self
     }
-    /// Register an iterator adapter for an iterable type with the [`Engine`].
+    /// Register an type iterator for an iterable type with the [`Engine`].
     /// This is an advanced feature.
     #[inline(always)]
     pub fn register_iterator<T>(&mut self) -> &mut Self
     where
-        T: Variant + Clone + Iterator,
-        <T as Iterator>::Item: Variant + Clone,
+        T: Variant + Clone + IntoIterator,
+        <T as IntoIterator>::Item: Variant + Clone,
     {
         self.global_namespace.set_iterable::<T>();
         self
