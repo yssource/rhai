@@ -858,11 +858,11 @@ impl Stmt {
 #[derive(Clone)]
 pub struct CustomExpr {
     /// Implementation function.
-    pub(crate) func: Shared<FnCustomSyntaxEval>,
+    pub func: Shared<FnCustomSyntaxEval>,
     /// List of keywords.
-    pub(crate) keywords: StaticVec<Expr>,
+    pub keywords: StaticVec<Expr>,
     /// List of tokens actually parsed.
-    pub(crate) tokens: Vec<ImmutableString>,
+    pub tokens: Vec<ImmutableString>,
 }
 
 impl fmt::Debug for CustomExpr {
@@ -873,24 +873,6 @@ impl fmt::Debug for CustomExpr {
         f.write_str(", tokens:")?;
         fmt::Debug::fmt(&self.tokens, f)?;
         f.write_str("}")
-    }
-}
-
-impl CustomExpr {
-    /// Get the implementation function for this custom syntax.
-    #[inline(always)]
-    pub fn func(&self) -> &FnCustomSyntaxEval {
-        self.func.as_ref()
-    }
-    /// Get the keywords for this custom syntax.
-    #[inline(always)]
-    pub fn keywords(&self) -> &[Expr] {
-        &self.keywords
-    }
-    /// Get the actual parsed tokens for this custom syntax.
-    #[inline(always)]
-    pub fn tokens(&self) -> &[ImmutableString] {
-        &self.tokens
     }
 }
 

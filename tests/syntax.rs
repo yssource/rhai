@@ -27,7 +27,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
             let stmt = inputs.get(1).unwrap();
             let condition = inputs.get(2).unwrap();
 
-            context.scope.push(var_name, 0 as INT);
+            context.scope_mut().push(var_name, 0 as INT);
 
             loop {
                 context.eval_expression_tree(stmt)?;
@@ -110,7 +110,7 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
         },
         1,
         |context, inputs| {
-            context.scope.push("foo", 999 as INT);
+            context.scope_mut().push("foo", 999 as INT);
 
             Ok(match inputs[0].get_variable_name().unwrap() {
                 "world" => 123 as INT,

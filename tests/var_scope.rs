@@ -71,7 +71,7 @@ fn test_var_resolver() -> Result<(), Box<EvalAltResult>> {
             }
             // Silently maps 'chameleon' into 'innocent'.
             "chameleon" => context
-                .scope
+                .scope()
                 .get_value("innocent")
                 .map(Some)
                 .ok_or_else(|| {
