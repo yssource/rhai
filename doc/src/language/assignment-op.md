@@ -34,7 +34,10 @@ number ^= 0x00ff;       // number = number ^ 0x00ff;
 The Flexible `+=`
 ----------------
 
-The `+=` operator can also be used to build [strings]:
+The the `+` and `+=` operators are often [overloaded][function overloading] to perform
+build-up operations for different data types.
+
+For example, it is used to build [strings]:
 
 ```rust
 let my_str = "abc";
@@ -44,7 +47,7 @@ my_str += 12345;
 my_str == "abcABC12345"
 ```
 
-It may also be used to concatenate [arrays]:
+to concatenate [arrays]:
 
 ```rust
 let my_array = [1, 2, 3];
@@ -53,7 +56,7 @@ my_array += [4, 5];
 my_array == [1, 2, 3, 4, 5];
 ```
 
-or mix two [object maps] together:
+and mix two [object maps] together:
 
 ```rust
 let my_obj = #{a:1, b:2};
@@ -61,6 +64,3 @@ my_obj += #{c:3, d:4, e:5};
 
 my_obj.len() == 5;
 ```
-
-In fact, the `+` and `+=` operators are usually [overloaded][function overloading] when
-something is to be _added_ to an existing type.

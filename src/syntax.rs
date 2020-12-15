@@ -1,18 +1,18 @@
 //! Module implementing custom syntax for [`Engine`].
 
 use crate::ast::Expr;
-use crate::engine::{EvalContext, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+use crate::engine::EvalContext;
 use crate::fn_native::SendSync;
-use crate::stdlib::{
-    boxed::Box,
-    format,
-    string::{String, ToString},
-};
+use crate::stdlib::{boxed::Box, format, string::ToString};
 use crate::token::{is_valid_identifier, Token};
 use crate::{
     Dynamic, Engine, EvalAltResult, ImmutableString, LexError, ParseError, Position, Shared,
     StaticVec,
 };
+
+pub const MARKER_EXPR: &str = "$expr$";
+pub const MARKER_BLOCK: &str = "$block$";
+pub const MARKER_IDENT: &str = "$ident$";
 
 /// A general expression evaluation trait object.
 #[cfg(not(feature = "sync"))]
@@ -25,11 +25,12 @@ pub type FnCustomSyntaxEval =
 
 /// A general expression parsing trait object.
 #[cfg(not(feature = "sync"))]
-pub type FnCustomSyntaxParse = dyn Fn(&[String]) -> Result<Option<String>, ParseError>;
+pub type FnCustomSyntaxParse =
+    dyn Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError>;
 /// A general expression parsing trait object.
 #[cfg(feature = "sync")]
 pub type FnCustomSyntaxParse =
-    dyn Fn(&[String]) -> Result<Option<String>, ParseError> + Send + Sync;
+    dyn Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError> + Send + Sync;
 
 /// An expression sub-tree in an [`AST`][crate::AST].
 #[derive(Debug, Clone)]
@@ -100,7 +101,7 @@ impl Engine {
     /// * `keywords` holds a slice of strings that define the custom syntax.  
     /// * `new_vars` is the number of new variables declared by this custom syntax, or the number of variables removed (if negative).
     /// * `func` is the implementation function.
-    pub fn register_custom_syntax<S: AsRef<str> + ToString>(
+    pub fn register_custom_syntax<S: AsRef<str> + Into<ImmutableString>>(
         &mut self,
         keywords: impl AsRef<[S]>,
         new_vars: isize,
@@ -110,7 +111,7 @@ impl Engine {
     ) -> Result<&mut Self, ParseError> {
         let keywords = keywords.as_ref();
 
-        let mut segments: StaticVec<_> = Default::default();
+        let mut segments: StaticVec<ImmutableString> = Default::default();
 
         for s in keywords {
             let s = s.as_ref().trim();
@@ -122,7 +123,7 @@ impl Engine {
 
             let seg = match s {
                 // Markers not in first position
-                MARKER_EXPR | MARKER_BLOCK | MARKER_IDENT if !segments.is_empty() => s.to_string(),
+                MARKER_IDENT | MARKER_EXPR | MARKER_BLOCK if !segments.is_empty() => s.into(),
                 // Standard or reserved keyword/symbol not in first position
                 s if !segments.is_empty() && Token::lookup_from_syntax(s).is_some() => {
                     // Make it a custom keyword/symbol
@@ -184,7 +185,7 @@ impl Engine {
         self.register_custom_syntax_raw(
             key,
             // Construct the parsing function
-            move |stream| {
+            move |stream, _| {
                 if stream.len() >= segments.len() {
                     Ok(None)
                 } else {
@@ -212,7 +213,9 @@ impl Engine {
     pub fn register_custom_syntax_raw(
         &mut self,
         key: impl Into<ImmutableString>,
-        parse: impl Fn(&[String]) -> Result<Option<String>, ParseError> + SendSync + 'static,
+        parse: impl Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError>
+            + SendSync
+            + 'static,
         new_vars: isize,
         func: impl Fn(&mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
             + SendSync

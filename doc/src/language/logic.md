@@ -6,6 +6,15 @@ Logic Operators
 Comparison Operators
 -------------------
 
+| Operator | Description               |
+| :------: | ------------------------- |
+|   `==`   | equals to                 |
+|   `!=`   | not equals to             |
+|   `>`    | greater than              |
+|   `>=`   | greater than or equals to |
+|   `<`    | less than                 |
+|   `<=`   | less than or equals to    |
+
 Comparing most values of the same data type work out-of-the-box for all [standard types] supported by the system.
 
 However, if using a [raw `Engine`] without loading any [packages], comparisons can only be made between a limited
@@ -43,15 +52,15 @@ ts != 42;               // true - types cannot be compared
 Boolean operators
 -----------------
 
-| Operator          | Description                           |
-| ----------------- | ------------------------------------- |
-| `!`               | boolean _Not_                         |
-| `&&`              | boolean _And_ (short-circuits)        |
-| <code>\|\|</code> | boolean _Or_ (short-circuits)         |
-| `&`               | boolean _And_ (doesn't short-circuit) |
-| <code>\|</code>   | boolean _Or_ (doesn't short-circuit)  |
+|     Operator      | Description   | Short-Circuits? |
+| :---------------: | ------------- | :-------------: |
+|   `!` (prefix)    | boolean _NOT_ |       no        |
+|       `&&`        | boolean _AND_ |       yes       |
+|        `&`        | boolean _AND_ |       no        |
+| <code>\|\|</code> | boolean _OR_  |       yes       |
+|  <code>\|</code>  | boolean _OR_  |       no        |
 
-Double boolean operators `&&` and `||` _short-circuit_, meaning that the second operand will not be evaluated
+Double boolean operators `&&` and `||` _short-circuit_ - meaning that the second operand will not be evaluated
 if the first one already proves the condition wrong.
 
 Single boolean operators `&` and `|` always evaluate both operands.
@@ -65,3 +74,5 @@ a() | b();              // both a() and b() are evaluated
 
 a() & b();              // both a() and b() are evaluated
 ```
+
+All boolean operators are [built in][built-in operators] for the `bool` data type.

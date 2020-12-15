@@ -4,11 +4,18 @@ Rhai Release Notes
 Version 0.19.8
 ==============
 
+This version makes it easier to generate documentation for a Rhai code base.
+
+Each function defined in an `AST` can optionally attach _doc-comments_ (which, as in Rust,
+are comments prefixed by either `///` or `/**`).  Doc-comments allow third-party tools to
+automatically generate documentation for functions defined in a Rhai script.
+
 Bug fixes
 ---------
 
 * Constants are no longer propagated by the optimizer if shadowed by a non-constant variable.
 * Constants passed as the `this` parameter to Rhai functions now throws an error if assigned to.
+* Generic type parameter of `Engine::register_iterator` is `IntoIterator` instead of `Iterator`.
 
 Breaking changes
 ----------------
@@ -16,12 +23,19 @@ Breaking changes
 * `Engine::on_progress` now takes `u64` instead of `&u64`.
 * The closure for `Engine::on_debug` now takes an additional `Position` parameter.
 * `AST::iter_functions` now returns `ScriptFnMetadata`.
+* The parser function passed to `Engine::register_custom_syntax_raw` now takes an additional parameter containing the _look-ahead_ symbol.
+
+New features
+------------
+
+* `AST::iter_functions` now returns `ScriptFnMetadata` which includes, among others, _doc-comments_ for functions prefixed by `///` or `/**`.
 
 Enhancements
 ------------
 
 * Capturing a constant variable in a closure is now supported, with no cloning.
 * Provides position info for `debug` statements.
+* A _look-ahead_ symbol is provided to custom syntax parsers, which can be used to parse variable-length symbol streams.
 
 
 Version 0.19.7

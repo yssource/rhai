@@ -4,8 +4,10 @@ Related Resources
 {{#include ../links.md}}
 
 
-Other Online Resources for Rhai
-------------------------------
+Online Resources for Rhai
+-------------------------
+
+* [GitHub](https://github.com/jonathandturner/rhai) - Home repository
 
 * [`crates.io`](https://crates.io/crates/rhai) - Rhai crate
 

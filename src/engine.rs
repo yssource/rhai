@@ -195,9 +195,6 @@ pub const FN_IDX_SET: &str = "index$set$";
 pub const FN_ANONYMOUS: &str = "anon$";
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 pub const OP_EQUALS: &str = "==";
-pub const MARKER_EXPR: &str = "$expr$";
-pub const MARKER_BLOCK: &str = "$block$";
-pub const MARKER_IDENT: &str = "$ident$";
 
 /// A type specifying the method of chaining.
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
@@ -535,7 +532,7 @@ pub struct Limits {
 #[derive(Debug)]
 pub struct EvalContext<'e, 'x, 'px: 'x, 'a, 's, 'm, 'pm: 'm, 't, 'pt: 't> {
     pub(crate) engine: &'e Engine,
-    pub scope: &'x mut Scope<'px>,
+    pub(crate) scope: &'x mut Scope<'px>,
     pub(crate) mods: &'a mut Imports,
     pub(crate) state: &'s mut State,
     pub(crate) lib: &'m [&'pm Module],
@@ -548,6 +545,16 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
     #[inline(always)]
     pub fn engine(&self) -> &'e Engine {
         self.engine
+    }
+    /// The current [`Scope`].
+    #[inline(always)]
+    pub fn scope(&self) -> &Scope<'px> {
+        self.scope
+    }
+    /// Mutable reference to the current [`Scope`].
+    #[inline(always)]
+    pub fn scope_mut(&mut self) -> &mut &'x mut Scope<'px> {
+        &mut self.scope
     }
     /// _(INTERNALS)_ The current set of modules imported via `import` statements.
     /// Available under the `internals` feature only.
@@ -1825,7 +1832,7 @@ impl Engine {
 
             Expr::Custom(custom, _) => {
                 let expressions = custom
-                    .keywords()
+                    .keywords
                     .iter()
                     .map(Into::into)
                     .collect::<StaticVec<_>>();

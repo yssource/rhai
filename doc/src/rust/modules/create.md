@@ -75,7 +75,7 @@ engine.eval::<i64>("calc::inc(41)")? == 42; // refer to the 'Calc' module
 `Module::set_fn_XXX_mut` can expose functions (usually _methods_) in the module
 to the _global_ namespace, so [getters/setters] and [indexers] for [custom types] can work as expected.
 
-Type iterators, because of their special nature, are always exposed to the _global_ namespace.
+[Type iterators], because of their special nature, are always exposed to the _global_ namespace.
 
 ```rust
 use rhai::{Engine, Module, FnNamespace};

@@ -4,7 +4,7 @@ use crate::ast::{
     BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, ScriptFnDef, Stmt,
 };
 use crate::dynamic::{AccessMode, Union};
-use crate::engine::{KEYWORD_THIS, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+use crate::engine::KEYWORD_THIS;
 use crate::module::NamespaceRef;
 use crate::optimize::optimize_into_ast;
 use crate::optimize::OptimizationLevel;
@@ -20,7 +20,7 @@ use crate::stdlib::{
     vec,
     vec::Vec,
 };
-use crate::syntax::CustomSyntax;
+use crate::syntax::{CustomSyntax, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::token::{is_doc_comment, is_keyword_function, is_valid_identifier, Token, TokenStream};
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
@@ -1803,7 +1803,9 @@ fn parse_custom_syntax(
     syntax: &CustomSyntax,
     pos: Position,
 ) -> Result<Expr, ParseError> {
-    let mut exprs: StaticVec<Expr> = Default::default();
+    let mut keywords: StaticVec<Expr> = Default::default();
+    let mut segments: StaticVec<_> = Default::default();
+    let mut tokens: Vec<_> = Default::default();
 
     // Adjust the variables stack
     match syntax.scope_delta {
@@ -1825,26 +1827,30 @@ fn parse_custom_syntax(
 
     let parse_func = &syntax.parse;
 
-    let mut segments: StaticVec<_> = Default::default();
-    segments.push(key.to_string());
+    segments.push(key.into());
+    tokens.push(key.into());
 
     loop {
-        settings.pos = input.peek().unwrap().1;
+        let (fwd_token, fwd_pos) = input.peek().unwrap();
+        settings.pos = *fwd_pos;
         let settings = settings.level_up();
 
-        let token =
-            if let Some(seg) = parse_func(&segments).map_err(|err| err.0.into_err(settings.pos))? {
-                seg
-            } else {
-                break;
-            };
+        let required_token = if let Some(seg) = parse_func(&segments, fwd_token.syntax().as_ref())
+            .map_err(|err| err.0.into_err(settings.pos))?
+        {
+            seg
+        } else {
+            break;
+        };
 
-        match token.as_str() {
+        match required_token.as_str() {
             MARKER_IDENT => match input.next().unwrap() {
                 (Token::Identifier(s), pos) => {
-                    segments.push(s.clone());
-                    let var_name_def = IdentX::new(state.get_interned_string(s), pos);
-                    exprs.push(Expr::Variable(Box::new((None, None, 0, var_name_def))));
+                    let ident = state.get_interned_string(s);
+                    let var_name_def = IdentX::new(ident.clone(), pos);
+                    keywords.push(Expr::Variable(Box::new((None, None, 0, var_name_def))));
+                    segments.push(ident);
+                    tokens.push(state.get_interned_string(MARKER_IDENT));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
@@ -1852,20 +1858,25 @@ fn parse_custom_syntax(
                 (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
             },
             MARKER_EXPR => {
-                exprs.push(parse_expr(input, state, lib, settings)?);
-                segments.push(MARKER_EXPR.into());
+                keywords.push(parse_expr(input, state, lib, settings)?);
+                let keyword = state.get_interned_string(MARKER_EXPR);
+                segments.push(keyword.clone());
+                tokens.push(keyword);
             }
             MARKER_BLOCK => match parse_block(input, state, lib, settings)? {
                 Stmt::Block(statements, pos) => {
-                    exprs.push(Expr::Stmt(Box::new(statements.into()), pos));
-                    segments.push(MARKER_BLOCK.into());
+                    keywords.push(Expr::Stmt(Box::new(statements.into()), pos));
+                    let keyword = state.get_interned_string(MARKER_BLOCK);
+                    segments.push(keyword.clone());
+                    tokens.push(keyword);
                 }
                 _ => unreachable!(),
             },
             s => match input.next().unwrap() {
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                 (t, _) if t.syntax().as_ref() == s => {
-                    segments.push(t.syntax().into_owned());
+                    segments.push(required_token.clone());
+                    tokens.push(required_token.clone());
                 }
                 (_, pos) => {
                     return Err(PERR::MissingToken(
@@ -1880,8 +1891,9 @@ fn parse_custom_syntax(
 
     Ok(Expr::Custom(
         Box::new(CustomExpr {
-            keywords: exprs,
+            keywords,
             func: syntax.func.clone(),
+            tokens,
         }),
         pos,
     ))
