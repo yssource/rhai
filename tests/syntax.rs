@@ -93,7 +93,7 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
 
     engine.register_custom_syntax_raw(
         "hello",
-        |stream| match stream.len() {
+        |stream, _| match stream.len() {
             0 => unreachable!(),
             1 => Ok(Some("$ident$".into())),
             2 => match stream[1].as_str() {

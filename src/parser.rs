@@ -1831,15 +1831,17 @@ fn parse_custom_syntax(
     tokens.push(key.into());
 
     loop {
-        settings.pos = input.peek().unwrap().1;
+        let (fwd_token, fwd_pos) = input.peek().unwrap();
+        settings.pos = *fwd_pos;
         let settings = settings.level_up();
 
-        let required_token =
-            if let Some(seg) = parse_func(&segments).map_err(|err| err.0.into_err(settings.pos))? {
-                seg
-            } else {
-                break;
-            };
+        let required_token = if let Some(seg) = parse_func(&segments, fwd_token.syntax().as_ref())
+            .map_err(|err| err.0.into_err(settings.pos))?
+        {
+            seg
+        } else {
+            break;
+        };
 
         match required_token.as_str() {
             MARKER_IDENT => match input.next().unwrap() {

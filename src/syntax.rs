@@ -26,11 +26,11 @@ pub type FnCustomSyntaxEval =
 /// A general expression parsing trait object.
 #[cfg(not(feature = "sync"))]
 pub type FnCustomSyntaxParse =
-    dyn Fn(&[ImmutableString]) -> Result<Option<ImmutableString>, ParseError>;
+    dyn Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError>;
 /// A general expression parsing trait object.
 #[cfg(feature = "sync")]
 pub type FnCustomSyntaxParse =
-    dyn Fn(&[ImmutableString]) -> Result<Option<ImmutableString>, ParseError> + Send + Sync;
+    dyn Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError> + Send + Sync;
 
 /// An expression sub-tree in an [`AST`][crate::AST].
 #[derive(Debug, Clone)]
@@ -185,7 +185,7 @@ impl Engine {
         self.register_custom_syntax_raw(
             key,
             // Construct the parsing function
-            move |stream| {
+            move |stream, _| {
                 if stream.len() >= segments.len() {
                     Ok(None)
                 } else {
@@ -213,7 +213,7 @@ impl Engine {
     pub fn register_custom_syntax_raw(
         &mut self,
         key: impl Into<ImmutableString>,
-        parse: impl Fn(&[ImmutableString]) -> Result<Option<ImmutableString>, ParseError>
+        parse: impl Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError>
             + SendSync
             + 'static,
         new_vars: isize,
