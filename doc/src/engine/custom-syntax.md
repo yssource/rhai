@@ -116,16 +116,17 @@ The function signature of an implementation is:
 
 where:
 
-| Parameter                     |              Type               | Description                                                                           |
-| ----------------------------- | :-----------------------------: | ------------------------------------------------------------------------------------- |
-| `context`                     |       `&mut EvalContext`        | mutable reference to the current evaluation _context_                                 |
-| - `context.scope`             |          `&mut Scope`           | mutable reference to the current [`Scope`]; variables can be added to/removed from it |
-| - `context.engine()`          |            `&Engine`            | reference to the current [`Engine`]                                                   |
-| - `context.imports()`         |           `&Imports`            | reference to the current stack of [modules] imported via `import` statements          |
-| - `context.iter_namespaces()` | `impl Iterator<Item = &Module>` | iterator of the namespaces (as [modules]) containing all script-defined functions     |
-| - `context.this_ptr()`        |       `Option<&Dynamic>`        | reference to the current bound [`this`] pointer, if any                               |
-| - `context.call_level()`      |             `usize`             | the current nesting level of function calls                                           |
-| `inputs`                      |         `&[Expression]`         | a list of input expression trees                                                      |
+| Parameter                  |              Type               | Description                                                                           |
+| -------------------------- | :-----------------------------: | ------------------------------------------------------------------------------------- |
+| `context`                  |       `&mut EvalContext`        | mutable reference to the current evaluation _context_                                 |
+| &bull; `scope()`           |            `&Scope`             | reference to the current [`Scope`]                                                    |
+| &bull; `scope_mut()`       |          `&mut Scope`           | mutable reference to the current [`Scope`]; variables can be added to/removed from it |
+| &bull; `engine()`          |            `&Engine`            | reference to the current [`Engine`]                                                   |
+| &bull; `imports()`         |           `&Imports`            | reference to the current stack of [modules] imported via `import` statements          |
+| &bull; `iter_namespaces()` | `impl Iterator<Item = &Module>` | iterator of the namespaces (as [modules]) containing all script-defined functions     |
+| &bull; `this_ptr()`        |       `Option<&Dynamic>`        | reference to the current bound [`this`] pointer, if any                               |
+| &bull; `call_level()`      |             `usize`             | the current nesting level of function calls                                           |
+| `inputs`                   |         `&[Expression]`         | a list of input expression trees                                                      |
 
 ### Return Value
 
@@ -168,7 +169,7 @@ In other words, any [`Scope`] calls that change the list of must come _before_ a
 let var_name = inputs[0].get_variable_name().unwrap();
 let expression = inputs.get(1).unwrap();
 
-context.scope.push(var_name, 0 as INT);     // do this BEFORE 'context.eval_expression_tree'!
+context.scope_mut().push(var_name, 0 as INT);   // do this BEFORE 'context.eval_expression_tree'!
 
 let result = context.eval_expression_tree(expression)?;
 ```
@@ -195,7 +196,7 @@ fn implementation_func(
     let condition = inputs.get(2).unwrap();
 
     // Push one new variable into the scope BEFORE 'context.eval_expression_tree'
-    context.scope.push(var_name, 0 as INT);
+    context.scope_mut().push(var_name, 0 as INT);
 
     loop {
         // Evaluate the statement block
@@ -258,8 +259,8 @@ Step Six - Profit!
 ------------------
 
 
-Really Advanced - Low Level Custom Syntax API
---------------------------------------------
+Really Advanced - Custom Parsers
+-------------------------------
 
 Sometimes it is desirable to have multiple custom syntax starting with the
 same symbol.  This is especially common for _command-style_ syntax where the
@@ -276,30 +277,67 @@ perform add something;      // Add something to the system
 perform remove something;   // Delete something from the system
 ```
 
-For even more flexibility, there is a _low level_ API for custom syntax that
-allows the registration of an entire mini-parser.
+Alternatively, a custom syntax may have variable length, with a termination symbol:
+
+```rust
+// The following is a variable-length list terminated by '>'  
+tags < "foo", "bar", 123, ... , x+y, true >
+```
+
+For even more flexibility in order to handle these advanced use cases, there is a
+_low level_ API for custom syntax that allows the registration of an entire mini-parser.
 
 Use `Engine::register_custom_syntax_raw` to register a custom syntax _parser_
-together with the implementation function:
+together with the implementation function.
+
+### How Custom Parsers Work
+
+A custom parser takes as input parameters two pieces of information:
+
+* The symbols parsed so far; `$ident$` is replaced with the actual identifier parsed,
+  while `$expr$` and `$block$` stay as they were.
+  
+  The custom parser can inspect this symbols stream to determine the next symbol to parse.
+
+* The _look-ahead_ symbol, which is the symbol that will be parsed _next_.
+
+  If the look-ahead is an expected symbol, the customer parser just returns it to continue parsing,
+  or it can return `$ident$` to parse it as an identifier, or even `$expr$` to start parsing
+  an expression.
+
+  If the look-ahead is '`{`', then the custom parser may also return `$block$` to start parsing a
+  statements block.
+
+  If the look-ahead is unexpected, the custom parser should then return the symbol expected
+  and Rhai will fail with a parse error containing information about the expected symbol.
+
+A custom parser always returns the _next_ symbol expected, which can also be `$ident$`,
+`$expr$` or `$block$`, or `None` if parsing should terminate (_without_ reading the
+look-ahead symbol).
+
+
+### Example
 
 ```rust
 engine.register_custom_syntax_raw(
     "perform",
-    |stream| match stream.len() {
+    // The custom parser implementation - always returns the next symbol expected
+    // 'look_ahead' is the next symbol about to be read
+    |symbols, look_ahead| match symbols.len() {
         // perform ...
         1 => Ok(Some("$ident$".to_string())),
         // perform command ...
-        2 => match stream[1].as_str() {
-            "action" => Ok(Some("$expr$".to_string())),
-            "hello" => Ok(Some("world".to_string())),
-            "update" | "check" | "add" | "remove" => Ok(Some("$ident$".to_string())),
+        2 => match symbols[1].as_str() {
+            "action" => Ok(Some("$expr$".into())),
+            "hello" => Ok(Some("world".into())),
+            "update" | "check" | "add" | "remove" => Ok(Some("$ident$".into())),
             "cleanup" => Ok(None),
             cmd => Err(ParseError(Box::new(ParseErrorType::BadInput(
                 LexError::ImproperSymbol(format!("Improper command: {}", cmd))
             )), Position::NONE)),
         },
         // perform command arg ...
-        3 => match (stream[1].as_str(), stream[2].as_str()) {
+        3 => match (symbols[1].as_str(), symbols[2].as_str()) {
             ("action", _) => Ok(None),
             ("hello", "world") => Ok(None),
             ("update", arg) if arg == "system" => Ok(None),
@@ -315,7 +353,9 @@ engine.register_custom_syntax_raw(
         },
         _ => unreachable!(),
     },
-    0, // the number of new variables declared within this custom syntax
+    // Number of new variables declared by this custom syntax
+    0,
+    // Implementation function
     implementation_func
 );
 ```
@@ -324,20 +364,24 @@ engine.register_custom_syntax_raw(
 
 The custom syntax parser has the following signature:
 
-> `Fn(stream: &[String]) -> Result<Option<String>, ParseError>`
+> `Fn(symbols: &[ImmutableString], look_ahead: &str) -> Result<Option<ImmutableString>, ParseError>`
 
 where:
 
-| Parameter |    Type     | Description                                                                                        |
-| --------- | :---------: | -------------------------------------------------------------------------------------------------- |
-| `stream`  | `&[String]` | a slice of symbols that have been parsed so far, possibly containing `"$expr$"` and/or `"$block$"` |
+| Parameter    |         Type         | Description                                                                                                                                    |
+| ------------ | :------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `symbols`    | `&[ImmutableString]` | a slice of symbols that have been parsed so far, possibly containing `$expr$` and/or `$block$`; `$ident$` is replaced by the actual identifier |
+| `look_ahead` |        `&str`        | a string slice containing the next symbol that is about to be read                                                                             |
+
+Most strings are [`ImmutableString`][string]'s so it is usually more efficient to just `clone` the appropriate one
+(if any matches, or keep an internal cache for commonly-used symbols) as the return value.
 
 ### Return Value
 
-The return value is `Result<Option<String>, ParseError>` where:
+The return value is `Result<Option<ImmutableString>, ParseError>` where:
 
-| Value              | Description                                                                                                                                                                                                                              |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Ok(None)`         | parsing complete and there are no more symbols to match                                                                                                                                                                                  |
-| `Ok(Some(symbol))` | next symbol to match, which can also be `"$expr$"`, `"$ident$"` or `"$block$"`                                                                                                                                                           |
-| `Err(ParseError)`  | error that is reflected back to the [`Engine`].<br/>Normally this is `ParseError(ParseErrorType::BadInput(LexError::ImproperSymbol(message)), Position::NONE)` to indicate that there is a syntax error, but it can be any `ParseError`. |
+| Value              | Description                                                                                                                                                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Ok(None)`         | parsing complete and there are no more symbols to match                                                                                                                                                                       |
+| `Ok(Some(symbol))` | the next symbol to match, which can also be `$expr$`, `$ident$` or `$block$`                                                                                                                                                  |
+| `Err(ParseError)`  | error that is reflected back to the [`Engine`] - normally `ParseError(ParseErrorType::BadInput(LexError::ImproperSymbol(message)), Position::NONE)` to indicate that there is a syntax error, but it can be any `ParseError`. |

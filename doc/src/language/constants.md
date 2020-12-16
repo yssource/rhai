@@ -61,8 +61,8 @@ r"
 ```
 
 
-Constants Can be Modified via Rust
----------------------------------
+Caveat - Constants Can be Modified via Rust
+------------------------------------------
 
 A custom type stored as a constant cannot be modified via script, but _can_ be modified via
 a registered Rust function that takes a first `&mut` parameter - because there is no way for
@@ -76,8 +76,14 @@ x.increment();      // call 'increment' defined in Rust with '&mut' first parame
 x == 43;            // value of 'x' is changed!
 
 fn double() {
-    this *= 2;      // function squares 'this'
+    this *= 2;      // function doubles 'this'
 }
+
+let y = 1;          // 'y' is not constant and mutable
+
+y.double();         // double it...
+
+y == 2;             // value of 'y' is changed as expected
 
 x.double();         // <- error: cannot modify constant 'this'
 

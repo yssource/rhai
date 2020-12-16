@@ -271,9 +271,9 @@ use rhai::plugin::*;        // a "prelude" import for macros
 
 #[export_module]
 mod my_module {
-    // This is the '+' operator for 'MyType'.
+    // This is the '+' operator for 'TestStruct'.
     #[rhai_fn(name = "+")]
-    pub fn add(obj: &mut MyType, value: i64) {
+    pub fn add(obj: &mut TestStruct, value: i64) {
         obj.prop += value;
     }
     // This function is 'calc (i64)'.
@@ -305,24 +305,24 @@ mod my_module {
     pub fn greet(name: &str) -> String {
         format!("hello, {}!", name)
     }
-    // This is a getter for 'MyType::prop'.
+    // This is a getter for 'TestStruct::prop'.
     #[rhai_fn(get = "prop")]
-    pub fn get_prop(obj: &mut MyType) -> i64 {
+    pub fn get_prop(obj: &mut TestStruct) -> i64 {
         obj.prop
     }
-    // This is a setter for 'MyType::prop'.
+    // This is a setter for 'TestStruct::prop'.
     #[rhai_fn(set = "prop")]
-    pub fn set_prop(obj: &mut MyType, value: i64) {
+    pub fn set_prop(obj: &mut TestStruct, value: i64) {
         obj.prop = value;
     }
-    // This is an index getter for 'MyType'.
+    // This is an index getter for 'TestStruct'.
     #[rhai_fn(index_get)]
-    pub fn get_index(obj: &mut MyType, index: i64) -> bool {
+    pub fn get_index(obj: &mut TestStruct, index: i64) -> bool {
         obj.list[index]
     }
-    // This is an index setter for 'MyType'.
+    // This is an index setter for 'TestStruct'.
     #[rhai_fn(index_set)]
-    pub fn get_index(obj: &mut MyType, index: i64, state: bool) {
+    pub fn get_index(obj: &mut TestStruct, index: i64, state: bool) {
         obj.list[index] = state;
     }
 }
@@ -344,7 +344,7 @@ use rhai::plugin::*;        // a "prelude" import for macros
 mod my_module {
     // This function can be called in five ways
     #[rhai_fn(name = "get_prop_value", name = "prop", name = "+", set = "prop", index_get)]
-    pub fn prop_function(obj: &mut MyType, index: i64) -> i64 {
+    pub fn prop_function(obj: &mut TestStruct, index: i64) -> i64 {
         obj.prop[index]
     }
 }

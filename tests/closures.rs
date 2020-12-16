@@ -195,7 +195,7 @@ fn test_closures_data_race() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
-type MyType = Rc<RefCell<INT>>;
+type TestStruct = Rc<RefCell<INT>>;
 
 #[test]
 #[cfg(not(feature = "no_object"))]
@@ -203,18 +203,18 @@ type MyType = Rc<RefCell<INT>>;
 fn test_closures_shared_obj() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    // Register API on MyType
+    // Register API on TestStruct
     engine
-        .register_type_with_name::<MyType>("MyType")
+        .register_type_with_name::<TestStruct>("TestStruct")
         .register_get_set(
             "data",
-            |p: &mut MyType| *p.borrow(),
-            |p: &mut MyType, value: INT| *p.borrow_mut() = value,
+            |p: &mut TestStruct| *p.borrow(),
+            |p: &mut TestStruct, value: INT| *p.borrow_mut() = value,
         )
-        .register_fn("+=", |p1: &mut MyType, p2: MyType| {
+        .register_fn("+=", |p1: &mut TestStruct, p2: TestStruct| {
             *p1.borrow_mut() += *p2.borrow()
         })
-        .register_fn("-=", |p1: &mut MyType, p2: MyType| {
+        .register_fn("-=", |p1: &mut TestStruct, p2: TestStruct| {
             *p1.borrow_mut() -= *p2.borrow()
         });
 
@@ -234,7 +234,7 @@ fn test_closures_shared_obj() -> Result<(), Box<EvalAltResult>> {
     let res = engine.eval_ast::<Map>(&ast)?;
 
     // Make closure
-    let f = move |p1: MyType, p2: MyType| -> Result<(), Box<EvalAltResult>> {
+    let f = move |p1: TestStruct, p2: TestStruct| -> Result<(), Box<EvalAltResult>> {
         let action_ptr = res["action"].clone().cast::<FnPtr>();
         let name = action_ptr.fn_name();
         engine.call_fn::<_, ()>(&mut Scope::new(), &ast, name, (p1, p2))

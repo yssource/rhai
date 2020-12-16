@@ -13,7 +13,7 @@ which contains only one function: `resolve`.
 When Rhai prepares to load a module, `ModuleResolver::resolve` is called with the name
 of the _module path_ (i.e. the path specified in the [`import`] statement).
 
-* Upon success, it should return an [`Rc<Module>`][module] (or `Arc<Module>` under [`sync`]).
+* Upon success, it should return an [`Rc<Module>`][module] (or [`Arc<Module>`][module] under [`sync`]).
   
   The module should call `Module::build_index` on the target module before returning.
   This method flattens the entire module tree and _indexes_ it for fast function name resolution.
@@ -66,7 +66,7 @@ engine.set_module_resolver(Some(MyModuleResolver {}));
 
 engine.consume(r#"
     import "hello" as foo;  // this 'import' statement will call
-                            // 'MyModuleResolver::resolve' with "hello" as `path`
+                            // 'MyModuleResolver::resolve' with "hello" as 'path'
     foo:bar();
 "#)?;
 ```
