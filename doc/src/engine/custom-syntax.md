@@ -220,12 +220,26 @@ fn implementation_func(
     Ok(Dynamic::UNIT)
 }
 
-// Register the custom syntax (sample): exec |x| -> { x += 1 } while x < 0;
+// Register the custom syntax (sample): exec |x| -> { x += 1 } while x < 0
 engine.register_custom_syntax(
     &[ "exec", "|", "$ident$", "|", "->", "$block$", "while", "$expr$" ], // the custom syntax
     1,  // the number of new variables declared within this custom syntax
     implementation_func
 )?;
+```
+
+Remember that a custom syntax acts as an _expression_, so it can show up practically anywhere:
+
+```rust
+// Use as an expression:
+let foo = (exec |x| -> { x += 1 } while x < 0) * 100;
+
+// Use as a function call argument:
+do_something(exec |x| -> { x += 1 } while x < 0, 24, true);
+
+// Use as a statement:
+exec |x| -> { x += 1 } while x < 0;
+//                                ^ terminate statement with ';'
 ```
 
 

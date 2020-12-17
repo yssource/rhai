@@ -29,8 +29,11 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
 
             context.scope_mut().push(var_name, 0 as INT);
 
+            let mut count: INT = 0;
+
             loop {
                 context.eval_expression_tree(stmt)?;
+                count += 1;
 
                 let stop = !context
                     .eval_expression_tree(condition)?
@@ -48,10 +51,20 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
                 }
             }
 
-            Ok(Dynamic::UNIT)
+            Ok(count.into())
         },
     )?;
 
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let x = 0;
+                let foo = (exec |x| -> { x += 2 } while x < 42) * 10;
+                foo
+            "
+        )?,
+        210
+    );
     assert_eq!(
         engine.eval::<INT>(
             r"
