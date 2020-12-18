@@ -3,7 +3,7 @@ What is Rhai
 
 {{#include ../links.md}}
 
-![Rhai Logo]({{rootUrl}}/images/rhai_logo.png)
+![Rhai Logo]({{rootUrl}}/images/logo/rhai-banner-transparent-colour.svg)
 
 Rhai is an embedded scripting language and evaluation engine for Rust that gives a safe and easy way
 to add scripting to any application.
@@ -35,9 +35,12 @@ and, in particular, a popular kind of milk tea consumed in India.
 Later, when the novel implementation technique behind ChaiScript was ported from C++ to Rust,
 logically the `C` was changed to an `R` to make it "RhaiScript", or just "Rhai".
 
-### On the origin of the temporary Rhai logo
+### On the origin of the semi-official Rhai logo
 
-One of Rhai's maintainers, Stephen Chung, was thinking about a logo when he accidentally
-came across a copy of _Catcher in the Rye_ in a restaurant.  The rest was history.
+One of Rhai's maintainers, [Stephen Chung](https://github.com/schungx), was thinking about a logo when he accidentally
+came across a copy of _Catcher in the Rye_ in a restaurant, and drew the first version
+of the logo.
 
-It is temporary until it becomes official, that is...
+Then [`@semirix`](https://github.com/semirix) refined it to the current version.
+
+The plan is to make the logo official together with a `1.0` release.
