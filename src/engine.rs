@@ -24,7 +24,7 @@ use crate::stdlib::{
     string::{String, ToString},
 };
 use crate::syntax::CustomSyntax;
-use crate::utils::get_hasher;
+use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
     calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position, Scope,
     Shared, StaticVec,
@@ -476,7 +476,7 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 /// ## WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct State {
     /// Normally, access to variables are parsed with a relative offset into the scope to avoid a lookup.
     /// In some situation, e.g. after running an `eval` statement, subsequent offsets become mis-aligned.
@@ -489,6 +489,8 @@ pub struct State {
     pub operations: u64,
     /// Number of modules loaded.
     pub modules: usize,
+    /// Cached lookup values for function hashes.
+    pub functions_cache: HashMap<u64, Option<CallableFunction>, StraightHasherBuilder>,
 }
 
 impl State {
@@ -1886,6 +1888,10 @@ impl Engine {
             });
 
         scope.rewind(prev_scope_len);
+        if mods.len() != prev_mods_len {
+            // If imports list is modified, clear the functions lookup cache
+            state.functions_cache.clear();
+        }
         mods.truncate(prev_mods_len);
         state.scope_level -= 1;
 
@@ -2365,6 +2371,8 @@ impl Engine {
                             } else {
                                 mods.push(name_def.name.clone(), module);
                             }
+                            // When imports list is modified, clear the functions lookup cache
+                            state.functions_cache.clear();
                         }
 
                         state.modules += 1;

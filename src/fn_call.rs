@@ -170,13 +170,24 @@ impl Engine {
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state)?;
 
-        // Search for the native function
-        // First search registered functions (can override packages)
-        // Then search packages
-        let func = //lib.get_fn(hash_fn, pub_only)
-            self.global_namespace.get_fn(hash_fn, pub_only)
+        let func = state.functions_cache.get(&hash_fn).cloned();
+
+        let func = if let Some(ref f) = func {
+            f.as_ref()
+        } else {
+            // Search for the native function
+            // First search registered functions (can override packages)
+            // Then search packages
+            // lib.get_fn(hash_fn, pub_only)
+            let f = self
+                .global_namespace
+                .get_fn(hash_fn, pub_only)
                 .or_else(|| self.packages.get_fn(hash_fn))
                 .or_else(|| mods.get_fn(hash_fn));
+
+            state.functions_cache.insert(hash_fn, f.cloned());
+            f
+        };
 
         if let Some(func) = func {
             assert!(func.is_native());
@@ -370,6 +381,9 @@ impl Engine {
         let mut lib_merged: StaticVec<_>;
 
         let unified_lib = if let Some(ref env_lib) = fn_def.lib {
+            // If the library is modified, clear the functions lookup cache
+            state.functions_cache.clear();
+
             lib_merged = Default::default();
             lib_merged.push(env_lib.as_ref());
             lib_merged.extend(lib.iter().cloned());
