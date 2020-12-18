@@ -15,7 +15,7 @@ it is usually used to perform type-specific actions based on the actual value's 
 ```c
 let mystery = get_some_dynamic_value();
 
-switch mystery {
+switch type_of(mystery) {
     "i64" => print("Hey, I got an integer here!"),
     "f64" => print("Hey, I got a float here!"),
     "string" => print("Hey, I got a string here!"),

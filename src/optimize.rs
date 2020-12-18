@@ -868,7 +868,7 @@ pub fn optimize_into_ast(
                     lib: None,
                     #[cfg(not(feature = "no_module"))]
                     mods: Default::default(),
-                    fn_comments: Default::default(),
+                    comments: Default::default(),
                 })
                 .for_each(|fn_def| {
                     lib2.set_script_fn(fn_def);

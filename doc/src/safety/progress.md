@@ -46,5 +46,7 @@ Operations Count vs. Progress Percentage
 
 Notice that the _operations count_ value passed into the closure does not indicate the _percentage_ of work
 already done by the script (and thus it is not real _progress_ tracking), because it is impossible to determine
-how long a script may run.  It is possible, however, to calculate this percentage based on an estimated
-total number of operations for a typical run.
+how long a script may run.
+
+It is possible, however, to calculate this percentage based on an estimated total number of operations
+for a typical run.

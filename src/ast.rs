@@ -83,8 +83,8 @@ pub struct ScriptFnDef {
     /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
     pub externals: Vec<ImmutableString>,
-    /// Comment block for function.
-    pub fn_comments: Vec<String>,
+    /// Function doc-comments (if any).
+    pub comments: Vec<String>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -107,16 +107,29 @@ impl fmt::Display for ScriptFnDef {
     }
 }
 
-/// A type containing a script-defined function's metadata.
-#[derive(Debug, Clone, Hash)]
-pub struct ScriptFnMetadata {
-    pub comments: Vec<String>,
+/// A type containing the metadata of a script-defined function.
+///
+/// Created by [`AST::iter_functions`].
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
+pub struct ScriptFnMetadata<'a> {
+    /// Function doc-comments (if any).
+    ///
+    /// Block doc-comments are kept in a single string slice with line-breaks within.
+    ///
+    /// Line doc-comments are kept in one string slice per line without the termination line-break.
+    ///
+    /// Leading white-spaces are stripped, and each string slice always starts with the corresponding
+    /// doc-comment leader: `///` or `/**`.
+    pub comments: Vec<&'a str>,
+    /// Function access mode.
     pub access: FnAccess,
-    pub fn_name: ImmutableString,
-    pub params: Vec<ImmutableString>,
+    /// Function name.
+    pub name: &'a str,
+    /// Function parameters (if any).
+    pub params: Vec<&'a str>,
 }
 
-impl fmt::Display for ScriptFnMetadata {
+impl fmt::Display for ScriptFnMetadata<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -126,23 +139,19 @@ impl fmt::Display for ScriptFnMetadata {
             } else {
                 ""
             },
-            self.fn_name,
-            self.params
-                .iter()
-                .map(|p| p.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
+            self.name,
+            self.params.iter().cloned().collect::<Vec<_>>().join(", ")
         )
     }
 }
 
-impl Into<ScriptFnMetadata> for &ScriptFnDef {
-    fn into(self) -> ScriptFnMetadata {
+impl<'a> Into<ScriptFnMetadata<'a>> for &'a ScriptFnDef {
+    fn into(self) -> ScriptFnMetadata<'a> {
         ScriptFnMetadata {
-            comments: self.fn_comments.clone(),
+            comments: self.comments.iter().map(|s| s.as_str()).collect(),
             access: self.access,
-            fn_name: self.name.clone(),
-            params: self.params.iter().cloned().collect(),
+            name: &self.name,
+            params: self.params.iter().map(|s| s.as_str()).collect(),
         }
     }
 }
@@ -538,7 +547,7 @@ impl AST {
         }
         self
     }
-    /// Iterate through all functions
+    /// Iterate through all function definitions.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn iter_functions<'a>(&'a self) -> impl Iterator<Item = ScriptFnMetadata> + 'a {

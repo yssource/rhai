@@ -16,6 +16,7 @@ Bug fixes
 * Constants are no longer propagated by the optimizer if shadowed by a non-constant variable.
 * Constants passed as the `this` parameter to Rhai functions now throws an error if assigned to.
 * Generic type parameter of `Engine::register_iterator` is `IntoIterator` instead of `Iterator`.
+* Fixes parsing of block comments ending with `**/` or inner blocks starting with `//*`.
 
 Breaking changes
 ----------------

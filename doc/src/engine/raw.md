@@ -17,7 +17,7 @@ To add more functionalities to a _raw_ `Engine`, load [packages] into it.
 Built-in Operators
 ------------------
 
-| Operators                 | Assignment operators         | Supported for types (see [standard types])                                    |
+| Operators                 | Assignment operators         | Supported for types<br/>(see [standard types])                                |
 | ------------------------- | ---------------------------- | ----------------------------------------------------------------------------- |
 | `+`,                      | `+=`                         | `INT`, `FLOAT` (if not [`no_float`]), `char`, `ImmutableString`               |
 | `-`, `*`, `/`, `%`, `~`,  | `-=`, `*=`, `/=`, `%=`, `~=` | `INT`, `FLOAT` (if not [`no_float`])                                          |

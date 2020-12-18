@@ -10,16 +10,16 @@ Operators
 |                                          Operator                                           | Description                            |  Binary?   | Binding direction |
 | :-----------------------------------------------------------------------------------------: | -------------------------------------- | :--------: | :---------------: |
 |                                             `+`                                             | add                                    |    yes     |       left        |
-|                                             `-`                                             | 1) subtract<br/>2) negative            | yes<br/>no |  left<br/>right   |
+|                                             `-`                                             | 1) subtract<br/>2) negative (prefix)   | yes<br/>no |  left<br/>right   |
 |                                             `*`                                             | multiply                               |    yes     |       left        |
 |                                             `/`                                             | divide                                 |    yes     |       left        |
 |                                             `%`                                             | modulo                                 |    yes     |       left        |
 |                                             `~`                                             | power                                  |    yes     |       left        |
 |                                            `>>`                                             | right bit-shift                        |    yes     |       left        |
 |                                            `<<`                                             | left bit-shift                         |    yes     |       left        |
-|                                             `&`                                             | 1) bit-wise _And_<br/>2) boolean _And_ |    yes     |       left        |
-|                                       <code>\|</code>                                       | 1) bit-wise _Or_<br/>2) boolean _Or_   |    yes     |       left        |
-|                                             `^`                                             | 1) bit-wise _Xor_<br/>2) boolean _Xor_ |    yes     |       left        |
+|                                             `&`                                             | 1) bit-wise _AND_<br/>2) boolean _AND_ |    yes     |       left        |
+|                                       <code>\|</code>                                       | 1) bit-wise _OR_<br/>2) boolean _OR_   |    yes     |       left        |
+|                                             `^`                                             | 1) bit-wise _XOR_<br/>2) boolean _XOR_ |    yes     |       left        |
 | `=`, `+=`, `-=`, `*=`, `/=`,<br/>`~=`, `%=`, `<<=`, `>>=`, `&=`,<br/><code>\|=</code>, `^=` | assignments                            |    yes     |       right       |
 |                                            `==`                                             | equals to                              |    yes     |       left        |
 |                                            `~=`                                             | not equals to                          |    yes     |       left        |
@@ -27,9 +27,9 @@ Operators
 |                                            `>=`                                             | greater than or equals to              |    yes     |       left        |
 |                                             `<`                                             | less than                              |    yes     |       left        |
 |                                            `<=`                                             | less than or equals to                 |    yes     |       left        |
-|                                            `&&`                                             | boolean _And_ (short-circuits)         |    yes     |       left        |
-|                                      <code>\|\|</code>                                      | boolean _Or_ (short-circuits)          |    yes     |       left        |
-|                                             `!`                                             | boolean _Not_                          |     no     |       left        |
+|                                            `&&`                                             | boolean _AND_ (short-circuits)         |    yes     |       left        |
+|                                      <code>\|\|</code>                                      | boolean _OR_ (short-circuits)          |    yes     |       left        |
+|                                             `!`                                             | boolean _NOT_                          |     no     |       left        |
 |                                         `[` .. `]`                                          | indexing                               |    yes     |       right       |
 |                                             `.`                                             | 1) property access<br/>2) method call  |    yes     |       right       |
 

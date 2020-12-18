@@ -2409,14 +2409,14 @@ fn parse_stmt(
 ) -> Result<Option<Stmt>, ParseError> {
     use AccessMode::{ReadOnly, ReadWrite};
 
-    let mut fn_comments: Vec<String> = Default::default();
-    let mut fn_comments_pos = Position::NONE;
+    let mut comments: Vec<String> = Default::default();
+    let mut comments_pos = Position::NONE;
 
-    // Handle doc-comment.
+    // Handle doc-comments.
     #[cfg(not(feature = "no_function"))]
     while let (Token::Comment(ref comment), comment_pos) = input.peek().unwrap() {
-        if fn_comments_pos.is_none() {
-            fn_comments_pos = *comment_pos;
+        if comments_pos.is_none() {
+            comments_pos = *comment_pos;
         }
 
         if !is_doc_comment(comment) {
@@ -2424,16 +2424,16 @@ fn parse_stmt(
         }
 
         if !settings.is_global {
-            return Err(PERR::WrongDocComment.into_err(fn_comments_pos));
+            return Err(PERR::WrongDocComment.into_err(comments_pos));
         }
 
         if let Token::Comment(comment) = input.next().unwrap().0 {
-            fn_comments.push(comment);
+            comments.push(comment);
 
             match input.peek().unwrap() {
                 (Token::Fn, _) | (Token::Private, _) => break,
                 (Token::Comment(_), _) => (),
-                _ => return Err(PERR::WrongDocComment.into_err(fn_comments_pos)),
+                _ => return Err(PERR::WrongDocComment.into_err(comments_pos)),
             }
         } else {
             unreachable!();
@@ -2492,7 +2492,7 @@ fn parse_stmt(
                         pos: pos,
                     };
 
-                    let func = parse_fn(input, &mut new_state, lib, access, settings, fn_comments)?;
+                    let func = parse_fn(input, &mut new_state, lib, access, settings, comments)?;
 
                     // Qualifiers (none) + function name + number of arguments.
                     let hash = calc_script_fn_hash(empty(), &func.name, func.params.len());
@@ -2651,7 +2651,7 @@ fn parse_fn(
     lib: &mut FunctionsLib,
     access: FnAccess,
     mut settings: ParseSettings,
-    fn_comments: Vec<String>,
+    comments: Vec<String>,
 ) -> Result<ScriptFnDef, ParseError> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2737,7 +2737,7 @@ fn parse_fn(
         lib: None,
         #[cfg(not(feature = "no_module"))]
         mods: Default::default(),
-        fn_comments,
+        comments,
     })
 }
 
@@ -2894,7 +2894,7 @@ fn parse_anon_fn(
         lib: None,
         #[cfg(not(feature = "no_module"))]
         mods: Default::default(),
-        fn_comments: Default::default(),
+        comments: Default::default(),
     };
 
     let expr = Expr::FnPointer(fn_name, settings.pos);

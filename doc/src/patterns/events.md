@@ -134,29 +134,33 @@ impl Handler {
     // Say there are three events: 'start', 'end', 'update'.
     // In a real application you'd be handling errors...
     pub fn on_event(&mut self, event_name: &str, event_data: i64) -> Result<(), Error> {
+        let engine = &self.engine;
+        let scope = &mut self.scope;
+        let ast = &self.ast;
+
         match event_name {
             // The 'start' event maps to function 'start'.
             // In a real application you'd be handling errors...
-            "start" => self.engine.call_fn(&mut self.scope, &self.ast, "start", (event_data,))?,
+            "start" => engine.call_fn(scope, ast, "start", (event_data,))?,
 
             // The 'end' event maps to function 'end'.
             // In a real application you'd be handling errors...
-            "end" => self.engine.call_fn(&mut self.scope, &self.ast, "end", (event_data,))?,
+            "end" => engine.call_fn(scope, ast, "end", (event_data,))?,
 
             // The 'update' event maps to function 'update'.
             // This event provides a default implementation when the scripted function
             // is not found.
-            "update" => self.engine
-                            .call_fn(&mut self.scope, &self.ast, "update", (event_data,))
-                            .or_else(|err| match *err {
-                                EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "update" => {
-                                    // Default implementation of 'update' event handler
-                                    self.scope.set_value("state2", SomeType::new(42));
-                                    // Turn function-not-found into a success
-                                    Ok(Dynamic::UNIT)
-                                }
-                                _ => Err(err.into())
-                            })?
+            "update" =>
+                engine.call_fn(scope, ast, "update", (event_data,))
+                      .or_else(|err| match *err {
+                         EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "update" => {
+                            // Default implementation of 'update' event handler
+                            self.scope.set_value("state2", SomeType::new(42));
+                            // Turn function-not-found into a success
+                            Ok(Dynamic::UNIT)
+                         }
+                         _ => Err(err.into())
+                      })?
         }
     }
 }

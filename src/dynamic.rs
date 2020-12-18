@@ -503,7 +503,7 @@ impl Clone for Dynamic {
     ///
     /// ## WARNING
     ///
-    /// The cloned copy is marked [`AccessType::Normal`] even if the original is constant.
+    /// The cloned copy is marked read-write even if the original is read-only.
     fn clone(&self) -> Self {
         match self.0 {
             Union::Unit(value, _) => Self(Union::Unit(value, AccessMode::ReadWrite)),

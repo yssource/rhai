@@ -489,7 +489,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            impl PluginFunction for MyType {
+            impl PluginFunction for TestStruct {
                 fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                     debug_assert_eq!(args.len(), 1usize,
                                 "wrong arg count: {} != {}", args.len(), 1usize);
@@ -499,7 +499,7 @@ mod generate_tests {
 
                 fn is_method_call(&self) -> bool { false }
                 fn is_variadic(&self) -> bool { false }
-                fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(MyType()) }
+                fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(TestStruct()) }
                 fn input_names(&self) -> Box<[&'static str]> {
                     new_vec!["x: usize"].into_boxed_slice()
                 }
@@ -513,7 +513,7 @@ mod generate_tests {
         };
 
         let item_fn = syn::parse2::<ExportedFn>(input_tokens).unwrap();
-        assert_streams_eq(item_fn.generate_impl("MyType"), expected_tokens);
+        assert_streams_eq(item_fn.generate_impl("TestStruct"), expected_tokens);
     }
 
     #[test]

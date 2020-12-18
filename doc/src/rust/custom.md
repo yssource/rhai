@@ -140,14 +140,14 @@ with a special "pretty-print" name, [`type_of()`] will return that name instead.
 engine
     .register_type::<TestStruct1>()
     .register_fn("new_ts1", TestStruct1::new)
-    .register_type_with_name::<TestStruct2>("MyType")
+    .register_type_with_name::<TestStruct2>("TestStruct")
     .register_fn("new_ts2", TestStruct2::new);
 
 let ts1_type = engine.eval::<String>(r#"let x = new_ts1(); x.type_of()"#)?;
 let ts2_type = engine.eval::<String>(r#"let x = new_ts2(); x.type_of()"#)?;
 
 println!("{}", ts1_type);               // prints 'path::to::TestStruct'
-println!("{}", ts1_type);               // prints 'MyType'
+println!("{}", ts1_type);               // prints 'TestStruct'
 ```
 
 
