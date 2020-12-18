@@ -125,15 +125,23 @@ impl Imports {
     /// Does the specified function hash key exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
     pub fn contains_fn(&self, hash: u64) -> bool {
-        self.0.as_ref().map_or(false, |x| {
-            x.iter().any(|(_, m)| m.contains_qualified_fn(hash))
-        })
+        if hash == 0 {
+            false
+        } else {
+            self.0.as_ref().map_or(false, |x| {
+                x.iter().any(|(_, m)| m.contains_qualified_fn(hash))
+            })
+        }
     }
     /// Get specified function via its hash key.
     pub fn get_fn(&self, hash: u64) -> Option<&CallableFunction> {
-        self.0
-            .as_ref()
-            .and_then(|x| x.iter().rev().find_map(|(_, m)| m.get_qualified_fn(hash)))
+        if hash == 0 {
+            None
+        } else {
+            self.0
+                .as_ref()
+                .and_then(|x| x.iter().rev().find_map(|(_, m)| m.get_qualified_fn(hash)))
+        }
     }
     /// Does the specified [`TypeId`][std::any::TypeId] iterator exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]

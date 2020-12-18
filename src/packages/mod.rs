@@ -64,15 +64,23 @@ impl PackagesCollection {
     /// Does the specified function hash key exist in the [`PackagesCollection`]?
     #[allow(dead_code)]
     pub fn contains_fn(&self, hash: u64) -> bool {
-        self.0
-            .as_ref()
-            .map_or(false, |x| x.iter().any(|p| p.contains_fn(hash, false)))
+        if hash == 0 {
+            false
+        } else {
+            self.0
+                .as_ref()
+                .map_or(false, |x| x.iter().any(|p| p.contains_fn(hash, false)))
+        }
     }
     /// Get specified function via its hash key.
     pub fn get_fn(&self, hash: u64) -> Option<&CallableFunction> {
-        self.0
-            .as_ref()
-            .and_then(|x| x.iter().find_map(|p| p.get_fn(hash, false)))
+        if hash == 0 {
+            None
+        } else {
+            self.0
+                .as_ref()
+                .and_then(|x| x.iter().find_map(|p| p.get_fn(hash, false)))
+        }
     }
     /// Does the specified [`TypeId`] iterator exist in the [`PackagesCollection`]?
     #[allow(dead_code)]

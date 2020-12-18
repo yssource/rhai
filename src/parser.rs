@@ -357,6 +357,7 @@ fn parse_fn_call(
             return Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
                     name: id.to_string().into(),
+                    native_only: !is_valid_identifier(id.chars()), // script functions can only be valid identifiers
                     capture,
                     namespace,
                     hash: hash_script,
@@ -404,6 +405,7 @@ fn parse_fn_call(
                 return Ok(Expr::FnCall(
                     Box::new(FnCallExpr {
                         name: id.to_string().into(),
+                        native_only: !is_valid_identifier(id.chars()), // script functions can only be valid identifiers
                         capture,
                         namespace,
                         hash: hash_script,

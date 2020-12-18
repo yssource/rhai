@@ -443,8 +443,8 @@ impl Engine {
         // NOTE: We skip script functions for global_namespace and packages, and native functions for lib
 
         // First check script-defined functions
-        lib.iter().any(|&m| m.contains_fn(hash_script, pub_only))
-            //|| lib.iter().any(|&m| m.contains_fn(hash_fn, pub_only))
+        (hash_script != 0 && lib.iter().any(|&m| m.contains_fn(hash_script, pub_only)))
+            //|| (hash_fn != 0 && lib.iter().any(|&m| m.contains_fn(hash_fn, pub_only)))
             // Then check registered functions
             //|| self.global_namespace.contains_fn(hash_script, pub_only)
             || self.global_namespace.contains_fn(hash_fn, false)
