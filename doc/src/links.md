@@ -13,6 +13,7 @@
 [`no_closure`]: {{rootUrl}}/start/features.md
 [`no_std`]: {{rootUrl}}/start/features.md
 [`no-std`]: {{rootUrl}}/start/features.md
+[`metadata`]: {{rootUrl}}/start/features.md
 [`internals`]: {{rootUrl}}/start/features.md
 [`unicode-xid-ident`]: {{rootUrl}}/start/features.md
 

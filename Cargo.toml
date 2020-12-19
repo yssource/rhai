@@ -42,6 +42,7 @@ no_closure = []     # no automatic sharing and capture of anonymous functions to
 no_module = []      # no modules
 internals = []      # expose internal data structures
 unicode-xid-ident = ["unicode-xid"]  # allow Unicode Standard Annex #31 for identifiers.
+metadata = [ "serde", "serde_json"]
 
 # compiling for no-std
 no_std = [ "smallvec/union", "num-traits/libm", "hashbrown", "core-error", "libm", "ahash" ]
@@ -84,6 +85,12 @@ optional = true
 version = "1.0.116"
 default_features = false
 features = ["derive", "alloc"]
+optional = true
+
+[dependencies.serde_json]
+version = "1.0.60"
+default_features = false
+features = ["alloc"]
 optional = true
 
 [dependencies.unicode-xid]
