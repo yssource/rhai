@@ -27,8 +27,8 @@ It doesn't attempt to be a new language. For example:
   There is, however, support for simulated [closures] via [currying] a [function pointer] with
   captured shared variables.
 
-* **No byte-codes/JIT** - Rhai has an optimized AST-walking interpreter which is fast enough for most usage scenarios.
-  Essential AST data structures are packed and kept together to maximize cache friendliness.
+* **No byte-codes/JIT** - Rhai has an optimized AST-walking interpreter which is fast enough for most casual
+  usage scenarios. Essential AST data structures are packed and kept together to maximize cache friendliness.
 
   Functions are dispatched based on pre-calculated hashes and accessing variables are mostly through pre-calculated
   offsets to the variables file (a [`Scope`]), so it is seldom necessary to look something up by text name.

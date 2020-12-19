@@ -30,6 +30,7 @@ New features
 ------------
 
 * `AST::iter_functions` now returns `ScriptFnMetadata` which includes, among others, _doc-comments_ for functions prefixed by `///` or `/**`.
+* A functions lookup cache is added to make function call resolution faster.
 
 Enhancements
 ------------

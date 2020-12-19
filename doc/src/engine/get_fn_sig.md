@@ -52,7 +52,7 @@ the return value, are [`Dynamic`] the types are simply not shown.
 
 A script-defined function always takes dynamic arguments, and the return type is also dynamic:
 
-> `foo(x, y, z)`
+> `foo(x, y, z) -> Dynamic`
 
 probably defined as:
 
@@ -71,17 +71,17 @@ is the same as:
 Functions defined in [plugin modules] are the best.  They contain all the metadata
 describing the functions.
 
-A plugin function `merge`:
+For example, a plugin function `merge`:
 
 > `merge(list: &mut MyStruct<i64>, num: usize, name: &str) -> Option<bool>`
 
 Notice that function names do not need to be valid identifiers.
 
-An operator defined as a [fallible function] in a [plugin module] via `#[rhai_fn(name="+=", return_raw)]`
-returns `Result<bool, Box<EvalAltResult>>`:
+For example, an operator defined as a [fallible function] in a [plugin module] via
+`#[rhai_fn(name="+=", return_raw)]` returns `Result<bool, Box<EvalAltResult>>`:
 
 > `+=(list: &mut MyStruct<i64>, num: usize, name: &str) -> Result<bool, Box<EvalAltResult>>`
 
-A [property getter][getters/setters] defined in a [plugin module]:
+For example, a [property getter][getters/setters] defined in a [plugin module]:
 
 > `get$prop(obj: &mut MyStruct<i64>) -> String`

@@ -649,7 +649,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         script: &str,
-        pos: Position,
+        _pos: Position,
         _level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         self.inc_operations(state)?;
@@ -663,7 +663,7 @@ impl Engine {
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
         if _level > self.max_call_levels() {
-            return Err(Box::new(EvalAltResult::ErrorStackOverflow(pos)));
+            return Err(Box::new(EvalAltResult::ErrorStackOverflow(_pos)));
         }
 
         // Compile the script text
