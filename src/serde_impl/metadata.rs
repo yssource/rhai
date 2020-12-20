@@ -1,4 +1,5 @@
 use crate::stdlib::{
+    cmp::Ordering,
     collections::BTreeMap,
     string::{String, ToString},
     vec,
@@ -46,12 +47,32 @@ impl From<crate::FnAccess> for FnAccess {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FnParam {
     pub name: String,
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub typ: Option<String>,
+}
+
+impl PartialOrd for FnParam {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(match self.name.partial_cmp(&other.name).unwrap() {
+            Ordering::Less => Ordering::Less,
+            Ordering::Greater => Ordering::Greater,
+            Ordering::Equal => match (self.typ.is_none(), other.typ.is_none()) {
+                (true, true) => Ordering::Equal,
+                (true, false) => Ordering::Greater,
+                (false, true) => Ordering::Less,
+                (false, false) => self
+                    .typ
+                    .as_ref()
+                    .unwrap()
+                    .partial_cmp(other.typ.as_ref().unwrap())
+                    .unwrap(),
+            },
+        })
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -67,8 +88,29 @@ struct FnMetadata {
     pub params: Vec<FnParam>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub return_type: Option<String>,
+    pub signature: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub doc_comments: Option<Vec<String>>,
+}
+
+impl PartialOrd for FnMetadata {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(match self.name.partial_cmp(&other.name).unwrap() {
+            Ordering::Less => Ordering::Less,
+            Ordering::Greater => Ordering::Greater,
+            Ordering::Equal => match self.num_params.partial_cmp(&other.num_params).unwrap() {
+                Ordering::Less => Ordering::Less,
+                Ordering::Greater => Ordering::Greater,
+                Ordering::Equal => self.params.partial_cmp(&other.params).unwrap(),
+            },
+        })
+    }
+}
+
+impl Ord for FnMetadata {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
 }
 
 impl From<&crate::module::FuncInfo> for FnMetadata {
@@ -108,6 +150,7 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
             } else {
                 None
             },
+            signature: info.gen_signature(),
             doc_comments: if info.func.is_script() {
                 Some(info.func.get_fn_def().comments.clone())
             } else {
@@ -134,6 +177,7 @@ impl From<crate::ScriptFnMetadata<'_>> for FnMetadata {
                 })
                 .collect(),
             return_type: Some("Dynamic".to_string()),
+            signature: info.to_string(),
             doc_comments: if info.comments.is_empty() {
                 None
             } else {
@@ -154,12 +198,15 @@ struct ModuleMetadata {
 
 impl From<&crate::Module> for ModuleMetadata {
     fn from(module: &crate::Module) -> Self {
+        let mut functions: Vec<_> = module.iter_fn().map(|f| f.into()).collect();
+        functions.sort();
+
         Self {
             modules: module
                 .iter_sub_modules()
                 .map(|(name, m)| (name.to_string(), m.as_ref().into()))
                 .collect(),
-            functions: module.iter_fn().map(|f| f.into()).collect(),
+            functions,
         }
     }
 }
@@ -202,6 +249,8 @@ impl Engine {
                 .map(|f| f.into())
                 .for_each(|info| global.functions.push(info));
         }
+
+        global.functions.sort();
 
         serde_json::to_string_pretty(&global)
     }

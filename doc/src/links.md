@@ -41,6 +41,7 @@
 [plugin modules]: {{rootUrl}}/plugins/module.md
 [plugin function]: {{rootUrl}}/plugins/function.md
 [plugin functions]: {{rootUrl}}/plugins/function.md
+[functions metadata]: {{rootUrl}}/engine/metadata/index.md
 [`Scope`]: {{rootUrl}}/engine/scope.md
 [`serde`]: {{rootUrl}}/rust/serde.md
 
@@ -90,6 +91,7 @@
 [timestamp]: {{rootUrl}}/language/timestamps.md
 [timestamps]: {{rootUrl}}/language/timestamps.md
 
+[doc-comments]: {{rootUrl}}/language/comments.md#doc-comments
 [function]: {{rootUrl}}/language/functions.md
 [functions]: {{rootUrl}}/language/functions.md
 [function overloading]: {{rootUrl}}/rust/functions.md#function-overloading

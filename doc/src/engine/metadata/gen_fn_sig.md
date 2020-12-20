@@ -1,26 +1,29 @@
-Get Function Signatures
-=======================
+Generate Function Signatures
+===========================
 
-{{#include ../links.md}}
+{{#include ../../links.md}}
 
 
 `Engine::gen_fn_signatures`
 --------------------------
 
-As part of a _reflections_ API, `Engine::gen_fn_signatures` returns a list of function signatures
-(`Vec<String>`), each corresponding to a particular function available to that [`Engine`] instance.
+As part of a _reflections_ API, `Engine::gen_fn_signatures` returns a list of function _signatures_
+(as `Vec<String>`), each corresponding to a particular function available to that [`Engine`] instance.
+
+> `fn_name ( param_1: type_1, param_2: type_2, ... , param_n : type_n ) -> return_type`
+
+### Sources
 
 Functions from the following sources are included, in order:
 
-1) Functions registered into the global namespace via the `Engine::register_XXX` API,
-2) Functions in global sub-modules registered via [`Engine::register_module`]({{rootUrl}}/rust/modules/create.md),
-3) Functions in registered [packages] (optional)
+1) Native Rust functions registered into the global namespace via the `Engine::register_XXX` API
+2) _Public_ (i.e. non-[`private`]) functions (native Rust or Rhai scripted) in global sub-modules registered via
+   [`Engine::register_module`]({{rootUrl}}/rust/modules/create.md)
+3) Native Rust functions in registered [packages] (optional)
 
-Included are both native Rust as well as script-defined functions (except [`private`] ones).
 
-
-Function Metadata
------------------
+Functions Metadata
+------------------
 
 Beware, however, that not all function signatures contain parameters and return value information.
 
@@ -30,7 +33,7 @@ For instance, functions registered via `Engine::register_XXX` contain no informa
 the names of parameter and their actual types because Rust simply does not make such metadata
 available natively. The return type is also undetermined.
 
-A function registered under the name 'foo' with three parameters and unknown return type:
+A function registered under the name `foo` with three parameters and unknown return type:
 
 > `foo(_, _, _)`
 
@@ -41,7 +44,7 @@ Notice that function names do not need to be valid identifiers.
 
 A [property setter][getters/setters] - again, unknown parameters and return type.
 Notice that function names do not need to be valid identifiers.
-In this case, the first parameter should be '&mut T' of the custom type and the return value is '()':
+In this case, the first parameter should be `&mut T` of the custom type and the return value is `()`:
 
 > `set$prop(_, _, _)`
 
