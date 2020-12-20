@@ -678,8 +678,13 @@ impl Engine {
         }
 
         // Evaluate the AST
-        let result = self.eval_statements_raw(scope, mods, state, ast.statements(), lib)?;
+        let mut new_state: State = Default::default();
+        new_state.operations = state.operations;
 
+        let result =
+            self.eval_statements_raw(scope, mods, &mut new_state, ast.statements(), lib)?;
+
+        state.operations = new_state.operations;
         return Ok(result);
     }
 
