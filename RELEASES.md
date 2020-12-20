@@ -33,12 +33,13 @@ New features
 ------------
 
 * `AST::iter_functions` now returns `ScriptFnMetadata` which includes, among others, _doc-comments_ for functions prefixed by `///` or `/**`.
-* A functions lookup cache is added to make function call resolution faster.
+* _Doc-comments_ can be enabled/disabled with the new `Engine::set_doc_comments` method.
 * A new feature `metadata` is added that pulls in `serde_json` and enables `Engine::gen_fn_metadata_to_json` which exports the full list of functions metadata (including those inside an `AST`) in JSON format.
 
 Enhancements
 ------------
 
+* A functions lookup cache is added to make function call resolution faster.
 * Capturing a constant variable in a closure is now supported, with no cloning.
 * Provides position info for `debug` statements.
 * A _look-ahead_ symbol is provided to custom syntax parsers, which can be used to parse variable-length symbol streams.

@@ -91,7 +91,7 @@
 [timestamp]: {{rootUrl}}/language/timestamps.md
 [timestamps]: {{rootUrl}}/language/timestamps.md
 
-[doc-comments]: {{rootUrl}}/language/comments.md#doc-comments
+[doc-comments]: {{rootUrl}}/language/doc-comments.md
 [function]: {{rootUrl}}/language/functions.md
 [functions]: {{rootUrl}}/language/functions.md
 [function overloading]: {{rootUrl}}/rust/functions.md#function-overloading

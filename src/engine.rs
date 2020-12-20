@@ -654,6 +654,9 @@ pub struct Engine {
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
     pub(crate) limits: Limits,
+
+    /// Disable doc-comments?
+    pub(crate) disable_doc_comments: bool,
 }
 
 impl fmt::Debug for Engine {
@@ -794,6 +797,8 @@ impl Engine {
                 #[cfg(not(feature = "no_object"))]
                 max_map_size: 0,
             },
+
+            disable_doc_comments: false,
         };
 
         engine.load_package(StandardPackage::new().get());
@@ -847,6 +852,8 @@ impl Engine {
                 #[cfg(not(feature = "no_object"))]
                 max_map_size: 0,
             },
+
+            disable_doc_comments: false,
         }
     }
 

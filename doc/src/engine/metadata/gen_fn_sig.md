@@ -48,7 +48,7 @@ In this case, the first parameter should be `&mut T` of the custom type and the 
 
 > `set$prop(_, _, _)`
 
-### Script-defined functions
+### Script-Defined Functions
 
 Script-defined [function] signatures contain parameter names. Since all parameters, as well as
 the return value, are [`Dynamic`] the types are simply not shown.
@@ -69,7 +69,7 @@ is the same as:
 
 > `foo(x: Dynamic, y: Dynamic, z: Dynamic) -> Result<Dynamic, Box<EvalAltResult>>`
 
-### Plugin functions
+### Plugin Functions
 
 Functions defined in [plugin modules] are the best.  They contain all the metadata
 describing the functions.

@@ -29,7 +29,7 @@ fn test_comments() -> Result<(), Box<EvalAltResult>> {
 #[cfg(not(feature = "no_function"))]
 #[test]
 fn test_comments_doc() -> Result<(), Box<EvalAltResult>> {
-    let engine = Engine::new();
+    let mut engine = Engine::new();
 
     let ast = engine.compile(
         r"
@@ -54,6 +54,16 @@ fn test_comments_doc() -> Result<(), Box<EvalAltResult>> {
         )
         .is_err());
 
+    engine.compile(
+        r"
+            ///////////////
+            let x = 42;
+
+            /***************/
+            let x = 42;
+        ",
+    )?;
+
     let ast = engine.compile(
         r"
             /** Hello world
@@ -77,6 +87,18 @@ fn test_comments_doc() -> Result<(), Box<EvalAltResult>> {
             "
         )
         .is_err());
+
+    engine.set_doc_comments(false);
+
+    engine.compile(
+        r"
+            /// Hello world!
+            let x = 42;
+
+            /** Hello world! */
+            let x = 42;
+        ",
+    )?;
 
     Ok(())
 }
