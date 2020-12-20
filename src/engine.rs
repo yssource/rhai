@@ -376,29 +376,29 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => {
                 let char_value = ch.clone();
-                self.set_value((char_value, Position::NONE)).unwrap();
+                self.set_value(char_value, Position::NONE).unwrap();
             }
         }
     }
     /// Update the value of the `Target`.
     #[cfg(any(not(feature = "no_object"), not(feature = "no_index")))]
-    pub fn set_value(&mut self, new_val: (Dynamic, Position)) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_value(&mut self, new_val: Dynamic, pos: Position) -> Result<(), Box<EvalAltResult>> {
         match self {
-            Self::Ref(r) => **r = new_val.0,
+            Self::Ref(r) => **r = new_val,
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
-            Self::LockGuard((r, _)) => **r = new_val.0,
+            Self::LockGuard((r, _)) => **r = new_val,
             Self::Value(_) => unreachable!(),
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(string, index, _) if string.is::<ImmutableString>() => {
                 let mut s = string.write_lock::<ImmutableString>().unwrap();
 
                 // Replace the character at the specified index position
-                let new_ch = new_val.0.as_char().map_err(|err| {
+                let new_ch = new_val.as_char().map_err(|err| {
                     Box::new(EvalAltResult::ErrorMismatchDataType(
                         err.to_string(),
                         "char".to_string(),
-                        new_val.1,
+                        pos,
                     ))
                 })?;
 
@@ -1031,7 +1031,8 @@ impl Engine {
                         ) {
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
-                                obj_ptr.set_value(new_val.unwrap())?;
+                                let (new_val, new_val_pos) = new_val.unwrap();
+                                obj_ptr.set_value(new_val, new_val_pos)?;
                                 None
                             }
                             Err(err) => match *err {
@@ -1107,7 +1108,9 @@ impl Engine {
                             mods, state, lib, target_val, index, *pos, true, is_ref, false, level,
                         )?;
 
-                        val.set_value(new_val.unwrap())?;
+                        let (new_val, new_val_pos) = new_val.unwrap();
+                        val.set_value(new_val, new_val_pos)?;
+
                         Ok((Default::default(), true))
                     }
                     // {xxx:map}.id
@@ -1308,8 +1311,7 @@ impl Engine {
                     pos: var_pos,
                 } = &x.3;
 
-                self.inc_operations(state)
-                    .map_err(|err| err.fill_position(*var_pos))?;
+                self.inc_operations(state, *var_pos)?;
 
                 let (target, _, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
@@ -1360,8 +1362,7 @@ impl Engine {
         size: usize,
         level: usize,
     ) -> Result<(), Box<EvalAltResult>> {
-        self.inc_operations(state)
-            .map_err(|err| err.fill_position(expr.position()))?;
+        self.inc_operations(state, expr.position())?;
 
         match expr {
             Expr::FnCall(x, _) if x.namespace.is_none() => {
@@ -1435,7 +1436,7 @@ impl Engine {
         _indexers: bool,
         _level: usize,
     ) -> Result<Target<'t>, Box<EvalAltResult>> {
-        self.inc_operations(state)?;
+        self.inc_operations(state, Position::NONE)?;
 
         match target {
             #[cfg(not(feature = "no_index"))]
@@ -1538,8 +1539,7 @@ impl Engine {
         rhs: &Expr,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.inc_operations(state)
-            .map_err(|err| err.fill_position(rhs.position()))?;
+        self.inc_operations(state, rhs.position())?;
 
         let lhs_value = self.eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?;
         let rhs_value = self.eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?;
@@ -1712,8 +1712,7 @@ impl Engine {
         expr: &Expr,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.inc_operations(state)
-            .map_err(|err| err.fill_position(expr.position()))?;
+        self.inc_operations(state, expr.position())?;
 
         let result = match expr {
             Expr::Expr(x) => self.eval_expr(scope, mods, state, lib, this_ptr, x, level),
@@ -1868,8 +1867,7 @@ impl Engine {
             _ => unreachable!(),
         };
 
-        self.check_data_size(result)
-            .map_err(|err| err.fill_position(expr.position()))
+        self.check_data_size(result, expr.position())
     }
 
     /// Evaluate a statements block.
@@ -1925,8 +1923,7 @@ impl Engine {
         stmt: &Stmt,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.inc_operations(state)
-            .map_err(|err| err.fill_position(stmt.position()))?;
+        self.inc_operations(state, stmt.position())?;
 
         let result = match stmt {
             // No-op
@@ -1948,8 +1945,7 @@ impl Engine {
                     return EvalAltResult::ErrorAssignmentToConstant(name.to_string(), pos).into();
                 }
 
-                self.inc_operations(state)
-                    .map_err(|err| err.fill_position(pos))?;
+                self.inc_operations(state, pos)?;
 
                 if lhs_ptr.as_ref().is_read_only() {
                     // Assignment to constant variable
@@ -2208,8 +2204,7 @@ impl Engine {
                             *loop_var = value;
                         }
 
-                        self.inc_operations(state)
-                            .map_err(|err| err.fill_position(stmt.position()))?;
+                        self.inc_operations(state, stmt.position())?;
 
                         match self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level) {
                             Ok(_) => (),
@@ -2427,8 +2422,7 @@ impl Engine {
             }
         };
 
-        self.check_data_size(result)
-            .map_err(|err| err.fill_position(stmt.position()))
+        self.check_data_size(result, stmt.position())
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
@@ -2438,16 +2432,17 @@ impl Engine {
     fn check_data_size(
         &self,
         result: Result<Dynamic, Box<EvalAltResult>>,
+        _pos: Position,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         result
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
-    /// [`Position`] in [`EvalAltResult`] may be None and should be set afterwards.
     #[cfg(not(feature = "unchecked"))]
     fn check_data_size(
         &self,
         result: Result<Dynamic, Box<EvalAltResult>>,
+        pos: Position,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         // If no data size limits, just return
         let mut total = 0;
@@ -2536,47 +2531,41 @@ impl Engine {
         let (_arr, _map, s) = calc_size(result.as_ref().unwrap());
 
         if s > self.max_string_size() {
-            return EvalAltResult::ErrorDataTooLarge(
-                "Length of string".to_string(),
-                Position::NONE,
-            )
-            .into();
+            return EvalAltResult::ErrorDataTooLarge("Length of string".to_string(), pos).into();
         }
 
         #[cfg(not(feature = "no_index"))]
         if _arr > self.max_array_size() {
-            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), Position::NONE)
-                .into();
+            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), pos).into();
         }
 
         #[cfg(not(feature = "no_object"))]
         if _map > self.max_map_size() {
-            return EvalAltResult::ErrorDataTooLarge(
-                "Size of object map".to_string(),
-                Position::NONE,
-            )
-            .into();
+            return EvalAltResult::ErrorDataTooLarge("Size of object map".to_string(), pos).into();
         }
 
         result
     }
 
     /// Check if the number of operations stay within limit.
-    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
-    pub(crate) fn inc_operations(&self, state: &mut State) -> Result<(), Box<EvalAltResult>> {
+    pub(crate) fn inc_operations(
+        &self,
+        state: &mut State,
+        pos: Position,
+    ) -> Result<(), Box<EvalAltResult>> {
         state.operations += 1;
 
         #[cfg(not(feature = "unchecked"))]
         // Guard against too many operations
         if self.max_operations() > 0 && state.operations > self.max_operations() {
-            return EvalAltResult::ErrorTooManyOperations(Position::NONE).into();
+            return EvalAltResult::ErrorTooManyOperations(pos).into();
         }
 
         // Report progress - only in steps
         if let Some(progress) = &self.progress {
             if let Some(token) = progress(state.operations) {
                 // Terminate script if progress returns a termination token
-                return EvalAltResult::ErrorTerminated(token, Position::NONE).into();
+                return EvalAltResult::ErrorTerminated(token, pos).into();
             }
         }
 

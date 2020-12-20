@@ -1370,7 +1370,7 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         let mut mods = self.global_sub_modules.clone();
 
-        let (result, _) = self.eval_ast_with_scope_raw(scope, &mut mods, ast)?;
+        let result = self.eval_ast_with_scope_raw(scope, &mut mods, ast)?;
 
         let typ = self.map_type_name(result.type_name());
 
@@ -1390,8 +1390,9 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         ast: &'a AST,
-    ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
-        self.eval_statements_raw(scope, mods, ast.statements(), &[ast.lib()])
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let state = &mut Default::default();
+        self.eval_statements_raw(scope, mods, state, ast.statements(), &[ast.lib()])
     }
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
@@ -1451,9 +1452,9 @@ impl Engine {
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
         let mut mods = self.global_sub_modules.clone();
-
-        self.eval_statements_raw(scope, &mut mods, ast.statements(), &[ast.lib()])
-            .map(|_| ())
+        let mut state = Default::default();
+        self.eval_statements_raw(scope, &mut mods, &mut state, ast.statements(), &[ast.lib()])?;
+        Ok(())
     }
     /// Call a script function defined in an [`AST`] with multiple arguments.
     /// Arguments are passed as a tuple.

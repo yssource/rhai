@@ -168,7 +168,7 @@ impl Engine {
         pos: Position,
         def_val: Option<&Dynamic>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        self.inc_operations(state)?;
+        self.inc_operations(state, pos)?;
 
         let func = state.functions_cache.get(&hash_fn).cloned();
 
@@ -348,7 +348,7 @@ impl Engine {
         pos: Position,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.inc_operations(state)?;
+        self.inc_operations(state, pos)?;
 
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
@@ -623,36 +623,34 @@ impl Engine {
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
+        state: &mut State,
         statements: impl IntoIterator<Item = &'a Stmt>,
         lib: &[&Module],
-    ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
-        let mut state = Default::default();
-
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         statements
             .into_iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, mods, &mut state, lib, &mut None, stmt, 0)
+                self.eval_stmt(scope, mods, state, lib, &mut None, stmt, 0)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
                 EvalAltResult::LoopBreak(_, _) => unreachable!(),
                 _ => Err(err),
             })
-            .map(|v| (v, state.operations))
     }
 
-    /// Evaluate a text string as a script - used primarily for 'eval'.
-    fn eval_script_expr(
+    /// Evaluate a text script in place - used primarily for 'eval'.
+    fn eval_script_expr_in_place(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
         lib: &[&Module],
         script: &str,
-        _pos: Position,
+        pos: Position,
         _level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.inc_operations(state)?;
+        self.inc_operations(state, pos)?;
 
         let script = script.trim();
         if script.is_empty() {
@@ -663,7 +661,7 @@ impl Engine {
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
         if _level > self.max_call_levels() {
-            return Err(Box::new(EvalAltResult::ErrorStackOverflow(_pos)));
+            return Err(Box::new(EvalAltResult::ErrorStackOverflow(pos)));
         }
 
         // Compile the script text
@@ -680,10 +678,7 @@ impl Engine {
         }
 
         // Evaluate the AST
-        let (result, operations) = self.eval_statements_raw(scope, mods, ast.statements(), lib)?;
-
-        state.operations += operations;
-        self.inc_operations(state)?;
+        let result = self.eval_statements_raw(scope, mods, state, ast.statements(), lib)?;
 
         return Ok(result);
     }
@@ -977,7 +972,8 @@ impl Engine {
                     self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
                 })?;
                 let pos = args_expr[0].position();
-                let result = self.eval_script_expr(scope, mods, state, lib, script, pos, level + 1);
+                let result =
+                    self.eval_script_expr_in_place(scope, mods, state, lib, script, pos, level + 1);
 
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
@@ -1020,8 +1016,7 @@ impl Engine {
                     target = target.into_owned();
                 }
 
-                self.inc_operations(state)
-                    .map_err(|err| err.fill_position(pos))?;
+                self.inc_operations(state, pos)?;
 
                 args = if target.is_shared() || target.is_value() {
                     arg_values.insert(0, target.take_or_clone().flatten());
@@ -1103,8 +1098,7 @@ impl Engine {
                 let (target, _, pos) =
                     self.search_scope_only(scope, mods, state, lib, this_ptr, &args_expr[0])?;
 
-                self.inc_operations(state)
-                    .map_err(|err| err.fill_position(pos))?;
+                self.inc_operations(state, pos)?;
 
                 if target.is_shared() || target.is_value() {
                     arg_values[0] = target.take_or_clone().flatten();
@@ -1133,7 +1127,7 @@ impl Engine {
         let func = match module.get_qualified_fn(hash_script) {
             // Then search in Rust functions
             None => {
-                self.inc_operations(state)?;
+                self.inc_operations(state, pos)?;
 
                 // Namespace-qualified Rust functions are indexed in two steps:
                 // 1) Calculate a hash in a similar manner to script-defined functions,
