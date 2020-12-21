@@ -27,7 +27,7 @@ Breaking changes
 ----------------
 
 * `Engine::on_progress` now takes `u64` instead of `&u64`.
-* The closure for `Engine::on_debug` now takes an additional `Position` parameter.
+* The closure for `Engine::on_debug` now takes two additional parameters: `source: Option<&str>` and `pos: Position`.
 * `AST::iter_functions` now returns `ScriptFnMetadata`.
 * The parser function passed to `Engine::register_custom_syntax_raw` now takes an additional parameter containing the _look-ahead_ symbol.
 

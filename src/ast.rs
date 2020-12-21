@@ -163,6 +163,8 @@ impl<'a> Into<ScriptFnMetadata<'a>> for &'a ScriptFnDef {
 /// Currently, [`AST`] is neither `Send` nor `Sync`. Turn on the `sync` feature to make it `Send + Sync`.
 #[derive(Debug, Clone)]
 pub struct AST {
+    /// Source of the [`AST`].
+    source: Option<ImmutableString>,
     /// Global statements.
     statements: Vec<Stmt>,
     /// Script-defined functions.
@@ -172,6 +174,7 @@ pub struct AST {
 impl Default for AST {
     fn default() -> Self {
         Self {
+            source: None,
             statements: Vec::with_capacity(16),
             functions: Default::default(),
         }
@@ -186,9 +189,35 @@ impl AST {
         functions: impl Into<Shared<Module>>,
     ) -> Self {
         Self {
+            source: None,
             statements: statements.into_iter().collect(),
             functions: functions.into(),
         }
+    }
+    /// Create a new [`AST`] with a source name.
+    #[inline(always)]
+    pub fn new_with_source(
+        statements: impl IntoIterator<Item = Stmt>,
+        functions: impl Into<Shared<Module>>,
+        source: impl Into<ImmutableString>,
+    ) -> Self {
+        Self {
+            source: Some(source.into()),
+            statements: statements.into_iter().collect(),
+            functions: functions.into(),
+        }
+    }
+    /// Get the source.
+    pub fn source(&self) -> Option<&str> {
+        self.source.as_ref().map(|s| s.as_str())
+    }
+    /// Clone the source.
+    pub(crate) fn clone_source(&self) -> Option<ImmutableString> {
+        self.source.clone()
+    }
+    /// Set the source.
+    pub fn set_source<S: Into<ImmutableString>>(&mut self, source: Option<S>) {
+        self.source = source.map(|s| s.into())
     }
     /// Get the statements.
     #[cfg(not(feature = "internals"))]
@@ -253,6 +282,7 @@ impl AST {
         let mut functions: Module = Default::default();
         functions.merge_filtered(&self.functions, &mut filter);
         Self {
+            source: self.source.clone(),
             statements: Default::default(),
             functions: functions.into(),
         }
@@ -262,6 +292,7 @@ impl AST {
     #[inline(always)]
     pub fn clone_statements_only(&self) -> Self {
         Self {
+            source: self.source.clone(),
             statements: self.statements.clone(),
             functions: Default::default(),
         }
@@ -432,6 +463,7 @@ impl AST {
         let Self {
             statements,
             functions,
+            ..
         } = self;
 
         let ast = match (statements.is_empty(), other.statements.is_empty()) {
@@ -445,10 +477,20 @@ impl AST {
             (true, true) => vec![],
         };
 
+        let source = if other.source.is_some() {
+            other.source.clone()
+        } else {
+            self.source.clone()
+        };
+
         let mut functions = functions.as_ref().clone();
         functions.merge_filtered(&other.functions, &mut filter);
 
-        Self::new(ast, functions)
+        if let Some(source) = source {
+            Self::new_with_source(ast, functions, source)
+        } else {
+            Self::new(ast, functions)
+        }
     }
     /// Combine one [`AST`] with another.  The second [`AST`] is consumed.
     ///

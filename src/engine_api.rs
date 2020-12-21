@@ -1,7 +1,7 @@
 //! Module that defines the extern API of [`Engine`].
 
 use crate::dynamic::Variant;
-use crate::engine::{EvalContext, Imports};
+use crate::engine::{EvalContext, Imports, State};
 use crate::fn_native::{FnCallArgs, SendSync};
 use crate::optimize::OptimizationLevel;
 use crate::stdlib::{
@@ -1368,9 +1368,9 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, Box<EvalAltResult>> {
-        let mut mods = self.global_sub_modules.clone();
+        let mods = &mut self.global_sub_modules.clone();
 
-        let result = self.eval_ast_with_scope_raw(scope, &mut mods, ast)?;
+        let result = self.eval_ast_with_scope_raw(scope, mods, ast)?;
 
         let typ = self.map_type_name(result.type_name());
 
@@ -1391,7 +1391,10 @@ impl Engine {
         mods: &mut Imports,
         ast: &'a AST,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let state = &mut Default::default();
+        let state = &mut State {
+            source: ast.clone_source(),
+            ..Default::default()
+        };
         self.eval_statements_raw(scope, mods, state, ast.statements(), &[ast.lib()])
     }
     /// Evaluate a file, but throw away the result and only return error (if any).
@@ -1451,9 +1454,12 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
-        let mut mods = self.global_sub_modules.clone();
-        let mut state = Default::default();
-        self.eval_statements_raw(scope, &mut mods, &mut state, ast.statements(), &[ast.lib()])?;
+        let mods = &mut self.global_sub_modules.clone();
+        let state = &mut State {
+            source: ast.clone_source(),
+            ..Default::default()
+        };
+        self.eval_statements_raw(scope, mods, state, ast.statements(), &[ast.lib()])?;
         Ok(())
     }
     /// Call a script function defined in an [`AST`] with multiple arguments.
@@ -1809,20 +1815,22 @@ impl Engine {
     ///
     /// // Override action of 'print' function
     /// let logger = result.clone();
-    /// engine.on_debug(move |s, pos| logger.write().unwrap().push_str(
-    ///                                 &format!("{:?} > {}", pos, s)
-    ///                               ));
+    /// engine.on_debug(move |s, src, pos| logger.write().unwrap().push_str(
+    ///                     &format!("{} @ {:?} > {}", src.unwrap_or("unknown"), pos, s)
+    ///                ));
     ///
-    /// engine.consume(r#"let x = "hello"; debug(x);"#)?;
+    /// let mut ast = engine.compile(r#"let x = "hello"; debug(x);"#)?;
+    /// ast.set_source(Some("world"));
+    /// engine.consume_ast(&ast)?;
     ///
-    /// assert_eq!(*result.read().unwrap(), r#"1:18 > "hello""#);
+    /// assert_eq!(*result.read().unwrap(), r#"world @ 1:18 > "hello""#);
     /// # Ok(())
     /// # }
     /// ```
     #[inline(always)]
     pub fn on_debug(
         &mut self,
-        callback: impl Fn(&str, Position) + SendSync + 'static,
+        callback: impl Fn(&str, Option<&str>, Position) + SendSync + 'static,
     ) -> &mut Self {
         self.debug = Box::new(callback);
         self

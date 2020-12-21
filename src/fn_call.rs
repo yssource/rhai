@@ -221,20 +221,17 @@ impl Engine {
                     .into(),
                     false,
                 ),
-                KEYWORD_DEBUG => (
-                    (self.debug)(
-                        result.as_str().map_err(|typ| {
-                            EvalAltResult::ErrorMismatchOutputType(
-                                self.map_type_name(type_name::<ImmutableString>()).into(),
-                                typ.into(),
-                                pos,
-                            )
-                        })?,
-                        pos,
-                    )
-                    .into(),
-                    false,
-                ),
+                KEYWORD_DEBUG => {
+                    let text = result.as_str().map_err(|typ| {
+                        EvalAltResult::ErrorMismatchOutputType(
+                            self.map_type_name(type_name::<ImmutableString>()).into(),
+                            typ.into(),
+                            pos,
+                        )
+                    })?;
+                    let source = state.source.as_ref().map(|s| s.as_str());
+                    ((self.debug)(text, source, pos).into(), false)
+                }
                 _ => (result, func.is_method()),
             });
         }
@@ -394,7 +391,7 @@ impl Engine {
 
         #[cfg(not(feature = "no_module"))]
         if !fn_def.mods.is_empty() {
-            mods.extend(fn_def.mods.iter_raw());
+            mods.extend(fn_def.mods.iter_raw().map(|(n, m)| (n.clone(), m.clone())));
         }
 
         // Evaluate the function at one higher level of call depth
@@ -531,14 +528,16 @@ impl Engine {
 
             // Script-like function found
             #[cfg(not(feature = "no_function"))]
-            _ if self.has_override(Some(mods), lib, 0, hash_script, pub_only) => {
+            _ if hash_script != 0
+                && self.has_override(Some(mods), lib, 0, hash_script, pub_only) =>
+            {
                 // Get function
-                let func = lib
+                let (func, mut source) = lib
                     .iter()
-                    .find_map(|&m| m.get_fn(hash_script, pub_only))
+                    .find_map(|&m| m.get_fn(hash_script, pub_only).map(|f| (f, m.clone_id())))
                     //.or_else(|| self.global_namespace.get_fn(hash_script, pub_only))
-                    .or_else(|| self.packages.get_fn(hash_script))
-                    //.or_else(|| mods.get_fn(hash_script))
+                    .or_else(|| self.packages.get_fn(hash_script).map(|f| (f, None)))
+                    //.or_else(|| mods.iter().find_map(|(_, m)| m.get_qualified_fn(hash_script).map(|f| (f, m.clone_id()))))
                     .unwrap();
 
                 if func.is_script() {
@@ -563,7 +562,10 @@ impl Engine {
                     let result = if _is_method {
                         // Method call of script function - map first argument to `this`
                         let (first, rest) = args.split_first_mut().unwrap();
-                        self.call_script_fn(
+
+                        mem::swap(&mut state.source, &mut source);
+
+                        let result = self.call_script_fn(
                             scope,
                             mods,
                             state,
@@ -573,16 +575,26 @@ impl Engine {
                             rest,
                             pos,
                             _level,
-                        )?
+                        );
+
+                        // Restore the original source
+                        state.source = source;
+
+                        result?
                     } else {
                         // Normal call of script function
                         // The first argument is a reference?
                         let mut backup: ArgBackup = Default::default();
                         backup.change_first_arg_to_copy(is_ref, args);
 
+                        mem::swap(&mut state.source, &mut source);
+
                         let result = self.call_script_fn(
                             scope, mods, state, lib, &mut None, func, args, pos, _level,
                         );
+
+                        // Restore the original source
+                        state.source = source;
 
                         // Restore the original reference
                         backup.restore_first_arg(args);
@@ -678,6 +690,7 @@ impl Engine {
 
         // Evaluate the AST
         let mut new_state = State {
+            source: state.source.clone(),
             operations: state.operations,
             ..Default::default()
         };
@@ -1162,9 +1175,17 @@ impl Engine {
                 let args = args.as_mut();
                 let new_scope = &mut Default::default();
                 let fn_def = f.get_fn_def().clone();
-                self.call_script_fn(
+
+                let mut source = module.clone_id();
+                mem::swap(&mut state.source, &mut source);
+
+                let result = self.call_script_fn(
                     new_scope, mods, state, lib, &mut None, &fn_def, args, pos, level,
-                )
+                );
+
+                state.source = source;
+
+                result
             }
             Some(f) if f.is_plugin_fn() => f
                 .get_plugin_fn()

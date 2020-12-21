@@ -100,19 +100,21 @@ impl Imports {
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> + 'a {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (&'a str, &'a Module)> + 'a {
         self.0.iter().flat_map(|lib| {
             lib.iter()
                 .rev()
-                .map(|(name, module)| (name.clone(), module.clone()))
+                .map(|(name, module)| (name.as_str(), module.as_ref()))
         })
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     pub(crate) fn iter_raw<'a>(
         &'a self,
-    ) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> + 'a {
-        self.0.iter().flat_map(|lib| lib.iter().rev().cloned())
+    ) -> impl Iterator<Item = (&'a ImmutableString, &'a Shared<Module>)> + 'a {
+        self.0
+            .iter()
+            .flat_map(|lib| lib.iter().rev().map(|(n, m)| (n, m)))
     }
     /// Get a consuming iterator to this stack of imported [modules][Module] in reverse order.
     pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
@@ -478,6 +480,8 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Default)]
 pub struct State {
+    /// Source of the current context.
+    pub source: Option<ImmutableString>,
     /// Normally, access to variables are parsed with a relative offset into the scope to avoid a lookup.
     /// In some situation, e.g. after running an `eval` statement, subsequent offsets become mis-aligned.
     /// When that happens, this flag is turned on to force a scope lookup by name.
@@ -708,10 +712,14 @@ fn default_print(_s: &str) {
 
 /// Debug to stdout
 #[inline(always)]
-fn default_debug(_s: &str, _pos: Position) {
+fn default_debug(_s: &str, _source: Option<&str>, _pos: Position) {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
-    println!("{:?} | {}", _pos, _s);
+    if let Some(source) = _source {
+        println!("{} @ {:?} | {}", source, _pos, _s);
+    } else {
+        println!("{:?} | {}", _pos, _s);
+    }
 }
 
 /// Search for a module within an imports stack.
@@ -828,7 +836,7 @@ impl Engine {
             resolve_var: None,
 
             print: Box::new(|_| {}),
-            debug: Box::new(|_, _| {}),
+            debug: Box::new(|_, _, _| {}),
             progress: None,
 
             optimization_level: if cfg!(feature = "no_optimize") {

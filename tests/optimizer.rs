@@ -55,17 +55,20 @@ fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
 
     let ast = engine.compile("{ const DECISION = false; if DECISION { 42 } else { 123 } }")?;
 
-    assert!(format!("{:?}", ast).starts_with(r#"AST { statements: [Block([Const(IdentX { name: "DECISION", pos: 1:9 }, Some(Unit(0:0)), false, 1:3), Expr(IntegerConstant(123, 1:53))], 1:1)]"#));
+    assert!(format!("{:?}", ast).starts_with(r#"AST { source: None, statements: [Block([Const(IdentX { name: "DECISION", pos: 1:9 }, Some(Unit(0:0)), false, 1:3), Expr(IntegerConstant(123, 1:53))], 1:1)]"#));
 
     let ast = engine.compile("if 1 == 2 { 42 }")?;
 
-    assert!(format!("{:?}", ast).starts_with("AST { statements: [], functions: Module("));
+    assert!(
+        format!("{:?}", ast).starts_with("AST { source: None, statements: [], functions: Module(")
+    );
 
     engine.set_optimization_level(OptimizationLevel::Full);
 
     let ast = engine.compile("abs(-42)")?;
 
-    assert!(format!("{:?}", ast).starts_with(r"AST { statements: [Expr(IntegerConstant(42, 1:1))]"));
+    assert!(format!("{:?}", ast)
+        .starts_with(r"AST { source: None, statements: [Expr(IntegerConstant(42, 1:1))]"));
 
     Ok(())
 }

@@ -119,6 +119,8 @@ impl FuncInfo {
 /// Not available under the `no_module` feature.
 #[derive(Clone)]
 pub struct Module {
+    /// ID identifying the module.
+    id: Option<ImmutableString>,
     /// Sub-modules.
     modules: HashMap<ImmutableString, Shared<Module>>,
     /// Module variables.
@@ -141,6 +143,7 @@ pub struct Module {
 impl Default for Module {
     fn default() -> Self {
         Self {
+            id: None,
             modules: Default::default(),
             variables: Default::default(),
             all_variables: Default::default(),
@@ -157,7 +160,12 @@ impl fmt::Debug for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Module(\n    modules: {}\n    vars: {}\n    functions: {}\n)",
+            "Module({}\n    modules: {}\n    vars: {}\n    functions: {}\n)",
+            if let Some(ref id) = self.id {
+                format!("id: {:?}", id)
+            } else {
+                "".to_string()
+            },
             self.modules
                 .keys()
                 .map(|m| m.as_str())
@@ -218,6 +226,41 @@ impl Module {
             functions: HashMap::with_capacity_and_hasher(capacity, StraightHasherBuilder),
             ..Default::default()
         }
+    }
+
+    /// Get the ID of the module, if any.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// module.set_id(Some("hello"));
+    /// assert_eq!(module.id(), Some("hello"));
+    /// ```
+    pub fn id(&self) -> Option<&str> {
+        self.id.as_ref().map(|s| s.as_str())
+    }
+
+    /// Get the ID of the module, if any.
+    pub(crate) fn clone_id(&self) -> Option<ImmutableString> {
+        self.id.clone()
+    }
+
+    /// Set the ID of the module.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// module.set_id(Some("hello"));
+    /// assert_eq!(module.id(), Some("hello"));
+    /// ```
+    pub fn set_id<S: Into<ImmutableString>>(&mut self, id: Option<S>) {
+        self.id = id.map(|s| s.into());
     }
 
     /// Is the module empty?
@@ -1338,7 +1381,11 @@ impl Module {
     /// the hash calculated by [`build_index`][Module::build_index].
     #[inline]
     pub fn contains_qualified_fn(&self, hash_fn: u64) -> bool {
-        self.all_functions.contains_key(&hash_fn)
+        if hash_fn == 0 {
+            false
+        } else {
+            self.all_functions.contains_key(&hash_fn)
+        }
     }
 
     /// Get a namespace-qualified function.
@@ -1348,7 +1395,11 @@ impl Module {
     /// the hash calculated by [`build_index`][Module::build_index].
     #[inline(always)]
     pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
-        self.all_functions.get(&hash_qualified_fn)
+        if hash_qualified_fn == 0 {
+            None
+        } else {
+            self.all_functions.get(&hash_qualified_fn)
+        }
     }
 
     /// Combine another module into this module.
@@ -1679,6 +1730,7 @@ impl Module {
                 });
         }
 
+        module.set_id(ast.clone_source());
         module.build_index();
 
         Ok(module)

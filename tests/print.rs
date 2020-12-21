@@ -13,20 +13,28 @@ fn test_print_debug() -> Result<(), Box<EvalAltResult>> {
 
     engine
         .on_print(move |s| log1.write().unwrap().push(format!("entry: {}", s)))
-        .on_debug(move |s, pos| {
-            log2.write()
-                .unwrap()
-                .push(format!("DEBUG at {:?}: {}", pos, s))
+        .on_debug(move |s, src, pos| {
+            log2.write().unwrap().push(format!(
+                "DEBUG of {} at {:?}: {}",
+                src.unwrap_or("unknown"),
+                pos,
+                s
+            ))
         });
 
     // Evaluate script
-    engine.eval::<()>("print(40 + 2)")?;
-    engine.eval::<()>(r#"let x = "hello!"; debug(x)"#)?;
+    engine.consume("print(40 + 2)")?;
+    let mut ast = engine.compile(r#"let x = "hello!"; debug(x)"#)?;
+    ast.set_source(Some("world"));
+    engine.consume_ast(&ast)?;
 
     // 'logbook' captures all the 'print' and 'debug' output
     assert_eq!(logbook.read().unwrap().len(), 2);
     assert_eq!(logbook.read().unwrap()[0], "entry: 42");
-    assert_eq!(logbook.read().unwrap()[1], r#"DEBUG at 1:19: "hello!""#);
+    assert_eq!(
+        logbook.read().unwrap()[1],
+        r#"DEBUG of world at 1:19: "hello!""#
+    );
 
     for entry in logbook.read().unwrap().iter() {
         println!("{}", entry);

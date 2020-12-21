@@ -128,8 +128,8 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> Array {
         .for_each(|(_, _, _, _, f)| list.push(make_metadata(&dict, None, f).into()));
 
     if let Some(mods) = ctx.mods {
-        mods.iter()
-            .for_each(|(ns, m)| scan_module(&mut list, &dict, ns, m.as_ref()));
+        mods.iter_raw()
+            .for_each(|(ns, m)| scan_module(&mut list, &dict, ns.clone(), m.as_ref()));
     }
 
     list
