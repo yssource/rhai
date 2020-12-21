@@ -1105,6 +1105,12 @@ fn parse_primary(
             (expr, Token::LeftBracket) => {
                 parse_index_chain(input, state, lib, expr, settings.level_up())?
             }
+            // Method access
+            #[cfg(not(feature = "no_object"))]
+            (expr, Token::Period) => {
+                let rhs = parse_unary(input, state, lib, settings.level_up())?;
+                make_dot_expr(state, expr, rhs, token_pos)?
+            }
             // Unknown postfix operator
             (expr, token) => unreachable!(
                 "unknown postfix operator '{}' for {:?}",
@@ -1114,20 +1120,25 @@ fn parse_primary(
         }
     }
 
+    // Cache the hash key for namespace-qualified variables
     match &mut root_expr {
-        // Cache the hash key for namespace-qualified variables
-        Expr::Variable(x) if x.1.is_some() => {
-            let (_, modules, hash, IdentX { name, .. }) = x.as_mut();
-            let namespace = modules.as_mut().unwrap();
-
-            // Qualifiers + variable name
-            *hash = calc_script_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0);
-
-            #[cfg(not(feature = "no_module"))]
-            namespace.set_index(state.find_module(&namespace[0].name));
-        }
-        _ => (),
+        Expr::Variable(x) if x.1.is_some() => Some(x),
+        Expr::Index(x, _) | Expr::Dot(x, _) => match &mut x.lhs {
+            Expr::Variable(x) if x.1.is_some() => Some(x),
+            _ => None,
+        },
+        _ => None,
     }
+    .map(|x| {
+        let (_, modules, hash, IdentX { name, .. }) = x.as_mut();
+        let namespace = modules.as_mut().unwrap();
+
+        // Qualifiers + variable name
+        *hash = calc_script_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0);
+
+        #[cfg(not(feature = "no_module"))]
+        namespace.set_index(state.find_module(&namespace[0].name));
+    });
 
     // Make sure identifiers are valid
     Ok(root_expr)
@@ -1201,8 +1212,33 @@ fn parse_unary(
         }
         // +expr
         Token::UnaryPlus => {
-            eat_token(input, Token::UnaryPlus);
-            parse_unary(input, state, lib, settings.level_up())
+            let pos = eat_token(input, Token::UnaryPlus);
+
+            match parse_unary(input, state, lib, settings.level_up())? {
+                expr @ Expr::IntegerConstant(_, _) => Ok(expr),
+                #[cfg(not(feature = "no_float"))]
+                expr @ Expr::FloatConstant(_, _) => Ok(expr),
+
+                // Call plus function
+                expr => {
+                    let op = "+";
+                    let hash = calc_script_fn_hash(empty(), op, 1);
+                    let mut args = StaticVec::new();
+                    args.push(expr);
+
+                    Ok(Expr::FnCall(
+                        Box::new(FnCallExpr {
+                            name: op.into(),
+                            native_only: true,
+                            namespace: None,
+                            hash,
+                            args,
+                            ..Default::default()
+                        }),
+                        pos,
+                    ))
+                }
+            }
         }
         // !expr
         Token::Bang => {
@@ -1770,6 +1806,7 @@ fn parse_binary_op(
                 make_in_expr(current_lhs, rhs, pos)?
             }
 
+            // This is needed to parse closure followed by a dot.
             #[cfg(not(feature = "no_object"))]
             Token::Period => {
                 let rhs = args.pop().unwrap();

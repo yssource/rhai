@@ -454,19 +454,18 @@ impl Engine {
         hash_script: u64,
         pub_only: bool,
     ) -> bool {
-        // NOTE: We skip script functions for global_namespace and packages, and native functions for lib
-
         // First check script-defined functions
         (hash_script != 0 && lib.iter().any(|&m| m.contains_fn(hash_script, pub_only)))
-            //|| (hash_fn != 0 && lib.iter().any(|&m| m.contains_fn(hash_fn, pub_only)))
+            //|| lib.iter().any(|&m| m.contains_fn(hash_fn, pub_only))
             // Then check registered functions
-            //|| self.global_namespace.contains_fn(hash_script, pub_only)
+            //|| (hash_script != 0 && self.global_namespace.contains_fn(hash_script, pub_only))
             || self.global_namespace.contains_fn(hash_fn, false)
             // Then check packages
-            || self.packages.contains_fn(hash_script)
+            || (hash_script != 0 && self.packages.contains_fn(hash_script))
             || self.packages.contains_fn(hash_fn)
             // Then check imported modules
-            || mods.map(|m| m.contains_fn(hash_script) || m.contains_fn(hash_fn)).unwrap_or(false)
+            || (hash_script != 0 && mods.map(|m| m.contains_fn(hash_script)).unwrap_or(false))
+            || mods.map(|m| m.contains_fn(hash_fn)).unwrap_or(false)
     }
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
@@ -678,14 +677,15 @@ impl Engine {
         }
 
         // Evaluate the AST
-        let mut new_state: State = Default::default();
-        new_state.operations = state.operations;
+        let mut new_state = State {
+            operations: state.operations,
+            ..Default::default()
+        };
 
-        let result =
-            self.eval_statements_raw(scope, mods, &mut new_state, ast.statements(), lib)?;
+        let result = self.eval_statements_raw(scope, mods, &mut new_state, ast.statements(), lib);
 
         state.operations = new_state.operations;
-        return Ok(result);
+        result
     }
 
     /// Call a dot method.

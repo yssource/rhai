@@ -1191,12 +1191,16 @@ impl Expr {
             | Self::Map(_, _) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
+                #[cfg(not(feature = "no_object"))]
+                Token::Period => true,
                 _ => false,
             },
 
             Self::Variable(_) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
+                #[cfg(not(feature = "no_object"))]
+                Token::Period => true,
                 Token::LeftParen => true,
                 Token::Bang => true,
                 Token::DoubleColon => true,
@@ -1206,6 +1210,8 @@ impl Expr {
             Self::Property(_) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
+                #[cfg(not(feature = "no_object"))]
+                Token::Period => true,
                 Token::LeftParen => true,
                 _ => false,
             },

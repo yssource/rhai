@@ -16,6 +16,8 @@ exports the full list of functions metadata (including those in an `AST`) as a J
 Bug fixes
 ---------
 
+* Unary prefix operators `-`, `+` and `!` now bind correctly when applied to an expression. Previously, `-x.len` is parsed as `(-x).len` which is obviously counter-intuitive.
+* Indexing of namespace-qualified variables now work properly, such as `path::to::var[x]`.
 * Constants are no longer propagated by the optimizer if shadowed by a non-constant variable.
 * Constants passed as the `this` parameter to Rhai functions now throws an error if assigned to.
 * Generic type parameter of `Engine::register_iterator` is `IntoIterator` instead of `Iterator`.
