@@ -244,8 +244,8 @@ impl Module {
     }
 
     /// Get the ID of the module, if any.
-    pub(crate) fn clone_id(&self) -> Option<ImmutableString> {
-        self.id.clone()
+    pub(crate) fn id_raw(&self) -> &Option<ImmutableString> {
+        &self.id
     }
 
     /// Set the ID of the module.

@@ -1,5 +1,7 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, FnPtr, ParseErrorType, RegisterFn, Scope, INT};
+use rhai::{
+    Engine, EvalAltResult, FnPtr, NativeCallContext, ParseErrorType, RegisterFn, Scope, INT,
+};
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::mem::take;
@@ -269,8 +271,14 @@ fn test_closures_external() -> Result<(), Box<EvalAltResult>> {
     // Get rid of the script, retaining only functions
     ast.retain_functions(|_, _, _, _| true);
 
-    // Closure 'f' captures: the engine, the AST, and the curried function pointer
-    let f = move |x: INT| fn_ptr.call_dynamic((&engine, &[ast.as_ref()]).into(), None, [x.into()]);
+    // Create function namespace from the 'AST'
+    let lib = [ast.as_ref()];
+
+    // Create native call context
+    let context = NativeCallContext::new(&engine, &lib);
+
+    // Closure  'f' captures: the engine, the AST, and the curried function pointer
+    let f = move |x: INT| fn_ptr.call_dynamic(context, None, [x.into()]);
 
     assert_eq!(f(42)?.as_str(), Ok("hello42"));
 

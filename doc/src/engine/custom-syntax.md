@@ -122,6 +122,7 @@ where:
 | &bull; `scope()`           |            `&Scope`             | reference to the current [`Scope`]                                                    |
 | &bull; `scope_mut()`       |          `&mut Scope`           | mutable reference to the current [`Scope`]; variables can be added to/removed from it |
 | &bull; `engine()`          |            `&Engine`            | reference to the current [`Engine`]                                                   |
+| &bull; `source()`          |         `Option<&str>`          | reference to the current source, if any                                               |
 | &bull; `imports()`         |           `&Imports`            | reference to the current stack of [modules] imported via `import` statements          |
 | &bull; `iter_namespaces()` | `impl Iterator<Item = &Module>` | iterator of the namespaces (as [modules]) containing all script-defined functions     |
 | &bull; `this_ptr()`        |       `Option<&Dynamic>`        | reference to the current bound [`this`] pointer, if any                               |

@@ -198,9 +198,10 @@ impl Engine {
 
             // Run external function
             let result = if func.is_plugin_fn() {
-                func.get_plugin_fn().call((self, mods, lib).into(), args)
+                func.get_plugin_fn()
+                    .call((self, &state.source, mods, lib).into(), args)
             } else {
-                func.get_native_fn()((self, mods, lib).into(), args)
+                func.get_native_fn()((self, &state.source, mods, lib).into(), args)
             };
 
             // Restore the original reference
@@ -534,10 +535,13 @@ impl Engine {
                 // Get function
                 let (func, mut source) = lib
                     .iter()
-                    .find_map(|&m| m.get_fn(hash_script, pub_only).map(|f| (f, m.clone_id())))
+                    .find_map(|&m| {
+                        m.get_fn(hash_script, pub_only)
+                            .map(|f| (f, m.id_raw().clone()))
+                    })
                     //.or_else(|| self.global_namespace.get_fn(hash_script, pub_only))
                     .or_else(|| self.packages.get_fn(hash_script).map(|f| (f, None)))
-                    //.or_else(|| mods.iter().find_map(|(_, m)| m.get_qualified_fn(hash_script).map(|f| (f, m.clone_id()))))
+                    //.or_else(|| mods.iter().find_map(|(_, m)| m.get_qualified_fn(hash_script).map(|f| (f, m.id_raw().clone()))))
                     .unwrap();
 
                 if func.is_script() {
@@ -1176,7 +1180,7 @@ impl Engine {
                 let new_scope = &mut Default::default();
                 let fn_def = f.get_fn_def().clone();
 
-                let mut source = module.clone_id();
+                let mut source = module.id_raw().clone();
                 mem::swap(&mut state.source, &mut source);
 
                 let result = self.call_script_fn(
@@ -1190,7 +1194,7 @@ impl Engine {
             Some(f) if f.is_plugin_fn() => f
                 .get_plugin_fn()
                 .clone()
-                .call((self, &*mods, lib).into(), args.as_mut()),
+                .call((self, module.id_raw(), &*mods, lib).into(), args.as_mut()),
             Some(f) if f.is_native() => {
                 if !f.is_method() {
                     // Clone first argument
@@ -1201,7 +1205,7 @@ impl Engine {
                     }
                 }
 
-                f.get_native_fn()((self, &*mods, lib).into(), args.as_mut())
+                f.get_native_fn()((self, module.id_raw(), &*mods, lib).into(), args.as_mut())
             }
             Some(_) => unreachable!(),
             None if def_val.is_some() => Ok(def_val.unwrap().clone()),

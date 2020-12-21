@@ -47,42 +47,47 @@ pub type Locked<T> = crate::stdlib::sync::RwLock<T>;
 
 /// Context of a native Rust function call.
 #[derive(Debug, Copy, Clone)]
-pub struct NativeCallContext<'e, 'a, 'm, 'pm: 'm> {
+pub struct NativeCallContext<'e, 's, 'a, 'm, 'pm: 'm> {
     engine: &'e Engine,
+    source: Option<&'s str>,
     pub(crate) mods: Option<&'a Imports>,
     pub(crate) lib: &'m [&'pm Module],
 }
 
-impl<'e, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized> From<(&'e Engine, &'a Imports, &'m M)>
-    for NativeCallContext<'e, 'a, 'm, 'pm>
+impl<'e, 's, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized>
+    From<(&'e Engine, &'s Option<ImmutableString>, &'a Imports, &'m M)>
+    for NativeCallContext<'e, 's, 'a, 'm, 'pm>
 {
-    fn from(value: (&'e Engine, &'a Imports, &'m M)) -> Self {
+    fn from(value: (&'e Engine, &'s Option<ImmutableString>, &'a Imports, &'m M)) -> Self {
         Self {
             engine: value.0,
-            mods: Some(value.1),
-            lib: value.2.as_ref(),
+            source: value.1.as_ref().map(|s| s.as_str()),
+            mods: Some(value.2),
+            lib: value.3.as_ref(),
         }
     }
 }
 
 impl<'e, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized> From<(&'e Engine, &'m M)>
-    for NativeCallContext<'e, '_, 'm, 'pm>
+    for NativeCallContext<'e, '_, '_, 'm, 'pm>
 {
     fn from(value: (&'e Engine, &'m M)) -> Self {
         Self {
             engine: value.0,
+            source: None,
             mods: None,
             lib: value.1.as_ref(),
         }
     }
 }
 
-impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
+impl<'e, 's, 'a, 'm, 'pm> NativeCallContext<'e, 's, 'a, 'm, 'pm> {
     /// Create a new [`NativeCallContext`].
     #[inline(always)]
     pub fn new(engine: &'e Engine, lib: &'m impl AsRef<[&'pm Module]>) -> Self {
         Self {
             engine,
+            source: None,
             mods: None,
             lib: lib.as_ref(),
         }
@@ -92,13 +97,15 @@ impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    pub fn new_with_imports(
+    pub fn new_with_all_fields(
         engine: &'e Engine,
+        source: &'s Option<ImmutableString>,
         mods: &'a mut Imports,
         lib: &'m impl AsRef<[&'pm Module]>,
     ) -> Self {
         Self {
             engine,
+            source: source.as_ref().map(|s| s.as_str()),
             mods: Some(mods),
             lib: lib.as_ref(),
         }
@@ -107,6 +114,11 @@ impl<'e, 'a, 'm, 'pm> NativeCallContext<'e, 'a, 'm, 'pm> {
     #[inline(always)]
     pub fn engine(&self) -> &'e Engine {
         self.engine
+    }
+    /// The current source.
+    #[inline(always)]
+    pub fn source<'z: 's>(&'z self) -> Option<&'s str> {
+        self.source
     }
     /// _(INTERNALS)_ The current set of modules imported via `import` statements.
     /// Available under the `internals` feature only.
