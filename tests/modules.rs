@@ -48,6 +48,7 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(engine.eval::<INT>("question::MYSTIC_NUMBER")?, 42);
     assert!(engine.eval::<INT>("MYSTIC_NUMBER").is_err());
+    assert_eq!(engine.eval::<INT>("question::life::universe::answer")?, 41);
     assert_eq!(
         engine.eval::<INT>("question::life::universe::answer + 1")?,
         42
@@ -59,6 +60,8 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
     assert!(engine
         .eval::<INT>("inc(question::life::universe::answer)")
         .is_err());
+    #[cfg(not(feature = "no_object"))]
+    assert_eq!(engine.eval::<INT>("question::MYSTIC_NUMBER.doubled")?, 84);
     #[cfg(not(feature = "no_object"))]
     assert_eq!(
         engine.eval::<INT>("question::life::universe::answer.doubled")?,

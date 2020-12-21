@@ -360,10 +360,10 @@ pub type OnPrintCallback = Box<dyn Fn(&str) + Send + Sync + 'static>;
 
 /// A standard callback function for debugging.
 #[cfg(not(feature = "sync"))]
-pub type OnDebugCallback = Box<dyn Fn(&str, Position) + 'static>;
+pub type OnDebugCallback = Box<dyn Fn(&str, Option<&str>, Position) + 'static>;
 /// A standard callback function for debugging.
 #[cfg(feature = "sync")]
-pub type OnDebugCallback = Box<dyn Fn(&str, Position) + Send + Sync + 'static>;
+pub type OnDebugCallback = Box<dyn Fn(&str, Option<&str>, Position) + Send + Sync + 'static>;
 
 /// A standard callback function for variable access.
 #[cfg(not(feature = "sync"))]

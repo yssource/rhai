@@ -13,6 +13,7 @@
 [`no_closure`]: {{rootUrl}}/start/features.md
 [`no_std`]: {{rootUrl}}/start/features.md
 [`no-std`]: {{rootUrl}}/start/features.md
+[`metadata`]: {{rootUrl}}/start/features.md
 [`internals`]: {{rootUrl}}/start/features.md
 [`unicode-xid-ident`]: {{rootUrl}}/start/features.md
 
@@ -40,6 +41,7 @@
 [plugin modules]: {{rootUrl}}/plugins/module.md
 [plugin function]: {{rootUrl}}/plugins/function.md
 [plugin functions]: {{rootUrl}}/plugins/function.md
+[functions metadata]: {{rootUrl}}/engine/metadata/index.md
 [`Scope`]: {{rootUrl}}/engine/scope.md
 [`serde`]: {{rootUrl}}/rust/serde.md
 
@@ -89,6 +91,7 @@
 [timestamp]: {{rootUrl}}/language/timestamps.md
 [timestamps]: {{rootUrl}}/language/timestamps.md
 
+[doc-comments]: {{rootUrl}}/language/doc-comments.md
 [function]: {{rootUrl}}/language/functions.md
 [functions]: {{rootUrl}}/language/functions.md
 [function overloading]: {{rootUrl}}/rust/functions.md#function-overloading

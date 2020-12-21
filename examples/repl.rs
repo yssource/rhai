@@ -147,6 +147,15 @@ fn main() {
                 println!();
                 continue;
             }
+            // "json" => {
+            //     println!(
+            //         "{}",
+            //         engine
+            //             .gen_fn_metadata_to_json(Some(&main_ast), false)
+            //             .unwrap()
+            //     );
+            //     continue;
+            // }
             _ => (),
         }
 

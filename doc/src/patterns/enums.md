@@ -178,22 +178,21 @@ Use `switch` Through Arrays
 ---------------------------
 
 Another way to work with Rust enums in a `switch` expression is through exposing the internal data
-of each enum variant as a variable-length [array], usually with the name of the variant as
-the first item for convenience:
+(or at least those that act as effective _discriminants_) of each enum variant as a variable-length
+[array], usually with the name of the variant as the first item for convenience:
 
 ```rust
 use rhai::Array;
 
 engine.register_get("enum_data", |x: &mut Enum| {
     match x {
-        Enum::Foo => vec![
-            "Foo".into()
-        ] as Array,
+        Enum::Foo => vec![ "Foo".into() ] as Array,
 
-        Enum::Bar(value) => vec![
-            "Bar".into(), (*value).into()
-        ] as Array,
+        // Say, skip the data field because it is not
+        // used as a discriminant
+        Enum::Bar(value) => vec![ "Bar".into() ] as Array,
 
+        // Say, all fields act as discriminants
         Enum::Baz(val1, val2) => vec![
             "Baz".into(), val1.clone().into(), (*val2).into()
         ] as Array
@@ -208,8 +207,7 @@ Then it is a simple matter to match an enum via the `switch` expression:
 // 'enum_data' creates a variable-length array with 'MyEnum' data
 let x = switch value.enum_data {
     ["Foo"] => 1,
-    ["Bar", 42] => 2,
-    ["Bar", 123] => 3,
+    ["Bar"] => value.field_1,
     ["Baz", "hello", false] => 4,
     ["Baz", "hello", true] => 5,
     _ => 9
@@ -220,10 +218,20 @@ x == 5;
 // Which is essentially the same as:
 let x = switch [value.type, value.field_0, value.field_1] {
     ["Foo", (), ()] => 1,
-    ["Bar", 42, ()] => 2,
-    ["Bar", 123, ()] => 3,
+    ["Bar", 42, ()] => 42,
+    ["Bar", 123, ()] => 123,
+            :
     ["Baz", "hello", false] => 4,
     ["Baz", "hello", true] => 5,
     _ => 9
 }
 ```
+
+Usually, a helper method returns an array of values that can uniquely determine
+the switch case based on actual usage requirements - which means that it probably
+skips fields that contain data instead of discriminants.
+
+Then `switch` is used to very quickly match through a large number of array shapes
+and jump to the appropriate case implementation.
+
+Data fields can then be extracted from the enum independently.

@@ -163,10 +163,11 @@ impl ModuleResolver for FileModuleResolver {
                     _ => Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos)),
                 })?;
 
-            let m = Module::eval_ast_as_new(scope, &ast, engine).map_err(|err| {
+            let mut m = Module::eval_ast_as_new(scope, &ast, engine).map_err(|err| {
                 Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
             })?;
 
+            m.set_id(Some(path));
             module = Some(m.into());
             module_ref = module.clone();
         };

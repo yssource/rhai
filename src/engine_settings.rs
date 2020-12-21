@@ -40,6 +40,12 @@ impl Engine {
     pub fn optimization_level(&self) -> crate::OptimizationLevel {
         self.optimization_level
     }
+    /// Enable/disable doc-comments.
+    #[inline(always)]
+    pub fn set_doc_comments(&mut self, enable: bool) -> &mut Self {
+        self.disable_doc_comments = !enable;
+        self
+    }
     /// Set the maximum levels of function calls allowed for a script in order to avoid
     /// infinite recursion and stack overflows.
     #[cfg(not(feature = "unchecked"))]

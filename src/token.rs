@@ -354,9 +354,7 @@ impl Token {
             Reserved(s) => s.clone().into(),
             Custom(s) => s.clone().into(),
             LexError(err) => err.to_string().into(),
-
-            Comment(s) if is_doc_comment(s) => s[..3].to_string().into(),
-            Comment(s) => s[..2].to_string().into(),
+            Comment(s) => s.clone().into(),
 
             token => match token {
                 LeftBrace => "{",
@@ -759,6 +757,8 @@ pub struct TokenizeState {
     pub end_with_none: bool,
     /// Include comments?
     pub include_comments: bool,
+    /// Disable doc-comments?
+    pub disable_doc_comments: bool,
 }
 
 /// _(INTERNALS)_ Trait that encapsulates a peekable character input stream.
@@ -1020,7 +1020,8 @@ fn is_binary_char(c: char) -> bool {
 /// Test if the comment block is a doc-comment.
 #[inline(always)]
 pub fn is_doc_comment(comment: &str) -> bool {
-    comment.starts_with("///") || comment.starts_with("/**")
+    (comment.starts_with("///") && !comment.starts_with("////"))
+        || (comment.starts_with("/**") && !comment.starts_with("/***"))
 }
 
 /// Get the next token.
@@ -1040,7 +1041,9 @@ fn get_next_token_inner(
 
         state.comment_level = scan_block_comment(stream, state.comment_level, pos, &mut comment);
 
-        if state.include_comments || is_doc_comment(comment.as_ref().unwrap()) {
+        if state.include_comments
+            || (!state.disable_doc_comments && is_doc_comment(comment.as_ref().unwrap()))
+        {
             return Some((Token::Comment(comment.unwrap()), start_pos));
         }
     }
@@ -1288,9 +1291,14 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
 
                 let mut comment = match stream.peek_next() {
-                    Some('/') => {
+                    Some('/') if !state.disable_doc_comments => {
                         eat_next(stream, pos);
-                        Some("///".to_string())
+
+                        // Long streams of `///...` are not doc-comments
+                        match stream.peek_next() {
+                            Some('/') => None,
+                            _ => Some("///".to_string()),
+                        }
                     }
                     _ if state.include_comments => Some("//".to_string()),
                     _ => None,
@@ -1316,9 +1324,14 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
 
                 let mut comment = match stream.peek_next() {
-                    Some('*') => {
+                    Some('*') if !state.disable_doc_comments => {
                         eat_next(stream, pos);
-                        Some("/**".to_string())
+
+                        // Long streams of `/****...` are not doc-comments
+                        match stream.peek_next() {
+                            Some('*') => None,
+                            _ => Some("/**".to_string()),
+                        }
                     }
                     _ if state.include_comments => Some("/*".to_string()),
                     _ => None,
@@ -1785,6 +1798,7 @@ impl Engine {
                 comment_level: 0,
                 end_with_none: false,
                 include_comments: false,
+                disable_doc_comments: self.disable_doc_comments,
             },
             pos: Position::new(1, 0),
             stream: MultiInputsStream {

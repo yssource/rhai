@@ -143,6 +143,10 @@ macro_rules! gen_signed_functions {
                         Ok(Dynamic::from(-x))
                     }
                 }
+                #[rhai_fn(name = "+")]
+                pub fn plus(x: $arg_type) -> $arg_type {
+                    x
+                }
                 #[rhai_fn(return_raw)]
                 pub fn abs(x: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
@@ -251,6 +255,10 @@ mod f32_functions {
     pub fn neg(x: f32) -> f32 {
         -x
     }
+    #[rhai_fn(name = "+")]
+    pub fn plus(x: f32) -> f32 {
+        -x
+    }
     pub fn abs(x: f32) -> f32 {
         x.abs()
     }
@@ -308,6 +316,10 @@ mod f64_functions {
     }
     #[rhai_fn(name = "-")]
     pub fn neg(x: f64) -> f64 {
+        -x
+    }
+    #[rhai_fn(name = "+")]
+    pub fn plus(x: f64) -> f64 {
         -x
     }
     pub fn abs(x: f64) -> f64 {

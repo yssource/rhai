@@ -10,9 +10,14 @@ Each function defined in an `AST` can optionally attach _doc-comments_ (which, a
 are comments prefixed by either `///` or `/**`).  Doc-comments allow third-party tools to
 automatically generate documentation for functions defined in a Rhai script.
 
+A new API, `Engine::gen_fn_metadata_to_json`, paired with the new `metadata` feature,
+exports the full list of functions metadata (including those in an `AST`) as a JSON document.
+
 Bug fixes
 ---------
 
+* Unary prefix operators `-`, `+` and `!` now bind correctly when applied to an expression. Previously, `-x.len` is parsed as `(-x).len` which is obviously counter-intuitive.
+* Indexing of namespace-qualified variables now work properly, such as `path::to::var[x]`.
 * Constants are no longer propagated by the optimizer if shadowed by a non-constant variable.
 * Constants passed as the `this` parameter to Rhai functions now throws an error if assigned to.
 * Generic type parameter of `Engine::register_iterator` is `IntoIterator` instead of `Iterator`.
@@ -22,7 +27,7 @@ Breaking changes
 ----------------
 
 * `Engine::on_progress` now takes `u64` instead of `&u64`.
-* The closure for `Engine::on_debug` now takes an additional `Position` parameter.
+* The closure for `Engine::on_debug` now takes two additional parameters: `source: Option<&str>` and `pos: Position`.
 * `AST::iter_functions` now returns `ScriptFnMetadata`.
 * The parser function passed to `Engine::register_custom_syntax_raw` now takes an additional parameter containing the _look-ahead_ symbol.
 
@@ -30,10 +35,13 @@ New features
 ------------
 
 * `AST::iter_functions` now returns `ScriptFnMetadata` which includes, among others, _doc-comments_ for functions prefixed by `///` or `/**`.
+* _Doc-comments_ can be enabled/disabled with the new `Engine::set_doc_comments` method.
+* A new feature `metadata` is added that pulls in `serde_json` and enables `Engine::gen_fn_metadata_to_json` which exports the full list of functions metadata (including those inside an `AST`) in JSON format.
 
 Enhancements
 ------------
 
+* A functions lookup cache is added to make function call resolution faster.
 * Capturing a constant variable in a closure is now supported, with no cloning.
 * Provides position info for `debug` statements.
 * A _look-ahead_ symbol is provided to custom syntax parsers, which can be used to parse variable-length symbol streams.

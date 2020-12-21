@@ -168,15 +168,26 @@ impl Engine {
         pos: Position,
         def_val: Option<&Dynamic>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        self.inc_operations(state)?;
+        self.inc_operations(state, pos)?;
 
-        // Search for the native function
-        // First search registered functions (can override packages)
-        // Then search packages
-        let func = //lib.get_fn(hash_fn, pub_only)
-            self.global_namespace.get_fn(hash_fn, pub_only)
+        let func = state.functions_cache.get(&hash_fn).cloned();
+
+        let func = if let Some(ref f) = func {
+            f.as_ref()
+        } else {
+            // Search for the native function
+            // First search registered functions (can override packages)
+            // Then search packages
+            // lib.get_fn(hash_fn, pub_only)
+            let f = self
+                .global_namespace
+                .get_fn(hash_fn, pub_only)
                 .or_else(|| self.packages.get_fn(hash_fn))
                 .or_else(|| mods.get_fn(hash_fn));
+
+            state.functions_cache.insert(hash_fn, f.cloned());
+            f
+        };
 
         if let Some(func) = func {
             assert!(func.is_native());
@@ -210,20 +221,17 @@ impl Engine {
                     .into(),
                     false,
                 ),
-                KEYWORD_DEBUG => (
-                    (self.debug)(
-                        result.as_str().map_err(|typ| {
-                            EvalAltResult::ErrorMismatchOutputType(
-                                self.map_type_name(type_name::<ImmutableString>()).into(),
-                                typ.into(),
-                                pos,
-                            )
-                        })?,
-                        pos,
-                    )
-                    .into(),
-                    false,
-                ),
+                KEYWORD_DEBUG => {
+                    let text = result.as_str().map_err(|typ| {
+                        EvalAltResult::ErrorMismatchOutputType(
+                            self.map_type_name(type_name::<ImmutableString>()).into(),
+                            typ.into(),
+                            pos,
+                        )
+                    })?;
+                    let source = state.source.as_ref().map(|s| s.as_str());
+                    ((self.debug)(text, source, pos).into(), false)
+                }
                 _ => (result, func.is_method()),
             });
         }
@@ -337,7 +345,7 @@ impl Engine {
         pos: Position,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.inc_operations(state)?;
+        self.inc_operations(state, pos)?;
 
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
@@ -370,6 +378,9 @@ impl Engine {
         let mut lib_merged: StaticVec<_>;
 
         let unified_lib = if let Some(ref env_lib) = fn_def.lib {
+            // If the library is modified, clear the functions lookup cache
+            state.functions_cache.clear();
+
             lib_merged = Default::default();
             lib_merged.push(env_lib.as_ref());
             lib_merged.extend(lib.iter().cloned());
@@ -380,7 +391,7 @@ impl Engine {
 
         #[cfg(not(feature = "no_module"))]
         if !fn_def.mods.is_empty() {
-            mods.extend(fn_def.mods.iter_raw());
+            mods.extend(fn_def.mods.iter_raw().map(|(n, m)| (n.clone(), m.clone())));
         }
 
         // Evaluate the function at one higher level of call depth
@@ -440,19 +451,18 @@ impl Engine {
         hash_script: u64,
         pub_only: bool,
     ) -> bool {
-        // NOTE: We skip script functions for global_namespace and packages, and native functions for lib
-
         // First check script-defined functions
-        lib.iter().any(|&m| m.contains_fn(hash_script, pub_only))
+        (hash_script != 0 && lib.iter().any(|&m| m.contains_fn(hash_script, pub_only)))
             //|| lib.iter().any(|&m| m.contains_fn(hash_fn, pub_only))
             // Then check registered functions
-            //|| self.global_namespace.contains_fn(hash_script, pub_only)
+            //|| (hash_script != 0 && self.global_namespace.contains_fn(hash_script, pub_only))
             || self.global_namespace.contains_fn(hash_fn, false)
             // Then check packages
-            || self.packages.contains_fn(hash_script)
+            || (hash_script != 0 && self.packages.contains_fn(hash_script))
             || self.packages.contains_fn(hash_fn)
             // Then check imported modules
-            || mods.map(|m| m.contains_fn(hash_script) || m.contains_fn(hash_fn)).unwrap_or(false)
+            || (hash_script != 0 && mods.map(|m| m.contains_fn(hash_script)).unwrap_or(false))
+            || mods.map(|m| m.contains_fn(hash_fn)).unwrap_or(false)
     }
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
@@ -518,14 +528,16 @@ impl Engine {
 
             // Script-like function found
             #[cfg(not(feature = "no_function"))]
-            _ if self.has_override(Some(mods), lib, 0, hash_script, pub_only) => {
+            _ if hash_script != 0
+                && self.has_override(Some(mods), lib, 0, hash_script, pub_only) =>
+            {
                 // Get function
-                let func = lib
+                let (func, mut source) = lib
                     .iter()
-                    .find_map(|&m| m.get_fn(hash_script, pub_only))
+                    .find_map(|&m| m.get_fn(hash_script, pub_only).map(|f| (f, m.clone_id())))
                     //.or_else(|| self.global_namespace.get_fn(hash_script, pub_only))
-                    .or_else(|| self.packages.get_fn(hash_script))
-                    //.or_else(|| mods.get_fn(hash_script))
+                    .or_else(|| self.packages.get_fn(hash_script).map(|f| (f, None)))
+                    //.or_else(|| mods.iter().find_map(|(_, m)| m.get_qualified_fn(hash_script).map(|f| (f, m.clone_id()))))
                     .unwrap();
 
                 if func.is_script() {
@@ -550,7 +562,10 @@ impl Engine {
                     let result = if _is_method {
                         // Method call of script function - map first argument to `this`
                         let (first, rest) = args.split_first_mut().unwrap();
-                        self.call_script_fn(
+
+                        mem::swap(&mut state.source, &mut source);
+
+                        let result = self.call_script_fn(
                             scope,
                             mods,
                             state,
@@ -560,16 +575,26 @@ impl Engine {
                             rest,
                             pos,
                             _level,
-                        )?
+                        );
+
+                        // Restore the original source
+                        state.source = source;
+
+                        result?
                     } else {
                         // Normal call of script function
                         // The first argument is a reference?
                         let mut backup: ArgBackup = Default::default();
                         backup.change_first_arg_to_copy(is_ref, args);
 
+                        mem::swap(&mut state.source, &mut source);
+
                         let result = self.call_script_fn(
                             scope, mods, state, lib, &mut None, func, args, pos, _level,
                         );
+
+                        // Restore the original source
+                        state.source = source;
 
                         // Restore the original reference
                         backup.restore_first_arg(args);
@@ -609,26 +634,24 @@ impl Engine {
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
+        state: &mut State,
         statements: impl IntoIterator<Item = &'a Stmt>,
         lib: &[&Module],
-    ) -> Result<(Dynamic, u64), Box<EvalAltResult>> {
-        let mut state = Default::default();
-
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         statements
             .into_iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, mods, &mut state, lib, &mut None, stmt, 0)
+                self.eval_stmt(scope, mods, state, lib, &mut None, stmt, 0)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
                 EvalAltResult::LoopBreak(_, _) => unreachable!(),
                 _ => Err(err),
             })
-            .map(|v| (v, state.operations))
     }
 
-    /// Evaluate a text string as a script - used primarily for 'eval'.
-    fn eval_script_expr(
+    /// Evaluate a text script in place - used primarily for 'eval'.
+    fn eval_script_expr_in_place(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
@@ -638,7 +661,7 @@ impl Engine {
         pos: Position,
         _level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        self.inc_operations(state)?;
+        self.inc_operations(state, pos)?;
 
         let script = script.trim();
         if script.is_empty() {
@@ -666,12 +689,16 @@ impl Engine {
         }
 
         // Evaluate the AST
-        let (result, operations) = self.eval_statements_raw(scope, mods, ast.statements(), lib)?;
+        let mut new_state = State {
+            source: state.source.clone(),
+            operations: state.operations,
+            ..Default::default()
+        };
 
-        state.operations += operations;
-        self.inc_operations(state)?;
+        let result = self.eval_statements_raw(scope, mods, &mut new_state, ast.statements(), lib);
 
-        return Ok(result);
+        state.operations = new_state.operations;
+        result
     }
 
     /// Call a dot method.
@@ -963,7 +990,8 @@ impl Engine {
                     self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
                 })?;
                 let pos = args_expr[0].position();
-                let result = self.eval_script_expr(scope, mods, state, lib, script, pos, level + 1);
+                let result =
+                    self.eval_script_expr_in_place(scope, mods, state, lib, script, pos, level + 1);
 
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
@@ -1006,8 +1034,7 @@ impl Engine {
                     target = target.into_owned();
                 }
 
-                self.inc_operations(state)
-                    .map_err(|err| err.fill_position(pos))?;
+                self.inc_operations(state, pos)?;
 
                 args = if target.is_shared() || target.is_value() {
                     arg_values.insert(0, target.take_or_clone().flatten());
@@ -1089,8 +1116,7 @@ impl Engine {
                 let (target, _, pos) =
                     self.search_scope_only(scope, mods, state, lib, this_ptr, &args_expr[0])?;
 
-                self.inc_operations(state)
-                    .map_err(|err| err.fill_position(pos))?;
+                self.inc_operations(state, pos)?;
 
                 if target.is_shared() || target.is_value() {
                     arg_values[0] = target.take_or_clone().flatten();
@@ -1119,7 +1145,7 @@ impl Engine {
         let func = match module.get_qualified_fn(hash_script) {
             // Then search in Rust functions
             None => {
-                self.inc_operations(state)?;
+                self.inc_operations(state, pos)?;
 
                 // Namespace-qualified Rust functions are indexed in two steps:
                 // 1) Calculate a hash in a similar manner to script-defined functions,
@@ -1149,9 +1175,17 @@ impl Engine {
                 let args = args.as_mut();
                 let new_scope = &mut Default::default();
                 let fn_def = f.get_fn_def().clone();
-                self.call_script_fn(
+
+                let mut source = module.clone_id();
+                mem::swap(&mut state.source, &mut source);
+
+                let result = self.call_script_fn(
                     new_scope, mods, state, lib, &mut None, &fn_def, args, pos, level,
-                )
+                );
+
+                state.source = source;
+
+                result
             }
             Some(f) if f.is_plugin_fn() => f
                 .get_plugin_fn()
