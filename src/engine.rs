@@ -560,6 +560,11 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
     pub fn engine(&self) -> &'e Engine {
         self.engine
     }
+    /// The current source.
+    #[inline(always)]
+    pub fn source<'z: 's>(&'z self) -> Option<&'s str> {
+        self.state.source.as_ref().map(|s| s.as_str())
+    }
     /// The current [`Scope`].
     #[inline(always)]
     pub fn scope(&self) -> &Scope<'px> {
@@ -2002,9 +2007,12 @@ impl Engine {
                             // Overriding exact implementation
                             if func.is_plugin_fn() {
                                 func.get_plugin_fn()
-                                    .call((self, &*mods, lib).into(), args)?;
+                                    .call((self, &state.source, &*mods, lib).into(), args)?;
                             } else {
-                                func.get_native_fn()((self, &*mods, lib).into(), args)?;
+                                func.get_native_fn()(
+                                    (self, &state.source, &*mods, lib).into(),
+                                    args,
+                                )?;
                             }
                         }
                         // Built-in op-assignment function

@@ -228,6 +228,7 @@ of the particular call to a registered Rust function. It is a type that exposes 
 | Field               |              Type               | Description                                                                                                                                                                                                                                |
 | ------------------- | :-----------------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `engine()`          |            `&Engine`            | the current [`Engine`], with all configurations and settings.<br/>This is sometimes useful for calling a script-defined function within the same evaluation context using [`Engine::call_fn`][`call_fn`], or calling a [function pointer]. |
+| `source()`          |         `Option<&str>`          | reference to the current source, if any                                                                                                                                                                                                    |
 | `imports()`         |       `Option<&Imports>`        | reference to the current stack of [modules] imported via `import` statements (if any)                                                                                                                                                      |
 | `iter_namespaces()` | `impl Iterator<Item = &Module>` | iterator of the namespaces (as [modules]) containing all script-defined functions                                                                                                                                                          |
 
@@ -254,11 +255,11 @@ let fn_ptr = engine.eval_ast::<FnPtr>(&ast)?;
 // Get rid of the script, retaining only functions
 ast.retain_functions(|_, _, _| true);
 
+// Create function namespace from the 'AST'
+let lib = [ast.as_ref()];
+
 // Create native call context
-let context = NativeCallContext::new(
-    &engine,                    // the 'Engine'
-    &[ast.as_ref()]             // function namespace from the 'AST'
-);
+let context = NativeCallContext::new(&engine, &lib);
 
 // 'f' captures: the engine, the AST, and the closure
 let f = move |x: i64| fn_ptr.call_dynamic(context, None, [x.into()]);
