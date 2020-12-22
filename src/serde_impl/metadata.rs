@@ -213,17 +213,17 @@ impl From<&crate::Module> for ModuleMetadata {
 
 #[cfg(feature = "serde")]
 impl Engine {
-    /// Generate a list of all functions (including those defined in an [`AST`][crate::AST], if provided)
+    /// Generate a list of all functions (including those defined in an [`AST`][crate::AST])
     /// in JSON format.  Available only under the `metadata` feature.
     ///
     /// Functions from the following sources are included:
-    /// 1) Functions defined in an [`AST`][crate::AST] (if provided)
+    /// 1) Functions defined in an [`AST`][crate::AST]
     /// 2) Functions registered into the global namespace
     /// 3) Functions in registered sub-modules
     /// 4) Functions in packages (optional)
-    pub fn gen_fn_metadata_to_json(
+    pub fn gen_fn_metadata_with_ast_to_json(
         &self,
-        ast: Option<&AST>,
+        ast: &AST,
         include_packages: bool,
     ) -> serde_json::Result<String> {
         let mut global: ModuleMetadata = Default::default();
@@ -253,5 +253,16 @@ impl Engine {
         global.functions.sort();
 
         serde_json::to_string_pretty(&global)
+    }
+
+    /// Generate a list of all functions in JSON format.
+    /// Available only under the `metadata` feature.
+    ///
+    /// Functions from the following sources are included:
+    /// 1) Functions registered into the global namespace
+    /// 2) Functions in registered sub-modules
+    /// 3) Functions in packages (optional)
+    pub fn gen_fn_metadata_to_json(&self, include_packages: bool) -> serde_json::Result<String> {
+        self.gen_fn_metadata_with_ast_to_json(&Default::default(), include_packages)
     }
 }

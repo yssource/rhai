@@ -10,8 +10,9 @@ Each function defined in an `AST` can optionally attach _doc-comments_ (which, a
 are comments prefixed by either `///` or `/**`).  Doc-comments allow third-party tools to
 automatically generate documentation for functions defined in a Rhai script.
 
-A new API, `Engine::gen_fn_metadata_to_json`, paired with the new `metadata` feature,
-exports the full list of functions metadata (including those in an `AST`) as a JSON document.
+A new API, `Engine::gen_fn_metadata_to_json` and `Engine::gen_fn_metadata_with_ast_to_json`,
+paired with the new `metadata` feature, exports the full list of functions metadata
+(including those in an `AST`) as a JSON document.
 
 Bug fixes
 ---------
@@ -36,7 +37,7 @@ New features
 
 * `AST::iter_functions` now returns `ScriptFnMetadata` which includes, among others, _doc-comments_ for functions prefixed by `///` or `/**`.
 * _Doc-comments_ can be enabled/disabled with the new `Engine::set_doc_comments` method.
-* A new feature `metadata` is added that pulls in `serde_json` and enables `Engine::gen_fn_metadata_to_json` which exports the full list of functions metadata (including those inside an `AST`) in JSON format.
+* A new feature `metadata` is added that pulls in `serde_json` and enables `Engine::gen_fn_metadata_to_json` and ``Engine::gen_fn_metadata_with_ast_to_json` which exports the full list of functions metadata (including those inside an `AST`) in JSON format.
 * `Engine::on_debug` provides two additional parameters: `source: Option<&str>` and `pos: Position`.
 * `NativeCallContext` and `EvalContext` both expose `source()` which returns the current source, if any.
 
