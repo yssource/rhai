@@ -4,20 +4,21 @@ Export Functions Metadata to JSON
 {{#include ../../links.md}}
 
 
-`Engine::gen_fn_metadata_to_json`
---------------------------------
+`Engine::gen_fn_metadata_to_json`<br/>`Engine::gen_fn_metadata_with_ast_to_json`
+------------------------------------------------------------------------------
 
-As part of a _reflections_ API, `Engine::gen_fn_metadata_to_json` exports the full list
-of [functions metadata] in JSON format.
+As part of a _reflections_ API, `Engine::gen_fn_metadata_to_json` and the corresponding
+`Engine::gen_fn_metadata_with_ast_to_json` export the full list of [functions metadata]
+in JSON format.
 
-The [`metadata`] feature must be used to turn on this method, which requires
+The [`metadata`] feature must be used to turn on this API, which requires
 the [`serde_json`](https://crates.io/crates/serde_json) crate.
 
 ### Sources
 
 Functions from the following sources are included:
 
-1) Script-defined functions in an [`AST`], if provided
+1) Script-defined functions in an [`AST`] (for `Engine::gen_fn_metadata_with_ast_to_json`)
 2) Native Rust functions registered into the global namespace via the `Engine::register_XXX` API
 3) _Public_ (i.e. non-[`private`]) functions (native Rust or Rhai scripted) in global sub-modules registered via
    [`Engine::register_module`]({{rootUrl}}/rust/modules/create.md)

@@ -648,7 +648,9 @@ impl AsRef<Module> for AST {
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Ident {
+    /// Identifier name.
     pub name: ImmutableString,
+    /// Declaration position.
     pub pos: Position,
 }
 

@@ -1,6 +1,10 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.9
+==============
+
+
 Version 0.19.8
 ==============
 
@@ -14,13 +18,15 @@ A new API, `Engine::gen_fn_metadata_to_json` and `Engine::gen_fn_metadata_with_a
 paired with the new `metadata` feature, exports the full list of functions metadata
 (including those in an `AST`) as a JSON document.
 
+There are also a sizable number of bug fixes.
+
 Bug fixes
 ---------
 
 * Unary prefix operators `-`, `+` and `!` now bind correctly when applied to an expression. Previously, `-x.len` is parsed as `(-x).len` which is obviously counter-intuitive.
 * Indexing of namespace-qualified variables now work properly, such as `path::to::var[x]`.
 * Constants are no longer propagated by the optimizer if shadowed by a non-constant variable.
-* Constants passed as the `this` parameter to Rhai functions now throws an error if assigned to.
+* A constant passed as the `this` parameter to Rhai functions now throws an error if assigned to.
 * Generic type parameter of `Engine::register_iterator` is `IntoIterator` instead of `Iterator`.
 * Fixes parsing of block comments ending with `**/` or inner blocks starting with `//*`.
 
@@ -37,8 +43,8 @@ New features
 
 * `AST::iter_functions` now returns `ScriptFnMetadata` which includes, among others, _doc-comments_ for functions prefixed by `///` or `/**`.
 * _Doc-comments_ can be enabled/disabled with the new `Engine::set_doc_comments` method.
-* A new feature `metadata` is added that pulls in `serde_json` and enables `Engine::gen_fn_metadata_to_json` and ``Engine::gen_fn_metadata_with_ast_to_json` which exports the full list of functions metadata (including those inside an `AST`) in JSON format.
-* `Engine::on_debug` provides two additional parameters: `source: Option<&str>` and `pos: Position`.
+* A new feature `metadata` is added that pulls in `serde_json` and enables `Engine::gen_fn_metadata_to_json` and `Engine::gen_fn_metadata_with_ast_to_json` which exports the full list of functions metadata (including those inside an `AST`) in JSON format.
+* `Engine::on_debug` provides two additional parameters: `source: Option<&str>` and `pos: Position`, containing the current source (if any) and position of the `debug` statement.
 * `NativeCallContext` and `EvalContext` both expose `source()` which returns the current source, if any.
 
 Enhancements
@@ -46,7 +52,6 @@ Enhancements
 
 * A functions lookup cache is added to make function call resolution faster.
 * Capturing a constant variable in a closure is now supported, with no cloning.
-* Provides position info for `debug` statements.
 * A _look-ahead_ symbol is provided to custom syntax parsers, which can be used to parse variable-length symbol streams.
 
 
