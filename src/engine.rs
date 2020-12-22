@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::ast::{Expr, FnCallExpr, Ident, IdentX, ReturnType, Stmt};
+use crate::ast::{Expr, FnCallExpr, Ident, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{
@@ -734,7 +734,7 @@ pub fn search_imports(
     state: &mut State,
     namespace: &NamespaceRef,
 ) -> Result<Shared<Module>, Box<EvalAltResult>> {
-    let IdentX { name: root, pos } = &namespace[0];
+    let Ident { name: root, pos } = &namespace[0];
 
     // Qualified - check if the root module is directly indexed
     let index = if state.always_search {
@@ -884,7 +884,7 @@ impl Engine {
         match expr {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
-                (_, Some(modules), hash_var, IdentX { name, pos }) => {
+                (_, Some(modules), hash_var, Ident { name, pos }) => {
                     let module = search_imports(mods, state, modules)?;
                     let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
                         match *err {
@@ -918,7 +918,7 @@ impl Engine {
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &'a Expr,
     ) -> Result<(Target<'s>, &'a str, Position), Box<EvalAltResult>> {
-        let (index, _, _, IdentX { name, pos }) = match expr {
+        let (index, _, _, Ident { name, pos }) = match expr {
             Expr::Variable(v) => v.as_ref(),
             _ => unreachable!(),
         };
@@ -1115,7 +1115,7 @@ impl Engine {
                     Expr::FnCall(_, _) => unreachable!(),
                     // {xxx:map}.id = ???
                     Expr::Property(x) if target_val.is::<Map>() && new_val.is_some() => {
-                        let IdentX { name, pos } = &x.1;
+                        let Ident { name, pos } = &x.1;
                         let index = name.clone().into();
                         let mut val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, true, is_ref, false, level,
@@ -1128,7 +1128,7 @@ impl Engine {
                     }
                     // {xxx:map}.id
                     Expr::Property(x) if target_val.is::<Map>() => {
-                        let IdentX { name, pos } = &x.1;
+                        let Ident { name, pos } = &x.1;
                         let index = name.clone().into();
                         let val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, false, is_ref, false, level,
@@ -1138,7 +1138,7 @@ impl Engine {
                     }
                     // xxx.id = ???
                     Expr::Property(x) if new_val.is_some() => {
-                        let ((_, setter), IdentX { pos, .. }) = x.as_ref();
+                        let ((_, setter), Ident { pos, .. }) = x.as_ref();
                         let mut new_val = new_val;
                         let mut args = [target_val, &mut new_val.as_mut().unwrap().0];
                         self.exec_fn_call(
@@ -1150,7 +1150,7 @@ impl Engine {
                     }
                     // xxx.id
                     Expr::Property(x) => {
-                        let ((getter, _), IdentX { pos, .. }) = x.as_ref();
+                        let ((getter, _), Ident { pos, .. }) = x.as_ref();
                         let mut args = [target_val];
                         self.exec_fn_call(
                             mods, state, lib, getter, 0, &mut args, is_ref, true, false, *pos,
@@ -1163,7 +1163,7 @@ impl Engine {
                     Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target_val.is::<Map>() => {
                         let mut val = match &x.lhs {
                             Expr::Property(p) => {
-                                let IdentX { name, pos } = &p.1;
+                                let Ident { name, pos } = &p.1;
                                 let index = name.clone().into();
                                 self.get_indexed_mut(
                                     mods, state, lib, target_val, index, *pos, false, is_ref, true,
@@ -1204,7 +1204,7 @@ impl Engine {
                         match &x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
-                                let ((getter, setter), IdentX { pos, .. }) = p.as_ref();
+                                let ((getter, setter), Ident { pos, .. }) = p.as_ref();
                                 let arg_values = &mut [target_val, &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self
@@ -1319,7 +1319,7 @@ impl Engine {
         match lhs {
             // id.??? or id[???]
             Expr::Variable(x) => {
-                let IdentX {
+                let Ident {
                     name: var_name,
                     pos: var_pos,
                 } = &x.3;
@@ -1675,7 +1675,7 @@ impl Engine {
 
                     if target.is::<Map>() {
                         // map.prop - point directly to the item
-                        let (_, IdentX { name, pos }) = p.as_ref();
+                        let (_, Ident { name, pos }) = p.as_ref();
                         let idx = name.clone().into();
 
                         if target.is_shared() || target.is_value() {
@@ -1693,7 +1693,7 @@ impl Engine {
                         .map(|v| (v, *pos))
                     } else {
                         // var.prop - call property getter
-                        let ((getter, _), IdentX { pos, .. }) = p.as_ref();
+                        let ((getter, _), Ident { pos, .. }) = p.as_ref();
                         let mut args = [target.as_mut()];
                         self.exec_fn_call(
                             mods, state, lib, getter, 0, &mut args, is_ref, true, false, *pos,
@@ -1781,7 +1781,7 @@ impl Engine {
             Expr::Map(x, _) => {
                 let mut map =
                     Map::with_capacity(crate::stdlib::cmp::max(TYPICAL_MAP_SIZE, x.len()));
-                for (IdentX { name: key, .. }, expr) in x.as_ref() {
+                for (Ident { name: key, .. }, expr) in x.as_ref() {
                     map.insert(
                         key.clone(),
                         self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
@@ -2272,9 +2272,9 @@ impl Engine {
 
                             if let Some(Ident { name, .. }) = var_def {
                                 let var_name: Cow<'_, str> = if state.is_global() {
-                                    name.clone().into()
+                                    name.to_string().into()
                                 } else {
-                                    unsafe_cast_var_name_to_lifetime(name).into()
+                                    unsafe_cast_var_name_to_lifetime(&name).into()
                                 };
                                 scope.push(var_name, value);
                             }
@@ -2410,7 +2410,7 @@ impl Engine {
             // Export statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(list, _) => {
-                for (IdentX { name, pos: id_pos }, rename) in list.iter() {
+                for (Ident { name, pos: id_pos }, rename) in list.iter() {
                     // Mark scope variables as public
                     if let Some(index) = scope.get_index(name).map(|(i, _)| i) {
                         let alias = rename.as_ref().map(|x| &x.name).unwrap_or_else(|| name);

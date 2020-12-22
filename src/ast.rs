@@ -640,25 +640,6 @@ impl AsRef<Module> for AST {
     }
 }
 
-/// _(INTERNALS)_ An identifier containing a [string][String] name and a [position][Position].
-/// Exported under the `internals` feature only.
-///
-/// ## WARNING
-///
-/// This type is volatile and may change.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Ident {
-    pub name: String,
-    pub pos: Position,
-}
-
-impl Ident {
-    /// Create a new `Identifier`.
-    pub fn new(name: String, pos: Position) -> Self {
-        Self { name, pos }
-    }
-}
-
 /// _(INTERNALS)_ An identifier containing an [immutable string][ImmutableString] name and a [position][Position].
 /// Exported under the `internals` feature only.
 ///
@@ -666,28 +647,9 @@ impl Ident {
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct IdentX {
+pub struct Ident {
     pub name: ImmutableString,
     pub pos: Position,
-}
-
-impl From<Ident> for IdentX {
-    fn from(value: Ident) -> Self {
-        Self {
-            name: value.name.into(),
-            pos: value.pos,
-        }
-    }
-}
-
-impl IdentX {
-    /// Create a new `Identifier`.
-    pub fn new(name: impl Into<ImmutableString>, pos: Position) -> Self {
-        Self {
-            name: name.into(),
-            pos,
-        }
-    }
 }
 
 /// _(INTERNALS)_ A type encapsulating the mode of a `return`/`throw` statement.
@@ -729,9 +691,9 @@ pub enum Stmt {
     /// `for` id `in` expr `{` stmt `}`
     For(Expr, Box<(String, Stmt)>, Position),
     /// \[`export`\] `let` id `=` expr
-    Let(Box<IdentX>, Option<Expr>, bool, Position),
+    Let(Box<Ident>, Option<Expr>, bool, Position),
     /// \[`export`\] `const` id `=` expr
-    Const(Box<IdentX>, Option<Expr>, bool, Position),
+    Const(Box<Ident>, Option<Expr>, bool, Position),
     /// expr op`=` expr
     Assignment(Box<(Expr, Cow<'static, str>, Expr)>, Position),
     /// `{` stmt`;` ... `}`
@@ -748,13 +710,13 @@ pub enum Stmt {
     Return((ReturnType, Position), Option<Expr>, Position),
     /// `import` expr `as` var
     #[cfg(not(feature = "no_module"))]
-    Import(Expr, Option<Box<IdentX>>, Position),
+    Import(Expr, Option<Box<Ident>>, Position),
     /// `export` var `as` var `,` ...
     #[cfg(not(feature = "no_module"))]
-    Export(Vec<(IdentX, Option<IdentX>)>, Position),
+    Export(Vec<(Ident, Option<Ident>)>, Position),
     /// Convert a variable to shared.
     #[cfg(not(feature = "no_closure"))]
-    Share(IdentX),
+    Share(Ident),
 }
 
 impl Default for Stmt {
@@ -996,13 +958,13 @@ pub enum Expr {
     /// [ expr, ... ]
     Array(Box<StaticVec<Expr>>, Position),
     /// #{ name:expr, ... }
-    Map(Box<StaticVec<(IdentX, Expr)>>, Position),
+    Map(Box<StaticVec<(Ident, Expr)>>, Position),
     /// ()
     Unit(Position),
     /// Variable access - (optional index, optional modules, hash, variable name)
-    Variable(Box<(Option<NonZeroUsize>, Option<Box<NamespaceRef>>, u64, IdentX)>),
+    Variable(Box<(Option<NonZeroUsize>, Option<Box<NamespaceRef>>, u64, Ident)>),
     /// Property access - (getter, setter), prop
-    Property(Box<((ImmutableString, ImmutableString), IdentX)>),
+    Property(Box<((ImmutableString, ImmutableString), Ident)>),
     /// { [statement][Stmt] }
     Stmt(Box<StaticVec<Stmt>>, Position),
     /// Wrapped [expression][`Expr`] - should not be optimized away.
