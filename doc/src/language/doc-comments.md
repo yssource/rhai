@@ -1,6 +1,8 @@
 Doc-Comments
 ============
 
+{{#include ../links.md}}
+
 Similar to Rust, comments starting with `///` (three slashes) or `/**` (two asterisks) are
 _doc-comments_.
 
@@ -54,7 +56,6 @@ This is consistent with popular comment block styles for C-like languages.
  *                                      *
  ****************************************/
 ```
-
 
 
 Using Doc-Comments
