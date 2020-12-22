@@ -3,7 +3,7 @@
 use super::str::ImmutableStringDeserializer;
 use crate::dynamic::Union;
 use crate::stdlib::{any::type_name, boxed::Box, fmt, string::ToString};
-use crate::{Dynamic, EvalAltResult, ImmutableString, LexError, ParseErrorType, Position};
+use crate::{Dynamic, EvalAltResult, ImmutableString, LexError, Position};
 use serde::de::{
     DeserializeSeed, Deserializer, Error, IntoDeserializer, MapAccess, SeqAccess, Visitor,
 };
@@ -121,7 +121,6 @@ impl Error for Box<EvalAltResult> {
     fn custom<T: fmt::Display>(err: T) -> Self {
         LexError::ImproperSymbol("".to_string(), err.to_string())
             .into_err(Position::NONE)
-            .into()
             .into()
     }
 }

@@ -178,7 +178,9 @@ impl Engine {
             // Search for the native function
             // First search registered functions (can override packages)
             // Then search packages
-            // lib.get_fn(hash_fn, pub_only)
+            // Finally search modules
+
+            //lib.get_fn(hash_fn, pub_only)
             let f = self
                 .global_namespace
                 .get_fn(hash_fn, pub_only)
@@ -211,17 +213,16 @@ impl Engine {
 
             // See if the function match print/debug (which requires special processing)
             return Ok(match fn_name {
-                KEYWORD_PRINT => (
-                    (self.print)(result.as_str().map_err(|typ| {
+                KEYWORD_PRINT => {
+                    let text = result.as_str().map_err(|typ| {
                         EvalAltResult::ErrorMismatchOutputType(
                             self.map_type_name(type_name::<ImmutableString>()).into(),
                             typ.into(),
                             pos,
                         )
-                    })?)
-                    .into(),
-                    false,
-                ),
+                    })?;
+                    ((self.print)(text).into(), false)
+                }
                 KEYWORD_DEBUG => {
                     let text = result.as_str().map_err(|typ| {
                         EvalAltResult::ErrorMismatchOutputType(
