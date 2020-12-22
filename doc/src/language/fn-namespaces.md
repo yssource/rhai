@@ -15,10 +15,10 @@ allow combining all functions in one [`AST`] into another, forming a new, unifie
 
 In general, there are two types of _namespaces_ where functions are looked up:
 
-| Namespace | How Many | Source                                                                                                                                                                       | Lookup method                     | Sub-modules? | Variables? |
-| --------- | :------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | :----------: | :--------: |
-| Global    |   One    | 1) [`AST`] being evaluated<br/>2) `Engine::register_XXX` API<br/>3) [packages] loaded<br/>4) functions in [modules] loaded via `Engine::register_module` and marked _global_ | simple function name              |   ignored    |  ignored   |
-| Module    |   Many   | [`Module`]                                                                                                                                                                   | namespace-qualified function name |     yes      |    yes     |
+| Namespace | How Many | Source                                                                                                                                                                                                                                | Lookup method                     | Sub-modules? | Variables? |
+| --------- | :------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | :----------: | :--------: |
+| Global    |   One    | 1) [`AST`] being evaluated<br/>2) `Engine::register_XXX` API<br/>3) global [modules] loaded via `Engine::register_global_module`<br/>4) functions in static [modules] loaded via `Engine::register_static_module` and marked _global_ | simple function name              |   ignored    |  ignored   |
+| Module    |   Many   | [`Module`]                                                                                                                                                                                                                            | namespace-qualified function name |     yes      |    yes     |
 
 
 Module Namespace
@@ -52,9 +52,10 @@ There is one _global_ namespace for every [`Engine`], which includes (in the fol
 
 * All native Rust functions and iterators registered via the `Engine::register_XXX` API.
 
-* All functions and iterators defined in [packages] that are loaded into the [`Engine`].
+* All functions and iterators defined in global [modules] that are registered into the [`Engine`] via
+  `Engine::register_global_module`.
 
-* Functions defined in [modules] loaded via `Engine::register_module` that are specifically marked
+* Functions defined in [modules] loaded via `Engine::register_static_module` that are specifically marked
   for exposure to the global namespace (e.g. via the `#[rhai(global)]` attribute in a [plugin module]).
 
 Anywhere in a Rhai script, when a function call is made, the function is searched within the

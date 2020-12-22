@@ -2,22 +2,12 @@
 
 use crate::stdlib::{format, string::String};
 use crate::token::{is_valid_identifier, Token};
-use crate::{Engine, Module, Shared};
+use crate::Engine;
 
 #[cfg(not(feature = "no_module"))]
 use crate::stdlib::boxed::Box;
 
 impl Engine {
-    /// Load a new package into the [`Engine`].
-    /// A simple [`Module`][crate::Module] is automatically converted into a package.
-    ///
-    /// When searching for functions, packages loaded later are preferred.
-    /// In other words, loaded packages are searched in reverse order.
-    #[inline(always)]
-    pub fn load_package(&mut self, package: impl Into<Shared<Module>>) -> &mut Self {
-        self.packages.insert(0, package.into());
-        self
-    }
     /// Control whether and how the [`Engine`] will optimize an [`AST`][crate::AST] after compilation.
     ///
     /// Not available under the `no_optimize` feature.

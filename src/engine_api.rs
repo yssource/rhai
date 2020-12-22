@@ -14,8 +14,8 @@ use crate::stdlib::{
 };
 use crate::utils::get_hasher;
 use crate::{
-    scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, NativeCallContext,
-    ParseError, Position, AST,
+    scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Module, NativeCallContext,
+    ParseError, Position, Shared, AST,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -723,7 +723,23 @@ impl Engine {
         self.register_indexer_get(getter)
             .register_indexer_set(setter)
     }
-    /// Register a [`Module`][crate::Module] as a fixed module namespace with the [`Engine`].
+    /// Register a shared [`Module`][crate::Module] into the global namespace of [`Engine`].
+    ///
+    /// All functions and type iterators are automatically available to scripts without namespace qualifications.
+    ///
+    /// Sub-modules and variables are **ignored**.
+    ///
+    /// When searching for functions, modules loaded later are preferred.
+    /// In other words, loaded modules are searched in reverse order.
+    #[inline(always)]
+    pub fn register_global_module(&mut self, package: impl Into<Shared<Module>>) -> &mut Self {
+        // Insert the module into the front
+        self.global_modules.insert(0, package.into());
+        self
+    }
+    /// Register a shared [`Module`][crate::Module] as a static module namespace with the [`Engine`].
+    ///
+    /// Functions marked `FnNamespace::Global` and type iterators are exposed to scripts without namespace qualifications.
     ///
     /// # Example
     ///
@@ -738,17 +754,17 @@ impl Engine {
     /// module.set_fn_1("calc", |x: i64| Ok(x + 1));
     ///
     /// // Register the module as a fixed sub-module
-    /// engine.register_module("CalcService", module);
+    /// engine.register_static_module("CalcService", module);
     ///
     /// assert_eq!(engine.eval::<i64>("CalcService::calc(41)")?, 42);
     /// # Ok(())
     /// # }
     /// ```
     #[cfg(not(feature = "no_module"))]
-    pub fn register_module(
+    pub fn register_static_module(
         &mut self,
         name: impl Into<crate::ImmutableString>,
-        module: impl Into<crate::Shared<crate::Module>>,
+        module: impl Into<Shared<Module>>,
     ) -> &mut Self {
         let module = module.into();
 
@@ -1681,7 +1697,11 @@ impl Engine {
         });
 
         if include_packages {
-            signatures.extend(self.packages.iter().flat_map(|m| m.gen_fn_signatures()));
+            signatures.extend(
+                self.global_modules
+                    .iter()
+                    .flat_map(|m| m.gen_fn_signatures()),
+            );
         }
 
         signatures

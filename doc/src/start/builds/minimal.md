@@ -49,6 +49,6 @@ Use a Raw [`Engine`]
 A _raw_ engine supports, out of the box, only a very [restricted set]({{rootUrl}}/engine/raw.md#built-in-operators)
 of basic arithmetic and logical operators.
 
-Selectively include other necessary functionalities by loading specific [packages] to minimize the footprint.
+Selectively include other necessary functionalities by picking specific [packages] to minimize the footprint.
 
-Packages are sharable (even across threads via the [`sync`] feature), so they only have to be created once.
+Packages are shared (even across threads via the [`sync`] feature), so they only have to be created once.

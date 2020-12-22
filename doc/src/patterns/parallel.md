@@ -20,7 +20,8 @@ Usage Scenario
 Key Concepts
 ------------
 
-* Create a single instance of each standard [package] required.  To duplicate `Engine::new`, create a [`StandardPackage`]({{rootUrl}}/rust/packages/builtin.md).
+* Create a single instance of each standard [package] required.
+  To duplicate `Engine::new`, create a [`StandardPackage`]({{rootUrl}}/rust/packages/builtin.md).
 
 * Gather up all common custom functions into a [custom package].
 
@@ -29,10 +30,14 @@ Key Concepts
 * Always use `Engine::new_raw` to create a [raw `Engine`], instead of `Engine::new` which is _much_ more expensive.
   A [raw `Engine`] is _extremely_ cheap to create.
   
-  Loading the [`StandardPackage`]({{rootUrl}}/rust/packages/builtin.md) into a [raw `Engine`] via `Engine::load_package` is essentially the same as `Engine::new`.
-  But because packages are shared, loading an existing package is _much cheaper_ than registering all the functions one by one.
+  Registering the [`StandardPackage`]({{rootUrl}}/rust/packages/builtin.md) into a [raw `Engine`] via
+  `Engine::register_global_module` is essentially the same as `Engine::new`.
+  
+  However, because packages are shared, using existing package is _much cheaper_ than
+  registering all the functions one by one.
 
-* Load the required packages into the [raw `Engine`] via `Engine::load_package`, using `Package::get` to obtain a shared copy.
+* Register the required packages with the [raw `Engine`] via `Engine::register_global_module`,
+  using `Package::as_shared_module` to obtain a shared [module].
 
 
 Examples
@@ -46,17 +51,17 @@ let std_pkg = StandardPackage::new();
 let custom_pkg = MyCustomPackage::new();
 
 let make_call = |x: i64| -> Result<(), Box<EvalAltResult>> {
-    // Create a raw Engine - extremely cheap.
+    // Create a raw Engine - extremely cheap
     let mut engine = Engine::new_raw();
 
-    // Load packages - cheap.
-    engine.load_package(std_pkg.get());
-    engine.load_package(custom_pkg.get());
+    // Register packages as global modules - cheap
+    engine.register_global_module(std_pkg.as_shared_module());
+    engine.register_global_module(custom_pkg.as_shared_module());
 
-    // Create custom scope - cheap.
+    // Create custom scope - cheap
     let mut scope = Scope::new();
 
-    // Push variable into scope - relatively cheap.
+    // Push variable into scope - relatively cheap
     scope.push("x", x);
 
     // Evaluate script.

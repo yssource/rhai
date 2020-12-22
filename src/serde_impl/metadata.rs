@@ -219,17 +219,17 @@ impl Engine {
     /// Functions from the following sources are included:
     /// 1) Functions defined in an [`AST`][crate::AST]
     /// 2) Functions registered into the global namespace
-    /// 3) Functions in registered sub-modules
-    /// 4) Functions in packages (optional)
+    /// 3) Functions in static modules
+    /// 4) Functions in global modules (optional)
     pub fn gen_fn_metadata_with_ast_to_json(
         &self,
         ast: &AST,
-        include_packages: bool,
+        include_global: bool,
     ) -> serde_json::Result<String> {
         let mut global: ModuleMetadata = Default::default();
 
-        if include_packages {
-            self.packages
+        if include_global {
+            self.global_modules
                 .iter()
                 .flat_map(|m| m.iter_fn().map(|f| f.into()))
                 .for_each(|info| global.functions.push(info));
@@ -260,9 +260,9 @@ impl Engine {
     ///
     /// Functions from the following sources are included:
     /// 1) Functions registered into the global namespace
-    /// 2) Functions in registered sub-modules
-    /// 3) Functions in packages (optional)
-    pub fn gen_fn_metadata_to_json(&self, include_packages: bool) -> serde_json::Result<String> {
-        self.gen_fn_metadata_with_ast_to_json(&Default::default(), include_packages)
+    /// 2) Functions in static modules
+    /// 3) Functions in global modules (optional)
+    pub fn gen_fn_metadata_to_json(&self, include_global: bool) -> serde_json::Result<String> {
+        self.gen_fn_metadata_with_ast_to_json(&Default::default(), include_global)
     }
 }

@@ -613,8 +613,8 @@ pub struct Engine {
 
     /// A module containing all functions directly loaded into the Engine.
     pub(crate) global_namespace: Module,
-    /// A collection of all library packages loaded into the Engine.
-    pub(crate) packages: StaticVec<Shared<Module>>,
+    /// A collection of all modules loaded into the global namespace of the Engine.
+    pub(crate) global_modules: StaticVec<Shared<Module>>,
     /// A collection of all sub-modules directly loaded into the Engine.
     pub(crate) global_sub_modules: Imports,
 
@@ -745,8 +745,8 @@ impl Engine {
         let mut engine = Self {
             id: Default::default(),
 
-            packages: Default::default(),
             global_namespace: Default::default(),
+            global_modules: Default::default(),
             global_sub_modules: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
@@ -798,20 +798,20 @@ impl Engine {
             disable_doc_comments: false,
         };
 
-        engine.load_package(StandardPackage::new().get());
+        engine.register_global_module(StandardPackage::new().as_shared_module());
 
         engine
     }
 
     /// Create a new [`Engine`] with minimal built-in functions.
-    /// Use the [`load_package`][Engine::load_package] method to load additional packages of functions.
+    /// Use the [`register_global_module`][Engine::register_global_module] method to load additional packages of functions.
     #[inline]
     pub fn new_raw() -> Self {
         Self {
             id: Default::default(),
 
-            packages: Default::default(),
             global_namespace: Default::default(),
+            global_modules: Default::default(),
             global_sub_modules: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
@@ -1971,7 +1971,11 @@ impl Engine {
                     match self
                         .global_namespace
                         .get_fn(hash_fn, false)
-                        .or_else(|| self.packages.iter().find_map(|m| m.get_fn(hash_fn, false)))
+                        .or_else(|| {
+                            self.global_modules
+                                .iter()
+                                .find_map(|m| m.get_fn(hash_fn, false))
+                        })
                         .or_else(|| mods.get_fn(hash_fn))
                     {
                         // op= function registered as method
@@ -2180,7 +2184,11 @@ impl Engine {
                 let func = self
                     .global_namespace
                     .get_iter(iter_type)
-                    .or_else(|| self.packages.iter().find_map(|m| m.get_iter(iter_type)))
+                    .or_else(|| {
+                        self.global_modules
+                            .iter()
+                            .find_map(|m| m.get_iter(iter_type))
+                    })
                     .or_else(|| mods.get_iter(iter_type));
 
                 if let Some(func) = func {

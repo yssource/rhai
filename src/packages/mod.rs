@@ -1,8 +1,6 @@
 //! Module containing all built-in _packages_ available to Rhai, plus facilities to define custom packages.
 
-use crate::fn_native::{CallableFunction, IteratorFn};
-use crate::stdlib::{any::TypeId, string::String};
-use crate::{Module, Shared, StaticVec};
+use crate::{Module, Shared};
 
 pub(crate) mod arithmetic;
 mod array_basic;
@@ -39,7 +37,7 @@ pub trait Package {
     fn init(lib: &mut Module);
 
     /// Retrieve the generic package library from this package.
-    fn get(&self) -> Shared<Module>;
+    fn as_shared_module(&self) -> Shared<Module>;
 }
 
 /// Macro that makes it easy to define a _package_ (which is basically a shared module)
@@ -71,7 +69,7 @@ macro_rules! def_package {
         pub struct $package($root::Shared<$root::Module>);
 
         impl $root::packages::Package for $package {
-            fn get(&self) -> $root::Shared<$root::Module> {
+            fn as_shared_module(&self) -> $root::Shared<$root::Module> {
                 self.0.clone()
             }
 

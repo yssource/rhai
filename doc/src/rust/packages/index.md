@@ -3,16 +3,17 @@ Packages
 
 {{#include ../../links.md}}
 
-Standard built-in Rhai features are provided in various _packages_ that can be loaded via a call to `Engine::load_package`.
+Standard built-in Rhai features are provided in various _packages_ that can be registered into the
+_global namespace_ of an [`Engine`] via `Engine::register_global_module`.
 
 Packages reside under `rhai::packages::*` and the trait `rhai::packages::Package` must be loaded in order for
 packages to be used.
 
 Packages typically contain Rust functions that are callable within a Rhai script.
-All functions registered in a package is loaded under the _global namespace_
+All _top-level_ functions in a package are available under the _global namespace_
 (i.e. they're available without namespace qualifiers).
 
-Once a package is created (e.g. via `Package::new`), it can be _shared_ (via `Package::get`)
+Once a package is created (e.g. via `Package::new`), it can be _shared_ (via `Package::as_shared_module`)
 among multiple instances of [`Engine`], even across threads (under [`sync`]).
 Therefore, a package only has to be created _once_.
 
@@ -21,43 +22,21 @@ use rhai::Engine;
 use rhai::packages::Package         // load the 'Package' trait to use packages
 use rhai::packages::CorePackage;    // the 'core' package contains basic functionalities (e.g. arithmetic)
 
-let mut engine = Engine::new_raw(); // create a 'raw' Engine
-let package = CorePackage::new();   // create a package - can be shared among multiple `Engine` instances
+// Create a 'raw' Engine
+let mut engine = Engine::new_raw();
 
-engine.load_package(package.get()); // load the package manually. 'get' returns a reference to the shared package
+// Create a package - can be shared among multiple `Engine` instances
+let package = CorePackage::new();
+
+// Register the package into the global namespace.
+// 'Package::as_shared_module' converts the package into a shared module.
+engine.register_global_module(package.as_shared_module());
 ```
 
 
-Difference Between a Package and a Module
-----------------------------------------
+Share a Package Among `Engine`s
+------------------------------
 
-Packages are internally implemented as [modules], so they share a lot of behavior and characteristics.
+`Engine::register_global_module` consumes the input shared module.
 
-The main difference is that a package loads under the _global_ namespace, while a module loads under its own
-namespace alias specified in an [`import`] statement (see also [modules]).
-
-A package is _static_ (i.e. pre-loaded into an [`Engine`]), while a module is _dynamic_ (i.e. loaded with
-the `import` statement).
-
-Sub-modules in a package are _flattened_, meaning that functions from them must be pulled up to the root level.
-In other words, there can be no sub-modules in a package, and everything should reside in one, flat namespace.
-
-Only functions matter for a package.  Constant variables registered in a package are ignored.
-
-
-Load a Module as a Package
---------------------------
-
-Stand-alone [modules] can be loaded directly into an [`Engine`] as a package via the same `Engine::load_package` API.
-
-```rust
-let mut module = Module::new();
-        :
-    // add functions into module
-        :
-
-engine.load_package(module);
-```
-
-[Modules], however, are not _shared_, so use a [custom package] if it must be shared among multiple
-instances of [`Engine`].
+However, `Package::as_shared_module` can be called multiple times for multiple instances of [`Engine`].

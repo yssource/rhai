@@ -52,7 +52,7 @@ fn test_generated_ops() -> Result<(), Box<EvalAltResult>> {
     register_in_bulk!(m, add, i8, i16, i32, i64);
     register_in_bulk!(m, mul, i8, i16, i32, i64);
 
-    engine.load_package(m);
+    engine.register_global_module(m);
 
     #[cfg(feature = "only_i32")]
     assert_eq!(engine.eval::<INT>("let a = 0; add_i32(a, 1)")?, 1);

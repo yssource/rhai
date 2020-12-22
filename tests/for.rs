@@ -101,7 +101,7 @@ fn test_for_module_iterator() -> Result<(), Box<EvalAltResult>> {
     let mut module = Module::new();
     module.set_sub_module("inner", sub_module);
 
-    engine.register_module("testing", module);
+    engine.register_static_module("testing", module);
 
     let script = r#"
         let item = testing::inner::new_ts();

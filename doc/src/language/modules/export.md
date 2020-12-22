@@ -4,7 +4,7 @@ Export Variables, Functions and Sub-Modules in Module
 {{#include ../../links.md}}
 
 
-The easiest way to expose a package of functions as a self-contained [module] is to do it via a Rhai script itself.
+The easiest way to expose a collection of functions as a self-contained [module] is to do it via a Rhai script itself.
 
 See the section on [_Creating a Module from AST_]({{rootUrl}}/rust/modules/ast.md) for more details.
 

@@ -28,11 +28,11 @@ and is custom fit to each exported item.
 All `pub` functions become registered functions, all `pub` constants become [module] constant variables,
 and all sub-modules become Rhai sub-modules.
 
-This Rust module can then either be loaded into an [`Engine`] as a normal [module] or
-registered as a [package]. This is done by using the `exported_module!` macro.
+This Rust module can then be registered into an [`Engine`] as a normal [module].
+This is done via the `exported_module!` macro.
 
-The macro `combine_with_exported_module!` can also be used to _combine_ all the functions
-and variables into an existing module, _flattening_ the namespace - i.e. all sub-modules
+The macro `combine_with_exported_module!` can be used to _combine_ all the functions
+and variables into an existing [module], _flattening_ the namespace - i.e. all sub-modules
 are eliminated and their contents promoted to the top level.  This is typical for
 developing [custom packages].
 
@@ -42,7 +42,7 @@ use rhai::plugin::*;        // a "prelude" import for macros
 #[export_module]
 mod my_module {
     // This constant will be registered as the constant variable 'MY_NUMBER'.
-    // Ignored when loaded as a package.
+    // Ignored when registered as a global module.
     pub const MY_NUMBER: i64 = 42;
 
     // This function will be registered as 'greet'.
@@ -64,9 +64,9 @@ mod my_module {
         42
     }
 
-    // Sub-modules are ignored when the Module is loaded as a package.
+    // Sub-modules are ignored when the module is registered globally.
     pub mod my_sub_module {
-        // This function is ignored when loaded as a package.
+        // This function is ignored when registered globally.
         // Otherwise it is a valid registered function under a sub-module.
         pub fn get_info() -> String {
             "hello".to_string()
@@ -78,7 +78,7 @@ mod my_module {
     // This is currently a limitation of the plugin procedural macros.
     #[cfg(feature = "advanced_functions")]
     pub mod advanced {
-        // This function is ignored when loaded as a package.
+        // This function is ignored when registered globally.
         // Otherwise it is a valid registered function under a sub-module
         // which only exists when the 'advanced_functions' feature is used.
         pub fn advanced_calc(input: i64) -> i64 {
@@ -88,10 +88,10 @@ mod my_module {
 }
 ```
 
-### Use `Engine::load_package`
+### Use `Engine::register_global_module`
 
-The simplest way to load this into an [`Engine`] is to first use the `exported_module!` macro
-to turn it into a normal Rhai [module], then use the `Engine::load_package` method on it:
+The simplest way to register this into an [`Engine`] is to first use the `exported_module!` macro
+to turn it into a normal Rhai [module], then use the `Engine::register_global_module` method on it:
 
 ```rust
 fn main() {
@@ -100,13 +100,13 @@ fn main() {
     // The macro call creates a Rhai module from the plugin module.
     let module = exported_module!(my_module);
 
-    // A module can simply be loaded, registering all public functions.
-    engine.load_package(module);
+    // A module can simply be registered into the global namespace.
+    engine.register_global_module(module);
 }
 ```
 
 The functions contained within the module definition (i.e. `greet`, `get_num` and `increment`)
-are automatically registered into the [`Engine`] when `Engine::load_package` is called.
+are automatically registered into the [`Engine`] when `Engine::register_global_module` is called.
 
 ```rust
 let x = greet("world");
@@ -123,12 +123,14 @@ x == 43;
 ```
 
 Notice that, when using a [module] as a [package], only functions registered at the _top level_
-can be accessed.  Variables as well as sub-modules are ignored.
+can be accessed.
 
-### Use `Engine::register_module`
+Variables as well as sub-modules are **ignored**.
 
-Another simple way to load this into an [`Engine`] is, again, to use the `exported_module!` macro
-to turn it into a normal Rhai [module], then use the `Engine::register_module` method on it:
+### Use `Engine::register_static_module`
+
+Another simple way to register this into an [`Engine`] is, again, to use the `exported_module!` macro
+to turn it into a normal Rhai [module], then use the `Engine::register_static_module` method on it:
 
 ```rust
 fn main() {
@@ -137,13 +139,13 @@ fn main() {
     // The macro call creates a Rhai module from the plugin module.
     let module = exported_module!(my_module);
 
-    // A module can simply be loaded as a globally-available module.
-    engine.register_module("service", module);
+    // A module can simply be registered as a static module namespace.
+    engine.register_static_module("service", module);
 }
 ```
 
 The functions contained within the module definition (i.e. `greet`, `get_num` and `increment`),
-plus the constant `MY_NUMBER`, are automatically loaded under the module namespace `service`:
+plus the constant `MY_NUMBER`, are automatically registered under the module namespace `service`:
 
 ```rust
 let x = service::greet("world");
@@ -178,14 +180,14 @@ x.increment();
 x == 43;
 ```
 
-### Use as loadable `Module`
+### Use Dynamically
 
 Using this directly as a dynamically-loadable Rhai [module] is almost the same, except that a
 [module resolver] must be used to serve the module, and the module is loaded via `import` statements.
 
 See the [module] section for more information.
 
-### Use as custom package
+### Combine into Custom Package
 
 Finally the plugin module can also be used to develop a [custom package],
 using `combine_with_exported_module!`:
