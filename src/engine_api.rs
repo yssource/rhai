@@ -1681,7 +1681,7 @@ impl Engine {
         });
 
         if include_packages {
-            signatures.extend(self.packages.gen_fn_signatures());
+            signatures.extend(self.packages.iter().flat_map(|m| m.gen_fn_signatures()));
         }
 
         signatures

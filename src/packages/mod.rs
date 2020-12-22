@@ -39,71 +39,7 @@ pub trait Package {
     fn init(lib: &mut Module);
 
     /// Retrieve the generic package library from this package.
-    fn get(&self) -> PackageLibrary;
-}
-
-/// A sharable [`Module`][crate::Module] to facilitate sharing library instances.
-pub type PackageLibrary = Shared<Module>;
-
-/// Type containing a collection of [`PackageLibrary`] instances.
-/// All function and type iterator keys in the loaded packages are indexed for fast access.
-#[derive(Debug, Clone, Default)]
-pub(crate) struct PackagesCollection(Option<StaticVec<PackageLibrary>>);
-
-impl PackagesCollection {
-    /// Add a [`PackageLibrary`] into the [`PackagesCollection`].
-    ///
-    /// Packages are searched in reverse order.
-    pub fn add(&mut self, package: PackageLibrary) {
-        if self.0.is_none() {
-            self.0 = Some(Default::default());
-        }
-        // Later packages override previous ones.
-        self.0.as_mut().unwrap().insert(0, package);
-    }
-    /// Does the specified function hash key exist in the [`PackagesCollection`]?
-    #[allow(dead_code)]
-    pub fn contains_fn(&self, hash: u64) -> bool {
-        if hash == 0 {
-            false
-        } else {
-            self.0
-                .as_ref()
-                .map_or(false, |x| x.iter().any(|p| p.contains_fn(hash, false)))
-        }
-    }
-    /// Get specified function via its hash key.
-    pub fn get_fn(&self, hash: u64) -> Option<&CallableFunction> {
-        if hash == 0 {
-            None
-        } else {
-            self.0
-                .as_ref()
-                .and_then(|x| x.iter().find_map(|p| p.get_fn(hash, false)))
-        }
-    }
-    /// Does the specified [`TypeId`] iterator exist in the [`PackagesCollection`]?
-    #[allow(dead_code)]
-    pub fn contains_iter(&self, id: TypeId) -> bool {
-        self.0
-            .as_ref()
-            .map_or(false, |x| x.iter().any(|p| p.contains_iter(id)))
-    }
-    /// Get the specified [`TypeId`] iterator.
-    pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
-        self.0
-            .as_ref()
-            .and_then(|x| x.iter().find_map(|p| p.get_iter(id)))
-    }
-    /// Get an iterator over all the packages in the [`PackagesCollection`].
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &PackageLibrary> {
-        self.0.iter().flat_map(|p| p.iter())
-    }
-
-    /// Generate signatures for all the functions in the [`PackagesCollection`].
-    pub fn gen_fn_signatures<'a>(&'a self) -> impl Iterator<Item = String> + 'a {
-        self.iter().flat_map(|m| m.gen_fn_signatures())
-    }
+    fn get(&self) -> Shared<Module>;
 }
 
 /// Macro that makes it easy to define a _package_ (which is basically a shared module)
@@ -132,10 +68,10 @@ impl PackagesCollection {
 macro_rules! def_package {
     ($root:ident : $package:ident : $comment:expr , $lib:ident , $block:stmt) => {
         #[doc=$comment]
-        pub struct $package($root::packages::PackageLibrary);
+        pub struct $package($root::Shared<$root::Module>);
 
         impl $root::packages::Package for $package {
-            fn get(&self) -> $root::packages::PackageLibrary {
+            fn get(&self) -> $root::Shared<$root::Module> {
                 self.0.clone()
             }
 

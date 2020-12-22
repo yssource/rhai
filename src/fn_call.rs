@@ -184,7 +184,7 @@ impl Engine {
             let f = self
                 .global_namespace
                 .get_fn(hash_fn, pub_only)
-                .or_else(|| self.packages.get_fn(hash_fn))
+                .or_else(|| self.packages.iter().find_map(|m| m.get_fn(hash_fn, false)))
                 .or_else(|| mods.get_fn(hash_fn));
 
             state.functions_cache.insert(hash_fn, f.cloned());
@@ -460,8 +460,8 @@ impl Engine {
             //|| (hash_script != 0 && self.global_namespace.contains_fn(hash_script, pub_only))
             || self.global_namespace.contains_fn(hash_fn, false)
             // Then check packages
-            || (hash_script != 0 && self.packages.contains_fn(hash_script))
-            || self.packages.contains_fn(hash_fn)
+            || (hash_script != 0 && self.packages.iter().any(|m| m.contains_fn(hash_script, false)))
+            || self.packages.iter().any(|m| m.contains_fn(hash_fn, false))
             // Then check imported modules
             || (hash_script != 0 && mods.map(|m| m.contains_fn(hash_script)).unwrap_or(false))
             || mods.map(|m| m.contains_fn(hash_fn)).unwrap_or(false)
@@ -541,7 +541,12 @@ impl Engine {
                             .map(|f| (f, m.id_raw().clone()))
                     })
                     //.or_else(|| self.global_namespace.get_fn(hash_script, pub_only))
-                    .or_else(|| self.packages.get_fn(hash_script).map(|f| (f, None)))
+                    .or_else(|| {
+                        self.packages
+                            .iter()
+                            .find_map(|m| m.get_fn(hash_script, false))
+                            .map(|f| (f, None))
+                    })
                     //.or_else(|| mods.iter().find_map(|(_, m)| m.get_qualified_fn(hash_script).map(|f| (f, m.id_raw().clone()))))
                     .unwrap();
 
