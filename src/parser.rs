@@ -1,8 +1,6 @@
 //! Main module defining the lexer and parser.
 
-use crate::ast::{
-    BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, ScriptFnDef, Stmt,
-};
+use crate::ast::{BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, ReturnType, ScriptFnDef, Stmt};
 use crate::dynamic::{AccessMode, Union};
 use crate::engine::KEYWORD_THIS;
 use crate::module::NamespaceRef;
@@ -703,7 +701,7 @@ fn parse_map_literal(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let mut map: StaticVec<(IdentX, Expr)> = Default::default();
+    let mut map: StaticVec<(Ident, Expr)> = Default::default();
 
     loop {
         const MISSING_RBRACE: &str = "to end this object map literal";
@@ -773,7 +771,8 @@ fn parse_map_literal(
         }
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
-        map.push((IdentX::new(name, pos), expr));
+        let name = state.get_interned_string(name);
+        map.push((Ident { name, pos }, expr));
 
         match input.peek().unwrap() {
             (Token::Comma, _) => {
@@ -970,7 +969,10 @@ fn parse_primary(
             {
                 state.allow_capture = true;
             }
-            let var_name_def = IdentX::new(state.get_interned_string(s), settings.pos);
+            let var_name_def = Ident {
+                name: state.get_interned_string(s),
+                pos: settings.pos,
+            };
             Expr::Variable(Box::new((None, None, 0, var_name_def)))
         }
         // Namespace qualification
@@ -981,20 +983,29 @@ fn parse_primary(
             {
                 state.allow_capture = true;
             }
-            let var_name_def = IdentX::new(state.get_interned_string(s), settings.pos);
+            let var_name_def = Ident {
+                name: state.get_interned_string(s),
+                pos: settings.pos,
+            };
             Expr::Variable(Box::new((None, None, 0, var_name_def)))
         }
         // Normal variable access
         Token::Identifier(s) => {
             let index = state.access_var(&s, settings.pos);
-            let var_name_def = IdentX::new(state.get_interned_string(s), settings.pos);
+            let var_name_def = Ident {
+                name: state.get_interned_string(s),
+                pos: settings.pos,
+            };
             Expr::Variable(Box::new((index, None, 0, var_name_def)))
         }
 
         // Function call is allowed to have reserved keyword
         Token::Reserved(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
             if is_keyword_function(&s) {
-                let var_name_def = IdentX::new(state.get_interned_string(s), settings.pos);
+                let var_name_def = Ident {
+                    name: state.get_interned_string(s),
+                    pos: settings.pos,
+                };
                 Expr::Variable(Box::new((None, None, 0, var_name_def)))
             } else {
                 return Err(PERR::Reserved(s).into_err(settings.pos));
@@ -1007,7 +1018,10 @@ fn parse_primary(
                 let msg = format!("'{}' can only be used in functions", s);
                 return Err(LexError::ImproperSymbol(s, msg).into_err(settings.pos));
             } else {
-                let var_name_def = IdentX::new(state.get_interned_string(s), settings.pos);
+                let var_name_def = Ident {
+                    name: state.get_interned_string(s),
+                    pos: settings.pos,
+                };
                 Expr::Variable(Box::new((None, None, 0, var_name_def)))
             }
         }
@@ -1067,13 +1081,13 @@ fn parse_primary(
                     .into_err(pos));
                 }
 
-                let (_, modules, _, IdentX { name, pos }) = *x;
+                let (_, modules, _, Ident { name, pos }) = *x;
                 settings.pos = pos;
                 parse_fn_call(input, state, lib, name, true, modules, settings.level_up())?
             }
             // Function call
             (Expr::Variable(x), Token::LeftParen) => {
-                let (_, modules, _, IdentX { name, pos }) = *x;
+                let (_, modules, _, Ident { name, pos }) = *x;
                 settings.pos = pos;
                 parse_fn_call(input, state, lib, name, false, modules, settings.level_up())?
             }
@@ -1091,7 +1105,10 @@ fn parse_primary(
                         modules = Some(Box::new(m));
                     }
 
-                    let var_name_def = IdentX::new(state.get_interned_string(id2), pos2);
+                    let var_name_def = Ident {
+                        name: state.get_interned_string(id2),
+                        pos: pos2,
+                    };
                     Expr::Variable(Box::new((index, modules, 0, var_name_def)))
                 }
                 (Token::Reserved(id2), pos2) if is_valid_identifier(id2.chars()) => {
@@ -1129,7 +1146,7 @@ fn parse_primary(
         _ => None,
     }
     .map(|x| {
-        let (_, modules, hash, IdentX { name, .. }) = x.as_mut();
+        let (_, modules, hash, Ident { name, .. }) = x.as_mut();
         let namespace = modules.as_mut().unwrap();
 
         // Qualifiers + variable name
@@ -1311,58 +1328,46 @@ fn make_assignment_stmt<'a>(
     state: &mut ParseState,
     lhs: Expr,
     rhs: Expr,
-    pos: Position,
+    op_pos: Position,
 ) -> Result<Stmt, ParseError> {
     match &lhs {
         // var (non-indexed) = rhs
-        Expr::Variable(x) if x.0.is_none() => {
-            Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
-        }
+        Expr::Variable(x) if x.0.is_none() => Ok(Stmt::Assignment(
+            Box::new((lhs, fn_name.into(), rhs)),
+            op_pos,
+        )),
         // var (indexed) = rhs
         Expr::Variable(x) => {
-            let (
-                index,
-                _,
-                _,
-                IdentX {
-                    name,
-                    pos: name_pos,
-                },
-            ) = x.as_ref();
+            let (index, _, _, Ident { name, pos }) = x.as_ref();
             match state.stack[(state.stack.len() - index.unwrap().get())].1 {
-                AccessMode::ReadWrite => {
-                    Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
-                }
+                AccessMode::ReadWrite => Ok(Stmt::Assignment(
+                    Box::new((lhs, fn_name.into(), rhs)),
+                    op_pos,
+                )),
                 // Constant values cannot be assigned to
                 AccessMode::ReadOnly => {
-                    Err(PERR::AssignmentToConstant(name.to_string()).into_err(*name_pos))
+                    Err(PERR::AssignmentToConstant(name.to_string()).into_err(*pos))
                 }
             }
         }
         // xxx[???] = rhs, xxx.??? = rhs
         Expr::Index(x, _) | Expr::Dot(x, _) => match &x.lhs {
             // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
-            Expr::Variable(x) if x.0.is_none() => {
-                Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
-            }
+            Expr::Variable(x) if x.0.is_none() => Ok(Stmt::Assignment(
+                Box::new((lhs, fn_name.into(), rhs)),
+                op_pos,
+            )),
             // var[???] (indexed) = rhs, var.??? (indexed) = rhs
             Expr::Variable(x) => {
-                let (
-                    index,
-                    _,
-                    _,
-                    IdentX {
-                        name,
-                        pos: name_pos,
-                    },
-                ) = x.as_ref();
+                let (index, _, _, Ident { name, pos }) = x.as_ref();
                 match state.stack[(state.stack.len() - index.unwrap().get())].1 {
-                    AccessMode::ReadWrite => {
-                        Ok(Stmt::Assignment(Box::new((lhs, fn_name.into(), rhs)), pos))
-                    }
+                    AccessMode::ReadWrite => Ok(Stmt::Assignment(
+                        Box::new((lhs, fn_name.into(), rhs)),
+                        op_pos,
+                    )),
                     // Constant values cannot be assigned to
                     AccessMode::ReadOnly => {
-                        Err(PERR::AssignmentToConstant(name.to_string()).into_err(*name_pos))
+                        Err(PERR::AssignmentToConstant(name.to_string()).into_err(*pos))
                     }
                 }
             }
@@ -1378,7 +1383,7 @@ fn make_assignment_stmt<'a>(
             "=".to_string(),
             "Possibly a typo of '=='?".to_string(),
         )
-        .into_err(pos)),
+        .into_err(op_pos)),
         // expr = rhs
         _ => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(lhs.position())),
     }
@@ -1883,11 +1888,11 @@ fn parse_custom_syntax(
         match required_token.as_str() {
             MARKER_IDENT => match input.next().unwrap() {
                 (Token::Identifier(s), pos) => {
-                    let ident = state.get_interned_string(s);
-                    let var_name_def = IdentX::new(ident.clone(), pos);
-                    keywords.push(Expr::Variable(Box::new((None, None, 0, var_name_def))));
-                    segments.push(ident);
+                    let name = state.get_interned_string(s);
+                    segments.push(name.clone());
                     tokens.push(state.get_interned_string(MARKER_IDENT));
+                    let var_name_def = Ident { name, pos };
+                    keywords.push(Expr::Variable(Box::new((None, None, 0, var_name_def))));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
@@ -2208,16 +2213,16 @@ fn parse_let(
     match var_type {
         // let name = expr
         AccessMode::ReadWrite => {
-            let var_name = state.get_interned_string(name.clone());
-            state.stack.push((var_name, AccessMode::ReadWrite));
-            let var_def = IdentX::new(name, pos);
+            let name = state.get_interned_string(name);
+            state.stack.push((name.clone(), AccessMode::ReadWrite));
+            let var_def = Ident { name, pos };
             Ok(Stmt::Let(Box::new(var_def), init_expr, export, token_pos))
         }
         // const name = { expr:constant }
         AccessMode::ReadOnly => {
-            let var_name = state.get_interned_string(name.clone());
-            state.stack.push((var_name, AccessMode::ReadOnly));
-            let var_def = IdentX::new(name, pos);
+            let name = state.get_interned_string(name);
+            state.stack.push((name.clone(), AccessMode::ReadOnly));
+            let var_def = Ident { name, pos };
             Ok(Stmt::Const(Box::new(var_def), init_expr, export, token_pos))
         }
     }
@@ -2261,7 +2266,10 @@ fn parse_import(
 
     Ok(Stmt::Import(
         expr,
-        Some(Box::new(IdentX::new(name, settings.pos))),
+        Some(Box::new(Ident {
+            name,
+            pos: settings.pos,
+        })),
         token_pos,
     ))
 }
@@ -2310,7 +2318,10 @@ fn parse_export(
 
         let rename = if match_token(input, Token::As).0 {
             match input.next().unwrap() {
-                (Token::Identifier(s), pos) => Some(IdentX::new(state.get_interned_string(s), pos)),
+                (Token::Identifier(s), pos) => Some(Ident {
+                    name: state.get_interned_string(s),
+                    pos,
+                }),
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
                 }
@@ -2321,7 +2332,13 @@ fn parse_export(
             None
         };
 
-        exports.push((IdentX::new(state.get_interned_string(id), id_pos), rename));
+        exports.push((
+            Ident {
+                name: state.get_interned_string(id),
+                pos: id_pos,
+            },
+            rename,
+        ));
 
         match input.peek().unwrap() {
             (Token::Comma, _) => {
@@ -2651,7 +2668,10 @@ fn parse_try_catch(
     // try { body } catch (
     let var_def = if match_token(input, Token::LeftParen).0 {
         let id = match input.next().unwrap() {
-            (Token::Identifier(s), pos) => Ident::new(s, pos),
+            (Token::Identifier(s), pos) => Ident {
+                name: state.get_interned_string(s),
+                pos,
+            },
             (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
         };
 
@@ -2780,7 +2800,7 @@ fn parse_fn(
 
 /// Creates a curried expression from a list of external variables
 #[cfg(not(feature = "no_function"))]
-fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<IdentX>, pos: Position) -> Expr {
+fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Position) -> Expr {
     if externals.is_empty() {
         return fn_expr;
     }
@@ -2889,13 +2909,16 @@ fn parse_anon_fn(
 
     // External variables may need to be processed in a consistent order,
     // so extract them into a list.
-    let externals: StaticVec<IdentX> = {
+    let externals: StaticVec<Ident> = {
         #[cfg(not(feature = "no_closure"))]
         {
             state
                 .externals
                 .iter()
-                .map(|(k, &v)| IdentX::new(k.clone(), v))
+                .map(|(name, &pos)| Ident {
+                    name: name.clone(),
+                    pos,
+                })
                 .collect()
         }
         #[cfg(feature = "no_closure")]
@@ -3114,7 +3137,7 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         Union::Map(map, _) => {
             let items: Vec<_> = map
                 .into_iter()
-                .map(|(k, v)| (IdentX::new(k, pos), map_dynamic_to_expr(v, pos)))
+                .map(|(name, value)| (Ident { name, pos }, map_dynamic_to_expr(value, pos)))
                 .collect();
 
             if items.iter().all(|(_, expr)| expr.is_some()) {

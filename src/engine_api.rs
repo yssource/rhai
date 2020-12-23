@@ -14,8 +14,8 @@ use crate::stdlib::{
 };
 use crate::utils::get_hasher;
 use crate::{
-    scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, NativeCallContext,
-    ParseError, Position, AST,
+    scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Module, NativeCallContext,
+    ParseError, Position, Shared, AST,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -48,7 +48,7 @@ impl Engine {
     /// Notice that this will _consume_ the argument, replacing it with `()`.
     ///
     /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
-    #[deprecated(note = "this function is volatile and may change")]
+    #[deprecated = "this function is volatile and may change"]
     #[inline(always)]
     pub fn register_raw_fn<T: Variant + Clone>(
         &mut self,
@@ -723,7 +723,33 @@ impl Engine {
         self.register_indexer_get(getter)
             .register_indexer_set(setter)
     }
-    /// Register a [`Module`][crate::Module] as a fixed module namespace with the [`Engine`].
+    /// Register a shared [`Module`][crate::Module] into the global namespace of [`Engine`].
+    ///
+    /// All functions and type iterators are automatically available to scripts without namespace qualifications.
+    ///
+    /// Sub-modules and variables are **ignored**.
+    ///
+    /// When searching for functions, modules loaded later are preferred.
+    /// In other words, loaded modules are searched in reverse order.
+    #[inline(always)]
+    pub fn register_global_module(&mut self, module: Shared<Module>) -> &mut Self {
+        // Insert the module into the front
+        self.global_modules.insert(0, module);
+        self
+    }
+    /// Register a shared [`Module`][crate::Module] into the global namespace of [`Engine`].
+    ///
+    /// ## Deprecated
+    ///
+    /// Use `register_global_module` instead.
+    #[inline(always)]
+    #[deprecated = "use `register_global_module` instead"]
+    pub fn load_package(&mut self, module: impl Into<Shared<Module>>) -> &mut Self {
+        self.register_global_module(module.into())
+    }
+    /// Register a shared [`Module`][crate::Module] as a static module namespace with the [`Engine`].
+    ///
+    /// Functions marked `FnNamespace::Global` and type iterators are exposed to scripts without namespace qualifications.
     ///
     /// # Example
     ///
@@ -738,20 +764,18 @@ impl Engine {
     /// module.set_fn_1("calc", |x: i64| Ok(x + 1));
     ///
     /// // Register the module as a fixed sub-module
-    /// engine.register_module("CalcService", module);
+    /// engine.register_static_module("CalcService", module.into());
     ///
     /// assert_eq!(engine.eval::<i64>("CalcService::calc(41)")?, 42);
     /// # Ok(())
     /// # }
     /// ```
     #[cfg(not(feature = "no_module"))]
-    pub fn register_module(
+    pub fn register_static_module(
         &mut self,
         name: impl Into<crate::ImmutableString>,
-        module: impl Into<crate::Shared<crate::Module>>,
+        module: Shared<Module>,
     ) -> &mut Self {
-        let module = module.into();
-
         if !module.is_indexed() {
             // Index the module (making a clone copy if necessary) if it is not indexed
             let mut module = crate::fn_native::shared_take_or_clone(module);
@@ -761,6 +785,21 @@ impl Engine {
             self.global_sub_modules.push(name, module);
         }
         self
+    }
+    /// Register a shared [`Module`][crate::Module] as a static module namespace with the [`Engine`].
+    ///
+    /// ## Deprecated
+    ///
+    /// Use `register_static_module` instead.
+    #[cfg(not(feature = "no_module"))]
+    #[inline(always)]
+    #[deprecated = "use `register_static_module` instead"]
+    pub fn register_module(
+        &mut self,
+        name: impl Into<crate::ImmutableString>,
+        module: impl Into<Shared<Module>>,
+    ) -> &mut Self {
+        self.register_static_module(name, module.into())
     }
     /// Compile a string into an [`AST`], which can be used later for evaluation.
     ///
@@ -1681,7 +1720,11 @@ impl Engine {
         });
 
         if include_packages {
-            signatures.extend(self.packages.gen_fn_signatures());
+            signatures.extend(
+                self.global_modules
+                    .iter()
+                    .flat_map(|m| m.gen_fn_signatures()),
+            );
         }
 
         signatures

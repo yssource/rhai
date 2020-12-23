@@ -174,17 +174,15 @@ pub use optimize::OptimizationLevel;
 
 // Expose internal data structures.
 #[cfg(feature = "internals")]
-#[deprecated(note = "this type is volatile and may change")]
+#[deprecated = "this type is volatile and may change"]
 pub use token::{get_next_token, parse_string_literal, InputStream, Token, TokenizeState};
 
 #[cfg(feature = "internals")]
-#[deprecated(note = "this type is volatile and may change")]
-pub use ast::{
-    BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, IdentX, ReturnType, ScriptFnDef, Stmt,
-};
+#[deprecated = "this type is volatile and may change"]
+pub use ast::{BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, ReturnType, ScriptFnDef, Stmt};
 
 #[cfg(feature = "internals")]
-#[deprecated(note = "this type is volatile and may change")]
+#[deprecated = "this type is volatile and may change"]
 pub use engine::{Imports, State as EvalState};
 
 #[cfg(feature = "internals")]
@@ -192,7 +190,7 @@ pub use engine::{Imports, State as EvalState};
 pub use engine::Limits;
 
 #[cfg(feature = "internals")]
-#[deprecated(note = "this type is volatile and may change")]
+#[deprecated = "this type is volatile and may change"]
 pub use module::NamespaceRef;
 
 /// _(INTERNALS)_ Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),

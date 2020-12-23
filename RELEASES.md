@@ -1,6 +1,20 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.9
+==============
+
+This version removes the confusing differences between _packages_ and _modules_
+by unifying the terminology and API under the global umbrella of _modules_.
+
+Breaking changes
+----------------
+
+* `Engine::load_package` is renamed `Engine::register_global_module` and now must explicitly pass a shared [`Module`].
+* `Engine::register_module` is renamed `Engine::register_static_module` and now must explicitly pass a shared [`Module`].
+* `Package::get` is renamed `Package::as_shared_module`.
+
+
 Version 0.19.8
 ==============
 
@@ -14,13 +28,15 @@ A new API, `Engine::gen_fn_metadata_to_json` and `Engine::gen_fn_metadata_with_a
 paired with the new `metadata` feature, exports the full list of functions metadata
 (including those in an `AST`) as a JSON document.
 
+There are also a sizable number of bug fixes.
+
 Bug fixes
 ---------
 
 * Unary prefix operators `-`, `+` and `!` now bind correctly when applied to an expression. Previously, `-x.len` is parsed as `(-x).len` which is obviously counter-intuitive.
 * Indexing of namespace-qualified variables now work properly, such as `path::to::var[x]`.
 * Constants are no longer propagated by the optimizer if shadowed by a non-constant variable.
-* Constants passed as the `this` parameter to Rhai functions now throws an error if assigned to.
+* A constant passed as the `this` parameter to Rhai functions now throws an error if assigned to.
 * Generic type parameter of `Engine::register_iterator` is `IntoIterator` instead of `Iterator`.
 * Fixes parsing of block comments ending with `**/` or inner blocks starting with `//*`.
 
@@ -37,8 +53,8 @@ New features
 
 * `AST::iter_functions` now returns `ScriptFnMetadata` which includes, among others, _doc-comments_ for functions prefixed by `///` or `/**`.
 * _Doc-comments_ can be enabled/disabled with the new `Engine::set_doc_comments` method.
-* A new feature `metadata` is added that pulls in `serde_json` and enables `Engine::gen_fn_metadata_to_json` and ``Engine::gen_fn_metadata_with_ast_to_json` which exports the full list of functions metadata (including those inside an `AST`) in JSON format.
-* `Engine::on_debug` provides two additional parameters: `source: Option<&str>` and `pos: Position`.
+* A new feature `metadata` is added that pulls in `serde_json` and enables `Engine::gen_fn_metadata_to_json` and `Engine::gen_fn_metadata_with_ast_to_json` which exports the full list of functions metadata (including those inside an `AST`) in JSON format.
+* `Engine::on_debug` provides two additional parameters: `source: Option<&str>` and `pos: Position`, containing the current source (if any) and position of the `debug` statement.
 * `NativeCallContext` and `EvalContext` both expose `source()` which returns the current source, if any.
 
 Enhancements
@@ -46,7 +62,6 @@ Enhancements
 
 * A functions lookup cache is added to make function call resolution faster.
 * Capturing a constant variable in a closure is now supported, with no cloning.
-* Provides position info for `debug` statements.
 * A _look-ahead_ symbol is provided to custom syntax parsers, which can be used to parse variable-length symbol streams.
 
 
@@ -98,7 +113,7 @@ New features
 * New `switch` statement.
 * New `do ... while` and `do ... until` statements.
 * New `Engine::gen_fn_signatures`, `Module::gen_fn_signatures` and `PackagesCollection::gen_fn_signatures` to generate a list of signatures for functions registered.
-* New `Engine::register_module` to register a module as a sub-module in the global namespace.
+* New `Engine::register_static_module` to register a module as a sub-module in the global namespace.
 * New `set_exported_global_fn!` macro to register a plugin function and expose it to the global namespace.
 * `Module::set_fn_XXX_mut` can expose a module function to the global namespace. This is convenient when registering an API for a custom type.
 * `Module::set_getter_fn`, `Module::set_setter_fn`, `Module::set_indexer_get_fn`, `Module::set_indexer_set_fn` all expose the function to the global namespace by default. This is convenient when registering an API for a custom type.
@@ -365,7 +380,7 @@ Breaking changes
 * `Engine::register_raw_fn_XXX` API shortcuts are removed.
 * `PackagesCollection::get_fn`, `PackagesCollection::contains_fn`, `Module::get_fn` and `Module::contains_fn` now take an additional `public_only` parameter indicating whether only public functions are accepted.
 * The iterator returned by `Scope::iter` now contains a clone of the `Dynamic` value (unshared).
-* `Engine::load_package` takes any type that is `Into<PackageLibrary>`.
+* `Engine::register_global_module` takes any type that is `Into<PackageLibrary>`.
 * Error in `Engine::register_custom_syntax` is no longer `Box`-ed.
 
 Housekeeping

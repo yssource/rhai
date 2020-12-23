@@ -160,7 +160,7 @@ pub fn export_fn(
 ///
 /// let module = exported_module!(my_plugin_module);
 ///
-/// engine.load_package(module);
+/// engine.register_global_module(module.into());
 ///
 /// assert_eq!(engine.eval::<i64>("foo(bar())")?, 42);
 /// # Ok(())
@@ -203,7 +203,7 @@ pub fn export_module(
 ///
 /// let module = exported_module!(my_plugin_module);
 ///
-/// engine.load_package(module);
+/// engine.register_global_module(module.into());
 ///
 /// assert_eq!(engine.eval::<i64>("foo(bar())")?, 42);
 /// # Ok(())
@@ -250,7 +250,7 @@ pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::Toke
 /// let mut module = Module::new();
 /// combine_with_exported_module!(&mut module, "my_plugin_module_ID", my_plugin_module);
 ///
-/// engine.load_package(module);
+/// engine.register_global_module(module.into());
 ///
 /// assert_eq!(engine.eval::<i64>("foo(bar())")?, 42);
 /// # Ok(())
@@ -324,7 +324,7 @@ pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenS
 /// let mut module = Module::new();
 /// set_exported_fn!(module, "func", my_plugin_function);
 ///
-/// engine.load_package(module);
+/// engine.register_global_module(module.into());
 ///
 /// assert_eq!(engine.eval::<i64>("func(21)")?, 42);
 /// # Ok(())
@@ -366,7 +366,7 @@ pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream
 /// let mut module = Module::new();
 /// set_exported_global_fn!(module, "func", my_plugin_function);
 ///
-/// engine.register_module("test", module);
+/// engine.register_static_module("test", module.into());
 ///
 /// assert_eq!(engine.eval::<i64>("func(21)")?, 42);
 /// # Ok(())

@@ -62,7 +62,7 @@ fn test_functions_namespaces() -> Result<(), Box<EvalAltResult>> {
         let hash = m.set_fn_0("test", || Ok(999 as INT));
         m.update_fn_namespace(hash, FnNamespace::Global);
 
-        engine.register_module("hello", m);
+        engine.register_static_module("hello", m.into());
 
         assert_eq!(engine.eval::<INT>("test()")?, 999);
         assert_eq!(engine.eval::<INT>("fn test() { 123 } test()")?, 123);

@@ -17,9 +17,9 @@ As part of a _reflections_ API, `Engine::gen_fn_signatures` returns a list of fu
 Functions from the following sources are included, in order:
 
 1) Native Rust functions registered into the global namespace via the `Engine::register_XXX` API
-2) _Public_ (i.e. non-[`private`]) functions (native Rust or Rhai scripted) in global sub-modules registered via
-   [`Engine::register_module`]({{rootUrl}}/rust/modules/create.md)
-3) Native Rust functions in registered [packages] (optional)
+2) _Public_ (i.e. non-[`private`]) functions (native Rust or Rhai scripted) in global sub-modules
+   registered via `Engine::register_static_module`.
+3) Native Rust functions in global modules registered via `Engine::register_global_module` (optional)
 
 
 Functions Metadata

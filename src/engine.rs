@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::ast::{Expr, FnCallExpr, Ident, IdentX, ReturnType, Stmt};
+use crate::ast::{Expr, FnCallExpr, Ident, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{
@@ -9,7 +9,7 @@ use crate::fn_native::{
 };
 use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
-use crate::packages::{Package, PackagesCollection, StandardPackage};
+use crate::packages::{Package, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -55,74 +55,60 @@ pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 // the module name will live beyond the AST of the eval script text.
 // The best we can do is a shared reference.
 #[derive(Debug, Clone, Default)]
-pub struct Imports(Option<StaticVec<(ImmutableString, Shared<Module>)>>);
+pub struct Imports(StaticVec<(ImmutableString, Shared<Module>)>);
 
 impl Imports {
     /// Get the length of this stack of imported [modules][Module].
     pub fn len(&self) -> usize {
-        self.0.as_ref().map_or(0, StaticVec::len)
+        self.0.len()
     }
     /// Is this stack of imported [modules][Module] empty?
     pub fn is_empty(&self) -> bool {
-        self.0.as_ref().map_or(true, StaticVec::is_empty)
+        self.0.is_empty()
     }
     /// Get the imported [modules][Module] at a particular index.
     pub fn get(&self, index: usize) -> Option<Shared<Module>> {
-        self.0
-            .as_ref()
-            .and_then(|x| x.get(index))
-            .map(|(_, m)| m)
-            .cloned()
+        self.0.get(index).map(|(_, m)| m).cloned()
     }
     /// Get the index of an imported [modules][Module] by name.
     pub fn find(&self, name: &str) -> Option<usize> {
-        self.0.as_ref().and_then(|x| {
-            x.iter()
-                .enumerate()
-                .rev()
-                .find(|(_, (key, _))| key.as_str() == name)
-                .map(|(index, _)| index)
-        })
+        self.0
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, (key, _))| key.as_str() == name)
+            .map(|(index, _)| index)
     }
     /// Push an imported [modules][Module] onto the stack.
     pub fn push(&mut self, name: impl Into<ImmutableString>, module: impl Into<Shared<Module>>) {
-        if self.0.is_none() {
-            self.0 = Some(Default::default());
-        }
-
-        self.0.as_mut().unwrap().push((name.into(), module.into()));
+        self.0.push((name.into(), module.into()));
     }
     /// Truncate the stack of imported [modules][Module] to a particular length.
     pub fn truncate(&mut self, size: usize) {
-        if self.0.is_some() {
-            self.0.as_mut().unwrap().truncate(size);
-        }
+        self.0.truncate(size);
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (&'a str, &'a Module)> + 'a {
-        self.0.iter().flat_map(|lib| {
-            lib.iter()
-                .rev()
-                .map(|(name, module)| (name.as_str(), module.as_ref()))
-        })
+        self.0
+            .iter()
+            .rev()
+            .map(|(name, module)| (name.as_str(), module.as_ref()))
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     pub(crate) fn iter_raw<'a>(
         &'a self,
     ) -> impl Iterator<Item = (&'a ImmutableString, &'a Shared<Module>)> + 'a {
-        self.0
-            .iter()
-            .flat_map(|lib| lib.iter().rev().map(|(n, m)| (n, m)))
+        self.0.iter().rev().map(|(n, m)| (n, m))
     }
     /// Get a consuming iterator to this stack of imported [modules][Module] in reverse order.
     pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
-        self.0.into_iter().flat_map(|lib| lib.into_iter().rev())
+        self.0.into_iter().rev()
     }
     /// Add a stream of imported [modules][Module].
     pub fn extend(&mut self, stream: impl Iterator<Item = (ImmutableString, Shared<Module>)>) {
-        self.0.as_mut().unwrap().extend(stream)
+        self.0.extend(stream)
     }
     /// Does the specified function hash key exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
@@ -130,9 +116,7 @@ impl Imports {
         if hash == 0 {
             false
         } else {
-            self.0.as_ref().map_or(false, |x| {
-                x.iter().any(|(_, m)| m.contains_qualified_fn(hash))
-            })
+            self.0.iter().any(|(_, m)| m.contains_qualified_fn(hash))
         }
     }
     /// Get specified function via its hash key.
@@ -141,22 +125,22 @@ impl Imports {
             None
         } else {
             self.0
-                .as_ref()
-                .and_then(|x| x.iter().rev().find_map(|(_, m)| m.get_qualified_fn(hash)))
+                .iter()
+                .rev()
+                .find_map(|(_, m)| m.get_qualified_fn(hash))
         }
     }
     /// Does the specified [`TypeId`][std::any::TypeId] iterator exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
     pub fn contains_iter(&self, id: TypeId) -> bool {
-        self.0.as_ref().map_or(false, |x| {
-            x.iter().any(|(_, m)| m.contains_qualified_iter(id))
-        })
+        self.0.iter().any(|(_, m)| m.contains_qualified_iter(id))
     }
     /// Get the specified [`TypeId`][std::any::TypeId] iterator.
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.0
-            .as_ref()
-            .and_then(|x| x.iter().rev().find_map(|(_, m)| m.get_qualified_iter(id)))
+            .iter()
+            .rev()
+            .find_map(|(_, m)| m.get_qualified_iter(id))
     }
 }
 
@@ -629,8 +613,8 @@ pub struct Engine {
 
     /// A module containing all functions directly loaded into the Engine.
     pub(crate) global_namespace: Module,
-    /// A collection of all library packages loaded into the Engine.
-    pub(crate) packages: PackagesCollection,
+    /// A collection of all modules loaded into the global namespace of the Engine.
+    pub(crate) global_modules: StaticVec<Shared<Module>>,
     /// A collection of all sub-modules directly loaded into the Engine.
     pub(crate) global_sub_modules: Imports,
 
@@ -734,7 +718,7 @@ pub fn search_imports(
     state: &mut State,
     namespace: &NamespaceRef,
 ) -> Result<Shared<Module>, Box<EvalAltResult>> {
-    let IdentX { name: root, pos } = &namespace[0];
+    let Ident { name: root, pos } = &namespace[0];
 
     // Qualified - check if the root module is directly indexed
     let index = if state.always_search {
@@ -761,8 +745,8 @@ impl Engine {
         let mut engine = Self {
             id: Default::default(),
 
-            packages: Default::default(),
             global_namespace: Default::default(),
+            global_modules: Default::default(),
             global_sub_modules: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
@@ -814,20 +798,20 @@ impl Engine {
             disable_doc_comments: false,
         };
 
-        engine.load_package(StandardPackage::new().get());
+        engine.register_global_module(StandardPackage::new().as_shared_module());
 
         engine
     }
 
     /// Create a new [`Engine`] with minimal built-in functions.
-    /// Use the [`load_package`][Engine::load_package] method to load additional packages of functions.
+    /// Use the [`register_global_module`][Engine::register_global_module] method to load additional packages of functions.
     #[inline]
     pub fn new_raw() -> Self {
         Self {
             id: Default::default(),
 
-            packages: Default::default(),
             global_namespace: Default::default(),
+            global_modules: Default::default(),
             global_sub_modules: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
@@ -884,7 +868,7 @@ impl Engine {
         match expr {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
-                (_, Some(modules), hash_var, IdentX { name, pos }) => {
+                (_, Some(modules), hash_var, Ident { name, pos }) => {
                     let module = search_imports(mods, state, modules)?;
                     let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
                         match *err {
@@ -918,7 +902,7 @@ impl Engine {
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &'a Expr,
     ) -> Result<(Target<'s>, &'a str, Position), Box<EvalAltResult>> {
-        let (index, _, _, IdentX { name, pos }) = match expr {
+        let (index, _, _, Ident { name, pos }) = match expr {
             Expr::Variable(v) => v.as_ref(),
             _ => unreachable!(),
         };
@@ -1115,7 +1099,7 @@ impl Engine {
                     Expr::FnCall(_, _) => unreachable!(),
                     // {xxx:map}.id = ???
                     Expr::Property(x) if target_val.is::<Map>() && new_val.is_some() => {
-                        let IdentX { name, pos } = &x.1;
+                        let Ident { name, pos } = &x.1;
                         let index = name.clone().into();
                         let mut val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, true, is_ref, false, level,
@@ -1128,7 +1112,7 @@ impl Engine {
                     }
                     // {xxx:map}.id
                     Expr::Property(x) if target_val.is::<Map>() => {
-                        let IdentX { name, pos } = &x.1;
+                        let Ident { name, pos } = &x.1;
                         let index = name.clone().into();
                         let val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, false, is_ref, false, level,
@@ -1138,7 +1122,7 @@ impl Engine {
                     }
                     // xxx.id = ???
                     Expr::Property(x) if new_val.is_some() => {
-                        let ((_, setter), IdentX { pos, .. }) = x.as_ref();
+                        let ((_, setter), Ident { pos, .. }) = x.as_ref();
                         let mut new_val = new_val;
                         let mut args = [target_val, &mut new_val.as_mut().unwrap().0];
                         self.exec_fn_call(
@@ -1150,7 +1134,7 @@ impl Engine {
                     }
                     // xxx.id
                     Expr::Property(x) => {
-                        let ((getter, _), IdentX { pos, .. }) = x.as_ref();
+                        let ((getter, _), Ident { pos, .. }) = x.as_ref();
                         let mut args = [target_val];
                         self.exec_fn_call(
                             mods, state, lib, getter, 0, &mut args, is_ref, true, false, *pos,
@@ -1163,7 +1147,7 @@ impl Engine {
                     Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target_val.is::<Map>() => {
                         let mut val = match &x.lhs {
                             Expr::Property(p) => {
-                                let IdentX { name, pos } = &p.1;
+                                let Ident { name, pos } = &p.1;
                                 let index = name.clone().into();
                                 self.get_indexed_mut(
                                     mods, state, lib, target_val, index, *pos, false, is_ref, true,
@@ -1204,7 +1188,7 @@ impl Engine {
                         match &x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
-                                let ((getter, setter), IdentX { pos, .. }) = p.as_ref();
+                                let ((getter, setter), Ident { pos, .. }) = p.as_ref();
                                 let arg_values = &mut [target_val, &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self
@@ -1319,7 +1303,7 @@ impl Engine {
         match lhs {
             // id.??? or id[???]
             Expr::Variable(x) => {
-                let IdentX {
+                let Ident {
                     name: var_name,
                     pos: var_pos,
                 } = &x.3;
@@ -1675,7 +1659,7 @@ impl Engine {
 
                     if target.is::<Map>() {
                         // map.prop - point directly to the item
-                        let (_, IdentX { name, pos }) = p.as_ref();
+                        let (_, Ident { name, pos }) = p.as_ref();
                         let idx = name.clone().into();
 
                         if target.is_shared() || target.is_value() {
@@ -1693,7 +1677,7 @@ impl Engine {
                         .map(|v| (v, *pos))
                     } else {
                         // var.prop - call property getter
-                        let ((getter, _), IdentX { pos, .. }) = p.as_ref();
+                        let ((getter, _), Ident { pos, .. }) = p.as_ref();
                         let mut args = [target.as_mut()];
                         self.exec_fn_call(
                             mods, state, lib, getter, 0, &mut args, is_ref, true, false, *pos,
@@ -1781,7 +1765,7 @@ impl Engine {
             Expr::Map(x, _) => {
                 let mut map =
                     Map::with_capacity(crate::stdlib::cmp::max(TYPICAL_MAP_SIZE, x.len()));
-                for (IdentX { name: key, .. }, expr) in x.as_ref() {
+                for (Ident { name: key, .. }, expr) in x.as_ref() {
                     map.insert(
                         key.clone(),
                         self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
@@ -1987,7 +1971,11 @@ impl Engine {
                     match self
                         .global_namespace
                         .get_fn(hash_fn, false)
-                        .or_else(|| self.packages.get_fn(hash_fn))
+                        .or_else(|| {
+                            self.global_modules
+                                .iter()
+                                .find_map(|m| m.get_fn(hash_fn, false))
+                        })
                         .or_else(|| mods.get_fn(hash_fn))
                     {
                         // op= function registered as method
@@ -2196,7 +2184,11 @@ impl Engine {
                 let func = self
                     .global_namespace
                     .get_iter(iter_type)
-                    .or_else(|| self.packages.get_iter(iter_type))
+                    .or_else(|| {
+                        self.global_modules
+                            .iter()
+                            .find_map(|m| m.get_iter(iter_type))
+                    })
                     .or_else(|| mods.get_iter(iter_type));
 
                 if let Some(func) = func {
@@ -2272,9 +2264,9 @@ impl Engine {
 
                             if let Some(Ident { name, .. }) = var_def {
                                 let var_name: Cow<'_, str> = if state.is_global() {
-                                    name.clone().into()
+                                    name.to_string().into()
                                 } else {
-                                    unsafe_cast_var_name_to_lifetime(name).into()
+                                    unsafe_cast_var_name_to_lifetime(&name).into()
                                 };
                                 scope.push(var_name, value);
                             }
@@ -2410,7 +2402,7 @@ impl Engine {
             // Export statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(list, _) => {
-                for (IdentX { name, pos: id_pos }, rename) in list.iter() {
+                for (Ident { name, pos: id_pos }, rename) in list.iter() {
                     // Mark scope variables as public
                     if let Some(index) = scope.get_index(name).map(|(i, _)| i) {
                         let alias = rename.as_ref().map(|x| &x.name).unwrap_or_else(|| name);

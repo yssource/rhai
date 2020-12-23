@@ -11,8 +11,8 @@ fn test_packages() -> Result<(), Box<EvalAltResult>> {
         // Create a raw Engine - extremely cheap.
         let mut engine = Engine::new_raw();
 
-        // Load packages - cheap.
-        engine.load_package(std_pkg.get());
+        // Register packages - cheap.
+        engine.register_global_module(std_pkg.as_shared_module());
 
         // Create custom scope - cheap.
         let mut scope = Scope::new();
@@ -37,7 +37,7 @@ fn test_packages_with_script() -> Result<(), Box<EvalAltResult>> {
     let ast = engine.compile("fn foo(x) { x + 1 }  fn bar(x) { foo(x) + 1 }")?;
 
     let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
-    engine.load_package(module);
+    engine.register_global_module(module.into());
     assert_eq!(engine.eval::<INT>("foo(41)")?, 42);
     assert_eq!(engine.eval::<INT>("bar(40)")?, 42);
 

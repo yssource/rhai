@@ -19,14 +19,16 @@ Manually creating a [module] is possible via the `Module` API.
 For the complete `Module` API, refer to the [documentation](https://docs.rs/rhai/{{version}}/rhai/struct.Module.html) online.
 
 
-Make the `Module` Available to the `Engine`
-------------------------------------------
+Use Case 1 - Make the `Module` Globally Available
+------------------------------------------------
 
-`Engine::load_package` supports loading a [module] as a [package].
+`Engine::register_global_module` registers a shared [module] into the _global_ namespace.
 
-Since it acts as a [package], all functions will be registered into the _global_ namespace
-and can be accessed without _namespace qualifiers_.  This is by far the easiest way to expose
-a module's functionalities to Rhai.
+All [functions] and [type iterators] can be accessed without _namespace qualifiers_.
+
+Variables and sub-modules are **ignored**.
+
+This is by far the easiest way to expose a module's functionalities to Rhai.
 
 ```rust
 use rhai::{Engine, Module};
@@ -40,18 +42,18 @@ let hash = module.set_fn_1("inc", |x: i64| Ok(x+1));
 // 'set_fn_XXX' by default does not set function metadata.
 module.update_fn_metadata(hash, ["x: i64", "i64"]);
 
-// Load the module into the Engine as a new package.
+// Register the module into the global namespace of the Engine.
 let mut engine = Engine::new();
-engine.load_package(module);
+engine.register_global_module(module.into());
 
 engine.eval::<i64>("inc(41)")? == 42;       // no need to import module
 ```
 
 
-Make the `Module` a Global Module
-------------------------------------
+Use Case 2 - Make the `Module` a Static Module
+---------------------------------------------
 
-`Engine::register_module` loads a [module] and makes it available globally under a specific namespace.
+`Engine::register_static_module` registers a [module] and under a specific module namespace.
 
 ```rust
 use rhai::{Engine, Module};
@@ -65,17 +67,20 @@ let hash = module.set_fn_1("inc", |x: i64| Ok(x+1));
 // 'set_fn_XXX' by default does not set function metadata.
 module.update_fn_metadata(hash, ["x: i64", "i64"]);
 
-// Load the module into the Engine as a sub-module named 'calc'
+// Register the module into the Engine as a static module namespace 'calc'
 let mut engine = Engine::new();
-engine.register_module("calc", module);
+engine.register_static_module("calc", module.into());
 
 engine.eval::<i64>("calc::inc(41)")? == 42; // refer to the 'Calc' module
 ```
 
-`Module::set_fn_XXX_mut` can expose functions (usually _methods_) in the module
-to the _global_ namespace, so [getters/setters] and [indexers] for [custom types] can work as expected.
+### Expose Functions to the Global Namespace
 
-[Type iterators], because of their special nature, are always exposed to the _global_ namespace.
+`Module::set_fn_mut` and `Module::set_fn_XXX_mut` can optionally expose functions (usually _methods_)
+in the module to the _global_ namespace, so [getters/setters] and [indexers] for [custom types]
+can work as expected.
+
+[Type iterators], because of their special nature, are _always_ exposed to the _global_ namespace.
 
 ```rust
 use rhai::{Engine, Module, FnNamespace};
@@ -89,17 +94,17 @@ let hash = module.set_fn_1_mut("inc", FnNamespace::Global, |x: &mut i64| Ok(x+1)
 // 'set_fn_XXX' by default does not set function metadata.
 module.update_fn_metadata(hash, ["x: &mut i64", "i64"]);
 
-// Load the module into the Engine as a sub-module named 'calc'
+// Register the module into the Engine as a static module namespace 'calc'
 let mut engine = Engine::new();
-engine.register_module("calc", module);
+engine.register_static_module("calc", module.into());
 
 // The method 'inc' works as expected because it is exposed to the global namespace
 engine.eval::<i64>("let x = 41; x.inc()")? == 42;
 ```
 
 
-Make the `Module` Dynamically Loadable
--------------------------------------
+Use Case 3 - Make the `Module` Dynamically Loadable
+--------------------------------------------------
 
 In order to dynamically load a custom module, there must be a [module resolver] which serves
 the module when loaded via `import` statements.

@@ -100,7 +100,7 @@ impl Handler {
         // Register custom types and API's
         engine
             .register_type_with_name::<SomeType>("SomeType")
-            .load_package(exported_module!(SomeTypeAPI));
+            .register_global_module(exported_module!(SomeTypeAPI));
 
         // Create a custom 'Scope' to hold state
         let mut scope = Scope::new();

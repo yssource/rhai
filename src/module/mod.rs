@@ -1,6 +1,6 @@
 //! Module defining external-loaded modules for Rhai.
 
-use crate::ast::{FnAccess, IdentX};
+use crate::ast::{FnAccess, Ident};
 use crate::dynamic::Variant;
 use crate::fn_native::{shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::fn_register::by_value as cast_arg;
@@ -1906,7 +1906,7 @@ impl Module {
 ///
 /// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
-pub struct NamespaceRef(StaticVec<IdentX>, Option<NonZeroUsize>);
+pub struct NamespaceRef(StaticVec<Ident>, Option<NonZeroUsize>);
 
 impl fmt::Debug for NamespaceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1921,7 +1921,7 @@ impl fmt::Debug for NamespaceRef {
 }
 
 impl Deref for NamespaceRef {
-    type Target = StaticVec<IdentX>;
+    type Target = StaticVec<Ident>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -1936,15 +1936,15 @@ impl DerefMut for NamespaceRef {
 
 impl fmt::Display for NamespaceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for IdentX { name, .. } in self.0.iter() {
+        for Ident { name, .. } in self.0.iter() {
             write!(f, "{}{}", name, Token::DoubleColon.syntax())?;
         }
         Ok(())
     }
 }
 
-impl From<StaticVec<IdentX>> for NamespaceRef {
-    fn from(modules: StaticVec<IdentX>) -> Self {
+impl From<StaticVec<Ident>> for NamespaceRef {
+    fn from(modules: StaticVec<Ident>) -> Self {
         Self(modules, None)
     }
 }
