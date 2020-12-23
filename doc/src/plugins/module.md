@@ -101,7 +101,7 @@ fn main() {
     let module = exported_module!(my_module);
 
     // A module can simply be registered into the global namespace.
-    engine.register_global_module(module);
+    engine.register_global_module(module.into());
 }
 ```
 
@@ -140,7 +140,7 @@ fn main() {
     let module = exported_module!(my_module);
 
     // A module can simply be registered as a static module namespace.
-    engine.register_static_module("service", module);
+    engine.register_static_module("service", module.into());
 }
 ```
 

@@ -23,10 +23,10 @@ Built-In Packages
 | `StandardPackage`      | standard library (default for `Engine::new`)                                                           |    no     |      yes      |
 
 
-Load the `CorePackage`
----------------------
+`CorePackage`
+-------------
 
-If only minimal functionalities is required, load the `CorePackage` instead:
+If only minimal functionalities are required, register the `CorePackage` instead:
 
 ```rust
 use rhai::Engine;
@@ -35,6 +35,6 @@ use rhai::packages::{Package, CorePackage};
 let mut engine = Engine::new_raw();
 let package = CorePackage::new();
 
-// Register the package into the Engine by converting it into a shared module.
+// Register the package into the 'Engine' by converting it into a shared module.
 engine.register_global_module(package.as_shared_module());
 ```

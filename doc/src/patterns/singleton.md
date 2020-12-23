@@ -146,7 +146,7 @@ pub mod bunny_api {
     }
 }
 
-engine.register_global_module(exported_module!(bunny_api));
+engine.register_global_module(exported_module!(bunny_api).into());
 ```
 
 ### Push Constant Command Object into Custom Scope
