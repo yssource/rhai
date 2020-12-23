@@ -160,7 +160,7 @@ pub fn export_fn(
 ///
 /// let module = exported_module!(my_plugin_module);
 ///
-/// engine.register_global_module(module.into);
+/// engine.register_global_module(module.into());
 ///
 /// assert_eq!(engine.eval::<i64>("foo(bar())")?, 42);
 /// # Ok(())
