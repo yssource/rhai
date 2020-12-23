@@ -228,7 +228,7 @@ impl AST {
     /// _(INTERNALS)_ Get the statements.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
-    #[deprecated(note = "this method is volatile and may change")]
+    #[deprecated = "this method is volatile and may change"]
     #[inline(always)]
     pub fn statements(&self) -> &[Stmt] {
         &self.statements
@@ -255,7 +255,7 @@ impl AST {
     /// _(INTERNALS)_ Get the internal [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
-    #[deprecated(note = "this method is volatile and may change")]
+    #[deprecated = "this method is volatile and may change"]
     #[inline(always)]
     pub fn lib(&self) -> &Module {
         &self.functions

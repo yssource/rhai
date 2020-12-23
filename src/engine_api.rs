@@ -48,7 +48,7 @@ impl Engine {
     /// Notice that this will _consume_ the argument, replacing it with `()`.
     ///
     /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
-    #[deprecated(note = "this function is volatile and may change")]
+    #[deprecated = "this function is volatile and may change"]
     #[inline(always)]
     pub fn register_raw_fn<T: Variant + Clone>(
         &mut self,
@@ -737,6 +737,16 @@ impl Engine {
         self.global_modules.insert(0, module);
         self
     }
+    /// Register a shared [`Module`][crate::Module] into the global namespace of [`Engine`].
+    ///
+    /// ## Deprecated
+    ///
+    /// Use `register_global_module` instead.
+    #[inline(always)]
+    #[deprecated = "use `register_global_module` instead"]
+    pub fn load_package(&mut self, module: impl Into<Shared<Module>>) -> &mut Self {
+        self.register_global_module(module.into())
+    }
     /// Register a shared [`Module`][crate::Module] as a static module namespace with the [`Engine`].
     ///
     /// Functions marked `FnNamespace::Global` and type iterators are exposed to scripts without namespace qualifications.
@@ -775,6 +785,21 @@ impl Engine {
             self.global_sub_modules.push(name, module);
         }
         self
+    }
+    /// Register a shared [`Module`][crate::Module] as a static module namespace with the [`Engine`].
+    ///
+    /// ## Deprecated
+    ///
+    /// Use `register_static_module` instead.
+    #[cfg(not(feature = "no_module"))]
+    #[inline(always)]
+    #[deprecated = "use `register_static_module` instead"]
+    pub fn register_module(
+        &mut self,
+        name: impl Into<crate::ImmutableString>,
+        module: impl Into<Shared<Module>>,
+    ) -> &mut Self {
+        self.register_static_module(name, module.into())
     }
     /// Compile a string into an [`AST`], which can be used later for evaluation.
     ///
