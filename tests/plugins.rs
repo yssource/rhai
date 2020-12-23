@@ -77,7 +77,7 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
 
     let mut m = Module::new();
     combine_with_exported_module!(&mut m, "test", test::special_array_package);
-    engine.register_global_module(m);
+    engine.register_global_module(m.into());
 
     reg_functions!(engine += greet::single(INT, bool, char));
 
@@ -95,7 +95,7 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
         "6 kitties"
     );
 
-    engine.register_static_module("test", exported_module!(test::special_array_package));
+    engine.register_static_module("test", exported_module!(test::special_array_package).into());
 
     assert_eq!(engine.eval::<INT>("test::MYSTIC_NUMBER")?, 42);
 

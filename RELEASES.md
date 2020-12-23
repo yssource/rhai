@@ -4,12 +4,15 @@ Rhai Release Notes
 Version 0.19.9
 ==============
 
+This version removes the confusing differences between _packages_ and _modules_
+by unifying the terminology and API under the global umbrella of _modules_.
+
 Breaking changes
 ----------------
 
-* `Engine::load_package` is renamed `Engine::register_global_module`.
+* `Engine::load_package` is renamed `Engine::register_global_module` and now must explicitly pass a shared [`Module`].
+* `Engine::register_module` is renamed `Engine::register_static_module` and now must explicitly pass a shared [`Module`].
 * `Package::get` is renamed `Package::as_shared_module`.
-* `Engine::register_module` is renamed `Engine::register_static_module`.
 
 
 Version 0.19.8

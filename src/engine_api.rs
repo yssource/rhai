@@ -732,9 +732,9 @@ impl Engine {
     /// When searching for functions, modules loaded later are preferred.
     /// In other words, loaded modules are searched in reverse order.
     #[inline(always)]
-    pub fn register_global_module(&mut self, package: impl Into<Shared<Module>>) -> &mut Self {
+    pub fn register_global_module(&mut self, module: Shared<Module>) -> &mut Self {
         // Insert the module into the front
-        self.global_modules.insert(0, package.into());
+        self.global_modules.insert(0, module);
         self
     }
     /// Register a shared [`Module`][crate::Module] as a static module namespace with the [`Engine`].
@@ -754,7 +754,7 @@ impl Engine {
     /// module.set_fn_1("calc", |x: i64| Ok(x + 1));
     ///
     /// // Register the module as a fixed sub-module
-    /// engine.register_static_module("CalcService", module);
+    /// engine.register_static_module("CalcService", module.into());
     ///
     /// assert_eq!(engine.eval::<i64>("CalcService::calc(41)")?, 42);
     /// # Ok(())
@@ -764,10 +764,8 @@ impl Engine {
     pub fn register_static_module(
         &mut self,
         name: impl Into<crate::ImmutableString>,
-        module: impl Into<Shared<Module>>,
+        module: Shared<Module>,
     ) -> &mut Self {
-        let module = module.into();
-
         if !module.is_indexed() {
             // Index the module (making a clone copy if necessary) if it is not indexed
             let mut module = crate::fn_native::shared_take_or_clone(module);

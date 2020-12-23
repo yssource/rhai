@@ -37,7 +37,7 @@ fn test_packages_with_script() -> Result<(), Box<EvalAltResult>> {
     let ast = engine.compile("fn foo(x) { x + 1 }  fn bar(x) { foo(x) + 1 }")?;
 
     let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
-    engine.register_global_module(module);
+    engine.register_global_module(module.into());
     assert_eq!(engine.eval::<INT>("foo(41)")?, 42);
     assert_eq!(engine.eval::<INT>("bar(40)")?, 42);
 

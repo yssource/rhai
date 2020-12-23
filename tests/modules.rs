@@ -44,7 +44,7 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(m2.get_var_value::<INT>("answer").unwrap(), 41);
 
     let mut engine = Engine::new();
-    engine.register_static_module("question", module);
+    engine.register_static_module("question", module.into());
 
     assert_eq!(engine.eval::<INT>("question::MYSTIC_NUMBER")?, 42);
     assert!(engine.eval::<INT>("MYSTIC_NUMBER").is_err());
