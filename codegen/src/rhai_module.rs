@@ -243,13 +243,13 @@ pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::
     let mut fn_defs = HashMap::<String, proc_macro2::Span>::new();
 
     for itemfn in fns.iter() {
-        if itemfn.params().name.is_some() || itemfn.params().special != FnSpecialAccess::None {
-            let mut names = itemfn
+        if !itemfn.params().name.is_empty() || itemfn.params().special != FnSpecialAccess::None {
+            let mut names: Vec<_> = itemfn
                 .params()
                 .name
-                .as_ref()
-                .map(|v| v.iter().map(|n| (n.clone(), n.clone())).collect())
-                .unwrap_or_else(|| Vec::new());
+                .iter()
+                .map(|n| (n.clone(), n.clone()))
+                .collect();
 
             if let Some((s, n, _)) = itemfn.params().special.get_fn_name() {
                 names.push((s, n));

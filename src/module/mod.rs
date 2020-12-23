@@ -79,9 +79,9 @@ pub struct FuncInfo {
     /// Number of parameters.
     pub params: usize,
     /// Parameter types (if applicable).
-    pub param_types: Option<StaticVec<TypeId>>,
+    pub param_types: StaticVec<TypeId>,
     /// Parameter names (if available).
-    pub param_names: Option<StaticVec<ImmutableString>>,
+    pub param_names: StaticVec<ImmutableString>,
 }
 
 impl FuncInfo {
@@ -89,13 +89,19 @@ impl FuncInfo {
     pub fn gen_signature(&self) -> String {
         let mut sig = format!("{}(", self.name);
 
-        if let Some(ref names) = self.param_names {
-            let mut params: Vec<_> = names.iter().map(ImmutableString::to_string).collect();
+        if !self.param_names.is_empty() {
+            let mut params: Vec<_> = self
+                .param_names
+                .iter()
+                .map(ImmutableString::to_string)
+                .collect();
             let return_type = params.pop().unwrap_or_else(|| "()".to_string());
             sig.push_str(&params.join(", "));
             if return_type != "()" {
                 sig.push_str(") -> ");
                 sig.push_str(&return_type);
+            } else if self.func.is_script() {
+                sig.push_str(") -> Dynamic");
             } else {
                 sig.push_str(")");
             }
@@ -106,7 +112,12 @@ impl FuncInfo {
                     sig.push_str(", ");
                 }
             }
-            sig.push_str(") -> Dynamic");
+
+            if self.func.is_script() {
+                sig.push_str(") -> Dynamic");
+            } else {
+                sig.push_str(") -> ?");
+            }
         }
 
         sig
@@ -419,8 +430,8 @@ impl Module {
                 namespace: FnNamespace::Internal,
                 access: fn_def.access,
                 params: num_params,
-                param_types: None,
-                param_names: Some(param_names),
+                param_types: Default::default(),
+                param_names,
                 func: fn_def.into(),
             },
         );
@@ -556,7 +567,7 @@ impl Module {
         arg_names: impl AsRef<[&'a str]>,
     ) -> &mut Self {
         if let Some(f) = self.functions.get_mut(&hash_fn) {
-            f.param_names = Some(arg_names.as_ref().iter().map(|&n| n.into()).collect());
+            f.param_names = arg_names.as_ref().iter().map(|&n| n.into()).collect();
         }
         self
     }
@@ -593,7 +604,7 @@ impl Module {
 
         let hash_fn = crate::calc_native_fn_hash(empty(), &name, arg_types.iter().cloned());
 
-        let params = arg_types
+        let param_types = arg_types
             .into_iter()
             .cloned()
             .map(|id| {
@@ -611,9 +622,13 @@ impl Module {
                 name,
                 namespace,
                 access,
-                params: params.len(),
-                param_types: Some(params),
-                param_names: arg_names.map(|p| p.iter().map(|&v| v.into()).collect()),
+                params: param_types.len(),
+                param_types,
+                param_names: if let Some(p) = arg_names {
+                    p.iter().map(|&v| v.into()).collect()
+                } else {
+                    Default::default()
+                },
                 func: func.into(),
             },
         );
@@ -1781,7 +1796,7 @@ impl Module {
                             name,
                             namespace,
                             params,
-                            param_types: types,
+                            param_types,
                             func,
                             ..
                         },
@@ -1795,7 +1810,7 @@ impl Module {
                         let hash_qualified_script =
                             crate::calc_script_fn_hash(qualifiers.iter().cloned(), name, *params);
 
-                        if let Some(param_types) = types {
+                        if !func.is_script() {
                             assert_eq!(*params, param_types.len());
 
                             // Namespace-qualified Rust functions are indexed in two steps:

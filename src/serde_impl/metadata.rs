@@ -90,7 +90,7 @@ struct FnMetadata {
     pub return_type: Option<String>,
     pub signature: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub doc_comments: Option<Vec<String>>,
+    pub doc_comments: Vec<String>,
 }
 
 impl PartialOrd for FnMetadata {
@@ -152,9 +152,9 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
             },
             signature: info.gen_signature(),
             doc_comments: if info.func.is_script() {
-                Some(info.func.get_fn_def().comments.clone())
+                info.func.get_fn_def().comments.clone()
             } else {
-                None
+                Default::default()
             },
         }
     }

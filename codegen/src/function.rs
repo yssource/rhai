@@ -97,7 +97,7 @@ pub(crate) fn print_type(ty: &syn::Type) -> String {
 
 #[derive(Debug, Default)]
 pub(crate) struct ExportedFnParams {
-    pub name: Option<Vec<String>>,
+    pub name: Vec<String>,
     pub return_raw: bool,
     pub skip: bool,
     pub special: FnSpecialAccess,
@@ -252,7 +252,7 @@ impl ExportedParams for ExportedFnParams {
         }
 
         Ok(ExportedFnParams {
-            name: if name.is_empty() { None } else { Some(name) },
+            name,
             return_raw,
             skip,
             special,
@@ -455,16 +455,12 @@ impl ExportedFn {
     }
 
     pub(crate) fn exported_names(&self) -> Vec<syn::LitStr> {
-        let mut literals = self
+        let mut literals: Vec<_> = self
             .params
             .name
-            .as_ref()
-            .map(|v| {
-                v.iter()
-                    .map(|s| syn::LitStr::new(s, proc_macro2::Span::call_site()))
-                    .collect()
-            })
-            .unwrap_or_else(|| Vec::new());
+            .iter()
+            .map(|s| syn::LitStr::new(s, proc_macro2::Span::call_site()))
+            .collect();
 
         if let Some((s, _, span)) = self.params.special.get_fn_name() {
             literals.push(syn::LitStr::new(&s, span));
@@ -481,11 +477,10 @@ impl ExportedFn {
     }
 
     pub(crate) fn exported_name<'n>(&'n self) -> Cow<'n, str> {
-        if let Some(ref name) = self.params.name {
-            name.last().unwrap().as_str().into()
-        } else {
-            self.signature.ident.to_string().into()
-        }
+        self.params.name.last().map_or_else(
+            || self.signature.ident.to_string().into(),
+            |s| s.as_str().into(),
+        )
     }
 
     pub(crate) fn arg_list(&self) -> impl Iterator<Item = &syn::FnArg> {
@@ -712,10 +707,12 @@ impl ExportedFn {
 
     pub fn generate_impl(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let sig_name = self.name().clone();
-        let name = self.params.name.as_ref().map_or_else(
-            || self.name().to_string(),
-            |names| names.last().unwrap().clone(),
-        );
+        let name = self
+            .params
+            .name
+            .last()
+            .cloned()
+            .unwrap_or_else(|| self.name().to_string());
 
         let arg_count = self.arg_count();
         let is_method_call = self.mutable_receiver();
