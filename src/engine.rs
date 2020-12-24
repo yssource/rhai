@@ -19,6 +19,7 @@ use crate::stdlib::{
     fmt, format,
     hash::{Hash, Hasher},
     iter::{empty, once},
+    num::NonZeroU64,
     num::NonZeroUsize,
     ops::DerefMut,
     string::{String, ToString},
@@ -112,23 +113,15 @@ impl Imports {
     }
     /// Does the specified function hash key exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
-    pub fn contains_fn(&self, hash: u64) -> bool {
-        if hash == 0 {
-            false
-        } else {
-            self.0.iter().any(|(_, m)| m.contains_qualified_fn(hash))
-        }
+    pub fn contains_fn(&self, hash: NonZeroU64) -> bool {
+        self.0.iter().any(|(_, m)| m.contains_qualified_fn(hash))
     }
     /// Get specified function via its hash key.
-    pub fn get_fn(&self, hash: u64) -> Option<&CallableFunction> {
-        if hash == 0 {
-            None
-        } else {
-            self.0
-                .iter()
-                .rev()
-                .find_map(|(_, m)| m.get_qualified_fn(hash))
-        }
+    pub fn get_fn(&self, hash: NonZeroU64) -> Option<&CallableFunction> {
+        self.0
+            .iter()
+            .rev()
+            .find_map(|(_, m)| m.get_qualified_fn(hash))
     }
     /// Does the specified [`TypeId`][std::any::TypeId] iterator exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
@@ -478,7 +471,7 @@ pub struct State {
     /// Number of modules loaded.
     pub modules: usize,
     /// Cached lookup values for function hashes.
-    pub functions_cache: HashMap<u64, Option<CallableFunction>, StraightHasherBuilder>,
+    pub functions_cache: HashMap<NonZeroU64, Option<CallableFunction>, StraightHasherBuilder>,
 }
 
 impl State {
@@ -870,15 +863,18 @@ impl Engine {
                 // Qualified variable
                 (_, Some(modules), hash_var, Ident { name, pos }) => {
                     let module = search_imports(mods, state, modules)?;
-                    let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
-                        match *err {
-                            EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
-                                *err_name = format!("{}{}", modules, name);
-                            }
-                            _ => (),
-                        }
-                        err.fill_position(*pos)
-                    })?;
+                    let target =
+                        module
+                            .get_qualified_var(hash_var.unwrap())
+                            .map_err(|mut err| {
+                                match *err {
+                                    EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
+                                        *err_name = format!("{}{}", modules, name);
+                                    }
+                                    _ => (),
+                                }
+                                err.fill_position(*pos)
+                            })?;
 
                     // Module variables are constant
                     let mut target = target.clone();
@@ -1047,7 +1043,7 @@ impl Engine {
                             let args = &mut [target_val, &mut idx_val2, &mut new_val.0];
 
                             self.exec_fn_call(
-                                mods, state, lib, FN_IDX_SET, 0, args, is_ref, true, false,
+                                mods, state, lib, FN_IDX_SET, None, args, is_ref, true, false,
                                 new_val.1, None, None, level,
                             )
                             .map_err(|err| match *err {
@@ -1083,16 +1079,15 @@ impl Engine {
                     Expr::FnCall(x, pos) if x.namespace.is_none() => {
                         let FnCallExpr {
                             name,
-                            native_only: native,
-                            hash,
+                            hash_script: hash,
                             def_value,
                             ..
                         } = x.as_ref();
                         let def_value = def_value.as_ref();
                         let args = idx_val.as_fn_call_args();
                         self.make_method_call(
-                            mods, state, lib, name, *hash, target, args, def_value, *native, false,
-                            *pos, level,
+                            mods, state, lib, name, *hash, target, args, def_value, false, *pos,
+                            level,
                         )
                     }
                     // xxx.module::fn_name(...) - syntax error
@@ -1126,7 +1121,7 @@ impl Engine {
                         let mut new_val = new_val;
                         let mut args = [target_val, &mut new_val.as_mut().unwrap().0];
                         self.exec_fn_call(
-                            mods, state, lib, setter, 0, &mut args, is_ref, true, false, *pos,
+                            mods, state, lib, setter, None, &mut args, is_ref, true, false, *pos,
                             None, None, level,
                         )
                         .map(|(v, _)| (v, true))
@@ -1137,7 +1132,7 @@ impl Engine {
                         let ((getter, _), Ident { pos, .. }) = x.as_ref();
                         let mut args = [target_val];
                         self.exec_fn_call(
-                            mods, state, lib, getter, 0, &mut args, is_ref, true, false, *pos,
+                            mods, state, lib, getter, None, &mut args, is_ref, true, false, *pos,
                             None, None, level,
                         )
                         .map(|(v, _)| (v, false))
@@ -1158,16 +1153,15 @@ impl Engine {
                             Expr::FnCall(x, pos) if x.namespace.is_none() => {
                                 let FnCallExpr {
                                     name,
-                                    native_only: native,
-                                    hash,
+                                    hash_script: hash,
                                     def_value,
                                     ..
                                 } = x.as_ref();
                                 let def_value = def_value.as_ref();
                                 let args = idx_val.as_fn_call_args();
                                 let (val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hash, target, args, def_value,
-                                    *native, false, *pos, level,
+                                    mods, state, lib, name, *hash, target, args, def_value, false,
+                                    *pos, level,
                                 )?;
                                 val.into()
                             }
@@ -1193,7 +1187,7 @@ impl Engine {
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self
                                     .exec_fn_call(
-                                        mods, state, lib, getter, 0, args, is_ref, true, false,
+                                        mods, state, lib, getter, None, args, is_ref, true, false,
                                         *pos, None, None, level,
                                     )
                                     .map_err(|err| err.fill_position(*pos))?;
@@ -1220,7 +1214,7 @@ impl Engine {
                                     // Re-use args because the first &mut parameter will not be consumed
                                     arg_values[1] = val;
                                     self.exec_fn_call(
-                                        mods, state, lib, setter, 0, arg_values, is_ref, true,
+                                        mods, state, lib, setter, None, arg_values, is_ref, true,
                                         false, *pos, None, None, level,
                                     )
                                     .or_else(
@@ -1240,16 +1234,15 @@ impl Engine {
                             Expr::FnCall(f, pos) if f.namespace.is_none() => {
                                 let FnCallExpr {
                                     name,
-                                    native_only: native,
-                                    hash,
+                                    hash_script: hash,
                                     def_value,
                                     ..
                                 } = f.as_ref();
                                 let def_value = def_value.as_ref();
                                 let args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hash, target, args, def_value,
-                                    *native, false, *pos, level,
+                                    mods, state, lib, name, *hash, target, args, def_value, false,
+                                    *pos, level,
                                 )?;
                                 let val = &mut val;
                                 let target = &mut val.into();
@@ -1501,8 +1494,8 @@ impl Engine {
                 let mut idx = idx;
                 let args = &mut [target, &mut idx];
                 self.exec_fn_call(
-                    _mods, state, _lib, FN_IDX_GET, 0, args, _is_ref, true, false, idx_pos, None,
-                    None, _level,
+                    _mods, state, _lib, FN_IDX_GET, None, args, _is_ref, true, false, idx_pos,
+                    None, None, _level,
                 )
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
@@ -1553,7 +1546,8 @@ impl Engine {
 
                     // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
                     let hash =
-                        calc_native_fn_hash(empty(), OP_EQUALS, args.iter().map(|a| a.type_id()));
+                        calc_native_fn_hash(empty(), OP_EQUALS, args.iter().map(|a| a.type_id()))
+                            .unwrap();
 
                     let pos = rhs.position();
 
@@ -1680,7 +1674,7 @@ impl Engine {
                         let ((getter, _), Ident { pos, .. }) = p.as_ref();
                         let mut args = [target.as_mut()];
                         self.exec_fn_call(
-                            mods, state, lib, getter, 0, &mut args, is_ref, true, false, *pos,
+                            mods, state, lib, getter, None, &mut args, is_ref, true, false, *pos,
                             None, None, level,
                         )
                         .map(|(v, _)| (v.into(), *pos))
@@ -1778,17 +1772,16 @@ impl Engine {
             Expr::FnCall(x, pos) if x.namespace.is_none() => {
                 let FnCallExpr {
                     name,
-                    native_only: native,
                     capture: cap_scope,
-                    hash,
+                    hash_script: hash,
                     args,
                     def_value,
                     ..
                 } = x.as_ref();
                 let def_value = def_value.as_ref();
                 self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args, def_value, *hash, *native,
-                    false, *pos, *cap_scope, level,
+                    scope, mods, state, lib, this_ptr, name, args, def_value, *hash, false, *pos,
+                    *cap_scope, level,
                 )
             }
 
@@ -1797,15 +1790,16 @@ impl Engine {
                 let FnCallExpr {
                     name,
                     namespace,
-                    hash,
+                    hash_script: hash,
                     args,
                     def_value,
                     ..
                 } = x.as_ref();
                 let namespace = namespace.as_ref().map(|v| v.as_ref());
+                let hash = hash.unwrap();
                 let def_value = def_value.as_ref();
                 self.make_qualified_function_call(
-                    scope, mods, state, lib, this_ptr, namespace, name, args, def_value, *hash,
+                    scope, mods, state, lib, this_ptr, namespace, name, args, def_value, hash,
                     *pos, level,
                 )
             }
@@ -1966,7 +1960,7 @@ impl Engine {
 
                     // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
                     let arg_types = once(lhs_ptr.as_mut().type_id()).chain(once(rhs_val.type_id()));
-                    let hash_fn = calc_native_fn_hash(empty(), op, arg_types);
+                    let hash_fn = calc_native_fn_hash(empty(), op, arg_types).unwrap();
 
                     match self
                         .global_namespace
@@ -2015,8 +2009,8 @@ impl Engine {
 
                             // Run function
                             let (value, _) = self.exec_fn_call(
-                                mods, state, lib, op, 0, args, false, false, false, *op_pos, None,
-                                None, level,
+                                mods, state, lib, op, None, args, false, false, false, *op_pos,
+                                None, None, level,
                             )?;
 
                             let value = value.flatten();
@@ -2051,7 +2045,7 @@ impl Engine {
 
                     let result = self
                         .exec_fn_call(
-                            mods, state, lib, op, 0, args, false, false, false, *op_pos, None,
+                            mods, state, lib, op, None, args, false, false, false, *op_pos, None,
                             None, level,
                         )
                         .map(|(v, _)| v)?;

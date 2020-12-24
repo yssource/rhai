@@ -9,30 +9,31 @@ use crate::stdlib::{
     fmt,
     hash::{BuildHasher, Hash, Hasher},
     iter::{empty, FromIterator},
+    num::NonZeroU64,
     ops::{Add, AddAssign, Deref},
     str::FromStr,
     string::{String, ToString},
 };
 use crate::Shared;
 
-/// A hasher that only takes one single [`u64`] and returns it as a hash key.
+/// A hasher that only takes one single [`NonZeroU64`] and returns it as a hash key.
 ///
 /// # Panics
 ///
-/// Panics when hashing any data type other than a [`u64`].
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
-pub struct StraightHasher(u64);
+/// Panics when hashing any data type other than a [`NonZeroU64`].
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct StraightHasher(NonZeroU64);
 
 impl Hasher for StraightHasher {
     #[inline(always)]
     fn finish(&self) -> u64 {
-        self.0
+        self.0.get()
     }
     #[inline(always)]
     fn write(&mut self, bytes: &[u8]) {
         let mut key = [0_u8; 8];
         key.copy_from_slice(&bytes[..8]); // Panics if fewer than 8 bytes
-        self.0 = u64::from_le_bytes(key);
+        self.0 = NonZeroU64::new(u64::from_le_bytes(key)).unwrap();
     }
 }
 
@@ -45,11 +46,11 @@ impl BuildHasher for StraightHasherBuilder {
 
     #[inline(always)]
     fn build_hasher(&self) -> Self::Hasher {
-        Default::default()
+        StraightHasher(NonZeroU64::new(1).unwrap())
     }
 }
 
-/// _(INTERNALS)_ Calculate a [`u64`] hash key from a namespace-qualified function name and parameter types.
+/// _(INTERNALS)_ Calculate a [`NonZeroU64`] hash key from a namespace-qualified function name and parameter types.
 /// Exported under the `internals` feature only.
 ///
 /// Module names are passed in via `&str` references from an iterator.
@@ -63,11 +64,11 @@ pub fn calc_native_fn_hash<'a>(
     modules: impl Iterator<Item = &'a str>,
     fn_name: &str,
     params: impl Iterator<Item = TypeId>,
-) -> u64 {
+) -> Option<NonZeroU64> {
     calc_fn_hash(modules, fn_name, None, params)
 }
 
-/// _(INTERNALS)_ Calculate a [`u64`] hash key from a namespace-qualified function name
+/// _(INTERNALS)_ Calculate a [`NonZeroU64`] hash key from a namespace-qualified function name
 /// and the number of parameters, but no parameter types.
 /// Exported under the `internals` feature only.
 ///
@@ -82,7 +83,7 @@ pub fn calc_script_fn_hash<'a>(
     modules: impl Iterator<Item = &'a str>,
     fn_name: &str,
     num: usize,
-) -> u64 {
+) -> Option<NonZeroU64> {
     calc_fn_hash(modules, fn_name, Some(num), empty())
 }
 
@@ -96,7 +97,7 @@ pub fn get_hasher() -> impl Hasher {
     s
 }
 
-/// Calculate a [`u64`] hash key from a namespace-qualified function name and parameter types.
+/// Calculate a [`NonZeroU64`] hash key from a namespace-qualified function name and parameter types.
 ///
 /// Module names are passed in via `&str` references from an iterator.
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
@@ -109,7 +110,7 @@ fn calc_fn_hash<'a>(
     fn_name: &str,
     num: Option<usize>,
     params: impl Iterator<Item = TypeId>,
-) -> u64 {
+) -> Option<NonZeroU64> {
     let s = &mut get_hasher();
 
     // Hash a boolean indicating whether the hash is namespace-qualified.
@@ -122,7 +123,7 @@ fn calc_fn_hash<'a>(
     } else {
         params.for_each(|t| t.hash(s));
     }
-    s.finish()
+    NonZeroU64::new(s.finish())
 }
 
 /// The system immutable string type.

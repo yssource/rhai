@@ -1,14 +1,18 @@
 //! # Rhai - embedded scripting for Rust
 //!
+//! ![Rhai logo](https://schungx.github.io/rhai/images/logo/rhai-banner-transparent-colour.svg)
+//!
 //! Rhai is a tiny, simple and fast embedded scripting language for Rust
 //! that gives you a safe and easy way to add scripting to your applications.
-//! It provides a familiar syntax based on JavaScript and Rust and a simple Rust interface.
-//! Here is a quick example.
 //!
-//! First, the contents of `my_script.rhai`:
+//! It provides a familiar syntax based on JavaScript+Rust and a simple Rust interface.
+//!
+//! # A Quick Example
+//!
+//! ## Contents of `my_script.rhai`
 //!
 //! ```,ignore
-//! // Brute force factorial function
+//! /// Brute force factorial function
 //! fn factorial(x) {
 //!     if x == 1 { return 1; }
 //!     x * factorial(x - 1)
@@ -18,7 +22,7 @@
 //! compute(factorial(10))
 //! ```
 //!
-//! And the Rust part:
+//! ## The Rust part
 //!
 //! ```,no_run
 //! use rhai::{Engine, EvalAltResult, RegisterFn};

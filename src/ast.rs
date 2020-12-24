@@ -9,7 +9,7 @@ use crate::stdlib::{
     collections::HashMap,
     fmt,
     hash::Hash,
-    num::NonZeroUsize,
+    num::{NonZeroU64, NonZeroUsize},
     ops::{Add, AddAssign},
     string::String,
     vec,
@@ -914,10 +914,8 @@ pub struct BinaryExpr {
 #[derive(Debug, Clone, Default)]
 pub struct FnCallExpr {
     /// Pre-calculated hash for a script-defined function of the same name and number of parameters.
-    pub hash: u64,
-    /// Call native functions only? Set to [`true`] to skip searching for script-defined function overrides
-    /// when it is certain that the function must be native (e.g. an operator).
-    pub native_only: bool,
+    /// None if native Rust only.
+    pub hash_script: Option<NonZeroU64>,
     /// Does this function call capture the parent scope?
     pub capture: bool,
     /// Default value when the function is not found, mostly used to provide a default for comparison functions.
@@ -964,7 +962,14 @@ pub enum Expr {
     /// ()
     Unit(Position),
     /// Variable access - (optional index, optional modules, hash, variable name)
-    Variable(Box<(Option<NonZeroUsize>, Option<Box<NamespaceRef>>, u64, Ident)>),
+    Variable(
+        Box<(
+            Option<NonZeroUsize>,
+            Option<Box<NamespaceRef>>,
+            Option<NonZeroU64>,
+            Ident,
+        )>,
+    ),
     /// Property access - (getter, setter), prop
     Property(Box<((ImmutableString, ImmutableString), Ident)>),
     /// { [statement][Stmt] }

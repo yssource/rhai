@@ -15,6 +15,7 @@ use crate::stdlib::{
     format,
     iter::{empty, once},
     mem,
+    num::NonZeroU64,
     ops::Deref,
     string::ToString,
     vec::Vec,
@@ -161,7 +162,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        hash_fn: u64,
+        hash_fn: NonZeroU64,
         args: &mut FnCallArgs,
         is_ref: bool,
         pub_only: bool,
@@ -453,22 +454,22 @@ impl Engine {
         &self,
         mods: Option<&Imports>,
         lib: &[&Module],
-        hash_fn: u64,
-        hash_script: u64,
+        hash_fn: Option<NonZeroU64>,
+        hash_script: Option<NonZeroU64>,
         pub_only: bool,
     ) -> bool {
         // First check script-defined functions
-        (hash_script != 0 && lib.iter().any(|&m| m.contains_fn(hash_script, pub_only)))
-            //|| lib.iter().any(|&m| m.contains_fn(hash_fn, pub_only))
+        hash_script.map(|hash| lib.iter().any(|&m| m.contains_fn(hash, pub_only))).unwrap_or(false)
+            //|| hash_fn.map(|hash| lib.iter().any(|&m| m.contains_fn(hash, pub_only))).unwrap_or(false)
             // Then check registered functions
-            //|| (hash_script != 0 && self.global_namespace.contains_fn(hash_script, pub_only))
-            || self.global_namespace.contains_fn(hash_fn, false)
+            //|| hash_script.map(|hash| self.global_namespace.contains_fn(hash, pub_only)).unwrap_or(false)
+            || hash_fn.map(|hash| self.global_namespace.contains_fn(hash, false)).unwrap_or(false)
             // Then check packages
-            || (hash_script != 0 && self.global_modules.iter().any(|m| m.contains_fn(hash_script, false)))
-            || self.global_modules.iter().any(|m| m.contains_fn(hash_fn, false))
+            || hash_script.map(|hash| self.global_modules.iter().any(|m| m.contains_fn(hash, false))).unwrap_or(false)
+            || hash_fn.map(|hash| self.global_modules.iter().any(|m| m.contains_fn(hash, false))).unwrap_or(false)
             // Then check imported modules
-            || (hash_script != 0 && mods.map(|m| m.contains_fn(hash_script)).unwrap_or(false))
-            || mods.map(|m| m.contains_fn(hash_fn)).unwrap_or(false)
+            || hash_script.map(|hash| mods.map(|m| m.contains_fn(hash)).unwrap_or(false)).unwrap_or(false)
+            || hash_fn.map(|hash| mods.map(|m| m.contains_fn(hash)).unwrap_or(false)).unwrap_or(false)
     }
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
@@ -484,7 +485,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        hash_script: u64,
+        hash_script: Option<NonZeroU64>,
         args: &mut FnCallArgs,
         is_ref: bool,
         _is_method: bool,
@@ -534,9 +535,11 @@ impl Engine {
 
             // Script-like function found
             #[cfg(not(feature = "no_function"))]
-            _ if hash_script != 0
-                && self.has_override(Some(mods), lib, 0, hash_script, pub_only) =>
+            _ if hash_script.is_some()
+                && self.has_override(Some(mods), lib, None, hash_script, pub_only) =>
             {
+                let hash_script = hash_script.unwrap();
+
                 // Get function
                 let (func, mut source) = lib
                     .iter()
@@ -636,7 +639,16 @@ impl Engine {
 
             // Normal native function call
             _ => self.call_native_fn(
-                mods, state, lib, fn_name, hash_fn, args, is_ref, pub_only, pos, def_val,
+                mods,
+                state,
+                lib,
+                fn_name,
+                hash_fn.unwrap(),
+                args,
+                is_ref,
+                pub_only,
+                pos,
+                def_val,
             ),
         }
     }
@@ -723,11 +735,10 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        hash_script: u64,
+        hash_script: Option<NonZeroU64>,
         target: &mut crate::engine::Target,
         mut call_args: StaticVec<Dynamic>,
         def_val: Option<&Dynamic>,
-        native: bool,
         pub_only: bool,
         pos: Position,
         level: usize,
@@ -745,11 +756,7 @@ impl Engine {
             let fn_name = fn_ptr.fn_name();
             let args_len = call_args.len() + fn_ptr.curry().len();
             // Recalculate hash
-            let hash = if native {
-                0
-            } else {
-                calc_script_fn_hash(empty(), fn_name, args_len)
-            };
+            let hash = hash_script.and_then(|_| calc_script_fn_hash(empty(), fn_name, args_len));
             // Arguments are passed as-is, adding the curried arguments
             let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
             let mut arg_values = curry
@@ -773,11 +780,7 @@ impl Engine {
             let fn_name = fn_ptr.fn_name();
             let args_len = call_args.len() + fn_ptr.curry().len();
             // Recalculate hash
-            let hash = if native {
-                0
-            } else {
-                calc_script_fn_hash(empty(), fn_name, args_len)
-            };
+            let hash = hash_script.and_then(|_| calc_script_fn_hash(empty(), fn_name, args_len));
             // Replace the first argument with the object pointer, adding the curried arguments
             let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
             let mut arg_values = once(obj)
@@ -837,17 +840,14 @@ impl Engine {
                             .enumerate()
                             .for_each(|(i, v)| call_args.insert(i, v));
                         // Recalculate the hash based on the new function name and new arguments
-                        hash = if native {
-                            0
-                        } else {
-                            calc_script_fn_hash(empty(), fn_name, call_args.len())
-                        };
+                        hash = hash_script
+                            .and_then(|_| calc_script_fn_hash(empty(), fn_name, call_args.len()));
                     }
                 }
             };
 
-            if native {
-                hash = 0;
+            if hash_script.is_none() {
+                hash = None;
             }
 
             // Attached object pointer in front of the arguments
@@ -881,8 +881,7 @@ impl Engine {
         fn_name: &str,
         args_expr: impl AsRef<[Expr]>,
         def_val: Option<&Dynamic>,
-        mut hash_script: u64,
-        native: bool,
+        mut hash_script: Option<NonZeroU64>,
         pub_only: bool,
         pos: Position,
         capture_scope: bool,
@@ -951,7 +950,7 @@ impl Engine {
 
         if name == KEYWORD_FN_PTR_CALL
             && args_expr.len() >= 1
-            && !self.has_override(Some(mods), lib, 0, hash_script, pub_only)
+            && !self.has_override(Some(mods), lib, None, hash_script, pub_only)
         {
             let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
@@ -1071,11 +1070,21 @@ impl Engine {
             }
         }
 
-        let hash = if native { 0 } else { hash_script };
         let args = args.as_mut();
 
         self.exec_fn_call(
-            mods, state, lib, name, hash, args, is_ref, false, pub_only, pos, capture, def_val,
+            mods,
+            state,
+            lib,
+            name,
+            hash_script,
+            args,
+            is_ref,
+            false,
+            pub_only,
+            pos,
+            capture,
+            def_val,
             level,
         )
         .map(|(v, _)| v)
@@ -1093,7 +1102,7 @@ impl Engine {
         fn_name: &str,
         args_expr: impl AsRef<[Expr]>,
         def_val: Option<&Dynamic>,
-        hash_script: u64,
+        hash_script: NonZeroU64,
         pos: Position,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -1167,9 +1176,10 @@ impl Engine {
                 // 2) Calculate a second hash with no qualifiers, empty function name,
                 //    and the actual list of argument `TypeId`'.s
                 let hash_fn_args =
-                    calc_native_fn_hash(empty(), "", args.iter().map(|a| a.type_id()));
+                    calc_native_fn_hash(empty(), "", args.iter().map(|a| a.type_id())).unwrap();
                 // 3) The final hash is the XOR of the two hashes.
-                let hash_qualified_fn = hash_script ^ hash_fn_args;
+                let hash_qualified_fn =
+                    NonZeroU64::new(hash_script.get() ^ hash_fn_args.get()).unwrap();
 
                 module.get_qualified_fn(hash_qualified_fn)
             }

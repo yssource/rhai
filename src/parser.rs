@@ -13,7 +13,7 @@ use crate::stdlib::{
     format,
     hash::{Hash, Hasher},
     iter::empty,
-    num::NonZeroUsize,
+    num::{NonZeroU64, NonZeroUsize},
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -34,7 +34,7 @@ use crate::FnAccess;
 
 type PERR = ParseErrorType;
 
-type FunctionsLib = HashMap<u64, ScriptFnDef, StraightHasherBuilder>;
+type FunctionsLib = HashMap<NonZeroU64, ScriptFnDef, StraightHasherBuilder>;
 
 /// A type that encapsulates the current state of the parser.
 #[derive(Debug)]
@@ -335,7 +335,7 @@ fn parse_fn_call(
         Token::RightParen => {
             eat_token(input, Token::RightParen);
 
-            let hash_script = if let Some(modules) = namespace.as_mut() {
+            let mut hash_script = if let Some(modules) = namespace.as_mut() {
                 #[cfg(not(feature = "no_module"))]
                 modules.set_index(state.find_module(&modules[0].name));
 
@@ -352,13 +352,17 @@ fn parse_fn_call(
                 calc_script_fn_hash(empty(), &id, 0)
             };
 
+            // script functions can only be valid identifiers
+            if !is_valid_identifier(id.chars()) {
+                hash_script = None;
+            }
+
             return Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
                     name: id.to_string().into(),
-                    native_only: !is_valid_identifier(id.chars()), // script functions can only be valid identifiers
                     capture,
                     namespace,
-                    hash: hash_script,
+                    hash_script,
                     args,
                     ..Default::default()
                 }),
@@ -383,7 +387,7 @@ fn parse_fn_call(
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
 
-                let hash_script = if let Some(modules) = namespace.as_mut() {
+                let mut hash_script = if let Some(modules) = namespace.as_mut() {
                     #[cfg(not(feature = "no_module"))]
                     modules.set_index(state.find_module(&modules[0].name));
 
@@ -400,13 +404,17 @@ fn parse_fn_call(
                     calc_script_fn_hash(empty(), &id, args.len())
                 };
 
+                // script functions can only be valid identifiers
+                if !is_valid_identifier(id.chars()) {
+                    hash_script = None;
+                }
+
                 return Ok(Expr::FnCall(
                     Box::new(FnCallExpr {
                         name: id.to_string().into(),
-                        native_only: !is_valid_identifier(id.chars()), // script functions can only be valid identifiers
                         capture,
                         namespace,
-                        hash: hash_script,
+                        hash_script,
                         args,
                         ..Default::default()
                     }),
@@ -973,7 +981,7 @@ fn parse_primary(
                 name: state.get_interned_string(s),
                 pos: settings.pos,
             };
-            Expr::Variable(Box::new((None, None, 0, var_name_def)))
+            Expr::Variable(Box::new((None, None, None, var_name_def)))
         }
         // Namespace qualification
         #[cfg(not(feature = "no_module"))]
@@ -987,7 +995,7 @@ fn parse_primary(
                 name: state.get_interned_string(s),
                 pos: settings.pos,
             };
-            Expr::Variable(Box::new((None, None, 0, var_name_def)))
+            Expr::Variable(Box::new((None, None, None, var_name_def)))
         }
         // Normal variable access
         Token::Identifier(s) => {
@@ -996,7 +1004,7 @@ fn parse_primary(
                 name: state.get_interned_string(s),
                 pos: settings.pos,
             };
-            Expr::Variable(Box::new((index, None, 0, var_name_def)))
+            Expr::Variable(Box::new((index, None, None, var_name_def)))
         }
 
         // Function call is allowed to have reserved keyword
@@ -1006,7 +1014,7 @@ fn parse_primary(
                     name: state.get_interned_string(s),
                     pos: settings.pos,
                 };
-                Expr::Variable(Box::new((None, None, 0, var_name_def)))
+                Expr::Variable(Box::new((None, None, None, var_name_def)))
             } else {
                 return Err(PERR::Reserved(s).into_err(settings.pos));
             }
@@ -1022,7 +1030,7 @@ fn parse_primary(
                     name: state.get_interned_string(s),
                     pos: settings.pos,
                 };
-                Expr::Variable(Box::new((None, None, 0, var_name_def)))
+                Expr::Variable(Box::new((None, None, None, var_name_def)))
             }
         }
 
@@ -1109,7 +1117,7 @@ fn parse_primary(
                         name: state.get_interned_string(id2),
                         pos: pos2,
                     };
-                    Expr::Variable(Box::new((index, modules, 0, var_name_def)))
+                    Expr::Variable(Box::new((index, modules, None, var_name_def)))
                 }
                 (Token::Reserved(id2), pos2) if is_valid_identifier(id2.chars()) => {
                     return Err(PERR::Reserved(id2).into_err(pos2));
@@ -1208,16 +1216,12 @@ fn parse_unary(
                 // Call negative function
                 expr => {
                     let op = "-";
-                    let hash = calc_script_fn_hash(empty(), op, 1);
                     let mut args = StaticVec::new();
                     args.push(expr);
 
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
                             name: op.into(),
-                            native_only: true,
-                            namespace: None,
-                            hash,
                             args,
                             ..Default::default()
                         }),
@@ -1238,16 +1242,12 @@ fn parse_unary(
                 // Call plus function
                 expr => {
                     let op = "+";
-                    let hash = calc_script_fn_hash(empty(), op, 1);
                     let mut args = StaticVec::new();
                     args.push(expr);
 
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
                             name: op.into(),
-                            native_only: true,
-                            namespace: None,
-                            hash,
                             args,
                             ..Default::default()
                         }),
@@ -1264,13 +1264,10 @@ fn parse_unary(
             args.push(expr);
 
             let op = "!";
-            let hash = calc_script_fn_hash(empty(), op, 1);
 
             Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
                     name: op.into(),
-                    native_only: true,
-                    hash,
                     args,
                     def_value: Some(false.into()), // NOT operator, when operating on invalid operand, defaults to false
                     ..Default::default()
@@ -1310,7 +1307,7 @@ fn parse_unary(
             });
 
             // Qualifiers (none) + function name + number of arguments.
-            let hash = calc_script_fn_hash(empty(), &func.name, func.params.len());
+            let hash = calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap();
 
             lib.insert(hash, func);
 
@@ -1723,11 +1720,9 @@ fn parse_binary_op(
 
         let cmp_def = Some(false.into());
         let op = op_token.syntax();
-        let hash = calc_script_fn_hash(empty(), &op, 2);
 
         let op_base = FnCallExpr {
             name: op,
-            native_only: true,
             capture: false,
             ..Default::default()
         };
@@ -1747,19 +1742,11 @@ fn parse_binary_op(
             | Token::PowerOf
             | Token::Ampersand
             | Token::Pipe
-            | Token::XOr => Expr::FnCall(
-                Box::new(FnCallExpr {
-                    hash,
-                    args,
-                    ..op_base
-                }),
-                pos,
-            ),
+            | Token::XOr => Expr::FnCall(Box::new(FnCallExpr { args, ..op_base }), pos),
 
             // '!=' defaults to true when passed invalid operands
             Token::NotEqualsTo => Expr::FnCall(
                 Box::new(FnCallExpr {
-                    hash,
                     args,
                     def_value: Some(true.into()),
                     ..op_base
@@ -1774,7 +1761,6 @@ fn parse_binary_op(
             | Token::GreaterThan
             | Token::GreaterThanEqualsTo => Expr::FnCall(
                 Box::new(FnCallExpr {
-                    hash,
                     args,
                     def_value: cmp_def,
                     ..op_base
@@ -1821,9 +1807,8 @@ fn parse_binary_op(
                 // Accept non-native functions for custom operators
                 Expr::FnCall(
                     Box::new(FnCallExpr {
-                        hash,
+                        hash_script: calc_script_fn_hash(empty(), &s, 2),
                         args,
-                        native_only: false,
                         ..op_base
                     }),
                     pos,
@@ -1892,7 +1877,7 @@ fn parse_custom_syntax(
                     segments.push(name.clone());
                     tokens.push(state.get_interned_string(MARKER_IDENT));
                     let var_name_def = Ident { name, pos };
-                    keywords.push(Expr::Variable(Box::new((None, None, 0, var_name_def))));
+                    keywords.push(Expr::Variable(Box::new((None, None, None, var_name_def))));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
@@ -2549,7 +2534,7 @@ fn parse_stmt(
                     let func = parse_fn(input, &mut new_state, lib, access, settings, comments)?;
 
                     // Qualifiers (none) + function name + number of arguments.
-                    let hash = calc_script_fn_hash(empty(), &func.name, func.params.len());
+                    let hash = calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap();
 
                     lib.insert(hash, func);
 
@@ -2812,7 +2797,12 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
 
     #[cfg(not(feature = "no_closure"))]
     externals.iter().for_each(|x| {
-        args.push(Expr::Variable(Box::new((None, None, 0, x.clone().into()))));
+        args.push(Expr::Variable(Box::new((
+            None,
+            None,
+            None,
+            x.clone().into(),
+        ))));
     });
 
     #[cfg(feature = "no_closure")]
@@ -2822,12 +2812,12 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
 
     let curry_func = crate::engine::KEYWORD_FN_PTR_CURRY;
 
-    let hash = calc_script_fn_hash(empty(), curry_func, num_externals + 1);
+    let hash_script = calc_script_fn_hash(empty(), curry_func, num_externals + 1);
 
     let expr = Expr::FnCall(
         Box::new(FnCallExpr {
             name: curry_func.into(),
-            hash,
+            hash_script,
             args,
             ..Default::default()
         }),

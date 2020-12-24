@@ -10,6 +10,7 @@ use crate::stdlib::{
     collections::HashMap,
     fmt, format,
     iter::empty,
+    num::NonZeroU64,
     num::NonZeroUsize,
     ops::{Add, AddAssign, Deref, DerefMut},
     string::{String, ToString},
@@ -137,12 +138,12 @@ pub struct Module {
     /// Module variables.
     variables: HashMap<ImmutableString, Dynamic>,
     /// Flattened collection of all module variables, including those in sub-modules.
-    all_variables: HashMap<u64, Dynamic, StraightHasherBuilder>,
+    all_variables: HashMap<NonZeroU64, Dynamic, StraightHasherBuilder>,
     /// External Rust functions.
-    functions: HashMap<u64, FuncInfo, StraightHasherBuilder>,
+    functions: HashMap<NonZeroU64, FuncInfo, StraightHasherBuilder>,
     /// Flattened collection of all external Rust functions, native or scripted.
     /// including those in sub-modules.
-    all_functions: HashMap<u64, CallableFunction, StraightHasherBuilder>,
+    all_functions: HashMap<NonZeroU64, CallableFunction, StraightHasherBuilder>,
     /// Iterator functions, keyed by the type producing the iterator.
     type_iterators: HashMap<TypeId, IteratorFn>,
     /// Flattened collection of iterator functions, including those in sub-modules.
@@ -398,16 +399,15 @@ impl Module {
     /// Get a reference to a namespace-qualified variable.
     /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
-    /// The [`u64`] hash is calculated by the function [`crate::calc_native_fn_hash`].
+    /// The [`NonZeroU64`] hash is calculated by the function [`crate::calc_native_fn_hash`].
     #[inline(always)]
-    pub(crate) fn get_qualified_var(&self, hash_var: u64) -> Result<&Dynamic, Box<EvalAltResult>> {
-        if hash_var == 0 {
-            Err(EvalAltResult::ErrorVariableNotFound(String::new(), Position::NONE).into())
-        } else {
-            self.all_variables.get(&hash_var).ok_or_else(|| {
-                EvalAltResult::ErrorVariableNotFound(String::new(), Position::NONE).into()
-            })
-        }
+    pub(crate) fn get_qualified_var(
+        &self,
+        hash_var: NonZeroU64,
+    ) -> Result<&Dynamic, Box<EvalAltResult>> {
+        self.all_variables.get(&hash_var).ok_or_else(|| {
+            EvalAltResult::ErrorVariableNotFound(String::new(), Position::NONE).into()
+        })
     }
 
     /// Set a script-defined function into the module.
@@ -415,12 +415,12 @@ impl Module {
     /// If there is an existing function of the same name and number of arguments, it is replaced.
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub(crate) fn set_script_fn(&mut self, fn_def: impl Into<Shared<ScriptFnDef>>) -> u64 {
+    pub(crate) fn set_script_fn(&mut self, fn_def: impl Into<Shared<ScriptFnDef>>) -> NonZeroU64 {
         let fn_def = fn_def.into();
 
         // None + function name + number of arguments.
         let num_params = fn_def.params.len();
-        let hash_script = crate::calc_script_fn_hash(empty(), &fn_def.name, num_params);
+        let hash_script = crate::calc_script_fn_hash(empty(), &fn_def.name, num_params).unwrap();
         let mut param_names: StaticVec<_> = fn_def.params.iter().cloned().collect();
         param_names.push("Dynamic".into());
         self.functions.insert(
@@ -526,7 +526,7 @@ impl Module {
 
     /// Does the particular Rust function exist in the module?
     ///
-    /// The [`u64`] hash is calculated by the function [`crate::calc_native_fn_hash`].
+    /// The [`NonZeroU64`] hash is calculated by the function [`crate::calc_native_fn_hash`].
     /// It is also returned by the `set_fn_XXX` calls.
     ///
     /// # Example
@@ -539,10 +539,8 @@ impl Module {
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[inline]
-    pub fn contains_fn(&self, hash_fn: u64, public_only: bool) -> bool {
-        if hash_fn == 0 {
-            false
-        } else if public_only {
+    pub fn contains_fn(&self, hash_fn: NonZeroU64, public_only: bool) -> bool {
+        if public_only {
             self.functions
                 .get(&hash_fn)
                 .map(|FuncInfo { access, .. }| access.is_public())
@@ -554,7 +552,7 @@ impl Module {
 
     /// Update the metadata (parameter names/types and return type) of a registered function.
     ///
-    /// The [`u64`] hash is calculated either by the function [`crate::calc_native_fn_hash`] or
+    /// The [`NonZeroU64`] hash is calculated either by the function [`crate::calc_native_fn_hash`] or
     /// the function [`crate::calc_script_fn_hash`].
     ///
     /// Each parameter name/type pair should be a single string of the format: `var_name: type`.
@@ -563,7 +561,7 @@ impl Module {
     /// In other words, the number of entries should be one larger than the number of parameters.
     pub fn update_fn_metadata<'a>(
         &mut self,
-        hash_fn: u64,
+        hash_fn: NonZeroU64,
         arg_names: impl AsRef<[&'a str]>,
     ) -> &mut Self {
         if let Some(f) = self.functions.get_mut(&hash_fn) {
@@ -574,9 +572,13 @@ impl Module {
 
     /// Update the namespace of a registered function.
     ///
-    /// The [`u64`] hash is calculated either by the function [`crate::calc_native_fn_hash`] or
+    /// The [`NonZeroU64`] hash is calculated either by the function [`crate::calc_native_fn_hash`] or
     /// the function [`crate::calc_script_fn_hash`].
-    pub fn update_fn_namespace(&mut self, hash_fn: u64, namespace: FnNamespace) -> &mut Self {
+    pub fn update_fn_namespace(
+        &mut self,
+        hash_fn: NonZeroU64,
+        namespace: FnNamespace,
+    ) -> &mut Self {
         if let Some(f) = self.functions.get_mut(&hash_fn) {
             f.namespace = namespace;
         }
@@ -599,10 +601,11 @@ impl Module {
         arg_names: Option<&[&str]>,
         arg_types: &[TypeId],
         func: CallableFunction,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         let name = name.into();
 
-        let hash_fn = crate::calc_native_fn_hash(empty(), &name, arg_types.iter().cloned());
+        let hash_fn =
+            crate::calc_native_fn_hash(empty(), &name, arg_types.iter().cloned()).unwrap();
 
         let param_types = arg_types
             .into_iter()
@@ -712,7 +715,7 @@ impl Module {
         func: impl Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
             + SendSync
             + 'static,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         let f =
             move |ctx: NativeCallContext, args: &mut FnCallArgs| func(ctx, args).map(Dynamic::from);
 
@@ -748,7 +751,7 @@ impl Module {
         &mut self,
         name: impl Into<String>,
         func: impl Fn() -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         let f = move |_: NativeCallContext, _: &mut FnCallArgs| func().map(Dynamic::from);
         let arg_types = [];
         self.set_fn(
@@ -783,7 +786,7 @@ impl Module {
         &mut self,
         name: impl Into<String>,
         func: impl Fn(A) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             func(cast_arg::<A>(&mut args[0])).map(Dynamic::from)
         };
@@ -823,7 +826,7 @@ impl Module {
         name: impl Into<String>,
         namespace: FnNamespace,
         func: impl Fn(&mut A) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             func(&mut args[0].write_lock::<A>().unwrap()).map(Dynamic::from)
         };
@@ -862,7 +865,7 @@ impl Module {
         &mut self,
         name: impl Into<String>,
         func: impl Fn(&mut A) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         self.set_fn_1_mut(
             crate::engine::make_getter(&name.into()),
             FnNamespace::Global,
@@ -894,7 +897,7 @@ impl Module {
         &mut self,
         name: impl Into<String>,
         func: impl Fn(A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             let a = cast_arg::<A>(&mut args[0]);
             let b = cast_arg::<B>(&mut args[1]);
@@ -941,7 +944,7 @@ impl Module {
         name: impl Into<String>,
         namespace: FnNamespace,
         func: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             let b = cast_arg::<B>(&mut args[1]);
             let a = &mut args[0].write_lock::<A>().unwrap();
@@ -987,7 +990,7 @@ impl Module {
         &mut self,
         name: impl Into<String>,
         func: impl Fn(&mut A, B) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         self.set_fn_2_mut(
             crate::engine::make_setter(&name.into()),
             FnNamespace::Global,
@@ -1026,7 +1029,7 @@ impl Module {
     pub fn set_indexer_get_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         func: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         if TypeId::of::<A>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -1073,7 +1076,7 @@ impl Module {
         &mut self,
         name: impl Into<String>,
         func: impl Fn(A, B, C) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             let a = cast_arg::<A>(&mut args[0]);
             let b = cast_arg::<B>(&mut args[1]);
@@ -1126,7 +1129,7 @@ impl Module {
         name: impl Into<String>,
         namespace: FnNamespace,
         func: impl Fn(&mut A, B, C) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             let b = cast_arg::<B>(&mut args[2]);
             let c = cast_arg::<C>(&mut args[3]);
@@ -1177,7 +1180,7 @@ impl Module {
     pub fn set_indexer_set_fn<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone>(
         &mut self,
         func: impl Fn(&mut A, B, C) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         if TypeId::of::<A>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -1249,7 +1252,7 @@ impl Module {
         &mut self,
         getter: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
         setter: impl Fn(&mut A, B, T) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
-    ) -> (u64, u64) {
+    ) -> (NonZeroU64, NonZeroU64) {
         (
             self.set_indexer_get_fn(getter),
             self.set_indexer_set_fn(setter),
@@ -1286,7 +1289,7 @@ impl Module {
         &mut self,
         name: impl Into<String>,
         func: impl Fn(A, B, C, D) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             let a = cast_arg::<A>(&mut args[0]);
             let b = cast_arg::<B>(&mut args[1]);
@@ -1346,7 +1349,7 @@ impl Module {
         name: impl Into<String>,
         namespace: FnNamespace,
         func: impl Fn(&mut A, B, C, D) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
-    ) -> u64 {
+    ) -> NonZeroU64 {
         let f = move |_: NativeCallContext, args: &mut FnCallArgs| {
             let b = cast_arg::<B>(&mut args[1]);
             let c = cast_arg::<C>(&mut args[2]);
@@ -1373,48 +1376,43 @@ impl Module {
 
     /// Get a Rust function.
     ///
-    /// The [`u64`] hash is calculated by the function [`crate::calc_native_fn_hash`].
+    /// The [`NonZeroU64`] hash is calculated by the function [`crate::calc_native_fn_hash`].
     /// It is also returned by the `set_fn_XXX` calls.
     #[inline(always)]
-    pub(crate) fn get_fn(&self, hash_fn: u64, public_only: bool) -> Option<&CallableFunction> {
-        if hash_fn == 0 {
-            None
-        } else {
-            self.functions
-                .get(&hash_fn)
-                .and_then(|FuncInfo { access, func, .. }| match access {
-                    _ if !public_only => Some(func),
-                    FnAccess::Public => Some(func),
-                    FnAccess::Private => None,
-                })
-        }
+    pub(crate) fn get_fn(
+        &self,
+        hash_fn: NonZeroU64,
+        public_only: bool,
+    ) -> Option<&CallableFunction> {
+        self.functions
+            .get(&hash_fn)
+            .and_then(|FuncInfo { access, func, .. }| match access {
+                _ if !public_only => Some(func),
+                FnAccess::Public => Some(func),
+                FnAccess::Private => None,
+            })
     }
 
     /// Does the particular namespace-qualified function exist in the module?
     ///
-    /// The [`u64`] hash is calculated by the function [`crate::calc_native_fn_hash`] and must match
+    /// The [`NonZeroU64`] hash is calculated by the function [`crate::calc_native_fn_hash`] and must match
     /// the hash calculated by [`build_index`][Module::build_index].
-    #[inline]
-    pub fn contains_qualified_fn(&self, hash_fn: u64) -> bool {
-        if hash_fn == 0 {
-            false
-        } else {
-            self.all_functions.contains_key(&hash_fn)
-        }
+    #[inline(always)]
+    pub fn contains_qualified_fn(&self, hash_fn: NonZeroU64) -> bool {
+        self.all_functions.contains_key(&hash_fn)
     }
 
     /// Get a namespace-qualified function.
     /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
-    /// The [`u64`] hash is calculated by the function [`crate::calc_native_fn_hash`] and must match
+    /// The [`NonZeroU64`] hash is calculated by the function [`crate::calc_native_fn_hash`] and must match
     /// the hash calculated by [`build_index`][Module::build_index].
     #[inline(always)]
-    pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
-        if hash_qualified_fn == 0 {
-            None
-        } else {
-            self.all_functions.get(&hash_qualified_fn)
-        }
+    pub(crate) fn get_qualified_fn(
+        &self,
+        hash_qualified_fn: NonZeroU64,
+    ) -> Option<&CallableFunction> {
+        self.all_functions.get(&hash_qualified_fn)
     }
 
     /// Combine another module into this module.
@@ -1760,8 +1758,8 @@ impl Module {
         fn index_module<'a>(
             module: &'a Module,
             qualifiers: &mut Vec<&'a str>,
-            variables: &mut HashMap<u64, Dynamic, StraightHasherBuilder>,
-            functions: &mut HashMap<u64, CallableFunction, StraightHasherBuilder>,
+            variables: &mut HashMap<NonZeroU64, Dynamic, StraightHasherBuilder>,
+            functions: &mut HashMap<NonZeroU64, CallableFunction, StraightHasherBuilder>,
             type_iterators: &mut HashMap<TypeId, IteratorFn>,
         ) {
             module.modules.iter().for_each(|(name, m)| {
@@ -1775,7 +1773,7 @@ impl Module {
             module.variables.iter().for_each(|(var_name, value)| {
                 // Qualifiers + variable name
                 let hash_var =
-                    crate::calc_script_fn_hash(qualifiers.iter().map(|&v| v), var_name, 0);
+                    crate::calc_script_fn_hash(qualifiers.iter().map(|&v| v), var_name, 0).unwrap();
                 variables.insert(hash_var, value.clone());
             });
 
@@ -1808,7 +1806,8 @@ impl Module {
 
                         // Qualifiers + function name + number of arguments.
                         let hash_qualified_script =
-                            crate::calc_script_fn_hash(qualifiers.iter().cloned(), name, *params);
+                            crate::calc_script_fn_hash(qualifiers.iter().cloned(), name, *params)
+                                .unwrap();
 
                         if !func.is_script() {
                             assert_eq!(*params, param_types.len());
@@ -1822,9 +1821,12 @@ impl Module {
                                 empty(),
                                 "",
                                 param_types.iter().cloned(),
-                            );
+                            )
+                            .unwrap();
                             // 3) The final hash is the XOR of the two hashes.
-                            let hash_qualified_fn = hash_qualified_script ^ hash_fn_args;
+                            let hash_qualified_fn =
+                                NonZeroU64::new(hash_qualified_script.get() ^ hash_fn_args.get())
+                                    .unwrap();
 
                             functions.insert(hash_qualified_fn, func.clone());
                         } else if cfg!(not(feature = "no_function")) {
@@ -1912,7 +1914,7 @@ impl Module {
 /// _(INTERNALS)_ A chain of [module][Module] names to namespace-qualify a variable or function call.
 /// Exported under the `internals` feature only.
 ///
-/// A [`u64`] hash key is cached for quick search purposes.
+/// A [`NonZeroU64`] hash key is cached for quick search purposes.
 ///
 /// A [`StaticVec`] is used because most namespace-qualified access contains only one level,
 /// and it is wasteful to always allocate a [`Vec`] with one element.
