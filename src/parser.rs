@@ -2797,17 +2797,14 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
 
     #[cfg(not(feature = "no_closure"))]
     externals.iter().for_each(|x| {
-        args.push(Expr::Variable(Box::new((
-            None,
-            None,
-            None,
-            x.clone().into(),
-        ))));
+        let expr = Expr::Variable(Box::new((None, None, None, x.clone().into())));
+        args.push(expr);
     });
 
     #[cfg(feature = "no_closure")]
     externals.into_iter().for_each(|x| {
-        args.push(Expr::Variable(Box::new((None, None, 0, x.clone().into()))));
+        let expr = Expr::Variable(Box::new((None, None, None, x.clone().into())));
+        args.push(expr);
     });
 
     let curry_func = crate::engine::KEYWORD_FN_PTR_CURRY;

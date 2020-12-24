@@ -20,6 +20,7 @@ use crate::stdlib::{
     string::ToString,
     vec::Vec,
 };
+use crate::utils::combine_hashes;
 use crate::{
     calc_native_fn_hash, calc_script_fn_hash, Dynamic, Engine, EvalAltResult, FnPtr,
     ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec, INT,
@@ -1177,9 +1178,8 @@ impl Engine {
                 //    and the actual list of argument `TypeId`'.s
                 let hash_fn_args =
                     calc_native_fn_hash(empty(), "", args.iter().map(|a| a.type_id())).unwrap();
-                // 3) The final hash is the XOR of the two hashes.
-                let hash_qualified_fn =
-                    NonZeroU64::new(hash_script.get() ^ hash_fn_args.get()).unwrap();
+                // 3) The two hashes are combined.
+                let hash_qualified_fn = combine_hashes(hash_script, hash_fn_args);
 
                 module.get_qualified_fn(hash_qualified_fn)
             }

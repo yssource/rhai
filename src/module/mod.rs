@@ -17,7 +17,7 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::token::Token;
-use crate::utils::StraightHasherBuilder;
+use crate::utils::{combine_hashes, StraightHasherBuilder};
 use crate::{
     Dynamic, EvalAltResult, ImmutableString, NativeCallContext, Position, Shared, StaticVec,
 };
@@ -1823,10 +1823,9 @@ impl Module {
                                 param_types.iter().cloned(),
                             )
                             .unwrap();
-                            // 3) The final hash is the XOR of the two hashes.
+                            // 3) The two hashes are combined.
                             let hash_qualified_fn =
-                                NonZeroU64::new(hash_qualified_script.get() ^ hash_fn_args.get())
-                                    .unwrap();
+                                combine_hashes(hash_qualified_script, hash_fn_args);
 
                             functions.insert(hash_qualified_fn, func.clone());
                         } else if cfg!(not(feature = "no_function")) {

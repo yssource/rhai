@@ -22,18 +22,23 @@ use crate::Shared;
 ///
 /// Panics when hashing any data type other than a [`NonZeroU64`].
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct StraightHasher(NonZeroU64);
+pub struct StraightHasher(u64);
 
 impl Hasher for StraightHasher {
     #[inline(always)]
     fn finish(&self) -> u64 {
-        self.0.get()
+        self.0
     }
     #[inline(always)]
     fn write(&mut self, bytes: &[u8]) {
         let mut key = [0_u8; 8];
         key.copy_from_slice(&bytes[..8]); // Panics if fewer than 8 bytes
-        self.0 = NonZeroU64::new(u64::from_le_bytes(key)).unwrap();
+        self.0 = u64::from_le_bytes(key);
+
+        // HACK - If it so happens to hash directly to zero (OMG!) then change it to 42...
+        if self.0 == 0 {
+            self.0 = 42;
+        }
     }
 }
 
@@ -46,8 +51,18 @@ impl BuildHasher for StraightHasherBuilder {
 
     #[inline(always)]
     fn build_hasher(&self) -> Self::Hasher {
-        StraightHasher(NonZeroU64::new(1).unwrap())
+        StraightHasher(1)
     }
+}
+
+/// Create an instance of the default hasher.
+pub fn get_hasher() -> impl Hasher {
+    #[cfg(feature = "no_std")]
+    let s: ahash::AHasher = Default::default();
+    #[cfg(not(feature = "no_std"))]
+    let s = crate::stdlib::collections::hash_map::DefaultHasher::new();
+
+    s
 }
 
 /// _(INTERNALS)_ Calculate a [`NonZeroU64`] hash key from a namespace-qualified function name and parameter types.
@@ -87,16 +102,6 @@ pub fn calc_script_fn_hash<'a>(
     calc_fn_hash(modules, fn_name, Some(num), empty())
 }
 
-/// Create an instance of the default hasher.
-pub fn get_hasher() -> impl Hasher {
-    #[cfg(feature = "no_std")]
-    let s: ahash::AHasher = Default::default();
-    #[cfg(not(feature = "no_std"))]
-    let s = crate::stdlib::collections::hash_map::DefaultHasher::new();
-
-    s
-}
-
 /// Calculate a [`NonZeroU64`] hash key from a namespace-qualified function name and parameter types.
 ///
 /// Module names are passed in via `&str` references from an iterator.
@@ -123,7 +128,15 @@ fn calc_fn_hash<'a>(
     } else {
         params.for_each(|t| t.hash(s));
     }
-    NonZeroU64::new(s.finish())
+    // HACK - If it so happens to hash directly to zero (OMG!) then change it to 42...
+    NonZeroU64::new(s.finish()).or_else(|| NonZeroU64::new(42))
+}
+
+/// Combine two [`NonZeroU64`] hashes by taking the XOR of them.
+#[inline(always)]
+pub(crate) fn combine_hashes(a: NonZeroU64, b: NonZeroU64) -> NonZeroU64 {
+    // HACK - If it so happens to hash directly to zero (OMG!) then change it to 42...
+    NonZeroU64::new(a.get() ^ b.get()).unwrap_or_else(|| NonZeroU64::new(42).unwrap())
 }
 
 /// The system immutable string type.
