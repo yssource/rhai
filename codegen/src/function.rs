@@ -22,23 +22,30 @@ use crate::attrs::{ExportInfo, ExportScope, ExportedParams};
 
 #[derive(Clone, Debug, Eq, PartialEq, Copy, Hash)]
 pub enum FnNamespaceAccess {
+    Unset,
     Global,
     Internal,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+impl Default for FnNamespaceAccess {
+    fn default() -> Self {
+        Self::Unset
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Copy, Hash)]
 pub enum Index {
     Get,
     Set,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Property {
     Get(syn::Ident),
     Set(syn::Ident),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum FnSpecialAccess {
     None,
     Index(Index),
@@ -101,7 +108,7 @@ pub(crate) struct ExportedFnParams {
     pub return_raw: bool,
     pub skip: bool,
     pub special: FnSpecialAccess,
-    pub namespace: Option<FnNamespaceAccess>,
+    pub namespace: FnNamespaceAccess,
     pub span: Option<proc_macro2::Span>,
 }
 
@@ -138,7 +145,7 @@ impl ExportedParams for ExportedFnParams {
         let mut name = Vec::new();
         let mut return_raw = false;
         let mut skip = false;
-        let mut namespace = None;
+        let mut namespace = FnNamespaceAccess::Unset;
         let mut special = FnSpecialAccess::None;
         for attr in attrs {
             let crate::attrs::AttrItem {
@@ -226,22 +233,16 @@ impl ExportedParams for ExportedFnParams {
                 ("global", Some(s)) | ("internal", Some(s)) => {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
                 }
-                ("global", None) => {
-                    if let Some(ns) = namespace {
-                        if ns != FnNamespaceAccess::Global {
-                            return Err(syn::Error::new(key.span(), "conflicting namespace"));
-                        }
-                    }
-                    namespace = Some(FnNamespaceAccess::Global);
-                }
-                ("internal", None) => {
-                    if let Some(ns) = namespace {
-                        if ns != FnNamespaceAccess::Internal {
-                            return Err(syn::Error::new(key.span(), "conflicting namespace"));
-                        }
-                    }
-                    namespace = Some(FnNamespaceAccess::Internal);
-                }
+                ("global", None) => match namespace {
+                    FnNamespaceAccess::Unset => namespace = FnNamespaceAccess::Global,
+                    FnNamespaceAccess::Global => (),
+                    _ => return Err(syn::Error::new(key.span(), "conflicting namespace")),
+                },
+                ("internal", None) => match namespace {
+                    FnNamespaceAccess::Unset => namespace = FnNamespaceAccess::Internal,
+                    FnNamespaceAccess::Internal => (),
+                    _ => return Err(syn::Error::new(key.span(), "conflicting namespace")),
+                },
                 (attr, _) => {
                     return Err(syn::Error::new(
                         key.span(),

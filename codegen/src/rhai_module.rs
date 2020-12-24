@@ -40,15 +40,13 @@ pub(crate) fn generate_body(
         if itemmod.skipped() {
             continue;
         }
-        let module_name = itemmod.module_name().unwrap();
-        let exported_name: syn::LitStr = if let Some(name) = itemmod.exported_name() {
-            syn::LitStr::new(&name, proc_macro2::Span::call_site())
-        } else {
-            syn::LitStr::new(&module_name.to_string(), proc_macro2::Span::call_site())
-        };
+        let module_name = itemmod.module_name();
+        let exported_name: syn::LitStr = syn::LitStr::new(
+            itemmod.exported_name().as_ref(),
+            proc_macro2::Span::call_site(),
+        );
         let cfg_attrs: Vec<&syn::Attribute> = itemmod
             .attrs()
-            .unwrap()
             .iter()
             .filter(|&a| a.path.get_ident().map(|i| *i == "cfg").unwrap_or(false))
             .collect();
@@ -158,12 +156,14 @@ pub(crate) fn generate_body(
                 }
             }
 
-            if let Some(ns) = function.params().namespace {
-                namespace = ns;
+            match function.params().namespace {
+                FnNamespaceAccess::Unset => (),
+                ns => namespace = ns,
             }
 
             let ns_str = syn::Ident::new(
                 match namespace {
+                    FnNamespaceAccess::Unset => unreachable!(),
                     FnNamespaceAccess::Global => "Global",
                     FnNamespaceAccess::Internal => "Internal",
                 },
@@ -256,11 +256,11 @@ pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::
             }
 
             for (name, fn_name) in names {
-                let current_span = itemfn.params().span.as_ref().unwrap();
+                let current_span = itemfn.params().span.unwrap();
                 let key = make_key(&name, itemfn);
-                if let Some(other_span) = renames.insert(key, *current_span) {
+                if let Some(other_span) = renames.insert(key, current_span) {
                     let mut err = syn::Error::new(
-                        *current_span,
+                        current_span,
                         format!("duplicate Rhai signature for '{}'", &fn_name),
                     );
                     err.combine(syn::Error::new(

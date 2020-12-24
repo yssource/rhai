@@ -291,6 +291,7 @@ fn multiple_fn_rename_test() -> Result<(), Box<EvalAltResult>> {
 
 mod export_by_prefix {
     use rhai::plugin::*;
+
     #[export_module(export_prefix = "foo_")]
     pub mod my_adds {
         use rhai::{FLOAT, INT};
@@ -373,6 +374,7 @@ fn export_by_prefix_test() -> Result<(), Box<EvalAltResult>> {
 
 mod export_all {
     use rhai::plugin::*;
+
     #[export_module(export_all)]
     pub mod my_adds {
         use rhai::{FLOAT, INT};

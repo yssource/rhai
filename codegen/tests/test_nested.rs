@@ -73,8 +73,8 @@ fn one_fn_submodule_nested_attr_test() -> Result<(), Box<EvalAltResult>> {
 
 mod export_nested_by_prefix {
     use rhai::plugin::*;
-    #[export_module(export_prefix = "foo_")]
 
+    #[export_module(export_prefix = "foo_")]
     pub mod my_adds {
         pub mod foo_first_adders {
             use rhai::{FLOAT, INT};
