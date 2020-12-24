@@ -861,20 +861,17 @@ impl Engine {
         match expr {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
-                (_, Some(modules), hash_var, Ident { name, pos }) => {
+                (_, Some((hash_var, modules)), Ident { name, pos }) => {
                     let module = search_imports(mods, state, modules)?;
-                    let target =
-                        module
-                            .get_qualified_var(hash_var.unwrap())
-                            .map_err(|mut err| {
-                                match *err {
-                                    EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
-                                        *err_name = format!("{}{}", modules, name);
-                                    }
-                                    _ => (),
-                                }
-                                err.fill_position(*pos)
-                            })?;
+                    let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
+                        match *err {
+                            EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
+                                *err_name = format!("{}{}", modules, name);
+                            }
+                            _ => (),
+                        }
+                        err.fill_position(*pos)
+                    })?;
 
                     // Module variables are constant
                     let mut target = target.clone();
@@ -898,7 +895,7 @@ impl Engine {
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &'a Expr,
     ) -> Result<(Target<'s>, &'a str, Position), Box<EvalAltResult>> {
-        let (index, _, _, Ident { name, pos }) = match expr {
+        let (index, _, Ident { name, pos }) = match expr {
             Expr::Variable(v) => v.as_ref(),
             _ => unreachable!(),
         };
@@ -1299,7 +1296,7 @@ impl Engine {
                 let Ident {
                     name: var_name,
                     pos: var_pos,
-                } = &x.3;
+                } = &x.2;
 
                 self.inc_operations(state, *var_pos)?;
 
@@ -1715,11 +1712,11 @@ impl Engine {
             Expr::StringConstant(x, _) => Ok(x.clone().into()),
             Expr::CharConstant(x, _) => Ok((*x).into()),
             Expr::FnPointer(x, _) => Ok(FnPtr::new_unchecked(x.clone(), Default::default()).into()),
-            Expr::Variable(x) if (x.3).name == KEYWORD_THIS => {
+            Expr::Variable(x) if (x.2).name == KEYWORD_THIS => {
                 if let Some(val) = this_ptr {
                     Ok(val.clone())
                 } else {
-                    EvalAltResult::ErrorUnboundThis((x.3).pos).into()
+                    EvalAltResult::ErrorUnboundThis((x.2).pos).into()
                 }
             }
             Expr::Variable(_) => {
@@ -1795,7 +1792,7 @@ impl Engine {
                     def_value,
                     ..
                 } = x.as_ref();
-                let namespace = namespace.as_ref().map(|v| v.as_ref());
+                let namespace = namespace.as_ref();
                 let hash = hash.unwrap();
                 let def_value = def_value.as_ref();
                 self.make_qualified_function_call(

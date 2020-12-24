@@ -717,12 +717,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         Expr::FnCall(x, _) => x.args.iter_mut().for_each(|a| optimize_expr(a, state)),
 
         // constant-name
-        Expr::Variable(x) if x.1.is_none() && state.find_constant(&x.3.name).is_some() => {
+        Expr::Variable(x) if x.1.is_none() && state.find_constant(&x.2.name).is_some() => {
             state.set_dirty();
 
             // Replace constant with value
-            let mut result = state.find_constant(&x.3.name).unwrap().clone();
-            result.set_position(x.3.pos);
+            let mut result = state.find_constant(&x.2.name).unwrap().clone();
+            result.set_position(x.2.pos);
             *expr = result;
         }
 

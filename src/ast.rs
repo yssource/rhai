@@ -921,7 +921,7 @@ pub struct FnCallExpr {
     /// Default value when the function is not found, mostly used to provide a default for comparison functions.
     pub def_value: Option<Dynamic>,
     /// Namespace of the function, if any. Boxed because it occurs rarely.
-    pub namespace: Option<Box<NamespaceRef>>,
+    pub namespace: Option<NamespaceRef>,
     /// Function name.
     /// Use [`Cow<'static, str>`][Cow] because a lot of operators (e.g. `==`, `>=`) are implemented as
     /// function calls and the function names are predictable, so no need to allocate a new [`String`].
@@ -961,12 +961,11 @@ pub enum Expr {
     Map(Box<StaticVec<(Ident, Expr)>>, Position),
     /// ()
     Unit(Position),
-    /// Variable access - (optional index, optional modules, hash, variable name)
+    /// Variable access - (optional index, optional (hash, modules), variable name)
     Variable(
         Box<(
             Option<NonZeroUsize>,
-            Option<Box<NamespaceRef>>,
-            Option<NonZeroU64>,
+            Option<(NonZeroU64, NamespaceRef)>,
             Ident,
         )>,
     ),
@@ -1049,7 +1048,7 @@ impl Expr {
     /// Is the expression a simple variable access?
     pub(crate) fn get_variable_access(&self, non_qualified: bool) -> Option<&str> {
         match self {
-            Self::Variable(x) if !non_qualified || x.1.is_none() => Some((x.3).name.as_str()),
+            Self::Variable(x) if !non_qualified || x.1.is_none() => Some((x.2).name.as_str()),
             _ => None,
         }
     }
@@ -1071,7 +1070,7 @@ impl Expr {
             Self::Map(_, pos) => *pos,
             Self::Property(x) => (x.1).pos,
             Self::Stmt(_, pos) => *pos,
-            Self::Variable(x) => (x.3).pos,
+            Self::Variable(x) => (x.2).pos,
             Self::FnCall(_, pos) => *pos,
 
             Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => x.lhs.position(),
@@ -1101,7 +1100,7 @@ impl Expr {
             Self::FnPointer(_, pos) => *pos = new_pos,
             Self::Array(_, pos) => *pos = new_pos,
             Self::Map(_, pos) => *pos = new_pos,
-            Self::Variable(x) => (x.3).pos = new_pos,
+            Self::Variable(x) => (x.2).pos = new_pos,
             Self::Property(x) => (x.1).pos = new_pos,
             Self::Stmt(_, pos) => *pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,

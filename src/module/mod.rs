@@ -1913,7 +1913,7 @@ impl Module {
 /// _(INTERNALS)_ A chain of [module][Module] names to namespace-qualify a variable or function call.
 /// Exported under the `internals` feature only.
 ///
-/// A [`NonZeroU64`] hash key is cached for quick search purposes.
+/// A [`NonZeroU64`] offset to the current [`Scope`][crate::Scope] is cached for quick search purposes.
 ///
 /// A [`StaticVec`] is used because most namespace-qualified access contains only one level,
 /// and it is wasteful to always allocate a [`Vec`] with one element.
@@ -1922,13 +1922,13 @@ impl Module {
 ///
 /// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
-pub struct NamespaceRef(StaticVec<Ident>, Option<NonZeroUsize>);
+pub struct NamespaceRef(Option<NonZeroUsize>, StaticVec<Ident>);
 
 impl fmt::Debug for NamespaceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, f)?;
+        fmt::Debug::fmt(&self.1, f)?;
 
-        if let Some(index) = self.1 {
+        if let Some(index) = self.0 {
             write!(f, " -> {}", index)
         } else {
             Ok(())
@@ -1940,19 +1940,19 @@ impl Deref for NamespaceRef {
     type Target = StaticVec<Ident>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.1
     }
 }
 
 impl DerefMut for NamespaceRef {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.1
     }
 }
 
 impl fmt::Display for NamespaceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for Ident { name, .. } in self.0.iter() {
+        for Ident { name, .. } in self.1.iter() {
             write!(f, "{}{}", name, Token::DoubleColon.syntax())?;
         }
         Ok(())
@@ -1961,7 +1961,7 @@ impl fmt::Display for NamespaceRef {
 
 impl From<StaticVec<Ident>> for NamespaceRef {
     fn from(modules: StaticVec<Ident>) -> Self {
-        Self(modules, None)
+        Self(None, modules)
     }
 }
 
@@ -1991,12 +1991,14 @@ impl<M: Into<Module>> AddAssign<M> for Module {
 }
 
 impl NamespaceRef {
+    /// Get the [`Scope`][crate::Scope] index offset.
     pub(crate) fn index(&self) -> Option<NonZeroUsize> {
-        self.1
+        self.0
     }
+    /// Set the [`Scope`][crate::Scope] index offset.
     #[cfg(not(feature = "no_module"))]
     pub(crate) fn set_index(&mut self, index: Option<NonZeroUsize>) {
-        self.1 = index
+        self.0 = index
     }
 }
 

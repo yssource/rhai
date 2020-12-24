@@ -238,7 +238,7 @@ impl Expr {
     fn into_property(self, state: &mut ParseState) -> Self {
         match self {
             Self::Variable(x) if x.1.is_none() => {
-                let ident = x.3;
+                let ident = x.2;
                 let getter = state.get_interned_string(crate::engine::make_getter(&ident.name));
                 let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
                 Self::Property(Box::new(((getter, setter), ident.into())))
@@ -310,7 +310,7 @@ fn parse_fn_call(
     lib: &mut FunctionsLib,
     id: ImmutableString,
     capture: bool,
-    mut namespace: Option<Box<NamespaceRef>>,
+    mut namespace: Option<NamespaceRef>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
     let (token, token_pos) = input.peek().unwrap();
@@ -335,7 +335,7 @@ fn parse_fn_call(
         Token::RightParen => {
             eat_token(input, Token::RightParen);
 
-            let mut hash_script = if let Some(modules) = namespace.as_mut() {
+            let mut hash_script = if let Some(ref mut modules) = namespace {
                 #[cfg(not(feature = "no_module"))]
                 modules.set_index(state.find_module(&modules[0].name));
 
@@ -981,7 +981,7 @@ fn parse_primary(
                 name: state.get_interned_string(s),
                 pos: settings.pos,
             };
-            Expr::Variable(Box::new((None, None, None, var_name_def)))
+            Expr::Variable(Box::new((None, None, var_name_def)))
         }
         // Namespace qualification
         #[cfg(not(feature = "no_module"))]
@@ -995,7 +995,7 @@ fn parse_primary(
                 name: state.get_interned_string(s),
                 pos: settings.pos,
             };
-            Expr::Variable(Box::new((None, None, None, var_name_def)))
+            Expr::Variable(Box::new((None, None, var_name_def)))
         }
         // Normal variable access
         Token::Identifier(s) => {
@@ -1004,7 +1004,7 @@ fn parse_primary(
                 name: state.get_interned_string(s),
                 pos: settings.pos,
             };
-            Expr::Variable(Box::new((index, None, None, var_name_def)))
+            Expr::Variable(Box::new((index, None, var_name_def)))
         }
 
         // Function call is allowed to have reserved keyword
@@ -1014,7 +1014,7 @@ fn parse_primary(
                     name: state.get_interned_string(s),
                     pos: settings.pos,
                 };
-                Expr::Variable(Box::new((None, None, None, var_name_def)))
+                Expr::Variable(Box::new((None, None, var_name_def)))
             } else {
                 return Err(PERR::Reserved(s).into_err(settings.pos));
             }
@@ -1030,7 +1030,7 @@ fn parse_primary(
                     name: state.get_interned_string(s),
                     pos: settings.pos,
                 };
-                Expr::Variable(Box::new((None, None, None, var_name_def)))
+                Expr::Variable(Box::new((None, None, var_name_def)))
             }
         }
 
@@ -1089,35 +1089,38 @@ fn parse_primary(
                     .into_err(pos));
                 }
 
-                let (_, modules, _, Ident { name, pos }) = *x;
+                let (_, namespace, Ident { name, pos }) = *x;
                 settings.pos = pos;
-                parse_fn_call(input, state, lib, name, true, modules, settings.level_up())?
+                let ns = namespace.map(|(_, ns)| ns);
+                parse_fn_call(input, state, lib, name, true, ns, settings.level_up())?
             }
             // Function call
             (Expr::Variable(x), Token::LeftParen) => {
-                let (_, modules, _, Ident { name, pos }) = *x;
+                let (_, namespace, Ident { name, pos }) = *x;
                 settings.pos = pos;
-                parse_fn_call(input, state, lib, name, false, modules, settings.level_up())?
+                let ns = namespace.map(|(_, ns)| ns);
+                parse_fn_call(input, state, lib, name, false, ns, settings.level_up())?
             }
             (Expr::Property(_), _) => unreachable!(),
             // module access
             (Expr::Variable(x), Token::DoubleColon) => match input.next().unwrap() {
                 (Token::Identifier(id2), pos2) => {
-                    let (index, mut modules, _, var_name_def) = *x;
+                    let (index, mut namespace, var_name_def) = *x;
 
-                    if let Some(ref mut modules) = modules {
-                        modules.push(var_name_def);
+                    if let Some((_, ref mut namespace)) = namespace {
+                        namespace.push(var_name_def);
                     } else {
-                        let mut m: NamespaceRef = Default::default();
-                        m.push(var_name_def);
-                        modules = Some(Box::new(m));
+                        let mut ns: NamespaceRef = Default::default();
+                        ns.push(var_name_def);
+                        let index = NonZeroU64::new(42).unwrap(); // Dummy
+                        namespace = Some((index, ns));
                     }
 
                     let var_name_def = Ident {
                         name: state.get_interned_string(id2),
                         pos: pos2,
                     };
-                    Expr::Variable(Box::new((index, modules, None, var_name_def)))
+                    Expr::Variable(Box::new((index, namespace, var_name_def)))
                 }
                 (Token::Reserved(id2), pos2) if is_valid_identifier(id2.chars()) => {
                     return Err(PERR::Reserved(id2).into_err(pos2));
@@ -1154,14 +1157,16 @@ fn parse_primary(
         _ => None,
     }
     .map(|x| {
-        let (_, modules, hash, Ident { name, .. }) = x.as_mut();
-        let namespace = modules.as_mut().unwrap();
+        if let (_, Some((ref mut hash, ref mut namespace)), Ident { name, .. }) = x.as_mut() {
+            // Qualifiers + variable name
+            *hash =
+                calc_script_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0).unwrap();
 
-        // Qualifiers + variable name
-        *hash = calc_script_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0);
-
-        #[cfg(not(feature = "no_module"))]
-        namespace.set_index(state.find_module(&namespace[0].name));
+            #[cfg(not(feature = "no_module"))]
+            namespace.set_index(state.find_module(&namespace[0].name));
+        } else {
+            unreachable!();
+        }
     });
 
     // Make sure identifiers are valid
@@ -1335,7 +1340,7 @@ fn make_assignment_stmt<'a>(
         )),
         // var (indexed) = rhs
         Expr::Variable(x) => {
-            let (index, _, _, Ident { name, pos }) = x.as_ref();
+            let (index, _, Ident { name, pos }) = x.as_ref();
             match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                 AccessMode::ReadWrite => Ok(Stmt::Assignment(
                     Box::new((lhs, fn_name.into(), rhs)),
@@ -1356,7 +1361,7 @@ fn make_assignment_stmt<'a>(
             )),
             // var[???] (indexed) = rhs, var.??? (indexed) = rhs
             Expr::Variable(x) => {
-                let (index, _, _, Ident { name, pos }) = x.as_ref();
+                let (index, _, Ident { name, pos }) = x.as_ref();
                 match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                     AccessMode::ReadWrite => Ok(Stmt::Assignment(
                         Box::new((lhs, fn_name.into(), rhs)),
@@ -1440,7 +1445,7 @@ fn make_dot_expr(
         }
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
-            let ident = x.3;
+            let ident = x.2;
             let getter = state.get_interned_string(crate::engine::make_getter(&ident.name));
             let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
             let rhs = Expr::Property(Box::new(((getter, setter), ident)));
@@ -1449,7 +1454,7 @@ fn make_dot_expr(
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(x)) if x.1.is_some() => {
-            return Err(PERR::PropertyExpected.into_err(x.1.unwrap()[0].pos));
+            return Err(PERR::PropertyExpected.into_err(x.1.unwrap().1[0].pos));
         }
         // lhs.prop
         (lhs, prop @ Expr::Property(_)) => {
@@ -1877,7 +1882,7 @@ fn parse_custom_syntax(
                     segments.push(name.clone());
                     tokens.push(state.get_interned_string(MARKER_IDENT));
                     let var_name_def = Ident { name, pos };
-                    keywords.push(Expr::Variable(Box::new((None, None, None, var_name_def))));
+                    keywords.push(Expr::Variable(Box::new((None, None, var_name_def))));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
@@ -2797,14 +2802,12 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
 
     #[cfg(not(feature = "no_closure"))]
     externals.iter().for_each(|x| {
-        let expr = Expr::Variable(Box::new((None, None, None, x.clone().into())));
-        args.push(expr);
+        args.push(Expr::Variable(Box::new((None, None, x.clone().into()))));
     });
 
     #[cfg(feature = "no_closure")]
     externals.into_iter().for_each(|x| {
-        let expr = Expr::Variable(Box::new((None, None, None, x.clone().into())));
-        args.push(expr);
+        args.push(Expr::Variable(Box::new((None, None, x.clone().into()))));
     });
 
     let curry_func = crate::engine::KEYWORD_FN_PTR_CURRY;
