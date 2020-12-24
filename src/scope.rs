@@ -39,17 +39,16 @@ use crate::{Dynamic, ImmutableString, StaticVec};
 // # Implementation Notes
 //
 // [`Scope`] is implemented as two [`Vec`]'s of exactly the same length.  Variables data (name, type, etc.)
-// is manually split into three equal-length arrays.  That's because variable names take up the most space,
-// with [`Cow<str>`][Cow] being four words long, but in the vast majority of cases the name is NOT used to look up
-// a variable's value.  Variable lookup is usually via direct index, by-passing the name altogether.
+// is manually split into two equal-length arrays.  That's because variable names take up the most space,
+// with [`Cow<str>`][Cow] being four words long, but in the vast majority of cases the name is NOT used to
+/// look up a variable.  Variable lookup is usually via direct indexing, by-passing the name altogether.
 //
 // Since [`Dynamic`] is reasonably small, packing it tightly improves cache locality when variables are accessed.
-// The variable type is packed separately into another array because it is even smaller.
-#[derive(Debug)]
+#[derive(Debug, Clone, Hash)]
 pub struct Scope<'a> {
     /// Current value of the entry.
     values: Vec<Dynamic>,
-    /// (Name, aliases) of the entry. The list of aliases is Boxed because it occurs rarely.
+    /// (Name, aliases) of the entry.
     names: Vec<(Cow<'a, str>, Box<StaticVec<ImmutableString>>)>,
 }
 

@@ -14,6 +14,11 @@ Breaking changes
 * `Engine::register_module` is renamed `Engine::register_static_module` and now must explicitly pass a shared [`Module`].
 * `Package::get` is renamed `Package::as_shared_module`.
 
+Enhancements
+------------
+
+* `Scope` is now `Clone + Hash`.
+
 
 Version 0.19.8
 ==============
