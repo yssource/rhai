@@ -501,7 +501,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         Expr::Dot(x, _) => match (&mut x.lhs, &mut x.rhs) {
             // map.string
             (Expr::Map(m, pos), Expr::Property(p)) if m.iter().all(|(_, x)| x.is_pure()) => {
-                let prop = &p.1.name;
+                let prop = &p.2.name;
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();

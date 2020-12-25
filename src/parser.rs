@@ -241,7 +241,7 @@ impl Expr {
                 let ident = x.2;
                 let getter = state.get_interned_string(crate::engine::make_getter(&ident.name));
                 let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
-                Self::Property(Box::new(((getter, setter), ident.into())))
+                Self::Property(Box::new((getter, setter, ident.into())))
             }
             _ => self,
         }
@@ -1448,7 +1448,7 @@ fn make_dot_expr(
             let ident = x.2;
             let getter = state.get_interned_string(crate::engine::make_getter(&ident.name));
             let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
-            let rhs = Expr::Property(Box::new(((getter, setter), ident)));
+            let rhs = Expr::Property(Box::new((getter, setter, ident)));
 
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
         }

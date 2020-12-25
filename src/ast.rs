@@ -970,7 +970,7 @@ pub enum Expr {
         )>,
     ),
     /// Property access - (getter, setter), prop
-    Property(Box<((ImmutableString, ImmutableString), Ident)>),
+    Property(Box<(ImmutableString, ImmutableString, Ident)>),
     /// { [statement][Stmt] }
     Stmt(Box<StaticVec<Stmt>>, Position),
     /// Wrapped [expression][`Expr`] - should not be optimized away.
@@ -1068,7 +1068,7 @@ impl Expr {
             Self::FnPointer(_, pos) => *pos,
             Self::Array(_, pos) => *pos,
             Self::Map(_, pos) => *pos,
-            Self::Property(x) => (x.1).pos,
+            Self::Property(x) => (x.2).pos,
             Self::Stmt(_, pos) => *pos,
             Self::Variable(x) => (x.2).pos,
             Self::FnCall(_, pos) => *pos,
@@ -1101,7 +1101,7 @@ impl Expr {
             Self::Array(_, pos) => *pos = new_pos,
             Self::Map(_, pos) => *pos = new_pos,
             Self::Variable(x) => (x.2).pos = new_pos,
-            Self::Property(x) => (x.1).pos = new_pos,
+            Self::Property(x) => (x.2).pos = new_pos,
             Self::Stmt(_, pos) => *pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
             Self::And(_, pos) | Self::Or(_, pos) | Self::In(_, pos) => *pos = new_pos,

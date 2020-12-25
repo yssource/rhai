@@ -1091,7 +1091,7 @@ impl Engine {
                     Expr::FnCall(_, _) => unreachable!(),
                     // {xxx:map}.id = ???
                     Expr::Property(x) if target_val.is::<Map>() && new_val.is_some() => {
-                        let Ident { name, pos } = &x.1;
+                        let Ident { name, pos } = &x.2;
                         let index = name.clone().into();
                         let mut val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, true, is_ref, false, level,
@@ -1104,7 +1104,7 @@ impl Engine {
                     }
                     // {xxx:map}.id
                     Expr::Property(x) if target_val.is::<Map>() => {
-                        let Ident { name, pos } = &x.1;
+                        let Ident { name, pos } = &x.2;
                         let index = name.clone().into();
                         let val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, false, is_ref, false, level,
@@ -1114,7 +1114,7 @@ impl Engine {
                     }
                     // xxx.id = ???
                     Expr::Property(x) if new_val.is_some() => {
-                        let ((_, setter), Ident { pos, .. }) = x.as_ref();
+                        let (_, setter, Ident { pos, .. }) = x.as_ref();
                         let mut new_val = new_val;
                         let mut args = [target_val, &mut new_val.as_mut().unwrap().0];
                         self.exec_fn_call(
@@ -1126,7 +1126,7 @@ impl Engine {
                     }
                     // xxx.id
                     Expr::Property(x) => {
-                        let ((getter, _), Ident { pos, .. }) = x.as_ref();
+                        let (getter, _, Ident { pos, .. }) = x.as_ref();
                         let mut args = [target_val];
                         self.exec_fn_call(
                             mods, state, lib, getter, None, &mut args, is_ref, true, false, *pos,
@@ -1139,7 +1139,7 @@ impl Engine {
                     Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target_val.is::<Map>() => {
                         let mut val = match &x.lhs {
                             Expr::Property(p) => {
-                                let Ident { name, pos } = &p.1;
+                                let Ident { name, pos } = &p.2;
                                 let index = name.clone().into();
                                 self.get_indexed_mut(
                                     mods, state, lib, target_val, index, *pos, false, is_ref, true,
@@ -1179,7 +1179,7 @@ impl Engine {
                         match &x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
-                                let ((getter, setter), Ident { pos, .. }) = p.as_ref();
+                                let (getter, setter, Ident { pos, .. }) = p.as_ref();
                                 let arg_values = &mut [target_val, &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self
@@ -1650,7 +1650,7 @@ impl Engine {
 
                     if target.is::<Map>() {
                         // map.prop - point directly to the item
-                        let (_, Ident { name, pos }) = p.as_ref();
+                        let (_, _, Ident { name, pos }) = p.as_ref();
                         let idx = name.clone().into();
 
                         if target.is_shared() || target.is_value() {
@@ -1668,7 +1668,7 @@ impl Engine {
                         .map(|v| (v, *pos))
                     } else {
                         // var.prop - call property getter
-                        let ((getter, _), Ident { pos, .. }) = p.as_ref();
+                        let (getter, _, Ident { pos, .. }) = p.as_ref();
                         let mut args = [target.as_mut()];
                         self.exec_fn_call(
                             mods, state, lib, getter, None, &mut args, is_ref, true, false, *pos,
