@@ -11,13 +11,13 @@ A number of examples can be found in the `examples` directory:
 | [`custom_types_and_methods`]({{repoTree}}/examples/custom_types_and_methods.rs) | shows how to register a custom Rust type and methods for it                                                                                  |
 | [`hello`]({{repoTree}}/examples/hello.rs)                                       | simple example that evaluates an expression and prints the result                                                                            |
 | [`reuse_scope`]({{repoTree}}/examples/reuse_scope.rs)                           | evaluates two pieces of code in separate runs, but using a common [`Scope`]                                                                  |
-| [`rhai_runner`]({{repoTree}}/examples/rhai_runner.rs)                           | runs each filename passed to it as a Rhai script                                                                                             |
+| [`rhai-repl`]({{repoTree}}/examples/rhai-repl.rs)                               | a simple REPL, interactively evaluate statements from stdin                                                                                  |
+| [`rhai-run`]({{repoTree}}/examples/rhai-run.rs)                                 | runs each filename passed to it as a Rhai script                                                                                             |
 | [`serde`]({{repoTree}}/examples/serde.rs)                                       | example to serialize and deserialize Rust types with [`serde`](https://crates.io/crates/serde).<br/>The [`serde`] feature is required to run |
 | [`simple_fn`]({{repoTree}}/examples/simple_fn.rs)                               | shows how to register a simple function                                                                                                      |
 | [`strings`]({{repoTree}}/examples/strings.rs)                                   | shows different ways to register functions taking string arguments                                                                           |
-| [`repl`]({{repoTree}}/examples/repl.rs)                                         | a simple REPL, interactively evaluate statements from stdin                                                                                  |
 
-The `repl` example is a particularly good one as it allows one to interactively try out Rhai's
+The `rhai-repl` example is a particularly good one as it allows one to interactively try out Rhai's
 language features in a standard REPL (**R**ead-**E**val-**P**rint **L**oop).
 
 
