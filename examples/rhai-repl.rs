@@ -67,7 +67,7 @@ fn main() {
     print_help();
 
     'main_loop: loop {
-        print!("rhai> ");
+        print!("rhai-repl> ");
         stdout().flush().expect("couldn't flush stdout");
 
         input.clear();
@@ -126,12 +126,12 @@ fn main() {
             }
             "astu" => {
                 // print the last un-optimized AST
-                println!("{:#?}\n", &ast_u);
+                println!("{:#?}\n", ast_u);
                 continue;
             }
             "ast" => {
                 // print the last AST
-                println!("{:#?}\n", &ast);
+                println!("{:#?}\n", ast);
                 continue;
             }
             "functions" => {

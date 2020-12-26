@@ -69,7 +69,7 @@ fn main() -> Result<(), Box<EvalAltResult>> {
                 display("Trimmed", x);
                 display("Trimmed Length", x.len());
                 display("Index of \"!!!\"", x.index_of("!!!"));
-        "#,
+            "#,
         )?;
 
         println!();
