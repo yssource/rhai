@@ -20,6 +20,8 @@ Enhancements
 
 * `Scope` is now `Clone + Hash`.
 * `Engine::register_static_module` now supports sub-module paths (e.g. `foo::bar::baz`).
+* `Engine::register_custom_operator` now accepts reserved symbols.
+* `Engine::register_custom_operator` now returns an error if given a precedence of zero.
 
 
 Version 0.19.8

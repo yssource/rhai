@@ -21,12 +21,17 @@ fn test_tokens_disabled() {
             .compile("let x = 40 + 2; x += 1;")
             .expect_err("should error")
             .0,
-        ParseErrorType::BadInput(LexError::UnexpectedInput("+=".to_string()))
+        ParseErrorType::UnknownOperator("+=".to_string())
     );
+
+    assert!(matches!(
+        *engine.compile("let x = += 0;").expect_err("should error").0,
+        ParseErrorType::BadInput(LexError::UnexpectedInput(err)) if err == "+="
+    ));
 }
 
 #[test]
-fn test_tokens_custom_operator() -> Result<(), Box<EvalAltResult>> {
+fn test_tokens_custom_operator_identifiers() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
     // Register a custom operator called `foo` and give it
@@ -51,6 +56,29 @@ fn test_tokens_custom_operator() -> Result<(), Box<EvalAltResult>> {
         )?,
         -1
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_tokens_custom_operator_symbol() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    // Register a custom operator `#` and give it
+    // a precedence of 160 (i.e. between +|- and *|/).
+    engine.register_custom_operator("#", 160).unwrap();
+
+    // Register a binary function named `#`
+    engine.register_fn("#", |x: INT, y: INT| (x * y) - (x + y));
+
+    assert_eq!(engine.eval_expression::<INT>("1 + 2 * 3 # 4 - 5 / 6")?, 15);
+
+    // Register a custom operator named `=>`
+    assert!(engine.register_custom_operator("=>", 160).is_err());
+    engine.disable_symbol("=>");
+    engine.register_custom_operator("=>", 160).unwrap();
+    engine.register_fn("=>", |x: INT, y: INT| (x * y) - (x + y));
+    assert_eq!(engine.eval_expression::<INT>("1 + 2 * 3 => 4 - 5 / 6")?, 15);
 
     Ok(())
 }

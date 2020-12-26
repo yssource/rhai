@@ -1665,15 +1665,24 @@ fn parse_binary_op(
 
     loop {
         let (current_op, current_pos) = input.peek().unwrap();
-        let precedence = if let Token::Custom(c) = current_op {
-            // Custom operators
-            if let Some(Some(p)) = state.engine.custom_keywords.get(c) {
-                *p
-            } else {
-                return Err(PERR::Reserved(c.clone()).into_err(*current_pos));
+        let precedence = match current_op {
+            Token::Custom(c) => {
+                if state
+                    .engine
+                    .custom_keywords
+                    .get(c)
+                    .map(Option::is_some)
+                    .unwrap_or(false)
+                {
+                    state.engine.custom_keywords.get(c).unwrap().unwrap().get()
+                } else {
+                    return Err(PERR::Reserved(c.clone()).into_err(*current_pos));
+                }
             }
-        } else {
-            current_op.precedence()
+            Token::Reserved(c) if !is_valid_identifier(c.chars()) => {
+                return Err(PERR::UnknownOperator(c.into()).into_err(*current_pos))
+            }
+            _ => current_op.precedence(),
         };
         let bind_right = current_op.is_bind_right();
 
@@ -1698,15 +1707,24 @@ fn parse_binary_op(
         let rhs = parse_unary(input, state, lib, settings)?;
 
         let (next_op, next_pos) = input.peek().unwrap();
-        let next_precedence = if let Token::Custom(c) = next_op {
-            // Custom operators
-            if let Some(Some(p)) = state.engine.custom_keywords.get(c) {
-                *p
-            } else {
-                return Err(PERR::Reserved(c.clone()).into_err(*next_pos));
+        let next_precedence = match next_op {
+            Token::Custom(c) => {
+                if state
+                    .engine
+                    .custom_keywords
+                    .get(c)
+                    .map(Option::is_some)
+                    .unwrap_or(false)
+                {
+                    state.engine.custom_keywords.get(c).unwrap().unwrap().get()
+                } else {
+                    return Err(PERR::Reserved(c.clone()).into_err(*next_pos));
+                }
             }
-        } else {
-            next_op.precedence()
+            Token::Reserved(c) if !is_valid_identifier(c.chars()) => {
+                return Err(PERR::UnknownOperator(c.into()).into_err(*next_pos))
+            }
+            _ => next_op.precedence(),
         };
 
         // Bind to right if the next operator has higher precedence
@@ -1809,11 +1827,24 @@ fn parse_binary_op(
                 make_dot_expr(state, current_lhs, rhs, pos)?
             }
 
-            Token::Custom(s) if state.engine.custom_keywords.contains_key(&s) => {
-                // Accept non-native functions for custom operators
+            Token::Custom(s)
+                if state
+                    .engine
+                    .custom_keywords
+                    .get(&s)
+                    .map(Option::is_some)
+                    .unwrap_or(false) =>
+            {
+                let hash_script = if is_valid_identifier(s.chars()) {
+                    // Accept non-native functions for custom operators
+                    calc_script_fn_hash(empty(), &s, 2)
+                } else {
+                    None
+                };
+
                 Expr::FnCall(
                     Box::new(FnCallExpr {
-                        hash_script: calc_script_fn_hash(empty(), &s, 2),
+                        hash_script,
                         args,
                         ..op_base
                     }),

@@ -121,20 +121,26 @@ impl Engine {
                 continue;
             }
 
+            let token = Token::lookup_from_syntax(s);
+
             let seg = match s {
                 // Markers not in first position
                 MARKER_IDENT | MARKER_EXPR | MARKER_BLOCK if !segments.is_empty() => s.into(),
                 // Standard or reserved keyword/symbol not in first position
-                s if !segments.is_empty() && Token::lookup_from_syntax(s).is_some() => {
-                    // Make it a custom keyword/symbol
-                    if !self.custom_keywords.contains_key(s) {
+                s if !segments.is_empty() && token.is_some() => {
+                    // Make it a custom keyword/symbol if it is disabled or reserved
+                    if (self.disabled_symbols.contains(s)
+                        || matches!(token, Some(Token::Reserved(_))))
+                        && !self.custom_keywords.contains_key(s)
+                    {
                         self.custom_keywords.insert(s.into(), None);
                     }
                     s.into()
                 }
                 // Standard keyword in first position
                 s if segments.is_empty()
-                    && Token::lookup_from_syntax(s)
+                    && token
+                        .as_ref()
                         .map(|v| v.is_keyword() || v.is_reserved())
                         .unwrap_or(false) =>
                 {
@@ -151,7 +157,11 @@ impl Engine {
                 }
                 // Identifier in first position
                 s if segments.is_empty() && is_valid_identifier(s.chars()) => {
-                    if !self.custom_keywords.contains_key(s) {
+                    // Make it a custom keyword/symbol if it is disabled or reserved
+                    if (self.disabled_symbols.contains(s)
+                        || matches!(token, Some(Token::Reserved(_))))
+                        && !self.custom_keywords.contains_key(s)
+                    {
                         self.custom_keywords.insert(s.into(), None);
                     }
                     s.into()

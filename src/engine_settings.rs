@@ -1,7 +1,7 @@
 //! Configuration settings for [`Engine`].
 
 use crate::stdlib::{format, num::NonZeroU8, string::String};
-use crate::token::{is_valid_identifier, Token};
+use crate::token::Token;
 use crate::Engine;
 
 #[cfg(not(feature = "no_module"))]
@@ -252,17 +252,29 @@ impl Engine {
         if precedence.is_none() {
             return Err("precedence cannot be zero".into());
         }
-        if !is_valid_identifier(keyword.chars()) {
-            return Err(format!("not a valid identifier: '{}'", keyword).into());
-        }
 
         match Token::lookup_from_syntax(keyword) {
             // Standard identifiers, reserved keywords and custom keywords are OK
             None | Some(Token::Reserved(_)) | Some(Token::Custom(_)) => (),
-            // Disabled keywords are also OK
-            Some(token) if !self.disabled_symbols.contains(token.syntax().as_ref()) => (),
             // Active standard keywords cannot be made custom
-            Some(_) => return Err(format!("'{}' is a reserved keyword", keyword).into()),
+            // Disabled keywords are OK
+            Some(token) if token.is_keyword() => {
+                if !self.disabled_symbols.contains(token.syntax().as_ref()) {
+                    return Err(format!("'{}' is a reserved keyword", keyword).into());
+                }
+            }
+            // Active standard operators cannot be made custom
+            Some(token) if token.is_operator() => {
+                if !self.disabled_symbols.contains(token.syntax().as_ref()) {
+                    return Err(format!("'{}' is a reserved operator", keyword).into());
+                }
+            }
+            // Active standard symbols cannot be made custom
+            Some(token) if !self.disabled_symbols.contains(token.syntax().as_ref()) => {
+                return Err(format!("'{}' is a reserved symbol", keyword).into())
+            }
+            // Disabled symbols are OK
+            Some(_) => (),
         }
 
         // Add to custom keywords
