@@ -18,7 +18,7 @@ use crate::stdlib::{
     collections::{HashMap, HashSet},
     fmt, format,
     hash::{Hash, Hasher},
-    iter::{empty, once},
+    iter::{empty, once, FromIterator},
     num::NonZeroU64,
     num::NonZeroUsize,
     ops::DerefMut,
@@ -134,6 +134,22 @@ impl Imports {
             .iter()
             .rev()
             .find_map(|(_, m)| m.get_qualified_iter(id))
+    }
+}
+
+impl<'a, T: IntoIterator<Item = (&'a ImmutableString, &'a Shared<Module>)>> From<T> for Imports {
+    fn from(value: T) -> Self {
+        Self(
+            value
+                .into_iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+        )
+    }
+}
+impl FromIterator<(ImmutableString, Shared<Module>)> for Imports {
+    fn from_iter<T: IntoIterator<Item = (ImmutableString, Shared<Module>)>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
     }
 }
 
@@ -609,11 +625,11 @@ pub struct Engine {
     /// A collection of all modules loaded into the global namespace of the Engine.
     pub(crate) global_modules: StaticVec<Shared<Module>>,
     /// A collection of all sub-modules directly loaded into the Engine.
-    pub(crate) global_sub_modules: Imports,
+    pub(crate) global_sub_modules: HashMap<ImmutableString, Shared<Module>>,
 
     /// A module resolution service.
     #[cfg(not(feature = "no_module"))]
-    pub(crate) module_resolver: Option<Box<dyn crate::ModuleResolver>>,
+    pub(crate) module_resolver: Box<dyn crate::ModuleResolver>,
 
     /// A hashmap mapping type names to pretty-print names.
     pub(crate) type_names: HashMap<String, String>,
@@ -745,7 +761,7 @@ impl Engine {
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_std"))]
             #[cfg(not(target_arch = "wasm32"))]
-            module_resolver: Some(Box::new(crate::module::resolvers::FileModuleResolver::new())),
+            module_resolver: Box::new(crate::module::resolvers::FileModuleResolver::new()),
             #[cfg(not(feature = "no_module"))]
             #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
             module_resolver: None,
@@ -808,7 +824,7 @@ impl Engine {
             global_sub_modules: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
-            module_resolver: None,
+            module_resolver: Box::new(crate::module::resolvers::DummyModuleResolver::new()),
 
             type_names: Default::default(),
             disabled_symbols: Default::default(),
@@ -849,15 +865,15 @@ impl Engine {
 
     /// Search for a variable within the scope or within imports,
     /// depending on whether the variable name is namespace-qualified.
-    pub(crate) fn search_namespace<'s, 'a>(
+    pub(crate) fn search_namespace<'s>(
         &self,
         scope: &'s mut Scope,
         mods: &mut Imports,
         state: &mut State,
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
-        expr: &'a Expr,
-    ) -> Result<(Target<'s>, &'a str, Position), Box<EvalAltResult>> {
+        expr: &Expr,
+    ) -> Result<(Target<'s>, Position), Box<EvalAltResult>> {
         match expr {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
@@ -876,7 +892,7 @@ impl Engine {
                     // Module variables are constant
                     let mut target = target.clone();
                     target.set_access_mode(AccessMode::ReadOnly);
-                    Ok((target.into(), name, *pos))
+                    Ok((target.into(), *pos))
                 }
                 // Normal variable access
                 _ => self.search_scope_only(scope, mods, state, lib, this_ptr, expr),
@@ -886,15 +902,15 @@ impl Engine {
     }
 
     /// Search for a variable within the scope
-    pub(crate) fn search_scope_only<'s, 'a>(
+    pub(crate) fn search_scope_only<'s>(
         &self,
         scope: &'s mut Scope,
         mods: &mut Imports,
         state: &mut State,
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
-        expr: &'a Expr,
-    ) -> Result<(Target<'s>, &'a str, Position), Box<EvalAltResult>> {
+        expr: &Expr,
+    ) -> Result<(Target<'s>, Position), Box<EvalAltResult>> {
         let (index, _, Ident { name, pos }) = match expr {
             Expr::Variable(v) => v.as_ref(),
             _ => unreachable!(),
@@ -903,7 +919,7 @@ impl Engine {
         // Check if the variable is `this`
         if name.as_str() == KEYWORD_THIS {
             if let Some(val) = this_ptr {
-                return Ok(((*val).into(), KEYWORD_THIS, *pos));
+                return Ok(((*val).into(), *pos));
             } else {
                 return EvalAltResult::ErrorUnboundThis(*pos).into();
             }
@@ -931,7 +947,7 @@ impl Engine {
                 resolve_var(name, index, &context).map_err(|err| err.fill_position(*pos))?
             {
                 result.set_access_mode(AccessMode::ReadOnly);
-                return Ok((result.into(), name, *pos));
+                return Ok((result.into(), *pos));
             }
         }
 
@@ -945,7 +961,7 @@ impl Engine {
                 .0
         };
 
-        let val = scope.get_mut(index);
+        let val = scope.get_mut_by_index(index);
 
         // Check for data race - probably not necessary because the only place it should conflict is in a method call
         //                       when the object variable is also used as a parameter.
@@ -953,7 +969,7 @@ impl Engine {
         //     return EvalAltResult::ErrorDataRace(name.into(), *pos).into();
         // }
 
-        Ok((val.into(), name, *pos))
+        Ok((val.into(), *pos))
     }
 
     /// Chain-evaluate a dot/index chain.
@@ -1300,7 +1316,7 @@ impl Engine {
 
                 self.inc_operations(state, *var_pos)?;
 
-                let (target, _, pos) =
+                let (target, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
 
                 // Constants cannot be modified
@@ -1594,7 +1610,7 @@ impl Engine {
         match expr {
             // var - point directly to the value
             Expr::Variable(_) => {
-                let (mut target, _, pos) =
+                let (mut target, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, expr)?;
 
                 // If necessary, constants are cloned
@@ -1720,7 +1736,7 @@ impl Engine {
                 }
             }
             Expr::Variable(_) => {
-                let (val, _, _) = self.search_namespace(scope, mods, state, lib, this_ptr, expr)?;
+                let (val, _) = self.search_namespace(scope, mods, state, lib, this_ptr, expr)?;
                 Ok(val.take_or_clone())
             }
             Expr::Property(_) => unreachable!(),
@@ -1926,11 +1942,15 @@ impl Engine {
                 let mut rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
                     .flatten();
-                let (mut lhs_ptr, name, pos) =
+                let (mut lhs_ptr, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, lhs_expr)?;
 
                 if !lhs_ptr.is_ref() {
-                    return EvalAltResult::ErrorAssignmentToConstant(name.to_string(), pos).into();
+                    return EvalAltResult::ErrorAssignmentToConstant(
+                        lhs_expr.get_variable_access(false).unwrap().to_string(),
+                        pos,
+                    )
+                    .into();
                 }
 
                 self.inc_operations(state, pos)?;
@@ -1938,7 +1958,7 @@ impl Engine {
                 if lhs_ptr.as_ref().is_read_only() {
                     // Assignment to constant variable
                     Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
-                        name.to_string(),
+                        lhs_expr.get_variable_access(false).unwrap().to_string(),
                         pos,
                     )))
                 } else if op.is_empty() {
@@ -2194,7 +2214,7 @@ impl Engine {
                     state.scope_level += 1;
 
                     for iter_value in func(iter_obj) {
-                        let loop_var = scope.get_mut(index);
+                        let loop_var = scope.get_mut_by_index(index);
 
                         let value = iter_value.flatten();
                         if cfg!(not(feature = "no_closure")) && loop_var.is_shared() {
@@ -2360,31 +2380,24 @@ impl Engine {
                     .eval_expr(scope, mods, state, lib, this_ptr, &expr, level)?
                     .try_cast::<ImmutableString>()
                 {
-                    if let Some(resolver) = &self.module_resolver {
-                        let module = resolver.resolve(self, &path, expr.position())?;
+                    let module = self.module_resolver.resolve(self, &path, expr.position())?;
 
-                        if let Some(name_def) = alias {
-                            if !module.is_indexed() {
-                                // Index the module (making a clone copy if necessary) if it is not indexed
-                                let mut module = crate::fn_native::shared_take_or_clone(module);
-                                module.build_index();
-                                mods.push(name_def.name.clone(), module);
-                            } else {
-                                mods.push(name_def.name.clone(), module);
-                            }
-                            // When imports list is modified, clear the functions lookup cache
-                            state.functions_cache.clear();
+                    if let Some(name_def) = alias {
+                        if !module.is_indexed() {
+                            // Index the module (making a clone copy if necessary) if it is not indexed
+                            let mut module = crate::fn_native::shared_take_or_clone(module);
+                            module.build_index();
+                            mods.push(name_def.name.clone(), module);
+                        } else {
+                            mods.push(name_def.name.clone(), module);
                         }
-
-                        state.modules += 1;
-
-                        Ok(Dynamic::UNIT)
-                    } else {
-                        Err(
-                            EvalAltResult::ErrorModuleNotFound(path.to_string(), expr.position())
-                                .into(),
-                        )
+                        // When imports list is modified, clear the functions lookup cache
+                        state.functions_cache.clear();
                     }
+
+                    state.modules += 1;
+
+                    Ok(Dynamic::UNIT)
                 } else {
                     Err(self.make_type_mismatch_err::<ImmutableString>("", expr.position()))
                 }
@@ -2410,7 +2423,7 @@ impl Engine {
             #[cfg(not(feature = "no_closure"))]
             Stmt::Share(x) => {
                 if let Some((index, _)) = scope.get_index(&x.name) {
-                    let val = scope.get_mut(index);
+                    let val = scope.get_mut_by_index(index);
 
                     if !val.is_shared() {
                         // Replace the variable with a shared value.

@@ -153,13 +153,19 @@ A collection of module resolvers. Modules will be resolved from each resolver in
 This is useful when multiple types of modules are needed simultaneously.
 
 
+`DummyResolversCollection`
+-------------------------
+
+This module resolver acts as a _dummy_ and always fails all module resolution calls.
+
+
 Set into `Engine`
 -----------------
 
 An [`Engine`]'s module resolver is set via a call to `Engine::set_module_resolver`:
 
 ```rust
-use rhai::module_resolvers::StaticModuleResolver;
+use rhai::module_resolvers::{DummyModuleResolver, StaticModuleResolver};
 
 // Create a module resolver
 let resolver = StaticModuleResolver::new();
@@ -167,8 +173,9 @@ let resolver = StaticModuleResolver::new();
 // Register functions into 'resolver'...
 
 // Use the module resolver
-engine.set_module_resolver(Some(resolver));
+engine.set_module_resolver(resolver);
 
-// Effectively disable 'import' statements by setting module resolver to 'None'
-engine.set_module_resolver(None);
+// Effectively disable 'import' statements by setting module resolver to
+// the 'DummyModuleResolver' which acts as... well... a dummy.
+engine.set_module_resolver(DummyModuleResolver::new());
 ```

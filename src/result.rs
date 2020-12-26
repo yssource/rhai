@@ -55,8 +55,8 @@ pub enum EvalAltResult {
     /// String indexing out-of-bounds.
     /// Wrapped values are the current number of characters in the string and the index number.
     ErrorStringBounds(usize, INT, Position),
-    /// Trying to index into a type that is not an array, an object map, or a string, and has no indexer function defined.
-    /// Wrapped value is the type name.
+    /// Trying to index into a type that is not an array, an object map, or a string, and has no
+    /// indexer function defined. Wrapped value is the type name.
     ErrorIndexingType(String, Position),
     /// Invalid arguments for `in` operator.
     ErrorInExpr(Position),

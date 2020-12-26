@@ -27,15 +27,15 @@ pub trait Func<ARGS, RET> {
     /// // Func takes two type parameters:
     /// //   1) a tuple made up of the types of the script function's parameters
     /// //   2) the return type of the script function
-    /// //
+    ///
     /// // 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, Box<EvalAltResult>>> and is callable!
     /// let func = Func::<(i64, String), bool>::create_from_ast(
     /// //                ^^^^^^^^^^^^^ function parameter types in tuple
     ///
-    ///                 engine,                         // the 'Engine' is consumed into the closure
-    ///                 ast,                            // the 'AST'
-    ///                 "calc"                          // the entry-point function name
-    /// );
+    ///                                             engine, // the 'Engine' is consumed into the closure
+    ///                                             ast,    // the 'AST'
+    ///                                             "calc"  // the entry-point function name
+    ///                                         );
     ///
     /// func(123, "hello".to_string())? == false;       // call the anonymous function
     /// # Ok(())
@@ -58,15 +58,15 @@ pub trait Func<ARGS, RET> {
     /// // Func takes two type parameters:
     /// //   1) a tuple made up of the types of the script function's parameters
     /// //   2) the return type of the script function
-    /// //
+    ///
     /// // 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, Box<EvalAltResult>>> and is callable!
     /// let func = Func::<(i64, String), bool>::create_from_script(
     /// //                ^^^^^^^^^^^^^ function parameter types in tuple
     ///
-    ///                 engine,                         // the 'Engine' is consumed into the closure
-    ///                 script,                         // the script, notice number of parameters must match
-    ///                 "calc"                          // the entry-point function name
-    /// )?;
+    ///                                             engine, // the 'Engine' is consumed into the closure
+    ///                                             script, // the script, notice number of parameters must match
+    ///                                             "calc"  // the entry-point function name
+    ///                                         )?;
     ///
     /// func(123, "hello".to_string())? == false;       // call the anonymous function
     /// # Ok(())

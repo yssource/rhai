@@ -91,13 +91,16 @@ pub enum ParseErrorType {
     UnknownOperator(String),
     /// Expecting a particular token but not finding one. Wrapped values are the token and description.
     MissingToken(String, String),
-    /// An expression in function call arguments `()` has syntax error. Wrapped value is the error description (if any).
+    /// An expression in function call arguments `()` has syntax error. Wrapped value is the error
+    /// description (if any).
     MalformedCallExpr(String),
-    /// An expression in indexing brackets `[]` has syntax error. Wrapped value is the error description (if any).
+    /// An expression in indexing brackets `[]` has syntax error. Wrapped value is the error
+    /// description (if any).
     ///
     /// Never appears under the `no_index` feature.
     MalformedIndexExpr(String),
-    /// An expression in an `in` expression has syntax error. Wrapped value is the error description (if any).
+    /// An expression in an `in` expression has syntax error. Wrapped value is the error description
+    /// (if any).
     ///
     /// Never appears under the `no_object` and `no_index` features combination.
     MalformedInExpr(String),
@@ -137,7 +140,8 @@ pub enum ParseErrorType {
     ///
     /// Never appears under the `no_function` feature.
     FnMissingParams(String),
-    /// A function definition has duplicated parameters. Wrapped values are the function name and parameter name.
+    /// A function definition has duplicated parameters. Wrapped values are the function name and
+    /// parameter name.
     ///
     /// Never appears under the `no_function` feature.
     FnDuplicatedParam(String, String),

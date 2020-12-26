@@ -25,7 +25,6 @@ Use Case 1 - Make the `Module` Globally Available
 `Engine::register_global_module` registers a shared [module] into the _global_ namespace.
 
 All [functions] and [type iterators] can be accessed without _namespace qualifiers_.
-
 Variables and sub-modules are **ignored**.
 
 This is by far the easiest way to expose a module's functionalities to Rhai.
@@ -35,11 +34,11 @@ use rhai::{Engine, Module};
 
 let mut module = Module::new();             // new module
 
-// Use the 'set_fn_XXX' API to add functions.
-let hash = module.set_fn_1("inc", |x: i64| Ok(x+1));
+// Use the 'Module::set_fn_XXX' API to add functions.
+let hash = module.set_fn_1("inc", |x: i64| Ok(x + 1));
 
 // Remember to update the parameter names/types and return type metadata.
-// 'set_fn_XXX' by default does not set function metadata.
+// 'Module::set_fn_XXX' by default does not set function metadata.
 module.update_fn_metadata(hash, ["x: i64", "i64"]);
 
 // Register the module into the global namespace of the Engine.
@@ -49,6 +48,19 @@ engine.register_global_module(module.into());
 engine.eval::<i64>("inc(41)")? == 42;       // no need to import module
 ```
 
+Registering a [module] via `Engine::register_global_module` is essentially the _same_
+as calling `Engine::register_fn` (or any of the `Engine::register_XXX` API) individually
+on each top-level function within that [module].  In fact, the actual implementation of
+`Engine::register_fn` etc. simply adds the function to an internal [module]!
+
+```rust
+// The above is essentially the same as:
+let mut engine = Engine::new();
+
+engine.register_fn("inc", |x: i64| x + 1);
+
+engine.eval::<i64>("inc(41)")? == 42;       // no need to import module
+```
 
 Use Case 2 - Make the `Module` a Static Module
 ---------------------------------------------
@@ -60,25 +72,27 @@ use rhai::{Engine, Module};
 
 let mut module = Module::new();             // new module
 
-// Use the 'set_fn_XXX' API to add functions.
-let hash = module.set_fn_1("inc", |x: i64| Ok(x+1));
+// Use the 'Module::set_fn_XXX' API to add functions.
+let hash = module.set_fn_1("inc", |x: i64| Ok(x + 1));
 
 // Remember to update the parameter names/types and return type metadata.
-// 'set_fn_XXX' by default does not set function metadata.
+// 'Module::set_fn_XXX' by default does not set function metadata.
 module.update_fn_metadata(hash, ["x: i64", "i64"]);
 
-// Register the module into the Engine as a static module namespace 'calc'
+// Register the module into the Engine as the static module namespace path
+// 'services::calc'
 let mut engine = Engine::new();
-engine.register_static_module("calc", module.into());
+engine.register_static_module("services::calc", module.into());
 
-engine.eval::<i64>("calc::inc(41)")? == 42; // refer to the 'Calc' module
+// refer to the 'services::calc' module
+engine.eval::<i64>("services::calc::inc(41)")? == 42;
 ```
 
 ### Expose Functions to the Global Namespace
 
-`Module::set_fn_mut` and `Module::set_fn_XXX_mut` can optionally expose functions (usually _methods_)
-in the module to the _global_ namespace, so [getters/setters] and [indexers] for [custom types]
-can work as expected.
+The `Module::set_fn_XXX_mut` API methods can optionally expose functions in the [module]
+to the _global_ namespace by setting the `namespace` parameter to `FnNamespace::Global`,
+so [getters/setters] and [indexers] for [custom types] can work as expected.
 
 [Type iterators], because of their special nature, are _always_ exposed to the _global_ namespace.
 
@@ -87,19 +101,24 @@ use rhai::{Engine, Module, FnNamespace};
 
 let mut module = Module::new();             // new module
 
-// Expose method 'inc' to the global namespace (default is 'Internal')
-let hash = module.set_fn_1_mut("inc", FnNamespace::Global, |x: &mut i64| Ok(x+1));
+// Expose method 'inc' to the global namespace (default is 'FnNamespace::Internal')
+let hash = module.set_fn_1_mut("inc", FnNamespace::Global, |x: &mut i64| Ok(x + 1));
 
 // Remember to update the parameter names/types and return type metadata.
-// 'set_fn_XXX' by default does not set function metadata.
+// 'Module::set_fn_XXX_mut' by default does not set function metadata.
 module.update_fn_metadata(hash, ["x: &mut i64", "i64"]);
 
 // Register the module into the Engine as a static module namespace 'calc'
 let mut engine = Engine::new();
 engine.register_static_module("calc", module.into());
 
-// The method 'inc' works as expected because it is exposed to the global namespace
+// 'inc' works when qualified by the namespace
+engine.eval::<i64>("calc::inc(41)")? == 42;
+
+// 'inc' also works without a namespace qualifier
+// because it is exposed to the global namespace
 engine.eval::<i64>("let x = 41; x.inc()")? == 42;
+engine.eval::<i64>("let x = 41; inc(x)")? == 42;
 ```
 
 
@@ -118,7 +137,7 @@ use rhai::module_resolvers::StaticModuleResolver;
 
 let mut module = Module::new();             // new module
 module.set_var("answer", 41_i64);           // variable 'answer' under module
-module.set_fn_1("inc", |x: i64| Ok(x+1));   // use the 'set_fn_XXX' API to add functions
+module.set_fn_1("inc", |x: i64| Ok(x + 1)); // use the 'set_fn_XXX' API to add functions
 
 // Create the module resolver
 let mut resolver = StaticModuleResolver::new();
@@ -129,7 +148,7 @@ resolver.insert("question", module);
 
 // Set the module resolver into the 'Engine'
 let mut engine = Engine::new();
-engine.set_module_resolver(Some(resolver));
+engine.set_module_resolver(resolver);
 
 // Use namespace-qualified variables
 engine.eval::<i64>(r#"import "question" as q; q::answer + 1"#)? == 42;

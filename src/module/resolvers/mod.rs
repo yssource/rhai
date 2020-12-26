@@ -2,6 +2,9 @@ use crate::fn_native::SendSync;
 use crate::stdlib::boxed::Box;
 use crate::{Engine, EvalAltResult, Module, Position, Shared};
 
+mod dummy;
+pub use dummy::DummyModuleResolver;
+
 mod collection;
 pub use collection::ModuleResolversCollection;
 

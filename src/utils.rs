@@ -63,7 +63,8 @@ pub fn get_hasher() -> impl Hasher {
     s
 }
 
-/// _(INTERNALS)_ Calculate a [`NonZeroU64`] hash key from a namespace-qualified function name and parameter types.
+/// _(INTERNALS)_ Calculate a [`NonZeroU64`] hash key from a namespace-qualified function name and
+/// parameter types.
 /// Exported under the `internals` feature only.
 ///
 /// Module names are passed in via `&str` references from an iterator.
@@ -108,6 +109,7 @@ pub fn calc_script_fn_hash<'a>(
 /// # Note
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
+#[inline(always)]
 fn calc_fn_hash<'a>(
     mut modules: impl Iterator<Item = &'a str>,
     fn_name: &str,

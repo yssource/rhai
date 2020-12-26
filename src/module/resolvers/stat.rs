@@ -16,7 +16,7 @@ use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 ///
 /// let mut engine = Engine::new();
 ///
-/// engine.set_module_resolver(Some(resolver));
+/// engine.set_module_resolver(resolver);
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct StaticModuleResolver(HashMap<String, Shared<Module>>);
@@ -36,7 +36,7 @@ impl StaticModuleResolver {
     /// resolver.insert("hello", module);
     ///
     /// let mut engine = Engine::new();
-    /// engine.set_module_resolver(Some(resolver));
+    /// engine.set_module_resolver(resolver);
     /// ```
     #[inline(always)]
     pub fn new() -> Self {
@@ -60,8 +60,13 @@ impl StaticModuleResolver {
     }
     /// Get an iterator of all the modules.
     #[inline(always)]
-    pub fn iter(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
-        self.0.iter().map(|(k, v)| (k.as_str(), v.clone()))
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Shared<Module>)> {
+        self.0.iter().map(|(k, v)| (k.as_str(), v))
+    }
+    /// Get a mutable iterator of all the modules.
+    #[inline(always)]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&str, &mut Shared<Module>)> {
+        self.0.iter_mut().map(|(k, v)| (k.as_str(), v))
     }
     /// Get a mutable iterator of all the modules.
     #[inline(always)]
@@ -75,8 +80,8 @@ impl StaticModuleResolver {
     }
     /// Get an iterator of all the modules.
     #[inline(always)]
-    pub fn values<'a>(&'a self) -> impl Iterator<Item = Shared<Module>> + 'a {
-        self.0.values().map(|m| m.clone())
+    pub fn values(&self) -> impl Iterator<Item = &Shared<Module>> {
+        self.0.values().map(|m| m)
     }
     /// Remove all modules.
     #[inline(always)]
@@ -95,6 +100,8 @@ impl StaticModuleResolver {
     }
     /// Merge another [`StaticModuleResolver`] into this.
     /// The other [`StaticModuleResolver`] is consumed.
+    ///
+    /// Existing modules of the same path name are overwritten.
     #[inline(always)]
     pub fn merge(&mut self, other: Self) {
         if !other.is_empty() {

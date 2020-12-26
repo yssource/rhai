@@ -1325,6 +1325,7 @@ fn parse_unary(
     }
 }
 
+/// Make an assignment statement.
 fn make_assignment_stmt<'a>(
     fn_name: Cow<'static, str>,
     state: &mut ParseState,

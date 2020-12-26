@@ -209,9 +209,10 @@ impl Engine {
     pub fn register_get<T: Variant + Clone, U: Variant + Clone>(
         &mut self,
         name: &str,
-        callback: impl Fn(&mut T) -> U + SendSync + 'static,
+        get_fn: impl Fn(&mut T) -> U + SendSync + 'static,
     ) -> &mut Self {
-        crate::RegisterFn::register_fn(self, &crate::engine::make_getter(name), callback)
+        use crate::{engine::make_getter, RegisterFn};
+        self.register_fn(&make_getter(name), get_fn)
     }
     /// Register a getter function for a member of a registered type with the [`Engine`].
     ///
@@ -255,13 +256,10 @@ impl Engine {
     pub fn register_get_result<T: Variant + Clone>(
         &mut self,
         name: &str,
-        callback: impl Fn(&mut T) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+        get_fn: impl Fn(&mut T) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
-        crate::RegisterResultFn::register_result_fn(
-            self,
-            &crate::engine::make_getter(name),
-            callback,
-        )
+        use crate::{engine::make_getter, RegisterResultFn};
+        self.register_result_fn(&make_getter(name), get_fn)
     }
     /// Register a setter function for a member of a registered type with the [`Engine`].
     ///
@@ -304,9 +302,10 @@ impl Engine {
     pub fn register_set<T: Variant + Clone, U: Variant + Clone>(
         &mut self,
         name: &str,
-        callback: impl Fn(&mut T, U) + SendSync + 'static,
+        set_fn: impl Fn(&mut T, U) + SendSync + 'static,
     ) -> &mut Self {
-        crate::RegisterFn::register_fn(self, &crate::engine::make_setter(name), callback)
+        use crate::{engine::make_setter, RegisterFn};
+        self.register_fn(&make_setter(name), set_fn)
     }
     /// Register a setter function for a member of a registered type with the [`Engine`].
     ///
@@ -352,13 +351,12 @@ impl Engine {
     pub fn register_set_result<T: Variant + Clone, U: Variant + Clone>(
         &mut self,
         name: &str,
-        callback: impl Fn(&mut T, U) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
+        set_fn: impl Fn(&mut T, U) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
-        crate::RegisterResultFn::register_result_fn(
-            self,
-            &crate::engine::make_setter(name),
-            move |obj: &mut T, value: U| callback(obj, value).map(Into::into),
-        )
+        use crate::{engine::make_setter, RegisterResultFn};
+        self.register_result_fn(&make_setter(name), move |obj: &mut T, value: U| {
+            set_fn(obj, value).map(Into::into)
+        })
     }
     /// Short-hand for registering both getter and setter functions
     /// of a registered type with the [`Engine`].
@@ -453,7 +451,7 @@ impl Engine {
     #[inline(always)]
     pub fn register_indexer_get<T: Variant + Clone, X: Variant + Clone, U: Variant + Clone>(
         &mut self,
-        callback: impl Fn(&mut T, X) -> U + SendSync + 'static,
+        get_fn: impl Fn(&mut T, X) -> U + SendSync + 'static,
     ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
@@ -469,7 +467,8 @@ impl Engine {
             panic!("Cannot register indexer for strings.");
         }
 
-        crate::RegisterFn::register_fn(self, crate::engine::FN_IDX_GET, callback)
+        use crate::{engine::FN_IDX_GET, RegisterFn};
+        self.register_fn(FN_IDX_GET, get_fn)
     }
     /// Register an index getter for a custom type with the [`Engine`].
     ///
@@ -518,7 +517,7 @@ impl Engine {
     #[inline(always)]
     pub fn register_indexer_get_result<T: Variant + Clone, X: Variant + Clone>(
         &mut self,
-        callback: impl Fn(&mut T, X) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+        get_fn: impl Fn(&mut T, X) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
@@ -534,7 +533,8 @@ impl Engine {
             panic!("Cannot register indexer for strings.");
         }
 
-        crate::RegisterResultFn::register_result_fn(self, crate::engine::FN_IDX_GET, callback)
+        use crate::{engine::FN_IDX_GET, RegisterResultFn};
+        self.register_result_fn(FN_IDX_GET, get_fn)
     }
     /// Register an index setter for a custom type with the [`Engine`].
     ///
@@ -581,7 +581,7 @@ impl Engine {
     #[inline(always)]
     pub fn register_indexer_set<T: Variant + Clone, X: Variant + Clone, U: Variant + Clone>(
         &mut self,
-        callback: impl Fn(&mut T, X, U) + SendSync + 'static,
+        set_fn: impl Fn(&mut T, X, U) + SendSync + 'static,
     ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
@@ -597,7 +597,8 @@ impl Engine {
             panic!("Cannot register indexer for strings.");
         }
 
-        crate::RegisterFn::register_fn(self, crate::engine::FN_IDX_SET, callback)
+        use crate::{engine::FN_IDX_SET, RegisterFn};
+        self.register_fn(FN_IDX_SET, set_fn)
     }
     /// Register an index setter for a custom type with the [`Engine`].
     ///
@@ -651,7 +652,7 @@ impl Engine {
         U: Variant + Clone,
     >(
         &mut self,
-        callback: impl Fn(&mut T, X, U) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
+        set_fn: impl Fn(&mut T, X, U) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
@@ -667,11 +668,10 @@ impl Engine {
             panic!("Cannot register indexer for strings.");
         }
 
-        crate::RegisterResultFn::register_result_fn(
-            self,
-            crate::engine::FN_IDX_SET,
-            move |obj: &mut T, index: X, value: U| callback(obj, index, value).map(Into::into),
-        )
+        use crate::{engine::FN_IDX_SET, RegisterResultFn};
+        self.register_result_fn(FN_IDX_SET, move |obj: &mut T, index: X, value: U| {
+            set_fn(obj, index, value).map(Into::into)
+        })
     }
     /// Short-hand for register both index getter and setter functions for a custom type with the [`Engine`].
     ///
@@ -755,7 +755,7 @@ impl Engine {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, Module};
+    /// use rhai::{Engine, Shared, Module};
     ///
     /// let mut engine = Engine::new();
     ///
@@ -763,9 +763,18 @@ impl Engine {
     /// let mut module = Module::new();
     /// module.set_fn_1("calc", |x: i64| Ok(x + 1));
     ///
-    /// // Register the module as a fixed sub-module
-    /// engine.register_static_module("CalcService", module.into());
+    /// let module: Shared<Module> = module.into();
     ///
+    /// // Register the module as a fixed sub-module
+    /// engine.register_static_module("foo::bar::baz", module.clone());
+    ///
+    /// // Multiple registrations to the same partial path is also OK!
+    /// engine.register_static_module("foo::bar::hello", module.clone());
+    ///
+    /// engine.register_static_module("CalcService", module);
+    ///
+    /// assert_eq!(engine.eval::<i64>("foo::bar::baz::calc(41)")?, 42);
+    /// assert_eq!(engine.eval::<i64>("foo::bar::hello::calc(41)")?, 42);
     /// assert_eq!(engine.eval::<i64>("CalcService::calc(41)")?, 42);
     /// # Ok(())
     /// # }
@@ -773,19 +782,49 @@ impl Engine {
     #[cfg(not(feature = "no_module"))]
     pub fn register_static_module(
         &mut self,
-        name: impl Into<crate::ImmutableString>,
+        name: impl AsRef<str>,
         module: Shared<Module>,
     ) -> &mut Self {
-        if !module.is_indexed() {
-            // Index the module (making a clone copy if necessary) if it is not indexed
-            let mut module = crate::fn_native::shared_take_or_clone(module);
-            module.build_index();
-            self.global_sub_modules.push(name, module);
-        } else {
-            self.global_sub_modules.push(name, module);
+        fn register_static_module_raw(
+            root: &mut crate::stdlib::collections::HashMap<crate::ImmutableString, Shared<Module>>,
+            name: impl AsRef<str>,
+            module: Shared<Module>,
+        ) {
+            let separator = crate::token::Token::DoubleColon.syntax();
+
+            if !name.as_ref().contains(separator.as_ref()) {
+                if !module.is_indexed() {
+                    // Index the module (making a clone copy if necessary) if it is not indexed
+                    let mut module = crate::fn_native::shared_take_or_clone(module);
+                    module.build_index();
+                    root.insert(name.as_ref().trim().into(), module.into());
+                } else {
+                    root.insert(name.as_ref().trim().into(), module);
+                }
+            } else {
+                let mut iter = name.as_ref().splitn(2, separator.as_ref());
+                let sub_module = iter.next().unwrap().trim();
+                let remainder = iter.next().unwrap().trim();
+
+                if !root.contains_key(sub_module) {
+                    let mut m: Module = Default::default();
+                    register_static_module_raw(m.sub_modules_mut(), remainder, module);
+                    m.build_index();
+                    root.insert(sub_module.into(), m.into());
+                } else {
+                    let m = root.remove(sub_module).unwrap();
+                    let mut m = crate::fn_native::shared_take_or_clone(m);
+                    register_static_module_raw(m.sub_modules_mut(), remainder, module);
+                    m.build_index();
+                    root.insert(sub_module.into(), m.into());
+                }
+            }
         }
+
+        register_static_module_raw(&mut self.global_sub_modules, name.as_ref(), module);
         self
     }
+
     /// Register a shared [`Module`][crate::Module] as a static module namespace with the [`Engine`].
     ///
     /// ## Deprecated
@@ -796,7 +835,7 @@ impl Engine {
     #[deprecated = "use `register_static_module` instead"]
     pub fn register_module(
         &mut self,
-        name: impl Into<crate::ImmutableString>,
+        name: impl AsRef<str>,
         module: impl Into<Shared<Module>>,
     ) -> &mut Self {
         self.register_static_module(name, module.into())
@@ -1407,7 +1446,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, Box<EvalAltResult>> {
-        let mods = &mut self.global_sub_modules.clone();
+        let mods = &mut (&self.global_sub_modules).into();
 
         let result = self.eval_ast_with_scope_raw(scope, mods, ast)?;
 
@@ -1493,7 +1532,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
-        let mods = &mut self.global_sub_modules.clone();
+        let mods = &mut (&self.global_sub_modules).into();
         let state = &mut State {
             source: ast.clone_source(),
             ..Default::default()
@@ -1539,12 +1578,12 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub fn call_fn<A: crate::fn_args::FuncArgs, T: Variant + Clone>(
+    pub fn call_fn<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
         ast: &AST,
         name: &str,
-        args: A,
+        args: impl crate::fn_args::FuncArgs,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = args.into_vec();
         let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
@@ -1650,7 +1689,7 @@ impl Engine {
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::NONE))?;
 
         let mut state = Default::default();
-        let mut mods = self.global_sub_modules.clone();
+        let mut mods = (&self.global_sub_modules).into();
 
         // Check for data race.
         if cfg!(not(feature = "no_closure")) {

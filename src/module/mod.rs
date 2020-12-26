@@ -35,9 +35,9 @@ use crate::Map;
 /// A type representing the namespace of a function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum FnNamespace {
-    /// Global namespace.
+    /// Expose to global namespace.
     Global,
-    /// Internal only.
+    /// Module namespace only.
     Internal,
 }
 
@@ -463,6 +463,16 @@ impl Module {
                 },
             )
             .map(|FuncInfo { func, .. }| func.get_fn_def())
+    }
+
+    /// Get a mutable reference to the underlying [`HashMap`] of sub-modules.
+    #[inline(always)]
+    pub(crate) fn sub_modules_mut(&mut self) -> &mut HashMap<ImmutableString, Shared<Module>> {
+        // We must assume that the user has changed the sub-modules
+        // (otherwise why take a mutable reference?)
+        self.indexed = false;
+
+        &mut self.modules
     }
 
     /// Does a sub-module exist in the module?
@@ -1699,7 +1709,7 @@ impl Module {
         ast: &crate::AST,
         engine: &crate::Engine,
     ) -> Result<Self, Box<EvalAltResult>> {
-        let mut mods = engine.global_sub_modules.clone();
+        let mut mods: crate::engine::Imports = (&engine.global_sub_modules).into();
         let orig_mods_len = mods.len();
 
         // Run the script

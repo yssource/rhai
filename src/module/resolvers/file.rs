@@ -1,5 +1,9 @@
 use crate::stdlib::{
-    boxed::Box, collections::HashMap, io::Error as IoError, path::PathBuf, string::String,
+    boxed::Box,
+    collections::HashMap,
+    io::Error as IoError,
+    path::{Path, PathBuf},
+    string::String,
 };
 use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 
@@ -31,7 +35,7 @@ use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 ///
 /// let mut engine = Engine::new();
 ///
-/// engine.set_module_resolver(Some(resolver));
+/// engine.set_module_resolver(resolver);
 /// ```
 #[derive(Debug)]
 pub struct FileModuleResolver {
@@ -65,10 +69,10 @@ impl FileModuleResolver {
     /// let resolver = FileModuleResolver::new_with_path("./scripts");
     ///
     /// let mut engine = Engine::new();
-    /// engine.set_module_resolver(Some(resolver));
+    /// engine.set_module_resolver(resolver);
     /// ```
     #[inline(always)]
-    pub fn new_with_path<P: Into<PathBuf>>(path: P) -> Self {
+    pub fn new_with_path(path: impl Into<PathBuf>) -> Self {
         Self::new_with_path_and_extension(path, "rhai")
     }
 
@@ -87,12 +91,12 @@ impl FileModuleResolver {
     /// let resolver = FileModuleResolver::new_with_path_and_extension("./scripts", "x");
     ///
     /// let mut engine = Engine::new();
-    /// engine.set_module_resolver(Some(resolver));
+    /// engine.set_module_resolver(resolver);
     /// ```
     #[inline(always)]
-    pub fn new_with_path_and_extension<P: Into<PathBuf>, E: Into<String>>(
-        path: P,
-        extension: E,
+    pub fn new_with_path_and_extension(
+        path: impl Into<PathBuf>,
+        extension: impl Into<String>,
     ) -> Self {
         Self {
             path: path.into(),
@@ -114,11 +118,63 @@ impl FileModuleResolver {
     /// let resolver = FileModuleResolver::new();
     ///
     /// let mut engine = Engine::new();
-    /// engine.set_module_resolver(Some(resolver));
+    /// engine.set_module_resolver(resolver);
     /// ```
     #[inline(always)]
     pub fn new() -> Self {
         Default::default()
+    }
+
+    /// Get the base path for script files.
+    #[inline(always)]
+    pub fn path(&self) -> &Path {
+        self.path.as_ref()
+    }
+    /// Set the base path for script files.
+    #[inline(always)]
+    pub fn set_path(&mut self, path: impl Into<PathBuf>) -> &mut Self {
+        self.path = path.into();
+        self
+    }
+
+    /// Get the script file extension.
+    #[inline(always)]
+    pub fn extension(&self) -> &str {
+        &self.extension
+    }
+
+    /// Set the script file extension.
+    #[inline(always)]
+    pub fn set_extension(&mut self, extension: impl Into<String>) -> &mut Self {
+        self.extension = extension.into();
+        self
+    }
+
+    /// Empty the internal cache.
+    #[inline(always)]
+    pub fn clear_cache(&mut self) {
+        #[cfg(not(feature = "sync"))]
+        self.cache.borrow_mut().clear();
+        #[cfg(feature = "sync")]
+        self.cache.write().unwrap().clear();
+    }
+
+    /// Empty the internal cache.
+    #[inline(always)]
+    pub fn clear_cache_for_path(&mut self, path: impl AsRef<Path>) -> Option<Shared<Module>> {
+        #[cfg(not(feature = "sync"))]
+        return self
+            .cache
+            .borrow_mut()
+            .remove_entry(path.as_ref())
+            .map(|(_, v)| v);
+        #[cfg(feature = "sync")]
+        return self
+            .cache
+            .write()
+            .unwrap()
+            .remove_entry(path.as_ref())
+            .map(|(_, v)| v);
     }
 }
 

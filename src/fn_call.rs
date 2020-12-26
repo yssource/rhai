@@ -1041,7 +1041,7 @@ impl Engine {
                     .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
                     .collect::<Result<_, _>>()?;
 
-                let (mut target, _, pos) =
+                let (mut target, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, &args_expr[0])?;
 
                 if target.as_ref().is_read_only() {
@@ -1137,7 +1137,7 @@ impl Engine {
                     .collect::<Result<_, _>>()?;
 
                 // Get target reference to first argument
-                let (target, _, pos) =
+                let (target, pos) =
                     self.search_scope_only(scope, mods, state, lib, this_ptr, &args_expr[0])?;
 
                 self.inc_operations(state, pos)?;

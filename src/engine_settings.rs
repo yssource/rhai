@@ -168,9 +168,9 @@ impl Engine {
     #[inline(always)]
     pub fn set_module_resolver(
         &mut self,
-        resolver: Option<impl crate::ModuleResolver + 'static>,
+        resolver: impl crate::ModuleResolver + 'static,
     ) -> &mut Self {
-        self.module_resolver = resolver.map(|f| Box::new(f) as Box<dyn crate::ModuleResolver>);
+        self.module_resolver = Box::new(resolver);
         self
     }
     /// Disable a particular keyword or operator in the language.

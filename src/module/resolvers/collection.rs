@@ -16,7 +16,7 @@ use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 /// collection.push(resolver);
 ///
 /// let mut engine = Engine::new();
-/// engine.set_module_resolver(Some(collection));
+/// engine.set_module_resolver(collection);
 /// ```
 #[derive(Default)]
 pub struct ModuleResolversCollection(Vec<Box<dyn ModuleResolver>>);
@@ -36,16 +36,41 @@ impl ModuleResolversCollection {
     /// collection.push(resolver);
     ///
     /// let mut engine = Engine::new();
-    /// engine.set_module_resolver(Some(collection));
+    /// engine.set_module_resolver(collection);
     /// ```
     #[inline(always)]
     pub fn new() -> Self {
         Default::default()
     }
-    /// Add a module keyed by its path.
+    /// Append a module resolver to the end.
     #[inline(always)]
-    pub fn push(&mut self, resolver: impl ModuleResolver + 'static) {
+    pub fn push(&mut self, resolver: impl ModuleResolver + 'static) -> &mut Self {
         self.0.push(Box::new(resolver));
+        self
+    }
+    /// Insert a module resolver to an offset index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out of bounds.
+    #[inline(always)]
+    pub fn insert(&mut self, index: usize, resolver: impl ModuleResolver + 'static) -> &mut Self {
+        self.0.insert(index, Box::new(resolver));
+        self
+    }
+    /// Remove the last module resolver from the end, if any.
+    #[inline(always)]
+    pub fn pop(&mut self) -> Option<Box<dyn ModuleResolver>> {
+        self.0.pop()
+    }
+    /// Remove a module resolver at an offset index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out of bounds.
+    #[inline(always)]
+    pub fn remove(&mut self, index: usize) -> Box<dyn ModuleResolver> {
+        self.0.remove(index)
     }
     /// Get an iterator of all the module resolvers.
     #[inline(always)]
@@ -59,8 +84,9 @@ impl ModuleResolversCollection {
     }
     /// Remove all module resolvers.
     #[inline(always)]
-    pub fn clear(&mut self) {
+    pub fn clear(&mut self) -> &mut Self {
         self.0.clear();
+        self
     }
     /// Is this [`ModuleResolversCollection`] empty?
     #[inline(always)]
@@ -75,8 +101,9 @@ impl ModuleResolversCollection {
     /// Add another [`ModuleResolversCollection`] to the end of this collection.
     /// The other [`ModuleResolversCollection`] is consumed.
     #[inline(always)]
-    pub fn append(&mut self, other: Self) {
+    pub fn append(&mut self, other: Self) -> &mut Self {
         self.0.extend(other.0.into_iter());
+        self
     }
 }
 

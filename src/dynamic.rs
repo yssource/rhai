@@ -748,13 +748,16 @@ impl Dynamic {
 
         Self(Union::Variant(Box::new(boxed), AccessMode::ReadWrite))
     }
-    /// Turn the [`Dynamic`] value into a shared [`Dynamic`] value backed by an [`Rc`][std::rc::Rc]`<`[`RefCell`][std::cell::RefCell]`<`[`Dynamic`]`>>`
-    /// or [`Arc`][std::sync::Arc]`<`[`RwLock`][std::sync::RwLock]`<`[`Dynamic`]`>>` depending on the `sync` feature.
+    /// Turn the [`Dynamic`] value into a shared [`Dynamic`] value backed by an
+    /// [`Rc`][std::rc::Rc]`<`[`RefCell`][std::cell::RefCell]`<`[`Dynamic`]`>>` or
+    /// [`Arc`][std::sync::Arc]`<`[`RwLock`][std::sync::RwLock]`<`[`Dynamic`]`>>`
+    /// depending on the `sync` feature.
     ///
     /// Shared [`Dynamic`] values are relatively cheap to clone as they simply increment the
     /// reference counts.
     ///
-    /// Shared [`Dynamic`] values can be converted seamlessly to and from ordinary [`Dynamic`] values.
+    /// Shared [`Dynamic`] values can be converted seamlessly to and from ordinary [`Dynamic`]
+    /// values.
     ///
     /// If the [`Dynamic`] value is already shared, this method returns itself.
     ///
@@ -970,8 +973,8 @@ impl Dynamic {
     ///
     /// If the [`Dynamic`] is not a shared value, it returns itself.
     ///
-    /// If the [`Dynamic`] is a shared value, it returns the shared value if there are
-    /// no outstanding references, or a cloned copy.
+    /// If the [`Dynamic`] is a shared value, it returns the shared value if there are no
+    /// outstanding references, or a cloned copy.
     #[inline(always)]
     pub fn flatten(self) -> Self {
         match self.0 {
