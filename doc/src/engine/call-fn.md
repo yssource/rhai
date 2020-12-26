@@ -41,8 +41,8 @@ let mut scope = Scope::new();
 // If arguments of the wrong types are passed, the Engine will not find the function.
 
 let result: i64 = engine.call_fn(&mut scope, &ast, "hello", ( String::from("abc"), 123_i64 ) )?;
-//                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-//                                                          put arguments in a tuple
+//          ^^^                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+//        return type must be specified                          put arguments in a tuple
 
 let result: i64 = engine.call_fn(&mut scope, &ast, "hello", (123_i64,) )?;
 //                                                          ^^^^^^^^^^ tuple of one

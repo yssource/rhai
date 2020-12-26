@@ -723,21 +723,22 @@ impl Engine {
         self.register_indexer_get(getter)
             .register_indexer_set(setter)
     }
-    /// Register a shared [`Module`][crate::Module] into the global namespace of [`Engine`].
+    /// Register a shared [`Module`] into the global namespace of [`Engine`].
     ///
-    /// All functions and type iterators are automatically available to scripts without namespace qualifications.
+    /// All functions and type iterators are automatically available to scripts without namespace
+    /// qualifications.
     ///
     /// Sub-modules and variables are **ignored**.
     ///
-    /// When searching for functions, modules loaded later are preferred.
-    /// In other words, loaded modules are searched in reverse order.
+    /// When searching for functions, modules loaded later are preferred. In other words, loaded
+    /// modules are searched in reverse order.
     #[inline(always)]
     pub fn register_global_module(&mut self, module: Shared<Module>) -> &mut Self {
         // Insert the module into the front
         self.global_modules.insert(0, module);
         self
     }
-    /// Register a shared [`Module`][crate::Module] into the global namespace of [`Engine`].
+    /// Register a shared [`Module`] into the global namespace of [`Engine`].
     ///
     /// ## Deprecated
     ///
@@ -747,9 +748,11 @@ impl Engine {
     pub fn load_package(&mut self, module: impl Into<Shared<Module>>) -> &mut Self {
         self.register_global_module(module.into())
     }
-    /// Register a shared [`Module`][crate::Module] as a static module namespace with the [`Engine`].
+    /// Register a shared [`Module`] as a static module namespace with the
+    /// [`Engine`].
     ///
-    /// Functions marked `FnNamespace::Global` and type iterators are exposed to scripts without namespace qualifications.
+    /// Functions marked [`FnNamespace::Global`] and type iterators are exposed to scripts without
+    /// namespace qualifications.
     ///
     /// # Example
     ///
@@ -825,7 +828,7 @@ impl Engine {
         self
     }
 
-    /// Register a shared [`Module`][crate::Module] as a static module namespace with the [`Engine`].
+    /// Register a shared [`Module`] as a static module namespace with the [`Engine`].
     ///
     /// ## Deprecated
     ///
@@ -1719,7 +1722,7 @@ impl Engine {
     /// With this method, it is no longer necessary to recompile a large script.
     /// The script [`AST`] can be compiled just once. Before evaluation,
     /// constants are passed into the [`Engine`] via an external scope
-    /// (i.e. with [`scope.push_constant(...)`][crate::Scope::push_constant]).
+    /// (i.e. with [`Scope::push_constant`]).
     /// Then, the [`AST`] is cloned and the copy re-optimized before running.
     #[cfg(not(feature = "no_optimize"))]
     #[inline]

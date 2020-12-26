@@ -356,7 +356,7 @@ impl Module {
         self.get_var(name).and_then(Dynamic::try_cast::<T>)
     }
 
-    /// Get a module variable as a [`Dynamic`][crate::Dynamic].
+    /// Get a module variable as a [`Dynamic`].
     ///
     /// # Example
     ///
@@ -466,10 +466,18 @@ impl Module {
     }
 
     /// Get a mutable reference to the underlying [`HashMap`] of sub-modules.
+    ///
+    /// ## Warning
+    ///
+    /// By taking a mutable reference, it is assumed that some sub-modules will be modified.
+    /// Thus the module is automatically set to be non-indexed.
     #[inline(always)]
     pub(crate) fn sub_modules_mut(&mut self) -> &mut HashMap<ImmutableString, Shared<Module>> {
         // We must assume that the user has changed the sub-modules
         // (otherwise why take a mutable reference?)
+        self.all_functions.clear();
+        self.all_variables.clear();
+        self.all_type_iterators.clear();
         self.indexed = false;
 
         &mut self.modules
@@ -652,7 +660,7 @@ impl Module {
     }
 
     /// Set a Rust function taking a reference to the scripting [`Engine`][crate::Engine],
-    /// the current set of functions, plus a list of mutable [`Dynamic`][crate::Dynamic] references
+    /// the current set of functions, plus a list of mutable [`Dynamic`] references
     /// into the module, returning a hash key.
     ///
     /// Use this to register a built-in function which must reference settings on the scripting
@@ -667,7 +675,7 @@ impl Module {
     ///
     /// A list of [`TypeId`]'s is taken as the argument types.
     ///
-    /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`][crate::Dynamic],
+    /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`],
     /// which is guaranteed to contain enough arguments of the correct types.
     ///
     /// The function is assumed to be a _method_, meaning that the first argument should not be consumed.

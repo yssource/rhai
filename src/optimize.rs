@@ -152,7 +152,7 @@ fn call_fn_with_constant_arguments(
         .map(|(v, _)| v)
 }
 
-/// Optimize a block of [statements][crate::ast::Stmt].
+/// Optimize a block of [statements][Stmt].
 fn optimize_stmt_block(
     mut statements: Vec<Stmt>,
     pos: Position,
@@ -277,7 +277,7 @@ fn optimize_stmt_block(
     }
 }
 
-/// Optimize a [statement][crate::ast::Stmt].
+/// Optimize a [statement][Stmt].
 fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
     match stmt {
         // expr op= expr
@@ -473,7 +473,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
     }
 }
 
-/// Optimize an [expression][crate::ast::Expr].
+/// Optimize an [expression][Expr].
 fn optimize_expr(expr: &mut Expr, state: &mut State) {
     // These keywords are handled specially
     const DONT_EVAL_KEYWORDS: &[&str] = &[
@@ -737,7 +737,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
     }
 }
 
-/// Optimize a block of [statements][crate::ast::Stmt] at top level.
+/// Optimize a block of [statements][Stmt] at top level.
 fn optimize_top_level(
     mut statements: Vec<Stmt>,
     engine: &Engine,

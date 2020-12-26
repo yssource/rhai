@@ -736,7 +736,7 @@ impl Stmt {
             _ => false,
         }
     }
-    /// Get the [position][`Position`] of this statement.
+    /// Get the [position][Position] of this statement.
     pub fn position(&self) -> Position {
         match self {
             Self::Noop(pos)
@@ -765,7 +765,7 @@ impl Stmt {
             Self::Share(x) => x.pos,
         }
     }
-    /// Override the [position][`Position`] of this statement.
+    /// Override the [position][Position] of this statement.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
             Self::Noop(pos)
@@ -973,7 +973,7 @@ pub enum Expr {
     Property(Box<(ImmutableString, ImmutableString, Ident)>),
     /// { [statement][Stmt] }
     Stmt(Box<StaticVec<Stmt>>, Position),
-    /// Wrapped [expression][`Expr`] - should not be optimized away.
+    /// Wrapped [expression][Expr] - should not be optimized away.
     Expr(Box<Expr>),
     /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
@@ -1052,7 +1052,7 @@ impl Expr {
             _ => None,
         }
     }
-    /// Get the [position][`Position`] of the expression.
+    /// Get the [position][Position] of the expression.
     pub fn position(&self) -> Position {
         match self {
             Self::Expr(x) => x.position(),
@@ -1082,7 +1082,7 @@ impl Expr {
             Self::Custom(_, pos) => *pos,
         }
     }
-    /// Override the [position][`Position`] of the expression.
+    /// Override the [position][Position] of the expression.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
             Self::Expr(x) => {

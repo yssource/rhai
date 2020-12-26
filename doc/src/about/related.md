@@ -15,11 +15,17 @@ Online Resources for Rhai
 
 * [`LIB.RS`](https://lib.rs/crates/rhai) - Rhai library info
 
-* [Online Playground][playground] - Run scripts directly from editor
-
 * [Discord Chat](https://discord.gg/HquqbYFcZ9) - Rhai channel
 
 * [Reddit](https://www.reddit.com/r/Rhai) - Rhai community
+
+
+External Tools
+--------------
+
+* [Online Playground][playground] - Run Rhai scripts directly from an editor in the browser
+
+* [`rhai-doc`] - Rhai script documentation tool
 
 
 Other Cool Projects

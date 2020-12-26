@@ -43,7 +43,7 @@ fn print_help() {
     println!("quit, exit => quit");
     println!("scope      => print all variables in the scope");
     println!("functions  => print all functions defined");
-    println!("ast        => print the last AST");
+    println!("ast        => print the last AST (optimized)");
     println!("astu       => print the last raw, un-optimized AST");
     println!(r"end a line with '\' to continue to the next line.");
     println!();

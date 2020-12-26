@@ -19,8 +19,7 @@ use crate::stdlib::{
     fmt, format,
     hash::{Hash, Hasher},
     iter::{empty, once, FromIterator},
-    num::NonZeroU64,
-    num::NonZeroUsize,
+    num::{NonZeroU64, NonZeroU8, NonZeroUsize},
     ops::DerefMut,
     string::{String, ToString},
 };
@@ -637,7 +636,7 @@ pub struct Engine {
     /// A hashset containing symbols to disable.
     pub(crate) disabled_symbols: HashSet<String>,
     /// A hashmap containing custom keywords and precedence to recognize.
-    pub(crate) custom_keywords: HashMap<String, Option<u8>>,
+    pub(crate) custom_keywords: HashMap<String, Option<NonZeroU8>>,
     /// Custom syntax.
     pub(crate) custom_syntax: HashMap<ImmutableString, CustomSyntax>,
     /// Callback closure for resolving variable access.
@@ -989,7 +988,7 @@ impl Engine {
         new_val: Option<(Dynamic, Position)>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         if chain_type == ChainType::None {
-            panic!();
+            unreachable!();
         }
 
         let is_ref = target.is_ref();
