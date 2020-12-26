@@ -1,6 +1,6 @@
 //! Configuration settings for [`Engine`].
 
-use crate::stdlib::{format, string::String};
+use crate::stdlib::{format, num::NonZeroU8, string::String};
 use crate::token::{is_valid_identifier, Token};
 use crate::Engine;
 
@@ -214,9 +214,11 @@ impl Engine {
         self.disabled_symbols.insert(symbol.into());
         self
     }
-    /// Register a custom operator into the language.
+    /// Register a custom operator with a precedence into the language.
     ///
     /// The operator must be a valid identifier (i.e. it cannot be a symbol).
+    ///
+    /// The precedence cannot be zero.
     ///
     /// # Example
     ///
@@ -245,6 +247,11 @@ impl Engine {
         keyword: &str,
         precedence: u8,
     ) -> Result<&mut Self, String> {
+        let precedence = NonZeroU8::new(precedence);
+
+        if precedence.is_none() {
+            return Err("precedence cannot be zero".into());
+        }
         if !is_valid_identifier(keyword.chars()) {
             return Err(format!("not a valid identifier: '{}'", keyword).into());
         }
@@ -259,8 +266,7 @@ impl Engine {
         }
 
         // Add to custom keywords
-        self.custom_keywords
-            .insert(keyword.into(), Some(precedence));
+        self.custom_keywords.insert(keyword.into(), precedence);
 
         Ok(self)
     }

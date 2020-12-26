@@ -208,7 +208,7 @@ impl Engine {
     /// * `parse` is the parsing function.
     /// * `func` is the implementation function.
     ///
-    /// All custom keywords must be manually registered via [`register_custom_operator`][Engine::register_custom_operator].
+    /// All custom keywords must be manually registered via [`Engine::register_custom_operator`].
     /// Otherwise, custom keywords won't be recognized.
     pub fn register_custom_syntax_raw(
         &mut self,
