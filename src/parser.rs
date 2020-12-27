@@ -1135,6 +1135,12 @@ fn parse_primary(
             // Method access
             #[cfg(not(feature = "no_object"))]
             (expr, Token::Period) => {
+                // prevents capturing of the object properties as vars: xxx.<var>
+                #[cfg(not(feature = "no_closure"))]
+                if let (Token::Identifier(_), _) = input.peek().unwrap() {
+                    state.allow_capture = false;
+                }
+
                 let rhs = parse_unary(input, state, lib, settings.level_up())?;
                 make_dot_expr(state, expr, rhs, token_pos)?
             }
@@ -1693,16 +1699,6 @@ fn parse_binary_op(
         }
 
         let (op_token, pos) = input.next().unwrap();
-
-        if cfg!(not(feature = "no_object")) && op_token == Token::Period {
-            if let (Token::Identifier(_), _) = input.peek().unwrap() {
-                // prevents capturing of the object properties as vars: xxx.<var>
-                #[cfg(not(feature = "no_closure"))]
-                {
-                    state.allow_capture = false;
-                }
-            }
-        }
 
         let rhs = parse_unary(input, state, lib, settings)?;
 

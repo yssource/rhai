@@ -56,6 +56,17 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
+            r"
+                let foo = #{ x: 42 };
+                let f = || { this.x };
+                foo.call(f)                
+            ",
+        )?,
+        42
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
             r#"
                 let x = 8;
 
