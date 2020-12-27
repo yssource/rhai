@@ -1176,6 +1176,12 @@ impl Expr {
     }
     /// Is a particular [token][Token] allowed as a postfix operator to this expression?
     pub fn is_valid_postfix(&self, token: &Token) -> bool {
+        match token {
+            #[cfg(not(feature = "no_object"))]
+            Token::Period => return true,
+            _ => (),
+        }
+
         match self {
             Self::Expr(x) => x.is_valid_postfix(token),
 
@@ -1193,24 +1199,20 @@ impl Expr {
             | Self::Unit(_) => false,
 
             Self::StringConstant(_, _)
-            | Self::Stmt(_, _)
             | Self::FnCall(_, _)
+            | Self::Stmt(_, _)
             | Self::Dot(_, _)
             | Self::Index(_, _)
             | Self::Array(_, _)
             | Self::Map(_, _) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
-                #[cfg(not(feature = "no_object"))]
-                Token::Period => true,
                 _ => false,
             },
 
             Self::Variable(_) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
-                #[cfg(not(feature = "no_object"))]
-                Token::Period => true,
                 Token::LeftParen => true,
                 Token::Bang => true,
                 Token::DoubleColon => true,
@@ -1220,8 +1222,6 @@ impl Expr {
             Self::Property(_) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
-                #[cfg(not(feature = "no_object"))]
-                Token::Period => true,
                 Token::LeftParen => true,
                 _ => false,
             },

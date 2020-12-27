@@ -7,6 +7,11 @@ Version 0.19.9
 This version removes the confusing differences between _packages_ and _modules_
 by unifying the terminology and API under the global umbrella of _modules_.
 
+Bug fixes
+---------
+
+* Property access in 
+
 Breaking changes
 ----------------
 

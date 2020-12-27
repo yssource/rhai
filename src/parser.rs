@@ -278,8 +278,11 @@ fn parse_paren_expr(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    settings: ParseSettings,
+    mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    // ( ...
+    settings.pos = eat_token(input, Token::LeftParen);
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -637,8 +640,11 @@ fn parse_array_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    settings: ParseSettings,
+    mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    // [ ...
+    settings.pos = eat_token(input, Token::LeftBracket);
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -704,8 +710,11 @@ fn parse_map_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    settings: ParseSettings,
+    mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    // #{ ...
+    settings.pos = eat_token(input, Token::MapStart);
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -947,105 +956,196 @@ fn parse_primary(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let (token, _) = match token {
+    let mut root_expr = match token {
+        Token::EOF => return Err(PERR::UnexpectedEOF.into_err(settings.pos)),
+
+        Token::IntegerConstant(_)
+        | Token::CharConstant(_)
+        | Token::StringConstant(_)
+        | Token::True
+        | Token::False => match input.next().unwrap().0 {
+            Token::IntegerConstant(x) => Expr::IntegerConstant(x, settings.pos),
+            Token::CharConstant(c) => Expr::CharConstant(c, settings.pos),
+            Token::StringConstant(s) => {
+                Expr::StringConstant(state.get_interned_string(s), settings.pos)
+            }
+            Token::True => Expr::BoolConstant(true, settings.pos),
+            Token::False => Expr::BoolConstant(false, settings.pos),
+            _ => unreachable!(),
+        },
+        #[cfg(not(feature = "no_float"))]
+        Token::FloatConstant(x) => {
+            let x = *x;
+            input.next().unwrap();
+            Expr::FloatConstant(x, settings.pos)
+        }
+
         // { - block statement as expression
         Token::LeftBrace if settings.allow_stmt_expr => {
-            return parse_block(input, state, lib, settings.level_up()).map(|block| match block {
+            match parse_block(input, state, lib, settings.level_up())? {
                 Stmt::Block(statements, pos) => Expr::Stmt(Box::new(statements.into()), pos),
                 _ => unreachable!(),
-            })
-        }
-        Token::EOF => return Err(PERR::UnexpectedEOF.into_err(settings.pos)),
-        _ => input.next().unwrap(),
-    };
-
-    let (next_token, _) = input.peek().unwrap();
-
-    let mut root_expr = match token {
-        Token::IntegerConstant(x) => Expr::IntegerConstant(x, settings.pos),
-        #[cfg(not(feature = "no_float"))]
-        Token::FloatConstant(x) => Expr::FloatConstant(x, settings.pos),
-        Token::CharConstant(c) => Expr::CharConstant(c, settings.pos),
-        Token::StringConstant(s) => {
-            Expr::StringConstant(state.get_interned_string(s), settings.pos)
-        }
-
-        // Function call
-        Token::Identifier(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
-            // Once the identifier consumed we must enable next variables capturing
-            #[cfg(not(feature = "no_closure"))]
-            {
-                state.allow_capture = true;
-            }
-            let var_name_def = Ident {
-                name: state.get_interned_string(s),
-                pos: settings.pos,
-            };
-            Expr::Variable(Box::new((None, None, var_name_def)))
-        }
-        // Namespace qualification
-        #[cfg(not(feature = "no_module"))]
-        Token::Identifier(s) if *next_token == Token::DoubleColon => {
-            // Once the identifier consumed we must enable next variables capturing
-            #[cfg(not(feature = "no_closure"))]
-            {
-                state.allow_capture = true;
-            }
-            let var_name_def = Ident {
-                name: state.get_interned_string(s),
-                pos: settings.pos,
-            };
-            Expr::Variable(Box::new((None, None, var_name_def)))
-        }
-        // Normal variable access
-        Token::Identifier(s) => {
-            let index = state.access_var(&s, settings.pos);
-            let var_name_def = Ident {
-                name: state.get_interned_string(s),
-                pos: settings.pos,
-            };
-            Expr::Variable(Box::new((index, None, var_name_def)))
-        }
-
-        // Function call is allowed to have reserved keyword
-        Token::Reserved(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
-            if is_keyword_function(&s) {
-                let var_name_def = Ident {
-                    name: state.get_interned_string(s),
-                    pos: settings.pos,
-                };
-                Expr::Variable(Box::new((None, None, var_name_def)))
-            } else {
-                return Err(PERR::Reserved(s).into_err(settings.pos));
             }
         }
-
-        // Access to `this` as a variable is OK
-        Token::Reserved(s) if s == KEYWORD_THIS && *next_token != Token::LeftParen => {
-            if !settings.is_function_scope {
-                let msg = format!("'{}' can only be used in functions", s);
-                return Err(LexError::ImproperSymbol(s, msg).into_err(settings.pos));
-            } else {
-                let var_name_def = Ident {
-                    name: state.get_interned_string(s),
-                    pos: settings.pos,
-                };
-                Expr::Variable(Box::new((None, None, var_name_def)))
-            }
-        }
-
-        Token::Reserved(s) if is_valid_identifier(s.chars()) => {
-            return Err(PERR::Reserved(s).into_err(settings.pos));
-        }
-
+        // ( - grouped expression
         Token::LeftParen => parse_paren_expr(input, state, lib, settings.level_up())?,
+
+        // If statement is allowed to act as expressions
+        Token::If if settings.allow_if_expr => Expr::Stmt(
+            Box::new(vec![parse_if(input, state, lib, settings.level_up())?].into()),
+            settings.pos,
+        ),
+        // Switch statement is allowed to act as expressions
+        Token::Switch if settings.allow_switch_expr => Expr::Stmt(
+            Box::new(vec![parse_switch(input, state, lib, settings.level_up())?].into()),
+            settings.pos,
+        ),
+        // | ...
+        #[cfg(not(feature = "no_function"))]
+        Token::Pipe | Token::Or if settings.allow_anonymous_fn => {
+            let mut new_state = ParseState::new(
+                state.engine,
+                state.script_hash,
+                #[cfg(not(feature = "unchecked"))]
+                state.max_function_expr_depth,
+                #[cfg(not(feature = "unchecked"))]
+                state.max_function_expr_depth,
+            );
+
+            let settings = ParseSettings {
+                allow_if_expr: true,
+                allow_switch_expr: true,
+                allow_stmt_expr: true,
+                allow_anonymous_fn: true,
+                is_global: false,
+                is_function_scope: true,
+                is_breakable: false,
+                level: 0,
+                pos: settings.pos,
+            };
+
+            let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
+
+            #[cfg(not(feature = "no_closure"))]
+            new_state.externals.iter().for_each(|(closure, pos)| {
+                state.access_var(closure, *pos);
+            });
+
+            // Qualifiers (none) + function name + number of arguments.
+            let hash = calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap();
+
+            lib.insert(hash, func);
+
+            expr
+        }
+
+        // Array literal
         #[cfg(not(feature = "no_index"))]
         Token::LeftBracket => parse_array_literal(input, state, lib, settings.level_up())?,
+
+        // Map literal
         #[cfg(not(feature = "no_object"))]
         Token::MapStart => parse_map_literal(input, state, lib, settings.level_up())?,
-        Token::True => Expr::BoolConstant(true, settings.pos),
-        Token::False => Expr::BoolConstant(false, settings.pos),
-        Token::LexError(err) => return Err(err.into_err(settings.pos)),
+
+        // Identifier
+        Token::Identifier(_) => {
+            let s = match input.next().unwrap().0 {
+                Token::Identifier(s) => s,
+                _ => unreachable!(),
+            };
+
+            match input.peek().unwrap().0 {
+                // Function call
+                Token::LeftParen | Token::Bang => {
+                    // Once the identifier consumed we must enable next variables capturing
+                    #[cfg(not(feature = "no_closure"))]
+                    {
+                        state.allow_capture = true;
+                    }
+                    let var_name_def = Ident {
+                        name: state.get_interned_string(s),
+                        pos: settings.pos,
+                    };
+                    Expr::Variable(Box::new((None, None, var_name_def)))
+                }
+                // Namespace qualification
+                #[cfg(not(feature = "no_module"))]
+                Token::DoubleColon => {
+                    // Once the identifier consumed we must enable next variables capturing
+                    #[cfg(not(feature = "no_closure"))]
+                    {
+                        state.allow_capture = true;
+                    }
+                    let var_name_def = Ident {
+                        name: state.get_interned_string(s),
+                        pos: settings.pos,
+                    };
+                    Expr::Variable(Box::new((None, None, var_name_def)))
+                }
+                // Normal variable access
+                _ => {
+                    let index = state.access_var(&s, settings.pos);
+                    let var_name_def = Ident {
+                        name: state.get_interned_string(s),
+                        pos: settings.pos,
+                    };
+                    Expr::Variable(Box::new((index, None, var_name_def)))
+                }
+            }
+        }
+
+        // Reserved keyword or symbol
+        Token::Reserved(_) => {
+            let s = match input.next().unwrap().0 {
+                Token::Reserved(s) => s,
+                _ => unreachable!(),
+            };
+
+            match input.peek().unwrap().0 {
+                // Function call is allowed to have reserved keyword
+                Token::LeftParen | Token::Bang => {
+                    if s == KEYWORD_THIS {
+                        return Err(PERR::Reserved(s).into_err(settings.pos));
+                    } else if is_keyword_function(&s) {
+                        let var_name_def = Ident {
+                            name: state.get_interned_string(s),
+                            pos: settings.pos,
+                        };
+                        Expr::Variable(Box::new((None, None, var_name_def)))
+                    } else {
+                        return Err(PERR::Reserved(s).into_err(settings.pos));
+                    }
+                }
+                // Access to `this` as a variable is OK
+                _ if s == KEYWORD_THIS => {
+                    if !settings.is_function_scope {
+                        let msg = format!("'{}' can only be used in functions", s);
+                        return Err(LexError::ImproperSymbol(s, msg).into_err(settings.pos));
+                    } else {
+                        let var_name_def = Ident {
+                            name: state.get_interned_string(s),
+                            pos: settings.pos,
+                        };
+                        Expr::Variable(Box::new((None, None, var_name_def)))
+                    }
+                }
+                _ if is_valid_identifier(s.chars()) => {
+                    return Err(PERR::Reserved(s).into_err(settings.pos));
+                }
+                _ => {
+                    return Err(LexError::UnexpectedInput(s).into_err(settings.pos));
+                }
+            }
+        }
+
+        Token::LexError(_) => {
+            let err = match input.next().unwrap().0 {
+                Token::LexError(err) => err,
+                _ => unreachable!(),
+            };
+
+            return Err(err.into_err(settings.pos));
+        }
 
         _ => {
             return Err(
@@ -1056,26 +1156,26 @@ fn parse_primary(
 
     // Tail processing all possible postfix operators
     loop {
-        let (token, _) = input.peek().unwrap();
+        let (tail_token, _) = input.peek().unwrap();
 
-        if !root_expr.is_valid_postfix(token) {
+        if !root_expr.is_valid_postfix(tail_token) {
             break;
         }
 
-        let (token, token_pos) = input.next().unwrap();
-        settings.pos = token_pos;
+        let (tail_token, tail_pos) = input.next().unwrap();
+        settings.pos = tail_pos;
 
-        root_expr = match (root_expr, token) {
+        root_expr = match (root_expr, tail_token) {
             // Qualified function call with !
             (Expr::Variable(x), Token::Bang) if x.1.is_some() => {
                 return Err(if !match_token(input, Token::LeftParen).0 {
-                    LexError::UnexpectedInput(Token::Bang.syntax().to_string()).into_err(token_pos)
+                    LexError::UnexpectedInput(Token::Bang.syntax().to_string()).into_err(tail_pos)
                 } else {
                     LexError::ImproperSymbol(
                         "!".to_string(),
                         "'!' cannot be used to call module functions".to_string(),
                     )
-                    .into_err(token_pos)
+                    .into_err(tail_pos)
                 });
             }
             // Function call with !
@@ -1132,7 +1232,7 @@ fn parse_primary(
             (expr, Token::LeftBracket) => {
                 parse_index_chain(input, state, lib, expr, settings.level_up())?
             }
-            // Method access
+            // Property access
             #[cfg(not(feature = "no_object"))]
             (expr, Token::Period) => {
                 // prevents capturing of the object properties as vars: xxx.<var>
@@ -1142,7 +1242,7 @@ fn parse_primary(
                 }
 
                 let rhs = parse_unary(input, state, lib, settings.level_up())?;
-                make_dot_expr(state, expr, rhs, token_pos)?
+                make_dot_expr(state, expr, rhs, tail_pos)?
             }
             // Unknown postfix operator
             (expr, token) => unreachable!(
@@ -1193,16 +1293,6 @@ fn parse_unary(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     match token {
-        // If statement is allowed to act as expressions
-        Token::If if settings.allow_if_expr => Ok(Expr::Stmt(
-            Box::new(vec![parse_if(input, state, lib, settings.level_up())?].into()),
-            settings.pos,
-        )),
-        // Switch statement is allowed to act as expressions
-        Token::Switch if settings.allow_switch_expr => Ok(Expr::Stmt(
-            Box::new(vec![parse_switch(input, state, lib, settings.level_up())?].into()),
-            settings.pos,
-        )),
         // -expr
         Token::UnaryMinus => {
             let pos = eat_token(input, Token::UnaryMinus);
@@ -1285,44 +1375,6 @@ fn parse_unary(
                 }),
                 pos,
             ))
-        }
-        // | ...
-        #[cfg(not(feature = "no_function"))]
-        Token::Pipe | Token::Or if settings.allow_anonymous_fn => {
-            let mut new_state = ParseState::new(
-                state.engine,
-                state.script_hash,
-                #[cfg(not(feature = "unchecked"))]
-                state.max_function_expr_depth,
-                #[cfg(not(feature = "unchecked"))]
-                state.max_function_expr_depth,
-            );
-
-            let settings = ParseSettings {
-                allow_if_expr: true,
-                allow_switch_expr: true,
-                allow_stmt_expr: true,
-                allow_anonymous_fn: true,
-                is_global: false,
-                is_function_scope: true,
-                is_breakable: false,
-                level: 0,
-                pos: *token_pos,
-            };
-
-            let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
-
-            #[cfg(not(feature = "no_closure"))]
-            new_state.externals.iter().for_each(|(closure, pos)| {
-                state.access_var(closure, *pos);
-            });
-
-            // Qualifiers (none) + function name + number of arguments.
-            let hash = calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap();
-
-            lib.insert(hash, func);
-
-            Ok(expr)
         }
         // <EOF>
         Token::EOF => Err(PERR::UnexpectedEOF.into_err(settings.pos)),
@@ -1816,13 +1868,12 @@ fn parse_binary_op(
                 make_in_expr(current_lhs, rhs, pos)?
             }
 
-            #[cfg(not(feature = "no_object"))]
-            Token::Period => {
-                let rhs = args.pop().unwrap();
-                let current_lhs = args.pop().unwrap();
-                make_dot_expr(state, current_lhs, rhs, pos)?
-            }
-
+            // #[cfg(not(feature = "no_object"))]
+            // Token::Period => {
+            //     let rhs = args.pop().unwrap();
+            //     let current_lhs = args.pop().unwrap();
+            //     make_dot_expr(state, current_lhs, rhs, pos)?
+            // }
             Token::Custom(s)
                 if state
                     .engine
@@ -2583,6 +2634,7 @@ fn parse_stmt(
         }
 
         Token::If => parse_if(input, state, lib, settings.level_up()).map(Some),
+        Token::Switch => parse_switch(input, state, lib, settings.level_up()).map(Some),
         Token::While | Token::Loop => {
             parse_while_loop(input, state, lib, settings.level_up()).map(Some)
         }
