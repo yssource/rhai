@@ -20,16 +20,10 @@ pub mod one_fn_module_nested_attr {
 fn one_fn_module_nested_attr_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::one_fn_module_nested_attr::advanced_math);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Math::Advanced", m.into());
 
     assert_eq!(
-        engine.eval::<FLOAT>(
-            r#"import "Math::Advanced" as math;
-           let m = math::get_mystic_number();
-           m"#
-        )?,
+        engine.eval::<FLOAT>(r#"let m = Math::Advanced::get_mystic_number(); m"#)?,
         42.0
     );
     Ok(())
@@ -56,16 +50,10 @@ pub mod one_fn_submodule_nested_attr {
 fn one_fn_submodule_nested_attr_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::one_fn_submodule_nested_attr::advanced_math);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Math::Advanced", m.into());
 
     assert_eq!(
-        engine.eval::<FLOAT>(
-            r#"import "Math::Advanced" as math;
-           let m = math::constants::get_mystic_number();
-           m"#
-        )?,
+        engine.eval::<FLOAT>(r#"let m = Math::Advanced::constants::get_mystic_number(); m"#)?,
         42.0
     );
     Ok(())
@@ -73,8 +61,8 @@ fn one_fn_submodule_nested_attr_test() -> Result<(), Box<EvalAltResult>> {
 
 mod export_nested_by_prefix {
     use rhai::plugin::*;
-    #[export_module(export_prefix = "foo_")]
 
+    #[export_module(export_prefix = "foo_")]
     pub mod my_adds {
         pub mod foo_first_adders {
             use rhai::{FLOAT, INT};
@@ -131,26 +119,24 @@ mod export_nested_by_prefix {
 fn export_nested_by_prefix_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::export_nested_by_prefix::my_adds);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Math::Advanced", m.into());
 
     let output_array = engine.eval::<Array>(
-        r#"import "Math::Advanced" as math;
-       let ex = 41.0;
-       let fx = math::foo_first_adders::add_float(ex, 1.0);
+        r#"
+        let ex = 41.0;
+        let fx = Math::Advanced::foo_first_adders::add_float(ex, 1.0);
 
-       let ei = 41;
-       let fi = math::foo_first_adders::add_int(ei, 1);
+        let ei = 41;
+        let fi = Math::Advanced::foo_first_adders::add_int(ei, 1);
 
-       let gx = 41.0;
-       let hx = math::foo_second_adders::add_float(gx, 1.0);
+        let gx = 41.0;
+        let hx = Math::Advanced::foo_second_adders::add_float(gx, 1.0);
 
-       let gi = 41;
-       let hi = math::foo_second_adders::add_int(gi, 1);
+        let gi = 41;
+        let hi = Math::Advanced::foo_second_adders::add_int(gi, 1);
 
-       [fx, hx, fi, hi]
-       "#,
+        [fx, hx, fi, hi]
+        "#,
     )?;
     assert_eq!(&output_array[0].as_float().unwrap(), &42.0);
     assert_eq!(&output_array[1].as_float().unwrap(), &42.0);
@@ -158,44 +144,44 @@ fn export_nested_by_prefix_test() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(&output_array[3].as_int().unwrap(), &42);
 
     assert!(matches!(*engine.eval::<FLOAT>(
-        r#"import "Math::Advanced" as math;
-       let ex = 41.0;
-       let fx = math::foo_third_adders::add_float(ex, 1.0);
-       fx
-       "#).unwrap_err(),
-       EvalAltResult::ErrorFunctionNotFound(s, p)
-            if s == "math::foo_third_adders::add_float (f64, f64)"
-            && p == rhai::Position::new(3, 41)));
+        r#"
+        let ex = 41.0;
+        let fx = Math::Advanced::foo_third_adders::add_float(ex, 1.0);
+        fx
+        "#).unwrap_err(),
+        EvalAltResult::ErrorFunctionNotFound(s, p)
+            if s == "Math::Advanced::foo_third_adders::add_float (f64, f64)"
+            && p == rhai::Position::new(3, 52)));
 
     assert!(matches!(*engine.eval::<FLOAT>(
-        r#"import "Math::Advanced" as math;
-       let ex = 41;
-       let fx = math::foo_third_adders::add_int(ex, 1);
-       fx
-       "#).unwrap_err(),
-       EvalAltResult::ErrorFunctionNotFound(s, p)
-            if s == "math::foo_third_adders::add_int (i64, i64)"
-            && p == rhai::Position::new(3, 41)));
+        r#"
+        let ex = 41;
+        let fx = Math::Advanced::foo_third_adders::add_int(ex, 1);
+        fx
+        "#).unwrap_err(),
+        EvalAltResult::ErrorFunctionNotFound(s, p)
+            if s == "Math::Advanced::foo_third_adders::add_int (i64, i64)"
+            && p == rhai::Position::new(3, 52)));
 
     assert!(matches!(*engine.eval::<FLOAT>(
-        r#"import "Math::Advanced" as math;
-       let ex = 41;
-       let fx = math::bar_fourth_adders::add_int(ex, 1);
-       fx
-       "#).unwrap_err(),
-       EvalAltResult::ErrorFunctionNotFound(s, p)
-            if s == "math::bar_fourth_adders::add_int (i64, i64)"
-            && p == rhai::Position::new(3, 42)));
+        r#"
+        let ex = 41;
+        let fx = Math::Advanced::bar_fourth_adders::add_int(ex, 1);
+        fx
+        "#).unwrap_err(),
+        EvalAltResult::ErrorFunctionNotFound(s, p)
+            if s == "Math::Advanced::bar_fourth_adders::add_int (i64, i64)"
+            && p == rhai::Position::new(3, 53)));
 
     assert!(matches!(*engine.eval::<FLOAT>(
-        r#"import "Math::Advanced" as math;
-       let ex = 41.0;
-       let fx = math::bar_fourth_adders::add_float(ex, 1.0);
-       fx
-       "#).unwrap_err(),
-       EvalAltResult::ErrorFunctionNotFound(s, p)
-            if s == "math::bar_fourth_adders::add_float (f64, f64)"
-            && p == rhai::Position::new(3, 42)));
+        r#"
+        let ex = 41.0;
+        let fx = Math::Advanced::bar_fourth_adders::add_float(ex, 1.0);
+        fx
+        "#).unwrap_err(),
+        EvalAltResult::ErrorFunctionNotFound(s, p)
+            if s == "Math::Advanced::bar_fourth_adders::add_float (f64, f64)"
+            && p == rhai::Position::new(3, 53)));
 
     Ok(())
 }

@@ -3,7 +3,7 @@ use syn::{
     spanned::Spanned,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum ExportScope {
     PubOnly,
     Prefix(String),
@@ -22,12 +22,14 @@ pub trait ExportedParams: Sized {
     fn from_info(info: ExportInfo) -> syn::Result<Self>;
 }
 
+#[derive(Debug, Clone)]
 pub struct AttrItem {
     pub key: proc_macro2::Ident,
     pub value: Option<syn::LitStr>,
     pub span: proc_macro2::Span,
 }
 
+#[derive(Debug, Clone)]
 pub struct ExportInfo {
     pub item_span: proc_macro2::Span,
     pub items: Vec<AttrItem>,

@@ -7,12 +7,26 @@ Version 0.19.9
 This version removes the confusing differences between _packages_ and _modules_
 by unifying the terminology and API under the global umbrella of _modules_.
 
+Bug fixes
+---------
+
+* Property access in 
+
 Breaking changes
 ----------------
 
 * `Engine::load_package` is renamed `Engine::register_global_module` and now must explicitly pass a shared [`Module`].
 * `Engine::register_module` is renamed `Engine::register_static_module` and now must explicitly pass a shared [`Module`].
 * `Package::get` is renamed `Package::as_shared_module`.
+* `Engine::set_module_resolver` now takes a straight module resolver instead of an `Option`. To disable module resolving, use the new `DummyModuleResolver`.
+
+Enhancements
+------------
+
+* `Scope` is now `Clone + Hash`.
+* `Engine::register_static_module` now supports sub-module paths (e.g. `foo::bar::baz`).
+* `Engine::register_custom_operator` now accepts reserved symbols.
+* `Engine::register_custom_operator` now returns an error if given a precedence of zero.
 
 
 Version 0.19.8

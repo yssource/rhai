@@ -82,7 +82,7 @@ fn test_call_fn_private() -> Result<(), Box<EvalAltResult>> {
     let ast = engine.compile("private fn add(x, n, ) { x + n }")?;
 
     assert!(matches!(
-        *engine.call_fn::<_, INT>(&mut scope, &ast, "add", (40 as INT, 2 as INT))
+        *(engine.call_fn(&mut scope, &ast, "add", (40 as INT, 2 as INT)) as Result<INT, Box<EvalAltResult>>)
             .expect_err("should error"),
         EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "add"
     ));

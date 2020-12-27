@@ -13,7 +13,7 @@ use crate::stdlib::{
     format,
     hash::{Hash, Hasher},
     iter::empty,
-    num::NonZeroUsize,
+    num::{NonZeroU64, NonZeroUsize},
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -34,7 +34,7 @@ use crate::FnAccess;
 
 type PERR = ParseErrorType;
 
-type FunctionsLib = HashMap<u64, ScriptFnDef, StraightHasherBuilder>;
+type FunctionsLib = HashMap<NonZeroU64, ScriptFnDef, StraightHasherBuilder>;
 
 /// A type that encapsulates the current state of the parser.
 #[derive(Debug)]
@@ -238,10 +238,10 @@ impl Expr {
     fn into_property(self, state: &mut ParseState) -> Self {
         match self {
             Self::Variable(x) if x.1.is_none() => {
-                let ident = x.3;
+                let ident = x.2;
                 let getter = state.get_interned_string(crate::engine::make_getter(&ident.name));
                 let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
-                Self::Property(Box::new(((getter, setter), ident.into())))
+                Self::Property(Box::new((getter, setter, ident.into())))
             }
             _ => self,
         }
@@ -278,8 +278,11 @@ fn parse_paren_expr(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    settings: ParseSettings,
+    mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    // ( ...
+    settings.pos = eat_token(input, Token::LeftParen);
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -310,7 +313,7 @@ fn parse_fn_call(
     lib: &mut FunctionsLib,
     id: ImmutableString,
     capture: bool,
-    mut namespace: Option<Box<NamespaceRef>>,
+    mut namespace: Option<NamespaceRef>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
     let (token, token_pos) = input.peek().unwrap();
@@ -335,7 +338,7 @@ fn parse_fn_call(
         Token::RightParen => {
             eat_token(input, Token::RightParen);
 
-            let hash_script = if let Some(modules) = namespace.as_mut() {
+            let mut hash_script = if let Some(ref mut modules) = namespace {
                 #[cfg(not(feature = "no_module"))]
                 modules.set_index(state.find_module(&modules[0].name));
 
@@ -352,13 +355,17 @@ fn parse_fn_call(
                 calc_script_fn_hash(empty(), &id, 0)
             };
 
+            // script functions can only be valid identifiers
+            if !is_valid_identifier(id.chars()) {
+                hash_script = None;
+            }
+
             return Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
                     name: id.to_string().into(),
-                    native_only: !is_valid_identifier(id.chars()), // script functions can only be valid identifiers
                     capture,
                     namespace,
-                    hash: hash_script,
+                    hash_script,
                     args,
                     ..Default::default()
                 }),
@@ -383,7 +390,7 @@ fn parse_fn_call(
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
 
-                let hash_script = if let Some(modules) = namespace.as_mut() {
+                let mut hash_script = if let Some(modules) = namespace.as_mut() {
                     #[cfg(not(feature = "no_module"))]
                     modules.set_index(state.find_module(&modules[0].name));
 
@@ -400,13 +407,17 @@ fn parse_fn_call(
                     calc_script_fn_hash(empty(), &id, args.len())
                 };
 
+                // script functions can only be valid identifiers
+                if !is_valid_identifier(id.chars()) {
+                    hash_script = None;
+                }
+
                 return Ok(Expr::FnCall(
                     Box::new(FnCallExpr {
                         name: id.to_string().into(),
-                        native_only: !is_valid_identifier(id.chars()), // script functions can only be valid identifiers
                         capture,
                         namespace,
-                        hash: hash_script,
+                        hash_script,
                         args,
                         ..Default::default()
                     }),
@@ -629,8 +640,11 @@ fn parse_array_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    settings: ParseSettings,
+    mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    // [ ...
+    settings.pos = eat_token(input, Token::LeftBracket);
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -696,8 +710,11 @@ fn parse_map_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    settings: ParseSettings,
+    mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    // #{ ...
+    settings.pos = eat_token(input, Token::MapStart);
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -939,105 +956,196 @@ fn parse_primary(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let (token, _) = match token {
+    let mut root_expr = match token {
+        Token::EOF => return Err(PERR::UnexpectedEOF.into_err(settings.pos)),
+
+        Token::IntegerConstant(_)
+        | Token::CharConstant(_)
+        | Token::StringConstant(_)
+        | Token::True
+        | Token::False => match input.next().unwrap().0 {
+            Token::IntegerConstant(x) => Expr::IntegerConstant(x, settings.pos),
+            Token::CharConstant(c) => Expr::CharConstant(c, settings.pos),
+            Token::StringConstant(s) => {
+                Expr::StringConstant(state.get_interned_string(s), settings.pos)
+            }
+            Token::True => Expr::BoolConstant(true, settings.pos),
+            Token::False => Expr::BoolConstant(false, settings.pos),
+            _ => unreachable!(),
+        },
+        #[cfg(not(feature = "no_float"))]
+        Token::FloatConstant(x) => {
+            let x = *x;
+            input.next().unwrap();
+            Expr::FloatConstant(x, settings.pos)
+        }
+
         // { - block statement as expression
         Token::LeftBrace if settings.allow_stmt_expr => {
-            return parse_block(input, state, lib, settings.level_up()).map(|block| match block {
+            match parse_block(input, state, lib, settings.level_up())? {
                 Stmt::Block(statements, pos) => Expr::Stmt(Box::new(statements.into()), pos),
                 _ => unreachable!(),
-            })
-        }
-        Token::EOF => return Err(PERR::UnexpectedEOF.into_err(settings.pos)),
-        _ => input.next().unwrap(),
-    };
-
-    let (next_token, _) = input.peek().unwrap();
-
-    let mut root_expr = match token {
-        Token::IntegerConstant(x) => Expr::IntegerConstant(x, settings.pos),
-        #[cfg(not(feature = "no_float"))]
-        Token::FloatConstant(x) => Expr::FloatConstant(x, settings.pos),
-        Token::CharConstant(c) => Expr::CharConstant(c, settings.pos),
-        Token::StringConstant(s) => {
-            Expr::StringConstant(state.get_interned_string(s), settings.pos)
-        }
-
-        // Function call
-        Token::Identifier(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
-            // Once the identifier consumed we must enable next variables capturing
-            #[cfg(not(feature = "no_closure"))]
-            {
-                state.allow_capture = true;
-            }
-            let var_name_def = Ident {
-                name: state.get_interned_string(s),
-                pos: settings.pos,
-            };
-            Expr::Variable(Box::new((None, None, 0, var_name_def)))
-        }
-        // Namespace qualification
-        #[cfg(not(feature = "no_module"))]
-        Token::Identifier(s) if *next_token == Token::DoubleColon => {
-            // Once the identifier consumed we must enable next variables capturing
-            #[cfg(not(feature = "no_closure"))]
-            {
-                state.allow_capture = true;
-            }
-            let var_name_def = Ident {
-                name: state.get_interned_string(s),
-                pos: settings.pos,
-            };
-            Expr::Variable(Box::new((None, None, 0, var_name_def)))
-        }
-        // Normal variable access
-        Token::Identifier(s) => {
-            let index = state.access_var(&s, settings.pos);
-            let var_name_def = Ident {
-                name: state.get_interned_string(s),
-                pos: settings.pos,
-            };
-            Expr::Variable(Box::new((index, None, 0, var_name_def)))
-        }
-
-        // Function call is allowed to have reserved keyword
-        Token::Reserved(s) if *next_token == Token::LeftParen || *next_token == Token::Bang => {
-            if is_keyword_function(&s) {
-                let var_name_def = Ident {
-                    name: state.get_interned_string(s),
-                    pos: settings.pos,
-                };
-                Expr::Variable(Box::new((None, None, 0, var_name_def)))
-            } else {
-                return Err(PERR::Reserved(s).into_err(settings.pos));
             }
         }
-
-        // Access to `this` as a variable is OK
-        Token::Reserved(s) if s == KEYWORD_THIS && *next_token != Token::LeftParen => {
-            if !settings.is_function_scope {
-                let msg = format!("'{}' can only be used in functions", s);
-                return Err(LexError::ImproperSymbol(s, msg).into_err(settings.pos));
-            } else {
-                let var_name_def = Ident {
-                    name: state.get_interned_string(s),
-                    pos: settings.pos,
-                };
-                Expr::Variable(Box::new((None, None, 0, var_name_def)))
-            }
-        }
-
-        Token::Reserved(s) if is_valid_identifier(s.chars()) => {
-            return Err(PERR::Reserved(s).into_err(settings.pos));
-        }
-
+        // ( - grouped expression
         Token::LeftParen => parse_paren_expr(input, state, lib, settings.level_up())?,
+
+        // If statement is allowed to act as expressions
+        Token::If if settings.allow_if_expr => Expr::Stmt(
+            Box::new(vec![parse_if(input, state, lib, settings.level_up())?].into()),
+            settings.pos,
+        ),
+        // Switch statement is allowed to act as expressions
+        Token::Switch if settings.allow_switch_expr => Expr::Stmt(
+            Box::new(vec![parse_switch(input, state, lib, settings.level_up())?].into()),
+            settings.pos,
+        ),
+        // | ...
+        #[cfg(not(feature = "no_function"))]
+        Token::Pipe | Token::Or if settings.allow_anonymous_fn => {
+            let mut new_state = ParseState::new(
+                state.engine,
+                state.script_hash,
+                #[cfg(not(feature = "unchecked"))]
+                state.max_function_expr_depth,
+                #[cfg(not(feature = "unchecked"))]
+                state.max_function_expr_depth,
+            );
+
+            let settings = ParseSettings {
+                allow_if_expr: true,
+                allow_switch_expr: true,
+                allow_stmt_expr: true,
+                allow_anonymous_fn: true,
+                is_global: false,
+                is_function_scope: true,
+                is_breakable: false,
+                level: 0,
+                pos: settings.pos,
+            };
+
+            let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
+
+            #[cfg(not(feature = "no_closure"))]
+            new_state.externals.iter().for_each(|(closure, pos)| {
+                state.access_var(closure, *pos);
+            });
+
+            // Qualifiers (none) + function name + number of arguments.
+            let hash = calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap();
+
+            lib.insert(hash, func);
+
+            expr
+        }
+
+        // Array literal
         #[cfg(not(feature = "no_index"))]
         Token::LeftBracket => parse_array_literal(input, state, lib, settings.level_up())?,
+
+        // Map literal
         #[cfg(not(feature = "no_object"))]
         Token::MapStart => parse_map_literal(input, state, lib, settings.level_up())?,
-        Token::True => Expr::BoolConstant(true, settings.pos),
-        Token::False => Expr::BoolConstant(false, settings.pos),
-        Token::LexError(err) => return Err(err.into_err(settings.pos)),
+
+        // Identifier
+        Token::Identifier(_) => {
+            let s = match input.next().unwrap().0 {
+                Token::Identifier(s) => s,
+                _ => unreachable!(),
+            };
+
+            match input.peek().unwrap().0 {
+                // Function call
+                Token::LeftParen | Token::Bang => {
+                    // Once the identifier consumed we must enable next variables capturing
+                    #[cfg(not(feature = "no_closure"))]
+                    {
+                        state.allow_capture = true;
+                    }
+                    let var_name_def = Ident {
+                        name: state.get_interned_string(s),
+                        pos: settings.pos,
+                    };
+                    Expr::Variable(Box::new((None, None, var_name_def)))
+                }
+                // Namespace qualification
+                #[cfg(not(feature = "no_module"))]
+                Token::DoubleColon => {
+                    // Once the identifier consumed we must enable next variables capturing
+                    #[cfg(not(feature = "no_closure"))]
+                    {
+                        state.allow_capture = true;
+                    }
+                    let var_name_def = Ident {
+                        name: state.get_interned_string(s),
+                        pos: settings.pos,
+                    };
+                    Expr::Variable(Box::new((None, None, var_name_def)))
+                }
+                // Normal variable access
+                _ => {
+                    let index = state.access_var(&s, settings.pos);
+                    let var_name_def = Ident {
+                        name: state.get_interned_string(s),
+                        pos: settings.pos,
+                    };
+                    Expr::Variable(Box::new((index, None, var_name_def)))
+                }
+            }
+        }
+
+        // Reserved keyword or symbol
+        Token::Reserved(_) => {
+            let s = match input.next().unwrap().0 {
+                Token::Reserved(s) => s,
+                _ => unreachable!(),
+            };
+
+            match input.peek().unwrap().0 {
+                // Function call is allowed to have reserved keyword
+                Token::LeftParen | Token::Bang => {
+                    if s == KEYWORD_THIS {
+                        return Err(PERR::Reserved(s).into_err(settings.pos));
+                    } else if is_keyword_function(&s) {
+                        let var_name_def = Ident {
+                            name: state.get_interned_string(s),
+                            pos: settings.pos,
+                        };
+                        Expr::Variable(Box::new((None, None, var_name_def)))
+                    } else {
+                        return Err(PERR::Reserved(s).into_err(settings.pos));
+                    }
+                }
+                // Access to `this` as a variable is OK
+                _ if s == KEYWORD_THIS => {
+                    if !settings.is_function_scope {
+                        let msg = format!("'{}' can only be used in functions", s);
+                        return Err(LexError::ImproperSymbol(s, msg).into_err(settings.pos));
+                    } else {
+                        let var_name_def = Ident {
+                            name: state.get_interned_string(s),
+                            pos: settings.pos,
+                        };
+                        Expr::Variable(Box::new((None, None, var_name_def)))
+                    }
+                }
+                _ if is_valid_identifier(s.chars()) => {
+                    return Err(PERR::Reserved(s).into_err(settings.pos));
+                }
+                _ => {
+                    return Err(LexError::UnexpectedInput(s).into_err(settings.pos));
+                }
+            }
+        }
+
+        Token::LexError(_) => {
+            let err = match input.next().unwrap().0 {
+                Token::LexError(err) => err,
+                _ => unreachable!(),
+            };
+
+            return Err(err.into_err(settings.pos));
+        }
 
         _ => {
             return Err(
@@ -1048,26 +1156,26 @@ fn parse_primary(
 
     // Tail processing all possible postfix operators
     loop {
-        let (token, _) = input.peek().unwrap();
+        let (tail_token, _) = input.peek().unwrap();
 
-        if !root_expr.is_valid_postfix(token) {
+        if !root_expr.is_valid_postfix(tail_token) {
             break;
         }
 
-        let (token, token_pos) = input.next().unwrap();
-        settings.pos = token_pos;
+        let (tail_token, tail_pos) = input.next().unwrap();
+        settings.pos = tail_pos;
 
-        root_expr = match (root_expr, token) {
+        root_expr = match (root_expr, tail_token) {
             // Qualified function call with !
             (Expr::Variable(x), Token::Bang) if x.1.is_some() => {
                 return Err(if !match_token(input, Token::LeftParen).0 {
-                    LexError::UnexpectedInput(Token::Bang.syntax().to_string()).into_err(token_pos)
+                    LexError::UnexpectedInput(Token::Bang.syntax().to_string()).into_err(tail_pos)
                 } else {
                     LexError::ImproperSymbol(
                         "!".to_string(),
                         "'!' cannot be used to call module functions".to_string(),
                     )
-                    .into_err(token_pos)
+                    .into_err(tail_pos)
                 });
             }
             // Function call with !
@@ -1081,35 +1189,38 @@ fn parse_primary(
                     .into_err(pos));
                 }
 
-                let (_, modules, _, Ident { name, pos }) = *x;
+                let (_, namespace, Ident { name, pos }) = *x;
                 settings.pos = pos;
-                parse_fn_call(input, state, lib, name, true, modules, settings.level_up())?
+                let ns = namespace.map(|(_, ns)| ns);
+                parse_fn_call(input, state, lib, name, true, ns, settings.level_up())?
             }
             // Function call
             (Expr::Variable(x), Token::LeftParen) => {
-                let (_, modules, _, Ident { name, pos }) = *x;
+                let (_, namespace, Ident { name, pos }) = *x;
                 settings.pos = pos;
-                parse_fn_call(input, state, lib, name, false, modules, settings.level_up())?
+                let ns = namespace.map(|(_, ns)| ns);
+                parse_fn_call(input, state, lib, name, false, ns, settings.level_up())?
             }
             (Expr::Property(_), _) => unreachable!(),
             // module access
             (Expr::Variable(x), Token::DoubleColon) => match input.next().unwrap() {
                 (Token::Identifier(id2), pos2) => {
-                    let (index, mut modules, _, var_name_def) = *x;
+                    let (index, mut namespace, var_name_def) = *x;
 
-                    if let Some(ref mut modules) = modules {
-                        modules.push(var_name_def);
+                    if let Some((_, ref mut namespace)) = namespace {
+                        namespace.push(var_name_def);
                     } else {
-                        let mut m: NamespaceRef = Default::default();
-                        m.push(var_name_def);
-                        modules = Some(Box::new(m));
+                        let mut ns: NamespaceRef = Default::default();
+                        ns.push(var_name_def);
+                        let index = NonZeroU64::new(42).unwrap(); // Dummy
+                        namespace = Some((index, ns));
                     }
 
                     let var_name_def = Ident {
                         name: state.get_interned_string(id2),
                         pos: pos2,
                     };
-                    Expr::Variable(Box::new((index, modules, 0, var_name_def)))
+                    Expr::Variable(Box::new((index, namespace, var_name_def)))
                 }
                 (Token::Reserved(id2), pos2) if is_valid_identifier(id2.chars()) => {
                     return Err(PERR::Reserved(id2).into_err(pos2));
@@ -1121,11 +1232,17 @@ fn parse_primary(
             (expr, Token::LeftBracket) => {
                 parse_index_chain(input, state, lib, expr, settings.level_up())?
             }
-            // Method access
+            // Property access
             #[cfg(not(feature = "no_object"))]
             (expr, Token::Period) => {
+                // prevents capturing of the object properties as vars: xxx.<var>
+                #[cfg(not(feature = "no_closure"))]
+                if let (Token::Identifier(_), _) = input.peek().unwrap() {
+                    state.allow_capture = false;
+                }
+
                 let rhs = parse_unary(input, state, lib, settings.level_up())?;
-                make_dot_expr(state, expr, rhs, token_pos)?
+                make_dot_expr(state, expr, rhs, tail_pos)?
             }
             // Unknown postfix operator
             (expr, token) => unreachable!(
@@ -1146,14 +1263,16 @@ fn parse_primary(
         _ => None,
     }
     .map(|x| {
-        let (_, modules, hash, Ident { name, .. }) = x.as_mut();
-        let namespace = modules.as_mut().unwrap();
+        if let (_, Some((ref mut hash, ref mut namespace)), Ident { name, .. }) = x.as_mut() {
+            // Qualifiers + variable name
+            *hash =
+                calc_script_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0).unwrap();
 
-        // Qualifiers + variable name
-        *hash = calc_script_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0);
-
-        #[cfg(not(feature = "no_module"))]
-        namespace.set_index(state.find_module(&namespace[0].name));
+            #[cfg(not(feature = "no_module"))]
+            namespace.set_index(state.find_module(&namespace[0].name));
+        } else {
+            unreachable!();
+        }
     });
 
     // Make sure identifiers are valid
@@ -1174,16 +1293,6 @@ fn parse_unary(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     match token {
-        // If statement is allowed to act as expressions
-        Token::If if settings.allow_if_expr => Ok(Expr::Stmt(
-            Box::new(vec![parse_if(input, state, lib, settings.level_up())?].into()),
-            settings.pos,
-        )),
-        // Switch statement is allowed to act as expressions
-        Token::Switch if settings.allow_switch_expr => Ok(Expr::Stmt(
-            Box::new(vec![parse_switch(input, state, lib, settings.level_up())?].into()),
-            settings.pos,
-        )),
         // -expr
         Token::UnaryMinus => {
             let pos = eat_token(input, Token::UnaryMinus);
@@ -1208,16 +1317,12 @@ fn parse_unary(
                 // Call negative function
                 expr => {
                     let op = "-";
-                    let hash = calc_script_fn_hash(empty(), op, 1);
                     let mut args = StaticVec::new();
                     args.push(expr);
 
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
                             name: op.into(),
-                            native_only: true,
-                            namespace: None,
-                            hash,
                             args,
                             ..Default::default()
                         }),
@@ -1238,16 +1343,12 @@ fn parse_unary(
                 // Call plus function
                 expr => {
                     let op = "+";
-                    let hash = calc_script_fn_hash(empty(), op, 1);
                     let mut args = StaticVec::new();
                     args.push(expr);
 
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
                             name: op.into(),
-                            native_only: true,
-                            namespace: None,
-                            hash,
                             args,
                             ..Default::default()
                         }),
@@ -1264,57 +1365,16 @@ fn parse_unary(
             args.push(expr);
 
             let op = "!";
-            let hash = calc_script_fn_hash(empty(), op, 1);
 
             Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
                     name: op.into(),
-                    native_only: true,
-                    hash,
                     args,
                     def_value: Some(false.into()), // NOT operator, when operating on invalid operand, defaults to false
                     ..Default::default()
                 }),
                 pos,
             ))
-        }
-        // | ...
-        #[cfg(not(feature = "no_function"))]
-        Token::Pipe | Token::Or if settings.allow_anonymous_fn => {
-            let mut new_state = ParseState::new(
-                state.engine,
-                state.script_hash,
-                #[cfg(not(feature = "unchecked"))]
-                state.max_function_expr_depth,
-                #[cfg(not(feature = "unchecked"))]
-                state.max_function_expr_depth,
-            );
-
-            let settings = ParseSettings {
-                allow_if_expr: true,
-                allow_switch_expr: true,
-                allow_stmt_expr: true,
-                allow_anonymous_fn: true,
-                is_global: false,
-                is_function_scope: true,
-                is_breakable: false,
-                level: 0,
-                pos: *token_pos,
-            };
-
-            let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
-
-            #[cfg(not(feature = "no_closure"))]
-            new_state.externals.iter().for_each(|(closure, pos)| {
-                state.access_var(closure, *pos);
-            });
-
-            // Qualifiers (none) + function name + number of arguments.
-            let hash = calc_script_fn_hash(empty(), &func.name, func.params.len());
-
-            lib.insert(hash, func);
-
-            Ok(expr)
         }
         // <EOF>
         Token::EOF => Err(PERR::UnexpectedEOF.into_err(settings.pos)),
@@ -1323,6 +1383,7 @@ fn parse_unary(
     }
 }
 
+/// Make an assignment statement.
 fn make_assignment_stmt<'a>(
     fn_name: Cow<'static, str>,
     state: &mut ParseState,
@@ -1338,7 +1399,7 @@ fn make_assignment_stmt<'a>(
         )),
         // var (indexed) = rhs
         Expr::Variable(x) => {
-            let (index, _, _, Ident { name, pos }) = x.as_ref();
+            let (index, _, Ident { name, pos }) = x.as_ref();
             match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                 AccessMode::ReadWrite => Ok(Stmt::Assignment(
                     Box::new((lhs, fn_name.into(), rhs)),
@@ -1359,7 +1420,7 @@ fn make_assignment_stmt<'a>(
             )),
             // var[???] (indexed) = rhs, var.??? (indexed) = rhs
             Expr::Variable(x) => {
-                let (index, _, _, Ident { name, pos }) = x.as_ref();
+                let (index, _, Ident { name, pos }) = x.as_ref();
                 match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                     AccessMode::ReadWrite => Ok(Stmt::Assignment(
                         Box::new((lhs, fn_name.into(), rhs)),
@@ -1443,16 +1504,16 @@ fn make_dot_expr(
         }
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
-            let ident = x.3;
+            let ident = x.2;
             let getter = state.get_interned_string(crate::engine::make_getter(&ident.name));
             let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
-            let rhs = Expr::Property(Box::new(((getter, setter), ident)));
+            let rhs = Expr::Property(Box::new((getter, setter, ident)));
 
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(x)) if x.1.is_some() => {
-            return Err(PERR::PropertyExpected.into_err(x.1.unwrap()[0].pos));
+            return Err(PERR::PropertyExpected.into_err(x.1.unwrap().1[0].pos));
         }
         // lhs.prop
         (lhs, prop @ Expr::Property(_)) => {
@@ -1662,15 +1723,24 @@ fn parse_binary_op(
 
     loop {
         let (current_op, current_pos) = input.peek().unwrap();
-        let precedence = if let Token::Custom(c) = current_op {
-            // Custom operators
-            if let Some(Some(p)) = state.engine.custom_keywords.get(c) {
-                *p
-            } else {
-                return Err(PERR::Reserved(c.clone()).into_err(*current_pos));
+        let precedence = match current_op {
+            Token::Custom(c) => {
+                if state
+                    .engine
+                    .custom_keywords
+                    .get(c)
+                    .map(Option::is_some)
+                    .unwrap_or(false)
+                {
+                    state.engine.custom_keywords.get(c).unwrap().unwrap().get()
+                } else {
+                    return Err(PERR::Reserved(c.clone()).into_err(*current_pos));
+                }
             }
-        } else {
-            current_op.precedence()
+            Token::Reserved(c) if !is_valid_identifier(c.chars()) => {
+                return Err(PERR::UnknownOperator(c.into()).into_err(*current_pos))
+            }
+            _ => current_op.precedence(),
         };
         let bind_right = current_op.is_bind_right();
 
@@ -1682,28 +1752,27 @@ fn parse_binary_op(
 
         let (op_token, pos) = input.next().unwrap();
 
-        if cfg!(not(feature = "no_object")) && op_token == Token::Period {
-            if let (Token::Identifier(_), _) = input.peek().unwrap() {
-                // prevents capturing of the object properties as vars: xxx.<var>
-                #[cfg(not(feature = "no_closure"))]
-                {
-                    state.allow_capture = false;
-                }
-            }
-        }
-
         let rhs = parse_unary(input, state, lib, settings)?;
 
         let (next_op, next_pos) = input.peek().unwrap();
-        let next_precedence = if let Token::Custom(c) = next_op {
-            // Custom operators
-            if let Some(Some(p)) = state.engine.custom_keywords.get(c) {
-                *p
-            } else {
-                return Err(PERR::Reserved(c.clone()).into_err(*next_pos));
+        let next_precedence = match next_op {
+            Token::Custom(c) => {
+                if state
+                    .engine
+                    .custom_keywords
+                    .get(c)
+                    .map(Option::is_some)
+                    .unwrap_or(false)
+                {
+                    state.engine.custom_keywords.get(c).unwrap().unwrap().get()
+                } else {
+                    return Err(PERR::Reserved(c.clone()).into_err(*next_pos));
+                }
             }
-        } else {
-            next_op.precedence()
+            Token::Reserved(c) if !is_valid_identifier(c.chars()) => {
+                return Err(PERR::UnknownOperator(c.into()).into_err(*next_pos))
+            }
+            _ => next_op.precedence(),
         };
 
         // Bind to right if the next operator has higher precedence
@@ -1723,11 +1792,9 @@ fn parse_binary_op(
 
         let cmp_def = Some(false.into());
         let op = op_token.syntax();
-        let hash = calc_script_fn_hash(empty(), &op, 2);
 
         let op_base = FnCallExpr {
             name: op,
-            native_only: true,
             capture: false,
             ..Default::default()
         };
@@ -1747,19 +1814,11 @@ fn parse_binary_op(
             | Token::PowerOf
             | Token::Ampersand
             | Token::Pipe
-            | Token::XOr => Expr::FnCall(
-                Box::new(FnCallExpr {
-                    hash,
-                    args,
-                    ..op_base
-                }),
-                pos,
-            ),
+            | Token::XOr => Expr::FnCall(Box::new(FnCallExpr { args, ..op_base }), pos),
 
             // '!=' defaults to true when passed invalid operands
             Token::NotEqualsTo => Expr::FnCall(
                 Box::new(FnCallExpr {
-                    hash,
                     args,
                     def_value: Some(true.into()),
                     ..op_base
@@ -1774,7 +1833,6 @@ fn parse_binary_op(
             | Token::GreaterThan
             | Token::GreaterThanEqualsTo => Expr::FnCall(
                 Box::new(FnCallExpr {
-                    hash,
                     args,
                     def_value: cmp_def,
                     ..op_base
@@ -1810,20 +1868,31 @@ fn parse_binary_op(
                 make_in_expr(current_lhs, rhs, pos)?
             }
 
-            #[cfg(not(feature = "no_object"))]
-            Token::Period => {
-                let rhs = args.pop().unwrap();
-                let current_lhs = args.pop().unwrap();
-                make_dot_expr(state, current_lhs, rhs, pos)?
-            }
+            // #[cfg(not(feature = "no_object"))]
+            // Token::Period => {
+            //     let rhs = args.pop().unwrap();
+            //     let current_lhs = args.pop().unwrap();
+            //     make_dot_expr(state, current_lhs, rhs, pos)?
+            // }
+            Token::Custom(s)
+                if state
+                    .engine
+                    .custom_keywords
+                    .get(&s)
+                    .map(Option::is_some)
+                    .unwrap_or(false) =>
+            {
+                let hash_script = if is_valid_identifier(s.chars()) {
+                    // Accept non-native functions for custom operators
+                    calc_script_fn_hash(empty(), &s, 2)
+                } else {
+                    None
+                };
 
-            Token::Custom(s) if state.engine.custom_keywords.contains_key(&s) => {
-                // Accept non-native functions for custom operators
                 Expr::FnCall(
                     Box::new(FnCallExpr {
-                        hash,
+                        hash_script,
                         args,
-                        native_only: false,
                         ..op_base
                     }),
                     pos,
@@ -1892,7 +1961,7 @@ fn parse_custom_syntax(
                     segments.push(name.clone());
                     tokens.push(state.get_interned_string(MARKER_IDENT));
                     let var_name_def = Ident { name, pos };
-                    keywords.push(Expr::Variable(Box::new((None, None, 0, var_name_def))));
+                    keywords.push(Expr::Variable(Box::new((None, None, var_name_def))));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
@@ -2549,7 +2618,7 @@ fn parse_stmt(
                     let func = parse_fn(input, &mut new_state, lib, access, settings, comments)?;
 
                     // Qualifiers (none) + function name + number of arguments.
-                    let hash = calc_script_fn_hash(empty(), &func.name, func.params.len());
+                    let hash = calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap();
 
                     lib.insert(hash, func);
 
@@ -2565,6 +2634,7 @@ fn parse_stmt(
         }
 
         Token::If => parse_if(input, state, lib, settings.level_up()).map(Some),
+        Token::Switch => parse_switch(input, state, lib, settings.level_up()).map(Some),
         Token::While | Token::Loop => {
             parse_while_loop(input, state, lib, settings.level_up()).map(Some)
         }
@@ -2812,22 +2882,22 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
 
     #[cfg(not(feature = "no_closure"))]
     externals.iter().for_each(|x| {
-        args.push(Expr::Variable(Box::new((None, None, 0, x.clone().into()))));
+        args.push(Expr::Variable(Box::new((None, None, x.clone().into()))));
     });
 
     #[cfg(feature = "no_closure")]
     externals.into_iter().for_each(|x| {
-        args.push(Expr::Variable(Box::new((None, None, 0, x.clone().into()))));
+        args.push(Expr::Variable(Box::new((None, None, x.clone().into()))));
     });
 
     let curry_func = crate::engine::KEYWORD_FN_PTR_CURRY;
 
-    let hash = calc_script_fn_hash(empty(), curry_func, num_externals + 1);
+    let hash_script = calc_script_fn_hash(empty(), curry_func, num_externals + 1);
 
     let expr = Expr::FnCall(
         Box::new(FnCallExpr {
             name: curry_func.into(),
-            hash,
+            hash_script,
             args,
             ..Default::default()
         }),

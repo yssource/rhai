@@ -12,14 +12,8 @@ pub mod empty_module {
 fn empty_module_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::empty_module::EmptyModule);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Module::Empty", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Module::Empty", m.into());
 
-    assert_eq!(
-        engine.eval::<INT>(r#"import "Module::Empty" as m; 42"#)?,
-        42
-    );
     Ok(())
 }
 
@@ -39,16 +33,10 @@ pub mod one_fn_module {
 fn one_fn_module_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::one_fn_module::advanced_math);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Math::Advanced", m.into());
 
     assert_eq!(
-        engine.eval::<FLOAT>(
-            r#"import "Math::Advanced" as math;
-           let m = math::get_mystic_number();
-           m"#
-        )?,
+        engine.eval::<FLOAT>(r#"let m = Math::Advanced::get_mystic_number();m"#)?,
         42.0
     );
     Ok(())
@@ -73,16 +61,14 @@ pub mod one_fn_and_const_module {
 fn one_fn_and_const_module_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::one_fn_and_const_module::advanced_math);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Math::Advanced", m.into());
 
     assert_eq!(
         engine.eval::<FLOAT>(
-            r#"import "Math::Advanced" as math;
-           let m = math::MYSTIC_NUMBER;
-           let x = math::euclidean_distance(0.0, 1.0, 0.0, m);
-           x"#
+            r#"
+            let m = Math::Advanced::MYSTIC_NUMBER;
+            let x = Math::Advanced::euclidean_distance(0.0, 1.0, 0.0, m);
+            x"#
         )?,
         41.0
     );
@@ -105,16 +91,10 @@ pub mod raw_fn_str_module {
 fn raw_fn_str_module_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::raw_fn_str_module::host_io);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Host::IO", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Host::IO", m.into());
 
     assert_eq!(
-        engine.eval::<bool>(
-            r#"import "Host::IO" as io;
-           let x = io::write_out_str("hello world!");
-           x"#
-        )?,
+        engine.eval::<bool>(r#"let x = Host::IO::write_out_str("hello world!"); x"#)?,
         true
     );
     Ok(())
@@ -162,19 +142,17 @@ pub mod mut_opaque_ref_module {
 fn mut_opaque_ref_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::mut_opaque_ref_module::host_msg);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Host::Msg", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Host::Msg", m.into());
 
     assert_eq!(
         engine.eval::<bool>(
-            r#"import "Host::Msg" as msg;
-           let success = "it worked";
-           let message1 = msg::new_message(true, success);
-           let ok1 = msg::write_out_message(message1);
-           let message2 = msg::new_os_message(true, 0);
-           let ok2 = msg::write_out_message(message2);
-           ok1 && ok2"#
+            r#"
+            let success = "it worked";
+            let message1 = Host::Msg::new_message(true, success);
+            let ok1 = Host::Msg::write_out_message(message1);
+            let message2 = Host::Msg::new_os_message(true, 0);
+            let ok2 = Host::Msg::write_out_message(message2);
+            ok1 && ok2"#
         )?,
         true
     );
@@ -204,18 +182,16 @@ fn duplicate_fn_rename_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.register_fn("get_mystic_number", || 42 as FLOAT);
     let m = rhai::exported_module!(crate::duplicate_fn_rename::my_adds);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Math::Advanced", m.into());
 
     let output_array = engine.eval::<Array>(
-        r#"import "Math::Advanced" as math;
-       let fx = get_mystic_number();
-       let fy = math::add(fx, 1.0);
-       let ix = 42;
-       let iy = math::add(ix, 1);
-       [fy, iy]
-       "#,
+        r#"
+        let fx = get_mystic_number();
+        let fy = Math::Advanced::add(fx, 1.0);
+        let ix = 42;
+        let iy = Math::Advanced::add(ix, 1);
+        [fy, iy]
+        "#,
     )?;
     assert_eq!(&output_array[0].as_float().unwrap(), &43.0);
     assert_eq!(&output_array[1].as_int().unwrap(), &43);
@@ -291,6 +267,7 @@ fn multiple_fn_rename_test() -> Result<(), Box<EvalAltResult>> {
 
 mod export_by_prefix {
     use rhai::plugin::*;
+
     #[export_module(export_prefix = "foo_")]
     pub mod my_adds {
         use rhai::{FLOAT, INT};
@@ -328,20 +305,18 @@ mod export_by_prefix {
 fn export_by_prefix_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::export_by_prefix::my_adds);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Math::Advanced", m.into());
 
     let output_array = engine.eval::<Array>(
-        r#"import "Math::Advanced" as math;
-       let ex = 41.0;
-       let fx = math::foo_add_f(ex, 1.0);
-       let gx = math::foo_m(41.0, 1.0);
-       let ei = 41;
-       let fi = math::bar_add_i(ei, 1);
-       let gi = math::foo_n(41, 1);
-       [fx, gx, fi, gi]
-       "#,
+        r#"
+        let ex = 41.0;
+        let fx = Math::Advanced::foo_add_f(ex, 1.0);
+        let gx = Math::Advanced::foo_m(41.0, 1.0);
+        let ei = 41;
+        let fi = Math::Advanced::bar_add_i(ei, 1);
+        let gi = Math::Advanced::foo_n(41, 1);
+        [fx, gx, fi, gi]
+        "#,
     )?;
     assert_eq!(&output_array[0].as_float().unwrap(), &42.0);
     assert_eq!(&output_array[1].as_float().unwrap(), &42.0);
@@ -349,30 +324,31 @@ fn export_by_prefix_test() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(&output_array[3].as_int().unwrap(), &42);
 
     assert!(matches!(*engine.eval::<FLOAT>(
-        r#"import "Math::Advanced" as math;
-       let ex = 41.0;
-       let fx = math::foo_add_float2(ex, 1.0);
-       fx
-       "#).unwrap_err(),
-       EvalAltResult::ErrorFunctionNotFound(s, p)
-            if s == "math::foo_add_float2 (f64, f64)"
-            && p == rhai::Position::new(3, 23)));
+        r#"
+        let ex = 41.0;
+        let fx = Math::Advanced::foo_add_float2(ex, 1.0);
+        fx
+        "#).unwrap_err(),
+        EvalAltResult::ErrorFunctionNotFound(s, p)
+            if s == "Math::Advanced::foo_add_float2 (f64, f64)"
+            && p == rhai::Position::new(3, 34)));
 
     assert!(matches!(*engine.eval::<FLOAT>(
-        r#"import "Math::Advanced" as math;
-       let ex = 41.0;
-       let fx = math::bar_m(ex, 1.0);
-       fx
-       "#).unwrap_err(),
-       EvalAltResult::ErrorFunctionNotFound(s, p)
-            if s == "math::bar_m (f64, f64)"
-            && p == rhai::Position::new(3, 23)));
+        r#"
+        let ex = 41.0;
+        let fx = Math::Advanced::bar_m(ex, 1.0);
+        fx
+        "#).unwrap_err(),
+        EvalAltResult::ErrorFunctionNotFound(s, p)
+            if s == "Math::Advanced::bar_m (f64, f64)"
+            && p == rhai::Position::new(3, 34)));
 
     Ok(())
 }
 
 mod export_all {
     use rhai::plugin::*;
+
     #[export_module(export_all)]
     pub mod my_adds {
         use rhai::{FLOAT, INT};
@@ -411,20 +387,18 @@ mod export_all {
 fn export_all_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     let m = rhai::exported_module!(crate::export_all::my_adds);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Math::Advanced", m.into());
 
     let output_array = engine.eval::<Array>(
-        r#"import "Math::Advanced" as math;
-       let ex = 41.0;
-       let fx = math::foo_add_f(ex, 1.0);
-       let gx = math::foo_m(41.0, 1.0);
-       let ei = 41;
-       let fi = math::foo_add_i(ei, 1);
-       let gi = math::foo_n(41, 1);
-       [fx, gx, fi, gi]
-       "#,
+        r#"
+        let ex = 41.0;
+        let fx = Math::Advanced::foo_add_f(ex, 1.0);
+        let gx = Math::Advanced::foo_m(41.0, 1.0);
+        let ei = 41;
+        let fi = Math::Advanced::foo_add_i(ei, 1);
+        let gi = Math::Advanced::foo_n(41, 1);
+        [fx, gx, fi, gi]
+        "#,
     )?;
     assert_eq!(&output_array[0].as_float().unwrap(), &42.0);
     assert_eq!(&output_array[1].as_float().unwrap(), &42.0);
@@ -432,14 +406,14 @@ fn export_all_test() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(&output_array[3].as_int().unwrap(), &42);
 
     assert!(matches!(*engine.eval::<INT>(
-        r#"import "Math::Advanced" as math;
-       let ex = 41;
-       let fx = math::foo_p(ex, 1);
-       fx
-       "#).unwrap_err(),
-       EvalAltResult::ErrorFunctionNotFound(s, p)
-            if s == "math::foo_p (i64, i64)"
-            && p == rhai::Position::new(3, 23)));
+        r#"
+        let ex = 41;
+        let fx = Math::Advanced::foo_p(ex, 1);
+        fx
+        "#).unwrap_err(),
+        EvalAltResult::ErrorFunctionNotFound(s, p)
+            if s == "Math::Advanced::foo_p (i64, i64)"
+            && p == rhai::Position::new(3, 34)));
 
     Ok(())
 }

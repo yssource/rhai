@@ -13,8 +13,8 @@ pub use rhai_codegen::*;
 pub use rhai_codegen::{export_fn, register_exported_fn};
 
 /// Trait implemented by a _plugin function_.
-/// This trait should not be used directly.
 ///
+/// This trait should not be used directly.
 /// Use the `#[export_module]` and `#[export_fn]` procedural attributes instead.
 pub trait PluginFunction {
     /// Call the plugin function with the arguments provided.

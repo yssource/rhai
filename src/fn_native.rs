@@ -3,7 +3,14 @@
 use crate::ast::{FnAccess, ScriptFnDef};
 use crate::engine::Imports;
 use crate::plugin::PluginFunction;
-use crate::stdlib::{boxed::Box, convert::TryFrom, fmt, iter::empty, mem, string::String};
+use crate::stdlib::{
+    boxed::Box,
+    convert::{TryFrom, TryInto},
+    fmt,
+    iter::empty,
+    mem,
+    string::String,
+};
 use crate::token::is_valid_identifier;
 use crate::{
     calc_script_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ImmutableString, Module,
@@ -153,25 +160,13 @@ impl<'e, 's, 'a, 'm, 'pm> NativeCallContext<'e, 's, 'a, 'm, 'pm> {
         args: &mut [&mut Dynamic],
         def_value: Option<&Dynamic>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut mods = self.mods.cloned().unwrap_or_default();
-
-        let hash_script = calc_script_fn_hash(
-            empty(),
-            fn_name,
-            if is_method {
-                args.len() - 1
-            } else {
-                args.len()
-            },
-        );
-
         self.engine()
             .exec_fn_call(
-                &mut mods,
+                &mut self.mods.cloned().unwrap_or_default(),
                 &mut Default::default(),
                 self.lib,
                 fn_name,
-                hash_script,
+                calc_script_fn_hash(empty(), fn_name, args.len() - if is_method { 1 } else { 0 }),
                 args,
                 is_method,
                 is_method,
@@ -225,11 +220,15 @@ pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
 /// A general function pointer, which may carry additional (i.e. curried) argument values
 /// to be passed onto a function during a call.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct FnPtr(ImmutableString, StaticVec<Dynamic>);
 
 impl FnPtr {
     /// Create a new function pointer.
+    pub fn new(name: impl Into<ImmutableString>) -> Result<Self, Box<EvalAltResult>> {
+        name.into().try_into()
+    }
+    /// Create a new function pointer without checking its parameters.
     #[inline(always)]
     pub(crate) fn new_unchecked(
         name: impl Into<ImmutableString>,
@@ -257,7 +256,24 @@ impl FnPtr {
     pub fn curry(&self) -> &[Dynamic] {
         self.1.as_ref()
     }
-    /// Does this function pointer refer to an anonymous function?
+    /// Add a new curried argument.
+    #[inline(always)]
+    pub fn add_curry(&mut self, value: Dynamic) -> &mut Self {
+        self.1.push(value);
+        self
+    }
+    /// Set curried arguments to the function pointer.
+    #[inline(always)]
+    pub fn set_curry(&mut self, values: impl IntoIterator<Item = Dynamic>) -> &mut Self {
+        self.1 = values.into_iter().collect();
+        self
+    }
+    /// Is the function pointer curried?
+    #[inline(always)]
+    pub fn is_curried(&self) -> bool {
+        !self.1.is_empty()
+    }
+    /// Does the function pointer refer to an anonymous function?
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn is_anonymous(&self) -> bool {

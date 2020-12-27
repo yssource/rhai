@@ -32,7 +32,7 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
                 x.append(y);
 
                 x.len + r
-           "
+            "
         )?,
         14
     );
@@ -42,7 +42,7 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
                 let x = [1, 2, 3];
                 x += [4, 5];
                 len(x)
-           "
+            "
         )?,
         5
     );
@@ -53,7 +53,7 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
                     let x = [1, 2, 3];
                     let y = [4, 5];
                     x + y
-           "
+                "
             )?
             .len(),
         5

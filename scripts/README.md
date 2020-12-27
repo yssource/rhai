@@ -7,14 +7,14 @@ Testing scripts written in Rhai.
 How to Run
 ----------
 
-Compile the `rhai_runner` example:
+Compile the `rhai-run` example:
 
 ```bash
-cargo build --example rhai_runner
+cargo build --example rhai-run
 ```
 
 Run it:
 
 ```bash
-./target/debug/examples/rhai_runner ./scripts/test_script_to_run.rhai
+./target/debug/examples/rhai-run ./scripts/test_script_to_run.rhai
 ```

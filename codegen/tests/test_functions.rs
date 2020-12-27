@@ -18,14 +18,11 @@ fn raw_fn_test() -> Result<(), Box<EvalAltResult>> {
     engine.register_fn("get_mystic_number", || 42 as FLOAT);
     let mut m = Module::new();
     rhai::set_exported_fn!(m, "euclidean_distance", raw_fn::distance_function);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Math::Advanced", m.into());
 
     assert_eq!(
         engine.eval::<FLOAT>(
-            r#"import "Math::Advanced" as math;
-           let x = math::euclidean_distance(0.0, 1.0, 0.0, get_mystic_number()); x"#
+            r#"let x = Math::Advanced::euclidean_distance(0.0, 1.0, 0.0, get_mystic_number()); x"#
         )?,
         41.0
     );
@@ -48,16 +45,13 @@ fn raw_fn_mut_test() -> Result<(), Box<EvalAltResult>> {
     engine.register_fn("get_mystic_number", || 42 as FLOAT);
     let mut m = Module::new();
     rhai::set_exported_fn!(m, "add_in_place", raw_fn_mut::add_in_place);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Math::Advanced", m.into());
 
     assert_eq!(
         engine.eval::<FLOAT>(
-            r#"import "Math::Advanced" as math;
-           let x = get_mystic_number();
-           math::add_in_place(x, 1.0);
-           x"#
+            r#"let x = get_mystic_number();
+            Math::Advanced::add_in_place(x, 1.0);
+            x"#
         )?,
         43.0
     );
@@ -80,16 +74,10 @@ fn raw_fn_str_test() -> Result<(), Box<EvalAltResult>> {
     engine.register_fn("get_mystic_number", || 42 as FLOAT);
     let mut m = Module::new();
     rhai::set_exported_fn!(m, "write_out_str", raw_fn_str::write_out_str);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Host::IO", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Host::IO", m.into());
 
     assert_eq!(
-        engine.eval::<bool>(
-            r#"import "Host::IO" as io;
-           let x = io::write_out_str("hello world!");
-           x"#
-        )?,
+        engine.eval::<bool>(r#"let x = Host::IO::write_out_str("hello world!"); x"#)?,
         true
     );
     Ok(())
@@ -138,18 +126,16 @@ fn mut_opaque_ref_test() -> Result<(), Box<EvalAltResult>> {
     rhai::set_exported_fn!(m, "new_message", mut_opaque_ref::new_message);
     rhai::set_exported_fn!(m, "new_os_message", mut_opaque_ref::new_os_message);
     rhai::set_exported_fn!(m, "write_out_message", mut_opaque_ref::write_out_message);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Host::Msg", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Host::Msg", m.into());
 
     assert_eq!(
         engine.eval::<bool>(
-            r#"import "Host::Msg" as msg;
-           let message1 = msg::new_message(true, "it worked");
-           let ok1 = msg::write_out_message(message1);
-           let message2 = msg::new_os_message(true, 0);
-           let ok2 = msg::write_out_message(message2);
-           ok1 && ok2"#
+            r#"
+            let message1 = Host::Msg::new_message(true, "it worked");
+            let ok1 = Host::Msg::write_out_message(message1);
+            let message2 = Host::Msg::new_os_message(true, 0);
+            let ok2 = Host::Msg::write_out_message(message2);
+            ok1 && ok2"#
         )?,
         true
     );
@@ -179,14 +165,11 @@ fn raw_returning_fn_test() -> Result<(), Box<EvalAltResult>> {
     engine.register_fn("get_mystic_number", || 42 as FLOAT);
     let mut m = Module::new();
     rhai::set_exported_fn!(m, "euclidean_distance", raw_returning_fn::distance_function);
-    let mut r = StaticModuleResolver::new();
-    r.insert("Math::Advanced", m);
-    engine.set_module_resolver(Some(r));
+    engine.register_static_module("Math::Advanced", m.into());
 
     assert_eq!(
         engine.eval::<FLOAT>(
-            r#"import "Math::Advanced" as math;
-           let x = math::euclidean_distance(0.0, 1.0, 0.0, get_mystic_number()); x"#
+            r#"let x = Math::Advanced::euclidean_distance(0.0, 1.0, 0.0, get_mystic_number()); x"#
         )?,
         41.0
     );

@@ -62,7 +62,7 @@ impl ModuleResolver for MyModuleResolver {
 let mut engine = Engine::new();
 
 // Set the custom module resolver into the 'Engine'.
-engine.set_module_resolver(Some(MyModuleResolver {}));
+engine.set_module_resolver(MyModuleResolver {});
 
 engine.consume(r#"
     import "hello" as foo;  // this 'import' statement will call

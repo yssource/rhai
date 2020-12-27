@@ -18,6 +18,7 @@ pub(crate) fn generated_module_path(
 }
 
 type RegisterMacroInput = (syn::Expr, proc_macro2::TokenStream, syn::Path);
+
 pub fn parse_register_macro(
     args: proc_macro::TokenStream,
 ) -> Result<RegisterMacroInput, syn::Error> {

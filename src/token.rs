@@ -532,10 +532,10 @@ impl Token {
             #[cfg(feature = "no_module")]
             "import" | "export" | "as" => Reserved(syntax.into()),
 
-            "===" | "!==" | "->" | "<-" | ":=" | "::<" | "(*" | "*)" | "#" | "public" | "new"
-            | "use" | "module" | "package" | "var" | "static" | "begin" | "end" | "shared"
-            | "with" | "each" | "then" | "goto" | "unless" | "exit" | "match" | "case"
-            | "default" | "void" | "null" | "nil" | "spawn" | "thread" | "go" | "sync"
+            "===" | "!==" | "->" | "<-" | ":=" | "**" | "::<" | "(*" | "*)" | "#" | "public"
+            | "new" | "use" | "module" | "package" | "var" | "static" | "begin" | "end"
+            | "shared" | "with" | "each" | "then" | "goto" | "unless" | "exit" | "match"
+            | "case" | "default" | "void" | "null" | "nil" | "spawn" | "thread" | "go" | "sync"
             | "async" | "await" | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
@@ -1742,27 +1742,21 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
             Some((Token::Identifier(s), pos)) if self.engine.custom_keywords.contains_key(&s) => {
                 Some((Token::Custom(s), pos))
             }
-            // Custom standard keyword - must be disabled
-            Some((token, pos)) if token.is_keyword() && self.engine.custom_keywords.contains_key(token.syntax().as_ref()) => {
+            // Custom standard keyword/symbol - must be disabled
+            Some((token, pos)) if self.engine.custom_keywords.contains_key(token.syntax().as_ref()) => {
                 if self.engine.disabled_symbols.contains(token.syntax().as_ref()) {
-                    // Disabled standard keyword
+                    // Disabled standard keyword/symbol
                     Some((Token::Custom(token.syntax().into()), pos))
                 } else {
                     // Active standard keyword - should never be a custom keyword!
-                    unreachable!()
+                    unreachable!("{:?}", token)
                 }
             }
-            // Disabled operator
-            Some((token, pos)) if token.is_operator() && self.engine.disabled_symbols.contains(token.syntax().as_ref()) => {
-                Some((
-                    Token::LexError(LexError::UnexpectedInput(token.syntax().into())),
-                    pos,
-                ))
-            }
-            // Disabled standard keyword
-            Some((token, pos)) if token.is_keyword() && self.engine.disabled_symbols.contains(token.syntax().as_ref()) => {
+            // Disabled symbol
+            Some((token, pos)) if self.engine.disabled_symbols.contains(token.syntax().as_ref()) => {
                 Some((Token::Reserved(token.syntax().into()), pos))
             }
+            // Normal symbol
             r => r,
         };
 

@@ -39,17 +39,18 @@ use crate::{Dynamic, ImmutableString, StaticVec};
 // # Implementation Notes
 //
 // [`Scope`] is implemented as two [`Vec`]'s of exactly the same length.  Variables data (name, type, etc.)
-// is manually split into three equal-length arrays.  That's because variable names take up the most space,
-// with [`Cow<str>`][Cow] being four words long, but in the vast majority of cases the name is NOT used to look up
-// a variable's value.  Variable lookup is usually via direct index, by-passing the name altogether.
+// is manually split into two equal-length arrays.  That's because variable names take up the most space,
+// with [`Cow<str>`][Cow] being four words long, but in the vast majority of cases the name is NOT used to
+// look up a variable.  Variable lookup is usually via direct indexing, by-passing the name altogether.
 //
 // Since [`Dynamic`] is reasonably small, packing it tightly improves cache locality when variables are accessed.
-// The variable type is packed separately into another array because it is even smaller.
-#[derive(Debug)]
+//
+// The alias is `Box`'ed because it occurs infrequently.
+#[derive(Debug, Clone, Hash)]
 pub struct Scope<'a> {
     /// Current value of the entry.
     values: Vec<Dynamic>,
-    /// (Name, aliases) of the entry. The list of aliases is Boxed because it occurs rarely.
+    /// (Name, aliases) of the entry.
     names: Vec<(Cow<'a, str>, Box<StaticVec<ImmutableString>>)>,
 }
 
@@ -357,8 +358,35 @@ impl<'a> Scope<'a> {
         self
     }
     /// Get a mutable reference to an entry in the [`Scope`].
+    ///
+    /// If the entry by the specified name is not found, of if it is read-only,
+    /// [`None`] is returned.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::Scope;
+    ///
+    /// let mut my_scope = Scope::new();
+    ///
+    /// my_scope.push("x", 42_i64);
+    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
+    ///
+    /// let ptr = my_scope.get_mut("x").unwrap();
+    /// *ptr = 123_i64.into();
+    ///
+    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 123);
+    /// ```
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut Dynamic> {
+        self.get_index(name)
+            .and_then(move |(index, access)| match access {
+                AccessMode::ReadWrite => Some(self.get_mut_by_index(index)),
+                AccessMode::ReadOnly => None,
+            })
+    }
+    /// Get a mutable reference to an entry in the [`Scope`] based on the index.
     #[inline(always)]
-    pub(crate) fn get_mut(&mut self, index: usize) -> &mut Dynamic {
+    pub(crate) fn get_mut_by_index(&mut self, index: usize) -> &mut Dynamic {
         self.values.get_mut(index).expect("invalid index in Scope")
     }
     /// Update the access type of an entry in the [`Scope`].

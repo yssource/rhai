@@ -2,7 +2,7 @@
 
 use crate::ast::{Expr, ScriptFnDef, Stmt};
 use crate::dynamic::AccessMode;
-use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
+use crate::engine::{Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_call::run_builtin_binary_op;
 use crate::parser::map_dynamic_to_expr;
 use crate::stdlib::{
@@ -62,6 +62,8 @@ struct State<'a> {
     variables: Vec<(String, AccessMode, Expr)>,
     /// An [`Engine`] instance for eager function evaluation.
     engine: &'a Engine,
+    /// Collection of sub-modules.
+    mods: Imports,
     /// [Module] containing script-defined functions.
     lib: &'a [&'a Module],
     /// Optimization level.
@@ -76,6 +78,7 @@ impl<'a> State<'a> {
             changed: false,
             variables: vec![],
             engine,
+            mods: (&engine.global_sub_modules).into(),
             lib,
             optimization_level: level,
         }
@@ -138,7 +141,7 @@ fn call_fn_with_constant_arguments(
             &mut Default::default(),
             state.lib,
             fn_name,
-            hash_fn,
+            hash_fn.unwrap(),
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
             false,
             true,
@@ -149,7 +152,7 @@ fn call_fn_with_constant_arguments(
         .map(|(v, _)| v)
 }
 
-/// Optimize a block of [statements][crate::ast::Stmt].
+/// Optimize a block of [statements][Stmt].
 fn optimize_stmt_block(
     mut statements: Vec<Stmt>,
     pos: Position,
@@ -274,7 +277,7 @@ fn optimize_stmt_block(
     }
 }
 
-/// Optimize a [statement][crate::ast::Stmt].
+/// Optimize a [statement][Stmt].
 fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
     match stmt {
         // expr op= expr
@@ -470,7 +473,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
     }
 }
 
-/// Optimize an [expression][crate::ast::Expr].
+/// Optimize an [expression][Expr].
 fn optimize_expr(expr: &mut Expr, state: &mut State) {
     // These keywords are handled specially
     const DONT_EVAL_KEYWORDS: &[&str] = &[
@@ -501,7 +504,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         Expr::Dot(x, _) => match (&mut x.lhs, &mut x.rhs) {
             // map.string
             (Expr::Map(m, pos), Expr::Property(p)) if m.iter().all(|(_, x)| x.is_pure()) => {
-                let prop = &p.1.name;
+                let prop = &p.2.name;
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
@@ -655,7 +658,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
-            if !state.engine.has_override_by_name_and_arguments(Some(&state.engine.global_sub_modules), state.lib, x.name.as_ref(), arg_types.as_ref(), false) {
+            if !state.engine.has_override_by_name_and_arguments(Some(&state.mods), state.lib, x.name.as_ref(), arg_types.as_ref(), false) {
                 if let Some(result) = run_builtin_binary_op(x.name.as_ref(), &arg_values[0], &arg_values[1])
                                         .ok().flatten()
                                         .and_then(|result| map_dynamic_to_expr(result, *pos))
@@ -717,12 +720,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         Expr::FnCall(x, _) => x.args.iter_mut().for_each(|a| optimize_expr(a, state)),
 
         // constant-name
-        Expr::Variable(x) if x.1.is_none() && state.find_constant(&x.3.name).is_some() => {
+        Expr::Variable(x) if x.1.is_none() && state.find_constant(&x.2.name).is_some() => {
             state.set_dirty();
 
             // Replace constant with value
-            let mut result = state.find_constant(&x.3.name).unwrap().clone();
-            result.set_position(x.3.pos);
+            let mut result = state.find_constant(&x.2.name).unwrap().clone();
+            result.set_position(x.2.pos);
             *expr = result;
         }
 
@@ -734,7 +737,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
     }
 }
 
-/// Optimize a block of [statements][crate::ast::Stmt] at top level.
+/// Optimize a block of [statements][Stmt] at top level.
 fn optimize_top_level(
     mut statements: Vec<Stmt>,
     engine: &Engine,

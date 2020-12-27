@@ -56,6 +56,17 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
+            r"
+                let foo = #{ x: 42 };
+                let f = || { this.x };
+                foo.call(f)                
+            ",
+        )?,
+        42
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
             r#"
                 let x = 8;
 
@@ -239,7 +250,7 @@ fn test_closures_shared_obj() -> Result<(), Box<EvalAltResult>> {
     let f = move |p1: TestStruct, p2: TestStruct| -> Result<(), Box<EvalAltResult>> {
         let action_ptr = res["action"].clone().cast::<FnPtr>();
         let name = action_ptr.fn_name();
-        engine.call_fn::<_, ()>(&mut Scope::new(), &ast, name, (p1, p2))
+        engine.call_fn(&mut Scope::new(), &ast, name, (p1, p2))
     };
 
     // Test closure

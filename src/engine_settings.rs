@@ -1,7 +1,7 @@
 //! Configuration settings for [`Engine`].
 
-use crate::stdlib::{format, string::String};
-use crate::token::{is_valid_identifier, Token};
+use crate::stdlib::{format, num::NonZeroU8, string::String};
+use crate::token::Token;
 use crate::Engine;
 
 #[cfg(not(feature = "no_module"))]
@@ -168,9 +168,9 @@ impl Engine {
     #[inline(always)]
     pub fn set_module_resolver(
         &mut self,
-        resolver: Option<impl crate::ModuleResolver + 'static>,
+        resolver: impl crate::ModuleResolver + 'static,
     ) -> &mut Self {
-        self.module_resolver = resolver.map(|f| Box::new(f) as Box<dyn crate::ModuleResolver>);
+        self.module_resolver = Box::new(resolver);
         self
     }
     /// Disable a particular keyword or operator in the language.
@@ -214,9 +214,11 @@ impl Engine {
         self.disabled_symbols.insert(symbol.into());
         self
     }
-    /// Register a custom operator into the language.
+    /// Register a custom operator with a precedence into the language.
     ///
     /// The operator must be a valid identifier (i.e. it cannot be a symbol).
+    ///
+    /// The precedence cannot be zero.
     ///
     /// # Example
     ///
@@ -245,22 +247,38 @@ impl Engine {
         keyword: &str,
         precedence: u8,
     ) -> Result<&mut Self, String> {
-        if !is_valid_identifier(keyword.chars()) {
-            return Err(format!("not a valid identifier: '{}'", keyword).into());
+        let precedence = NonZeroU8::new(precedence);
+
+        if precedence.is_none() {
+            return Err("precedence cannot be zero".into());
         }
 
         match Token::lookup_from_syntax(keyword) {
             // Standard identifiers, reserved keywords and custom keywords are OK
             None | Some(Token::Reserved(_)) | Some(Token::Custom(_)) => (),
-            // Disabled keywords are also OK
-            Some(token) if !self.disabled_symbols.contains(token.syntax().as_ref()) => (),
             // Active standard keywords cannot be made custom
-            Some(_) => return Err(format!("'{}' is a reserved keyword", keyword).into()),
+            // Disabled keywords are OK
+            Some(token) if token.is_keyword() => {
+                if !self.disabled_symbols.contains(token.syntax().as_ref()) {
+                    return Err(format!("'{}' is a reserved keyword", keyword).into());
+                }
+            }
+            // Active standard operators cannot be made custom
+            Some(token) if token.is_operator() => {
+                if !self.disabled_symbols.contains(token.syntax().as_ref()) {
+                    return Err(format!("'{}' is a reserved operator", keyword).into());
+                }
+            }
+            // Active standard symbols cannot be made custom
+            Some(token) if !self.disabled_symbols.contains(token.syntax().as_ref()) => {
+                return Err(format!("'{}' is a reserved symbol", keyword).into())
+            }
+            // Disabled symbols are OK
+            Some(_) => (),
         }
 
         // Add to custom keywords
-        self.custom_keywords
-            .insert(keyword.into(), Some(precedence));
+        self.custom_keywords.insert(keyword.into(), precedence);
 
         Ok(self)
     }

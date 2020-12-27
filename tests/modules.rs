@@ -101,7 +101,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
     resolver.insert("hello", module);
 
     let mut engine = Engine::new();
-    engine.set_module_resolver(Some(resolver));
+    engine.set_module_resolver(resolver);
 
     assert_eq!(
         engine.eval::<INT>(
@@ -295,13 +295,13 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
         "#,
     )?;
 
-    engine.set_module_resolver(Some(resolver1));
+    engine.set_module_resolver(resolver1);
 
     let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
 
     let mut resolver2 = StaticModuleResolver::new();
     resolver2.insert("testing", module);
-    engine.set_module_resolver(Some(resolver2));
+    engine.set_module_resolver(resolver2);
 
     assert_eq!(
         engine.eval::<INT>(r#"import "testing" as ttt; ttt::abc"#)?,
@@ -384,7 +384,7 @@ fn test_module_str() -> Result<(), Box<EvalAltResult>> {
 
     let mut static_modules = rhai::module_resolvers::StaticModuleResolver::new();
     static_modules.insert("test", module);
-    engine.set_module_resolver(Some(static_modules));
+    engine.set_module_resolver(static_modules);
 
     assert_eq!(
         engine.eval::<INT>(r#"import "test" as test; test::test("test");"#)?,
@@ -418,7 +418,7 @@ fn test_module_ast_namespace() -> Result<(), Box<EvalAltResult>> {
 
     let mut resolver = StaticModuleResolver::new();
     resolver.insert("testing", module);
-    engine.set_module_resolver(Some(resolver));
+    engine.set_module_resolver(resolver);
 
     assert_eq!(
         engine.eval::<INT>(r#"import "testing" as t; t::foo(41)"#)?,
@@ -466,7 +466,7 @@ fn test_module_ast_namespace2() -> Result<(), Box<EvalAltResult>> {
     let module = Module::eval_ast_as_new(Scope::new(), &module_ast, &engine)?;
     let mut static_modules = rhai::module_resolvers::StaticModuleResolver::new();
     static_modules.insert("test_module", module);
-    engine.set_module_resolver(Some(static_modules));
+    engine.set_module_resolver(static_modules);
 
     engine.consume(SCRIPT)?;
 

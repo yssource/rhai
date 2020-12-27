@@ -9,7 +9,7 @@ use crate::stdlib::{
     collections::HashMap,
     fmt,
     hash::Hash,
-    num::NonZeroUsize,
+    num::{NonZeroU64, NonZeroUsize},
     ops::{Add, AddAssign},
     string::String,
     vec,
@@ -736,7 +736,7 @@ impl Stmt {
             _ => false,
         }
     }
-    /// Get the [position][`Position`] of this statement.
+    /// Get the [position][Position] of this statement.
     pub fn position(&self) -> Position {
         match self {
             Self::Noop(pos)
@@ -765,7 +765,7 @@ impl Stmt {
             Self::Share(x) => x.pos,
         }
     }
-    /// Override the [position][`Position`] of this statement.
+    /// Override the [position][Position] of this statement.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
             Self::Noop(pos)
@@ -914,16 +914,14 @@ pub struct BinaryExpr {
 #[derive(Debug, Clone, Default)]
 pub struct FnCallExpr {
     /// Pre-calculated hash for a script-defined function of the same name and number of parameters.
-    pub hash: u64,
-    /// Call native functions only? Set to [`true`] to skip searching for script-defined function overrides
-    /// when it is certain that the function must be native (e.g. an operator).
-    pub native_only: bool,
+    /// None if native Rust only.
+    pub hash_script: Option<NonZeroU64>,
     /// Does this function call capture the parent scope?
     pub capture: bool,
     /// Default value when the function is not found, mostly used to provide a default for comparison functions.
     pub def_value: Option<Dynamic>,
     /// Namespace of the function, if any. Boxed because it occurs rarely.
-    pub namespace: Option<Box<NamespaceRef>>,
+    pub namespace: Option<NamespaceRef>,
     /// Function name.
     /// Use [`Cow<'static, str>`][Cow] because a lot of operators (e.g. `==`, `>=`) are implemented as
     /// function calls and the function names are predictable, so no need to allocate a new [`String`].
@@ -963,13 +961,19 @@ pub enum Expr {
     Map(Box<StaticVec<(Ident, Expr)>>, Position),
     /// ()
     Unit(Position),
-    /// Variable access - (optional index, optional modules, hash, variable name)
-    Variable(Box<(Option<NonZeroUsize>, Option<Box<NamespaceRef>>, u64, Ident)>),
+    /// Variable access - (optional index, optional (hash, modules), variable name)
+    Variable(
+        Box<(
+            Option<NonZeroUsize>,
+            Option<(NonZeroU64, NamespaceRef)>,
+            Ident,
+        )>,
+    ),
     /// Property access - (getter, setter), prop
-    Property(Box<((ImmutableString, ImmutableString), Ident)>),
+    Property(Box<(ImmutableString, ImmutableString, Ident)>),
     /// { [statement][Stmt] }
     Stmt(Box<StaticVec<Stmt>>, Position),
-    /// Wrapped [expression][`Expr`] - should not be optimized away.
+    /// Wrapped [expression][Expr] - should not be optimized away.
     Expr(Box<Expr>),
     /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
@@ -1044,11 +1048,11 @@ impl Expr {
     /// Is the expression a simple variable access?
     pub(crate) fn get_variable_access(&self, non_qualified: bool) -> Option<&str> {
         match self {
-            Self::Variable(x) if !non_qualified || x.1.is_none() => Some((x.3).name.as_str()),
+            Self::Variable(x) if !non_qualified || x.1.is_none() => Some((x.2).name.as_str()),
             _ => None,
         }
     }
-    /// Get the [position][`Position`] of the expression.
+    /// Get the [position][Position] of the expression.
     pub fn position(&self) -> Position {
         match self {
             Self::Expr(x) => x.position(),
@@ -1064,9 +1068,9 @@ impl Expr {
             Self::FnPointer(_, pos) => *pos,
             Self::Array(_, pos) => *pos,
             Self::Map(_, pos) => *pos,
-            Self::Property(x) => (x.1).pos,
+            Self::Property(x) => (x.2).pos,
             Self::Stmt(_, pos) => *pos,
-            Self::Variable(x) => (x.3).pos,
+            Self::Variable(x) => (x.2).pos,
             Self::FnCall(_, pos) => *pos,
 
             Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => x.lhs.position(),
@@ -1078,7 +1082,7 @@ impl Expr {
             Self::Custom(_, pos) => *pos,
         }
     }
-    /// Override the [position][`Position`] of the expression.
+    /// Override the [position][Position] of the expression.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
             Self::Expr(x) => {
@@ -1096,8 +1100,8 @@ impl Expr {
             Self::FnPointer(_, pos) => *pos = new_pos,
             Self::Array(_, pos) => *pos = new_pos,
             Self::Map(_, pos) => *pos = new_pos,
-            Self::Variable(x) => (x.3).pos = new_pos,
-            Self::Property(x) => (x.1).pos = new_pos,
+            Self::Variable(x) => (x.2).pos = new_pos,
+            Self::Property(x) => (x.2).pos = new_pos,
             Self::Stmt(_, pos) => *pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
             Self::And(_, pos) | Self::Or(_, pos) | Self::In(_, pos) => *pos = new_pos,
@@ -1172,6 +1176,12 @@ impl Expr {
     }
     /// Is a particular [token][Token] allowed as a postfix operator to this expression?
     pub fn is_valid_postfix(&self, token: &Token) -> bool {
+        match token {
+            #[cfg(not(feature = "no_object"))]
+            Token::Period => return true,
+            _ => (),
+        }
+
         match self {
             Self::Expr(x) => x.is_valid_postfix(token),
 
@@ -1189,24 +1199,20 @@ impl Expr {
             | Self::Unit(_) => false,
 
             Self::StringConstant(_, _)
-            | Self::Stmt(_, _)
             | Self::FnCall(_, _)
+            | Self::Stmt(_, _)
             | Self::Dot(_, _)
             | Self::Index(_, _)
             | Self::Array(_, _)
             | Self::Map(_, _) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
-                #[cfg(not(feature = "no_object"))]
-                Token::Period => true,
                 _ => false,
             },
 
             Self::Variable(_) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
-                #[cfg(not(feature = "no_object"))]
-                Token::Period => true,
                 Token::LeftParen => true,
                 Token::Bang => true,
                 Token::DoubleColon => true,
@@ -1216,8 +1222,6 @@ impl Expr {
             Self::Property(_) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
-                #[cfg(not(feature = "no_object"))]
-                Token::Period => true,
                 Token::LeftParen => true,
                 _ => false,
             },

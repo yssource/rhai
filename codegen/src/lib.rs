@@ -21,7 +21,7 @@
 //! let m = exported_module!(advanced_math);
 //! let mut r = StaticModuleResolver::new();
 //! r.insert("Math::Advanced", m);
-//! engine.set_module_resolver(Some(r));
+//! engine.set_module_resolver(r);
 //!
 //! assert_eq!(engine.eval::<FLOAT>(
 //!     r#"
@@ -51,7 +51,7 @@
 //! set_exported_fn!(m, "euclidean_distance", distance_function);
 //! let mut r = StaticModuleResolver::new();
 //! r.insert("Math::Advanced", m);
-//! engine.set_module_resolver(Some(r));
+//! engine.set_module_resolver(r);
 //!
 //! assert_eq!(engine.eval::<FLOAT>(
 //!     r#"

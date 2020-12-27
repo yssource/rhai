@@ -19,9 +19,9 @@ use std::borrow::Cow;
 use crate::attrs::{AttrItem, ExportInfo, ExportScope, ExportedParams};
 use crate::function::ExportedFnParams;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
 pub(crate) struct ExportedModParams {
-    pub name: Option<String>,
+    pub name: String,
     skip: bool,
     pub scope: ExportScope,
 }
@@ -49,21 +49,32 @@ impl ExportedParams for ExportedModParams {
 
     fn from_info(info: ExportInfo) -> syn::Result<Self> {
         let ExportInfo { items: attrs, .. } = info;
-        let mut name = None;
+        let mut name = Default::default();
         let mut skip = false;
-        let mut scope = ExportScope::default();
+        let mut scope = None;
         for attr in attrs {
             let AttrItem { key, value, .. } = attr;
             match (key.to_string().as_ref(), value) {
-                ("name", Some(s)) => name = Some(s.value()),
+                ("name", Some(s)) => {
+                    let new_name = s.value();
+                    if name == new_name {
+                        return Err(syn::Error::new(key.span(), "conflicting name"));
+                    }
+                    name = new_name;
+                }
                 ("name", None) => return Err(syn::Error::new(key.span(), "requires value")),
+
                 ("skip", None) => skip = true,
                 ("skip", Some(s)) => return Err(syn::Error::new(s.span(), "extraneous value")),
-                ("export_prefix", Some(s)) => scope = ExportScope::Prefix(s.value()),
+
+                ("export_prefix", Some(_)) | ("export_all", None) if scope.is_some() => {
+                    return Err(syn::Error::new(key.span(), "duplicate export scope"));
+                }
+                ("export_prefix", Some(s)) => scope = Some(ExportScope::Prefix(s.value())),
                 ("export_prefix", None) => {
                     return Err(syn::Error::new(key.span(), "requires value"))
                 }
-                ("export_all", None) => scope = ExportScope::All,
+                ("export_all", None) => scope = Some(ExportScope::All),
                 ("export_all", Some(s)) => {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
                 }
@@ -79,7 +90,7 @@ impl ExportedParams for ExportedModParams {
         Ok(ExportedModParams {
             name,
             skip,
-            scope,
+            scope: scope.unwrap_or_default(),
             ..Default::default()
         })
     }
@@ -87,7 +98,7 @@ impl ExportedParams for ExportedModParams {
 
 #[derive(Debug)]
 pub(crate) struct Module {
-    mod_all: Option<syn::ItemMod>,
+    mod_all: syn::ItemMod,
     fns: Vec<ExportedFn>,
     consts: Vec<ExportedConst>,
     submodules: Vec<Module>,
@@ -183,7 +194,7 @@ impl Parse for Module {
             fns = new_vec![];
         }
         Ok(Module {
-            mod_all: Some(mod_all),
+            mod_all,
             fns,
             consts,
             submodules,
@@ -194,39 +205,27 @@ impl Parse for Module {
 
 #[allow(dead_code)]
 impl Module {
-    pub fn attrs(&self) -> Option<&Vec<syn::Attribute>> {
-        self.mod_all.as_ref().map(|m| &m.attrs)
+    pub fn attrs(&self) -> &Vec<syn::Attribute> {
+        &self.mod_all.attrs
     }
 
-    pub fn module_name(&self) -> Option<&syn::Ident> {
-        self.mod_all.as_ref().map(|m| &m.ident)
+    pub fn module_name(&self) -> &syn::Ident {
+        &self.mod_all.ident
     }
 
-    pub fn exported_name(&self) -> Option<Cow<str>> {
-        if let Some(ref s) = self.params.name {
-            Some(s.into())
+    pub fn exported_name(&self) -> Cow<str> {
+        if !self.params.name.is_empty() {
+            self.params.name.as_str().into()
         } else {
-            self.module_name().map(|m| m.to_string().into())
+            self.module_name().to_string().into()
         }
     }
 
     pub fn update_scope(&mut self, parent_scope: &ExportScope) {
         let keep = match (self.params.skip, parent_scope) {
             (true, _) => false,
-            (_, ExportScope::PubOnly) => {
-                if let Some(ref mod_all) = self.mod_all {
-                    matches!(mod_all.vis, syn::Visibility::Public(_))
-                } else {
-                    false
-                }
-            }
-            (_, ExportScope::Prefix(s)) => {
-                if let Some(ref mod_all) = self.mod_all {
-                    mod_all.ident.to_string().starts_with(s)
-                } else {
-                    false
-                }
-            }
+            (_, ExportScope::PubOnly) => matches!(self.mod_all.vis, syn::Visibility::Public(_)),
+            (_, ExportScope::Prefix(s)) => self.mod_all.ident.to_string().starts_with(s),
             (_, ExportScope::All) => true,
         };
         self.params.skip = !keep;
@@ -249,14 +248,13 @@ impl Module {
 
         // Extract the current structure of the module.
         let Module {
-            mod_all,
+            mut mod_all,
             mut fns,
             consts,
             mut submodules,
             params,
             ..
         } = self;
-        let mut mod_all = mod_all.unwrap();
         let mod_name = mod_all.ident.clone();
         let (_, orig_content) = mod_all.content.take().unwrap();
         let mod_attrs = mem::take(&mut mod_all.attrs);
@@ -299,8 +297,8 @@ impl Module {
         }
     }
 
-    pub fn name(&self) -> Option<&syn::Ident> {
-        self.mod_all.as_ref().map(|m| &m.ident)
+    pub fn name(&self) -> &syn::Ident {
+        &self.mod_all.ident
     }
 
     pub fn consts(&self) -> &[ExportedConst] {
@@ -317,10 +315,10 @@ impl Module {
 
     pub fn content(&self) -> Option<&Vec<syn::Item>> {
         match self.mod_all {
-            Some(syn::ItemMod {
+            syn::ItemMod {
                 content: Some((_, ref vec)),
                 ..
-            }) => Some(vec),
+            } => Some(vec),
             _ => None,
         }
     }

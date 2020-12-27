@@ -6,7 +6,8 @@ Custom Operators
 For use as a DSL (Domain-Specific Languages), it is sometimes more convenient to augment Rhai with
 customized operators performing specific logic.
 
-`Engine::register_custom_operator` registers a keyword as a custom operator.
+`Engine::register_custom_operator` registers a keyword as a custom operator, giving it a particular
+_precedence_ (which cannot be zero).
 
 
 Example
@@ -52,15 +53,23 @@ into a syntax that uses the corresponding function calls.
 Using `Engine::register_custom_operator` merely enables a convenient shortcut.
 
 
-Must Follow Variable Naming
---------------------------
+Must be a Valid Identifier or Reserved Symbol
+--------------------------------------------
 
 All custom operators must be _identifiers_ that follow the same naming rules as [variables].
+
+Alternatively, they can also be [reserved symbols]({{rootUrl}}/appendix/operators.md#symbols),
+[disabled operators or keywords][disable keywords and operators].
 
 ```rust
 engine.register_custom_operator("foo", 20);     // 'foo' is a valid custom operator
 
-engine.register_custom_operator("=>", 30);      // <- error: '=>' is not a valid custom operator
+engine.register_custom_operator("#", 20);       // the reserved symbol '#' is also
+                                                // a valid custom operator
+
+engine.register_custom_operator("+", 30);       // <- error: '+' is an active operator
+
+engine.register_custom_operator("=>", 30);      // <- error: '=>' is an active symbol
 ```
 
 
