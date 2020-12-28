@@ -280,11 +280,11 @@ fn parse_paren_expr(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    // ( ...
-    settings.pos = eat_token(input, Token::LeftParen);
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    // ( ...
+    settings.pos = eat_token(input, Token::LeftParen);
 
     if match_token(input, Token::RightParen).0 {
         return Ok(Expr::Unit(settings.pos));
@@ -316,10 +316,10 @@ fn parse_fn_call(
     mut namespace: Option<NamespaceRef>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    let (token, token_pos) = input.peek().unwrap();
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    let (token, token_pos) = input.peek().unwrap();
 
     let mut args = StaticVec::new();
 
@@ -642,11 +642,11 @@ fn parse_array_literal(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    // [ ...
-    settings.pos = eat_token(input, Token::LeftBracket);
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    // [ ...
+    settings.pos = eat_token(input, Token::LeftBracket);
 
     let mut arr = StaticVec::new();
 
@@ -712,11 +712,11 @@ fn parse_map_literal(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    // #{ ...
-    settings.pos = eat_token(input, Token::MapStart);
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    // #{ ...
+    settings.pos = eat_token(input, Token::MapStart);
 
     let mut map: StaticVec<(Ident, Expr)> = Default::default();
 
@@ -823,12 +823,11 @@ fn parse_switch(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    // switch ...
-    let token_pos = eat_token(input, Token::Switch);
-    settings.pos = token_pos;
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    // switch ...
+    settings.pos = eat_token(input, Token::Switch);
 
     let item = parse_expr(input, state, lib, settings.level_up())?;
 
@@ -950,11 +949,11 @@ fn parse_primary(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    let (token, token_pos) = input.peek().unwrap();
-    settings.pos = *token_pos;
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    let (token, token_pos) = input.peek().unwrap();
+    settings.pos = *token_pos;
 
     let mut root_expr = match token {
         Token::EOF => return Err(PERR::UnexpectedEOF.into_err(settings.pos)),
@@ -1241,7 +1240,7 @@ fn parse_primary(
                     state.allow_capture = false;
                 }
 
-                let rhs = parse_unary(input, state, lib, settings.level_up())?;
+                let rhs = parse_primary(input, state, lib, settings.level_up())?;
                 make_dot_expr(state, expr, rhs, tail_pos)?
             }
             // Unknown postfix operator
@@ -1262,17 +1261,16 @@ fn parse_primary(
         },
         _ => None,
     }
-    .map(|x| {
-        if let (_, Some((ref mut hash, ref mut namespace)), Ident { name, .. }) = x.as_mut() {
+    .map(|x| match x.as_mut() {
+        (_, Some((ref mut hash, ref mut namespace)), Ident { name, .. }) => {
             // Qualifiers + variable name
             *hash =
                 calc_script_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0).unwrap();
 
             #[cfg(not(feature = "no_module"))]
             namespace.set_index(state.find_module(&namespace[0].name));
-        } else {
-            unreachable!();
         }
+        _ => unreachable!(),
     });
 
     // Make sure identifiers are valid
@@ -1458,11 +1456,11 @@ fn parse_op_assignment_stmt(
     lhs: Expr,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    let (token, token_pos) = input.peek().unwrap();
-    settings.pos = *token_pos;
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    let (token, token_pos) = input.peek().unwrap();
+    settings.pos = *token_pos;
 
     let op = match token {
         Token::Equals => "".into(),
@@ -1714,10 +1712,10 @@ fn parse_binary_op(
     lhs: Expr,
     mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    settings.pos = lhs.position();
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    settings.pos = lhs.position();
 
     let mut root = lhs;
 
@@ -1868,12 +1866,6 @@ fn parse_binary_op(
                 make_in_expr(current_lhs, rhs, pos)?
             }
 
-            // #[cfg(not(feature = "no_object"))]
-            // Token::Period => {
-            //     let rhs = args.pop().unwrap();
-            //     let current_lhs = args.pop().unwrap();
-            //     make_dot_expr(state, current_lhs, rhs, pos)?
-            // }
             Token::Custom(s)
                 if state
                     .engine
@@ -2017,10 +2009,10 @@ fn parse_expr(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    settings.pos = input.peek().unwrap().1;
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    settings.pos = input.peek().unwrap().1;
 
     // Check if it is a custom syntax.
     if !state.engine.custom_syntax.is_empty() {
@@ -2095,12 +2087,11 @@ fn parse_if(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    // if ...
-    let token_pos = eat_token(input, Token::If);
-    settings.pos = token_pos;
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    // if ...
+    settings.pos = eat_token(input, Token::If);
 
     // if guard { if_body }
     ensure_not_statement_expr(input, "a boolean")?;
@@ -2121,7 +2112,11 @@ fn parse_if(
         None
     };
 
-    Ok(Stmt::If(guard, Box::new((if_body, else_body)), token_pos))
+    Ok(Stmt::If(
+        guard,
+        Box::new((if_body, else_body)),
+        settings.pos,
+    ))
 }
 
 /// Parse a while loop.
@@ -2149,7 +2144,7 @@ fn parse_while_loop(
     settings.is_breakable = true;
     let body = Box::new(parse_block(input, state, lib, settings.level_up())?);
 
-    Ok(Stmt::While(guard, body, token_pos))
+    Ok(Stmt::While(guard, body, settings.pos))
 }
 
 /// Parse a do loop.
@@ -2159,12 +2154,11 @@ fn parse_do(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    // do ...
-    let token_pos = eat_token(input, Token::Do);
-    settings.pos = token_pos;
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    // do ...
+    settings.pos = eat_token(input, Token::Do);
 
     // do { body } [while|until] guard
     settings.is_breakable = true;
@@ -2186,7 +2180,7 @@ fn parse_do(
     let guard = parse_expr(input, state, lib, settings.level_up())?;
     ensure_not_assignment(input)?;
 
-    Ok(Stmt::Do(body, guard, is_while, token_pos))
+    Ok(Stmt::Do(body, guard, is_while, settings.pos))
 }
 
 /// Parse a for loop.
@@ -2196,12 +2190,11 @@ fn parse_for(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    // for ...
-    let token_pos = eat_token(input, Token::For);
-    settings.pos = token_pos;
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    // for ...
+    settings.pos = eat_token(input, Token::For);
 
     // for name ...
     let name = match input.next().unwrap() {
@@ -2242,7 +2235,7 @@ fn parse_for(
 
     state.stack.truncate(prev_stack_len);
 
-    Ok(Stmt::For(expr, Box::new((name, body)), token_pos))
+    Ok(Stmt::For(expr, Box::new((name, body)), settings.pos))
 }
 
 /// Parse a variable definition statement.
@@ -2254,12 +2247,11 @@ fn parse_let(
     export: bool,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    // let/const... (specified in `var_type`)
-    let token_pos = input.next().unwrap().1;
-    settings.pos = token_pos;
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    // let/const... (specified in `var_type`)
+    settings.pos = input.next().unwrap().1;
 
     // let name ...
     let (name, pos) = match input.next().unwrap() {
@@ -2272,7 +2264,7 @@ fn parse_let(
     };
 
     // let name = ...
-    let init_expr = if match_token(input, Token::Equals).0 {
+    let expr = if match_token(input, Token::Equals).0 {
         // let name = expr
         Some(parse_expr(input, state, lib, settings.level_up())?)
     } else {
@@ -2285,14 +2277,14 @@ fn parse_let(
             let name = state.get_interned_string(name);
             state.stack.push((name.clone(), AccessMode::ReadWrite));
             let var_def = Ident { name, pos };
-            Ok(Stmt::Let(Box::new(var_def), init_expr, export, token_pos))
+            Ok(Stmt::Let(Box::new(var_def), expr, export, settings.pos))
         }
         // const name = { expr:constant }
         AccessMode::ReadOnly => {
             let name = state.get_interned_string(name);
             state.stack.push((name.clone(), AccessMode::ReadOnly));
             let var_def = Ident { name, pos };
-            Ok(Stmt::Const(Box::new(var_def), init_expr, export, token_pos))
+            Ok(Stmt::Const(Box::new(var_def), expr, export, settings.pos))
         }
     }
 }
@@ -2305,23 +2297,22 @@ fn parse_import(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    // import ...
-    let token_pos = eat_token(input, Token::Import);
-    settings.pos = token_pos;
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    // import ...
+    settings.pos = eat_token(input, Token::Import);
 
     // import expr ...
     let expr = parse_expr(input, state, lib, settings.level_up())?;
 
     // import expr as ...
     if !match_token(input, Token::As).0 {
-        return Ok(Stmt::Import(expr, None, token_pos));
+        return Ok(Stmt::Import(expr, None, settings.pos));
     }
 
     // import expr as name ...
-    let (name, _) = match input.next().unwrap() {
+    let (name, name_pos) = match input.next().unwrap() {
         (Token::Identifier(s), pos) => (s, pos),
         (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
             return Err(PERR::Reserved(s).into_err(pos));
@@ -2337,9 +2328,9 @@ fn parse_import(
         expr,
         Some(Box::new(Ident {
             name,
-            pos: settings.pos,
+            pos: name_pos,
         })),
-        token_pos,
+        settings.pos,
     ))
 }
 
@@ -2351,11 +2342,10 @@ fn parse_export(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    let token_pos = eat_token(input, Token::Export);
-    settings.pos = token_pos;
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    settings.pos = eat_token(input, Token::Export);
 
     match input.peek().unwrap() {
         (Token::Let, pos) => {
@@ -2424,7 +2414,7 @@ fn parse_export(
         }
     }
 
-    Ok(Stmt::Export(exports, token_pos))
+    Ok(Stmt::Export(exports, settings.pos))
 }
 
 /// Parse a statement block.
@@ -2513,10 +2503,10 @@ fn parse_expr_stmt(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    settings.pos = input.peek().unwrap().1;
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    settings.pos = input.peek().unwrap().1;
 
     let expr = parse_expr(input, state, lib, settings.level_up())?;
     let stmt = parse_op_assignment_stmt(input, state, lib, expr, settings.level_up())?;
@@ -2715,12 +2705,11 @@ fn parse_try_catch(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
-    // try ...
-    let token_pos = eat_token(input, Token::Try);
-    settings.pos = token_pos;
-
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
+
+    // try ...
+    settings.pos = eat_token(input, Token::Try);
 
     // try { body }
     let body = parse_block(input, state, lib, settings.level_up())?;
@@ -2765,7 +2754,7 @@ fn parse_try_catch(
 
     Ok(Stmt::TryCatch(
         Box::new((body, var_def, catch_body)),
-        token_pos,
+        settings.pos,
         catch_pos,
     ))
 }

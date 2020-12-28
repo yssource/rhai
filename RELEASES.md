@@ -4,13 +4,16 @@ Rhai Release Notes
 Version 0.19.9
 ==============
 
-This version removes the confusing differences between _packages_ and _modules_
+This version fixes a bug introduced in `0.19.8` which breaks property access
+within closures.
+
+It also removes the confusing differences between _packages_ and _modules_
 by unifying the terminology and API under the global umbrella of _modules_.
 
 Bug fixes
 ---------
 
-* Property access in 
+* Bug when accessing properties in closures is fixed.
 
 Breaking changes
 ----------------

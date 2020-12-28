@@ -91,7 +91,7 @@ impl fmt::Display for ScriptFnDef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}{}({}) -> Dynamic",
+            "{}{}({})",
             if self.access.is_private() {
                 "private "
             } else {
@@ -133,7 +133,7 @@ impl fmt::Display for ScriptFnMetadata<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}{}({}) -> Dynamic",
+            "{}{}({})",
             if self.access.is_private() {
                 "private "
             } else {
@@ -646,12 +646,18 @@ impl AsRef<Module> for AST {
 /// ## WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Ident {
     /// Identifier name.
     pub name: ImmutableString,
     /// Declaration position.
     pub pos: Position,
+}
+
+impl fmt::Debug for Ident {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Ident({:?} @ {:?})", self.name, self.pos)
+    }
 }
 
 /// _(INTERNALS)_ A type encapsulating the mode of a `return`/`throw` statement.

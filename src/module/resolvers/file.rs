@@ -39,7 +39,7 @@ use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 /// ```
 #[derive(Debug)]
 pub struct FileModuleResolver {
-    path: PathBuf,
+    base_path: PathBuf,
     extension: String,
 
     #[cfg(not(feature = "sync"))]
@@ -99,7 +99,7 @@ impl FileModuleResolver {
         extension: impl Into<String>,
     ) -> Self {
         Self {
-            path: path.into(),
+            base_path: path.into(),
             extension: extension.into(),
             cache: Default::default(),
         }
@@ -127,13 +127,13 @@ impl FileModuleResolver {
 
     /// Get the base path for script files.
     #[inline(always)]
-    pub fn path(&self) -> &Path {
-        self.path.as_ref()
+    pub fn base_path(&self) -> &Path {
+        self.base_path.as_ref()
     }
     /// Set the base path for script files.
     #[inline(always)]
-    pub fn set_path(&mut self, path: impl Into<PathBuf>) -> &mut Self {
-        self.path = path.into();
+    pub fn set_base_path(&mut self, path: impl Into<PathBuf>) -> &mut Self {
+        self.base_path = path.into();
         self
     }
 
@@ -186,7 +186,7 @@ impl ModuleResolver for FileModuleResolver {
         pos: Position,
     ) -> Result<Shared<Module>, Box<EvalAltResult>> {
         // Construct the script file path
-        let mut file_path = self.path.clone();
+        let mut file_path = self.base_path.clone();
         file_path.push(path);
         file_path.set_extension(&self.extension); // Force extension
 
