@@ -812,6 +812,7 @@ impl Dynamic {
             #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
             Union::Shared(cell, _) => return cell.read().unwrap().clone().try_cast(),
+
             _ => (),
         }
 
@@ -903,7 +904,7 @@ impl Dynamic {
         match self.0 {
             Union::Variant(value, _) => (*value).as_box_any().downcast().map(|x| *x).ok(),
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_, _) => unreachable!(),
+            Union::Shared(_, _) => unreachable!("Union::Shared case should be already handled"),
             _ => None,
         }
     }

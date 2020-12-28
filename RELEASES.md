@@ -13,7 +13,8 @@ by unifying the terminology and API under the global umbrella of _modules_.
 Bug fixes
 ---------
 
-* Bug when accessing properties in closures is fixed.
+* Fix bug when accessing properties in closures.
+* Fix bug when accessing a deep index with a function call.
 
 Breaking changes
 ----------------

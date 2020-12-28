@@ -535,10 +535,10 @@ impl CallableFunction {
     pub fn get_native_fn(&self) -> &FnAny {
         match self {
             Self::Pure(f) | Self::Method(f) => f.as_ref(),
-            Self::Iterator(_) | Self::Plugin(_) => unreachable!(),
+            Self::Iterator(_) | Self::Plugin(_) => panic!("function should be native"),
 
             #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => unreachable!(),
+            Self::Script(_) => panic!("function should be native"),
         }
     }
     /// Get a shared reference to a script-defined function definition.
@@ -549,7 +549,9 @@ impl CallableFunction {
     #[cfg(not(feature = "no_function"))]
     pub fn get_fn_def(&self) -> &ScriptFnDef {
         match self {
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => unreachable!(),
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => {
+                panic!("function should be scripted")
+            }
             Self::Script(f) => f.as_ref(),
         }
     }
@@ -561,10 +563,12 @@ impl CallableFunction {
     pub fn get_iter_fn(&self) -> IteratorFn {
         match self {
             Self::Iterator(f) => *f,
-            Self::Pure(_) | Self::Method(_) | Self::Plugin(_) => unreachable!(),
+            Self::Pure(_) | Self::Method(_) | Self::Plugin(_) => {
+                panic!("function should an iterator")
+            }
 
             #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => unreachable!(),
+            Self::Script(_) => panic!("function should be an iterator"),
         }
     }
     /// Get a shared reference to a plugin function.
@@ -575,10 +579,12 @@ impl CallableFunction {
     pub fn get_plugin_fn<'s>(&'s self) -> &FnPlugin {
         match self {
             Self::Plugin(f) => f.as_ref(),
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => unreachable!(),
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => {
+                panic!("function should a plugin")
+            }
 
             #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => unreachable!(),
+            Self::Script(_) => panic!("function should a plugin"),
         }
     }
     /// Create a new [`CallableFunction::Pure`].
@@ -609,7 +615,7 @@ impl From<ScriptFnDef> for CallableFunction {
     #[inline(always)]
     fn from(_func: ScriptFnDef) -> Self {
         #[cfg(feature = "no_function")]
-        unreachable!();
+        unreachable!("no_function active");
 
         #[cfg(not(feature = "no_function"))]
         Self::Script(_func.into())
@@ -620,7 +626,7 @@ impl From<Shared<ScriptFnDef>> for CallableFunction {
     #[inline(always)]
     fn from(_func: Shared<ScriptFnDef>) -> Self {
         #[cfg(feature = "no_function")]
-        unreachable!();
+        unreachable!("no_function active");
 
         #[cfg(not(feature = "no_function"))]
         Self::Script(_func)

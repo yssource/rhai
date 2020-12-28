@@ -118,7 +118,7 @@ impl Drop for ArgBackup<'_> {
         // Panic if the shorter lifetime leaks.
         assert!(
             self.orig_mut.is_none(),
-            "MutBackup::restore has not been called prior to existing this scope"
+            "ArgBackup::restore_first_arg has not been called prior to existing this scope"
         );
     }
 }
@@ -672,7 +672,9 @@ impl Engine {
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
-                EvalAltResult::LoopBreak(_, _) => unreachable!(),
+                EvalAltResult::LoopBreak(_, _) => {
+                    unreachable!("no outer loop scope to break out of")
+                }
                 _ => Err(err),
             })
     }
@@ -1227,7 +1229,7 @@ impl Engine {
 
                 f.get_native_fn()((self, module.id_raw(), &*mods, lib).into(), args.as_mut())
             }
-            Some(_) => unreachable!(),
+            Some(f) => unreachable!("unknown function type: {:?}", f),
             None if def_val.is_some() => Ok(def_val.unwrap().clone()),
             None => EvalAltResult::ErrorFunctionNotFound(
                 format!(

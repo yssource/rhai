@@ -603,26 +603,10 @@ fn parse_index_chain(
                     ))
                 }
                 // Otherwise terminate the indexing chain
-                _ => {
-                    match idx_expr {
-                        // Terminate with an `Expr::Expr` wrapper to prevent the last index expression
-                        // inside brackets to be mis-parsed as another level of indexing, or a
-                        // dot expression/function call to be mis-parsed as following the indexing chain.
-                        Expr::Index(_, _) | Expr::Dot(_, _) | Expr::FnCall(_, _) => {
-                            Ok(Expr::Index(
-                                Box::new(BinaryExpr {
-                                    lhs,
-                                    rhs: Expr::Expr(Box::new(idx_expr)),
-                                }),
-                                settings.pos,
-                            ))
-                        }
-                        _ => Ok(Expr::Index(
-                            Box::new(BinaryExpr { lhs, rhs: idx_expr }),
-                            settings.pos,
-                        )),
-                    }
-                }
+                _ => Ok(Expr::Index(
+                    Box::new(BinaryExpr { lhs, rhs: idx_expr }),
+                    settings.pos,
+                )),
             }
         }
         (Token::LexError(err), pos) => return Err(err.clone().into_err(*pos)),
@@ -970,7 +954,7 @@ fn parse_primary(
             }
             Token::True => Expr::BoolConstant(true, settings.pos),
             Token::False => Expr::BoolConstant(false, settings.pos),
-            _ => unreachable!(),
+            t => unreachable!("unexpected token: {:?}", t),
         },
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => {
@@ -983,7 +967,7 @@ fn parse_primary(
         Token::LeftBrace if settings.allow_stmt_expr => {
             match parse_block(input, state, lib, settings.level_up())? {
                 Stmt::Block(statements, pos) => Expr::Stmt(Box::new(statements.into()), pos),
-                _ => unreachable!(),
+                stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
             }
         }
         // ( - grouped expression
@@ -1050,7 +1034,7 @@ fn parse_primary(
         Token::Identifier(_) => {
             let s = match input.next().unwrap().0 {
                 Token::Identifier(s) => s,
-                _ => unreachable!(),
+                t => unreachable!("expecting Token::Identifier, but gets {:?}", t),
             };
 
             match input.peek().unwrap().0 {
@@ -1097,7 +1081,7 @@ fn parse_primary(
         Token::Reserved(_) => {
             let s = match input.next().unwrap().0 {
                 Token::Reserved(s) => s,
-                _ => unreachable!(),
+                t => unreachable!("expecting Token::Reserved, but gets {:?}", t),
             };
 
             match input.peek().unwrap().0 {
@@ -1140,7 +1124,7 @@ fn parse_primary(
         Token::LexError(_) => {
             let err = match input.next().unwrap().0 {
                 Token::LexError(err) => err,
-                _ => unreachable!(),
+                t => unreachable!("expecting Token::LexError, but gets {:?}", t),
             };
 
             return Err(err.into_err(settings.pos));
@@ -1200,7 +1184,6 @@ fn parse_primary(
                 let ns = namespace.map(|(_, ns)| ns);
                 parse_fn_call(input, state, lib, name, false, ns, settings.level_up())?
             }
-            (Expr::Property(_), _) => unreachable!(),
             // module access
             (Expr::Variable(x), Token::DoubleColon) => match input.next().unwrap() {
                 (Token::Identifier(id2), pos2) => {
@@ -1270,7 +1253,7 @@ fn parse_primary(
             #[cfg(not(feature = "no_module"))]
             namespace.set_index(state.find_module(&namespace[0].name));
         }
-        _ => unreachable!(),
+        _ => unreachable!("expecting namespace-qualified variable access"),
     });
 
     // Make sure identifiers are valid
@@ -1973,7 +1956,7 @@ fn parse_custom_syntax(
                     segments.push(keyword.clone());
                     tokens.push(keyword);
                 }
-                _ => unreachable!(),
+                stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
             },
             s => match input.next().unwrap() {
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
@@ -2136,7 +2119,7 @@ fn parse_while_loop(
             (parse_expr(input, state, lib, settings.level_up())?, pos)
         }
         (Token::Loop, pos) => (Expr::BoolConstant(true, pos), pos),
-        _ => unreachable!(),
+        (t, _) => unreachable!("expecting Token::While or Token::Loop, but gets {:?}", t),
     };
     settings.pos = token_pos;
 
@@ -2533,23 +2516,24 @@ fn parse_stmt(
         }
 
         if !is_doc_comment(comment) {
-            unreachable!();
+            unreachable!("expecting doc-comment, but gets {:?}", comment);
         }
 
         if !settings.is_global {
             return Err(PERR::WrongDocComment.into_err(comments_pos));
         }
 
-        if let Token::Comment(comment) = input.next().unwrap().0 {
-            comments.push(comment);
+        match input.next().unwrap().0 {
+            Token::Comment(comment) => {
+                comments.push(comment);
 
-            match input.peek().unwrap() {
-                (Token::Fn, _) | (Token::Private, _) => break,
-                (Token::Comment(_), _) => (),
-                _ => return Err(PERR::WrongDocComment.into_err(comments_pos)),
+                match input.peek().unwrap() {
+                    (Token::Fn, _) | (Token::Private, _) => break,
+                    (Token::Comment(_), _) => (),
+                    _ => return Err(PERR::WrongDocComment.into_err(comments_pos)),
+                }
             }
-        } else {
-            unreachable!();
+            t => unreachable!("expecting Token::Comment, but gets {:?}", t),
         }
     }
 
@@ -2649,7 +2633,10 @@ fn parse_stmt(
                         match token {
                             Token::Return => ReturnType::Return,
                             Token::Throw => ReturnType::Exception,
-                            _ => unreachable!(),
+                            t => unreachable!(
+                                "expecting Token::Return or Token::Throw, but gets {:?}",
+                                t
+                            ),
                         },
                         pos,
                     )
