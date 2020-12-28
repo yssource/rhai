@@ -53,9 +53,10 @@ In this case, the first parameter should be `&mut T` of the custom type and the 
 Script-defined [function] signatures contain parameter names. Since all parameters, as well as
 the return value, are [`Dynamic`] the types are simply not shown.
 
-A script-defined function always takes dynamic arguments, and the return type is also dynamic:
+A script-defined function always takes dynamic arguments, and the return type is also dynamic,
+so no type information is needed:
 
-> `foo(x, y, z) -> Dynamic`
+> `foo(x, y, z)`
 
 probably defined as:
 

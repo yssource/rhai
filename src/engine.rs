@@ -225,7 +225,7 @@ impl IndexChainValue {
     #[cfg(not(feature = "no_index"))]
     pub fn as_value(self) -> Dynamic {
         match self {
-            Self::None | Self::FnCallArgs(_) => unreachable!("expecting IndexChainValue::Value"),
+            Self::None | Self::FnCallArgs(_) => panic!("expecting IndexChainValue::Value"),
             Self::Value(value) => value,
         }
     }
@@ -237,7 +237,7 @@ impl IndexChainValue {
     #[cfg(not(feature = "no_object"))]
     pub fn as_fn_call_args(self) -> StaticVec<Dynamic> {
         match self {
-            Self::None | Self::Value(_) => unreachable!("expecting IndexChainValue::FnCallArgs"),
+            Self::None | Self::Value(_) => panic!("expecting IndexChainValue::FnCallArgs"),
             Self::FnCallArgs(value) => value,
         }
     }
@@ -382,7 +382,7 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => **r = new_val,
-            Self::Value(_) => unreachable!(),
+            Self::Value(_) => panic!("cannot update a value"),
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(string, index, _) if string.is::<ImmutableString>() => {
                 let mut s = string.write_lock::<ImmutableString>().unwrap();
@@ -896,7 +896,7 @@ impl Engine {
                 // Normal variable access
                 _ => self.search_scope_only(scope, mods, state, lib, this_ptr, expr),
             },
-            _ => unreachable!(),
+            _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
         }
     }
 
@@ -912,7 +912,7 @@ impl Engine {
     ) -> Result<(Target<'s>, Position), Box<EvalAltResult>> {
         let (index, _, Ident { name, pos }) = match expr {
             Expr::Variable(v) => v.as_ref(),
-            _ => unreachable!(),
+            _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
         };
 
         // Check if the variable is `this`
@@ -988,7 +988,7 @@ impl Engine {
         new_val: Option<(Dynamic, Position)>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         if chain_type == ChainType::None {
-            unreachable!();
+            unreachable!("should not be ChainType::None");
         }
 
         let is_ref = target.is_ref();
@@ -1103,7 +1103,9 @@ impl Engine {
                         )
                     }
                     // xxx.module::fn_name(...) - syntax error
-                    Expr::FnCall(_, _) => unreachable!(),
+                    Expr::FnCall(_, _) => {
+                        unreachable!("function call in dot chain should not be namespace-qualified")
+                    }
                     // {xxx:map}.id = ???
                     Expr::Property(x) if target_val.is::<Map>() && new_val.is_some() => {
                         let Ident { name, pos } = &x.2;
@@ -1178,9 +1180,11 @@ impl Engine {
                                 val.into()
                             }
                             // {xxx:map}.module::fn_name(...) - syntax error
-                            Expr::FnCall(_, _) => unreachable!(),
+                            Expr::FnCall(_, _) => unreachable!(
+                                "function call in dot chain should not be namespace-qualified"
+                            ),
                             // Others - syntax error
-                            _ => unreachable!(),
+                            expr => unreachable!("invalid dot expression: {:?}", expr),
                         };
 
                         self.eval_dot_index_chain_helper(
@@ -1266,9 +1270,11 @@ impl Engine {
                                 .map_err(|err| err.fill_position(*pos))
                             }
                             // xxx.module::fn_name(...) - syntax error
-                            Expr::FnCall(_, _) => unreachable!(),
+                            Expr::FnCall(_, _) => unreachable!(
+                                "function call in dot chain should not be namespace-qualified"
+                            ),
                             // Others - syntax error
-                            _ => unreachable!(),
+                            expr => unreachable!("invalid dot expression: {:?}", expr),
                         }
                     }
                     // Syntax error
@@ -1276,7 +1282,7 @@ impl Engine {
                 }
             }
 
-            _ => unreachable!(),
+            chain_type => unreachable!("invalid ChainType: {:?}", chain_type),
         }
     }
 
@@ -1296,7 +1302,7 @@ impl Engine {
         let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, op_pos) = match expr {
             Expr::Index(x, pos) => (x.as_ref(), ChainType::Index, *pos),
             Expr::Dot(x, pos) => (x.as_ref(), ChainType::Dot, *pos),
-            _ => unreachable!(),
+            _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
         };
 
         let idx_values = &mut Default::default();
@@ -1333,7 +1339,7 @@ impl Engine {
                 .map_err(|err| err.fill_position(op_pos))
             }
             // {expr}.??? = ??? or {expr}[???] = ???
-            _ if new_val.is_some() => unreachable!(),
+            _ if new_val.is_some() => unreachable!("cannot assign to an expression"),
             // {expr}.??? or {expr}[???]
             expr => {
                 let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
@@ -1359,7 +1365,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
-        chain_type: ChainType,
+        parent_chain_type: ChainType,
         idx_values: &mut StaticVec<IndexChainValue>,
         size: usize,
         level: usize,
@@ -1367,7 +1373,7 @@ impl Engine {
         self.inc_operations(state, expr.position())?;
 
         match expr {
-            Expr::FnCall(x, _) if x.namespace.is_none() => {
+            Expr::FnCall(x, _) if parent_chain_type == ChainType::Dot && x.namespace.is_none() => {
                 let arg_values = x
                     .args
                     .iter()
@@ -1378,15 +1384,27 @@ impl Engine {
 
                 idx_values.push(arg_values.into());
             }
-            Expr::FnCall(_, _) => unreachable!(),
-            Expr::Property(_) => idx_values.push(IndexChainValue::None),
+            Expr::FnCall(_, _) if parent_chain_type == ChainType::Dot => {
+                unreachable!("function call in dot chain should not be namespace-qualified")
+            }
+
+            Expr::Property(_) if parent_chain_type == ChainType::Dot => {
+                idx_values.push(IndexChainValue::None)
+            }
+            Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
+
             Expr::Index(x, _) | Expr::Dot(x, _) => {
                 let crate::ast::BinaryExpr { lhs, rhs, .. } = x.as_ref();
 
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
-                    Expr::Property(_) => IndexChainValue::None,
-                    Expr::FnCall(x, _) if chain_type == ChainType::Dot && x.namespace.is_none() => {
+                    Expr::Property(_) if parent_chain_type == ChainType::Dot => {
+                        IndexChainValue::None
+                    }
+                    Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
+                    Expr::FnCall(x, _)
+                        if parent_chain_type == ChainType::Dot && x.namespace.is_none() =>
+                    {
                         x.args
                             .iter()
                             .map(|arg_expr| {
@@ -1395,7 +1413,9 @@ impl Engine {
                             .collect::<Result<StaticVec<Dynamic>, _>>()?
                             .into()
                     }
-                    Expr::FnCall(_, _) => unreachable!(),
+                    Expr::FnCall(_, _) if parent_chain_type == ChainType::Dot => {
+                        unreachable!("function call in dot chain should not be namespace-qualified")
+                    }
                     _ => self
                         .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?
                         .into(),
@@ -1405,7 +1425,7 @@ impl Engine {
                 let chain_type = match expr {
                     Expr::Index(_, _) => ChainType::Index,
                     Expr::Dot(_, _) => ChainType::Dot,
-                    _ => unreachable!(),
+                    _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
                 };
                 self.eval_indexed_chain(
                     scope, mods, state, lib, this_ptr, rhs, chain_type, idx_values, size, level,
@@ -1413,6 +1433,7 @@ impl Engine {
 
                 idx_values.push(lhs_val);
             }
+
             _ => idx_values.push(
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .into(),
@@ -1622,7 +1643,7 @@ impl Engine {
             // var[...]
             #[cfg(not(feature = "no_index"))]
             Expr::Index(x, _) if x.lhs.get_variable_access(false).is_some() => match x.rhs {
-                Expr::Property(_) => unreachable!(),
+                Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
                 // var[...]...
                 Expr::FnCall(_, _) | Expr::Index(_, _) | Expr::Dot(_, _) => self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)
@@ -1655,7 +1676,9 @@ impl Engine {
             // var.prop
             #[cfg(not(feature = "no_object"))]
             Expr::Dot(x, _) if x.lhs.get_variable_access(false).is_some() => match x.rhs {
-                Expr::Variable(_) => unreachable!(),
+                Expr::Variable(_) => unreachable!(
+                    "unexpected Expr::Variable in dot access (should be Expr::Property)"
+                ),
                 // var.prop
                 Expr::Property(ref p) => {
                     let (mut target, _) = self.eval_expr_as_target(
@@ -1718,8 +1741,6 @@ impl Engine {
         self.inc_operations(state, expr.position())?;
 
         let result = match expr {
-            Expr::Expr(x) => self.eval_expr(scope, mods, state, lib, this_ptr, x, level),
-
             Expr::DynamicConstant(x, _) => Ok(x.as_ref().clone()),
             Expr::IntegerConstant(x, _) => Ok((*x).into()),
             #[cfg(not(feature = "no_float"))]
@@ -1738,7 +1759,6 @@ impl Engine {
                 let (val, _) = self.search_namespace(scope, mods, state, lib, this_ptr, expr)?;
                 Ok(val.take_or_clone())
             }
-            Expr::Property(_) => unreachable!(),
 
             // Statement block
             Expr::Stmt(x, _) => {
@@ -1867,7 +1887,7 @@ impl Engine {
                 (custom.func)(&mut context, &expressions)
             }
 
-            _ => unreachable!(),
+            _ => unreachable!("expression cannot be evaluated: {:?}", expr),
         };
 
         self.check_data_size(result, expr.position())
@@ -2072,7 +2092,9 @@ impl Engine {
                 // Must be either `var[index] op= val` or `var.prop op= val`
                 match lhs_expr {
                     // name op= rhs (handled above)
-                    Expr::Variable(_) => unreachable!(),
+                    Expr::Variable(_) => {
+                        unreachable!("Expr::Variable case should already been handled")
+                    }
                     // idx_lhs[idx_expr] op= rhs
                     #[cfg(not(feature = "no_index"))]
                     Expr::Index(_, _) => {
@@ -2090,7 +2112,7 @@ impl Engine {
                         Ok(Dynamic::UNIT)
                     }
                     // Non-lvalue expression (should be caught during parsing)
-                    _ => unreachable!(),
+                    _ => unreachable!("cannot assign to expression: {:?}", lhs_expr),
                 }
             }
 
@@ -2334,7 +2356,7 @@ impl Engine {
                 let entry_type = match stmt {
                     Stmt::Let(_, _, _, _) => AccessMode::ReadWrite,
                     Stmt::Const(_, _, _, _) => AccessMode::ReadOnly,
-                    _ => unreachable!(),
+                    _ => unreachable!("should be Stmt::Let or Stmt::Const, but gets {:?}", stmt),
                 };
 
                 let val = if let Some(expr) = expr {
@@ -2353,7 +2375,7 @@ impl Engine {
                         },
                     )
                 } else if *export {
-                    unreachable!();
+                    unreachable!("exported variable not on global level");
                 } else {
                     (unsafe_cast_var_name_to_lifetime(&var_def.name).into(), None)
                 };

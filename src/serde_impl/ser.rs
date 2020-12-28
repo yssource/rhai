@@ -283,9 +283,9 @@ impl Serializer for &mut DynamicSerializer {
             make_variant(_variant, content)
         }
         #[cfg(feature = "no_object")]
-        return EvalAltResult::ErrorMismatchOutputType(
-            "Dynamic".into(),
-            "map".into(),
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "object maps are not supported with 'no_object'".into(),
             Position::NONE,
         )
         .into();
@@ -295,9 +295,9 @@ impl Serializer for &mut DynamicSerializer {
         #[cfg(not(feature = "no_index"))]
         return Ok(DynamicSerializer::new(Array::new().into()));
         #[cfg(feature = "no_index")]
-        return EvalAltResult::ErrorMismatchOutputType(
-            "Dynamic".into(),
-            "array".into(),
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "arrays are not supported with 'no_index'".into(),
             Position::NONE,
         )
         .into();
@@ -322,33 +322,28 @@ impl Serializer for &mut DynamicSerializer {
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant, Box<EvalAltResult>> {
-        #[cfg(not(any(feature = "no_object", feature = "no_index")))]
+        #[cfg(not(feature = "no_object"))]
+        #[cfg(not(feature = "no_index"))]
         return Ok(TupleVariantSerializer {
             variant: _variant,
             array: Array::with_capacity(_len),
         });
         #[cfg(any(feature = "no_object", feature = "no_index"))]
-        {
-            #[cfg(feature = "no_object")]
-            let err_type = "map";
-            #[cfg(not(feature = "no_object"))]
-            let err_type = "array";
-            EvalAltResult::ErrorMismatchOutputType(
-                "Dynamic".into(),
-                err_type.into(),
-                Position::NONE,
-            )
-            .into()
-        }
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "tuples are not supported with 'no_index' or 'no_object'".into(),
+            Position::NONE,
+        )
+        .into();
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
         return Ok(DynamicSerializer::new(Map::new().into()));
         #[cfg(feature = "no_object")]
-        return EvalAltResult::ErrorMismatchOutputType(
-            "Dynamic".into(),
-            "map".into(),
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "object maps are not supported with 'no_object'".into(),
             Position::NONE,
         )
         .into();
@@ -375,9 +370,9 @@ impl Serializer for &mut DynamicSerializer {
             map: Map::with_capacity(_len),
         });
         #[cfg(feature = "no_object")]
-        return EvalAltResult::ErrorMismatchOutputType(
-            "Dynamic".into(),
-            "map".into(),
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "object maps are not supported with 'no_object'".into(),
             Position::NONE,
         )
         .into();
@@ -400,7 +395,12 @@ impl SerializeSeq for DynamicSerializer {
             Ok(())
         }
         #[cfg(feature = "no_index")]
-        unreachable!()
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "arrays are not supported with 'no_index'".into(),
+            Position::NONE,
+        )
+        .into();
     }
 
     // Close the sequence.
@@ -408,7 +408,12 @@ impl SerializeSeq for DynamicSerializer {
         #[cfg(not(feature = "no_index"))]
         return Ok(self._value);
         #[cfg(feature = "no_index")]
-        unreachable!()
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "arrays are not supported with 'no_index'".into(),
+            Position::NONE,
+        )
+        .into();
     }
 }
 
@@ -428,14 +433,24 @@ impl SerializeTuple for DynamicSerializer {
             Ok(())
         }
         #[cfg(feature = "no_index")]
-        unreachable!()
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "tuples are not supported with 'no_index'".into(),
+            Position::NONE,
+        )
+        .into();
     }
 
     fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
         return Ok(self._value);
         #[cfg(feature = "no_index")]
-        unreachable!()
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "tuples are not supported with 'no_index'".into(),
+            Position::NONE,
+        )
+        .into();
     }
 }
 
@@ -455,14 +470,24 @@ impl SerializeTupleStruct for DynamicSerializer {
             Ok(())
         }
         #[cfg(feature = "no_index")]
-        unreachable!()
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "tuples are not supported with 'no_index'".into(),
+            Position::NONE,
+        )
+        .into();
     }
 
     fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
         return Ok(self._value);
         #[cfg(feature = "no_index")]
-        unreachable!()
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "tuples are not supported with 'no_index'".into(),
+            Position::NONE,
+        )
+        .into();
     }
 }
 
@@ -477,7 +502,12 @@ impl SerializeMap for DynamicSerializer {
             Ok(())
         }
         #[cfg(feature = "no_object")]
-        unreachable!()
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "object maps are not supported with 'no_object'".into(),
+            Position::NONE,
+        )
+        .into();
     }
 
     fn serialize_value<T: ?Sized + Serialize>(
@@ -489,7 +519,7 @@ impl SerializeMap for DynamicSerializer {
             let key = crate::stdlib::mem::take(&mut self._key)
                 .take_immutable_string()
                 .map_err(|typ| {
-                    EvalAltResult::ErrorMismatchOutputType(
+                    EvalAltResult::ErrorMismatchDataType(
                         "string".into(),
                         typ.into(),
                         Position::NONE,
@@ -501,7 +531,12 @@ impl SerializeMap for DynamicSerializer {
             Ok(())
         }
         #[cfg(feature = "no_object")]
-        unreachable!()
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "object maps are not supported with 'no_object'".into(),
+            Position::NONE,
+        )
+        .into();
     }
 
     fn serialize_entry<K: ?Sized + Serialize, T: ?Sized + Serialize>(
@@ -513,7 +548,7 @@ impl SerializeMap for DynamicSerializer {
         {
             let _key: Dynamic = _key.serialize(&mut *self)?;
             let _key = _key.take_immutable_string().map_err(|typ| {
-                EvalAltResult::ErrorMismatchOutputType("string".into(), typ.into(), Position::NONE)
+                EvalAltResult::ErrorMismatchDataType("string".into(), typ.into(), Position::NONE)
             })?;
             let _value = _value.serialize(&mut *self)?;
             let map = self._value.downcast_mut::<Map>().unwrap();
@@ -521,14 +556,24 @@ impl SerializeMap for DynamicSerializer {
             Ok(())
         }
         #[cfg(feature = "no_object")]
-        unreachable!()
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "object maps are not supported with 'no_object'".into(),
+            Position::NONE,
+        )
+        .into();
     }
 
     fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
         return Ok(self._value);
         #[cfg(feature = "no_object")]
-        unreachable!()
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "object maps are not supported with 'no_object'".into(),
+            Position::NONE,
+        )
+        .into();
     }
 }
 
@@ -549,14 +594,24 @@ impl SerializeStruct for DynamicSerializer {
             Ok(())
         }
         #[cfg(feature = "no_object")]
-        unreachable!()
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "object maps are not supported with 'no_object'".into(),
+            Position::NONE,
+        )
+        .into();
     }
 
     fn end(self) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
         return Ok(self._value);
         #[cfg(feature = "no_object")]
-        unreachable!()
+        return EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "object maps are not supported with 'no_object'".into(),
+            Position::NONE,
+        )
+        .into();
     }
 }
 

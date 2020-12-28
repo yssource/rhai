@@ -91,7 +91,7 @@ impl fmt::Display for ScriptFnDef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}{}({}) -> Dynamic",
+            "{}{}({})",
             if self.access.is_private() {
                 "private "
             } else {
@@ -133,7 +133,7 @@ impl fmt::Display for ScriptFnMetadata<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}{}({}) -> Dynamic",
+            "{}{}({})",
             if self.access.is_private() {
                 "private "
             } else {
@@ -646,12 +646,18 @@ impl AsRef<Module> for AST {
 /// ## WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Ident {
     /// Identifier name.
     pub name: ImmutableString,
     /// Declaration position.
     pub pos: Position,
+}
+
+impl fmt::Debug for Ident {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Ident({:?} @ {:?})", self.name, self.pos)
+    }
 }
 
 /// _(INTERNALS)_ A type encapsulating the mode of a `return`/`throw` statement.
@@ -824,7 +830,7 @@ impl Stmt {
             Self::Import(_, _, _) | Self::Export(_, _) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => unreachable!(),
+            Self::Share(_) => unreachable!("Stmt::Share should not be parsed"),
         }
     }
     /// Is this statement _pure_?
@@ -973,8 +979,6 @@ pub enum Expr {
     Property(Box<(ImmutableString, ImmutableString, Ident)>),
     /// { [statement][Stmt] }
     Stmt(Box<StaticVec<Stmt>>, Position),
-    /// Wrapped [expression][Expr] - should not be optimized away.
-    Expr(Box<Expr>),
     /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
     /// lhs `.` rhs
@@ -1004,8 +1008,6 @@ impl Expr {
     /// Returns [`None`] if the expression is not constant.
     pub fn get_constant_value(&self) -> Option<Dynamic> {
         Some(match self {
-            Self::Expr(x) => return x.get_constant_value(),
-
             Self::DynamicConstant(x, _) => x.as_ref().clone(),
             Self::IntegerConstant(x, _) => (*x).into(),
             #[cfg(not(feature = "no_float"))]
@@ -1055,8 +1057,6 @@ impl Expr {
     /// Get the [position][Position] of the expression.
     pub fn position(&self) -> Position {
         match self {
-            Self::Expr(x) => x.position(),
-
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, pos) => *pos,
 
@@ -1085,10 +1085,6 @@ impl Expr {
     /// Override the [position][Position] of the expression.
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
-            Self::Expr(x) => {
-                x.set_position(new_pos);
-            }
-
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, pos) => *pos = new_pos,
 
@@ -1117,8 +1113,6 @@ impl Expr {
     /// A pure expression has no side effects.
     pub fn is_pure(&self) -> bool {
         match self {
-            Self::Expr(x) => x.is_pure(),
-
             Self::Array(x, _) => x.iter().all(Self::is_pure),
 
             Self::Map(x, _) => x.iter().map(|(_, v)| v).all(Self::is_pure),
@@ -1145,8 +1139,6 @@ impl Expr {
     /// Is the expression a constant?
     pub fn is_constant(&self) -> bool {
         match self {
-            Self::Expr(x) => x.is_constant(),
-
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, _) => true,
 
@@ -1183,8 +1175,6 @@ impl Expr {
         }
 
         match self {
-            Self::Expr(x) => x.is_valid_postfix(token),
-
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, _) => false,
 

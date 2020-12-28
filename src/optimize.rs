@@ -483,8 +483,6 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
     ];
 
     match expr {
-        // expr - do not promote because there is a reason it is wrapped in an `Expr::Expr`
-        Expr::Expr(x) => optimize_expr(x, state),
         // {}
         Expr::Stmt(x, pos) if x.is_empty() => { state.set_dirty(); *expr = Expr::Unit(*pos) }
         // { stmt; ... } - do not count promotion as dirty because it gets turned back into an array

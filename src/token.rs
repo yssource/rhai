@@ -437,7 +437,7 @@ impl Token {
                 #[cfg(not(feature = "no_module"))]
                 As => "as",
                 EOF => "{EOF}",
-                _ => unreachable!("operator should be match in outer scope"),
+                _ => unreachable!("operator should be matched in outer scope"),
             }
             .into(),
         }
@@ -837,7 +837,7 @@ pub fn parse_string_literal(
                     'x' => 2,
                     'u' => 4,
                     'U' => 8,
-                    _ => unreachable!(),
+                    _ => unreachable!("expecting 'x', 'u' or 'U', but gets {}", ch),
                 };
 
                 for _ in 0..len {
@@ -1126,14 +1126,14 @@ fn get_next_token_inner(
                                 'x' | 'X' => is_hex_char,
                                 'o' | 'O' => is_octal_char,
                                 'b' | 'B' => is_binary_char,
-                                _ => unreachable!(),
+                                _ => unreachable!("expecting 'x', 'o' or 'B', but gets {}", ch),
                             };
 
                             radix_base = Some(match ch {
                                 'x' | 'X' => 16,
                                 'o' | 'O' => 8,
                                 'b' | 'B' => 2,
-                                _ => unreachable!(),
+                                _ => unreachable!("expecting 'x', 'o' or 'B', but gets {}", ch),
                             });
 
                             while let Some(next_char_in_escape_seq) = stream.peek_next() {
@@ -1494,8 +1494,6 @@ fn get_next_token_inner(
 
             ('$', _) => return Some((Token::Reserved("$".into()), start_pos)),
 
-            ('\0', _) => unreachable!(),
-
             (ch, _) if ch.is_whitespace() => (),
             #[cfg(feature = "unicode-xid-ident")]
             (ch, _) if unicode_xid::UnicodeXID::is_xid_start(ch) => {
@@ -1749,7 +1747,7 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
                     Some((Token::Custom(token.syntax().into()), pos))
                 } else {
                     // Active standard keyword - should never be a custom keyword!
-                    unreachable!("{:?}", token)
+                    unreachable!("{:?} is an active keyword", token)
                 }
             }
             // Disabled symbol

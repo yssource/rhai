@@ -101,8 +101,6 @@ impl FuncInfo {
             if return_type != "()" {
                 sig.push_str(") -> ");
                 sig.push_str(&return_type);
-            } else if self.func.is_script() {
-                sig.push_str(") -> Dynamic");
             } else {
                 sig.push_str(")");
             }
@@ -115,7 +113,7 @@ impl FuncInfo {
             }
 
             if self.func.is_script() {
-                sig.push_str(") -> Dynamic");
+                sig.push_str(")");
             } else {
                 sig.push_str(") -> ?");
             }
@@ -471,6 +469,7 @@ impl Module {
     ///
     /// By taking a mutable reference, it is assumed that some sub-modules will be modified.
     /// Thus the module is automatically set to be non-indexed.
+    #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub(crate) fn sub_modules_mut(&mut self) -> &mut HashMap<ImmutableString, Shared<Module>> {
         // We must assume that the user has changed the sub-modules

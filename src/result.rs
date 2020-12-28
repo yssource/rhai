@@ -190,13 +190,16 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorAssignmentToConstant(s, _) => {
                 write!(f, "Cannot assign to constant '{}'", s)?
             }
-            Self::ErrorMismatchOutputType(r, s, _) => {
+            Self::ErrorMismatchOutputType(s, r, _) => {
                 write!(f, "Output type is incorrect: {} (expecting {})", r, s)?
             }
-            Self::ErrorMismatchDataType(r, s, _) if r.is_empty() => {
+            Self::ErrorMismatchDataType(s, r, _) if r.is_empty() => {
                 write!(f, "Data type is incorrect, expecting {}", s)?
             }
-            Self::ErrorMismatchDataType(r, s, _) => {
+            Self::ErrorMismatchDataType(s, r, _) if s.is_empty() => {
+                write!(f, "Data type is incorrect: {}", r)?
+            }
+            Self::ErrorMismatchDataType(s, r, _) => {
                 write!(f, "Data type is incorrect: {} (expecting {})", r, s)?
             }
             Self::ErrorArithmetic(s, _) => f.write_str(s)?,
@@ -263,10 +266,14 @@ impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
 
 impl EvalAltResult {
     /// Can this error be caught?
+    ///
+    /// # Panics
+    ///
+    /// Panics when [`LoopBreak`][EvalAltResult::LoopBreak] or [`Return`][EvalAltResult::Return].
     pub fn is_catchable(&self) -> bool {
         match self {
             Self::ErrorSystem(_, _) => false,
-            Self::ErrorParsing(_, _) => unreachable!(),
+            Self::ErrorParsing(_, _) => false,
 
             Self::ErrorFunctionNotFound(_, _)
             | Self::ErrorInFunctionCall(_, _, _)
@@ -293,14 +300,19 @@ impl EvalAltResult {
             | Self::ErrorDataTooLarge(_, _)
             | Self::ErrorTerminated(_, _) => false,
 
-            Self::LoopBreak(_, _) | Self::Return(_, _) => unreachable!(),
+            Self::LoopBreak(_, _) => panic!("EvalAltResult::LoopBreak should not occur naturally"),
+            Self::Return(_, _) => panic!("EvalAltResult::Return should not occur naturally"),
         }
     }
     /// Is this error a system exception?
+    ///
+    /// # Panics
+    ///
+    /// Panics when [`LoopBreak`][EvalAltResult::LoopBreak] or [`Return`][EvalAltResult::Return].
     pub fn is_system_exception(&self) -> bool {
         match self {
             Self::ErrorSystem(_, _) => true,
-            Self::ErrorParsing(_, _) => unreachable!(),
+            Self::ErrorParsing(_, _) => true,
 
             Self::ErrorTooManyOperations(_)
             | Self::ErrorTooManyModules(_)
@@ -309,7 +321,8 @@ impl EvalAltResult {
 
             Self::ErrorTerminated(_, _) => true,
 
-            Self::LoopBreak(_, _) | Self::Return(_, _) => unreachable!(),
+            Self::LoopBreak(_, _) => panic!("EvalAltResult::LoopBreak should not occur naturally"),
+            Self::Return(_, _) => panic!("EvalAltResult::Return should not occur naturally"),
 
             _ => false,
         }
