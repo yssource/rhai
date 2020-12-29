@@ -1115,7 +1115,7 @@ fn get_next_token_inner(
                             }
                         }
                         // 0x????, 0o????, 0b????
-                        ch @ 'x' | ch @ 'X' | ch @ 'o' | ch @ 'O' | ch @ 'b' | ch @ 'B'
+                        ch @ 'x' | ch @ 'o' | ch @ 'b' | ch @ 'X' | ch @ 'O' | ch @ 'B'
                             if c == '0' =>
                         {
                             result.push(next_char);
@@ -1184,11 +1184,11 @@ fn get_next_token_inner(
 
             // letter or underscore ...
             #[cfg(not(feature = "unicode-xid-ident"))]
-            ('A'..='Z', _) | ('a'..='z', _) | ('_', _) => {
+            ('a'..='z', _) | ('_', _) | ('A'..='Z', _) => {
                 return get_identifier(stream, pos, start_pos, c);
             }
             #[cfg(feature = "unicode-xid-ident")]
-            (ch, _) if unicode_xid::UnicodeXID::is_xid_start(ch) => {
+            (ch, _) if unicode_xid::UnicodeXID::is_xid_start(ch) || ch == '_' => {
                 return get_identifier(stream, pos, start_pos, c);
             }
 
