@@ -38,6 +38,7 @@ impl Engine {
     /// Set the maximum levels of function calls allowed for a script in order to avoid
     /// infinite recursion and stack overflows.
     #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn set_max_call_levels(&mut self, levels: usize) -> &mut Self {
         self.limits.max_call_stack_depth = levels;
@@ -45,6 +46,7 @@ impl Engine {
     }
     /// The maximum levels of function calls allowed for a script.
     #[cfg(not(feature = "unchecked"))]
+    #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn max_call_levels(&self) -> usize {
         self.limits.max_call_stack_depth

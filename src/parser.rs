@@ -19,7 +19,7 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::syntax::{CustomSyntax, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
-use crate::token::{is_doc_comment, is_keyword_function, is_valid_identifier, Token, TokenStream};
+use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
     calc_script_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType,
@@ -882,7 +882,7 @@ fn parse_switch(
             }
         };
 
-        let stmt = parse_stmt(input, state, lib, settings.level_up()).map(Option::unwrap)?;
+        let stmt = parse_stmt(input, state, lib, settings.level_up())?;
 
         let need_comma = !stmt.is_self_terminated();
 
@@ -1014,10 +1014,11 @@ fn parse_primary(
                 state.access_var(closure, *pos);
             });
 
-            // Qualifiers (none) + function name + number of arguments.
-            let hash = calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap();
-
-            lib.insert(hash, func);
+            lib.insert(
+                // Qualifiers (none) + function name + number of arguments.
+                calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap(),
+                func,
+            );
 
             expr
         }
@@ -1372,7 +1373,28 @@ fn make_assignment_stmt<'a>(
     rhs: Expr,
     op_pos: Position,
 ) -> Result<Stmt, ParseError> {
+    fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Position {
+        match expr {
+            Expr::Index(x, _) | Expr::Dot(x, _) if parent_is_dot => match x.lhs {
+                Expr::Property(_) => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _))),
+                ref e => e.position(),
+            },
+            Expr::Index(x, _) | Expr::Dot(x, _) => match x.lhs {
+                Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
+                _ => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _))),
+            },
+            Expr::Property(_) if parent_is_dot => Position::NONE,
+            Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
+            e if parent_is_dot => e.position(),
+            _ => Position::NONE,
+        }
+    }
+
     match &lhs {
+        // const_expr = rhs
+        expr if expr.is_constant() => {
+            Err(PERR::AssignmentToConstant("".into()).into_err(lhs.position()))
+        }
         // var (non-indexed) = rhs
         Expr::Variable(x) if x.0.is_none() => Ok(Stmt::Assignment(
             Box::new((lhs, fn_name.into(), rhs)),
@@ -1392,33 +1414,36 @@ fn make_assignment_stmt<'a>(
                 }
             }
         }
-        // xxx[???] = rhs, xxx.??? = rhs
-        Expr::Index(x, _) | Expr::Dot(x, _) => match &x.lhs {
-            // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
-            Expr::Variable(x) if x.0.is_none() => Ok(Stmt::Assignment(
-                Box::new((lhs, fn_name.into(), rhs)),
-                op_pos,
-            )),
-            // var[???] (indexed) = rhs, var.??? (indexed) = rhs
-            Expr::Variable(x) => {
-                let (index, _, Ident { name, pos }) = x.as_ref();
-                match state.stack[(state.stack.len() - index.unwrap().get())].1 {
-                    AccessMode::ReadWrite => Ok(Stmt::Assignment(
+        // xxx[???]... = rhs, xxx.prop... = rhs
+        Expr::Index(x, _) | Expr::Dot(x, _) => {
+            match check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _))) {
+                Position::NONE => match &x.lhs {
+                    // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
+                    Expr::Variable(x) if x.0.is_none() => Ok(Stmt::Assignment(
                         Box::new((lhs, fn_name.into(), rhs)),
                         op_pos,
                     )),
-                    // Constant values cannot be assigned to
-                    AccessMode::ReadOnly => {
-                        Err(PERR::AssignmentToConstant(name.to_string()).into_err(*pos))
+                    // var[???] (indexed) = rhs, var.??? (indexed) = rhs
+                    Expr::Variable(x) => {
+                        let (index, _, Ident { name, pos }) = x.as_ref();
+                        match state.stack[(state.stack.len() - index.unwrap().get())].1 {
+                            AccessMode::ReadWrite => Ok(Stmt::Assignment(
+                                Box::new((lhs, fn_name.into(), rhs)),
+                                op_pos,
+                            )),
+                            // Constant values cannot be assigned to
+                            AccessMode::ReadOnly => {
+                                Err(PERR::AssignmentToConstant(name.to_string()).into_err(*pos))
+                            }
+                        }
                     }
-                }
+                    // expr[???] = rhs, expr.??? = rhs
+                    expr => {
+                        Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(expr.position()))
+                    }
+                },
+                pos => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(pos)),
             }
-            // expr[???] = rhs, expr.??? = rhs
-            _ => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(x.lhs.position())),
-        },
-        // const_expr = rhs
-        expr if expr.is_constant() => {
-            Err(PERR::AssignmentToConstant("".into()).into_err(lhs.position()))
         }
         // ??? && ??? = rhs, ??? || ??? = rhs
         Expr::And(_, _) | Expr::Or(_, _) => Err(LexError::ImproperSymbol(
@@ -2435,7 +2460,11 @@ fn parse_block(
         // Parse statements inside the block
         settings.is_global = false;
 
-        let stmt = parse_stmt(input, state, lib, settings.level_up()).map(Option::unwrap)?;
+        let stmt = parse_stmt(input, state, lib, settings.level_up())?;
+
+        if stmt.is_noop() {
+            continue;
+        }
 
         // See if it needs a terminating semicolon
         let need_semicolon = !stmt.is_self_terminated();
@@ -2502,43 +2531,46 @@ fn parse_stmt(
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
-) -> Result<Option<Stmt>, ParseError> {
+) -> Result<Stmt, ParseError> {
     use AccessMode::{ReadOnly, ReadWrite};
 
-    let mut comments: Vec<String> = Default::default();
-    let mut comments_pos = Position::NONE;
+    let mut _comments: Vec<String> = Default::default();
 
-    // Handle doc-comments.
     #[cfg(not(feature = "no_function"))]
-    while let (Token::Comment(ref comment), comment_pos) = input.peek().unwrap() {
-        if comments_pos.is_none() {
-            comments_pos = *comment_pos;
-        }
+    {
+        let mut comments_pos = Position::NONE;
 
-        if !is_doc_comment(comment) {
-            unreachable!("expecting doc-comment, but gets {:?}", comment);
-        }
-
-        if !settings.is_global {
-            return Err(PERR::WrongDocComment.into_err(comments_pos));
-        }
-
-        match input.next().unwrap().0 {
-            Token::Comment(comment) => {
-                comments.push(comment);
-
-                match input.peek().unwrap() {
-                    (Token::Fn, _) | (Token::Private, _) => break,
-                    (Token::Comment(_), _) => (),
-                    _ => return Err(PERR::WrongDocComment.into_err(comments_pos)),
-                }
+        // Handle doc-comments.
+        while let (Token::Comment(ref comment), pos) = input.peek().unwrap() {
+            if comments_pos.is_none() {
+                comments_pos = *pos;
             }
-            t => unreachable!("expecting Token::Comment, but gets {:?}", t),
+
+            if !crate::token::is_doc_comment(comment) {
+                unreachable!("expecting doc-comment, but gets {:?}", comment);
+            }
+
+            if !settings.is_global {
+                return Err(PERR::WrongDocComment.into_err(comments_pos));
+            }
+
+            match input.next().unwrap().0 {
+                Token::Comment(comment) => {
+                    _comments.push(comment);
+
+                    match input.peek().unwrap() {
+                        (Token::Fn, _) | (Token::Private, _) => break,
+                        (Token::Comment(_), _) => (),
+                        _ => return Err(PERR::WrongDocComment.into_err(comments_pos)),
+                    }
+                }
+                t => unreachable!("expecting Token::Comment, but gets {:?}", t),
+            }
         }
     }
 
     let (token, token_pos) = match input.peek().unwrap() {
-        (Token::EOF, pos) => return Ok(Some(Stmt::Noop(*pos))),
+        (Token::EOF, pos) => return Ok(Stmt::Noop(*pos)),
         x => x,
     };
     settings.pos = *token_pos;
@@ -2548,10 +2580,10 @@ fn parse_stmt(
 
     match token {
         // ; - empty statement
-        Token::SemiColon => Ok(Some(Stmt::Noop(settings.pos))),
+        Token::SemiColon => Ok(Stmt::Noop(settings.pos)),
 
         // { - statements block
-        Token::LeftBrace => Ok(Some(parse_block(input, state, lib, settings.level_up())?)),
+        Token::LeftBrace => Ok(parse_block(input, state, lib, settings.level_up())?),
 
         // fn ...
         #[cfg(not(feature = "no_function"))]
@@ -2589,14 +2621,15 @@ fn parse_stmt(
                         pos: pos,
                     };
 
-                    let func = parse_fn(input, &mut new_state, lib, access, settings, comments)?;
+                    let func = parse_fn(input, &mut new_state, lib, access, settings, _comments)?;
 
-                    // Qualifiers (none) + function name + number of arguments.
-                    let hash = calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap();
+                    lib.insert(
+                        // Qualifiers (none) + function name + number of arguments.
+                        calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap(),
+                        func,
+                    );
 
-                    lib.insert(hash, func);
-
-                    Ok(None)
+                    Ok(Stmt::Noop(settings.pos))
                 }
 
                 (_, pos) => Err(PERR::MissingToken(
@@ -2607,21 +2640,19 @@ fn parse_stmt(
             }
         }
 
-        Token::If => parse_if(input, state, lib, settings.level_up()).map(Some),
-        Token::Switch => parse_switch(input, state, lib, settings.level_up()).map(Some),
-        Token::While | Token::Loop => {
-            parse_while_loop(input, state, lib, settings.level_up()).map(Some)
-        }
-        Token::Do => parse_do(input, state, lib, settings.level_up()).map(Some),
-        Token::For => parse_for(input, state, lib, settings.level_up()).map(Some),
+        Token::If => parse_if(input, state, lib, settings.level_up()),
+        Token::Switch => parse_switch(input, state, lib, settings.level_up()),
+        Token::While | Token::Loop => parse_while_loop(input, state, lib, settings.level_up()),
+        Token::Do => parse_do(input, state, lib, settings.level_up()),
+        Token::For => parse_for(input, state, lib, settings.level_up()),
 
         Token::Continue if settings.is_breakable => {
             let pos = eat_token(input, Token::Continue);
-            Ok(Some(Stmt::Continue(pos)))
+            Ok(Stmt::Continue(pos))
         }
         Token::Break if settings.is_breakable => {
             let pos = eat_token(input, Token::Break);
-            Ok(Some(Stmt::Break(pos)))
+            Ok(Stmt::Break(pos))
         }
         Token::Continue | Token::Break => Err(PERR::LoopBreak.into_err(settings.pos)),
 
@@ -2645,43 +2676,35 @@ fn parse_stmt(
 
             match input.peek().unwrap() {
                 // `return`/`throw` at <EOF>
-                (Token::EOF, pos) => Ok(Some(Stmt::Return((return_type, token_pos), None, *pos))),
+                (Token::EOF, pos) => Ok(Stmt::Return((return_type, token_pos), None, *pos)),
                 // `return;` or `throw;`
-                (Token::SemiColon, _) => Ok(Some(Stmt::Return(
-                    (return_type, token_pos),
-                    None,
-                    settings.pos,
-                ))),
+                (Token::SemiColon, _) => {
+                    Ok(Stmt::Return((return_type, token_pos), None, settings.pos))
+                }
                 // `return` or `throw` with expression
                 (_, _) => {
                     let expr = parse_expr(input, state, lib, settings.level_up())?;
                     let pos = expr.position();
-                    Ok(Some(Stmt::Return(
-                        (return_type, token_pos),
-                        Some(expr),
-                        pos,
-                    )))
+                    Ok(Stmt::Return((return_type, token_pos), Some(expr), pos))
                 }
             }
         }
 
-        Token::Try => parse_try_catch(input, state, lib, settings.level_up()).map(Some),
+        Token::Try => parse_try_catch(input, state, lib, settings.level_up()),
 
-        Token::Let => parse_let(input, state, lib, ReadWrite, false, settings.level_up()).map(Some),
-        Token::Const => {
-            parse_let(input, state, lib, ReadOnly, false, settings.level_up()).map(Some)
-        }
+        Token::Let => parse_let(input, state, lib, ReadWrite, false, settings.level_up()),
+        Token::Const => parse_let(input, state, lib, ReadOnly, false, settings.level_up()),
 
         #[cfg(not(feature = "no_module"))]
-        Token::Import => parse_import(input, state, lib, settings.level_up()).map(Some),
+        Token::Import => parse_import(input, state, lib, settings.level_up()),
 
         #[cfg(not(feature = "no_module"))]
         Token::Export if !settings.is_global => Err(PERR::WrongExport.into_err(settings.pos)),
 
         #[cfg(not(feature = "no_module"))]
-        Token::Export => parse_export(input, state, lib, settings.level_up()).map(Some),
+        Token::Export => parse_export(input, state, lib, settings.level_up()),
 
-        _ => parse_expr_stmt(input, state, lib, settings.level_up()).map(Some),
+        _ => parse_expr_stmt(input, state, lib, settings.level_up()),
     }
 }
 
@@ -2951,7 +2974,7 @@ fn parse_anon_fn(
 
     // Parse function body
     settings.is_breakable = false;
-    let body = parse_stmt(input, state, lib, settings.level_up()).map(Option::unwrap)?;
+    let body = parse_stmt(input, state, lib, settings.level_up())?;
 
     // External variables may need to be processed in a consistent order,
     // so extract them into a list.
@@ -3095,10 +3118,11 @@ impl Engine {
                 pos: Position::NONE,
             };
 
-            let stmt = match parse_stmt(input, &mut state, &mut functions, settings)? {
-                Some(s) => s,
-                None => continue,
-            };
+            let stmt = parse_stmt(input, &mut state, &mut functions, settings)?;
+
+            if stmt.is_noop() {
+                continue;
+            }
 
             let need_semicolon = !stmt.is_self_terminated();
 

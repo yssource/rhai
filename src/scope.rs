@@ -55,6 +55,7 @@ pub struct Scope<'a> {
 }
 
 impl Default for Scope<'_> {
+    #[inline(always)]
     fn default() -> Self {
         Self {
             values: Vec::with_capacity(16),

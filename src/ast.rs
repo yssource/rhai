@@ -88,6 +88,7 @@ pub struct ScriptFnDef {
 }
 
 impl fmt::Display for ScriptFnDef {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -130,6 +131,7 @@ pub struct ScriptFnMetadata<'a> {
 }
 
 impl fmt::Display for ScriptFnMetadata<'_> {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -146,6 +148,7 @@ impl fmt::Display for ScriptFnMetadata<'_> {
 }
 
 impl<'a> Into<ScriptFnMetadata<'a>> for &'a ScriptFnDef {
+    #[inline(always)]
     fn into(self) -> ScriptFnMetadata<'a> {
         ScriptFnMetadata {
             comments: self.comments.iter().map(|s| s.as_str()).collect(),
@@ -172,6 +175,7 @@ pub struct AST {
 }
 
 impl Default for AST {
+    #[inline(always)]
     fn default() -> Self {
         Self {
             source: None,
@@ -208,14 +212,17 @@ impl AST {
         }
     }
     /// Get the source.
+    #[inline(always)]
     pub fn source(&self) -> Option<&str> {
         self.source.as_ref().map(|s| s.as_str())
     }
     /// Clone the source.
+    #[inline(always)]
     pub(crate) fn clone_source(&self) -> Option<ImmutableString> {
         self.source.clone()
     }
     /// Set the source.
+    #[inline(always)]
     pub fn set_source<S: Into<ImmutableString>>(&mut self, source: Option<S>) {
         self.source = source.map(|s| s.into())
     }
@@ -655,6 +662,7 @@ pub struct Ident {
 }
 
 impl fmt::Debug for Ident {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Ident({:?} @ {:?})", self.name, self.pos)
     }
@@ -736,6 +744,7 @@ impl Default for Stmt {
 
 impl Stmt {
     /// Is this statement [`Noop`][Stmt::Noop]?
+    #[inline(always)]
     pub fn is_noop(&self) -> bool {
         match self {
             Self::Noop(_) => true,
@@ -1048,6 +1057,7 @@ impl Expr {
         })
     }
     /// Is the expression a simple variable access?
+    #[inline(always)]
     pub(crate) fn get_variable_access(&self, non_qualified: bool) -> Option<&str> {
         match self {
             Self::Variable(x) if !non_qualified || x.1.is_none() => Some((x.2).name.as_str()),

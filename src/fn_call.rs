@@ -77,6 +77,7 @@ impl<'a> ArgBackup<'a> {
     /// This method blindly casts a reference to another lifetime, which saves allocation and string cloning.
     ///
     /// If `restore_first_arg` is called before the end of the scope, the shorter lifetime will not leak.
+    #[inline(always)]
     fn change_first_arg_to_copy(&mut self, normalize: bool, args: &mut FnCallArgs<'a>) {
         // Only do it for method calls with arguments.
         if !normalize || args.is_empty() {
@@ -106,6 +107,7 @@ impl<'a> ArgBackup<'a> {
     ///
     /// If `change_first_arg_to_copy` has been called, this function **MUST** be called _BEFORE_ exiting
     /// the current scope.  Otherwise it is undefined behavior as the shorter lifetime will leak.
+    #[inline(always)]
     fn restore_first_arg(&mut self, args: &mut FnCallArgs<'a>) {
         if let Some(this_pointer) = self.orig_mut.take() {
             args[0] = this_pointer;
@@ -114,6 +116,7 @@ impl<'a> ArgBackup<'a> {
 }
 
 impl Drop for ArgBackup<'_> {
+    #[inline(always)]
     fn drop(&mut self) {
         // Panic if the shorter lifetime leaks.
         assert!(
@@ -402,11 +405,11 @@ impl Engine {
             mods.extend(fn_def.mods.iter_raw().map(|(n, m)| (n.clone(), m.clone())));
         }
 
-        // Evaluate the function at one higher level of call depth
+        // Evaluate the function
         let stmt = &fn_def.body;
 
         let result = self
-            .eval_stmt(scope, mods, state, unified_lib, this_ptr, stmt, level + 1)
+            .eval_stmt(scope, mods, state, unified_lib, this_ptr, stmt, level)
             .or_else(|err| match *err {
                 // Convert return statement to return value
                 EvalAltResult::Return(x, _) => Ok(x),
@@ -433,7 +436,7 @@ impl Engine {
     }
 
     // Has a system function an override?
-    #[inline]
+    #[inline(always)]
     pub(crate) fn has_override_by_name_and_arguments(
         &self,
         mods: Option<&Imports>,
@@ -583,6 +586,8 @@ impl Engine {
 
                         mem::swap(&mut state.source, &mut source);
 
+                        let level = _level + 1;
+
                         let result = self.call_script_fn(
                             scope,
                             mods,
@@ -592,7 +597,7 @@ impl Engine {
                             func,
                             rest,
                             pos,
-                            _level,
+                            level,
                         );
 
                         // Restore the original source
@@ -607,8 +612,10 @@ impl Engine {
 
                         mem::swap(&mut state.source, &mut source);
 
+                        let level = _level + 1;
+
                         let result = self.call_script_fn(
-                            scope, mods, state, lib, &mut None, func, args, pos, _level,
+                            scope, mods, state, lib, &mut None, func, args, pos, level,
                         );
 
                         // Restore the original source
@@ -664,11 +671,12 @@ impl Engine {
         state: &mut State,
         statements: impl IntoIterator<Item = &'a Stmt>,
         lib: &[&Module],
+        level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         statements
             .into_iter()
             .try_fold(().into(), |_, stmt| {
-                self.eval_stmt(scope, mods, state, lib, &mut None, stmt, 0)
+                self.eval_stmt(scope, mods, state, lib, &mut None, stmt, level)
             })
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -688,20 +696,13 @@ impl Engine {
         lib: &[&Module],
         script: &str,
         pos: Position,
-        _level: usize,
+        level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         self.inc_operations(state, pos)?;
 
         let script = script.trim();
         if script.is_empty() {
             return Ok(Dynamic::UNIT);
-        }
-
-        // Check for stack overflow
-        #[cfg(not(feature = "no_function"))]
-        #[cfg(not(feature = "unchecked"))]
-        if _level > self.max_call_levels() {
-            return Err(Box::new(EvalAltResult::ErrorStackOverflow(pos)));
         }
 
         // Compile the script text
@@ -724,7 +725,8 @@ impl Engine {
             ..Default::default()
         };
 
-        let result = self.eval_statements_raw(scope, mods, &mut new_state, ast.statements(), lib);
+        let result =
+            self.eval_statements_raw(scope, mods, &mut new_state, ast.statements(), lib, level);
 
         state.operations = new_state.operations;
         result
@@ -1204,6 +1206,8 @@ impl Engine {
 
                 let mut source = module.id_raw().clone();
                 mem::swap(&mut state.source, &mut source);
+
+                let level = level + 1;
 
                 let result = self.call_script_fn(
                     new_scope, mods, state, lib, &mut None, &fn_def, args, pos, level,

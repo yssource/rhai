@@ -54,6 +54,7 @@ impl BuildHasher for StraightHasherBuilder {
 }
 
 /// Create an instance of the default hasher.
+#[inline(always)]
 pub fn get_hasher() -> impl Hasher {
     #[cfg(feature = "no_std")]
     let s: ahash::AHasher = Default::default();

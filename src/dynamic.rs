@@ -88,21 +88,27 @@ pub trait Variant: Any + Send + Sync + private::Sealed {
 }
 
 impl<T: Any + Clone + SendSync> Variant for T {
+    #[inline(always)]
     fn as_any(&self) -> &dyn Any {
         self
     }
+    #[inline(always)]
     fn as_mut_any(&mut self) -> &mut dyn Any {
         self
     }
+    #[inline(always)]
     fn as_box_any(self: Box<Self>) -> Box<dyn Any> {
         self
     }
+    #[inline(always)]
     fn type_name(&self) -> &'static str {
         type_name::<T>()
     }
+    #[inline(always)]
     fn into_dynamic(self) -> Dynamic {
         Dynamic::from(self)
     }
+    #[inline(always)]
     fn clone_into_dynamic(&self) -> Dynamic {
         Dynamic::from(self.clone())
     }
@@ -127,6 +133,7 @@ pub enum AccessMode {
 
 impl AccessMode {
     /// Is the access type [`ReadOnly`]?
+    #[inline(always)]
     pub fn is_read_only(self) -> bool {
         match self {
             Self::ReadWrite => false,
