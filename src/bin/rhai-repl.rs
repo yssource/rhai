@@ -1,10 +1,16 @@
-use rhai::{Dynamic, Engine, EvalAltResult, Scope, AST};
+use rhai::{Dynamic, Engine, EvalAltResult, Module, Scope, AST};
 
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
 
-use std::io::{stdin, stdout, Write};
+use std::{
+    env,
+    fs::File,
+    io::{stdin, stdout, Read, Write},
+    process::exit,
+};
 
+/// Pretty-print error.
 fn print_error(input: &str, err: EvalAltResult) {
     let lines: Vec<_> = input.trim().split('\n').collect();
     let pos = err.position();
@@ -19,16 +25,17 @@ fn print_error(input: &str, err: EvalAltResult) {
         "".to_string()
     };
 
-    // Print error
+    // Print error position
     let pos_text = format!(" ({})", pos);
 
     if pos.is_none() {
         // No position
         println!("{}", err);
     } else {
-        // Specific position
+        // Specific position - print line text
         println!("{}{}", line_no, lines[pos.line().unwrap() - 1]);
 
+        // Display position marker
         println!(
             "{0:>1$} {2}",
             "^",
@@ -38,6 +45,7 @@ fn print_error(input: &str, err: EvalAltResult) {
     }
 }
 
+/// Print help text.
 fn print_help() {
     println!("help       => print this help");
     println!("quit, exit => quit");
@@ -52,6 +60,63 @@ fn print_help() {
 fn main() {
     let mut engine = Engine::new();
 
+    println!("Rhai REPL tool");
+    println!("==============");
+    print_help();
+
+    // Load init scripts
+
+    let mut contents = String::new();
+    let mut has_init_scripts = false;
+
+    for filename in env::args().skip(1) {
+        {
+            contents.clear();
+
+            let mut f = match File::open(&filename) {
+                Err(err) => {
+                    eprintln!("Error reading script file: {}\n{}", filename, err);
+                    exit(1);
+                }
+                Ok(f) => f,
+            };
+
+            if let Err(err) = f.read_to_string(&mut contents) {
+                println!("Error reading script file: {}\n{}", filename, err);
+                exit(1);
+            }
+        }
+
+        let module = match engine
+            .compile(&contents)
+            .map_err(|err| err.into())
+            .and_then(|ast| Module::eval_ast_as_new(Default::default(), &ast, &engine))
+        {
+            Err(err) => {
+                eprintln!("{:=<1$}", "", filename.len());
+                eprintln!("{}", filename);
+                eprintln!("{:=<1$}", "", filename.len());
+                eprintln!("");
+
+                print_error(&contents, *err);
+                exit(1);
+            }
+            Ok(m) => m,
+        };
+
+        engine.register_global_module(module.into());
+
+        has_init_scripts = true;
+
+        println!("Script '{}' loaded.", filename);
+    }
+
+    if has_init_scripts {
+        println!();
+    }
+
+    // Setup Engine
+
     #[cfg(not(feature = "no_optimize"))]
     engine.set_optimization_level(OptimizationLevel::None);
 
@@ -62,9 +127,7 @@ fn main() {
     let mut ast_u: AST = Default::default();
     let mut ast: AST = Default::default();
 
-    println!("Rhai REPL tool");
-    println!("==============");
-    print_help();
+    // REPL loop
 
     'main_loop: loop {
         print!("rhai-repl> ");
