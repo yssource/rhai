@@ -59,18 +59,22 @@ pub struct Imports(StaticVec<(ImmutableString, Shared<Module>)>);
 
 impl Imports {
     /// Get the length of this stack of imported [modules][Module].
+    #[inline(always)]
     pub fn len(&self) -> usize {
         self.0.len()
     }
     /// Is this stack of imported [modules][Module] empty?
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
     /// Get the imported [modules][Module] at a particular index.
+    #[inline(always)]
     pub fn get(&self, index: usize) -> Option<Shared<Module>> {
         self.0.get(index).map(|(_, m)| m).cloned()
     }
     /// Get the index of an imported [modules][Module] by name.
+    #[inline(always)]
     pub fn find(&self, name: &str) -> Option<usize> {
         self.0
             .iter()
@@ -80,15 +84,18 @@ impl Imports {
             .map(|(index, _)| index)
     }
     /// Push an imported [modules][Module] onto the stack.
+    #[inline(always)]
     pub fn push(&mut self, name: impl Into<ImmutableString>, module: impl Into<Shared<Module>>) {
         self.0.push((name.into(), module.into()));
     }
     /// Truncate the stack of imported [modules][Module] to a particular length.
+    #[inline(always)]
     pub fn truncate(&mut self, size: usize) {
         self.0.truncate(size);
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
+    #[inline(always)]
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (&'a str, &'a Module)> + 'a {
         self.0
             .iter()
@@ -97,25 +104,30 @@ impl Imports {
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
+    #[inline(always)]
     pub(crate) fn iter_raw<'a>(
         &'a self,
     ) -> impl Iterator<Item = (&'a ImmutableString, &'a Shared<Module>)> + 'a {
         self.0.iter().rev().map(|(n, m)| (n, m))
     }
     /// Get a consuming iterator to this stack of imported [modules][Module] in reverse order.
+    #[inline(always)]
     pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
         self.0.into_iter().rev()
     }
     /// Add a stream of imported [modules][Module].
+    #[inline(always)]
     pub fn extend(&mut self, stream: impl Iterator<Item = (ImmutableString, Shared<Module>)>) {
         self.0.extend(stream)
     }
     /// Does the specified function hash key exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
+    #[inline(always)]
     pub fn contains_fn(&self, hash: NonZeroU64) -> bool {
         self.0.iter().any(|(_, m)| m.contains_qualified_fn(hash))
     }
     /// Get specified function via its hash key.
+    #[inline(always)]
     pub fn get_fn(&self, hash: NonZeroU64) -> Option<&CallableFunction> {
         self.0
             .iter()
@@ -124,10 +136,12 @@ impl Imports {
     }
     /// Does the specified [`TypeId`][std::any::TypeId] iterator exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
+    #[inline(always)]
     pub fn contains_iter(&self, id: TypeId) -> bool {
         self.0.iter().any(|(_, m)| m.contains_qualified_iter(id))
     }
     /// Get the specified [`TypeId`][std::any::TypeId] iterator.
+    #[inline(always)]
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.0
             .iter()
@@ -137,6 +151,7 @@ impl Imports {
 }
 
 impl<'a, T: IntoIterator<Item = (&'a ImmutableString, &'a Shared<Module>)>> From<T> for Imports {
+    #[inline(always)]
     fn from(value: T) -> Self {
         Self(
             value
@@ -147,6 +162,7 @@ impl<'a, T: IntoIterator<Item = (&'a ImmutableString, &'a Shared<Module>)>> From
     }
 }
 impl FromIterator<(ImmutableString, Shared<Module>)> for Imports {
+    #[inline(always)]
     fn from_iter<T: IntoIterator<Item = (ImmutableString, Shared<Module>)>>(iter: T) -> Self {
         Self(iter.into_iter().collect())
     }
@@ -222,6 +238,7 @@ impl IndexChainValue {
     /// # Panics
     ///
     /// Panics if not `IndexChainValue::Value`.
+    #[inline(always)]
     #[cfg(not(feature = "no_index"))]
     pub fn as_value(self) -> Dynamic {
         match self {
@@ -234,6 +251,7 @@ impl IndexChainValue {
     /// # Panics
     ///
     /// Panics if not `IndexChainValue::FnCallArgs`.
+    #[inline(always)]
     #[cfg(not(feature = "no_object"))]
     pub fn as_fn_call_args(self) -> StaticVec<Dynamic> {
         match self {
@@ -245,6 +263,7 @@ impl IndexChainValue {
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl From<StaticVec<Dynamic>> for IndexChainValue {
+    #[inline(always)]
     fn from(value: StaticVec<Dynamic>) -> Self {
         Self::FnCallArgs(value)
     }
@@ -252,6 +271,7 @@ impl From<StaticVec<Dynamic>> for IndexChainValue {
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl From<Dynamic> for IndexChainValue {
+    #[inline(always)]
     fn from(value: Dynamic) -> Self {
         Self::Value(value)
     }
@@ -1088,7 +1108,7 @@ impl Engine {
             ChainType::Dot => {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
-                    Expr::FnCall(x, pos) if x.namespace.is_none() => {
+                    Expr::FnCall(x, pos) if x.namespace.is_none() && new_val.is_none() => {
                         let FnCallExpr {
                             name,
                             hash_script: hash,
@@ -1101,6 +1121,10 @@ impl Engine {
                             mods, state, lib, name, *hash, target, args, def_value, false, *pos,
                             level,
                         )
+                    }
+                    // xxx.fn_name(...) = ???
+                    Expr::FnCall(_, _) if new_val.is_some() => {
+                        unreachable!("method call cannot be assigned to")
                     }
                     // xxx.module::fn_name(...) - syntax error
                     Expr::FnCall(_, _) => {
@@ -1578,7 +1602,7 @@ impl Engine {
                     let args = &mut [&mut lhs_value.clone(), value];
 
                     // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
-                    let hash =
+                    let hash_fn =
                         calc_native_fn_hash(empty(), OP_EQUALS, args.iter().map(|a| a.type_id()))
                             .unwrap();
 
@@ -1586,7 +1610,8 @@ impl Engine {
 
                     if self
                         .call_native_fn(
-                            mods, state, lib, OP_EQUALS, hash, args, false, false, pos, def_value,
+                            mods, state, lib, OP_EQUALS, hash_fn, args, false, false, pos,
+                            def_value,
                         )?
                         .0
                         .as_bool()
@@ -1748,17 +1773,14 @@ impl Engine {
             Expr::StringConstant(x, _) => Ok(x.clone().into()),
             Expr::CharConstant(x, _) => Ok((*x).into()),
             Expr::FnPointer(x, _) => Ok(FnPtr::new_unchecked(x.clone(), Default::default()).into()),
-            Expr::Variable(x) if (x.2).name == KEYWORD_THIS => {
-                if let Some(val) = this_ptr {
-                    Ok(val.clone())
-                } else {
-                    EvalAltResult::ErrorUnboundThis((x.2).pos).into()
-                }
-            }
-            Expr::Variable(_) => {
-                let (val, _) = self.search_namespace(scope, mods, state, lib, this_ptr, expr)?;
-                Ok(val.take_or_clone())
-            }
+
+            Expr::Variable(x) if (x.2).name == KEYWORD_THIS => this_ptr
+                .as_deref()
+                .cloned()
+                .ok_or_else(|| EvalAltResult::ErrorUnboundThis((x.2).pos).into()),
+            Expr::Variable(_) => self
+                .search_namespace(scope, mods, state, lib, this_ptr, expr)
+                .map(|(val, _)| val.take_or_clone()),
 
             // Statement block
             Expr::Stmt(x, _) => {
@@ -1822,13 +1844,13 @@ impl Engine {
                 let FnCallExpr {
                     name,
                     namespace,
-                    hash_script: hash,
+                    hash_script,
                     args,
                     def_value,
                     ..
                 } = x.as_ref();
                 let namespace = namespace.as_ref();
-                let hash = hash.unwrap();
+                let hash = hash_script.unwrap();
                 let def_value = def_value.as_ref();
                 self.make_qualified_function_call(
                     scope, mods, state, lib, this_ptr, namespace, name, args, def_value, hash,
@@ -2111,7 +2133,6 @@ impl Engine {
                         )?;
                         Ok(Dynamic::UNIT)
                     }
-                    // Non-lvalue expression (should be caught during parsing)
                     _ => unreachable!("cannot assign to expression: {:?}", lhs_expr),
                 }
             }
@@ -2236,8 +2257,8 @@ impl Engine {
 
                     for iter_value in func(iter_obj) {
                         let loop_var = scope.get_mut_by_index(index);
-
                         let value = iter_value.flatten();
+
                         if cfg!(not(feature = "no_closure")) && loop_var.is_shared() {
                             *loop_var.write_lock().unwrap() = value;
                         } else {
@@ -2272,7 +2293,7 @@ impl Engine {
 
             // Try/Catch statement
             Stmt::TryCatch(x, _, _) => {
-                let (try_body, var_def, catch_body) = x.as_ref();
+                let (try_body, err_var, catch_body) = x.as_ref();
 
                 let result = self
                     .eval_stmt(scope, mods, state, lib, this_ptr, try_body, level)
@@ -2280,51 +2301,41 @@ impl Engine {
 
                 match result {
                     Ok(_) => result,
-                    Err(err) => match *err {
-                        mut err @ EvalAltResult::ErrorRuntime(_, _) | mut err
-                            if err.is_catchable() =>
-                        {
-                            let value = if let EvalAltResult::ErrorRuntime(ref x, _) = err {
-                                x.clone()
-                            } else {
+                    Err(err) if !err.is_catchable() => Err(err),
+                    Err(mut err) => {
+                        let value = match *err {
+                            EvalAltResult::ErrorRuntime(ref x, _) => x.clone(),
+                            _ => {
                                 err.set_position(Position::NONE);
                                 err.to_string().into()
-                            };
-
-                            let orig_scope_len = scope.len();
-                            state.scope_level += 1;
-
-                            if let Some(Ident { name, .. }) = var_def {
-                                let var_name: Cow<'_, str> = if state.is_global() {
-                                    name.to_string().into()
-                                } else {
-                                    unsafe_cast_var_name_to_lifetime(&name).into()
-                                };
-                                scope.push(var_name, value);
                             }
+                        };
 
-                            let mut result = self
-                                .eval_stmt(scope, mods, state, lib, this_ptr, catch_body, level)
-                                .map(|_| ().into());
+                        let orig_scope_len = scope.len();
+                        state.scope_level += 1;
 
-                            if let Some(result_err) = result.as_ref().err() {
-                                if let EvalAltResult::ErrorRuntime(
-                                    Dynamic(Union::Unit(_, _)),
-                                    pos,
-                                ) = result_err.as_ref()
-                                {
-                                    err.set_position(*pos);
-                                    result = Err(Box::new(err));
-                                }
-                            }
-
-                            state.scope_level -= 1;
-                            scope.rewind(orig_scope_len);
-
-                            result
+                        if let Some(Ident { name, .. }) = err_var {
+                            scope.push(unsafe_cast_var_name_to_lifetime(&name), value);
                         }
-                        _ => Err(err),
-                    },
+
+                        let result =
+                            self.eval_stmt(scope, mods, state, lib, this_ptr, catch_body, level);
+
+                        state.scope_level -= 1;
+                        scope.rewind(orig_scope_len);
+
+                        match result {
+                            Ok(_) => Ok(Dynamic::UNIT),
+                            Err(result_err) => match *result_err {
+                                // Re-throw exception
+                                EvalAltResult::ErrorRuntime(Dynamic(Union::Unit(_, _)), pos) => {
+                                    err.set_position(pos);
+                                    Err(err)
+                                }
+                                _ => Err(result_err),
+                            },
+                        }
+                    }
                 }
             }
 

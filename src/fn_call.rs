@@ -77,6 +77,7 @@ impl<'a> ArgBackup<'a> {
     /// This method blindly casts a reference to another lifetime, which saves allocation and string cloning.
     ///
     /// If `restore_first_arg` is called before the end of the scope, the shorter lifetime will not leak.
+    #[inline(always)]
     fn change_first_arg_to_copy(&mut self, normalize: bool, args: &mut FnCallArgs<'a>) {
         // Only do it for method calls with arguments.
         if !normalize || args.is_empty() {
@@ -106,6 +107,7 @@ impl<'a> ArgBackup<'a> {
     ///
     /// If `change_first_arg_to_copy` has been called, this function **MUST** be called _BEFORE_ exiting
     /// the current scope.  Otherwise it is undefined behavior as the shorter lifetime will leak.
+    #[inline(always)]
     fn restore_first_arg(&mut self, args: &mut FnCallArgs<'a>) {
         if let Some(this_pointer) = self.orig_mut.take() {
             args[0] = this_pointer;
@@ -114,6 +116,7 @@ impl<'a> ArgBackup<'a> {
 }
 
 impl Drop for ArgBackup<'_> {
+    #[inline(always)]
     fn drop(&mut self) {
         // Panic if the shorter lifetime leaks.
         assert!(
@@ -433,7 +436,7 @@ impl Engine {
     }
 
     // Has a system function an override?
-    #[inline]
+    #[inline(always)]
     pub(crate) fn has_override_by_name_and_arguments(
         &self,
         mods: Option<&Imports>,

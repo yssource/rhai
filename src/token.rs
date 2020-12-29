@@ -6,7 +6,6 @@ use crate::engine::{
 };
 use crate::stdlib::{
     borrow::Cow,
-    boxed::Box,
     char, fmt, format,
     iter::Peekable,
     str::{Chars, FromStr},
@@ -1126,14 +1125,14 @@ fn get_next_token_inner(
                                 'x' | 'X' => is_hex_char,
                                 'o' | 'O' => is_octal_char,
                                 'b' | 'B' => is_binary_char,
-                                _ => unreachable!("expecting 'x', 'o' or 'B', but gets {}", ch),
+                                _ => unreachable!("expecting 'x', 'o' or 'b', but gets {}", ch),
                             };
 
                             radix_base = Some(match ch {
                                 'x' | 'X' => 16,
                                 'o' | 'O' => 8,
                                 'b' | 'B' => 2,
-                                _ => unreachable!("expecting 'x', 'o' or 'B', but gets {}", ch),
+                                _ => unreachable!("expecting 'x', 'o' or 'b', but gets {}", ch),
                             });
 
                             while let Some(next_char_in_escape_seq) = stream.peek_next() {
@@ -1184,7 +1183,12 @@ fn get_next_token_inner(
             }
 
             // letter or underscore ...
+            #[cfg(not(feature = "unicode-xid-ident"))]
             ('A'..='Z', _) | ('a'..='z', _) | ('_', _) => {
+                return get_identifier(stream, pos, start_pos, c);
+            }
+            #[cfg(feature = "unicode-xid-ident")]
+            (ch, _) if unicode_xid::UnicodeXID::is_xid_start(ch) => {
                 return get_identifier(stream, pos, start_pos, c);
             }
 
@@ -1495,10 +1499,7 @@ fn get_next_token_inner(
             ('$', _) => return Some((Token::Reserved("$".into()), start_pos)),
 
             (ch, _) if ch.is_whitespace() => (),
-            #[cfg(feature = "unicode-xid-ident")]
-            (ch, _) if unicode_xid::UnicodeXID::is_xid_start(ch) => {
-                return get_identifier(stream, pos, start_pos, c);
-            }
+
             (ch, _) => {
                 return Some((
                     Token::LexError(LERR::UnexpectedInput(ch.to_string())),
@@ -1683,8 +1684,8 @@ pub struct TokenIterator<'a, 'e> {
     pos: Position,
     /// Input character stream.
     stream: MultiInputsStream<'a>,
-    /// A processor function (if any) that maps a token to another.
-    map: Option<Box<dyn Fn(Token) -> Token>>,
+    /// A processor function that maps a token to another.
+    map: fn(Token) -> Token,
 }
 
 impl<'a> Iterator for TokenIterator<'a, '_> {
@@ -1760,24 +1761,26 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
 
         match token {
             None => None,
-            Some((token, pos)) => {
-                if let Some(ref map) = self.map {
-                    Some((map(token), pos))
-                } else {
-                    Some((token, pos))
-                }
-            }
+            Some((token, pos)) => Some(((self.map)(token), pos)),
         }
     }
 }
 
 impl Engine {
     /// Tokenize an input text stream.
-    #[inline]
+    #[inline(always)]
     pub fn lex<'a, 'e>(
         &'e self,
         input: impl IntoIterator<Item = &'a &'a str>,
-        map: Option<Box<dyn Fn(Token) -> Token>>,
+    ) -> TokenIterator<'a, 'e> {
+        self.lex_with_map(input, |f| f)
+    }
+    /// Tokenize an input text stream with a mapping function.
+    #[inline]
+    pub fn lex_with_map<'a, 'e>(
+        &'e self,
+        input: impl IntoIterator<Item = &'a &'a str>,
+        map: fn(Token) -> Token,
     ) -> TokenIterator<'a, 'e> {
         TokenIterator {
             engine: self,

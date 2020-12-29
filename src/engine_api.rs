@@ -971,7 +971,7 @@ impl Engine {
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
         let hash = calc_hash_for_scripts(scripts);
-        let stream = self.lex(scripts, None);
+        let stream = self.lex(scripts);
         self.parse(hash, &mut stream.peekable(), scope, optimization_level)
     }
     /// Read the contents of a file into a string.
@@ -1129,18 +1129,20 @@ impl Engine {
         };
 
         let hash = calc_hash_for_scripts(&scripts);
-        let stream = self.lex(
+
+        let stream = self.lex_with_map(
             &scripts,
             if has_null {
-                Some(Box::new(|token| match token {
+                |token| match token {
                     // If `null` is present, make sure `null` is treated as a variable
                     Token::Reserved(s) if s == "null" => Token::Identifier(s),
                     _ => token,
-                }))
+                }
             } else {
-                None
+                |t| t
             },
         );
+
         let ast = self.parse_global_expr(
             hash,
             &mut stream.peekable(),
@@ -1226,7 +1228,7 @@ impl Engine {
     ) -> Result<AST, ParseError> {
         let scripts = [script];
         let hash = calc_hash_for_scripts(&scripts);
-        let stream = self.lex(&scripts, None);
+        let stream = self.lex(&scripts);
 
         let mut peekable = stream.peekable();
         self.parse_global_expr(hash, &mut peekable, scope, self.optimization_level)
@@ -1384,7 +1386,7 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
         let hash = calc_hash_for_scripts(&scripts);
-        let stream = self.lex(&scripts, None);
+        let stream = self.lex(&scripts);
 
         // No need to optimize a lone expression
         let ast =
@@ -1517,7 +1519,7 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
         let hash = calc_hash_for_scripts(&scripts);
-        let stream = self.lex(&scripts, None);
+        let stream = self.lex(&scripts);
         let ast = self.parse(hash, &mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }

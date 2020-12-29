@@ -15,6 +15,7 @@ Bug fixes
 
 * Fix bug when accessing properties in closures.
 * Fix bug when accessing a deep index with a function call.
+* Fix bug that sometimes allow assigning to an invalid l-value.
 
 Breaking changes
 ----------------

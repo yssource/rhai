@@ -65,6 +65,7 @@ impl<'e, 's, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized>
     From<(&'e Engine, &'s Option<ImmutableString>, &'a Imports, &'m M)>
     for NativeCallContext<'e, 's, 'a, 'm, 'pm>
 {
+    #[inline(always)]
     fn from(value: (&'e Engine, &'s Option<ImmutableString>, &'a Imports, &'m M)) -> Self {
         Self {
             engine: value.0,
@@ -78,6 +79,7 @@ impl<'e, 's, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized>
 impl<'e, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized> From<(&'e Engine, &'m M)>
     for NativeCallContext<'e, '_, '_, 'm, 'pm>
 {
+    #[inline(always)]
     fn from(value: (&'e Engine, &'m M)) -> Self {
         Self {
             engine: value.0,
@@ -152,6 +154,7 @@ impl<'e, 's, 'a, 'm, 'pm> NativeCallContext<'e, 's, 'a, 'm, 'pm> {
     ///
     /// If `is_method` is [`true`], the first argument is assumed to be passed
     /// by reference and is not consumed.
+    #[inline(always)]
     pub fn call_fn_dynamic_raw(
         &self,
         fn_name: &str,
@@ -225,6 +228,7 @@ pub struct FnPtr(ImmutableString, StaticVec<Dynamic>);
 
 impl FnPtr {
     /// Create a new function pointer.
+    #[inline(always)]
     pub fn new(name: impl Into<ImmutableString>) -> Result<Self, Box<EvalAltResult>> {
         name.into().try_into()
     }
@@ -289,6 +293,7 @@ impl FnPtr {
     /// This is to avoid unnecessarily cloning the arguments.
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
+    #[inline(always)]
     pub fn call_dynamic(
         &self,
         ctx: NativeCallContext,
@@ -306,13 +311,13 @@ impl FnPtr {
 
         let mut args = args_data.iter_mut().collect::<StaticVec<_>>();
 
-        let has_this = this_ptr.is_some();
+        let is_method = this_ptr.is_some();
 
         if let Some(obj) = this_ptr {
             args.insert(0, obj);
         }
 
-        ctx.call_fn_dynamic_raw(self.fn_name(), has_this, true, args.as_mut(), None)
+        ctx.call_fn_dynamic_raw(self.fn_name(), is_method, true, args.as_mut(), None)
     }
 }
 
@@ -424,6 +429,7 @@ pub enum CallableFunction {
 }
 
 impl fmt::Debug for CallableFunction {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Pure(_) => write!(f, "NativePureFunction"),
@@ -438,6 +444,7 @@ impl fmt::Debug for CallableFunction {
 }
 
 impl fmt::Display for CallableFunction {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Pure(_) => write!(f, "NativePureFunction"),
@@ -453,6 +460,7 @@ impl fmt::Display for CallableFunction {
 
 impl CallableFunction {
     /// Is this a pure native Rust function?
+    #[inline(always)]
     pub fn is_pure(&self) -> bool {
         match self {
             Self::Pure(_) => true,
@@ -465,6 +473,7 @@ impl CallableFunction {
         }
     }
     /// Is this a native Rust method function?
+    #[inline(always)]
     pub fn is_method(&self) -> bool {
         match self {
             Self::Method(_) => true,
@@ -477,6 +486,7 @@ impl CallableFunction {
         }
     }
     /// Is this an iterator function?
+    #[inline(always)]
     pub fn is_iter(&self) -> bool {
         match self {
             Self::Iterator(_) => true,
@@ -487,6 +497,7 @@ impl CallableFunction {
         }
     }
     /// Is this a Rhai-scripted function?
+    #[inline(always)]
     pub fn is_script(&self) -> bool {
         match self {
             #[cfg(not(feature = "no_function"))]
@@ -496,6 +507,7 @@ impl CallableFunction {
         }
     }
     /// Is this a plugin function?
+    #[inline(always)]
     pub fn is_plugin_fn(&self) -> bool {
         match self {
             Self::Plugin(_) => true,
@@ -506,6 +518,7 @@ impl CallableFunction {
         }
     }
     /// Is this a native Rust function?
+    #[inline(always)]
     pub fn is_native(&self) -> bool {
         match self {
             Self::Pure(_) | Self::Method(_) => true,
@@ -517,6 +530,7 @@ impl CallableFunction {
         }
     }
     /// Get the access mode.
+    #[inline(always)]
     pub fn access(&self) -> FnAccess {
         match self {
             Self::Plugin(_) => FnAccess::Public,
@@ -532,6 +546,7 @@ impl CallableFunction {
     ///
     /// Panics if the [`CallableFunction`] is not [`Pure`][CallableFunction::Pure] or
     /// [`Method`][CallableFunction::Method].
+    #[inline(always)]
     pub fn get_native_fn(&self) -> &FnAny {
         match self {
             Self::Pure(f) | Self::Method(f) => f.as_ref(),
@@ -547,6 +562,7 @@ impl CallableFunction {
     ///
     /// Panics if the [`CallableFunction`] is not [`Script`][CallableFunction::Script].
     #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
     pub fn get_fn_def(&self) -> &ScriptFnDef {
         match self {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => {
@@ -560,6 +576,7 @@ impl CallableFunction {
     /// # Panics
     ///
     /// Panics if the [`CallableFunction`] is not [`Iterator`][CallableFunction::Iterator].
+    #[inline(always)]
     pub fn get_iter_fn(&self) -> IteratorFn {
         match self {
             Self::Iterator(f) => *f,
@@ -576,6 +593,7 @@ impl CallableFunction {
     /// # Panics
     ///
     /// Panics if the [`CallableFunction`] is not [`Plugin`][CallableFunction::Plugin].
+    #[inline(always)]
     pub fn get_plugin_fn<'s>(&'s self) -> &FnPlugin {
         match self {
             Self::Plugin(f) => f.as_ref(),
