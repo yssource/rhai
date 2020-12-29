@@ -33,6 +33,7 @@ Enhancements
 * `Engine::register_static_module` now supports sub-module paths (e.g. `foo::bar::baz`).
 * `Engine::register_custom_operator` now accepts reserved symbols.
 * `Engine::register_custom_operator` now returns an error if given a precedence of zero.
+* The examples `repl` and `rhai_runner` are moved into `bin` and renamed `rhai-repl` and `rhai-run` respectively.
 
 
 Version 0.19.8

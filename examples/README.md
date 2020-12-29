@@ -1,7 +1,7 @@
 Sample Applications
 ===================
 
-Sample applications written in Rhai.
+Sample applications that use the Rhai scripting engine.
 
 
 How to Run
