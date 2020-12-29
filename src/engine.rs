@@ -170,6 +170,7 @@ impl FromIterator<(ImmutableString, Shared<Module>)> for Imports {
 
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
+#[cfg(not(feature = "no_function"))]
 pub const MAX_CALL_STACK_DEPTH: usize = 8;
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
@@ -181,6 +182,7 @@ pub const MAX_FUNCTION_EXPR_DEPTH: usize = 16;
 
 #[cfg(not(feature = "unchecked"))]
 #[cfg(not(debug_assertions))]
+#[cfg(not(feature = "no_function"))]
 pub const MAX_CALL_STACK_DEPTH: usize = 128;
 #[cfg(not(feature = "unchecked"))]
 #[cfg(not(debug_assertions))]
@@ -527,8 +529,8 @@ impl State {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Limits {
     /// Maximum levels of call-stack to prevent infinite recursion.
-    ///
-    /// Defaults to 16 for debug builds and 128 for non-debug builds.
+    /// Not available under `no_function`.
+    #[cfg(not(feature = "no_function"))]
     pub max_call_stack_depth: usize,
     /// Maximum depth of statements/expressions at global level (0 = unlimited).
     pub max_expr_depth: usize,
@@ -809,6 +811,7 @@ impl Engine {
 
             #[cfg(not(feature = "unchecked"))]
             limits: Limits {
+                #[cfg(not(feature = "no_function"))]
                 max_call_stack_depth: MAX_CALL_STACK_DEPTH,
                 max_expr_depth: MAX_EXPR_DEPTH,
                 #[cfg(not(feature = "no_function"))]
@@ -864,6 +867,7 @@ impl Engine {
 
             #[cfg(not(feature = "unchecked"))]
             limits: Limits {
+                #[cfg(not(feature = "no_function"))]
                 max_call_stack_depth: MAX_CALL_STACK_DEPTH,
                 max_expr_depth: MAX_EXPR_DEPTH,
                 #[cfg(not(feature = "no_function"))]

@@ -1453,7 +1453,7 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         let mods = &mut (&self.global_sub_modules).into();
 
-        let result = self.eval_ast_with_scope_raw(scope, mods, ast)?;
+        let result = self.eval_ast_with_scope_raw(scope, mods, ast, 0)?;
 
         let typ = self.map_type_name(result.type_name());
 
@@ -1473,12 +1473,13 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         ast: &'a AST,
+        level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let state = &mut State {
             source: ast.clone_source(),
             ..Default::default()
         };
-        self.eval_statements_raw(scope, mods, state, ast.statements(), &[ast.lib()])
+        self.eval_statements_raw(scope, mods, state, ast.statements(), &[ast.lib()], level)
     }
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
@@ -1542,7 +1543,7 @@ impl Engine {
             source: ast.clone_source(),
             ..Default::default()
         };
-        self.eval_statements_raw(scope, mods, state, ast.statements(), &[ast.lib()])?;
+        self.eval_statements_raw(scope, mods, state, ast.statements(), &[ast.lib()], 0)?;
         Ok(())
     }
     /// Call a script function defined in an [`AST`] with multiple arguments.

@@ -10,21 +10,24 @@ fn test_stack_overflow_fn_calls() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<INT>(
             r"
                 fn foo(n) { if n <= 1 { 0 } else { n + foo(n-1) } }
-                foo(7)
-    ",
+                foo(6)
+            ",
         )?,
-        27
+        20
     );
+
+    let max = engine.max_call_levels();
 
     #[cfg(not(feature = "unchecked"))]
     assert!(matches!(
         *engine
-            .eval::<()>(
+            .eval::<()>(&format!(
                 r"
-            fn foo(n) { if n == 0 { 0 } else { n + foo(n-1) } }
-            foo(1000)
-    "
-            )
+                    fn foo(n) {{ if n == 0 {{ 0 }} else {{ n + foo(n-1) }} }}
+                    foo({})
+                ",
+                max + 1
+            ))
             .expect_err("should error"),
         EvalAltResult::ErrorStackOverflow(_)
     ));

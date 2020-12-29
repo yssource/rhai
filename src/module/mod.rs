@@ -1720,7 +1720,7 @@ impl Module {
         let orig_mods_len = mods.len();
 
         // Run the script
-        engine.eval_ast_with_scope_raw(&mut scope, &mut mods, &ast)?;
+        engine.eval_ast_with_scope_raw(&mut scope, &mut mods, &ast, 0)?;
 
         // Create new module
         let mut module = Module::new();

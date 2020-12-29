@@ -19,7 +19,7 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::syntax::{CustomSyntax, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
-use crate::token::{is_doc_comment, is_keyword_function, is_valid_identifier, Token, TokenStream};
+use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
     calc_script_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType,
@@ -2534,35 +2534,38 @@ fn parse_stmt(
 ) -> Result<Stmt, ParseError> {
     use AccessMode::{ReadOnly, ReadWrite};
 
-    let mut comments: Vec<String> = Default::default();
-    let mut comments_pos = Position::NONE;
+    let mut _comments: Vec<String> = Default::default();
 
-    // Handle doc-comments.
     #[cfg(not(feature = "no_function"))]
-    while let (Token::Comment(ref comment), comment_pos) = input.peek().unwrap() {
-        if comments_pos.is_none() {
-            comments_pos = *comment_pos;
-        }
+    {
+        let mut comments_pos = Position::NONE;
 
-        if !is_doc_comment(comment) {
-            unreachable!("expecting doc-comment, but gets {:?}", comment);
-        }
-
-        if !settings.is_global {
-            return Err(PERR::WrongDocComment.into_err(comments_pos));
-        }
-
-        match input.next().unwrap().0 {
-            Token::Comment(comment) => {
-                comments.push(comment);
-
-                match input.peek().unwrap() {
-                    (Token::Fn, _) | (Token::Private, _) => break,
-                    (Token::Comment(_), _) => (),
-                    _ => return Err(PERR::WrongDocComment.into_err(comments_pos)),
-                }
+        // Handle doc-comments.
+        while let (Token::Comment(ref comment), pos) = input.peek().unwrap() {
+            if comments_pos.is_none() {
+                comments_pos = *pos;
             }
-            t => unreachable!("expecting Token::Comment, but gets {:?}", t),
+
+            if !crate::token::is_doc_comment(comment) {
+                unreachable!("expecting doc-comment, but gets {:?}", comment);
+            }
+
+            if !settings.is_global {
+                return Err(PERR::WrongDocComment.into_err(comments_pos));
+            }
+
+            match input.next().unwrap().0 {
+                Token::Comment(comment) => {
+                    _comments.push(comment);
+
+                    match input.peek().unwrap() {
+                        (Token::Fn, _) | (Token::Private, _) => break,
+                        (Token::Comment(_), _) => (),
+                        _ => return Err(PERR::WrongDocComment.into_err(comments_pos)),
+                    }
+                }
+                t => unreachable!("expecting Token::Comment, but gets {:?}", t),
+            }
         }
     }
 
@@ -2618,7 +2621,7 @@ fn parse_stmt(
                         pos: pos,
                     };
 
-                    let func = parse_fn(input, &mut new_state, lib, access, settings, comments)?;
+                    let func = parse_fn(input, &mut new_state, lib, access, settings, _comments)?;
 
                     lib.insert(
                         // Qualifiers (none) + function name + number of arguments.
