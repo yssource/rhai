@@ -3,7 +3,7 @@ Calling Rhai Functions from Rust
 
 {{#include ../links.md}}
 
-Rhai also allows working _backwards_ from the other direction - i.e. calling a Rhai-scripted function
+Rhai also allows working _backwards_ from the other direction &ndash; i.e. calling a Rhai-scripted function
 from Rust via `Engine::call_fn`.
 
 Functions declared with `private` are hidden and cannot be called from Rust (see also [modules]).
@@ -56,8 +56,8 @@ let result: () = engine.call_fn(&mut scope, &ast, "hidden", ())?;
 ```
 
 
-Low-Level API - `Engine::call_fn_dynamic`
-----------------------------------------
+Low-Level API &ndash; `Engine::call_fn_dynamic`
+----------------------------------------------
 
 For more control, construct all arguments as `Dynamic` values and use `Engine::call_fn_dynamic`, passing it
 anything that implements `AsMut<Dynamic>` (such as a simple array or a `Vec<Dynamic>`):

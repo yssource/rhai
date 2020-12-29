@@ -61,11 +61,11 @@ r"
 ```
 
 
-Caveat - Constants Can be Modified via Rust
-------------------------------------------
+Caveat &ndash; Constants Can be Modified via Rust
+------------------------------------------------
 
 A custom type stored as a constant cannot be modified via script, but _can_ be modified via
-a registered Rust function that takes a first `&mut` parameter - because there is no way for
+a registered Rust function that takes a first `&mut` parameter &ndash; because there is no way for
 Rhai to know whether the Rust function modifies its argument!
 
 ```rust

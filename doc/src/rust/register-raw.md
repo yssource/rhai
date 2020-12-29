@@ -100,8 +100,8 @@ When there is a mutable reference to the `this` object (i.e. the first argument)
 there can be no other immutable references to `args`, otherwise the Rust borrow checker will complain.
 
 
-Example - Passing a Callback to a Rust Function
-----------------------------------------------
+Example &ndash; Passing a Callback to a Rust Function
+----------------------------------------------------
 
 The low-level API is useful when there is a need to interact with the scripting [`Engine`]
 within a function.
@@ -147,8 +147,8 @@ let result = engine.eval::<i64>(
 ```
 
 
-TL;DR - Why `read_lock` and `write_lock`
----------------------------------------
+TL;DR &ndash; Why `read_lock` and `write_lock`
+---------------------------------------------
 
 The `Dynamic` API that casts it to a reference to a particular data type  is `read_lock`
 (for an immutable reference) and `write_lock` (for a mutable reference).

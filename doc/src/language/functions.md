@@ -125,8 +125,8 @@ x == 500;           // 'x' is NOT changed!
 ```
 
 
-`this` - Simulating an Object Method
------------------------------------
+`this` &ndash; Simulating an Object Method
+-----------------------------------------
 
 Script-defined functions can also be called in method-call style.
 When this happens, the keyword '`this`' binds to the object in the method call and can be changed.

@@ -43,7 +43,7 @@ Return Type
 The type parameter for `Engine::eval` is used to specify the type of the return value,
 which _must_ match the actual type or an error is returned. Rhai is very strict here.
 
-There are two ways to specify the return type - _turbofish_ notation, or type inference.
+There are two ways to specify the return type &ndash; _turbofish_ notation, or type inference.
 
 Use [`Dynamic`] for uncertain return types.
 

@@ -19,8 +19,8 @@ Manually creating a [module] is possible via the `Module` API.
 For the complete `Module` API, refer to the [documentation](https://docs.rs/rhai/{{version}}/rhai/struct.Module.html) online.
 
 
-Use Case 1 - Make the `Module` Globally Available
-------------------------------------------------
+Use Case 1 &ndash; Make the `Module` Globally Available
+------------------------------------------------------
 
 `Engine::register_global_module` registers a shared [module] into the _global_ namespace.
 
@@ -62,8 +62,8 @@ engine.register_fn("inc", |x: i64| x + 1);
 engine.eval::<i64>("inc(41)")? == 42;       // no need to import module
 ```
 
-Use Case 2 - Make the `Module` a Static Module
----------------------------------------------
+Use Case 2 &ndash; Make the `Module` a Static Module
+---------------------------------------------------
 
 `Engine::register_static_module` registers a [module] and under a specific module namespace.
 
@@ -122,8 +122,8 @@ engine.eval::<i64>("let x = 41; inc(x)")? == 42;
 ```
 
 
-Use Case 3 - Make the `Module` Dynamically Loadable
---------------------------------------------------
+Use Case 3 &ndash; Make the `Module` Dynamically Loadable
+--------------------------------------------------------
 
 In order to dynamically load a custom module, there must be a [module resolver] which serves
 the module when loaded via `import` statements.

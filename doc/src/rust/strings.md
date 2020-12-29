@@ -9,7 +9,7 @@ Avoid `String`
 
 As must as possible, avoid using `String` parameters in functions.
 
-Each `String` argument is cloned during every single call to that function - and the copy
+Each `String` argument is cloned during every single call to that function &ndash; and the copy
 immediately thrown away right after the call.
 
 Needless to say, it is _extremely_ inefficient to use `String` parameters.

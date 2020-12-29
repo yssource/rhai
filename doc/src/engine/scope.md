@@ -1,4 +1,4 @@
-`Scope` - Initializing and Maintaining State
+`Scope` &ndash; Initializing and Maintaining State
 =================================================
 
 {{#include ../links.md}}
@@ -37,7 +37,7 @@ scope
 
 // First invocation
 engine.eval_with_scope::<()>(&mut scope, r"
-    let x = 4 + 5 - y + z + MY_NUMBER + s.len;
+    let x = 4 + 5 &ndash; y + z + MY_NUMBER + s.len;
     y = 1;
 ")?;
 
@@ -46,7 +46,7 @@ let result = engine.eval_with_scope::<i64>(&mut scope, "x")?;
 
 println!("result: {}", result);                     // prints 1102
 
-// Variable y is changed in the script - read it with 'get_value'
+// Variable y is changed in the script &ndash; read it with 'get_value'
 assert_eq!(scope.get_value::<i64>("y").expect("variable y should exist"), 1);
 
 // We can modify scope variables directly with 'set_value'

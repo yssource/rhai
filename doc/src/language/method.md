@@ -15,7 +15,7 @@ Unlike functions defined in script (for which all arguments are passed by _value
 native Rust functions may mutate the object (or the first argument if called in normal function call style).
 
 However, sometimes it is not as straight-forward, and methods called in function-call style may end up
-not muting the object - see the example below. Therefore, it is best to always use method-call style.
+not muting the object &ndash; see the example below. Therefore, it is best to always use method-call style.
 
 Custom types, properties and methods can be disabled via the [`no_object`] feature.
 
@@ -59,7 +59,7 @@ The following table illustrates the differences:
 Using a `&mut` first parameter is highly encouraged when using types that are expensive to clone,
 even when the intention is not to mutate that argument, because it avoids cloning that argument value.
 
-Even when a function is never intended to be a method - for example an operator,
+Even when a function is never intended to be a method &ndash; for example an operator,
 it is still sometimes beneficial to make it method-like (i.e. with a first `&mut` parameter)
 if the first parameter is not modified.
 

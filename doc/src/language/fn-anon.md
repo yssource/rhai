@@ -50,8 +50,8 @@ fn anon_fn_1002() { print this.data; }
 ```
 
 
-WARNING - NOT Real Closures
---------------------------
+WARNING &ndash; NOT Real Closures
+--------------------------------
 
 Remember: anonymous functions, though having the same syntax as Rust _closures_, are themselves
 **not** real closures.

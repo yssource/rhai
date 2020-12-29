@@ -5,7 +5,7 @@ Optimization Levels
 
 There are three levels of optimization: `None`, `Simple` and `Full`.
 
-* `None` is obvious - no optimization on the AST is performed.
+* `None` is obvious &ndash; no optimization on the AST is performed.
 
 * `Simple` (default) performs only relatively _safe_ optimizations without causing side-effects
   (i.e. it only relies on static analysis and [built-in operators] for constant [standard types],

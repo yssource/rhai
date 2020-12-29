@@ -32,7 +32,7 @@ switch type_of(mystery) {
 Functions Returning `Dynamic`
 ----------------------------
 
-In Rust, sometimes a `Dynamic` forms part of a returned value - a good example is an [array]
+In Rust, sometimes a `Dynamic` forms part of a returned value &ndash; a good example is an [array]
 which contains `Dynamic` elements, or an [object map] which contains `Dynamic` property values.
 
 To get the _real_ values, the actual value types _must_ be known in advance.

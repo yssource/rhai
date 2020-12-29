@@ -63,7 +63,7 @@ There is one _global_ namespace for every [`Engine`], which includes (in the fol
 Anywhere in a Rhai script, when a function call is made, the function is searched within the
 global namespace, in the above search order.
 
-Therefore, function calls in Rhai are _late_ bound - meaning that the function called cannot be
+Therefore, function calls in Rhai are _late_ bound &ndash; meaning that the function called cannot be
 determined or guaranteed and there is no way to _lock down_ the function being called.
 This aspect is very similar to JavaScript before ES6 modules.
 

@@ -108,7 +108,7 @@ let x: MyStruct = from_dynamic(&result)?;
 Cannot Deserialize Shared Values
 -------------------------------
 
-A [`Dynamic`] containing a _shared_ value cannot be deserialized - i.e. it will give a type error.
+A [`Dynamic`] containing a _shared_ value cannot be deserialized &ndash; i.e. it will give a type error.
 
 Use `Dynamic::flatten` to obtain a cloned copy before deserialization
 (if the value is not shared, it is simply returned and not cloned).

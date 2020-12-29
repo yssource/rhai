@@ -24,7 +24,7 @@ An `ImmutableString` does not change and can be shared.
 
 Modifying an `ImmutableString` causes it first to be cloned, and then the modification made to the copy.
 
-### **IMPORTANT** - Avoid `String` Parameters
+### **IMPORTANT** &ndash; Avoid `String` Parameters
 
 `ImmutableString` should be used in place of `String` for function parameters because using
 `String` is very inefficient (the `String` argument is cloned during every call).

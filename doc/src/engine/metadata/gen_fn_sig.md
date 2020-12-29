@@ -37,12 +37,12 @@ A function registered under the name `foo` with three parameters and unknown ret
 
 > `foo(_, _, _)`
 
-An operator function - again, unknown parameters and return type.
+An operator function &ndash; again, unknown parameters and return type.
 Notice that function names do not need to be valid identifiers.
 
 > `+(_, _)`
 
-A [property setter][getters/setters] - again, unknown parameters and return type.
+A [property setter][getters/setters] &ndash; again, unknown parameters and return type.
 Notice that function names do not need to be valid identifiers.
 In this case, the first parameter should be `&mut T` of the custom type and the return value is `()`:
 

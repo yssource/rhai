@@ -29,7 +29,7 @@ which is an embedded scripting language for C++.
 Originally it was intended to be a scripting language similar to **JavaScript**.
 
 With java being a kind of hot beverage, the new language was named after
-another hot beverage - **Chai**, which is the word for "tea" in many world languages
+another hot beverage &ndash; **Chai**, which is the word for "tea" in many world languages
 and, in particular, a popular kind of milk tea consumed in India.
 
 Later, when the novel implementation technique behind ChaiScript was ported from C++ to Rust,

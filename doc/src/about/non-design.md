@@ -10,24 +10,24 @@ It doesn't attempt to be a new language. For example:
 
 * **No traits**...  so it is also not Rust. Do your Rusty stuff in Rust.
 
-* **No structures/records/tuples** - define your types in Rust instead; Rhai can seamlessly work with _any Rust type_.
+* **No structures/records/tuples** &ndash; define your types in Rust instead; Rhai can seamlessly work with _any Rust type_.
 
   There is, however, a built-in [object map] type which is adequate for most uses.
   It is possible to simulate [object-oriented programming (OOP)][OOP] by storing [function pointers]
   or [closures] in [object map] properties, turning them into _methods_.
 
-* **No first-class functions** - Code your functions in Rust instead, and register them with Rhai.
+* **No first-class functions** &ndash; Code your functions in Rust instead, and register them with Rhai.
 
   There is, however, support for simple [function pointers] to allow runtime dispatch by function name.
 
-* **No garbage collection** - this should be expected, so...
+* **No garbage collection** &ndash; this should be expected, so...
 
-* **No first-class closures** - do your closure magic in Rust instead: [turn a Rhai scripted function into a Rust closure]({{rootUrl}}/engine/call-fn.md).
+* **No first-class closures** &ndash; do your closure magic in Rust instead: [turn a Rhai scripted function into a Rust closure]({{rootUrl}}/engine/call-fn.md).
 
   There is, however, support for simulated [closures] via [currying] a [function pointer] with
   captured shared variables.
 
-* **No byte-codes/JIT** - Rhai has an optimized AST-walking interpreter which is fast enough for most casual
+* **No byte-codes/JIT** &ndash; Rhai has an optimized AST-walking interpreter which is fast enough for most casual
   usage scenarios. Essential AST data structures are packed and kept together to maximize cache friendliness.
 
   Functions are dispatched based on pre-calculated hashes and accessing variables are mostly through pre-calculated
@@ -41,7 +41,7 @@ It doesn't attempt to be a new language. For example:
   Still, the purpose of Rhai is not to be super _fast_, but to make it as easy and versatile as possible to
   integrate with native Rust applications.
 
-* **No formal language grammar** - Rhai uses a hand-coded lexer, a hand-coded top-down recursive-descent parser
+* **No formal language grammar** &ndash; Rhai uses a hand-coded lexer, a hand-coded top-down recursive-descent parser
   for statements, and a hand-coded Pratt parser for expressions.
   
   This lack of formalism allows the _tokenizer_ and _parser_ themselves to be exposed as services in order

@@ -60,7 +60,7 @@ Boolean operators
 | <code>\|\|</code> | boolean _OR_  |       yes       |
 |  <code>\|</code>  | boolean _OR_  |       no        |
 
-Double boolean operators `&&` and `||` _short-circuit_ - meaning that the second operand will not be evaluated
+Double boolean operators `&&` and `||` _short-circuit_ &ndash; meaning that the second operand will not be evaluated
 if the first one already proves the condition wrong.
 
 Single boolean operators `&` and `|` always evaluate both operands.

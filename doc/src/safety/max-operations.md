@@ -29,7 +29,7 @@ engine.set_max_operations(0);   // allow unlimited operations
 What Does One _Operation_ Mean
 -----------------------------
 
-The concept of one single _operation_ in Rhai is volatile - it roughly equals one expression node,
+The concept of one single _operation_ in Rhai is volatile &ndash; it roughly equals one expression node,
 loading one variable/constant, one operator call, one iteration of a loop, or one function call etc.
 with sub-expressions, statements and function calls executed inside these contexts accumulated on top.
 

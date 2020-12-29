@@ -1,24 +1,24 @@
-Rhai Tools
-==========
+Packaged Utilities
+==================
 
 {{#include ../links.md}}
 
-A number of Rhai tools can be found in the `src/bin` directory:
+A number of Rhai-driven utility programs can be found in the `src/bin` directory:
 
-| Tool                                              | Description                                                 |
-| ------------------------------------------------- | ----------------------------------------------------------- |
+|                  Utility program                  | Description                                                 |
+| :-----------------------------------------------: | ----------------------------------------------------------- |
 | [`rhai-repl`]({{repoTree}}/examples/rhai-repl.rs) | a simple REPL, interactively evaluate statements from stdin |
-| [`rhai-run`]({{repoTree}}/examples/rhai-run.rs)   | runs each filename passed to it as a Rhai script            |
+|  [`rhai-run`]({{repoTree}}/examples/rhai-run.rs)  | runs each filename passed to it as a Rhai script            |
 
-`rhai-repl` is particularly useful - it allows one to interactively try out Rhai's
+`rhai-repl` is particularly useful  &ndash;  it allows one to interactively try out Rhai's
 language features in a standard REPL (**R**ead-**E**val-**P**rint **L**oop).
 
 
-Running a Tool
---------------
+Running a Utility Program
+-------------------------
 
-Tools can be run with the following command:
+Utilities can be run with the following command:
 
 ```bash
-cargo run --bin {tool_name}
+cargo run --bin {program_name}
 ```

@@ -46,8 +46,8 @@ The following scripts are for benchmarking the speed of Rhai:
 Running Example Scripts
 ----------------------
 
-The [`rhai-run`](../examples/rust.md) example can be used to run the scripts:
+The [`rhai-run`](../bin.md) utility can be used to run Rhai scripts:
 
 ```bash
-cargo run --example rhai-run scripts/any_script.rhai
+cargo run --bin rhai-run scripts/any_script.rhai
 ```
