@@ -214,6 +214,7 @@ mod array_functions {
                     .map_err(|err| {
                         Box::new(EvalAltResult::ErrorInFunctionCall(
                             "map".to_string(),
+                            ctx.source().unwrap_or("").to_string(),
                             err,
                             Position::NONE,
                         ))
@@ -245,6 +246,7 @@ mod array_functions {
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "filter".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
                         err,
                         Position::NONE,
                     ))
@@ -278,6 +280,7 @@ mod array_functions {
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "index_of".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
                         err,
                         Position::NONE,
                     ))
@@ -311,6 +314,7 @@ mod array_functions {
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "some".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
                         err,
                         Position::NONE,
                     ))
@@ -344,6 +348,7 @@ mod array_functions {
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "all".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
                         err,
                         Position::NONE,
                     ))
@@ -379,6 +384,7 @@ mod array_functions {
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "reduce".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
                         err,
                         Position::NONE,
                     ))
@@ -397,6 +403,7 @@ mod array_functions {
         let mut result = initial.call_dynamic(ctx, None, []).map_err(|err| {
             Box::new(EvalAltResult::ErrorInFunctionCall(
                 "reduce".to_string(),
+                ctx.source().unwrap_or("").to_string(),
                 err,
                 Position::NONE,
             ))
@@ -416,6 +423,7 @@ mod array_functions {
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "reduce".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
                         err,
                         Position::NONE,
                     ))
@@ -446,6 +454,7 @@ mod array_functions {
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "reduce_rev".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
                         err,
                         Position::NONE,
                     ))
@@ -464,6 +473,7 @@ mod array_functions {
         let mut result = initial.call_dynamic(ctx, None, []).map_err(|err| {
             Box::new(EvalAltResult::ErrorInFunctionCall(
                 "reduce_rev".to_string(),
+                ctx.source().unwrap_or("").to_string(),
                 err,
                 Position::NONE,
             ))
@@ -483,6 +493,7 @@ mod array_functions {
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "reduce_rev".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
                         err,
                         Position::NONE,
                     ))
@@ -553,6 +564,7 @@ mod array_functions {
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "drain".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
                         err,
                         Position::NONE,
                     ))
@@ -612,6 +624,7 @@ mod array_functions {
                 .map_err(|err| {
                     Box::new(EvalAltResult::ErrorInFunctionCall(
                         "retain".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
                         err,
                         Position::NONE,
                     ))

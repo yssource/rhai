@@ -508,7 +508,11 @@ pub struct State {
     /// Number of modules loaded.
     pub modules: usize,
     /// Cached lookup values for function hashes.
-    pub functions_cache: HashMap<NonZeroU64, Option<CallableFunction>, StraightHasherBuilder>,
+    pub functions_cache: HashMap<
+        NonZeroU64,
+        Option<(CallableFunction, Option<ImmutableString>)>,
+        StraightHasherBuilder,
+    >,
 }
 
 impl State {

@@ -89,7 +89,7 @@ fn main() {
                 }
             }
 
-            let module = match engine
+            let mut module = match engine
                 .compile(&contents)
                 .map_err(|err| err.into())
                 .and_then(|ast| Module::eval_ast_as_new(Default::default(), &ast, &engine))
@@ -105,6 +105,8 @@ fn main() {
                 }
                 Ok(m) => m,
             };
+
+            module.set_id(Some(&filename));
 
             engine.register_global_module(module.into());
 

@@ -1,6 +1,20 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.10
+===============
+
+Breaking changes
+----------------
+
+* The error variant `EvalAltResult::ErrorInFunctionCall` has a new parameter holding the _source_ of the function.
+
+Enhancements
+------------
+
+* Source information is provided when there is an error within a call to a function defined in another module.
+
+
 Version 0.19.9
 ==============
 
