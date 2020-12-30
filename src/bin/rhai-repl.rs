@@ -66,53 +66,56 @@ fn main() {
 
     // Load init scripts
 
-    let mut contents = String::new();
-    let mut has_init_scripts = false;
+    #[cfg(not(feature = "no_module"))]
+    {
+        let mut contents = String::new();
+        let mut has_init_scripts = false;
 
-    for filename in env::args().skip(1) {
-        {
-            contents.clear();
+        for filename in env::args().skip(1) {
+            {
+                contents.clear();
 
-            let mut f = match File::open(&filename) {
-                Err(err) => {
-                    eprintln!("Error reading script file: {}\n{}", filename, err);
+                let mut f = match File::open(&filename) {
+                    Err(err) => {
+                        eprintln!("Error reading script file: {}\n{}", filename, err);
+                        exit(1);
+                    }
+                    Ok(f) => f,
+                };
+
+                if let Err(err) = f.read_to_string(&mut contents) {
+                    println!("Error reading script file: {}\n{}", filename, err);
                     exit(1);
                 }
-                Ok(f) => f,
+            }
+
+            let module = match engine
+                .compile(&contents)
+                .map_err(|err| err.into())
+                .and_then(|ast| Module::eval_ast_as_new(Default::default(), &ast, &engine))
+            {
+                Err(err) => {
+                    eprintln!("{:=<1$}", "", filename.len());
+                    eprintln!("{}", filename);
+                    eprintln!("{:=<1$}", "", filename.len());
+                    eprintln!("");
+
+                    print_error(&contents, *err);
+                    exit(1);
+                }
+                Ok(m) => m,
             };
 
-            if let Err(err) = f.read_to_string(&mut contents) {
-                println!("Error reading script file: {}\n{}", filename, err);
-                exit(1);
-            }
+            engine.register_global_module(module.into());
+
+            has_init_scripts = true;
+
+            println!("Script '{}' loaded.", filename);
         }
 
-        let module = match engine
-            .compile(&contents)
-            .map_err(|err| err.into())
-            .and_then(|ast| Module::eval_ast_as_new(Default::default(), &ast, &engine))
-        {
-            Err(err) => {
-                eprintln!("{:=<1$}", "", filename.len());
-                eprintln!("{}", filename);
-                eprintln!("{:=<1$}", "", filename.len());
-                eprintln!("");
-
-                print_error(&contents, *err);
-                exit(1);
-            }
-            Ok(m) => m,
-        };
-
-        engine.register_global_module(module.into());
-
-        has_init_scripts = true;
-
-        println!("Script '{}' loaded.", filename);
-    }
-
-    if has_init_scripts {
-        println!();
+        if has_init_scripts {
+            println!();
+        }
     }
 
     // Setup Engine
