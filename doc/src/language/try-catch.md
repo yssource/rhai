@@ -102,7 +102,7 @@ Non-Catchable Exceptions
 Some exceptions _cannot_ be caught:
 
 * Syntax error during parsing
-* System error - e.g. script file not found
+* System error &ndash; e.g. script file not found
 * Script evaluation metrics over [safety limits]({{rootUrl}}/safety/index.md)
 * Function calls nesting exceeding [maximum call stack depth]
 * Script evaluation manually terminated

@@ -13,8 +13,8 @@ access to the calling environment.
 When a function accesses a variable that is not defined within that function's scope,
 it raises an evaluation error.
 
-It is possible, through a special syntax, to capture the calling scope - i.e. the scope
-that makes the function call - and access variables defined there.
+It is possible, through a special syntax, to capture the calling scope &ndash; i.e. the scope
+that makes the function call &ndash; and access variables defined there.
 
 ```rust
 fn foo(y) {             // function accesses 'x' and 'y', but 'x' is not defined

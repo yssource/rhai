@@ -16,7 +16,7 @@ prepare a Rhai script for this purpose as well as to control which functions/var
 When given an [`AST`], it is first evaluated, then the following items are exposed as members of the
 new [module]:
 
-* Global variables - all variables exported via the `export` statement (those not exported remain hidden).
+* Global variables &ndash; all variables exported via the `export` statement (those not exported remain hidden).
 
 * Functions not specifically marked `private`.
 

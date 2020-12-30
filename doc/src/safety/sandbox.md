@@ -1,5 +1,5 @@
-Sand-Boxing - Block Access to External Data
-==========================================
+Sand-Boxing &ndash; Block Access to External Data
+================================================
 
 {{#include ../links.md}}
 

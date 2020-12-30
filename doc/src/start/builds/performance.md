@@ -9,7 +9,7 @@ Some features are for performance.  For example, using [`only_i32`] or [`only_i6
 Use Only One Integer Type
 ------------------------
 
-If only a single integer type is needed in scripts - most of the time this is the case - it is best to avoid registering
+If only a single integer type is needed in scripts &ndash; most of the time this is the case &ndash; it is best to avoid registering
 lots of functions related to other integer types that will never be used.  As a result, [`Engine`] creation will be faster
 because fewer functions need to be loaded.
 
@@ -19,7 +19,7 @@ The [`only_i32`] and [`only_i64`] features disable all integer types except `i32
 Use Only 32-Bit Numbers
 ----------------------
 
-If only 32-bit integers are needed - again, most of the time this is the case - turn on [`only_i32`].
+If only 32-bit integers are needed &ndash; again, most of the time this is the case &ndash; turn on [`only_i32`].
 Under this feature, only `i32` is supported as a built-in integer type and no others.
 
 On 64-bit targets this may not gain much, but on certain 32-bit targets this improves performance

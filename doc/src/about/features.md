@@ -11,12 +11,12 @@ Easy
 * Tight integration with native Rust [functions] and [types][custom types] including [getters/setters],
   [methods][custom type] and [indexers].
 
-* Freely pass Rust variables/constants into a script via an external [`Scope`] - all clonable Rust types are supported seamlessly
+* Freely pass Rust variables/constants into a script via an external [`Scope`] &ndash; all clonable Rust types are supported seamlessly
   without the need to implement any special trait.
 
 * Easily [call a script-defined function]({{rootUrl}}/engine/call-fn.md) from Rust.
 
-* Very few additional dependencies - right now only [`smallvec`](https://crates.io/crates/smallvec/) plus crates for procedural macros;
+* Very few additional dependencies &ndash; right now only [`smallvec`](https://crates.io/crates/smallvec/) plus crates for procedural macros;
   for [`no-std`] and `WASM` builds, a number of additional dependencies are pulled in to provide for missing functionalities.
 
 * [Plugins] system powered by procedural macros simplifies custom API development.
@@ -52,7 +52,7 @@ Safe
 
 * Relatively little `unsafe` code (yes there are some for performance reasons).
 
-* Sand-boxed - the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless
+* Sand-boxed &ndash; the scripting [`Engine`], if declared immutable, cannot mutate the containing environment unless
   [explicitly permitted]({{rootUrl}}/patterns/control.md).
 
 Rugged

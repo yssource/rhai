@@ -37,6 +37,8 @@ fn eprint_error(input: &str, err: EvalAltResult) {
 }
 
 fn main() {
+    let mut contents = String::new();
+
     for filename in env::args().skip(1) {
         let mut engine = Engine::new();
 
@@ -51,7 +53,7 @@ fn main() {
             Ok(f) => f,
         };
 
-        let mut contents = String::new();
+        contents.clear();
 
         if let Err(err) = f.read_to_string(&mut contents) {
             eprintln!("Error reading script file: {}\n{}", filename, err);

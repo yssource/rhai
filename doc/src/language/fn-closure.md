@@ -10,7 +10,7 @@ Since [anonymous functions] de-sugar to standard function definitions, they reta
 Rhai functions, including being _pure_, having no access to external variables.
 
 The anonymous function syntax, however, automatically _captures_ variables that are not defined within
-the current scope, but are defined in the external scope - i.e. the scope where the anonymous function
+the current scope, but are defined in the external scope &ndash; i.e. the scope where the anonymous function
 is created.
 
 Variables that are accessible during the time the [anonymous function] is created can be captured,
@@ -83,14 +83,14 @@ for f in funcs {
 ```
 
 
-Therefore - Be Careful to Prevent Data Races
--------------------------------------------
+Therefore &ndash; Be Careful to Prevent Data Races
+-------------------------------------------------
 
 Rust does not have data races, but that doesn't mean Rhai doesn't.
 
 Avoid performing a method call on a captured shared variable (which essentially takes a
 mutable reference to the shared object) while using that same variable as a parameter
-in the method call - this is a sure-fire way to generate a data race error.
+in the method call &ndash; this is a sure-fire way to generate a data race error.
 
 If a shared value is used as the `this` pointer in a method call to a closure function,
 then the same shared value _must not_ be captured inside that function, or a data race
@@ -143,7 +143,7 @@ The actual implementation of closures de-sugars to:
 1. Keeping track of what variables are accessed inside the anonymous function,
 
 2. If a variable is not defined within the anonymous function's scope, it is looked up _outside_ the function and
-   in the current execution scope - where the anonymous function is created.
+   in the current execution scope &ndash; where the anonymous function is created.
 
 3. The variable is added to the parameters list of the anonymous function, at the front.
 
@@ -158,13 +158,13 @@ The actual implementation of closures de-sugars to:
 
 ### Q: Why are closures implemented as automatic currying?
 
-In concept, a closure _closes_ over captured variables from the outer scope - that's why
+In concept, a closure _closes_ over captured variables from the outer scope &ndash; that's why
 they are called _closures_.  When this happen, a typical language implementation hoists
 those variables that are captured away from the stack frame and into heap-allocated storage.
 This is because those variables may be needed after the stack frame goes away.
 
 These heap-allocated captured variables only go away when all the closures that need them
-are finished with them.  A garbage collector makes this trivial to implement - they are
+are finished with them.  A garbage collector makes this trivial to implement &ndash; they are
 automatically collected as soon as all closures needing them are destroyed.
 
 In Rust, this can be done by reference counting instead, with the potential pitfall of creating

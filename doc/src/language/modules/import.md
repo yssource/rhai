@@ -78,7 +78,7 @@ for x in range(0, 1000) {
 Recursive Imports
 ----------------
 
-Beware of _import cycles_ - i.e. recursively loading the same module. This is a sure-fire way to
+Beware of _import cycles_ &ndash; i.e. recursively loading the same module. This is a sure-fire way to
 cause a stack overflow in the [`Engine`], unless stopped by setting a limit for [maximum number of modules].
 
 For instance, importing itself always causes an infinite recursion:

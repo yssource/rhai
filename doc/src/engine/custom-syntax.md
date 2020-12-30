@@ -33,8 +33,8 @@ Where This Might Be Useful
 * Where you just want to confuse your user and make their lives miserable, because you can.
 
 
-Step One - Design The Syntax
----------------------------
+Step One &ndash; Design The Syntax
+---------------------------------
 
 A custom syntax is simply a list of symbols.
 
@@ -48,11 +48,11 @@ These symbol types can be used:
 
 * Identifiers following the [variable] naming rules.
 
-* `$expr$` - any valid expression, statement or statement block.
+* `$expr$` &ndash; any valid expression, statement or statement block.
 
-* `$block$` - any valid statement block (i.e. must be enclosed by `'{'` .. `'}'`).
+* `$block$` &ndash; any valid statement block (i.e. must be enclosed by `'{'` .. `'}'`).
 
-* `$ident$` - any [variable] name.
+* `$ident$` &ndash; any [variable] name.
 
 ### The First Symbol Must be an Identifier
 
@@ -103,8 +103,8 @@ print(hello);   // variable declared by a custom syntax persists!
 ```
 
 
-Step Two - Implementation
--------------------------
+Step Two &ndash; Implementation
+------------------------------
 
 Any custom syntax must include an _implementation_ of it.
 
@@ -176,8 +176,8 @@ let result = context.eval_expression_tree(expression)?;
 ```
 
 
-Step Three - Register the Custom Syntax
---------------------------------------
+Step Three &ndash; Register the Custom Syntax
+--------------------------------------------
 
 Use `Engine::register_custom_syntax` to register a custom syntax.
 
@@ -244,8 +244,8 @@ exec |x| -> { x += 1 } while x < 0;
 ```
 
 
-Step Four - Disable Unneeded Statement Types
--------------------------------------------
+Step Four &ndash; Disable Unneeded Statement Types
+-------------------------------------------------
 
 When a DSL needs a custom syntax, most likely than not it is extremely specialized.
 Therefore, many statement types actually may not make sense under the same usage scenario.
@@ -258,24 +258,24 @@ the scenario.
 A keyword or operator that is disabled can still be used in a custom syntax.
 
 In an extreme case, it is possible to disable _every_ keyword in the language, leaving only
-custom syntax (plus possibly expressions).  But again, Don't Do It™ - unless you are certain
+custom syntax (plus possibly expressions).  But again, Don't Do It™ &ndash; unless you are certain
 of what you're doing.
 
 
-Step Five - Document
---------------------
+Step Five &ndash; Document
+-------------------------
 
 For custom syntax, documentation is crucial.
 
 Make sure there are _lots_ of examples for users to follow.
 
 
-Step Six - Profit!
-------------------
+Step Six &ndash; Profit!
+------------------------
 
 
-Really Advanced - Custom Parsers
--------------------------------
+Really Advanced &ndash; Custom Parsers
+-------------------------------------
 
 Sometimes it is desirable to have multiple custom syntax starting with the
 same symbol.  This is especially common for _command-style_ syntax where the
@@ -395,8 +395,8 @@ Most strings are [`ImmutableString`][string]'s so it is usually more efficient t
 
 The return value is `Result<Option<ImmutableString>, ParseError>` where:
 
-| Value              | Description                                                                                                                                                                                                                   |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Ok(None)`         | parsing complete and there are no more symbols to match                                                                                                                                                                       |
-| `Ok(Some(symbol))` | the next symbol to match, which can also be `$expr$`, `$ident$` or `$block$`                                                                                                                                                  |
-| `Err(ParseError)`  | error that is reflected back to the [`Engine`] - normally `ParseError(ParseErrorType::BadInput(LexError::ImproperSymbol(message)), Position::NONE)` to indicate that there is a syntax error, but it can be any `ParseError`. |
+| Value              | Description                                                                                                                                                                                                                         |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Ok(None)`         | parsing complete and there are no more symbols to match                                                                                                                                                                             |
+| `Ok(Some(symbol))` | the next symbol to match, which can also be `$expr$`, `$ident$` or `$block$`                                                                                                                                                        |
+| `Err(ParseError)`  | error that is reflected back to the [`Engine`] &ndash; normally `ParseError(ParseErrorType::BadInput(LexError::ImproperSymbol(message)), Position::NONE)` to indicate that there is a syntax error, but it can be any `ParseError`. |

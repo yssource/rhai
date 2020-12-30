@@ -24,7 +24,7 @@ Macros
 
 Apply `#[export_fn]` onto a function defined at _module level_ to convert it into a Rhai plugin function.
 
-The function cannot be nested inside another function - it can only be defined directly under a module.
+The function cannot be nested inside another function &ndash; it can only be defined directly under a module.
 
 To register the plugin function, simply call `register_exported_fn!`.  The name of the function can be
 any text string, so it is possible to register _overloaded_ functions as well as operators.

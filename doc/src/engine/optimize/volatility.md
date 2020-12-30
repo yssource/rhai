@@ -6,7 +6,7 @@ Volatility Considerations for Full Optimization Level
 Even if a custom function does not mutate state nor cause side-effects, it may still be _volatile_,
 i.e. it _depends_ on the external environment and is not _pure_.
 
-A perfect example is a function that gets the current time - obviously each run will return a different value!
+A perfect example is a function that gets the current time &ndash; obviously each run will return a different value!
 
 The optimizer, when using [`OptimizationLevel::Full`], will _merrily assume_ that all functions are _pure_,
 so when it finds constant arguments (or none) it eagerly executes the function call and replaces it with the result.

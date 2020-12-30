@@ -17,7 +17,7 @@ if true {           // condition always true
 foo(42)             // <- the above optimizes to this
 ```
 
-If the original script were evaluated instead, it would have been an error - the variable `hello` does not exist,
+If the original script were evaluated instead, it would have been an error &ndash; the variable `hello` does not exist,
 so the script would have been terminated at that point with an error return.
 
 In fact, any errors inside a statement that has been eliminated will silently _disappear_:

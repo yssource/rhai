@@ -6,7 +6,7 @@ Variables
 Valid Names
 -----------
 
-Variables in Rhai follow normal C naming rules - must contain only ASCII letters, digits and underscores '`_`',
+Variables in Rhai follow normal C naming rules &ndash; must contain only ASCII letters, digits and underscores '`_`',
 and cannot start with a digit.
 
 For example: '`_c3po`' and '`r2d2`' are valid variable names, but '`3abc`' is not.

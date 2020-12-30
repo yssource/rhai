@@ -45,9 +45,9 @@ Multiple Instantiations of Rhai Within The Same Project
 The trick is to differentiate between multiple identical copies of Rhai, each having
 a different [features] set, by their _sources_:
 
-* Different versions from [`crates.io`](https://crates.io/crates/rhai/) - The official crate.
+* Different versions from [`crates.io`](https://crates.io/crates/rhai/) &ndash; The official crate.
 
-* Different releases from [`GitHub`](https://github.com/jonathandturner/rhai) - Crate source on GitHub.
+* Different releases from [`GitHub`](https://github.com/jonathandturner/rhai) &ndash; Crate source on GitHub.
 
 * Forked copy of [https://github.com/jonathandturner/rhai](https://github.com/jonathandturner/rhai) on GitHub.
 
@@ -73,14 +73,14 @@ If more than four different instantiations of Rhai is necessary (why?), create m
 or GitHub forks or branches.
 
 
-Caveat - No Way To Avoid Dependency Conflicts
---------------------------------------------
+Caveat &ndash; No Way To Avoid Dependency Conflicts
+--------------------------------------------------
 
 Unfortunately, pulling in Rhai from different sources do not resolve the problem of
 [features] conflict between dependencies.  Even overriding `crates.io` via the `[patch]` manifest
-section doesn't work - all dependencies will eventually find the only one copy.
+section doesn't work &ndash; all dependencies will eventually find the only one copy.
 
-What is necessary - multiple copies of Rhai, one for each dependent crate that requires it,
+What is necessary &ndash; multiple copies of Rhai, one for each dependent crate that requires it,
 together with their _unique_ [features] set intact.  In other words, turning off Cargo's
 crate merging feature _just for Rhai_.
 

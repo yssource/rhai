@@ -75,8 +75,8 @@ Switching on [arrays] is very useful when working with Rust enums (see [this cha
 for more details).
 
 
-Difference From `if` - `else if` Chain
--------------------------------------
+Difference From `if`-`else if` Chain
+-----------------------------------
 
 Although a `switch` expression looks _almost_ the same as an `if`-`else if` chain,
 there are subtle differences between the two.
@@ -98,8 +98,8 @@ efficient, but it also means that [overloading][operator overloading]
 the `==` operator will have no effect.
 
 Therefore, in environments where it is desirable to [overload][operator overloading]
-the `==` operator - though it is difficult to think of valid scenarios where you'd want
-`1 == 1` to return something other than `true` - avoid using the `switch` expression.
+the `==` operator &ndash; though it is difficult to think of valid scenarios where you'd want
+`1 == 1` to return something other than `true` &ndash; avoid using the `switch` expression.
 
 ### Efficiency
 

@@ -38,7 +38,7 @@ Example
 The `Cargo.toml` configuration below turns on these six features:
 
 * `sync` (everything `Send + Sync`)
-* `unchecked` (disable all checking - should not be used with untrusted user scripts)
+* `unchecked` (disable all checking &ndash; should not be used with untrusted user scripts)
 * `only_i32` (only 32-bit signed integers)
 * `no_float` (no floating point numbers)
 * `no_module` (no loading external [modules])
@@ -56,12 +56,12 @@ nor loading external [modules].
 This configuration is perfect for an expression parser in a 32-bit embedded system without floating-point hardware.
 
 
-Caveat - Features Are Not Additive
----------------------------------
+Caveat &ndash; Features Are Not Additive
+---------------------------------------
 
-Most Rhai features are not strictly _additive_ - i.e. they do not only add optional functionalities.
+Most Rhai features are not strictly _additive_ &ndash; i.e. they do not only add optional functionalities.
 
-In fact, most features are _subtractive_ - i.e. they _remove_ functionalities.
+In fact, most features are _subtractive_ &ndash; i.e. they _remove_ functionalities.
 
 There is a reason for this design, because the _lack_ of a language feature by itself is a feature.
 

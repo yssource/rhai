@@ -6,7 +6,7 @@ Parse an Object Map from JSON
 The syntax for an [object map] is extremely similar to the JSON representation of a object hash,
 with the exception of `null` values which can technically be mapped to [`()`].
 
-A valid JSON string does not start with a hash character `#` while a Rhai [object map] does - that's the major difference!
+A valid JSON string does not start with a hash character `#` while a Rhai [object map] does &ndash; that's the major difference!
 
 Use the `Engine::parse_json` method to parse a piece of JSON into an object map.
 The JSON text must represent a single object hash (i.e. must be wrapped within "`{ .. }`")

@@ -228,7 +228,7 @@ let x = switch [value.type, value.field_0, value.field_1] {
 ```
 
 Usually, a helper method returns an array of values that can uniquely determine
-the switch case based on actual usage requirements - which means that it probably
+the switch case based on actual usage requirements &ndash; which means that it probably
 skips fields that contain data instead of discriminants.
 
 Then `switch` is used to very quickly match through a large number of array shapes

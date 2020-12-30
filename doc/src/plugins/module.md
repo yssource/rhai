@@ -32,7 +32,7 @@ This Rust module can then be registered into an [`Engine`] as a normal [module].
 This is done via the `exported_module!` macro.
 
 The macro `combine_with_exported_module!` can be used to _combine_ all the functions
-and variables into an existing [module], _flattening_ the namespace - i.e. all sub-modules
+and variables into an existing [module], _flattening_ the namespace &ndash; i.e. all sub-modules
 are eliminated and their contents promoted to the top level.  This is typical for
 developing [custom packages].
 

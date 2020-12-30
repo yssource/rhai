@@ -150,7 +150,7 @@ In order not to affect the speed of accessing properties in an object map, new p
 property access.
 
 A property [getter][getters/setters] function registered via `Engine::register_get`, for example,
-for a `Map` will never be found - instead, the property will be looked up in the object map.
+for a `Map` will never be found &ndash; instead, the property will be looked up in the object map.
 
 Therefore, _method-call_ notation must be used for built-in properties:
 

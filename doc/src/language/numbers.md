@@ -10,7 +10,7 @@ The default system integer type (also aliased to `INT`) is `i64`. It can be turn
 Floating-point numbers are also supported if not disabled with [`no_float`]. The default system floating-point type is `i64`
 (also aliased to `FLOAT`). It can be turned into `f32` via the [`f32_float`] feature.
 
-'`_`' separators can be added freely and are ignored within a number - except at the very beginning or right after
+'`_`' separators can be added freely and are ignored within a number &ndash; except at the very beginning or right after
 a decimal point ('`.`').
 
 | Format                | Type             |

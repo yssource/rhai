@@ -109,13 +109,13 @@ impl<'e, 's, 'a, 'm, 'pm> NativeCallContext<'e, 's, 'a, 'm, 'pm> {
     pub fn new_with_all_fields(
         engine: &'e Engine,
         source: &'s Option<ImmutableString>,
-        mods: &'a mut Imports,
+        imports: &'a mut Imports,
         lib: &'m impl AsRef<[&'pm Module]>,
     ) -> Self {
         Self {
             engine,
             source: source.as_ref().map(|s| s.as_str()),
-            mods: Some(mods),
+            mods: Some(imports),
             lib: lib.as_ref(),
         }
     }

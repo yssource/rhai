@@ -1685,18 +1685,18 @@ pub struct TokenIterator<'a, 'e> {
     /// Input character stream.
     stream: MultiInputsStream<'a>,
     /// A processor function that maps a token to another.
-    map: fn(Token) -> Token,
+    map: Option<fn(Token) -> Token>,
 }
 
 impl<'a> Iterator for TokenIterator<'a, '_> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let token = match get_next_token(&mut self.stream, &mut self.state, &mut self.pos) {
+        let (token, pos) = match get_next_token(&mut self.stream, &mut self.state, &mut self.pos) {
             // {EOF}
-            None => None,
+            None => return None,
             // Reserved keyword/symbol
-            Some((Token::Reserved(s), pos)) => Some((match
+            Some((Token::Reserved(s), pos)) => (match
                 (s.as_str(), self.engine.custom_keywords.contains_key(&s))
             {
                 ("===", false) => Token::LexError(LERR::ImproperSymbol(s,
@@ -1736,16 +1736,16 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
                 },
                 // Reserved keyword/operator that is not custom.
                 (_, false) => Token::Reserved(s),
-            }, pos)),
+            }, pos),
             // Custom keyword
             Some((Token::Identifier(s), pos)) if self.engine.custom_keywords.contains_key(&s) => {
-                Some((Token::Custom(s), pos))
+                (Token::Custom(s), pos)
             }
             // Custom standard keyword/symbol - must be disabled
             Some((token, pos)) if self.engine.custom_keywords.contains_key(token.syntax().as_ref()) => {
                 if self.engine.disabled_symbols.contains(token.syntax().as_ref()) {
                     // Disabled standard keyword/symbol
-                    Some((Token::Custom(token.syntax().into()), pos))
+                    (Token::Custom(token.syntax().into()), pos)
                 } else {
                     // Active standard keyword - should never be a custom keyword!
                     unreachable!("{:?} is an active keyword", token)
@@ -1753,16 +1753,20 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
             }
             // Disabled symbol
             Some((token, pos)) if self.engine.disabled_symbols.contains(token.syntax().as_ref()) => {
-                Some((Token::Reserved(token.syntax().into()), pos))
+                (Token::Reserved(token.syntax().into()), pos)
             }
             // Normal symbol
-            r => r,
+            Some(r) => r,
         };
 
-        match token {
-            None => None,
-            Some((token, pos)) => Some(((self.map)(token), pos)),
-        }
+        // Run the mapper, if any
+        let token = if let Some(map) = self.map {
+            map(token)
+        } else {
+            token
+        };
+
+        Some((token, pos))
     }
 }
 
@@ -1773,14 +1777,23 @@ impl Engine {
         &'e self,
         input: impl IntoIterator<Item = &'a &'a str>,
     ) -> TokenIterator<'a, 'e> {
-        self.lex_with_map(input, |f| f)
+        self.lex_raw(input, None)
     }
     /// Tokenize an input text stream with a mapping function.
-    #[inline]
+    #[inline(always)]
     pub fn lex_with_map<'a, 'e>(
         &'e self,
         input: impl IntoIterator<Item = &'a &'a str>,
         map: fn(Token) -> Token,
+    ) -> TokenIterator<'a, 'e> {
+        self.lex_raw(input, Some(map))
+    }
+    /// Tokenize an input text stream with an optional mapping function.
+    #[inline]
+    fn lex_raw<'a, 'e>(
+        &'e self,
+        input: impl IntoIterator<Item = &'a &'a str>,
+        map: Option<fn(Token) -> Token>,
     ) -> TokenIterator<'a, 'e> {
         TokenIterator {
             engine: self,
