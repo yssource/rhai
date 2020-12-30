@@ -789,7 +789,7 @@ impl Engine {
             module_resolver: Box::new(crate::module::resolvers::FileModuleResolver::new()),
             #[cfg(not(feature = "no_module"))]
             #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
-            module_resolver: None,
+            module_resolver: Box::new(crate::module::resolvers::DummyModuleResolver::new()),
 
             type_names: Default::default(),
             disabled_symbols: Default::default(),
