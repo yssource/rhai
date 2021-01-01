@@ -96,7 +96,7 @@ impl Imports {
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     #[inline(always)]
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (&'a str, &'a Module)> + 'a {
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.0
             .iter()
             .rev()
@@ -105,9 +105,7 @@ impl Imports {
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     #[inline(always)]
-    pub(crate) fn iter_raw<'a>(
-        &'a self,
-    ) -> impl Iterator<Item = (&'a ImmutableString, &'a Shared<Module>)> + 'a {
+    pub(crate) fn iter_raw(&self) -> impl Iterator<Item = (&ImmutableString, &Shared<Module>)> {
         self.0.iter().rev().map(|(n, m)| (n, m))
     }
     /// Get a consuming iterator to this stack of imported [modules][Module] in reverse order.
@@ -575,17 +573,17 @@ pub struct EvalContext<'e, 'x, 'px: 'x, 'a, 's, 'm, 'pm: 'm, 't, 'pt: 't> {
 impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> {
     /// The current [`Engine`].
     #[inline(always)]
-    pub fn engine(&self) -> &'e Engine {
+    pub fn engine(&self) -> &Engine {
         self.engine
     }
     /// The current source.
     #[inline(always)]
-    pub fn source<'z: 's>(&'z self) -> Option<&'s str> {
+    pub fn source(&self) -> Option<&str> {
         self.state.source.as_ref().map(|s| s.as_str())
     }
     /// The current [`Scope`].
     #[inline(always)]
-    pub fn scope(&self) -> &Scope<'px> {
+    pub fn scope(&self) -> &Scope {
         self.scope
     }
     /// Mutable reference to the current [`Scope`].
@@ -593,18 +591,31 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
     pub fn scope_mut(&mut self) -> &mut &'x mut Scope<'px> {
         &mut self.scope
     }
+    /// Get an iterator over the current set of modules imported via `import` statements.
+    #[cfg(not(feature = "no_module"))]
+    #[inline(always)]
+    pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
+        self.mods.iter()
+    }
     /// _(INTERNALS)_ The current set of modules imported via `import` statements.
     /// Available under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    pub fn imports(&'a self) -> &'a Imports {
+    pub fn imports(&self) -> &Imports {
         self.mods
     }
     /// Get an iterator over the namespaces containing definition of all script-defined functions.
     #[inline(always)]
-    pub fn iter_namespaces(&self) -> impl Iterator<Item = &'pm Module> + 'm {
+    pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
+    }
+    /// _(INTERNALS)_ The current set of namespaces containing definitions of all script-defined functions.
+    /// Available under the `internals` feature only.
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    pub fn namespaces(&self) -> &[&Module] {
+        self.lib
     }
     /// The current bound `this` pointer, if any.
     #[inline(always)]

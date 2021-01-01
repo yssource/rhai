@@ -121,13 +121,19 @@ impl<'e, 's, 'a, 'm, 'pm> NativeCallContext<'e, 's, 'a, 'm, 'pm> {
     }
     /// The current [`Engine`].
     #[inline(always)]
-    pub fn engine(&self) -> &'e Engine {
+    pub fn engine(&self) -> &Engine {
         self.engine
     }
     /// The current source.
     #[inline(always)]
-    pub fn source<'z: 's>(&'z self) -> Option<&'s str> {
+    pub fn source(&self) -> Option<&str> {
         self.source
+    }
+    /// Get an iterator over the current set of modules imported via `import` statements.
+    #[cfg(not(feature = "no_module"))]
+    #[inline(always)]
+    pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
+        self.mods.iter().flat_map(|m| m.iter())
     }
     /// _(INTERNALS)_ The current set of modules imported via `import` statements.
     /// Available under the `internals` feature only.
@@ -137,10 +143,17 @@ impl<'e, 's, 'a, 'm, 'pm> NativeCallContext<'e, 's, 'a, 'm, 'pm> {
     pub fn imports(&self) -> Option<&Imports> {
         self.mods
     }
-    /// Get an iterator over the namespaces containing definition of all script-defined functions.
+    /// Get an iterator over the namespaces containing definitions of all script-defined functions.
     #[inline(always)]
-    pub fn iter_namespaces(&self) -> impl Iterator<Item = &'pm Module> + 'm {
+    pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
+    }
+    /// _(INTERNALS)_ The current set of namespaces containing definitions of all script-defined functions.
+    /// Available under the `internals` feature only.
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    pub fn namespaces(&self) -> &[&Module] {
+        self.lib
     }
     /// Call a function inside the call context.
     ///
