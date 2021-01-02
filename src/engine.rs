@@ -126,11 +126,14 @@ impl Imports {
     }
     /// Get specified function via its hash key.
     #[inline(always)]
-    pub fn get_fn(&self, hash: NonZeroU64) -> Option<&CallableFunction> {
+    pub fn get_fn(
+        &self,
+        hash: NonZeroU64,
+    ) -> Option<(&CallableFunction, &Option<ImmutableString>)> {
         self.0
             .iter()
             .rev()
-            .find_map(|(_, m)| m.get_qualified_fn(hash))
+            .find_map(|(_, m)| m.get_qualified_fn(hash).map(|f| (f, m.id_raw())))
     }
     /// Does the specified [`TypeId`][std::any::TypeId] iterator exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
@@ -2046,15 +2049,16 @@ impl Engine {
                     match self
                         .global_namespace
                         .get_fn(hash_fn, false)
+                        .map(|f| (f, None))
                         .or_else(|| {
-                            self.global_modules
-                                .iter()
-                                .find_map(|m| m.get_fn(hash_fn, false))
+                            self.global_modules.iter().find_map(|m| {
+                                m.get_fn(hash_fn, false).map(|f| (f, m.id_raw().as_ref()))
+                            })
                         })
-                        .or_else(|| mods.get_fn(hash_fn))
+                        .or_else(|| mods.get_fn(hash_fn).map(|(f, source)| (f, source.as_ref())))
                     {
                         // op= function registered as method
-                        Some(func) if func.is_method() => {
+                        Some((func, source)) if func.is_method() => {
                             let mut lock_guard;
                             let lhs_ptr_inner;
 
@@ -2068,14 +2072,16 @@ impl Engine {
                             let args = &mut [lhs_ptr_inner, &mut rhs_val];
 
                             // Overriding exact implementation
+                            let source = if source.is_none() {
+                                state.source.as_ref()
+                            } else {
+                                source
+                            };
                             if func.is_plugin_fn() {
                                 func.get_plugin_fn()
-                                    .call((self, &state.source, &*mods, lib).into(), args)?;
+                                    .call((self, source, &*mods, lib).into(), args)?;
                             } else {
-                                func.get_native_fn()(
-                                    (self, &state.source, &*mods, lib).into(),
-                                    args,
-                                )?;
+                                func.get_native_fn()((self, source, &*mods, lib).into(), args)?;
                             }
                         }
                         // Built-in op-assignment function

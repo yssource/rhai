@@ -176,15 +176,14 @@ impl Engine {
         self.inc_operations(state, pos)?;
 
         // Check if function access already in the cache
-        if !state.functions_cache.contains_key(&hash_fn) {
+        let func = &*state.functions_cache.entry(hash_fn).or_insert_with(|| {
             // Search for the native function
             // First search registered functions (can override packages)
             // Then search packages
             // Finally search modules
 
             //lib.get_fn(hash_fn, pub_only)
-            let f = self
-                .global_namespace
+            self.global_namespace
                 .get_fn(hash_fn, pub_only)
                 .cloned()
                 .map(|f| (f, None))
@@ -195,13 +194,11 @@ impl Engine {
                             .map(|f| (f, m.id_raw().clone()))
                     })
                 })
-                .or_else(|| mods.get_fn(hash_fn).cloned().map(|f| (f, None)));
-
-            // Store into cache
-            state.functions_cache.insert(hash_fn, f);
-        }
-
-        let func = state.functions_cache.get(&hash_fn).unwrap();
+                .or_else(|| {
+                    mods.get_fn(hash_fn)
+                        .map(|(f, source)| (f.clone(), source.clone()))
+                })
+        });
 
         if let Some((func, source)) = func {
             assert!(func.is_native());
@@ -212,9 +209,9 @@ impl Engine {
 
             // Run external function
             let source = if source.is_none() {
-                &state.source
+                state.source.as_ref()
             } else {
-                source
+                source.as_ref()
             };
             let result = if func.is_plugin_fn() {
                 func.get_plugin_fn()
@@ -1240,10 +1237,10 @@ impl Engine {
 
                 result
             }
-            Some(f) if f.is_plugin_fn() => f
-                .get_plugin_fn()
-                .clone()
-                .call((self, module.id_raw(), &*mods, lib).into(), args.as_mut()),
+            Some(f) if f.is_plugin_fn() => f.get_plugin_fn().clone().call(
+                (self, module.id_raw().as_ref(), &*mods, lib).into(),
+                args.as_mut(),
+            ),
             Some(f) if f.is_native() => {
                 if !f.is_method() {
                     // Clone first argument
@@ -1254,7 +1251,10 @@ impl Engine {
                     }
                 }
 
-                f.get_native_fn()((self, module.id_raw(), &*mods, lib).into(), args.as_mut())
+                f.get_native_fn()(
+                    (self, module.id_raw().as_ref(), &*mods, lib).into(),
+                    args.as_mut(),
+                )
             }
             Some(f) => unreachable!("unknown function type: {:?}", f),
             None if def_val.is_some() => Ok(def_val.unwrap().clone()),

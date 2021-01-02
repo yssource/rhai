@@ -63,14 +63,14 @@ pub struct NativeCallContext<'e, 's, 'a, 'm, 'pm: 'm> {
 }
 
 impl<'e, 's, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized>
-    From<(&'e Engine, &'s Option<ImmutableString>, &'a Imports, &'m M)>
+    From<(&'e Engine, Option<&'s ImmutableString>, &'a Imports, &'m M)>
     for NativeCallContext<'e, 's, 'a, 'm, 'pm>
 {
     #[inline(always)]
-    fn from(value: (&'e Engine, &'s Option<ImmutableString>, &'a Imports, &'m M)) -> Self {
+    fn from(value: (&'e Engine, Option<&'s ImmutableString>, &'a Imports, &'m M)) -> Self {
         Self {
             engine: value.0,
-            source: value.1.as_ref().map(|s| s.as_str()),
+            source: value.1.map(|s| s.as_str()),
             mods: Some(value.2),
             lib: value.3.as_ref(),
         }
