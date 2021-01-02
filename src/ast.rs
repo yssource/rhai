@@ -1245,6 +1245,7 @@ mod tests {
         assert_eq!(size_of::<Option<crate::ast::Expr>>(), 16);
         assert_eq!(size_of::<crate::ast::Stmt>(), 32);
         assert_eq!(size_of::<Option<crate::ast::Stmt>>(), 32);
+        assert_eq!(size_of::<crate::FnPtr>(), 32);
         assert_eq!(size_of::<crate::Scope>(), 48);
         assert_eq!(size_of::<crate::LexError>(), 56);
         assert_eq!(size_of::<crate::ParseError>(), 16);
