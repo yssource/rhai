@@ -395,7 +395,7 @@ impl Module {
     }
 
     /// Get a reference to a namespace-qualified variable.
-    /// Name and Position in `EvalAltResult` are None and must be set afterwards.
+    /// Name and Position in [`EvalAltResult`] are [`None`] and [`NONE`][Position::NONE] and must be set afterwards.
     ///
     /// The [`NonZeroU64`] hash is calculated by the function [`crate::calc_native_fn_hash`].
     #[inline(always)]
@@ -1420,7 +1420,6 @@ impl Module {
     }
 
     /// Get a namespace-qualified function.
-    /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
     /// The [`NonZeroU64`] hash is calculated by the function [`crate::calc_native_fn_hash`] and must match
     /// the hash calculated by [`build_index`][Module::build_index].

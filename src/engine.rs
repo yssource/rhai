@@ -1182,7 +1182,6 @@ impl Engine {
                             None, None, level,
                         )
                         .map(|(v, _)| (v, true))
-                        .map_err(|err| err.fill_position(*pos))
                     }
                     // xxx.id
                     Expr::Property(x) => {
@@ -1193,7 +1192,6 @@ impl Engine {
                             None, None, level,
                         )
                         .map(|(v, _)| (v, false))
-                        .map_err(|err| err.fill_position(*pos))
                     }
                     // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
                     Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target_val.is::<Map>() => {
@@ -1244,12 +1242,10 @@ impl Engine {
                                 let (getter, setter, Ident { pos, .. }) = p.as_ref();
                                 let arg_values = &mut [target_val, &mut Default::default()];
                                 let args = &mut arg_values[..1];
-                                let (mut val, updated) = self
-                                    .exec_fn_call(
-                                        mods, state, lib, getter, None, args, is_ref, true, false,
-                                        *pos, None, None, level,
-                                    )
-                                    .map_err(|err| err.fill_position(*pos))?;
+                                let (mut val, updated) = self.exec_fn_call(
+                                    mods, state, lib, getter, None, args, is_ref, true, false,
+                                    *pos, None, None, level,
+                                )?;
 
                                 let val = &mut val;
 
@@ -1282,7 +1278,7 @@ impl Engine {
                                             EvalAltResult::ErrorDotExpr(_, _) => {
                                                 Ok((Dynamic::UNIT, false))
                                             }
-                                            _ => Err(err.fill_position(*x_pos)),
+                                            _ => Err(err),
                                         },
                                     )?;
                                 }
