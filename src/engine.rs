@@ -45,13 +45,13 @@ pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 /// _(INTERNALS)_ A stack of imported [modules][Module].
 /// Exported under the `internals` feature only.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 //
 // # Implementation Notes
 //
-// We cannot use &str or Cow<str> here because `eval` may load a [module][Module] and
+// We cannot use Cow<str> here because `eval` may load a [module][Module] and
 // the module name will live beyond the AST of the eval script text.
 // The best we can do is a shared reference.
 #[derive(Debug, Clone, Default)]
@@ -214,55 +214,62 @@ pub const FN_ANONYMOUS: &str = "anon$";
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 pub const OP_EQUALS: &str = "==";
 
-/// A type specifying the method of chaining.
+/// Method of chaining.
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum ChainType {
-    None,
+    /// Not a chaining type.
+    NonChaining,
+    /// Indexing.
     Index,
+    /// Dotting.
     Dot,
 }
 
+/// Value of a chaining argument.
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-#[derive(Debug, Clone)]
-pub enum IndexChainValue {
-    None,
+#[derive(Debug, Clone, Hash)]
+pub enum ChainArgument {
+    /// Dot-property access.
+    Property,
+    /// Arguments to a dot-function call.
     FnCallArgs(StaticVec<Dynamic>),
-    Value(Dynamic),
+    /// Index value.
+    IndexValue(Dynamic),
 }
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-impl IndexChainValue {
+impl ChainArgument {
     /// Return the `Dynamic` value.
     ///
     /// # Panics
     ///
-    /// Panics if not `IndexChainValue::Value`.
+    /// Panics if not `ChainArgument::IndexValue`.
     #[inline(always)]
     #[cfg(not(feature = "no_index"))]
-    pub fn as_value(self) -> Dynamic {
+    pub fn as_index_value(self) -> Dynamic {
         match self {
-            Self::None | Self::FnCallArgs(_) => panic!("expecting IndexChainValue::Value"),
-            Self::Value(value) => value,
+            Self::Property | Self::FnCallArgs(_) => panic!("expecting ChainArgument::IndexValue"),
+            Self::IndexValue(value) => value,
         }
     }
     /// Return the `StaticVec<Dynamic>` value.
     ///
     /// # Panics
     ///
-    /// Panics if not `IndexChainValue::FnCallArgs`.
+    /// Panics if not `ChainArgument::FnCallArgs`.
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
     pub fn as_fn_call_args(self) -> StaticVec<Dynamic> {
         match self {
-            Self::None | Self::Value(_) => panic!("expecting IndexChainValue::FnCallArgs"),
+            Self::Property | Self::IndexValue(_) => panic!("expecting ChainArgument::FnCallArgs"),
             Self::FnCallArgs(value) => value,
         }
     }
 }
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-impl From<StaticVec<Dynamic>> for IndexChainValue {
+impl From<StaticVec<Dynamic>> for ChainArgument {
     #[inline(always)]
     fn from(value: StaticVec<Dynamic>) -> Self {
         Self::FnCallArgs(value)
@@ -270,10 +277,10 @@ impl From<StaticVec<Dynamic>> for IndexChainValue {
 }
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-impl From<Dynamic> for IndexChainValue {
+impl From<Dynamic> for ChainArgument {
     #[inline(always)]
     fn from(value: Dynamic) -> Self {
-        Self::Value(value)
+        Self::IndexValue(value)
     }
 }
 
@@ -487,7 +494,7 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 /// _(INTERNALS)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Default)]
@@ -524,7 +531,7 @@ impl State {
 /// _(INTERNALS)_ A type containing all the limits imposed by the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 #[cfg(not(feature = "unchecked"))]
@@ -850,7 +857,8 @@ impl Engine {
     }
 
     /// Create a new [`Engine`] with minimal built-in functions.
-    /// Use the [`register_global_module`][Engine::register_global_module] method to load additional packages of functions.
+    ///
+    /// Use [`register_global_module`][Engine::register_global_module] to add packages of functions.
     #[inline]
     pub fn new_raw() -> Self {
         Self {
@@ -1021,13 +1029,13 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         target: &mut Target,
         rhs: &Expr,
-        idx_values: &mut StaticVec<IndexChainValue>,
+        idx_values: &mut StaticVec<ChainArgument>,
         chain_type: ChainType,
         level: usize,
         new_val: Option<(Dynamic, Position)>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        if chain_type == ChainType::None {
-            unreachable!("should not be ChainType::None");
+        if chain_type == ChainType::NonChaining {
+            unreachable!("should not be ChainType::NonChaining");
         }
 
         let is_ref = target.is_ref();
@@ -1035,7 +1043,7 @@ impl Engine {
         let next_chain = match rhs {
             Expr::Index(_, _) => ChainType::Index,
             Expr::Dot(_, _) => ChainType::Dot,
-            _ => ChainType::None,
+            _ => ChainType::NonChaining,
         };
 
         // Pop the last index value
@@ -1052,7 +1060,7 @@ impl Engine {
                     // xxx[idx].expr... | xxx[idx][expr]...
                     Expr::Dot(x, x_pos) | Expr::Index(x, x_pos) => {
                         let idx_pos = x.lhs.position();
-                        let idx_val = idx_val.as_value();
+                        let idx_val = idx_val.as_index_value();
                         let obj_ptr = &mut self.get_indexed_mut(
                             mods, state, lib, target_val, idx_val, idx_pos, false, is_ref, true,
                             level,
@@ -1066,7 +1074,7 @@ impl Engine {
                     }
                     // xxx[rhs] = new_val
                     _ if new_val.is_some() => {
-                        let idx_val = idx_val.as_value();
+                        let idx_val = idx_val.as_index_value();
                         let mut idx_val2 = idx_val.clone();
 
                         // `call_setter` is introduced to bypass double mutable borrowing of target
@@ -1114,7 +1122,7 @@ impl Engine {
                     }
                     // xxx[rhs]
                     _ => {
-                        let idx_val = idx_val.as_value();
+                        let idx_val = idx_val.as_index_value();
                         self.get_indexed_mut(
                             mods, state, lib, target_val, idx_val, pos, false, is_ref, true, level,
                         )
@@ -1405,7 +1413,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         parent_chain_type: ChainType,
-        idx_values: &mut StaticVec<IndexChainValue>,
+        idx_values: &mut StaticVec<ChainArgument>,
         size: usize,
         level: usize,
     ) -> Result<(), Box<EvalAltResult>> {
@@ -1428,7 +1436,7 @@ impl Engine {
             }
 
             Expr::Property(_) if parent_chain_type == ChainType::Dot => {
-                idx_values.push(IndexChainValue::None)
+                idx_values.push(ChainArgument::Property)
             }
             Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
 
@@ -1438,7 +1446,7 @@ impl Engine {
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
                     Expr::Property(_) if parent_chain_type == ChainType::Dot => {
-                        IndexChainValue::None
+                        ChainArgument::Property
                     }
                     Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
                     Expr::FnCall(x, _)
@@ -2312,7 +2320,7 @@ impl Engine {
 
                 let result = self
                     .eval_stmt(scope, mods, state, lib, this_ptr, try_body, level)
-                    .map(|_| ().into());
+                    .map(|_| Dynamic::UNIT);
 
                 match result {
                     Ok(_) => result,
@@ -2374,7 +2382,7 @@ impl Engine {
 
             // Empty throw
             Stmt::Return((ReturnType::Exception, pos), None, _) => {
-                EvalAltResult::ErrorRuntime(().into(), *pos).into()
+                EvalAltResult::ErrorRuntime(Dynamic::UNIT, *pos).into()
             }
 
             // Let/const statement
@@ -2389,7 +2397,7 @@ impl Engine {
                     self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                         .flatten()
                 } else {
-                    ().into()
+                    Dynamic::UNIT
                 };
                 let (var_name, _alias): (Cow<'_, str>, _) = if state.is_global() {
                     (
@@ -2607,6 +2615,7 @@ impl Engine {
     }
 
     /// Check if the number of operations stay within limit.
+    #[inline]
     pub(crate) fn inc_operations(
         &self,
         state: &mut State,

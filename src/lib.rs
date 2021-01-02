@@ -104,7 +104,7 @@ pub type INT = i32;
 ///
 /// If the `f32_float` feature is enabled, this will be [`i32`] instead.
 ///
-/// Not available under the `no_float` feature.
+/// Not available under `no_float`.
 #[cfg(not(feature = "no_float"))]
 #[cfg(not(feature = "f32_float"))]
 pub type FLOAT = f64;
@@ -114,7 +114,7 @@ pub type FLOAT = f64;
 ///
 /// If the `f32_float` feature is not used, this will be `f64` instead.
 ///
-/// Not available under the `no_float` feature.
+/// Not available under `no_float`.
 #[cfg(not(feature = "no_float"))]
 #[cfg(feature = "f32_float")]
 pub type FLOAT = f32;
@@ -148,13 +148,13 @@ pub use fn_func::Func;
 
 /// Variable-sized array of [`Dynamic`] values.
 ///
-/// Not available under the `no_index` feature.
+/// Not available under `no_index`.
 #[cfg(not(feature = "no_index"))]
 pub type Array = stdlib::vec::Vec<Dynamic>;
 
 /// Hash map of [`Dynamic`] values with [`ImmutableString`] keys.
 ///
-/// Not available under the `no_object` feature.
+/// Not available under `no_object`.
 #[cfg(not(feature = "no_object"))]
 pub type Map = stdlib::collections::HashMap<ImmutableString, Dynamic>;
 

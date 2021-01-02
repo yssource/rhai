@@ -1,7 +1,7 @@
 use crate::stdlib::{boxed::Box, ops::AddAssign, vec::Vec};
 use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 
-/// Module resolution service that holds a collection of module resolves,
+/// [Module] resolution service that holds a collection of [module][Module] resolves,
 /// to be searched in sequential order.
 ///
 /// # Example
@@ -42,13 +42,13 @@ impl ModuleResolversCollection {
     pub fn new() -> Self {
         Default::default()
     }
-    /// Append a module resolver to the end.
+    /// Append a [module resolver][ModuleResolver] to the end.
     #[inline(always)]
     pub fn push(&mut self, resolver: impl ModuleResolver + 'static) -> &mut Self {
         self.0.push(Box::new(resolver));
         self
     }
-    /// Insert a module resolver to an offset index.
+    /// Insert a [module resolver][ModuleResolver] to an offset index.
     ///
     /// # Panics
     ///
@@ -58,12 +58,12 @@ impl ModuleResolversCollection {
         self.0.insert(index, Box::new(resolver));
         self
     }
-    /// Remove the last module resolver from the end, if any.
+    /// Remove the last [module resolver][ModuleResolver] from the end, if any.
     #[inline(always)]
     pub fn pop(&mut self) -> Option<Box<dyn ModuleResolver>> {
         self.0.pop()
     }
-    /// Remove a module resolver at an offset index.
+    /// Remove a [module resolver][ModuleResolver] at an offset index.
     ///
     /// # Panics
     ///
@@ -72,17 +72,17 @@ impl ModuleResolversCollection {
     pub fn remove(&mut self, index: usize) -> Box<dyn ModuleResolver> {
         self.0.remove(index)
     }
-    /// Get an iterator of all the module resolvers.
+    /// Get an iterator of all the [module resolvers][ModuleResolver].
     #[inline(always)]
     pub fn iter(&self) -> impl Iterator<Item = &dyn ModuleResolver> {
         self.0.iter().map(|v| v.as_ref())
     }
-    /// Get a mutable iterator of all the modules.
+    /// Get a mutable iterator of all the [module resolvers][ModuleResolver].
     #[inline(always)]
     pub fn into_iter(self) -> impl Iterator<Item = Box<dyn ModuleResolver>> {
         self.0.into_iter()
     }
-    /// Remove all module resolvers.
+    /// Remove all [module resolvers][ModuleResolver].
     #[inline(always)]
     pub fn clear(&mut self) -> &mut Self {
         self.0.clear();
@@ -93,7 +93,7 @@ impl ModuleResolversCollection {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-    /// Get the number of module resolvers in this [`ModuleResolversCollection`].
+    /// Get the number of [module resolvers][ModuleResolver] in this [`ModuleResolversCollection`].
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.0.len()

@@ -1,7 +1,7 @@
 use crate::stdlib::boxed::Box;
 use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 
-/// Empty/disabled module resolution service that acts as a dummy.
+/// Empty/disabled [module][Module] resolution service that acts as a dummy.
 ///
 /// # Example
 ///

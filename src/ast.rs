@@ -62,7 +62,7 @@ impl FnAccess {
 /// _(INTERNALS)_ A type containing information on a scripted function.
 /// Exported under the `internals` feature only.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone)]
@@ -271,6 +271,8 @@ impl AST {
     /// No statements are cloned.
     ///
     /// This operation is cheap because functions are shared.
+    ///
+    /// Not available under [`no_function`].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clone_functions_only(&self) -> Self {
@@ -280,6 +282,8 @@ impl AST {
     /// No statements are cloned.
     ///
     /// This operation is cheap because functions are shared.
+    ///
+    /// Not available under [`no_function`].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clone_functions_only_filtered(
@@ -564,6 +568,8 @@ impl AST {
     }
     /// Filter out the functions, retaining only some based on a filter predicate.
     ///
+    /// Not available under [`no_function`].
+    ///
     /// # Example
     ///
     /// ```
@@ -597,6 +603,8 @@ impl AST {
         self
     }
     /// Iterate through all function definitions.
+    ///
+    /// Not available under [`no_function`].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn iter_functions<'a>(&'a self) -> impl Iterator<Item = ScriptFnMetadata> + 'a {
@@ -605,6 +613,8 @@ impl AST {
             .map(|(_, _, _, _, fn_def)| fn_def.into())
     }
     /// Clear all function definitions in the [`AST`].
+    ///
+    /// Not available under [`no_function`].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clear_functions(&mut self) {
@@ -650,7 +660,7 @@ impl AsRef<Module> for AST {
 /// _(INTERNALS)_ An identifier containing an [immutable string][ImmutableString] name and a [position][Position].
 /// Exported under the `internals` feature only.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -671,7 +681,7 @@ impl fmt::Debug for Ident {
 /// _(INTERNALS)_ A type encapsulating the mode of a `return`/`throw` statement.
 /// Exported under the `internals` feature only.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
@@ -685,7 +695,7 @@ pub enum ReturnType {
 /// _(INTERNALS)_ A statement.
 /// Exported under the `internals` feature only.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone)]
@@ -882,7 +892,7 @@ impl Stmt {
 /// _(INTERNALS)_ A custom syntax definition.
 /// Exported under the `internals` feature only.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 #[derive(Clone)]
@@ -909,7 +919,7 @@ impl fmt::Debug for CustomExpr {
 /// _(INTERNALS)_ A binary expression.
 /// Exported under the `internals` feature only.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone)]
@@ -923,7 +933,7 @@ pub struct BinaryExpr {
 /// _(INTERNALS)_ A function call.
 /// Exported under the `internals` feature only.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Default)]
@@ -948,7 +958,7 @@ pub struct FnCallExpr {
 /// _(INTERNALS)_ An expression sub-tree.
 /// Exported under the `internals` feature only.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone)]
@@ -1028,7 +1038,7 @@ impl Expr {
                 AccessMode::ReadOnly,
             )),
             Self::BoolConstant(x, _) => (*x).into(),
-            Self::Unit(_) => ().into(),
+            Self::Unit(_) => Dynamic::UNIT,
 
             #[cfg(not(feature = "no_index"))]
             Self::Array(x, _) if self.is_constant() => {

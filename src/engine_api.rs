@@ -35,7 +35,7 @@ fn calc_hash_for_scripts<'a>(scripts: impl IntoIterator<Item = &'a &'a str>) -> 
 impl Engine {
     /// Register a function of the [`Engine`].
     ///
-    /// ## WARNING - Low Level API
+    /// # WARNING - Low Level API
     ///
     /// This function is very low level.  It takes a list of [`TypeId`][std::any::TypeId]'s indicating the actual types of the parameters.
     ///
@@ -88,13 +88,12 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// // Register the custom type.
-    /// engine.register_type::<TestStruct>();
-    ///
-    /// engine.register_fn("new_ts", TestStruct::new);
-    ///
-    /// // Use `register_fn` to register methods on the type.
-    /// engine.register_fn("update", TestStruct::update);
+    /// // Register API for the custom type.
+    /// engine
+    ///     .register_type::<TestStruct>()
+    ///     .register_fn("new_ts", TestStruct::new)
+    ///     // Use `register_fn` to register methods on the type.
+    ///     .register_fn("update", TestStruct::update);
     ///
     /// assert_eq!(
     ///     engine.eval::<TestStruct>("let x = new_ts(); x.update(41); x")?,
@@ -128,21 +127,18 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// // Register the custom type.
-    /// engine.register_type::<TestStruct>();
-    ///
-    /// engine.register_fn("new_ts", TestStruct::new);
+    /// // Register API for the custom type.
+    /// engine
+    ///     .register_type::<TestStruct>()
+    ///     .register_fn("new_ts", TestStruct::new);
     ///
     /// assert_eq!(
     ///     engine.eval::<String>("let x = new_ts(); type_of(x)")?,
     ///     "rust_out::TestStruct"
     /// );
     ///
-    /// // Register the custom type with a name.
+    /// // Re-register the custom type with a name.
     /// engine.register_type_with_name::<TestStruct>("Hello");
-    ///
-    /// // Register methods on the type.
-    /// engine.register_fn("new_ts", TestStruct::new);
     ///
     /// assert_eq!(
     ///     engine.eval::<String>("let x = new_ts(); type_of(x)")?,
@@ -192,13 +188,12 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// // Register the custom type.
-    /// engine.register_type::<TestStruct>();
-    ///
-    /// engine.register_fn("new_ts", TestStruct::new);
-    ///
-    /// // Register a getter on a property (notice it doesn't have to be the same name).
-    /// engine.register_get("xyz", TestStruct::get_field);
+    /// // Register API for the custom type.
+    /// engine
+    ///     .register_type::<TestStruct>()
+    ///     .register_fn("new_ts", TestStruct::new)
+    ///     // Register a getter on a property (notice it doesn't have to be the same name).
+    ///     .register_get("xyz", TestStruct::get_field);
     ///
     /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a.xyz")?, 1);
     /// # Ok(())
@@ -239,13 +234,12 @@ impl Engine {
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// let mut engine = Engine::new();
     ///
-    /// // Register the custom type.
-    /// engine.register_type::<TestStruct>();
-    ///
-    /// engine.register_fn("new_ts", TestStruct::new);
-    ///
-    /// // Register a getter on a property (notice it doesn't have to be the same name).
-    /// engine.register_get_result("xyz", TestStruct::get_field);
+    /// // Register API for the custom type.
+    /// engine
+    ///     .register_type::<TestStruct>()
+    ///     .register_fn("new_ts", TestStruct::new)
+    ///     // Register a getter on a property (notice it doesn't have to be the same name).
+    ///     .register_get_result("xyz", TestStruct::get_field);
     ///
     /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a.xyz")?, 1);
     /// # Ok(())
@@ -281,13 +275,12 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// // Register the custom type.
-    /// engine.register_type::<TestStruct>();
-    ///
-    /// engine.register_fn("new_ts", TestStruct::new);
-    ///
-    /// // Register a setter on a property (notice it doesn't have to be the same name)
-    /// engine.register_set("xyz", TestStruct::set_field);
+    /// // Register API for the custom type.
+    /// engine
+    ///     .register_type::<TestStruct>()
+    ///     .register_fn("new_ts", TestStruct::new)
+    ///     // Register a setter on a property (notice it doesn't have to be the same name)
+    ///     .register_set("xyz", TestStruct::set_field);
     ///
     /// // Notice that, with a getter, there is no way to get the property value
     /// assert_eq!(
@@ -330,13 +323,12 @@ impl Engine {
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// let mut engine = Engine::new();
     ///
-    /// // Register the custom type.
-    /// engine.register_type::<TestStruct>();
-    ///
-    /// engine.register_fn("new_ts", TestStruct::new);
-    ///
-    /// // Register a setter on a property (notice it doesn't have to be the same name)
-    /// engine.register_set_result("xyz", TestStruct::set_field);
+    /// // Register API for the custom type.
+    /// engine
+    ///     .register_type::<TestStruct>()
+    ///     .register_fn("new_ts", TestStruct::new)
+    ///     // Register a setter on a property (notice it doesn't have to be the same name)
+    ///     .register_set_result("xyz", TestStruct::set_field);
     ///
     /// // Notice that, with a getter, there is no way to get the property value
     /// assert_eq!(
@@ -383,14 +375,13 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// // Register the custom type.
-    /// engine.register_type::<TestStruct>();
-    ///
-    /// engine.register_fn("new_ts", TestStruct::new);
-    ///
-    /// // Register a getter and a setter on a property
-    /// // (notice it doesn't have to be the same name)
-    /// engine.register_get_set("xyz", TestStruct::get_field, TestStruct::set_field);
+    /// // Register API for the custom type.
+    /// engine
+    ///     .register_type::<TestStruct>()
+    ///     .register_fn("new_ts", TestStruct::new)
+    ///     // Register both a getter and a setter on a property
+    ///     // (notice it doesn't have to be the same name)
+    ///     .register_get_set("xyz", TestStruct::get_field, TestStruct::set_field);
     ///
     /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a.xyz = 42; a.xyz")?, 42);
     /// # Ok(())
@@ -434,14 +425,14 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// // Register the custom type.
+    /// // Register API for the custom type.
     /// # #[cfg(not(feature = "no_object"))]
     /// engine.register_type::<TestStruct>();
     ///
-    /// engine.register_fn("new_ts", TestStruct::new);
-    ///
-    /// // Register an indexer.
-    /// engine.register_indexer_get(TestStruct::get_field);
+    /// engine
+    ///     .register_fn("new_ts", TestStruct::new)
+    ///     // Register an indexer.
+    ///     .register_indexer_get(TestStruct::get_field);
     ///
     /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a[2]")?, 3);
     /// # Ok(())
@@ -500,14 +491,14 @@ impl Engine {
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// let mut engine = Engine::new();
     ///
-    /// // Register the custom type.
+    /// // Register API for the custom type.
     /// # #[cfg(not(feature = "no_object"))]
     /// engine.register_type::<TestStruct>();
     ///
-    /// engine.register_fn("new_ts", TestStruct::new);
-    ///
-    /// // Register an indexer.
-    /// engine.register_indexer_get_result(TestStruct::get_field);
+    /// engine
+    ///     .register_fn("new_ts", TestStruct::new)
+    ///     // Register an indexer.
+    ///     .register_indexer_get_result(TestStruct::get_field);
     ///
     /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a[2]")?, 3);
     /// # Ok(())
@@ -561,14 +552,14 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// // Register the custom type.
+    /// // Register API for the custom type.
     /// # #[cfg(not(feature = "no_object"))]
     /// engine.register_type::<TestStruct>();
     ///
-    /// engine.register_fn("new_ts", TestStruct::new);
-    ///
-    /// // Register an indexer.
-    /// engine.register_indexer_set(TestStruct::set_field);
+    /// engine
+    ///     .register_fn("new_ts", TestStruct::new)
+    ///     // Register an indexer.
+    ///     .register_indexer_set(TestStruct::set_field);
     ///
     /// assert_eq!(
     ///     engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?.fields[2],
@@ -628,14 +619,14 @@ impl Engine {
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// let mut engine = Engine::new();
     ///
-    /// // Register the custom type.
+    /// // Register API for the custom type.
     /// # #[cfg(not(feature = "no_object"))]
     /// engine.register_type::<TestStruct>();
     ///
-    /// engine.register_fn("new_ts", TestStruct::new);
-    ///
-    /// // Register an indexer.
-    /// engine.register_indexer_set_result(TestStruct::set_field);
+    /// engine
+    ///     .register_fn("new_ts", TestStruct::new)
+    ///     // Register an indexer.
+    ///     .register_indexer_set_result(TestStruct::set_field);
     ///
     /// assert_eq!(
     ///     engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?.fields[2],
@@ -700,14 +691,14 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// // Register the custom type.
+    /// // Register API for the custom type.
     /// # #[cfg(not(feature = "no_object"))]
     /// engine.register_type::<TestStruct>();
     ///
-    /// engine.register_fn("new_ts", TestStruct::new);
-    ///
-    /// // Register an indexer.
-    /// engine.register_indexer_get_set(TestStruct::get_field, TestStruct::set_field);
+    /// engine
+    ///     .register_fn("new_ts", TestStruct::new)
+    ///     // Register an indexer.
+    ///     .register_indexer_get_set(TestStruct::get_field, TestStruct::set_field);
     ///
     /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a[2] = 42; a[2]")?, 42);
     /// # Ok(())
@@ -740,9 +731,9 @@ impl Engine {
     }
     /// Register a shared [`Module`] into the global namespace of [`Engine`].
     ///
-    /// ## Deprecated
+    /// # Deprecated
     ///
-    /// Use `register_global_module` instead.
+    /// Use [`register_global_module`][Engine::register_global_module] instead.
     #[inline(always)]
     #[deprecated = "use `register_global_module` instead"]
     pub fn load_package(&mut self, module: impl Into<Shared<Module>>) -> &mut Self {
@@ -768,13 +759,12 @@ impl Engine {
     ///
     /// let module: Shared<Module> = module.into();
     ///
-    /// // Register the module as a fixed sub-module
-    /// engine.register_static_module("foo::bar::baz", module.clone());
-    ///
-    /// // Multiple registrations to the same partial path is also OK!
-    /// engine.register_static_module("foo::bar::hello", module.clone());
-    ///
-    /// engine.register_static_module("CalcService", module);
+    /// engine
+    ///     // Register the module as a fixed sub-module
+    ///     .register_static_module("foo::bar::baz", module.clone())
+    ///     // Multiple registrations to the same partial path is also OK!
+    ///     .register_static_module("foo::bar::hello", module.clone())
+    ///     .register_static_module("CalcService", module);
     ///
     /// assert_eq!(engine.eval::<i64>("foo::bar::baz::calc(41)")?, 42);
     /// assert_eq!(engine.eval::<i64>("foo::bar::hello::calc(41)")?, 42);
@@ -830,9 +820,9 @@ impl Engine {
 
     /// Register a shared [`Module`] as a static module namespace with the [`Engine`].
     ///
-    /// ## Deprecated
+    /// # Deprecated
     ///
-    /// Use `register_static_module` instead.
+    /// Use [`register_static_module`][Engine::register_static_module] instead.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[deprecated = "use `register_static_module` instead"]
@@ -1001,6 +991,8 @@ impl Engine {
     }
     /// Compile a script file into an [`AST`], which can be used later for evaluation.
     ///
+    /// Not available under `no_std` or `WASM`.
+    ///
     /// # Example
     ///
     /// ```no_run
@@ -1029,6 +1021,8 @@ impl Engine {
         self.compile_file_with_scope(&Default::default(), path)
     }
     /// Compile a script file into an [`AST`] using own scope, which can be used later for evaluation.
+    ///
+    /// Not available under `no_std` or `WASM`.
     ///
     /// The scope is useful for passing constants into the script for optimization
     /// when using [`OptimizationLevel::Full`].
@@ -1069,12 +1063,13 @@ impl Engine {
     ) -> Result<AST, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| Ok(self.compile_with_scope(scope, &contents)?))
     }
-    /// Parse a JSON string into a map.
+    /// Parse a JSON string into an [object map][`Map`].
+    /// This is a light-weight alternative to using, say, [`serde_json`][https://crates.io/crates/serde_json] to deserialize the JSON.
     ///
-    /// The JSON string must be an object hash.  It cannot be a simple JavaScript primitive.
+    /// The JSON string must be an object hash.  It cannot be a simple scalar value.
     ///
     /// Set `has_null` to `true` in order to map `null` values to `()`.
-    /// Setting it to `false` will cause a _variable not found_ error during parsing.
+    /// Setting it to `false` will cause an [`ErrorVariableNotFound`][EvalAltResult::ErrorVariableNotFound] error during parsing.
     ///
     /// # JSON With Sub-Objects
     ///
@@ -1083,7 +1078,7 @@ impl Engine {
     /// Parsing a JSON string with sub-objects will cause a syntax error.
     ///
     /// If it is certain that the character `{` never appears in any text string within the JSON object,
-    /// then globally replace `{` with `#{` before calling this method.
+    /// which is a valid assumption for many use cases, then globally replace `{` with `#{` before calling this method.
     ///
     /// # Example
     ///
@@ -1235,6 +1230,8 @@ impl Engine {
     }
     /// Evaluate a script file.
     ///
+    /// Not available under `no_std` or `WASM`.
+    ///
     /// # Example
     ///
     /// ```no_run
@@ -1258,6 +1255,8 @@ impl Engine {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
     /// Evaluate a script file with own scope.
+    ///
+    /// Not available under `no_std` or `WASM`.
     ///
     /// # Example
     ///
@@ -1483,6 +1482,8 @@ impl Engine {
     }
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
+    ///
+    /// Not available under `no_std` or `WASM`.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
     #[inline(always)]
@@ -1494,6 +1495,8 @@ impl Engine {
     }
     /// Evaluate a file with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
+    ///
+    /// Not available under `no_std` or `WASM`.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(target_arch = "wasm32"))]
     #[inline(always)]
@@ -1611,7 +1614,7 @@ impl Engine {
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments
     /// and optionally a value for binding to the `this` pointer.
     ///
-    /// ## WARNING
+    /// # WARNING
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
@@ -1673,7 +1676,7 @@ impl Engine {
     }
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments.
     ///
-    /// ## WARNING
+    /// # WARNING
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
@@ -1776,12 +1779,12 @@ impl Engine {
     }
     /// Provide a callback that will be invoked before each variable access.
     ///
-    /// ## Return Value of Callback
+    /// # Return Value of Callback
     ///
     /// Return `Ok(None)` to continue with normal variable access.  
     /// Return `Ok(Some(Dynamic))` as the variable's value.
     ///
-    /// ## Errors in Callback
+    /// # Errors in Callback
     ///
     /// Return `Err(...)` if there is an error.
     ///

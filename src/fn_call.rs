@@ -155,7 +155,7 @@ pub fn ensure_no_data_race(
 impl Engine {
     /// Call a native Rust function registered with the [`Engine`].
     ///
-    /// ## WARNING
+    /// # WARNING
     ///
     /// Function call arguments be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
@@ -346,7 +346,7 @@ impl Engine {
 
     /// Call a script-defined function.
     ///
-    /// ## WARNING
+    /// # WARNING
     ///
     /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
@@ -516,7 +516,7 @@ impl Engine {
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
     ///
-    /// ## WARNING
+    /// # WARNING
     ///
     /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
@@ -698,7 +698,7 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         statements
             .into_iter()
-            .try_fold(().into(), |_, stmt| {
+            .try_fold(Dynamic::UNIT, |_, stmt| {
                 self.eval_stmt(scope, mods, state, lib, &mut None, stmt, level)
             })
             .or_else(|err| match *err {

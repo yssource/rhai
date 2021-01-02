@@ -19,8 +19,6 @@ use crate::utils::get_hasher;
 use crate::{calc_native_fn_hash, Dynamic, Engine, Module, Position, Scope, StaticVec, AST};
 
 /// Level of optimization performed.
-///
-/// Not available under the `no_optimize` feature.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum OptimizationLevel {
     /// No optimization performed.

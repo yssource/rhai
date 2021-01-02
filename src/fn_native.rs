@@ -134,7 +134,7 @@ impl<'e, 's, 'a, 'm, 'pm> NativeCallContext<'e, 's, 'a, 'm, 'pm> {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
-        self.mods.iter().flat_map(|m| m.iter())
+        self.mods.iter().flat_map(|&m| m.iter())
     }
     /// _(INTERNALS)_ The current set of modules imported via `import` statements.
     /// Available under the `internals` feature only.
@@ -158,7 +158,7 @@ impl<'e, 's, 'a, 'm, 'pm> NativeCallContext<'e, 's, 'a, 'm, 'pm> {
     }
     /// Call a function inside the call context.
     ///
-    /// ## WARNING
+    /// # WARNING
     ///
     /// All arguments may be _consumed_, meaning that they may be replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
@@ -298,7 +298,7 @@ impl FnPtr {
     ///
     /// If this function is a script-defined function, it must not be marked private.
     ///
-    /// ## WARNING
+    /// # WARNING
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
