@@ -8,6 +8,8 @@ Breaking changes
 ----------------
 
 * The error variant `EvalAltResult::ErrorInFunctionCall` has a new parameter holding the _source_ of the function.
+* `ParseErrorType::WrongFnDefinition` is renamed `FnWrongDefinition`.
+* Redefining an existing function within the same script now throws a new `ParseErrorType::FnDuplicatedDefinition`. This is to prevent accidental overwriting an earlier function definition.
 
 Enhancements
 ------------

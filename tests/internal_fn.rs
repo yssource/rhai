@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_function"))]
 
-use rhai::{Engine, EvalAltResult, INT};
+use rhai::{Engine, EvalAltResult, ParseErrorType, INT};
 
 #[test]
 fn test_internal_fn() -> Result<(), Box<EvalAltResult>> {
@@ -46,17 +46,29 @@ fn test_internal_fn_overloading() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r#"
+            r"
                 fn abc(x,y,z) { 2*x + 3*y + 4*z + 888 }
-                fn abc(x) { x + 42 }
                 fn abc(x,y) { x + 2*y + 88 }
                 fn abc() { 42 }
-                fn abc(x) { x - 42 }    // should override previous definition
+                fn abc(x) { x - 42 }
 
                 abc() + abc(1) + abc(1,2) + abc(1,2,3)
-    "#
+            "
         )?,
         1002
+    );
+
+    assert_eq!(
+        *engine
+            .compile(
+                r"
+                fn abc(x) { x + 42 }
+                fn abc(x) { x - 42 }
+            "
+            )
+            .expect_err("should error")
+            .0,
+        ParseErrorType::FnDuplicatedDefinition("abc".to_string(), 1)
     );
 
     Ok(())

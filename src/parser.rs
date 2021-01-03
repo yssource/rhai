@@ -2585,7 +2585,7 @@ fn parse_stmt(
 
         // fn ...
         #[cfg(not(feature = "no_function"))]
-        Token::Fn if !settings.is_global => Err(PERR::WrongFnDefinition.into_err(settings.pos)),
+        Token::Fn if !settings.is_global => Err(PERR::FnWrongDefinition.into_err(settings.pos)),
 
         #[cfg(not(feature = "no_function"))]
         Token::Fn | Token::Private => {
@@ -2621,13 +2621,20 @@ fn parse_stmt(
 
                     let func = parse_fn(input, &mut new_state, lib, access, settings, _comments)?;
 
-                    lib.insert(
-                        // Qualifiers (none) + function name + number of arguments.
-                        calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap(),
-                        func,
-                    );
+                    // Qualifiers (none) + function name + number of arguments.
+                    let hash = calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap();
 
-                    Ok(Stmt::Noop(settings.pos))
+                    if lib.contains_key(&hash) {
+                        return Err(PERR::FnDuplicatedDefinition(
+                            func.name.into_owned(),
+                            func.params.len(),
+                        )
+                        .into_err(pos));
+                    }
+
+                    lib.insert(hash, func);
+
+                    Ok(Stmt::Noop(pos))
                 }
 
                 (_, pos) => Err(PERR::MissingToken(

@@ -734,7 +734,7 @@ impl Engine {
 
         // If new functions are defined within the eval string, it is an error
         if ast.lib().count().0 != 0 {
-            return Err(ParseErrorType::WrongFnDefinition.into());
+            return Err(ParseErrorType::FnWrongDefinition.into());
         }
 
         // Evaluate the AST
