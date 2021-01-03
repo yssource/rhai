@@ -188,52 +188,43 @@ impl ModuleResolver for FileModuleResolver {
         file_path.push(path);
         file_path.set_extension(&self.extension); // Force extension
 
-        let scope = Default::default();
-
         // See if it is cached
-        let mut module: Option<Shared<Module>> = None;
-
-        let mut module_ref = {
+        {
             #[cfg(not(feature = "sync"))]
             let c = self.cache.borrow();
             #[cfg(feature = "sync")]
             let c = self.cache.read().unwrap();
 
             if let Some(module) = c.get(&file_path) {
-                Some(module.clone())
-            } else {
-                None
+                return Ok(module.clone());
             }
-        };
-
-        if module_ref.is_none() {
-            // Load the script file and compile it
-            let ast = engine
-                .compile_file(file_path.clone())
-                .map_err(|err| match *err {
-                    EvalAltResult::ErrorSystem(_, err) if err.is::<IoError>() => {
-                        Box::new(EvalAltResult::ErrorModuleNotFound(path.to_string(), pos))
-                    }
-                    _ => Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos)),
-                })?;
-
-            let mut m = Module::eval_ast_as_new(scope, &ast, engine).map_err(|err| {
-                Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos))
-            })?;
-
-            m.set_id(Some(path));
-            module = Some(m.into());
-            module_ref = module.clone();
-        };
-
-        if let Some(module) = module {
-            // Put it into the cache
-            #[cfg(not(feature = "sync"))]
-            self.cache.borrow_mut().insert(file_path, module);
-            #[cfg(feature = "sync")]
-            self.cache.write().unwrap().insert(file_path, module);
         }
 
-        Ok(module_ref.unwrap())
+        // Load the script file and compile it
+        let scope = Default::default();
+
+        let mut ast = engine
+            .compile_file(file_path.clone())
+            .map_err(|err| match *err {
+                EvalAltResult::ErrorSystem(_, err) if err.is::<IoError>() => {
+                    Box::new(EvalAltResult::ErrorModuleNotFound(path.to_string(), pos))
+                }
+                _ => Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos)),
+            })?;
+
+        ast.set_source(Some(path));
+
+        // Make a module from the AST
+        let m: Shared<Module> = Module::eval_ast_as_new(scope, &ast, engine)
+            .map_err(|err| Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos)))?
+            .into();
+
+        // Put it into the cache
+        #[cfg(not(feature = "sync"))]
+        self.cache.borrow_mut().insert(file_path, m.clone());
+        #[cfg(feature = "sync")]
+        self.cache.write().unwrap().insert(file_path, module);
+
+        Ok(m)
     }
 }

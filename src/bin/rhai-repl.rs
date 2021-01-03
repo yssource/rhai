@@ -89,11 +89,13 @@ fn main() {
                 }
             }
 
-            let mut module = match engine
+            let module = match engine
                 .compile(&contents)
                 .map_err(|err| err.into())
-                .and_then(|ast| Module::eval_ast_as_new(Default::default(), &ast, &engine))
-            {
+                .and_then(|mut ast| {
+                    ast.set_source(Some(&filename));
+                    Module::eval_ast_as_new(Default::default(), &ast, &engine)
+                }) {
                 Err(err) => {
                     eprintln!("{:=<1$}", "", filename.len());
                     eprintln!("{}", filename);
@@ -105,8 +107,6 @@ fn main() {
                 }
                 Ok(m) => m,
             };
-
-            module.set_id(Some(&filename));
 
             engine.register_global_module(module.into());
 
