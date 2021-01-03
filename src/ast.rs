@@ -224,7 +224,11 @@ impl AST {
     /// Set the source.
     #[inline(always)]
     pub fn set_source<S: Into<ImmutableString>>(&mut self, source: Option<S>) {
-        self.source = source.map(|s| s.into())
+        self.source = source.map(|s| s.into());
+
+        if let Some(module) = Shared::get_mut(&mut self.functions) {
+            module.set_id(self.source.clone());
+        }
     }
     /// Get the statements.
     #[cfg(not(feature = "internals"))]
