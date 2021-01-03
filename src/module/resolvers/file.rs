@@ -223,7 +223,7 @@ impl ModuleResolver for FileModuleResolver {
         #[cfg(not(feature = "sync"))]
         self.cache.borrow_mut().insert(file_path, m.clone());
         #[cfg(feature = "sync")]
-        self.cache.write().unwrap().insert(file_path, module);
+        self.cache.write().unwrap().insert(file_path, m.clone());
 
         Ok(m)
     }
