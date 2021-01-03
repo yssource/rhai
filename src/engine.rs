@@ -129,7 +129,7 @@ impl Imports {
     pub fn get_fn(
         &self,
         hash: NonZeroU64,
-    ) -> Option<(&CallableFunction, &Option<ImmutableString>)> {
+    ) -> Option<(&CallableFunction, Option<&ImmutableString>)> {
         self.0
             .iter()
             .rev()
@@ -2051,11 +2051,11 @@ impl Engine {
                         .get_fn(hash_fn, false)
                         .map(|f| (f, None))
                         .or_else(|| {
-                            self.global_modules.iter().find_map(|m| {
-                                m.get_fn(hash_fn, false).map(|f| (f, m.id_raw().as_ref()))
-                            })
+                            self.global_modules
+                                .iter()
+                                .find_map(|m| m.get_fn(hash_fn, false).map(|f| (f, m.id_raw())))
                         })
-                        .or_else(|| mods.get_fn(hash_fn).map(|(f, source)| (f, source.as_ref())))
+                        .or_else(|| mods.get_fn(hash_fn))
                     {
                         // op= function registered as method
                         Some((func, source)) if func.is_method() => {

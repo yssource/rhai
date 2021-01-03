@@ -190,13 +190,12 @@ impl Engine {
                 .or_else(|| {
                     self.global_modules.iter().find_map(|m| {
                         m.get_fn(hash_fn, false)
-                            .cloned()
-                            .map(|f| (f, m.id_raw().clone()))
+                            .map(|f| (f.clone(), m.id_raw().cloned()))
                     })
                 })
                 .or_else(|| {
                     mods.get_fn(hash_fn)
-                        .map(|(f, source)| (f.clone(), source.clone()))
+                        .map(|(f, source)| (f.clone(), source.cloned()))
                 })
         });
 
@@ -584,13 +583,13 @@ impl Engine {
                     .iter()
                     .find_map(|&m| {
                         m.get_fn(hash_script, pub_only)
-                            .map(|f| (f, m.id_raw().clone()))
+                            .map(|f| (f, m.id_raw().cloned()))
                     })
                     //.or_else(|| self.global_namespace.get_fn(hash_script, pub_only))
                     .or_else(|| {
                         self.global_modules.iter().find_map(|m| {
                             m.get_fn(hash_script, false)
-                                .map(|f| (f, m.id_raw().clone()))
+                                .map(|f| (f, m.id_raw().cloned()))
                         })
                     })
                     //.or_else(|| mods.iter().find_map(|(_, m)| m.get_qualified_fn(hash_script).map(|f| (f, m.id_raw().clone()))))
@@ -1224,7 +1223,7 @@ impl Engine {
                 let new_scope = &mut Default::default();
                 let fn_def = f.get_fn_def().clone();
 
-                let mut source = module.id_raw().clone();
+                let mut source = module.id_raw().cloned();
                 mem::swap(&mut state.source, &mut source);
 
                 let level = level + 1;
@@ -1237,10 +1236,10 @@ impl Engine {
 
                 result
             }
-            Some(f) if f.is_plugin_fn() => f.get_plugin_fn().clone().call(
-                (self, module.id_raw().as_ref(), &*mods, lib).into(),
-                args.as_mut(),
-            ),
+            Some(f) if f.is_plugin_fn() => f
+                .get_plugin_fn()
+                .clone()
+                .call((self, module.id_raw(), &*mods, lib).into(), args.as_mut()),
             Some(f) if f.is_native() => {
                 if !f.is_method() {
                     // Clone first argument
@@ -1251,10 +1250,7 @@ impl Engine {
                     }
                 }
 
-                f.get_native_fn()(
-                    (self, module.id_raw().as_ref(), &*mods, lib).into(),
-                    args.as_mut(),
-                )
+                f.get_native_fn()((self, module.id_raw(), &*mods, lib).into(), args.as_mut())
             }
             Some(f) => unreachable!("unknown function type: {:?}", f),
             None if def_val.is_some() => Ok(def_val.unwrap().clone()),

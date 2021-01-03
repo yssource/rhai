@@ -252,8 +252,8 @@ impl Module {
     }
 
     /// Get the ID of the [`Module`] as an [`ImmutableString`], if any.
-    pub fn id_raw(&self) -> &Option<ImmutableString> {
-        &self.id
+    pub fn id_raw(&self) -> Option<&ImmutableString> {
+        self.id.as_ref()
     }
 
     /// Set the ID of the [`Module`].
