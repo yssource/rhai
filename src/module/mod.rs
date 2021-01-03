@@ -247,11 +247,23 @@ impl Module {
     /// module.set_id(Some("hello"));
     /// assert_eq!(module.id(), Some("hello"));
     /// ```
+    #[inline(always)]
     pub fn id(&self) -> Option<&str> {
-        self.id.as_ref().map(|s| s.as_str())
+        self.id_raw().map(|s| s.as_str())
     }
 
     /// Get the ID of the [`Module`] as an [`ImmutableString`], if any.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// module.set_id(Some("hello"));
+    /// assert_eq!(module.id_raw().map(|s| s.as_str()), Some("hello"));
+    /// ```
+    #[inline(always)]
     pub fn id_raw(&self) -> Option<&ImmutableString> {
         self.id.as_ref()
     }
@@ -267,6 +279,7 @@ impl Module {
     /// module.set_id(Some("hello"));
     /// assert_eq!(module.id(), Some("hello"));
     /// ```
+    #[inline(always)]
     pub fn set_id<S: Into<ImmutableString>>(&mut self, id: Option<S>) {
         self.id = id.map(|s| s.into());
     }
@@ -308,11 +321,13 @@ impl Module {
     /// assert!(module.is_indexed());
     /// # }
     /// ```
+    #[inline(always)]
     pub fn is_indexed(&self) -> bool {
         self.indexed
     }
 
     /// Generate signatures for all the functions in the [`Module`].
+    #[inline(always)]
     pub fn gen_fn_signatures<'a>(&'a self) -> impl Iterator<Item = String> + 'a {
         self.functions
             .values()
@@ -579,6 +594,7 @@ impl Module {
     ///
     /// The _last entry_ in the list should be the _return type_ of the function.
     /// In other words, the number of entries should be one larger than the number of parameters.
+    #[inline(always)]
     pub fn update_fn_metadata<'a>(
         &mut self,
         hash_fn: NonZeroU64,
@@ -595,6 +611,7 @@ impl Module {
     /// The [`NonZeroU64`] hash is calculated either by the function
     /// [`calc_native_fn_hash`][crate::calc_native_fn_hash] or the function
     /// [`calc_script_fn_hash`][crate::calc_script_fn_hash].
+    #[inline(always)]
     pub fn update_fn_namespace(
         &mut self,
         hash_fn: NonZeroU64,
@@ -614,6 +631,7 @@ impl Module {
     /// # WARNING - Low Level API
     ///
     /// This function is very low level.
+    #[inline]
     pub fn set_fn(
         &mut self,
         name: impl Into<String>,
@@ -726,7 +744,7 @@ impl Module {
     ///
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_raw_fn<T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -767,7 +785,7 @@ impl Module {
     /// let hash = module.set_fn_0("calc", || Ok(42_i64));
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_0<T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -802,7 +820,7 @@ impl Module {
     /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_1<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -841,7 +859,7 @@ impl Module {
     ///            );
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_1_mut<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -881,7 +899,7 @@ impl Module {
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_object"))]
-    #[inline]
+    #[inline(always)]
     pub fn set_getter_fn<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -913,7 +931,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_2<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -959,7 +977,7 @@ impl Module {
     ///            );
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_2_mut<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -1006,7 +1024,7 @@ impl Module {
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_object"))]
-    #[inline]
+    #[inline(always)]
     pub fn set_setter_fn<A: Variant + Clone, B: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -1046,7 +1064,7 @@ impl Module {
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_index"))]
-    #[inline]
+    #[inline(always)]
     pub fn set_indexer_get_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         func: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
@@ -1087,7 +1105,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_3<
         A: Variant + Clone,
         B: Variant + Clone,
@@ -1139,7 +1157,7 @@ impl Module {
     ///            );
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_3_mut<
         A: Variant + Clone,
         B: Variant + Clone,
@@ -1197,7 +1215,7 @@ impl Module {
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_index"))]
-    #[inline]
+    #[inline(always)]
     pub fn set_indexer_set_fn<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone>(
         &mut self,
         func: impl Fn(&mut A, B, C) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
@@ -1268,7 +1286,7 @@ impl Module {
     /// assert!(module.contains_fn(hash_set, true));
     /// ```
     #[cfg(not(feature = "no_index"))]
-    #[inline]
+    #[inline(always)]
     pub fn set_indexer_get_set_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         getter: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
@@ -1299,7 +1317,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_4<
         A: Variant + Clone,
         B: Variant + Clone,
@@ -1358,7 +1376,7 @@ impl Module {
     ///            );
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_4_mut<
         A: Variant + Clone,
         B: Variant + Clone,
