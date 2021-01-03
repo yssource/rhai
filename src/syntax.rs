@@ -64,7 +64,7 @@ impl Expression<'_> {
 impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_, '_> {
     /// Evaluate an [expression tree][Expression].
     ///
-    /// ## WARNING - Low Level API
+    /// # WARNING - Low Level API
     ///
     /// This function is very low level.  It evaluates an expression from an [`AST`][crate::AST].
     #[inline(always)]
@@ -210,7 +210,7 @@ impl Engine {
     }
     /// Register a custom syntax with the [`Engine`].
     ///
-    /// ## WARNING - Low Level API
+    /// # WARNING - Low Level API
     ///
     /// This function is very low level.
     ///

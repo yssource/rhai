@@ -92,8 +92,10 @@ fn main() {
             let module = match engine
                 .compile(&contents)
                 .map_err(|err| err.into())
-                .and_then(|ast| Module::eval_ast_as_new(Default::default(), &ast, &engine))
-            {
+                .and_then(|mut ast| {
+                    ast.set_source(Some(&filename));
+                    Module::eval_ast_as_new(Default::default(), &ast, &engine)
+                }) {
                 Err(err) => {
                     eprintln!("{:=<1$}", "", filename.len());
                     eprintln!("{}", filename);

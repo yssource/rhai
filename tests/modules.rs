@@ -227,7 +227,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
                     "#
                 )
                 .expect_err("should error"),
-            EvalAltResult::ErrorInFunctionCall(fn_name, _, _) if fn_name == "foo"
+            EvalAltResult::ErrorInFunctionCall(fn_name, _, _, _) if fn_name == "foo"
         ));
 
         engine.set_max_modules(1000);

@@ -212,6 +212,12 @@ impl From<&str> for ImmutableString {
         Self(value.to_string().into())
     }
 }
+impl From<&String> for ImmutableString {
+    #[inline(always)]
+    fn from(value: &String) -> Self {
+        Self(value.to_string().into())
+    }
+}
 impl From<String> for ImmutableString {
     #[inline(always)]
     fn from(value: String) -> Self {

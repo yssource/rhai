@@ -173,11 +173,9 @@ impl<'e> ParseState<'e> {
     ) -> ImmutableString {
         #[allow(clippy::map_entry)]
         if !self.strings.contains_key(text.as_ref()) {
-            let value: ImmutableString = text.into();
-            let result = value.clone();
-            let key = value.to_string();
-            self.strings.insert(key, value);
-            result
+            let value = text.into();
+            self.strings.insert(value.clone().into(), value.clone());
+            value
         } else {
             self.strings.get(text.as_ref()).unwrap().clone()
         }

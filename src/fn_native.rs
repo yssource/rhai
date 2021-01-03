@@ -10,11 +10,12 @@ use crate::stdlib::{
     iter::empty,
     mem,
     string::String,
+    vec::Vec,
 };
 use crate::token::is_valid_identifier;
 use crate::{
     calc_script_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ImmutableString, Module,
-    Position, StaticVec,
+    Position,
 };
 
 #[cfg(not(feature = "sync"))]
@@ -62,14 +63,14 @@ pub struct NativeCallContext<'e, 's, 'a, 'm, 'pm: 'm> {
 }
 
 impl<'e, 's, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized>
-    From<(&'e Engine, &'s Option<ImmutableString>, &'a Imports, &'m M)>
+    From<(&'e Engine, Option<&'s ImmutableString>, &'a Imports, &'m M)>
     for NativeCallContext<'e, 's, 'a, 'm, 'pm>
 {
     #[inline(always)]
-    fn from(value: (&'e Engine, &'s Option<ImmutableString>, &'a Imports, &'m M)) -> Self {
+    fn from(value: (&'e Engine, Option<&'s ImmutableString>, &'a Imports, &'m M)) -> Self {
         Self {
             engine: value.0,
-            source: value.1.as_ref().map(|s| s.as_str()),
+            source: value.1.map(|s| s.as_str()),
             mods: Some(value.2),
             lib: value.3.as_ref(),
         }
@@ -121,13 +122,19 @@ impl<'e, 's, 'a, 'm, 'pm> NativeCallContext<'e, 's, 'a, 'm, 'pm> {
     }
     /// The current [`Engine`].
     #[inline(always)]
-    pub fn engine(&self) -> &'e Engine {
+    pub fn engine(&self) -> &Engine {
         self.engine
     }
     /// The current source.
     #[inline(always)]
-    pub fn source<'z: 's>(&'z self) -> Option<&'s str> {
+    pub fn source(&self) -> Option<&str> {
         self.source
+    }
+    /// Get an iterator over the current set of modules imported via `import` statements.
+    #[cfg(not(feature = "no_module"))]
+    #[inline(always)]
+    pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
+        self.mods.iter().flat_map(|&m| m.iter())
     }
     /// _(INTERNALS)_ The current set of modules imported via `import` statements.
     /// Available under the `internals` feature only.
@@ -137,14 +144,21 @@ impl<'e, 's, 'a, 'm, 'pm> NativeCallContext<'e, 's, 'a, 'm, 'pm> {
     pub fn imports(&self) -> Option<&Imports> {
         self.mods
     }
-    /// Get an iterator over the namespaces containing definition of all script-defined functions.
+    /// Get an iterator over the namespaces containing definitions of all script-defined functions.
     #[inline(always)]
-    pub fn iter_namespaces(&self) -> impl Iterator<Item = &'pm Module> + 'm {
+    pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
+    }
+    /// _(INTERNALS)_ The current set of namespaces containing definitions of all script-defined functions.
+    /// Available under the `internals` feature only.
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    pub fn namespaces(&self) -> &[&Module] {
+        self.lib
     }
     /// Call a function inside the call context.
     ///
-    /// ## WARNING
+    /// # WARNING
     ///
     /// All arguments may be _consumed_, meaning that they may be replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
@@ -224,7 +238,7 @@ pub type FnCallArgs<'a> = [&'a mut Dynamic];
 /// A general function pointer, which may carry additional (i.e. curried) argument values
 /// to be passed onto a function during a call.
 #[derive(Debug, Clone)]
-pub struct FnPtr(ImmutableString, StaticVec<Dynamic>);
+pub struct FnPtr(ImmutableString, Vec<Dynamic>);
 
 impl FnPtr {
     /// Create a new function pointer.
@@ -234,10 +248,7 @@ impl FnPtr {
     }
     /// Create a new function pointer without checking its parameters.
     #[inline(always)]
-    pub(crate) fn new_unchecked(
-        name: impl Into<ImmutableString>,
-        curry: StaticVec<Dynamic>,
-    ) -> Self {
+    pub(crate) fn new_unchecked(name: impl Into<ImmutableString>, curry: Vec<Dynamic>) -> Self {
         Self(name.into(), curry)
     }
     /// Get the name of the function.
@@ -252,7 +263,7 @@ impl FnPtr {
     }
     /// Get the underlying data of the function pointer.
     #[inline(always)]
-    pub(crate) fn take_data(self) -> (ImmutableString, StaticVec<Dynamic>) {
+    pub(crate) fn take_data(self) -> (ImmutableString, Vec<Dynamic>) {
         (self.0, self.1)
     }
     /// Get the curried arguments.
@@ -287,7 +298,7 @@ impl FnPtr {
     ///
     /// If this function is a script-defined function, it must not be marked private.
     ///
-    /// ## WARNING
+    /// # WARNING
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
@@ -307,9 +318,9 @@ impl FnPtr {
             .iter()
             .cloned()
             .chain(arg_values.iter_mut().map(mem::take))
-            .collect::<StaticVec<_>>();
+            .collect::<Vec<_>>();
 
-        let mut args = args_data.iter_mut().collect::<StaticVec<_>>();
+        let mut args = args_data.iter_mut().collect::<Vec<_>>();
 
         let is_method = this_ptr.is_some();
 

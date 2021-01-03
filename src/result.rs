@@ -34,8 +34,8 @@ pub enum EvalAltResult {
     /// Call to an unknown function. Wrapped value is the function signature.
     ErrorFunctionNotFound(String, Position),
     /// An error has occurred inside a called function.
-    /// Wrapped values are the function name and the interior error.
-    ErrorInFunctionCall(String, Box<EvalAltResult>, Position),
+    /// Wrapped values are the function name, function source, and the interior error.
+    ErrorInFunctionCall(String, String, Box<EvalAltResult>, Position),
     /// Usage of an unknown [module][crate::Module]. Wrapped value is the [module][crate::Module] name.
     ErrorModuleNotFound(String, Position),
     /// An error has occurred while loading a [module][crate::Module].
@@ -98,7 +98,7 @@ impl EvalAltResult {
             #[allow(deprecated)]
             Self::ErrorSystem(_, s) => s.description(),
             Self::ErrorParsing(p, _) => p.desc(),
-            Self::ErrorInFunctionCall(_, _, _) => "Error in called function",
+            Self::ErrorInFunctionCall(_,_, _, _) => "Error in called function",
             Self::ErrorInModule(_, _, _) => "Error in module",
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
             Self::ErrorUnboundThis(_) => "'this' is not bound",
@@ -152,12 +152,19 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorParsing(p, _) => write!(f, "Syntax error: {}", p)?,
 
             #[cfg(not(feature = "no_function"))]
-            Self::ErrorInFunctionCall(s, err, _) if crate::engine::is_anonymous_fn(s) => {
-                write!(f, "Error in call to closure: {}", err)?
+            Self::ErrorInFunctionCall(s, src, err, _) if crate::engine::is_anonymous_fn(s) => {
+                write!(f, "{}, in call to closure", err)?;
+                if !src.is_empty() {
+                    write!(f, " @ '{}'", src)?;
+                }
             }
-            Self::ErrorInFunctionCall(s, err, _) => {
-                write!(f, "Error in call to function '{}': {}", s, err)?
+            Self::ErrorInFunctionCall(s, src, err, _) => {
+                write!(f, "{}, in call to function {}", err, s)?;
+                if !src.is_empty() {
+                    write!(f, " @ '{}'", src)?;
+                }
             }
+
             Self::ErrorInModule(s, err, _) if s.is_empty() => {
                 write!(f, "Error in module: {}", err)?
             }
@@ -165,8 +172,9 @@ impl fmt::Display for EvalAltResult {
 
             Self::ErrorFunctionNotFound(s, _)
             | Self::ErrorVariableNotFound(s, _)
-            | Self::ErrorDataRace(s, _)
-            | Self::ErrorModuleNotFound(s, _) => write!(f, "{}: '{}'", desc, s)?,
+            | Self::ErrorDataRace(s, _) => write!(f, "{}: {}", desc, s)?,
+
+            Self::ErrorModuleNotFound(s, _) => write!(f, "{}: '{}'", desc, s)?,
 
             Self::ErrorDotExpr(s, _) if !s.is_empty() => write!(f, "{}", s)?,
 
@@ -187,9 +195,7 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorRuntime(d, _) if d.is::<()>() => f.write_str(desc)?,
             Self::ErrorRuntime(d, _) => write!(f, "{}: {}", desc, d)?,
 
-            Self::ErrorAssignmentToConstant(s, _) => {
-                write!(f, "Cannot assign to constant '{}'", s)?
-            }
+            Self::ErrorAssignmentToConstant(s, _) => write!(f, "Cannot assign to constant {}", s)?,
             Self::ErrorMismatchOutputType(s, r, _) => {
                 write!(f, "Output type is incorrect: {} (expecting {})", r, s)?
             }
@@ -276,7 +282,7 @@ impl EvalAltResult {
             Self::ErrorParsing(_, _) => false,
 
             Self::ErrorFunctionNotFound(_, _)
-            | Self::ErrorInFunctionCall(_, _, _)
+            | Self::ErrorInFunctionCall(_, _, _, _)
             | Self::ErrorInModule(_, _, _)
             | Self::ErrorUnboundThis(_)
             | Self::ErrorMismatchDataType(_, _, _)
@@ -334,7 +340,7 @@ impl EvalAltResult {
 
             Self::ErrorParsing(_, pos)
             | Self::ErrorFunctionNotFound(_, pos)
-            | Self::ErrorInFunctionCall(_, _, pos)
+            | Self::ErrorInFunctionCall(_, _, _, pos)
             | Self::ErrorInModule(_, _, pos)
             | Self::ErrorUnboundThis(pos)
             | Self::ErrorMismatchDataType(_, _, pos)
@@ -367,7 +373,7 @@ impl EvalAltResult {
 
             Self::ErrorParsing(_, pos)
             | Self::ErrorFunctionNotFound(_, pos)
-            | Self::ErrorInFunctionCall(_, _, pos)
+            | Self::ErrorInFunctionCall(_, _, _, pos)
             | Self::ErrorInModule(_, _, pos)
             | Self::ErrorUnboundThis(pos)
             | Self::ErrorMismatchDataType(_, _, pos)

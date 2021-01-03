@@ -45,13 +45,13 @@ pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 /// _(INTERNALS)_ A stack of imported [modules][Module].
 /// Exported under the `internals` feature only.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 //
 // # Implementation Notes
 //
-// We cannot use &str or Cow<str> here because `eval` may load a [module][Module] and
+// We cannot use Cow<str> here because `eval` may load a [module][Module] and
 // the module name will live beyond the AST of the eval script text.
 // The best we can do is a shared reference.
 #[derive(Debug, Clone, Default)]
@@ -96,7 +96,7 @@ impl Imports {
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     #[inline(always)]
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (&'a str, &'a Module)> + 'a {
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.0
             .iter()
             .rev()
@@ -105,9 +105,7 @@ impl Imports {
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     #[inline(always)]
-    pub(crate) fn iter_raw<'a>(
-        &'a self,
-    ) -> impl Iterator<Item = (&'a ImmutableString, &'a Shared<Module>)> + 'a {
+    pub(crate) fn iter_raw(&self) -> impl Iterator<Item = (&ImmutableString, &Shared<Module>)> {
         self.0.iter().rev().map(|(n, m)| (n, m))
     }
     /// Get a consuming iterator to this stack of imported [modules][Module] in reverse order.
@@ -128,11 +126,14 @@ impl Imports {
     }
     /// Get specified function via its hash key.
     #[inline(always)]
-    pub fn get_fn(&self, hash: NonZeroU64) -> Option<&CallableFunction> {
+    pub fn get_fn(
+        &self,
+        hash: NonZeroU64,
+    ) -> Option<(&CallableFunction, Option<&ImmutableString>)> {
         self.0
             .iter()
             .rev()
-            .find_map(|(_, m)| m.get_qualified_fn(hash))
+            .find_map(|(_, m)| m.get_qualified_fn(hash).map(|f| (f, m.id_raw())))
     }
     /// Does the specified [`TypeId`][std::any::TypeId] iterator exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
@@ -216,55 +217,62 @@ pub const FN_ANONYMOUS: &str = "anon$";
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 pub const OP_EQUALS: &str = "==";
 
-/// A type specifying the method of chaining.
+/// Method of chaining.
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum ChainType {
-    None,
+    /// Not a chaining type.
+    NonChaining,
+    /// Indexing.
     Index,
+    /// Dotting.
     Dot,
 }
 
+/// Value of a chaining argument.
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-#[derive(Debug, Clone)]
-pub enum IndexChainValue {
-    None,
+#[derive(Debug, Clone, Hash)]
+pub enum ChainArgument {
+    /// Dot-property access.
+    Property,
+    /// Arguments to a dot-function call.
     FnCallArgs(StaticVec<Dynamic>),
-    Value(Dynamic),
+    /// Index value.
+    IndexValue(Dynamic),
 }
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-impl IndexChainValue {
+impl ChainArgument {
     /// Return the `Dynamic` value.
     ///
     /// # Panics
     ///
-    /// Panics if not `IndexChainValue::Value`.
+    /// Panics if not `ChainArgument::IndexValue`.
     #[inline(always)]
     #[cfg(not(feature = "no_index"))]
-    pub fn as_value(self) -> Dynamic {
+    pub fn as_index_value(self) -> Dynamic {
         match self {
-            Self::None | Self::FnCallArgs(_) => panic!("expecting IndexChainValue::Value"),
-            Self::Value(value) => value,
+            Self::Property | Self::FnCallArgs(_) => panic!("expecting ChainArgument::IndexValue"),
+            Self::IndexValue(value) => value,
         }
     }
     /// Return the `StaticVec<Dynamic>` value.
     ///
     /// # Panics
     ///
-    /// Panics if not `IndexChainValue::FnCallArgs`.
+    /// Panics if not `ChainArgument::FnCallArgs`.
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
     pub fn as_fn_call_args(self) -> StaticVec<Dynamic> {
         match self {
-            Self::None | Self::Value(_) => panic!("expecting IndexChainValue::FnCallArgs"),
+            Self::Property | Self::IndexValue(_) => panic!("expecting ChainArgument::FnCallArgs"),
             Self::FnCallArgs(value) => value,
         }
     }
 }
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-impl From<StaticVec<Dynamic>> for IndexChainValue {
+impl From<StaticVec<Dynamic>> for ChainArgument {
     #[inline(always)]
     fn from(value: StaticVec<Dynamic>) -> Self {
         Self::FnCallArgs(value)
@@ -272,10 +280,10 @@ impl From<StaticVec<Dynamic>> for IndexChainValue {
 }
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-impl From<Dynamic> for IndexChainValue {
+impl From<Dynamic> for ChainArgument {
     #[inline(always)]
     fn from(value: Dynamic) -> Self {
-        Self::Value(value)
+        Self::IndexValue(value)
     }
 }
 
@@ -489,7 +497,7 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 /// _(INTERNALS)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Default)]
@@ -508,7 +516,11 @@ pub struct State {
     /// Number of modules loaded.
     pub modules: usize,
     /// Cached lookup values for function hashes.
-    pub functions_cache: HashMap<NonZeroU64, Option<CallableFunction>, StraightHasherBuilder>,
+    pub functions_cache: HashMap<
+        NonZeroU64,
+        Option<(CallableFunction, Option<ImmutableString>)>,
+        StraightHasherBuilder,
+    >,
 }
 
 impl State {
@@ -522,7 +534,7 @@ impl State {
 /// _(INTERNALS)_ A type containing all the limits imposed by the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 #[cfg(not(feature = "unchecked"))]
@@ -571,17 +583,17 @@ pub struct EvalContext<'e, 'x, 'px: 'x, 'a, 's, 'm, 'pm: 'm, 't, 'pt: 't> {
 impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> {
     /// The current [`Engine`].
     #[inline(always)]
-    pub fn engine(&self) -> &'e Engine {
+    pub fn engine(&self) -> &Engine {
         self.engine
     }
     /// The current source.
     #[inline(always)]
-    pub fn source<'z: 's>(&'z self) -> Option<&'s str> {
+    pub fn source(&self) -> Option<&str> {
         self.state.source.as_ref().map(|s| s.as_str())
     }
     /// The current [`Scope`].
     #[inline(always)]
-    pub fn scope(&self) -> &Scope<'px> {
+    pub fn scope(&self) -> &Scope {
         self.scope
     }
     /// Mutable reference to the current [`Scope`].
@@ -589,18 +601,31 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm,
     pub fn scope_mut(&mut self) -> &mut &'x mut Scope<'px> {
         &mut self.scope
     }
+    /// Get an iterator over the current set of modules imported via `import` statements.
+    #[cfg(not(feature = "no_module"))]
+    #[inline(always)]
+    pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
+        self.mods.iter()
+    }
     /// _(INTERNALS)_ The current set of modules imported via `import` statements.
     /// Available under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    pub fn imports(&'a self) -> &'a Imports {
+    pub fn imports(&self) -> &Imports {
         self.mods
     }
     /// Get an iterator over the namespaces containing definition of all script-defined functions.
     #[inline(always)]
-    pub fn iter_namespaces(&self) -> impl Iterator<Item = &'pm Module> + 'm {
+    pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
+    }
+    /// _(INTERNALS)_ The current set of namespaces containing definitions of all script-defined functions.
+    /// Available under the `internals` feature only.
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    pub fn namespaces(&self) -> &[&Module] {
+        self.lib
     }
     /// The current bound `this` pointer, if any.
     #[inline(always)]
@@ -835,7 +860,8 @@ impl Engine {
     }
 
     /// Create a new [`Engine`] with minimal built-in functions.
-    /// Use the [`register_global_module`][Engine::register_global_module] method to load additional packages of functions.
+    ///
+    /// Use [`register_global_module`][Engine::register_global_module] to add packages of functions.
     #[inline]
     pub fn new_raw() -> Self {
         Self {
@@ -1006,13 +1032,13 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         target: &mut Target,
         rhs: &Expr,
-        idx_values: &mut StaticVec<IndexChainValue>,
+        idx_values: &mut StaticVec<ChainArgument>,
         chain_type: ChainType,
         level: usize,
         new_val: Option<(Dynamic, Position)>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        if chain_type == ChainType::None {
-            unreachable!("should not be ChainType::None");
+        if chain_type == ChainType::NonChaining {
+            unreachable!("should not be ChainType::NonChaining");
         }
 
         let is_ref = target.is_ref();
@@ -1020,7 +1046,7 @@ impl Engine {
         let next_chain = match rhs {
             Expr::Index(_, _) => ChainType::Index,
             Expr::Dot(_, _) => ChainType::Dot,
-            _ => ChainType::None,
+            _ => ChainType::NonChaining,
         };
 
         // Pop the last index value
@@ -1037,7 +1063,7 @@ impl Engine {
                     // xxx[idx].expr... | xxx[idx][expr]...
                     Expr::Dot(x, x_pos) | Expr::Index(x, x_pos) => {
                         let idx_pos = x.lhs.position();
-                        let idx_val = idx_val.as_value();
+                        let idx_val = idx_val.as_index_value();
                         let obj_ptr = &mut self.get_indexed_mut(
                             mods, state, lib, target_val, idx_val, idx_pos, false, is_ref, true,
                             level,
@@ -1051,7 +1077,7 @@ impl Engine {
                     }
                     // xxx[rhs] = new_val
                     _ if new_val.is_some() => {
-                        let idx_val = idx_val.as_value();
+                        let idx_val = idx_val.as_index_value();
                         let mut idx_val2 = idx_val.clone();
 
                         // `call_setter` is introduced to bypass double mutable borrowing of target
@@ -1099,7 +1125,7 @@ impl Engine {
                     }
                     // xxx[rhs]
                     _ => {
-                        let idx_val = idx_val.as_value();
+                        let idx_val = idx_val.as_index_value();
                         self.get_indexed_mut(
                             mods, state, lib, target_val, idx_val, pos, false, is_ref, true, level,
                         )
@@ -1167,7 +1193,6 @@ impl Engine {
                             None, None, level,
                         )
                         .map(|(v, _)| (v, true))
-                        .map_err(|err| err.fill_position(*pos))
                     }
                     // xxx.id
                     Expr::Property(x) => {
@@ -1178,7 +1203,6 @@ impl Engine {
                             None, None, level,
                         )
                         .map(|(v, _)| (v, false))
-                        .map_err(|err| err.fill_position(*pos))
                     }
                     // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
                     Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target_val.is::<Map>() => {
@@ -1229,12 +1253,10 @@ impl Engine {
                                 let (getter, setter, Ident { pos, .. }) = p.as_ref();
                                 let arg_values = &mut [target_val, &mut Default::default()];
                                 let args = &mut arg_values[..1];
-                                let (mut val, updated) = self
-                                    .exec_fn_call(
-                                        mods, state, lib, getter, None, args, is_ref, true, false,
-                                        *pos, None, None, level,
-                                    )
-                                    .map_err(|err| err.fill_position(*pos))?;
+                                let (mut val, updated) = self.exec_fn_call(
+                                    mods, state, lib, getter, None, args, is_ref, true, false,
+                                    *pos, None, None, level,
+                                )?;
 
                                 let val = &mut val;
 
@@ -1267,7 +1289,7 @@ impl Engine {
                                             EvalAltResult::ErrorDotExpr(_, _) => {
                                                 Ok((Dynamic::UNIT, false))
                                             }
-                                            _ => Err(err.fill_position(*x_pos)),
+                                            _ => Err(err),
                                         },
                                     )?;
                                 }
@@ -1394,7 +1416,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         parent_chain_type: ChainType,
-        idx_values: &mut StaticVec<IndexChainValue>,
+        idx_values: &mut StaticVec<ChainArgument>,
         size: usize,
         level: usize,
     ) -> Result<(), Box<EvalAltResult>> {
@@ -1417,7 +1439,7 @@ impl Engine {
             }
 
             Expr::Property(_) if parent_chain_type == ChainType::Dot => {
-                idx_values.push(IndexChainValue::None)
+                idx_values.push(ChainArgument::Property)
             }
             Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
 
@@ -1427,7 +1449,7 @@ impl Engine {
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
                     Expr::Property(_) if parent_chain_type == ChainType::Dot => {
-                        IndexChainValue::None
+                        ChainArgument::Property
                     }
                     Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
                     Expr::FnCall(x, _)
@@ -2027,15 +2049,16 @@ impl Engine {
                     match self
                         .global_namespace
                         .get_fn(hash_fn, false)
+                        .map(|f| (f, None))
                         .or_else(|| {
                             self.global_modules
                                 .iter()
-                                .find_map(|m| m.get_fn(hash_fn, false))
+                                .find_map(|m| m.get_fn(hash_fn, false).map(|f| (f, m.id_raw())))
                         })
                         .or_else(|| mods.get_fn(hash_fn))
                     {
                         // op= function registered as method
-                        Some(func) if func.is_method() => {
+                        Some((func, source)) if func.is_method() => {
                             let mut lock_guard;
                             let lhs_ptr_inner;
 
@@ -2049,14 +2072,16 @@ impl Engine {
                             let args = &mut [lhs_ptr_inner, &mut rhs_val];
 
                             // Overriding exact implementation
+                            let source = if source.is_none() {
+                                state.source.as_ref()
+                            } else {
+                                source
+                            };
                             if func.is_plugin_fn() {
                                 func.get_plugin_fn()
-                                    .call((self, &state.source, &*mods, lib).into(), args)?;
+                                    .call((self, source, &*mods, lib).into(), args)?;
                             } else {
-                                func.get_native_fn()(
-                                    (self, &state.source, &*mods, lib).into(),
-                                    args,
-                                )?;
+                                func.get_native_fn()((self, source, &*mods, lib).into(), args)?;
                             }
                         }
                         // Built-in op-assignment function
@@ -2301,7 +2326,7 @@ impl Engine {
 
                 let result = self
                     .eval_stmt(scope, mods, state, lib, this_ptr, try_body, level)
-                    .map(|_| ().into());
+                    .map(|_| Dynamic::UNIT);
 
                 match result {
                     Ok(_) => result,
@@ -2363,7 +2388,7 @@ impl Engine {
 
             // Empty throw
             Stmt::Return((ReturnType::Exception, pos), None, _) => {
-                EvalAltResult::ErrorRuntime(().into(), *pos).into()
+                EvalAltResult::ErrorRuntime(Dynamic::UNIT, *pos).into()
             }
 
             // Let/const statement
@@ -2378,7 +2403,7 @@ impl Engine {
                     self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                         .flatten()
                 } else {
-                    ().into()
+                    Dynamic::UNIT
                 };
                 let (var_name, _alias): (Cow<'_, str>, _) = if state.is_global() {
                     (
@@ -2596,6 +2621,7 @@ impl Engine {
     }
 
     /// Check if the number of operations stay within limit.
+    #[inline]
     pub(crate) fn inc_operations(
         &self,
         state: &mut State,

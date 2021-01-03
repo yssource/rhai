@@ -73,7 +73,7 @@ fn test_fn_ptr() -> Result<(), Box<EvalAltResult>> {
             "#
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorInFunctionCall(fn_name, err, _)
+        EvalAltResult::ErrorInFunctionCall(fn_name, _, err, _)
             if fn_name == "foo" && matches!(*err, EvalAltResult::ErrorUnboundThis(_))
     ));
 

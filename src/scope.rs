@@ -445,7 +445,7 @@ impl<'a> Scope<'a> {
     /// let mut my_scope = Scope::new();
     ///
     /// my_scope.push("x", 42_i64);
-    /// my_scope.push_constant("foo", "hello".to_string());
+    /// my_scope.push_constant("foo", "hello");
     ///
     /// let mut iter = my_scope.iter();
     ///

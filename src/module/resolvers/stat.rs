@@ -1,7 +1,7 @@
 use crate::stdlib::{boxed::Box, collections::HashMap, ops::AddAssign, string::String};
 use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 
-/// Module resolution service that serves modules added into it.
+/// [Module] resolution service that serves [modules][Module] added into it.
 ///
 /// # Example
 ///
@@ -42,13 +42,13 @@ impl StaticModuleResolver {
     pub fn new() -> Self {
         Default::default()
     }
-    /// Add a module keyed by its path.
+    /// Add a [module][Module] keyed by its path.
     #[inline(always)]
     pub fn insert(&mut self, path: impl Into<String>, mut module: Module) {
         module.build_index();
         self.0.insert(path.into(), module.into());
     }
-    /// Remove a module given its path.
+    /// Remove a [module][Module] given its path.
     #[inline(always)]
     pub fn remove(&mut self, path: &str) -> Option<Shared<Module>> {
         self.0.remove(path)
@@ -58,12 +58,12 @@ impl StaticModuleResolver {
     pub fn contains_path(&self, path: &str) -> bool {
         self.0.contains_key(path)
     }
-    /// Get an iterator of all the modules.
+    /// Get an iterator of all the [modules][Module].
     #[inline(always)]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Shared<Module>)> {
         self.0.iter().map(|(k, v)| (k.as_str(), v))
     }
-    /// Get a mutable iterator of all the modules.
+    /// Get a mutable iterator of all the [modules][Module].
     #[inline(always)]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&str, &mut Shared<Module>)> {
         self.0.iter_mut().map(|(k, v)| (k.as_str(), v))
@@ -73,17 +73,17 @@ impl StaticModuleResolver {
     pub fn into_iter(self) -> impl Iterator<Item = (String, Shared<Module>)> {
         self.0.into_iter()
     }
-    /// Get an iterator of all the module paths.
+    /// Get an iterator of all the [module][Module] paths.
     #[inline(always)]
     pub fn paths(&self) -> impl Iterator<Item = &str> {
         self.0.keys().map(String::as_str)
     }
-    /// Get an iterator of all the modules.
+    /// Get an iterator of all the [modules][Module].
     #[inline(always)]
     pub fn values(&self) -> impl Iterator<Item = &Shared<Module>> {
         self.0.values().map(|m| m)
     }
-    /// Remove all modules.
+    /// Remove all [modules][Module].
     #[inline(always)]
     pub fn clear(&mut self) {
         self.0.clear();
@@ -93,7 +93,7 @@ impl StaticModuleResolver {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-    /// Get the number of modules in this [`StaticModuleResolver`].
+    /// Get the number of [modules][Module] in this [`StaticModuleResolver`].
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.0.len()

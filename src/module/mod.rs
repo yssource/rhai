@@ -125,17 +125,15 @@ impl FuncInfo {
 
 /// A module which may contain variables, sub-modules, external Rust functions,
 /// and/or script-defined functions.
-///
-/// Not available under the `no_module` feature.
 #[derive(Clone)]
 pub struct Module {
     /// ID identifying the module.
     id: Option<ImmutableString>,
     /// Sub-modules.
     modules: HashMap<ImmutableString, Shared<Module>>,
-    /// Module variables.
+    /// [`Module`] variables.
     variables: HashMap<ImmutableString, Dynamic>,
-    /// Flattened collection of all module variables, including those in sub-modules.
+    /// Flattened collection of all [`Module`] variables, including those in sub-modules.
     all_variables: HashMap<NonZeroU64, Dynamic, StraightHasherBuilder>,
     /// External Rust functions.
     functions: HashMap<NonZeroU64, FuncInfo, StraightHasherBuilder>,
@@ -146,7 +144,7 @@ pub struct Module {
     type_iterators: HashMap<TypeId, IteratorFn>,
     /// Flattened collection of iterator functions, including those in sub-modules.
     all_type_iterators: HashMap<TypeId, IteratorFn>,
-    /// Is the module indexed?
+    /// Is the [`Module`] indexed?
     indexed: bool,
 }
 
@@ -203,7 +201,7 @@ impl AsRef<Module> for Module {
 }
 
 impl Module {
-    /// Create a new module.
+    /// Create a new [`Module`].
     ///
     /// # Example
     ///
@@ -219,7 +217,7 @@ impl Module {
         Default::default()
     }
 
-    /// Create a new module with a specified capacity for native Rust functions.
+    /// Create a new [`Module`] with a specified capacity for native Rust functions.
     ///
     /// # Example
     ///
@@ -238,7 +236,7 @@ impl Module {
         }
     }
 
-    /// Get the ID of the module, if any.
+    /// Get the ID of the [`Module`], if any.
     ///
     /// # Example
     ///
@@ -249,16 +247,28 @@ impl Module {
     /// module.set_id(Some("hello"));
     /// assert_eq!(module.id(), Some("hello"));
     /// ```
+    #[inline(always)]
     pub fn id(&self) -> Option<&str> {
-        self.id.as_ref().map(|s| s.as_str())
+        self.id_raw().map(|s| s.as_str())
     }
 
-    /// Get the ID of the module, if any.
-    pub(crate) fn id_raw(&self) -> &Option<ImmutableString> {
-        &self.id
+    /// Get the ID of the [`Module`] as an [`ImmutableString`], if any.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::Module;
+    ///
+    /// let mut module = Module::new();
+    /// module.set_id(Some("hello"));
+    /// assert_eq!(module.id_raw().map(|s| s.as_str()), Some("hello"));
+    /// ```
+    #[inline(always)]
+    pub fn id_raw(&self) -> Option<&ImmutableString> {
+        self.id.as_ref()
     }
 
-    /// Set the ID of the module.
+    /// Set the ID of the [`Module`].
     ///
     /// # Example
     ///
@@ -269,11 +279,12 @@ impl Module {
     /// module.set_id(Some("hello"));
     /// assert_eq!(module.id(), Some("hello"));
     /// ```
+    #[inline(always)]
     pub fn set_id<S: Into<ImmutableString>>(&mut self, id: Option<S>) {
         self.id = id.map(|s| s.into());
     }
 
-    /// Is the module empty?
+    /// Is the [`Module`] empty?
     ///
     /// # Example
     ///
@@ -294,7 +305,7 @@ impl Module {
             && self.all_type_iterators.is_empty()
     }
 
-    /// Is the module indexed?
+    /// Is the [`Module`] indexed?
     ///
     /// # Example
     ///
@@ -310,11 +321,13 @@ impl Module {
     /// assert!(module.is_indexed());
     /// # }
     /// ```
+    #[inline(always)]
     pub fn is_indexed(&self) -> bool {
         self.indexed
     }
 
-    /// Generate signatures for all the functions in the module.
+    /// Generate signatures for all the functions in the [`Module`].
+    #[inline(always)]
     pub fn gen_fn_signatures<'a>(&'a self) -> impl Iterator<Item = String> + 'a {
         self.functions
             .values()
@@ -322,7 +335,7 @@ impl Module {
             .map(FuncInfo::gen_signature)
     }
 
-    /// Does a variable exist in the module?
+    /// Does a variable exist in the [`Module`]?
     ///
     /// # Example
     ///
@@ -338,7 +351,7 @@ impl Module {
         self.variables.contains_key(name)
     }
 
-    /// Get the value of a module variable.
+    /// Get the value of a [`Module`] variable.
     ///
     /// # Example
     ///
@@ -354,7 +367,7 @@ impl Module {
         self.get_var(name).and_then(Dynamic::try_cast::<T>)
     }
 
-    /// Get a module variable as a [`Dynamic`].
+    /// Get a [`Module`] variable as a [`Dynamic`].
     ///
     /// # Example
     ///
@@ -370,7 +383,7 @@ impl Module {
         self.variables.get(name).cloned()
     }
 
-    /// Set a variable into the module.
+    /// Set a variable into the [`Module`].
     ///
     /// If there is an existing variable of the same name, it is replaced.
     ///
@@ -395,9 +408,9 @@ impl Module {
     }
 
     /// Get a reference to a namespace-qualified variable.
-    /// Name and Position in `EvalAltResult` are None and must be set afterwards.
+    /// Name and Position in [`EvalAltResult`] are [`None`] and [`NONE`][Position::NONE] and must be set afterwards.
     ///
-    /// The [`NonZeroU64`] hash is calculated by the function [`crate::calc_native_fn_hash`].
+    /// The [`NonZeroU64`] hash is calculated by the function [`calc_native_fn_hash`][crate::calc_native_fn_hash].
     #[inline(always)]
     pub(crate) fn get_qualified_var(
         &self,
@@ -408,7 +421,7 @@ impl Module {
         })
     }
 
-    /// Set a script-defined function into the module.
+    /// Set a script-defined function into the [`Module`].
     ///
     /// If there is an existing function of the same name and number of arguments, it is replaced.
     #[cfg(not(feature = "no_function"))]
@@ -437,7 +450,7 @@ impl Module {
         hash_script
     }
 
-    /// Get a script-defined function in the module based on name and number of parameters.
+    /// Get a script-defined function in the [`Module`] based on name and number of parameters.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn get_script_fn(
@@ -465,10 +478,10 @@ impl Module {
 
     /// Get a mutable reference to the underlying [`HashMap`] of sub-modules.
     ///
-    /// ## Warning
+    /// # WARNING
     ///
     /// By taking a mutable reference, it is assumed that some sub-modules will be modified.
-    /// Thus the module is automatically set to be non-indexed.
+    /// Thus the [`Module`] is automatically set to be non-indexed.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub(crate) fn sub_modules_mut(&mut self) -> &mut HashMap<ImmutableString, Shared<Module>> {
@@ -482,7 +495,7 @@ impl Module {
         &mut self.modules
     }
 
-    /// Does a sub-module exist in the module?
+    /// Does a sub-module exist in the [`Module`]?
     ///
     /// # Example
     ///
@@ -499,7 +512,7 @@ impl Module {
         self.modules.contains_key(name)
     }
 
-    /// Get a sub-module.
+    /// Get a sub-module in the [`Module`].
     ///
     /// # Example
     ///
@@ -516,7 +529,7 @@ impl Module {
         self.modules.get(name).map(|m| m.as_ref())
     }
 
-    /// Set a sub-module into the module.
+    /// Set a sub-module into the [`Module`].
     ///
     /// If there is an existing sub-module of the same name, it is replaced.
     ///
@@ -541,9 +554,9 @@ impl Module {
         self
     }
 
-    /// Does the particular Rust function exist in the module?
+    /// Does the particular Rust function exist in the [`Module`]?
     ///
-    /// The [`NonZeroU64`] hash is calculated by the function [`crate::calc_native_fn_hash`].
+    /// The [`NonZeroU64`] hash is calculated by the function [`calc_native_fn_hash`][crate::calc_native_fn_hash].
     /// It is also returned by the `set_fn_XXX` calls.
     ///
     /// # Example
@@ -569,13 +582,19 @@ impl Module {
 
     /// Update the metadata (parameter names/types and return type) of a registered function.
     ///
-    /// The [`NonZeroU64`] hash is calculated either by the function [`crate::calc_native_fn_hash`] or
-    /// the function [`crate::calc_script_fn_hash`].
+    /// The [`NonZeroU64`] hash is calculated either by the function
+    /// [`calc_native_fn_hash`][crate::calc_native_fn_hash] or the function
+    /// [`calc_script_fn_hash`][crate::calc_script_fn_hash].
+    ///
+    /// ## Parameter Names and Types
     ///
     /// Each parameter name/type pair should be a single string of the format: `var_name: type`.
     ///
-    /// The last entry in the list should be the return type of the function.
+    /// ## Return Type
+    ///
+    /// The _last entry_ in the list should be the _return type_ of the function.
     /// In other words, the number of entries should be one larger than the number of parameters.
+    #[inline(always)]
     pub fn update_fn_metadata<'a>(
         &mut self,
         hash_fn: NonZeroU64,
@@ -589,8 +608,10 @@ impl Module {
 
     /// Update the namespace of a registered function.
     ///
-    /// The [`NonZeroU64`] hash is calculated either by the function [`crate::calc_native_fn_hash`] or
-    /// the function [`crate::calc_script_fn_hash`].
+    /// The [`NonZeroU64`] hash is calculated either by the function
+    /// [`calc_native_fn_hash`][crate::calc_native_fn_hash] or the function
+    /// [`calc_script_fn_hash`][crate::calc_script_fn_hash].
+    #[inline(always)]
     pub fn update_fn_namespace(
         &mut self,
         hash_fn: NonZeroU64,
@@ -603,13 +624,14 @@ impl Module {
         self
     }
 
-    /// Set a Rust function into the module, returning a hash key.
+    /// Set a Rust function into the [`Module`], returning a hash key.
     ///
     /// If there is an existing Rust function of the same hash, it is replaced.
     ///
-    /// ## WARNING - Low Level API
+    /// # WARNING - Low Level API
     ///
     /// This function is very low level.
+    #[inline]
     pub fn set_fn(
         &mut self,
         name: impl Into<String>,
@@ -660,7 +682,7 @@ impl Module {
 
     /// Set a Rust function taking a reference to the scripting [`Engine`][crate::Engine],
     /// the current set of functions, plus a list of mutable [`Dynamic`] references
-    /// into the module, returning a hash key.
+    /// into the [`Module`], returning a hash key.
     ///
     /// Use this to register a built-in function which must reference settings on the scripting
     /// [`Engine`][crate::Engine] (e.g. to prevent growing an array beyond the allowed maximum size),
@@ -668,13 +690,13 @@ impl Module {
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
-    /// ## WARNING - Low Level API
+    /// # WARNING - Low Level API
     ///
     /// This function is very low level.
     ///
     /// A list of [`TypeId`]'s is taken as the argument types.
     ///
-    /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`],
+    /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`][Dynamic],
     /// which is guaranteed to contain enough arguments of the correct types.
     ///
     /// The function is assumed to be a _method_, meaning that the first argument should not be consumed.
@@ -722,7 +744,7 @@ impl Module {
     ///
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_raw_fn<T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -746,7 +768,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust function taking no parameters into the module, returning a hash key.
+    /// Set a Rust function taking no parameters into the [`Module`], returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
@@ -763,7 +785,7 @@ impl Module {
     /// let hash = module.set_fn_0("calc", || Ok(42_i64));
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_0<T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -781,7 +803,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust function taking one parameter into the module, returning a hash key.
+    /// Set a Rust function taking one parameter into the [`Module`], returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
@@ -798,7 +820,7 @@ impl Module {
     /// let hash = module.set_fn_1("calc", |x: i64| Ok(x + 1));
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_1<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -818,7 +840,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust function taking one mutable parameter into the module, returning a hash key.
+    /// Set a Rust function taking one mutable parameter into the [`Module`], returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
@@ -837,7 +859,7 @@ impl Module {
     ///            );
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_1_mut<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -877,7 +899,7 @@ impl Module {
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_object"))]
-    #[inline]
+    #[inline(always)]
     pub fn set_getter_fn<A: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -890,7 +912,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust function taking two parameters into the module, returning a hash key.
+    /// Set a Rust function taking two parameters into the [`Module`], returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
@@ -909,7 +931,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_2<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -932,7 +954,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust function taking two parameters (the first one mutable) into the module,
+    /// Set a Rust function taking two parameters (the first one mutable) into the [`Module`],
     /// returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
@@ -955,7 +977,7 @@ impl Module {
     ///            );
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_2_mut<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -979,7 +1001,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust setter function taking two parameters (the first one mutable) into the module,
+    /// Set a Rust setter function taking two parameters (the first one mutable) into the [`Module`],
     /// returning a hash key.
     /// This function is automatically exposed to the global namespace.
     ///
@@ -1002,7 +1024,7 @@ impl Module {
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_object"))]
-    #[inline]
+    #[inline(always)]
     pub fn set_setter_fn<A: Variant + Clone, B: Variant + Clone>(
         &mut self,
         name: impl Into<String>,
@@ -1015,7 +1037,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust index getter taking two parameters (the first one mutable) into the module,
+    /// Set a Rust index getter taking two parameters (the first one mutable) into the [`Module`],
     /// returning a hash key.
     /// This function is automatically exposed to the global namespace.
     ///
@@ -1042,7 +1064,7 @@ impl Module {
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_index"))]
-    #[inline]
+    #[inline(always)]
     pub fn set_indexer_get_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         func: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
@@ -1064,7 +1086,7 @@ impl Module {
         self.set_fn_2_mut(crate::engine::FN_IDX_GET, FnNamespace::Global, func)
     }
 
-    /// Set a Rust function taking three parameters into the module, returning a hash key.
+    /// Set a Rust function taking three parameters into the [`Module`], returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
@@ -1083,7 +1105,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_3<
         A: Variant + Clone,
         B: Variant + Clone,
@@ -1112,7 +1134,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust function taking three parameters (the first one mutable) into the module,
+    /// Set a Rust function taking three parameters (the first one mutable) into the [`Module`],
     /// returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
@@ -1135,7 +1157,7 @@ impl Module {
     ///            );
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_3_mut<
         A: Variant + Clone,
         B: Variant + Clone,
@@ -1165,7 +1187,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust index setter taking three parameters (the first one mutable) into the module,
+    /// Set a Rust index setter taking three parameters (the first one mutable) into the [`Module`],
     /// returning a hash key.
     /// This function is automatically exposed to the global namespace.
     ///
@@ -1193,7 +1215,7 @@ impl Module {
     /// assert!(module.contains_fn(hash, true));
     /// ```
     #[cfg(not(feature = "no_index"))]
-    #[inline]
+    #[inline(always)]
     pub fn set_indexer_set_fn<A: Variant + Clone, B: Variant + Clone, C: Variant + Clone>(
         &mut self,
         func: impl Fn(&mut A, B, C) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
@@ -1264,7 +1286,7 @@ impl Module {
     /// assert!(module.contains_fn(hash_set, true));
     /// ```
     #[cfg(not(feature = "no_index"))]
-    #[inline]
+    #[inline(always)]
     pub fn set_indexer_get_set_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
         getter: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
@@ -1276,7 +1298,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust function taking four parameters into the module, returning a hash key.
+    /// Set a Rust function taking four parameters into the [`Module`], returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
@@ -1295,7 +1317,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_4<
         A: Variant + Clone,
         B: Variant + Clone,
@@ -1331,7 +1353,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust function taking four parameters (the first one mutable) into the module,
+    /// Set a Rust function taking four parameters (the first one mutable) into the [`Module`],
     /// returning a hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
@@ -1354,7 +1376,7 @@ impl Module {
     ///            );
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn set_fn_4_mut<
         A: Variant + Clone,
         B: Variant + Clone,
@@ -1393,7 +1415,7 @@ impl Module {
 
     /// Get a Rust function.
     ///
-    /// The [`NonZeroU64`] hash is calculated by the function [`crate::calc_native_fn_hash`].
+    /// The [`NonZeroU64`] hash is calculated by the function [`calc_native_fn_hash`][crate::calc_native_fn_hash].
     /// It is also returned by the `set_fn_XXX` calls.
     #[inline(always)]
     pub(crate) fn get_fn(
@@ -1410,9 +1432,10 @@ impl Module {
             })
     }
 
-    /// Does the particular namespace-qualified function exist in the module?
+    /// Does the particular namespace-qualified function exist in the [`Module`]?
     ///
-    /// The [`NonZeroU64`] hash is calculated by the function [`crate::calc_native_fn_hash`] and must match
+    /// The [`NonZeroU64`] hash is calculated by the function
+    /// [`calc_native_fn_hash`][crate::calc_native_fn_hash] and must match
     /// the hash calculated by [`build_index`][Module::build_index].
     #[inline(always)]
     pub fn contains_qualified_fn(&self, hash_fn: NonZeroU64) -> bool {
@@ -1420,9 +1443,9 @@ impl Module {
     }
 
     /// Get a namespace-qualified function.
-    /// Name and Position in `EvalAltResult` are None and must be set afterwards.
     ///
-    /// The [`NonZeroU64`] hash is calculated by the function [`crate::calc_native_fn_hash`] and must match
+    /// The [`NonZeroU64`] hash is calculated by the function
+    /// [`calc_native_fn_hash`][crate::calc_native_fn_hash] and must match
     /// the hash calculated by [`build_index`][Module::build_index].
     #[inline(always)]
     pub(crate) fn get_qualified_fn(
@@ -1432,8 +1455,8 @@ impl Module {
         self.all_functions.get(&hash_qualified_fn)
     }
 
-    /// Combine another module into this module.
-    /// The other module is consumed to merge into this module.
+    /// Combine another [`Module`] into this [`Module`].
+    /// The other [`Module`] is _consumed_ to merge into this [`Module`].
     #[inline]
     pub fn combine(&mut self, other: Self) -> &mut Self {
         self.modules.extend(other.modules.into_iter());
@@ -1447,9 +1470,9 @@ impl Module {
         self
     }
 
-    /// Combine another module into this module.
-    /// The other module is consumed to merge into this module.
-    /// Sub-modules are flattened onto the root module, with higher level overriding lower level.
+    /// Combine another [`Module`] into this [`Module`].
+    /// The other [`Module`] is _consumed_ to merge into this [`Module`].
+    /// Sub-modules are flattened onto the root [`Module`], with higher level overriding lower level.
     #[inline]
     pub fn combine_flatten(&mut self, other: Self) -> &mut Self {
         other.modules.into_iter().for_each(|(_, m)| {
@@ -1465,8 +1488,8 @@ impl Module {
         self
     }
 
-    /// Poly-fill this module with another module.
-    /// Only items not existing in this module are added.
+    /// Polyfill this [`Module`] with another [`Module`].
+    /// Only items not existing in this [`Module`] are added.
     #[inline]
     pub fn fill_with(&mut self, other: &Self) -> &mut Self {
         other.modules.iter().for_each(|(k, v)| {
@@ -1492,13 +1515,13 @@ impl Module {
         self
     }
 
-    /// Merge another module into this module.
+    /// Merge another [`Module`] into this [`Module`].
     #[inline(always)]
     pub fn merge(&mut self, other: &Self) -> &mut Self {
         self.merge_filtered(other, &mut |_, _, _, _, _| true)
     }
 
-    /// Merge another module into this module based on a filter predicate.
+    /// Merge another [`Module`] into this [`Module`] based on a filter predicate.
     pub(crate) fn merge_filtered(
         &mut self,
         other: &Self,
@@ -1584,7 +1607,7 @@ impl Module {
         self
     }
 
-    /// Get the number of variables, functions and type iterators in the module.
+    /// Get the number of variables, functions and type iterators in the [`Module`].
     #[inline(always)]
     pub fn count(&self) -> (usize, usize, usize) {
         (
@@ -1594,19 +1617,19 @@ impl Module {
         )
     }
 
-    /// Get an iterator to the sub-modules in the module.
+    /// Get an iterator to the sub-modules in the [`Module`].
     #[inline(always)]
     pub fn iter_sub_modules(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
         self.modules.iter().map(|(k, m)| (k.as_str(), m.clone()))
     }
 
-    /// Get an iterator to the variables in the module.
+    /// Get an iterator to the variables in the [`Module`].
     #[inline(always)]
     pub fn iter_var(&self) -> impl Iterator<Item = (&str, &Dynamic)> {
         self.variables.iter().map(|(k, v)| (k.as_str(), v))
     }
 
-    /// Get an iterator to the functions in the module.
+    /// Get an iterator to the functions in the [`Module`].
     #[cfg(not(feature = "no_optimize"))]
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
@@ -1614,7 +1637,7 @@ impl Module {
         self.functions.values()
     }
 
-    /// Get an iterator over all script-defined functions in the module.
+    /// Get an iterator over all script-defined functions in the [`Module`].
     ///
     /// Function metadata includes:
     /// 1) Namespace ([`FnNamespace::Global`] or [`FnNamespace::Internal`]).
@@ -1647,7 +1670,7 @@ impl Module {
         )
     }
 
-    /// Get an iterator over all script-defined functions in the module.
+    /// Get an iterator over all script-defined functions in the [`Module`].
     ///
     /// Function metadata includes:
     /// 1) Namespace ([`FnNamespace::Global`] or [`FnNamespace::Internal`]).
@@ -1671,7 +1694,7 @@ impl Module {
         )
     }
 
-    /// Get an iterator over all script-defined functions in the module.
+    /// Get an iterator over all script-defined functions in the [`Module`].
     ///
     /// Function metadata includes:
     /// 1) Namespace ([`FnNamespace::Global`] or [`FnNamespace::Internal`]).
@@ -1689,11 +1712,11 @@ impl Module {
         self.iter_script_fn()
     }
 
-    /// Create a new module by evaluating an [`AST`][crate::AST].
+    /// Create a new [`Module`] by evaluating an [`AST`][crate::AST].
     ///
     /// The entire [`AST`][crate::AST] is encapsulated into each function, allowing functions
     /// to cross-call each other.  Functions in the global namespace, plus all functions
-    /// defined in the module, are _merged_ into a _unified_ namespace before each call.
+    /// defined in the [`Module`], are _merged_ into a _unified_ namespace before each call.
     /// Therefore, all functions will be found.
     ///
     /// # Example
@@ -1766,10 +1789,10 @@ impl Module {
         Ok(module)
     }
 
-    /// Scan through all the sub-modules in the module and build a hash index of all
+    /// Scan through all the sub-modules in the [`Module`] and build a hash index of all
     /// variables and functions as one flattened namespace.
     ///
-    /// If the module is already indexed, this method has no effect.
+    /// If the [`Module`] is already indexed, this method has no effect.
     pub fn build_index(&mut self) -> &mut Self {
         // Collect a particular module.
         fn index_module<'a>(
@@ -1887,14 +1910,14 @@ impl Module {
         self.type_iterators.contains_key(&id)
     }
 
-    /// Set a type iterator into the module.
+    /// Set a type iterator into the [`Module`].
     pub fn set_iter(&mut self, typ: TypeId, func: IteratorFn) -> &mut Self {
         self.type_iterators.insert(typ, func);
         self.indexed = false;
         self
     }
 
-    /// Set a type iterator into the module.
+    /// Set a type iterator into the [`Module`].
     pub fn set_iterable<T>(&mut self) -> &mut Self
     where
         T: Variant + Clone + IntoIterator,
@@ -1905,7 +1928,7 @@ impl Module {
         })
     }
 
-    /// Set an iterator type into the module as a type iterator.
+    /// Set an iterator type into the [`Module`] as a type iterator.
     pub fn set_iterator<T>(&mut self) -> &mut Self
     where
         T: Variant + Clone + Iterator,
@@ -1935,7 +1958,7 @@ impl Module {
 /// A [`StaticVec`] is used because most namespace-qualified access contains only one level,
 /// and it is wasteful to always allocate a [`Vec`] with one element.
 ///
-/// ## WARNING
+/// # WARNING
 ///
 /// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
@@ -2019,10 +2042,9 @@ impl NamespaceRef {
     }
 }
 
-/// Re-export module resolver trait.
 #[cfg(not(feature = "no_module"))]
 pub use resolvers::ModuleResolver;
 
-/// Re-export module resolvers.
+/// Module containing all built-in [module resolvers][ModuleResolver].
 #[cfg(not(feature = "no_module"))]
 pub mod resolvers;

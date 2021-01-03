@@ -10,7 +10,7 @@ use crate::stdlib::boxed::Box;
 impl Engine {
     /// Control whether and how the [`Engine`] will optimize an [`AST`][crate::AST] after compilation.
     ///
-    /// Not available under the `no_optimize` feature.
+    /// Not available under `no_optimize`.
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
     pub fn set_optimization_level(
@@ -23,7 +23,7 @@ impl Engine {
     /// The current optimization level.
     /// It controls whether and how the [`Engine`] will optimize an [`AST`][crate::AST] after compilation.
     ///
-    /// Not available under the `no_optimize` feature.
+    /// Not available under `no_optimize`.
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
     pub fn optimization_level(&self) -> crate::OptimizationLevel {
@@ -37,6 +37,8 @@ impl Engine {
     }
     /// Set the maximum levels of function calls allowed for a script in order to avoid
     /// infinite recursion and stack overflows.
+    ///
+    /// Not available under `unchecked` or `no_function`.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
@@ -45,6 +47,8 @@ impl Engine {
         self
     }
     /// The maximum levels of function calls allowed for a script.
+    ///
+    /// Not available under `unchecked` or `no_function`.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
@@ -53,6 +57,8 @@ impl Engine {
     }
     /// Set the maximum number of operations allowed for a script to run to avoid
     /// consuming too much resources (0 for unlimited).
+    ///
+    /// Not available under `unchecked`.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn set_max_operations(&mut self, operations: u64) -> &mut Self {
@@ -64,12 +70,16 @@ impl Engine {
         self
     }
     /// The maximum number of operations allowed for a script to run (0 for unlimited).
+    ///
+    /// Not available under `unchecked`.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn max_operations(&self) -> u64 {
         self.limits.max_operations
     }
     /// Set the maximum number of imported [modules][crate::Module] allowed for a script.
+    ///
+    /// Not available under `unchecked` or `no_module`.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
@@ -78,6 +88,8 @@ impl Engine {
         self
     }
     /// The maximum number of imported [modules][crate::Module] allowed for a script.
+    ///
+    /// Not available under `unchecked` or `no_module`.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
@@ -85,6 +97,8 @@ impl Engine {
         self.limits.max_modules
     }
     /// Set the depth limits for expressions (0 for unlimited).
+    ///
+    /// Not available under `unchecked`.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn set_max_expr_depths(
@@ -108,12 +122,16 @@ impl Engine {
         self
     }
     /// The depth limit for expressions (0 for unlimited).
+    ///
+    /// Not available under `unchecked`.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn max_expr_depth(&self) -> usize {
         self.limits.max_expr_depth
     }
     /// The depth limit for expressions in functions (0 for unlimited).
+    ///
+    /// Not available under `unchecked` or `no_function`.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
@@ -121,6 +139,8 @@ impl Engine {
         self.limits.max_function_expr_depth
     }
     /// Set the maximum length of [strings][crate::ImmutableString] (0 for unlimited).
+    ///
+    /// Not available under `unchecked`.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn set_max_string_size(&mut self, max_size: usize) -> &mut Self {
@@ -128,12 +148,16 @@ impl Engine {
         self
     }
     /// The maximum length of [strings][crate::ImmutableString] (0 for unlimited).
+    ///
+    /// Not available under `unchecked`.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn max_string_size(&self) -> usize {
         self.limits.max_string_size
     }
     /// Set the maximum length of [arrays][crate::Array] (0 for unlimited).
+    ///
+    /// Not available under `unchecked` or `no_index`.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
@@ -142,13 +166,17 @@ impl Engine {
         self
     }
     /// The maximum length of [arrays][crate::Array] (0 for unlimited).
+    ///
+    /// Not available under `unchecked` or `no_index`.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
     pub fn max_array_size(&self) -> usize {
         self.limits.max_array_size
     }
-    /// Set the maximum length of [object maps][crate::Map] (0 for unlimited).
+    /// Set the maximum size of [object maps][crate::Map] (0 for unlimited).
+    ///
+    /// Not available under `unchecked` or `no_object`.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
@@ -156,7 +184,9 @@ impl Engine {
         self.limits.max_map_size = if max_size == usize::MAX { 0 } else { max_size };
         self
     }
-    /// The maximum length of [object maps][crate::Map] (0 for unlimited).
+    /// The maximum size of [object maps][crate::Map] (0 for unlimited).
+    ///
+    /// Not available under `unchecked` or `no_object`.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
@@ -165,7 +195,7 @@ impl Engine {
     }
     /// Set the module resolution service used by the [`Engine`].
     ///
-    /// Not available under the `no_module` feature.
+    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub fn set_module_resolver(

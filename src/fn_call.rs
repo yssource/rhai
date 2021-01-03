@@ -155,7 +155,7 @@ pub fn ensure_no_data_race(
 impl Engine {
     /// Call a native Rust function registered with the [`Engine`].
     ///
-    /// ## WARNING
+    /// # WARNING
     ///
     /// Function call arguments be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
@@ -175,32 +175,31 @@ impl Engine {
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state, pos)?;
 
-        let func = state.functions_cache.get(&hash_fn).cloned();
-
-        let func = if let Some(ref f) = func {
-            f.as_ref()
-        } else {
+        // Check if function access already in the cache
+        let func = &*state.functions_cache.entry(hash_fn).or_insert_with(|| {
             // Search for the native function
             // First search registered functions (can override packages)
             // Then search packages
             // Finally search modules
 
             //lib.get_fn(hash_fn, pub_only)
-            let f = self
-                .global_namespace
+            self.global_namespace
                 .get_fn(hash_fn, pub_only)
+                .cloned()
+                .map(|f| (f, None))
                 .or_else(|| {
-                    self.global_modules
-                        .iter()
-                        .find_map(|m| m.get_fn(hash_fn, false))
+                    self.global_modules.iter().find_map(|m| {
+                        m.get_fn(hash_fn, false)
+                            .map(|f| (f.clone(), m.id_raw().cloned()))
+                    })
                 })
-                .or_else(|| mods.get_fn(hash_fn));
+                .or_else(|| {
+                    mods.get_fn(hash_fn)
+                        .map(|(f, source)| (f.clone(), source.cloned()))
+                })
+        });
 
-            state.functions_cache.insert(hash_fn, f.cloned());
-            f
-        };
-
-        if let Some(func) = func {
+        if let Some((func, source)) = func {
             assert!(func.is_native());
 
             // Calling pure function but the first argument is a reference?
@@ -208,11 +207,16 @@ impl Engine {
             backup.change_first_arg_to_copy(is_ref && func.is_pure(), args);
 
             // Run external function
+            let source = if source.is_none() {
+                state.source.as_ref()
+            } else {
+                source.as_ref()
+            };
             let result = if func.is_plugin_fn() {
                 func.get_plugin_fn()
-                    .call((self, &state.source, mods, lib).into(), args)
+                    .call((self, source, mods, lib).into(), args)
             } else {
-                func.get_native_fn()((self, &state.source, mods, lib).into(), args)
+                func.get_native_fn()((self, source, mods, lib).into(), args)
             };
 
             // Restore the original reference
@@ -338,7 +342,7 @@ impl Engine {
 
     /// Call a script-defined function.
     ///
-    /// ## WARNING
+    /// # WARNING
     ///
     /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
@@ -413,9 +417,26 @@ impl Engine {
             .or_else(|err| match *err {
                 // Convert return statement to return value
                 EvalAltResult::Return(x, _) => Ok(x),
-                EvalAltResult::ErrorInFunctionCall(name, err, _) => {
+                EvalAltResult::ErrorInFunctionCall(name, src, err, _) => {
                     EvalAltResult::ErrorInFunctionCall(
-                        format!("{} > {}", fn_def.name, name),
+                        format!(
+                            "{}{} < {}",
+                            name,
+                            if src.is_empty() {
+                                "".to_string()
+                            } else {
+                                format!(" @ '{}'", src)
+                            },
+                            fn_def.name
+                        ),
+                        fn_def
+                            .lib
+                            .as_ref()
+                            .map(|m| m.id())
+                            .flatten()
+                            .or_else(|| state.source.as_ref().map(|s| s.as_str()))
+                            .unwrap_or("")
+                            .to_string(),
                         err,
                         pos,
                     )
@@ -424,7 +445,20 @@ impl Engine {
                 // System errors are passed straight-through
                 err if err.is_system_exception() => Err(Box::new(err)),
                 // Other errors are wrapped in `ErrorInFunctionCall`
-                _ => EvalAltResult::ErrorInFunctionCall(fn_def.name.to_string(), err, pos).into(),
+                _ => EvalAltResult::ErrorInFunctionCall(
+                    fn_def.name.to_string(),
+                    fn_def
+                        .lib
+                        .as_ref()
+                        .map(|m| m.id())
+                        .flatten()
+                        .or_else(|| state.source.as_ref().map(|s| s.as_str()))
+                        .unwrap_or("")
+                        .to_string(),
+                    err,
+                    pos,
+                )
+                .into(),
             });
 
         // Remove all local variables
@@ -478,7 +512,7 @@ impl Engine {
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
     ///
-    /// ## WARNING
+    /// # WARNING
     ///
     /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
@@ -549,100 +583,85 @@ impl Engine {
                     .iter()
                     .find_map(|&m| {
                         m.get_fn(hash_script, pub_only)
-                            .map(|f| (f, m.id_raw().clone()))
+                            .map(|f| (f, m.id_raw().cloned()))
                     })
                     //.or_else(|| self.global_namespace.get_fn(hash_script, pub_only))
                     .or_else(|| {
-                        self.global_modules
-                            .iter()
-                            .find_map(|m| m.get_fn(hash_script, false))
-                            .map(|f| (f, None))
+                        self.global_modules.iter().find_map(|m| {
+                            m.get_fn(hash_script, false)
+                                .map(|f| (f, m.id_raw().cloned()))
+                        })
                     })
                     //.or_else(|| mods.iter().find_map(|(_, m)| m.get_qualified_fn(hash_script).map(|f| (f, m.id_raw().clone()))))
                     .unwrap();
 
-                if func.is_script() {
-                    let func = func.get_fn_def();
+                assert!(func.is_script());
 
-                    let scope: &mut Scope = &mut Default::default();
+                let func = func.get_fn_def();
 
-                    // Move captured variables into scope
-                    #[cfg(not(feature = "no_closure"))]
-                    if let Some(captured) = _capture_scope {
-                        if !func.externals.is_empty() {
-                            captured
-                                .into_iter()
-                                .filter(|(name, _, _)| func.externals.iter().any(|ex| ex == name))
-                                .for_each(|(name, value, _)| {
-                                    // Consume the scope values.
-                                    scope.push_dynamic(name, value);
-                                });
-                        }
+                let scope: &mut Scope = &mut Default::default();
+
+                // Move captured variables into scope
+                #[cfg(not(feature = "no_closure"))]
+                if let Some(captured) = _capture_scope {
+                    if !func.externals.is_empty() {
+                        captured
+                            .into_iter()
+                            .filter(|(name, _, _)| func.externals.iter().any(|ex| ex == name))
+                            .for_each(|(name, value, _)| {
+                                // Consume the scope values.
+                                scope.push_dynamic(name, value);
+                            });
                     }
+                }
 
-                    let result = if _is_method {
-                        // Method call of script function - map first argument to `this`
-                        let (first, rest) = args.split_first_mut().unwrap();
+                let result = if _is_method {
+                    // Method call of script function - map first argument to `this`
+                    let (first, rest) = args.split_first_mut().unwrap();
 
-                        mem::swap(&mut state.source, &mut source);
+                    mem::swap(&mut state.source, &mut source);
 
-                        let level = _level + 1;
+                    let level = _level + 1;
 
-                        let result = self.call_script_fn(
-                            scope,
-                            mods,
-                            state,
-                            lib,
-                            &mut Some(*first),
-                            func,
-                            rest,
-                            pos,
-                            level,
-                        );
-
-                        // Restore the original source
-                        state.source = source;
-
-                        result?
-                    } else {
-                        // Normal call of script function
-                        // The first argument is a reference?
-                        let mut backup: ArgBackup = Default::default();
-                        backup.change_first_arg_to_copy(is_ref, args);
-
-                        mem::swap(&mut state.source, &mut source);
-
-                        let level = _level + 1;
-
-                        let result = self.call_script_fn(
-                            scope, mods, state, lib, &mut None, func, args, pos, level,
-                        );
-
-                        // Restore the original source
-                        state.source = source;
-
-                        // Restore the original reference
-                        backup.restore_first_arg(args);
-
-                        result?
-                    };
-
-                    Ok((result, false))
-                } else {
-                    // If it is a native function, redirect it
-                    self.call_native_fn(
+                    let result = self.call_script_fn(
+                        scope,
                         mods,
                         state,
                         lib,
-                        fn_name,
-                        hash_script,
-                        args,
-                        is_ref,
-                        pub_only,
+                        &mut Some(*first),
+                        func,
+                        rest,
                         pos,
-                        def_val,
-                    )
-                }
+                        level,
+                    );
+
+                    // Restore the original source
+                    state.source = source;
+
+                    result?
+                } else {
+                    // Normal call of script function
+                    // The first argument is a reference?
+                    let mut backup: ArgBackup = Default::default();
+                    backup.change_first_arg_to_copy(is_ref, args);
+
+                    mem::swap(&mut state.source, &mut source);
+
+                    let level = _level + 1;
+
+                    let result = self
+                        .call_script_fn(scope, mods, state, lib, &mut None, func, args, pos, level);
+
+                    // Restore the original source
+                    state.source = source;
+
+                    // Restore the original reference
+                    backup.restore_first_arg(args);
+
+                    result?
+                };
+
+                Ok((result, false))
             }
 
             // Normal native function call
@@ -675,7 +694,7 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         statements
             .into_iter()
-            .try_fold(().into(), |_, stmt| {
+            .try_fold(Dynamic::UNIT, |_, stmt| {
                 self.eval_stmt(scope, mods, state, lib, &mut None, stmt, level)
             })
             .or_else(|err| match *err {
@@ -1204,7 +1223,7 @@ impl Engine {
                 let new_scope = &mut Default::default();
                 let fn_def = f.get_fn_def().clone();
 
-                let mut source = module.id_raw().clone();
+                let mut source = module.id_raw().cloned();
                 mem::swap(&mut state.source, &mut source);
 
                 let level = level + 1;

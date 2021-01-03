@@ -41,9 +41,9 @@ pub trait Package {
 
     /// Retrieve the generic package library from this package.
     ///
-    /// ## Deprecated
+    /// # Deprecated
     ///
-    /// Use `as_shared_module` instead.
+    /// Use [`as_shared_module`][Package::as_shared_module] instead.
     #[deprecated = "use `as_shared_module` instead"]
     fn get(&self) -> Shared<Module> {
         self.as_shared_module()

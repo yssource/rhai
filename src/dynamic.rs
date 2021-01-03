@@ -9,7 +9,7 @@ use crate::stdlib::{
     hash::{Hash, Hasher},
     mem,
     ops::{Deref, DerefMut},
-    string::{String, ToString},
+    string::String,
 };
 use crate::{FnPtr, ImmutableString, INT};
 
@@ -132,7 +132,7 @@ pub enum AccessMode {
 }
 
 impl AccessMode {
-    /// Is the access type [`ReadOnly`]?
+    /// Is the access type `ReadOnly`?
     #[inline(always)]
     pub fn is_read_only(self) -> bool {
         match self {
@@ -183,7 +183,7 @@ enum DynamicReadLockInner<'d, T: Variant + Clone> {
     /// A simple reference to a non-shared value.
     Reference(&'d T),
 
-    /// A read guard to a shared `RefCell`.
+    /// A read guard to a shared [`RefCell`][std::cell::RefCell].
     #[cfg(not(feature = "no_closure"))]
     #[cfg(not(feature = "sync"))]
     Guard(crate::stdlib::cell::Ref<'d, Dynamic>),
@@ -220,7 +220,7 @@ enum DynamicWriteLockInner<'d, T: Variant + Clone> {
     /// A simple mutable reference to a non-shared value.
     Reference(&'d mut T),
 
-    /// A write guard to a shared `RefCell`.
+    /// A write guard to a shared [`RefCell`][std::cell::RefCell].
     #[cfg(not(feature = "no_closure"))]
     #[cfg(not(feature = "sync"))]
     Guard(crate::stdlib::cell::RefMut<'d, Dynamic>),
@@ -258,7 +258,7 @@ impl<'d, T: Variant + Clone> DerefMut for DynamicWriteLock<'d, T> {
 
 impl Dynamic {
     /// Does this [`Dynamic`] hold a variant data type
-    /// instead of one of the support system primitive types?
+    /// instead of one of the supported system primitive types?
     #[inline(always)]
     pub fn is_variant(&self) -> bool {
         match self.0 {
@@ -266,8 +266,7 @@ impl Dynamic {
             _ => false,
         }
     }
-    /// Does this [`Dynamic`] hold a shared data type
-    /// instead of one of the supported system primitive types?
+    /// Is the value held by this [`Dynamic`] shared?
     #[inline(always)]
     pub fn is_shared(&self) -> bool {
         match self.0 {
@@ -279,7 +278,7 @@ impl Dynamic {
     /// Is the value held by this [`Dynamic`] a particular type?
     ///
     /// If the [`Dynamic`] is a shared variant checking is performed on
-    /// top of it's internal value.
+    /// top of its internal value.
     #[inline(always)]
     pub fn is<T: Variant + Clone>(&self) -> bool {
         let mut target_type_id = TypeId::of::<T>();
@@ -508,7 +507,7 @@ impl fmt::Debug for Dynamic {
 impl Clone for Dynamic {
     /// Clone the [`Dynamic`] value.
     ///
-    /// ## WARNING
+    /// # WARNING
     ///
     /// The cloned copy is marked read-write even if the original is read-only.
     fn clone(&self) -> Self {
@@ -618,7 +617,7 @@ impl Dynamic {
     ///
     /// Constant [`Dynamic`] values are read-only. If a [`&mut Dynamic`][Dynamic] to such a constant
     /// is passed to a Rust function, the function can use this information to return an error of
-    /// [`EvalAltResult::ErrorAssignmentToConstant`][crate::EvalAltResult::ErrorAssignmentToConstant]
+    /// [`ErrorAssignmentToConstant`][crate::EvalAltResult::ErrorAssignmentToConstant]
     /// if its value is going to be modified. This safe-guards constant values from being modified
     /// from within Rust functions.
     pub fn is_read_only(&self) -> bool {
@@ -707,7 +706,7 @@ impl Dynamic {
         if TypeId::of::<T>() == TypeId::of::<&str>() {
             return <dyn Any>::downcast_ref::<&str>(&value)
                 .unwrap()
-                .to_string()
+                .deref()
                 .into();
         }
         if TypeId::of::<T>() == TypeId::of::<()>() {
