@@ -251,8 +251,8 @@ impl Module {
         self.id.as_ref().map(|s| s.as_str())
     }
 
-    /// Get the ID of the [`Module`], if any.
-    pub(crate) fn id_raw(&self) -> &Option<ImmutableString> {
+    /// Get the ID of the [`Module`] as an [`ImmutableString`], if any.
+    pub fn id_raw(&self) -> &Option<ImmutableString> {
         &self.id
     }
 
