@@ -183,7 +183,10 @@ pub use token::{get_next_token, parse_string_literal, InputStream, Token, Tokeni
 
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
-pub use ast::{BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, ReturnType, ScriptFnDef, Stmt};
+pub use ast::{
+    BinaryExpr, CustomExpr, Expr, FloatWrapper, FnCallExpr, Ident, ReturnType, ScriptFnDef, Stmt,
+    SwitchHashWrapper,
+};
 
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]

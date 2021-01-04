@@ -1923,6 +1923,10 @@ impl Engine {
                     .iter()
                     .map(Into::into)
                     .collect::<StaticVec<_>>();
+                let custom_def = self
+                    .custom_syntax
+                    .get(custom.tokens.first().unwrap())
+                    .unwrap();
                 let mut context = EvalContext {
                     engine: self,
                     scope,
@@ -1932,7 +1936,7 @@ impl Engine {
                     this_ptr,
                     level,
                 };
-                (custom.func)(&mut context, &expressions)
+                (custom_def.func)(&mut context, &expressions)
             }
 
             _ => unreachable!("expression cannot be evaluated: {:?}", expr),
@@ -2072,11 +2076,7 @@ impl Engine {
                             let args = &mut [lhs_ptr_inner, &mut rhs_val];
 
                             // Overriding exact implementation
-                            let source = if source.is_none() {
-                                state.source.as_ref()
-                            } else {
-                                source
-                            };
+                            let source = source.or_else(|| state.source.as_ref());
                             if func.is_plugin_fn() {
                                 func.get_plugin_fn()
                                     .call((self, source, &*mods, lib).into(), args)?;
@@ -2130,14 +2130,13 @@ impl Engine {
                         &mut rhs_val,
                     ];
 
-                    let result = self
-                        .exec_fn_call(
+                    Some(
+                        self.exec_fn_call(
                             mods, state, lib, op, None, args, false, false, false, *op_pos, None,
                             None, level,
                         )
-                        .map(|(v, _)| v)?;
-
-                    Some((result, rhs_expr.position()))
+                        .map(|(v, _)| (v, rhs_expr.position()))?,
+                    )
                 };
 
                 // Must be either `var[index] op= val` or `var.prop op= val`
