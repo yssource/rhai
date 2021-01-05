@@ -6,7 +6,6 @@ use crate::module::NamespaceRef;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
-    collections::HashMap,
     fmt,
     hash::{Hash, Hasher},
     num::{NonZeroU64, NonZeroUsize},
@@ -16,7 +15,7 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::token::Token;
-use crate::utils::StraightHasherBuilder;
+use crate::utils::{HashableHashMap, StraightHasherBuilder};
 use crate::{
     Dynamic, FnNamespace, FnPtr, ImmutableString, Module, Position, Shared, StaticVec, INT,
 };
@@ -691,54 +690,6 @@ pub enum ReturnType {
     Exception,
 }
 
-/// A type that wraps a [`HashMap`]`<u64, Stmt>` for the `switch` statement and implements [`Hash`].
-#[derive(Clone)]
-pub struct SwitchHashWrapper(HashMap<u64, Stmt, StraightHasherBuilder>);
-
-impl From<HashMap<u64, Stmt, StraightHasherBuilder>> for SwitchHashWrapper {
-    fn from(value: HashMap<u64, Stmt, StraightHasherBuilder>) -> Self {
-        Self(value)
-    }
-}
-impl AsRef<HashMap<u64, Stmt, StraightHasherBuilder>> for SwitchHashWrapper {
-    fn as_ref(&self) -> &HashMap<u64, Stmt, StraightHasherBuilder> {
-        &self.0
-    }
-}
-impl AsMut<HashMap<u64, Stmt, StraightHasherBuilder>> for SwitchHashWrapper {
-    fn as_mut(&mut self) -> &mut HashMap<u64, Stmt, StraightHasherBuilder> {
-        &mut self.0
-    }
-}
-impl Deref for SwitchHashWrapper {
-    type Target = HashMap<u64, Stmt, StraightHasherBuilder>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl DerefMut for SwitchHashWrapper {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-impl fmt::Debug for SwitchHashWrapper {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-impl Hash for SwitchHashWrapper {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        let mut keys: Vec<_> = self.0.keys().collect();
-        keys.sort();
-
-        keys.into_iter().for_each(|key| {
-            key.hash(state);
-            self.0.get(&key).unwrap().hash(state);
-        });
-    }
-}
-
 /// _(INTERNALS)_ A statement.
 /// Exported under the `internals` feature only.
 ///
@@ -752,7 +703,14 @@ pub enum Stmt {
     /// `if` expr `{` stmt `}` `else` `{` stmt `}`
     If(Expr, Box<(Stmt, Option<Stmt>)>, Position),
     /// `switch` expr `{` literal or _ `=>` stmt `,` ... `}`
-    Switch(Expr, Box<(SwitchHashWrapper, Option<Stmt>)>, Position),
+    Switch(
+        Expr,
+        Box<(
+            HashableHashMap<u64, Stmt, StraightHasherBuilder>,
+            Option<Stmt>,
+        )>,
+        Position,
+    ),
     /// `while` expr `{` stmt `}`
     While(Expr, Box<Stmt>, Position),
     /// `do` `{` stmt `}` `while`|`until` expr

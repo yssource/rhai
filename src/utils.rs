@@ -6,11 +6,13 @@ use crate::stdlib::{
     borrow::Borrow,
     boxed::Box,
     cmp::Ordering,
+    collections::HashMap,
     fmt,
+    fmt::{Debug, Display},
     hash::{BuildHasher, Hash, Hasher},
     iter::{empty, FromIterator},
     num::NonZeroU64,
-    ops::{Add, AddAssign, Deref},
+    ops::{Add, AddAssign, Deref, DerefMut},
     str::FromStr,
     string::{String, ToString},
 };
@@ -138,6 +140,55 @@ fn calc_fn_hash<'a>(
 pub(crate) fn combine_hashes(a: NonZeroU64, b: NonZeroU64) -> NonZeroU64 {
     // HACK - If it so happens to hash directly to zero (OMG!) then change it to 42...
     NonZeroU64::new(a.get() ^ b.get()).unwrap_or_else(|| NonZeroU64::new(42).unwrap())
+}
+
+/// _(INTERNALS)_ A type that wraps a [`HashMap`] and implements [`Hash`].
+/// Exported under the `internals` feature only.
+#[derive(Clone, Default)]
+pub struct HashableHashMap<K, T, H: BuildHasher>(HashMap<K, T, H>);
+
+impl<K, T, H: BuildHasher> From<HashMap<K, T, H>> for HashableHashMap<K, T, H> {
+    fn from(value: HashMap<K, T, H>) -> Self {
+        Self(value)
+    }
+}
+impl<K, T, H: BuildHasher> AsRef<HashMap<K, T, H>> for HashableHashMap<K, T, H> {
+    fn as_ref(&self) -> &HashMap<K, T, H> {
+        &self.0
+    }
+}
+impl<K, T, H: BuildHasher> AsMut<HashMap<K, T, H>> for HashableHashMap<K, T, H> {
+    fn as_mut(&mut self) -> &mut HashMap<K, T, H> {
+        &mut self.0
+    }
+}
+impl<K, T, H: BuildHasher> Deref for HashableHashMap<K, T, H> {
+    type Target = HashMap<K, T, H>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl<K, T, H: BuildHasher> DerefMut for HashableHashMap<K, T, H> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+impl<K: Debug, T: Debug, H: BuildHasher> Debug for HashableHashMap<K, T, H> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl<K: Hash + Ord, T: Hash, H: BuildHasher> Hash for HashableHashMap<K, T, H> {
+    fn hash<B: Hasher>(&self, state: &mut B) {
+        let mut keys: Vec<_> = self.0.keys().collect();
+        keys.sort();
+
+        keys.into_iter().for_each(|key| {
+            key.hash(state);
+            self.0.get(&key).unwrap().hash(state);
+        });
+    }
 }
 
 /// The system immutable string type.
@@ -276,17 +327,17 @@ impl<'a> FromIterator<String> for ImmutableString {
     }
 }
 
-impl fmt::Display for ImmutableString {
+impl Display for ImmutableString {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self.0.as_str(), f)
+        Display::fmt(self.0.as_str(), f)
     }
 }
 
-impl fmt::Debug for ImmutableString {
+impl Debug for ImmutableString {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(self.0.as_str(), f)
+        Debug::fmt(self.0.as_str(), f)
     }
 }
 
