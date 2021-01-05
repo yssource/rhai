@@ -1666,118 +1666,6 @@ impl Engine {
         }
     }
 
-    /// Get a [`Target`] from an expression.
-    pub(crate) fn eval_expr_as_target<'s>(
-        &self,
-        scope: &'s mut Scope,
-        mods: &mut Imports,
-        state: &mut State,
-        lib: &[&Module],
-        this_ptr: &'s mut Option<&mut Dynamic>,
-        expr: &Expr,
-        _no_const: bool,
-        level: usize,
-    ) -> Result<(Target<'s>, Position), Box<EvalAltResult>> {
-        match expr {
-            // var - point directly to the value
-            Expr::Variable(_) => {
-                let (mut target, pos) =
-                    self.search_namespace(scope, mods, state, lib, this_ptr, expr)?;
-
-                // If necessary, constants are cloned
-                if target.as_ref().is_read_only() {
-                    target = target.into_owned();
-                }
-
-                Ok((target, pos))
-            }
-            // var[...]
-            #[cfg(not(feature = "no_index"))]
-            Expr::Index(x, _) if x.lhs.get_variable_access(false).is_some() => match x.rhs {
-                Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
-                // var[...]...
-                Expr::FnCall(_, _) | Expr::Index(_, _) | Expr::Dot(_, _) => self
-                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                    .map(|v| (v.into(), expr.position())),
-                // var[expr] - point directly to the item
-                _ => {
-                    let idx = self.eval_expr(scope, mods, state, lib, this_ptr, &x.rhs, level)?;
-                    let idx_pos = x.rhs.position();
-                    let (mut target, pos) = self.eval_expr_as_target(
-                        scope, mods, state, lib, this_ptr, &x.lhs, _no_const, level,
-                    )?;
-
-                    let is_ref = target.is_ref();
-
-                    if target.is_shared() || target.is_value() {
-                        let target_ref = target.as_mut();
-                        self.get_indexed_mut(
-                            mods, state, lib, target_ref, idx, idx_pos, false, is_ref, true, level,
-                        )
-                        .map(Target::into_owned)
-                    } else {
-                        let target_ref = target.take_ref().unwrap();
-                        self.get_indexed_mut(
-                            mods, state, lib, target_ref, idx, idx_pos, false, is_ref, true, level,
-                        )
-                    }
-                    .map(|v| (v, pos))
-                }
-            },
-            // var.prop
-            #[cfg(not(feature = "no_object"))]
-            Expr::Dot(x, _) if x.lhs.get_variable_access(false).is_some() => match x.rhs {
-                Expr::Variable(_) => unreachable!(
-                    "unexpected Expr::Variable in dot access (should be Expr::Property)"
-                ),
-                // var.prop
-                Expr::Property(ref p) => {
-                    let (mut target, _) = self.eval_expr_as_target(
-                        scope, mods, state, lib, this_ptr, &x.lhs, _no_const, level,
-                    )?;
-                    let is_ref = target.is_ref();
-
-                    if target.is::<Map>() {
-                        // map.prop - point directly to the item
-                        let (_, _, Ident { name, pos }) = p.as_ref();
-                        let idx = name.clone().into();
-
-                        if target.is_shared() || target.is_value() {
-                            let target_ref = target.as_mut();
-                            self.get_indexed_mut(
-                                mods, state, lib, target_ref, idx, *pos, false, is_ref, true, level,
-                            )
-                            .map(Target::into_owned)
-                        } else {
-                            let target_ref = target.take_ref().unwrap();
-                            self.get_indexed_mut(
-                                mods, state, lib, target_ref, idx, *pos, false, is_ref, true, level,
-                            )
-                        }
-                        .map(|v| (v, *pos))
-                    } else {
-                        // var.prop - call property getter
-                        let (getter, _, Ident { pos, .. }) = p.as_ref();
-                        let mut args = [target.as_mut()];
-                        self.exec_fn_call(
-                            mods, state, lib, getter, None, &mut args, is_ref, true, false, *pos,
-                            None, None, level,
-                        )
-                        .map(|(v, _)| (v.into(), *pos))
-                    }
-                }
-                // var.???
-                _ => self
-                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                    .map(|v| (v.into(), expr.position())),
-            },
-            // expr
-            _ => self
-                .eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                .map(|v| (v.into(), expr.position())),
-        }
-    }
-
     /// Evaluate an expression.
     pub(crate) fn eval_expr(
         &self,
@@ -2192,12 +2080,8 @@ impl Engine {
                 let (table, def_stmt) = x.as_ref();
 
                 let hasher = &mut get_hasher();
-                self.eval_expr_as_target(
-                    scope, mods, state, lib, this_ptr, match_expr, false, level,
-                )?
-                .0
-                .as_ref()
-                .hash(hasher);
+                self.eval_expr(scope, mods, state, lib, this_ptr, match_expr, level)?
+                    .hash(hasher);
                 let hash = hasher.finish();
 
                 if let Some(stmt) = table.get(&hash) {
