@@ -1806,7 +1806,7 @@ impl Engine {
                 #[cfg(not(feature = "unchecked"))]
                 max_string_size: self.limits.max_string_size,
                 #[cfg(feature = "unchecked")]
-                max_string_size: 0,
+                max_string_size: None,
                 non_unary: false,
                 comment_level: 0,
                 end_with_none: false,

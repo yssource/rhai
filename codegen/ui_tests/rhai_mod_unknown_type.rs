@@ -9,16 +9,13 @@ pub struct Point {
 #[export_module]
 pub mod test_module {
     pub use super::Point;
-    pub fn test_fn(input: Pointer) -> bool {
+    pub fn test_fn(input: Point) -> bool {
         input.x < input.y
     }
 }
 
 fn main() {
-    let n = Point {
-        x: 0.0,
-        y: 10.0,
-    };
+    let n = Point { x: 0.0, y: 10.0 };
     if test_module::test_fn(n) {
         println!("yes");
     } else {

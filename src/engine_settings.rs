@@ -1,12 +1,11 @@
 //! Configuration settings for [`Engine`].
 
-use crate::stdlib::{
-    format,
-    num::{NonZeroU64, NonZeroU8, NonZeroUsize},
-    string::String,
-};
+use crate::stdlib::{format, num::NonZeroU8, string::String};
 use crate::token::Token;
 use crate::Engine;
+
+#[cfg(not(feature = "unchecked"))]
+use crate::stdlib::num::{NonZeroU64, NonZeroUsize};
 
 #[cfg(not(feature = "no_module"))]
 use crate::stdlib::boxed::Box;

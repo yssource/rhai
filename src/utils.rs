@@ -15,6 +15,7 @@ use crate::stdlib::{
     ops::{Add, AddAssign, Deref, DerefMut},
     str::FromStr,
     string::{String, ToString},
+    vec::Vec,
 };
 use crate::Shared;
 
