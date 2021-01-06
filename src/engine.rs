@@ -135,7 +135,8 @@ impl Imports {
             .rev()
             .find_map(|(_, m)| m.get_qualified_fn(hash).map(|f| (f, m.id_raw())))
     }
-    /// Does the specified [`TypeId`][std::any::TypeId] iterator exist in this stack of imported [modules][Module]?
+    /// Does the specified [`TypeId`][std::any::TypeId] iterator exist in this stack of
+    /// imported [modules][Module]?
     #[allow(dead_code)]
     #[inline(always)]
     pub fn contains_iter(&self, id: TypeId) -> bool {
@@ -508,8 +509,8 @@ pub struct State {
     /// In some situation, e.g. after running an `eval` statement, subsequent offsets become mis-aligned.
     /// When that happens, this flag is turned on to force a scope lookup by name.
     pub always_search: bool,
-    /// Level of the current scope.  The global (root) level is zero, a new block (or function call)
-    /// is one level higher, and so on.
+    /// Level of the current scope.  The global (root) level is zero, a new block
+    /// (or function call) is one level higher, and so on.
     pub scope_level: usize,
     /// Number of operations performed.
     pub operations: u64,
@@ -542,30 +543,34 @@ impl State {
 pub struct Limits {
     /// Maximum levels of call-stack to prevent infinite recursion.
     /// Not available under `no_function`.
+    ///
+    /// Set to zero to effectively disable function calls.
     #[cfg(not(feature = "no_function"))]
     pub max_call_stack_depth: usize,
-    /// Maximum depth of statements/expressions at global level (0 = unlimited).
-    pub max_expr_depth: usize,
-    /// Maximum depth of statements/expressions in functions (0 = unlimited).
+    /// Maximum depth of statements/expressions at global level.
+    pub max_expr_depth: Option<NonZeroUsize>,
+    /// Maximum depth of statements/expressions in functions.
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
-    pub max_function_expr_depth: usize,
-    /// Maximum number of operations allowed to run (0 = unlimited).
-    pub max_operations: u64,
+    pub max_function_expr_depth: Option<NonZeroUsize>,
+    /// Maximum number of operations allowed to run.
+    pub max_operations: Option<NonZeroU64>,
     /// Maximum number of [modules][Module] allowed to load.
     /// Not available under `no_module`.
+    ///
+    /// Set to zero to effectively disable loading any [module][Module].
     #[cfg(not(feature = "no_module"))]
     pub max_modules: usize,
-    /// Maximum length of a [string][ImmutableString] (0 = unlimited).
-    pub max_string_size: usize,
-    /// Maximum length of an [array][Array] (0 = unlimited).
+    /// Maximum length of a [string][ImmutableString].
+    pub max_string_size: Option<NonZeroUsize>,
+    /// Maximum length of an [array][Array].
     /// Not available under `no_index`.
     #[cfg(not(feature = "no_index"))]
-    pub max_array_size: usize,
-    /// Maximum number of properties in an [object map][Map] (0 = unlimited).
+    pub max_array_size: Option<NonZeroUsize>,
+    /// Maximum number of properties in an [object map][Map].
     /// Not available under `no_object`.
     #[cfg(not(feature = "no_object"))]
-    pub max_map_size: usize,
+    pub max_map_size: Option<NonZeroUsize>,
 }
 
 /// Context of a script evaluation process.
@@ -777,13 +782,13 @@ pub fn search_imports(
 
     // Qualified - check if the root module is directly indexed
     let index = if state.always_search {
-        0
+        None
     } else {
-        namespace.index().map_or(0, NonZeroUsize::get)
+        namespace.index()
     };
 
-    Ok(if index > 0 {
-        let offset = mods.len() - index;
+    Ok(if let Some(index) = index {
+        let offset = mods.len() - index.get();
         mods.get(offset).expect("invalid index in Imports")
     } else {
         mods.find(root)
@@ -838,17 +843,17 @@ impl Engine {
             limits: Limits {
                 #[cfg(not(feature = "no_function"))]
                 max_call_stack_depth: MAX_CALL_STACK_DEPTH,
-                max_expr_depth: MAX_EXPR_DEPTH,
+                max_expr_depth: NonZeroUsize::new(MAX_EXPR_DEPTH),
                 #[cfg(not(feature = "no_function"))]
-                max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
-                max_operations: 0,
+                max_function_expr_depth: NonZeroUsize::new(MAX_FUNCTION_EXPR_DEPTH),
+                max_operations: None,
                 #[cfg(not(feature = "no_module"))]
                 max_modules: usize::MAX,
-                max_string_size: 0,
+                max_string_size: None,
                 #[cfg(not(feature = "no_index"))]
-                max_array_size: 0,
+                max_array_size: None,
                 #[cfg(not(feature = "no_object"))]
-                max_map_size: 0,
+                max_map_size: None,
             },
 
             disable_doc_comments: false,
@@ -895,17 +900,17 @@ impl Engine {
             limits: Limits {
                 #[cfg(not(feature = "no_function"))]
                 max_call_stack_depth: MAX_CALL_STACK_DEPTH,
-                max_expr_depth: MAX_EXPR_DEPTH,
+                max_expr_depth: NonZeroUsize::new(MAX_EXPR_DEPTH),
                 #[cfg(not(feature = "no_function"))]
-                max_function_expr_depth: MAX_FUNCTION_EXPR_DEPTH,
-                max_operations: 0,
+                max_function_expr_depth: NonZeroUsize::new(MAX_FUNCTION_EXPR_DEPTH),
+                max_operations: None,
                 #[cfg(not(feature = "no_module"))]
                 max_modules: usize::MAX,
-                max_string_size: 0,
+                max_string_size: None,
                 #[cfg(not(feature = "no_index"))]
-                max_array_size: 0,
+                max_array_size: None,
                 #[cfg(not(feature = "no_object"))]
-                max_map_size: 0,
+                max_map_size: None,
             },
 
             disable_doc_comments: false,
@@ -975,14 +980,11 @@ impl Engine {
         }
 
         // Check if it is directly indexed
-        let index = if state.always_search {
-            0
-        } else {
-            index.map_or(0, NonZeroUsize::get)
-        };
+        let index = if state.always_search { &None } else { index };
 
         // Check the variable resolver, if any
         if let Some(ref resolve_var) = self.resolve_var {
+            let index = index.map(NonZeroUsize::get).unwrap_or(0);
             let context = EvalContext {
                 engine: self,
                 scope,
@@ -1000,8 +1002,8 @@ impl Engine {
             }
         }
 
-        let index = if index > 0 {
-            scope.len() - index
+        let index = if let Some(index) = index {
+            scope.len() - index.get()
         } else {
             // Find the variable in the scope
             scope
@@ -1012,8 +1014,8 @@ impl Engine {
 
         let val = scope.get_mut_by_index(index);
 
-        // Check for data race - probably not necessary because the only place it should conflict is in a method call
-        //                       when the object variable is also used as a parameter.
+        // Check for data race - probably not necessary because the only place it should conflict is
+        //                       in a method call when the object variable is also used as a parameter.
         // if cfg!(not(feature = "no_closure")) && val.is_locked() {
         //     return EvalAltResult::ErrorDataRace(name.into(), *pos).into();
         // }
@@ -1285,7 +1287,8 @@ impl Engine {
                                     )
                                     .or_else(
                                         |err| match *err {
-                                            // If there is no setter, no need to feed it back because the property is read-only
+                                            // If there is no setter, no need to feed it back because
+                                            // the property is read-only
                                             EvalAltResult::ErrorDotExpr(_, _) => {
                                                 Ok((Dynamic::UNIT, false))
                                             }
@@ -1405,7 +1408,8 @@ impl Engine {
     }
 
     /// Evaluate a chain of indexes and store the results in a [`StaticVec`].
-    /// [`StaticVec`] is used to avoid an allocation in the overwhelming cases of just a few levels of indexing.
+    /// [`StaticVec`] is used to avoid an allocation in the overwhelming cases of
+    /// just a few levels of indexing.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_indexed_chain(
         &self,
@@ -2400,20 +2404,23 @@ impl Engine {
         result: Result<Dynamic, Box<EvalAltResult>>,
         pos: Position,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        // If no data size limits, just return
-        let mut total = 0;
+        // Simply return all errors
+        if result.is_err() {
+            return result;
+        }
 
-        total += self.max_string_size();
+        // If no data size limits, just return
+        let mut has_limit = self.limits.max_string_size.is_some();
         #[cfg(not(feature = "no_index"))]
         {
-            total += self.max_array_size();
+            has_limit = has_limit || self.limits.max_array_size.is_some();
         }
         #[cfg(not(feature = "no_object"))]
         {
-            total += self.max_map_size();
+            has_limit = has_limit || self.limits.max_map_size.is_some();
         }
 
-        if total == 0 {
+        if !has_limit {
             return result;
         }
 
@@ -2469,34 +2476,33 @@ impl Engine {
             }
         }
 
-        match result {
-            // Simply return all errors
-            Err(_) => return result,
-            // String with limit
-            Ok(Dynamic(Union::Str(_, _))) if self.max_string_size() > 0 => (),
-            // Array with limit
-            #[cfg(not(feature = "no_index"))]
-            Ok(Dynamic(Union::Array(_, _))) if self.max_array_size() > 0 => (),
-            // Map with limit
-            #[cfg(not(feature = "no_object"))]
-            Ok(Dynamic(Union::Map(_, _))) if self.max_map_size() > 0 => (),
-            // Everything else is simply returned
-            Ok(_) => return result,
-        };
-
         let (_arr, _map, s) = calc_size(result.as_ref().unwrap());
 
-        if s > self.max_string_size() {
+        if s > self
+            .limits
+            .max_string_size
+            .map_or(usize::MAX, NonZeroUsize::get)
+        {
             return EvalAltResult::ErrorDataTooLarge("Length of string".to_string(), pos).into();
         }
 
         #[cfg(not(feature = "no_index"))]
-        if _arr > self.max_array_size() {
+        if _arr
+            > self
+                .limits
+                .max_array_size
+                .map_or(usize::MAX, NonZeroUsize::get)
+        {
             return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), pos).into();
         }
 
         #[cfg(not(feature = "no_object"))]
-        if _map > self.max_map_size() {
+        if _map
+            > self
+                .limits
+                .max_map_size
+                .map_or(usize::MAX, NonZeroUsize::get)
+        {
             return EvalAltResult::ErrorDataTooLarge("Size of object map".to_string(), pos).into();
         }
 

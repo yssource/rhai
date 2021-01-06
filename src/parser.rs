@@ -61,11 +61,11 @@ struct ParseState<'e> {
     modules: StaticVec<ImmutableString>,
     /// Maximum levels of expression nesting.
     #[cfg(not(feature = "unchecked"))]
-    max_expr_depth: usize,
+    max_expr_depth: Option<NonZeroUsize>,
     /// Maximum levels of expression nesting in functions.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_function"))]
-    max_function_expr_depth: usize,
+    max_function_expr_depth: Option<NonZeroUsize>,
 }
 
 impl<'e> ParseState<'e> {
@@ -73,10 +73,10 @@ impl<'e> ParseState<'e> {
     #[inline(always)]
     pub fn new(
         engine: &'e Engine,
-        #[cfg(not(feature = "unchecked"))] max_expr_depth: usize,
+        #[cfg(not(feature = "unchecked"))] max_expr_depth: Option<NonZeroUsize>,
         #[cfg(not(feature = "unchecked"))]
         #[cfg(not(feature = "no_function"))]
-        max_function_expr_depth: usize,
+        max_function_expr_depth: Option<NonZeroUsize>,
     ) -> Self {
         Self {
             engine,
@@ -212,15 +212,17 @@ impl ParseSettings {
     }
     /// Make sure that the current level of expression nesting is within the maximum limit.
     #[cfg(not(feature = "unchecked"))]
-    #[inline]
-    pub fn ensure_level_within_max_limit(&self, limit: usize) -> Result<(), ParseError> {
-        if limit == 0 {
-            Ok(())
-        } else if self.level > limit {
-            Err(PERR::ExprTooDeep.into_err(self.pos))
-        } else {
-            Ok(())
+    #[inline(always)]
+    pub fn ensure_level_within_max_limit(
+        &self,
+        limit: Option<NonZeroUsize>,
+    ) -> Result<(), ParseError> {
+        if let Some(limit) = limit {
+            if self.level > limit.get() {
+                return Err(PERR::ExprTooDeep.into_err(self.pos));
+            }
         }
+        Ok(())
     }
 }
 
@@ -3040,10 +3042,10 @@ impl Engine {
         let mut state = ParseState::new(
             self,
             #[cfg(not(feature = "unchecked"))]
-            self.max_expr_depth(),
+            NonZeroUsize::new(self.max_expr_depth()),
             #[cfg(not(feature = "unchecked"))]
             #[cfg(not(feature = "no_function"))]
-            self.max_function_expr_depth(),
+            NonZeroUsize::new(self.max_function_expr_depth()),
         );
 
         let settings = ParseSettings {
@@ -3087,10 +3089,10 @@ impl Engine {
         let mut state = ParseState::new(
             self,
             #[cfg(not(feature = "unchecked"))]
-            self.max_expr_depth(),
+            NonZeroUsize::new(self.max_expr_depth()),
             #[cfg(not(feature = "unchecked"))]
             #[cfg(not(feature = "no_function"))]
-            self.max_function_expr_depth(),
+            NonZeroUsize::new(self.max_function_expr_depth()),
         );
 
         while !input.peek().unwrap().0.is_eof() {
