@@ -11,7 +11,10 @@ mod inner {
     #[cfg(not(target_arch = "wasm32"))]
     pub use core::{i128, u128};
 
-    pub use alloc::{borrow, boxed, format, rc, string, sync, vec};
+    #[cfg(feature = "sync")]
+    pub use alloc::sync;
+
+    pub use alloc::{borrow, boxed, format, rc, string, vec};
 
     pub use core_error as error;
 
