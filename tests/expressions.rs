@@ -26,7 +26,7 @@ fn test_expressions() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
-/// This example taken from https://github.com/jonathandturner/rhai/issues/115
+/// This example taken from https://github.com/rhaiscript/rhai/issues/115
 #[test]
 #[cfg(not(feature = "no_object"))]
 fn test_expressions_eval() -> Result<(), Box<EvalAltResult>> {

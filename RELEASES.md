@@ -480,7 +480,7 @@ Version 0.16.0
 
 The major new feature in this version is OOP - well, poor man's OOP, that is.
 
-The `README` is officially transferred to [The Rhai Book](https://schungx.github.io/rhai).
+The `README` is officially transferred to [The Rhai Book](https://rhaiscript.github.io/book).
 
 An online [Playground](https://alvinhochun.github.io/rhai-demo/) is available.
 
@@ -505,7 +505,7 @@ New features
 Enhancements
 ------------
 
-* [The Rhai Book](https://schungx.github.io/rhai) is online.  Most content in the original `README` was transferred to the Book.
+* [The Rhai Book](https://rhaiscript.github.io/book) is online.  Most content in the original `README` was transferred to the Book.
 * New feature `internals` to expose internal data structures (e.g. the AST nodes).
 
 

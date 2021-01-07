@@ -1,6 +1,6 @@
 //! # Rhai - embedded scripting for Rust
 //!
-//! ![Rhai logo](https://schungx.github.io/rhai/images/logo/rhai-banner-transparent-colour.svg)
+//! ![Rhai logo](https://rhaiscript.github.io/book/images/logo/rhai-banner-transparent-colour.svg)
 //!
 //! Rhai is a tiny, simple and fast embedded scripting language for Rust
 //! that gives you a safe and easy way to add scripting to your applications.
@@ -54,7 +54,7 @@
 //!
 //! # Documentation
 //!
-//! See [The Rhai Book](https://schungx.github.io/rhai) for details on the Rhai scripting engine and language.
+//! See [The Rhai Book](https://rhaiscript.github.io/book) for details on the Rhai scripting engine and language.
 
 #![cfg_attr(feature = "no_std", no_std)]
 
