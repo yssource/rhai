@@ -896,8 +896,6 @@ impl Engine {
     /// via the current [module resolver][crate::ModuleResolver] and embedded into the resultant
     /// [`AST`]. When it is evaluated later, `import` statement directly recall pre-resolved
     /// [modules][Module] and the resolution process is not performed again.
-    ///
-    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     pub fn compile_into_self_contained(
         &self,
@@ -917,7 +915,16 @@ impl Engine {
 
         ast.statements()
             .iter()
-            .chain(ast.iter_fn_def().map(|f| &f.body))
+            .chain({
+                #[cfg(not(feature = "no_function"))]
+                {
+                    ast.iter_fn_def().map(|f| &f.body)
+                }
+                #[cfg(feature = "no_function")]
+                {
+                    crate::stdlib::iter::empty()
+                }
+            })
             .for_each(|stmt| {
                 stmt.walk(
                     &mut |stmt| match stmt {
@@ -1512,6 +1519,7 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let state = &mut State {
             source: ast.clone_source(),
+            #[cfg(not(feature = "no_module"))]
             resolver: ast.shared_resolver(),
             ..Default::default()
         };
@@ -1580,6 +1588,7 @@ impl Engine {
         let mods = &mut (&self.global_sub_modules).into();
         let state = &mut State {
             source: ast.clone_source(),
+            #[cfg(not(feature = "no_module"))]
             resolver: ast.shared_resolver(),
             ..Default::default()
         };

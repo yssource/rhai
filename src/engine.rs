@@ -7,7 +7,7 @@ use crate::fn_native::{
     CallableFunction, IteratorFn, OnDebugCallback, OnPrintCallback, OnProgressCallback,
     OnVarCallback,
 };
-use crate::module::{resolvers::StaticModuleResolver, NamespaceRef};
+use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
@@ -26,8 +26,8 @@ use crate::stdlib::{
 use crate::syntax::CustomSyntax;
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
-    calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, ModuleResolver,
-    Position, Scope, Shared, StaticVec,
+    calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position, Scope,
+    Shared, StaticVec,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -517,7 +517,8 @@ pub struct State {
     /// Number of modules loaded.
     pub modules: usize,
     /// Embedded module resolver.
-    pub resolver: Option<Shared<StaticModuleResolver>>,
+    #[cfg(not(feature = "no_module"))]
+    pub resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
     /// Cached lookup values for function hashes.
     pub functions_cache: HashMap<
         NonZeroU64,
@@ -2330,6 +2331,8 @@ impl Engine {
                     .eval_expr(scope, mods, state, lib, this_ptr, &expr, level)?
                     .try_cast::<ImmutableString>()
                 {
+                    use crate::ModuleResolver;
+
                     let expr_pos = expr.position();
 
                     let module = state

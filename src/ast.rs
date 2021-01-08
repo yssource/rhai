@@ -2,7 +2,7 @@
 
 use crate::dynamic::{AccessMode, Union};
 use crate::fn_native::shared_make_mut;
-use crate::module::{resolvers::StaticModuleResolver, NamespaceRef};
+use crate::module::NamespaceRef;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
@@ -171,7 +171,8 @@ pub struct AST {
     /// Script-defined functions.
     functions: Shared<Module>,
     /// Embedded module resolver, if any.
-    resolver: Option<Shared<StaticModuleResolver>>,
+    #[cfg(not(feature = "no_module"))]
+    resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
 }
 
 impl Default for AST {
@@ -181,6 +182,7 @@ impl Default for AST {
             source: None,
             statements: Vec::with_capacity(16),
             functions: Default::default(),
+            #[cfg(not(feature = "no_module"))]
             resolver: None,
         }
     }
@@ -197,6 +199,7 @@ impl AST {
             source: None,
             statements: statements.into_iter().collect(),
             functions: functions.into(),
+            #[cfg(not(feature = "no_module"))]
             resolver: None,
         }
     }
@@ -211,6 +214,7 @@ impl AST {
             source: Some(source.into()),
             statements: statements.into_iter().collect(),
             functions: functions.into(),
+            #[cfg(not(feature = "no_module"))]
             resolver: None,
         }
     }
@@ -275,23 +279,27 @@ impl AST {
         &self.functions
     }
     /// Get the embedded [module resolver][`ModuleResolver`].
-    #[cfg(not(feature = "internals"))]
+    #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    pub(crate) fn shared_resolver(&self) -> Option<Shared<StaticModuleResolver>> {
+    pub(crate) fn shared_resolver(
+        &self,
+    ) -> Option<Shared<crate::module::resolvers::StaticModuleResolver>> {
         self.resolver.clone()
     }
     /// _(INTERNALS)_ Get the embedded [module resolver][`ModuleResolver`].
     /// Exported under the `internals` feature only.
+    #[cfg(not(feature = "no_module"))]
     #[cfg(feature = "internals")]
     #[inline(always)]
     pub fn resolver(&self) -> Option<&dyn crate::ModuleResolver> {
         self.resolver.map(|r| &*r)
     }
     /// Set the embedded [module resolver][`ModuleResolver`].
+    #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub(crate) fn set_resolver(
         &mut self,
-        resolver: impl Into<Shared<StaticModuleResolver>>,
+        resolver: impl Into<Shared<crate::module::resolvers::StaticModuleResolver>>,
     ) -> &mut Self {
         self.resolver = Some(resolver.into());
         self
@@ -325,6 +333,7 @@ impl AST {
             source: self.source.clone(),
             statements: Default::default(),
             functions: functions.into(),
+            #[cfg(not(feature = "no_module"))]
             resolver: self.resolver.clone(),
         }
     }
@@ -336,6 +345,7 @@ impl AST {
             source: self.source.clone(),
             statements: self.statements.clone(),
             functions: Default::default(),
+            #[cfg(not(feature = "no_module"))]
             resolver: self.resolver.clone(),
         }
     }
@@ -633,6 +643,7 @@ impl AST {
     ///
     /// Not available under [`no_function`].
     #[cfg(not(feature = "no_function"))]
+    #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub(crate) fn iter_fn_def(&self) -> impl Iterator<Item = &ScriptFnDef> {
         self.functions
@@ -968,9 +979,9 @@ impl Stmt {
                 x.0.walk(process_stmt, process_expr);
                 x.2.walk(process_stmt, process_expr);
             }
-            Self::Expr(e) | Self::Return(_, Some(e), _) | Self::Import(e, _, _) => {
-                e.walk(process_stmt, process_expr)
-            }
+            Self::Expr(e) | Self::Return(_, Some(e), _) => e.walk(process_stmt, process_expr),
+            #[cfg(not(feature = "no_module"))]
+            Self::Import(e, _, _) => e.walk(process_stmt, process_expr),
             _ => (),
         }
     }
