@@ -16,6 +16,7 @@ Enhancements
 
 * Source information is provided when there is an error within a call to a function defined in another module.
 * Source information is provided to the `NativeCallContext` for native Rust functions.
+* `EvalAltResult::clear_position` to clear the position information of an error - useful when only the message is needed and the position doesn't need to be printed out.
 
 
 Version 0.19.9

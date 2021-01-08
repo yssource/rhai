@@ -366,6 +366,11 @@ impl EvalAltResult {
             | Self::Return(_, pos) => *pos,
         }
     }
+    /// Clear the [position][Position] information of this error.
+    pub fn clear_position(&mut self) -> &mut Self {
+        self.set_position(Position::NONE);
+        self
+    }
     /// Override the [position][Position] of this error.
     pub fn set_position(&mut self, new_position: Position) {
         match self {
