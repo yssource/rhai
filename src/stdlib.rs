@@ -13,6 +13,7 @@ mod inner {
 
     #[cfg(feature = "sync")]
     pub use alloc::sync;
+
     pub use alloc::{borrow, boxed, format, rc, string, vec};
 
     pub use core_error as error;

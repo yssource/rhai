@@ -7,14 +7,13 @@ use crate::stdlib::{
     boxed::Box,
     fmt,
     hash::{Hash, Hasher},
-    mem,
     ops::{Deref, DerefMut},
     string::String,
 };
 use crate::{FnPtr, ImmutableString, INT};
 
 #[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
+use crate::{ast::FloatWrapper, FLOAT};
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
@@ -155,7 +154,7 @@ pub enum Union {
     Char(char, AccessMode),
     Int(INT, AccessMode),
     #[cfg(not(feature = "no_float"))]
-    Float(FLOAT, AccessMode),
+    Float(FloatWrapper, AccessMode),
     #[cfg(not(feature = "no_index"))]
     Array(Box<Array>, AccessMode),
     #[cfg(not(feature = "no_object"))]
@@ -362,8 +361,6 @@ impl Dynamic {
 
 impl Hash for Dynamic {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        mem::discriminant(self).hash(state);
-
         match &self.0 {
             Union::Unit(_, _) => ().hash(state),
             Union::Bool(value, _) => value.hash(state),
@@ -371,7 +368,7 @@ impl Hash for Dynamic {
             Union::Char(ch, _) => ch.hash(state),
             Union::Int(i, _) => i.hash(state),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(f, _) => f.to_le_bytes().hash(state),
+            Union::Float(f, _) => f.hash(state),
             #[cfg(not(feature = "no_index"))]
             Union::Array(a, _) => (**a).hash(state),
             #[cfg(not(feature = "no_object"))]
@@ -559,13 +556,16 @@ impl Dynamic {
     pub const NEGATIVE_ONE: Dynamic = Self(Union::Int(-1, AccessMode::ReadWrite));
     /// A [`Dynamic`] containing the floating-point zero.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_ZERO: Dynamic = Self(Union::Float(0.0, AccessMode::ReadWrite));
+    pub const FLOAT_ZERO: Dynamic =
+        Self(Union::Float(FloatWrapper::new(0.0), AccessMode::ReadWrite));
     /// A [`Dynamic`] containing the floating-point one.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_ONE: Dynamic = Self(Union::Float(1.0, AccessMode::ReadWrite));
+    pub const FLOAT_ONE: Dynamic =
+        Self(Union::Float(FloatWrapper::new(1.0), AccessMode::ReadWrite));
     /// A [`Dynamic`] containing the floating-point negative one.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_NEGATIVE_ONE: Dynamic = Self(Union::Float(-1.0, AccessMode::ReadWrite));
+    pub const FLOAT_NEGATIVE_ONE: Dynamic =
+        Self(Union::Float(FloatWrapper::new(-1.0), AccessMode::ReadWrite));
 
     /// Get the [`AccessMode`] for this [`Dynamic`].
     pub(crate) fn access_mode(&self) -> AccessMode {
@@ -836,7 +836,7 @@ impl Dynamic {
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
             return match self.0 {
-                Union::Float(value, _) => unsafe_try_cast(value),
+                Union::Float(value, _) => unsafe_try_cast(*value),
                 _ => None,
             };
         }
@@ -1105,7 +1105,7 @@ impl Dynamic {
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
             return match &self.0 {
-                Union::Float(value, _) => <dyn Any>::downcast_ref::<T>(value),
+                Union::Float(value, _) => <dyn Any>::downcast_ref::<T>(value.as_ref()),
                 _ => None,
             };
         }
@@ -1194,7 +1194,7 @@ impl Dynamic {
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
             return match &mut self.0 {
-                Union::Float(value, _) => <dyn Any>::downcast_mut::<T>(value),
+                Union::Float(value, _) => <dyn Any>::downcast_mut::<T>(value.as_mut()),
                 _ => None,
             };
         }
@@ -1277,7 +1277,7 @@ impl Dynamic {
     #[inline(always)]
     pub fn as_float(&self) -> Result<FLOAT, &'static str> {
         match self.0 {
-            Union::Float(n, _) => Ok(n),
+            Union::Float(n, _) => Ok(*n),
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _) => self.read_lock().map(|v| *v).ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
@@ -1380,6 +1380,13 @@ impl From<INT> for Dynamic {
 impl From<FLOAT> for Dynamic {
     #[inline(always)]
     fn from(value: FLOAT) -> Self {
+        Self(Union::Float(value.into(), AccessMode::ReadWrite))
+    }
+}
+#[cfg(not(feature = "no_float"))]
+impl From<FloatWrapper> for Dynamic {
+    #[inline(always)]
+    fn from(value: FloatWrapper) -> Self {
         Self(Union::Float(value, AccessMode::ReadWrite))
     }
 }

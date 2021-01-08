@@ -6,18 +6,16 @@ use crate::module::NamespaceRef;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
-    collections::HashMap,
     fmt,
-    hash::Hash,
+    hash::{Hash, Hasher},
     num::{NonZeroU64, NonZeroUsize},
-    ops::{Add, AddAssign},
+    ops::{Add, AddAssign, Deref, DerefMut},
     string::String,
     vec,
     vec::Vec,
 };
-use crate::syntax::FnCustomSyntaxEval;
 use crate::token::Token;
-use crate::utils::StraightHasherBuilder;
+use crate::utils::{HashableHashMap, StraightHasherBuilder};
 use crate::{
     Dynamic, FnNamespace, FnPtr, ImmutableString, Module, Position, Shared, StaticVec, INT,
 };
@@ -492,11 +490,7 @@ impl AST {
             (true, true) => vec![],
         };
 
-        let source = if other.source.is_some() {
-            other.source.clone()
-        } else {
-            self.source.clone()
-        };
+        let source = other.source.clone().or_else(|| self.source.clone());
 
         let mut functions = functions.as_ref().clone();
         functions.merge_filtered(&other.functions, &mut filter);
@@ -702,7 +696,7 @@ pub enum ReturnType {
 /// # WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub enum Stmt {
     /// No-op.
     Noop(Position),
@@ -711,7 +705,10 @@ pub enum Stmt {
     /// `switch` expr `{` literal or _ `=>` stmt `,` ... `}`
     Switch(
         Expr,
-        Box<(HashMap<u64, Stmt, StraightHasherBuilder>, Option<Stmt>)>,
+        Box<(
+            HashableHashMap<u64, Stmt, StraightHasherBuilder>,
+            Option<Stmt>,
+        )>,
         Position,
     ),
     /// `while` expr `{` stmt `}`
@@ -899,10 +896,8 @@ impl Stmt {
 /// # WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct CustomExpr {
-    /// Implementation function.
-    pub func: Shared<FnCustomSyntaxEval>,
     /// List of keywords.
     pub keywords: StaticVec<Expr>,
     /// List of tokens actually parsed.
@@ -926,7 +921,7 @@ impl fmt::Debug for CustomExpr {
 /// # WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct BinaryExpr {
     /// LHS expression.
     pub lhs: Expr,
@@ -940,7 +935,7 @@ pub struct BinaryExpr {
 /// # WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Hash)]
 pub struct FnCallExpr {
     /// Pre-calculated hash for a script-defined function of the same name and number of parameters.
     /// None if native Rust only.
@@ -959,13 +954,83 @@ pub struct FnCallExpr {
     pub args: StaticVec<Expr>,
 }
 
+/// A type that wraps a [`FLOAT`] and implements [`Hash`].
+#[cfg(not(feature = "no_float"))]
+#[derive(Clone, Copy)]
+pub struct FloatWrapper(FLOAT);
+
+#[cfg(not(feature = "no_float"))]
+impl Hash for FloatWrapper {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.to_le_bytes().hash(state);
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+impl AsRef<FLOAT> for FloatWrapper {
+    fn as_ref(&self) -> &FLOAT {
+        &self.0
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+impl AsMut<FLOAT> for FloatWrapper {
+    fn as_mut(&mut self) -> &mut FLOAT {
+        &mut self.0
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+impl Deref for FloatWrapper {
+    type Target = FLOAT;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+impl DerefMut for FloatWrapper {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+impl fmt::Debug for FloatWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+impl fmt::Display for FloatWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+impl From<FLOAT> for FloatWrapper {
+    fn from(value: FLOAT) -> Self {
+        Self::new(value)
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+impl FloatWrapper {
+    pub const fn new(value: FLOAT) -> Self {
+        Self(value)
+    }
+}
+
 /// _(INTERNALS)_ An expression sub-tree.
 /// Exported under the `internals` feature only.
 ///
 /// # WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub enum Expr {
     /// Dynamic constant.
     /// Used to hold either an [`Array`] or [`Map`] literal for quick cloning.
@@ -977,7 +1042,7 @@ pub enum Expr {
     IntegerConstant(INT, Position),
     /// Floating-point constant.
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(FLOAT, Position),
+    FloatConstant(FloatWrapper, Position),
     /// Character constant.
     CharConstant(char, Position),
     /// [String][ImmutableString] constant.
@@ -1250,19 +1315,20 @@ mod tests {
     /// This test is to make sure no code changes increase the sizes of critical data structures.
     #[test]
     fn check_struct_sizes() {
-        use std::mem::size_of;
+        use crate::stdlib::mem::size_of;
+        use crate::*;
 
-        assert_eq!(size_of::<crate::Dynamic>(), 16);
-        assert_eq!(size_of::<Option<crate::Dynamic>>(), 16);
-        assert_eq!(size_of::<crate::Position>(), 4);
-        assert_eq!(size_of::<crate::ast::Expr>(), 16);
-        assert_eq!(size_of::<Option<crate::ast::Expr>>(), 16);
-        assert_eq!(size_of::<crate::ast::Stmt>(), 32);
-        assert_eq!(size_of::<Option<crate::ast::Stmt>>(), 32);
-        assert_eq!(size_of::<crate::FnPtr>(), 32);
-        assert_eq!(size_of::<crate::Scope>(), 48);
-        assert_eq!(size_of::<crate::LexError>(), 56);
-        assert_eq!(size_of::<crate::ParseError>(), 16);
-        assert_eq!(size_of::<crate::EvalAltResult>(), 72);
+        assert_eq!(size_of::<Dynamic>(), 16);
+        assert_eq!(size_of::<Option<Dynamic>>(), 16);
+        assert_eq!(size_of::<Position>(), 4);
+        assert_eq!(size_of::<ast::Expr>(), 16);
+        assert_eq!(size_of::<Option<ast::Expr>>(), 16);
+        assert_eq!(size_of::<ast::Stmt>(), 32);
+        assert_eq!(size_of::<Option<ast::Stmt>>(), 32);
+        assert_eq!(size_of::<FnPtr>(), 32);
+        assert_eq!(size_of::<Scope>(), 48);
+        assert_eq!(size_of::<LexError>(), 56);
+        assert_eq!(size_of::<ParseError>(), 16);
+        assert_eq!(size_of::<EvalAltResult>(), 72);
     }
 }

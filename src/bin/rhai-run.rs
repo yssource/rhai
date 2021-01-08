@@ -5,19 +5,17 @@ use rhai::OptimizationLevel;
 
 use std::{env, fs::File, io::Read, process::exit};
 
-fn eprint_error(input: &str, err: EvalAltResult) {
-    fn eprint_line(lines: &[&str], pos: Position, err: &str) {
+fn eprint_error(input: &str, mut err: EvalAltResult) {
+    fn eprint_line(lines: &[&str], pos: Position, err_msg: &str) {
         let line = pos.line().unwrap();
-
         let line_no = format!("{}: ", line);
-        let pos_text = format!(" ({})", pos);
 
         eprintln!("{}{}", line_no, lines[line - 1]);
         eprintln!(
             "{:>1$} {2}",
             "^",
             line_no.len() + pos.position().unwrap(),
-            err.replace(&pos_text, "")
+            err_msg
         );
         eprintln!("");
     }
@@ -26,6 +24,7 @@ fn eprint_error(input: &str, err: EvalAltResult) {
 
     // Print error
     let pos = err.position();
+    err.clear_position();
 
     if pos.is_none() {
         // No position

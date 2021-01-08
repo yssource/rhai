@@ -1,6 +1,6 @@
 //! # Rhai - embedded scripting for Rust
 //!
-//! ![Rhai logo](https://schungx.github.io/rhai/images/logo/rhai-banner-transparent-colour.svg)
+//! ![Rhai logo](https://rhaiscript.github.io/book/images/logo/rhai-banner-transparent-colour.svg)
 //!
 //! Rhai is a tiny, simple and fast embedded scripting language for Rust
 //! that gives you a safe and easy way to add scripting to your applications.
@@ -54,7 +54,7 @@
 //!
 //! # Documentation
 //!
-//! See [The Rhai Book](https://schungx.github.io/rhai) for details on the Rhai scripting engine and language.
+//! See [The Rhai Book](https://rhaiscript.github.io/book) for details on the Rhai scripting engine and language.
 
 #![cfg_attr(feature = "no_std", no_std)]
 
@@ -136,7 +136,7 @@ pub use utils::ImmutableString;
 use fn_native::Locked;
 
 #[cfg(feature = "internals")]
-pub use utils::{calc_native_fn_hash, calc_script_fn_hash};
+pub use utils::{calc_native_fn_hash, calc_script_fn_hash, HashableHashMap};
 
 #[cfg(not(feature = "internals"))]
 pub(crate) use utils::{calc_native_fn_hash, calc_script_fn_hash};
@@ -183,7 +183,9 @@ pub use token::{get_next_token, parse_string_literal, InputStream, Token, Tokeni
 
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
-pub use ast::{BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, ReturnType, ScriptFnDef, Stmt};
+pub use ast::{
+    BinaryExpr, CustomExpr, Expr, FloatWrapper, FnCallExpr, Ident, ReturnType, ScriptFnDef, Stmt,
+};
 
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]

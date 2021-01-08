@@ -17,7 +17,7 @@ pub mod test_module {
 fn main() {
     let n = Point {
         x: 0.0,
-        y: 10.0,
+        y: 10.0
     };
     if test_module::test_fn(n) {
         println!("yes");

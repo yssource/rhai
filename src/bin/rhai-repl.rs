@@ -11,9 +11,10 @@ use std::{
 };
 
 /// Pretty-print error.
-fn print_error(input: &str, err: EvalAltResult) {
+fn print_error(input: &str, mut err: EvalAltResult) {
     let lines: Vec<_> = input.trim().split('\n').collect();
     let pos = err.position();
+    err.clear_position();
 
     let line_no = if lines.len() > 1 {
         if pos.is_none() {
@@ -26,8 +27,6 @@ fn print_error(input: &str, err: EvalAltResult) {
     };
 
     // Print error position
-    let pos_text = format!(" ({})", pos);
-
     if pos.is_none() {
         // No position
         println!("{}", err);
@@ -40,7 +39,7 @@ fn print_error(input: &str, err: EvalAltResult) {
             "{0:>1$} {2}",
             "^",
             line_no.len() + pos.position().unwrap(),
-            err.to_string().replace(&pos_text, "")
+            err
         );
     }
 }

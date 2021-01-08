@@ -131,7 +131,12 @@ pub enum ParseErrorType {
     /// Defining a function `fn` in an appropriate place (e.g. inside another function).
     ///
     /// Never appears under the `no_function` feature.
-    WrongFnDefinition,
+    FnWrongDefinition,
+    /// Defining a function with a name that conflicts with an existing function.
+    /// Wrapped values are the function name and number of parameters.
+    ///
+    /// Never appears under the `no_object` feature.
+    FnDuplicatedDefinition(String, usize),
     /// Missing a function name after the `fn` keyword.
     ///
     /// Never appears under the `no_function` feature.
@@ -180,7 +185,7 @@ impl ParseErrorType {
     pub(crate) fn desc(&self) -> &str {
         match self {
             Self::UnexpectedEOF => "Script is incomplete",
-            Self::BadInput(p) => p.desc(),
+            Self::BadInput(err) => err.desc(),
             Self::UnknownOperator(_) => "Unknown operator",
             Self::MissingToken(_, _) => "Expecting a certain token that is missing",
             Self::MalformedCallExpr(_) => "Invalid expression in function call arguments",
@@ -193,12 +198,13 @@ impl ParseErrorType {
             Self::VariableExpected => "Expecting name of a variable",
             Self::Reserved(_) => "Invalid use of reserved keyword",
             Self::ExprExpected(_) => "Expecting an expression",
+            Self::FnWrongDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
+            Self::FnDuplicatedDefinition(_, _) => "Function already exists",
             Self::FnMissingName => "Expecting function name in function declaration",
             Self::FnMissingParams(_) => "Expecting parameters in function declaration",
             Self::FnDuplicatedParam(_,_) => "Duplicated parameters in function declaration",
             Self::FnMissingBody(_) => "Expecting body statement block for function declaration",
             Self::WrongDocComment => "Doc-comment must be followed immediately by a function definition",
-            Self::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
             Self::WrongExport => "Export statement can only appear at global level",
             Self::AssignmentToConstant(_) => "Cannot assign to a constant value",
             Self::AssignmentToInvalidLHS(_) => "Expression cannot be assigned to",
@@ -221,6 +227,14 @@ impl fmt::Display for ParseErrorType {
                 f.write_str(if s.is_empty() { self.desc() } else { s })
             }
 
+            Self::FnDuplicatedDefinition(s, n) => {
+                write!(f, "Function '{}' with ", s)?;
+                match n {
+                    0 => f.write_str("no parameters already exists"),
+                    1 => f.write_str("1 parameter already exists"),
+                    _ => write!(f, "{} parameters already exists", n),
+                }
+            }
             Self::DuplicatedProperty(s) => {
                 write!(f, "Duplicated property '{}' for object map literal", s)
             }

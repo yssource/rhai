@@ -8,12 +8,15 @@ Breaking changes
 ----------------
 
 * The error variant `EvalAltResult::ErrorInFunctionCall` has a new parameter holding the _source_ of the function.
+* `ParseErrorType::WrongFnDefinition` is renamed `FnWrongDefinition`.
+* Redefining an existing function within the same script now throws a new `ParseErrorType::FnDuplicatedDefinition`. This is to prevent accidental overwriting an earlier function definition.
 
 Enhancements
 ------------
 
 * Source information is provided when there is an error within a call to a function defined in another module.
 * Source information is provided to the `NativeCallContext` for native Rust functions.
+* `EvalAltResult::clear_position` to clear the position information of an error - useful when only the message is needed and the position doesn't need to be printed out.
 
 
 Version 0.19.9
@@ -478,7 +481,7 @@ Version 0.16.0
 
 The major new feature in this version is OOP - well, poor man's OOP, that is.
 
-The `README` is officially transferred to [The Rhai Book](https://schungx.github.io/rhai).
+The `README` is officially transferred to [The Rhai Book](https://rhaiscript.github.io/book).
 
 An online [Playground](https://alvinhochun.github.io/rhai-demo/) is available.
 
@@ -503,7 +506,7 @@ New features
 Enhancements
 ------------
 
-* [The Rhai Book](https://schungx.github.io/rhai) is online.  Most content in the original `README` was transferred to the Book.
+* [The Rhai Book](https://rhaiscript.github.io/book) is online.  Most content in the original `README` was transferred to the Book.
 * New feature `internals` to expose internal data structures (e.g. the AST nodes).
 
 

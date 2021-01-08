@@ -41,8 +41,6 @@ type FunctionsLib = HashMap<NonZeroU64, ScriptFnDef, StraightHasherBuilder>;
 struct ParseState<'e> {
     /// Reference to the scripting [`Engine`].
     engine: &'e Engine,
-    /// Hash that uniquely identifies a script.
-    script_hash: u64,
     /// Interned strings.
     strings: HashMap<String, ImmutableString>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
@@ -63,11 +61,11 @@ struct ParseState<'e> {
     modules: StaticVec<ImmutableString>,
     /// Maximum levels of expression nesting.
     #[cfg(not(feature = "unchecked"))]
-    max_expr_depth: usize,
+    max_expr_depth: Option<NonZeroUsize>,
     /// Maximum levels of expression nesting in functions.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_function"))]
-    max_function_expr_depth: usize,
+    max_function_expr_depth: Option<NonZeroUsize>,
 }
 
 impl<'e> ParseState<'e> {
@@ -75,15 +73,13 @@ impl<'e> ParseState<'e> {
     #[inline(always)]
     pub fn new(
         engine: &'e Engine,
-        script_hash: u64,
-        #[cfg(not(feature = "unchecked"))] max_expr_depth: usize,
+        #[cfg(not(feature = "unchecked"))] max_expr_depth: Option<NonZeroUsize>,
         #[cfg(not(feature = "unchecked"))]
         #[cfg(not(feature = "no_function"))]
-        max_function_expr_depth: usize,
+        max_function_expr_depth: Option<NonZeroUsize>,
     ) -> Self {
         Self {
             engine,
-            script_hash,
             #[cfg(not(feature = "unchecked"))]
             max_expr_depth,
             #[cfg(not(feature = "unchecked"))]
@@ -216,15 +212,17 @@ impl ParseSettings {
     }
     /// Make sure that the current level of expression nesting is within the maximum limit.
     #[cfg(not(feature = "unchecked"))]
-    #[inline]
-    pub fn ensure_level_within_max_limit(&self, limit: usize) -> Result<(), ParseError> {
-        if limit == 0 {
-            Ok(())
-        } else if self.level > limit {
-            Err(PERR::ExprTooDeep.into_err(self.pos))
-        } else {
-            Ok(())
+    #[inline(always)]
+    pub fn ensure_level_within_max_limit(
+        &self,
+        limit: Option<NonZeroUsize>,
+    ) -> Result<(), ParseError> {
+        if let Some(limit) = limit {
+            if self.level > limit.get() {
+                return Err(PERR::ExprTooDeep.into_err(self.pos));
+            }
         }
+        Ok(())
     }
 }
 
@@ -919,7 +917,7 @@ fn parse_switch(
 
     Ok(Stmt::Switch(
         item,
-        Box::new((final_table, def_stmt)),
+        Box::new((final_table.into(), def_stmt)),
         settings.pos,
     ))
 }
@@ -956,7 +954,7 @@ fn parse_primary(
         },
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => {
-            let x = *x;
+            let x = (*x).into();
             input.next().unwrap();
             Expr::FloatConstant(x, settings.pos)
         }
@@ -986,7 +984,6 @@ fn parse_primary(
         Token::Pipe | Token::Or if settings.allow_anonymous_fn => {
             let mut new_state = ParseState::new(
                 state.engine,
-                state.script_hash,
                 #[cfg(not(feature = "unchecked"))]
                 state.max_function_expr_depth,
                 #[cfg(not(feature = "unchecked"))]
@@ -1284,7 +1281,7 @@ fn parse_unary(
                     .map(|i| Expr::IntegerConstant(i, pos))
                     .or_else(|| {
                         #[cfg(not(feature = "no_float"))]
-                        return Some(Expr::FloatConstant(-(num as FLOAT), pos));
+                        return Some(Expr::FloatConstant((-(num as FLOAT)).into(), pos));
                         #[cfg(feature = "no_float")]
                         return None;
                     })
@@ -1292,7 +1289,7 @@ fn parse_unary(
 
                 // Negative float
                 #[cfg(not(feature = "no_float"))]
-                Expr::FloatConstant(x, pos) => Ok(Expr::FloatConstant(-x, pos)),
+                Expr::FloatConstant(x, pos) => Ok(Expr::FloatConstant((-(*x)).into(), pos)),
 
                 // Call negative function
                 expr => {
@@ -1998,14 +1995,7 @@ fn parse_custom_syntax(
         }
     }
 
-    Ok(Expr::Custom(
-        Box::new(CustomExpr {
-            keywords,
-            func: syntax.func.clone(),
-            tokens,
-        }),
-        pos,
-    ))
+    Ok(Expr::Custom(Box::new(CustomExpr { keywords, tokens }), pos))
 }
 
 /// Parse an expression.
@@ -2585,7 +2575,7 @@ fn parse_stmt(
 
         // fn ...
         #[cfg(not(feature = "no_function"))]
-        Token::Fn if !settings.is_global => Err(PERR::WrongFnDefinition.into_err(settings.pos)),
+        Token::Fn if !settings.is_global => Err(PERR::FnWrongDefinition.into_err(settings.pos)),
 
         #[cfg(not(feature = "no_function"))]
         Token::Fn | Token::Private => {
@@ -2600,7 +2590,6 @@ fn parse_stmt(
                 (Token::Fn, pos) => {
                     let mut new_state = ParseState::new(
                         state.engine,
-                        state.script_hash,
                         #[cfg(not(feature = "unchecked"))]
                         state.max_function_expr_depth,
                         #[cfg(not(feature = "unchecked"))]
@@ -2621,13 +2610,20 @@ fn parse_stmt(
 
                     let func = parse_fn(input, &mut new_state, lib, access, settings, _comments)?;
 
-                    lib.insert(
-                        // Qualifiers (none) + function name + number of arguments.
-                        calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap(),
-                        func,
-                    );
+                    // Qualifiers (none) + function name + number of arguments.
+                    let hash = calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap();
 
-                    Ok(Stmt::Noop(settings.pos))
+                    if lib.contains_key(&hash) {
+                        return Err(PERR::FnDuplicatedDefinition(
+                            func.name.into_owned(),
+                            func.params.len(),
+                        )
+                        .into_err(pos));
+                    }
+
+                    lib.insert(hash, func);
+
+                    Ok(Stmt::Noop(pos))
                 }
 
                 (_, pos) => Err(PERR::MissingToken(
@@ -3002,10 +2998,10 @@ fn parse_anon_fn(
         params.into_iter().map(|(v, _)| v).collect()
     };
 
-    // Create unique function name by hashing the script hash plus the position
+    // Create unique function name by hashing the script body plus the parameters.
     let hasher = &mut get_hasher();
-    state.script_hash.hash(hasher);
-    settings.pos.hash(hasher);
+    params.iter().for_each(|p| p.as_str().hash(hasher));
+    body.hash(hasher);
     let hash = hasher.finish();
 
     let fn_name: ImmutableString = format!("{}{:016x}", crate::engine::FN_ANONYMOUS, hash).into();
@@ -3038,7 +3034,6 @@ fn parse_anon_fn(
 impl Engine {
     pub(crate) fn parse_global_expr(
         &self,
-        script_hash: u64,
         input: &mut TokenStream,
         scope: &Scope,
         optimization_level: OptimizationLevel,
@@ -3046,12 +3041,11 @@ impl Engine {
         let mut functions = Default::default();
         let mut state = ParseState::new(
             self,
-            script_hash,
             #[cfg(not(feature = "unchecked"))]
-            self.max_expr_depth(),
+            NonZeroUsize::new(self.max_expr_depth()),
             #[cfg(not(feature = "unchecked"))]
             #[cfg(not(feature = "no_function"))]
-            self.max_function_expr_depth(),
+            NonZeroUsize::new(self.max_function_expr_depth()),
         );
 
         let settings = ParseSettings {
@@ -3088,19 +3082,17 @@ impl Engine {
     /// Parse the global level statements.
     fn parse_global_level(
         &self,
-        script_hash: u64,
         input: &mut TokenStream,
     ) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
         let mut statements = Vec::with_capacity(16);
         let mut functions = HashMap::with_capacity_and_hasher(16, StraightHasherBuilder);
         let mut state = ParseState::new(
             self,
-            script_hash,
             #[cfg(not(feature = "unchecked"))]
-            self.max_expr_depth(),
+            NonZeroUsize::new(self.max_expr_depth()),
             #[cfg(not(feature = "unchecked"))]
             #[cfg(not(feature = "no_function"))]
-            self.max_function_expr_depth(),
+            NonZeroUsize::new(self.max_function_expr_depth()),
         );
 
         while !input.peek().unwrap().0.is_eof() {
@@ -3158,12 +3150,11 @@ impl Engine {
     #[inline(always)]
     pub(crate) fn parse(
         &self,
-        script_hash: u64,
         input: &mut TokenStream,
         scope: &Scope,
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let (statements, lib) = self.parse_global_level(script_hash, input)?;
+        let (statements, lib) = self.parse_global_level(input)?;
 
         Ok(
             // Optimize AST

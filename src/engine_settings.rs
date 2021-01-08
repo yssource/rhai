@@ -4,6 +4,9 @@ use crate::stdlib::{format, num::NonZeroU8, string::String};
 use crate::token::Token;
 use crate::Engine;
 
+#[cfg(not(feature = "unchecked"))]
+use crate::stdlib::num::{NonZeroU64, NonZeroUsize};
+
 #[cfg(not(feature = "no_module"))]
 use crate::stdlib::boxed::Box;
 
@@ -62,11 +65,7 @@ impl Engine {
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn set_max_operations(&mut self, operations: u64) -> &mut Self {
-        self.limits.max_operations = if operations == u64::MAX {
-            0
-        } else {
-            operations
-        };
+        self.limits.max_operations = NonZeroU64::new(operations);
         self
     }
     /// The maximum number of operations allowed for a script to run (0 for unlimited).
@@ -75,7 +74,7 @@ impl Engine {
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn max_operations(&self) -> u64 {
-        self.limits.max_operations
+        self.limits.max_operations.map_or(0, NonZeroU64::get)
     }
     /// Set the maximum number of imported [modules][crate::Module] allowed for a script.
     ///
@@ -106,18 +105,10 @@ impl Engine {
         max_expr_depth: usize,
         #[cfg(not(feature = "no_function"))] max_function_expr_depth: usize,
     ) -> &mut Self {
-        self.limits.max_expr_depth = if max_expr_depth == usize::MAX {
-            0
-        } else {
-            max_expr_depth
-        };
+        self.limits.max_expr_depth = NonZeroUsize::new(max_expr_depth);
         #[cfg(not(feature = "no_function"))]
         {
-            self.limits.max_function_expr_depth = if max_function_expr_depth == usize::MAX {
-                0
-            } else {
-                max_function_expr_depth
-            };
+            self.limits.max_function_expr_depth = NonZeroUsize::new(max_function_expr_depth);
         }
         self
     }
@@ -127,7 +118,7 @@ impl Engine {
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn max_expr_depth(&self) -> usize {
-        self.limits.max_expr_depth
+        self.limits.max_expr_depth.map_or(0, NonZeroUsize::get)
     }
     /// The depth limit for expressions in functions (0 for unlimited).
     ///
@@ -136,7 +127,9 @@ impl Engine {
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn max_function_expr_depth(&self) -> usize {
-        self.limits.max_function_expr_depth
+        self.limits
+            .max_function_expr_depth
+            .map_or(0, NonZeroUsize::get)
     }
     /// Set the maximum length of [strings][crate::ImmutableString] (0 for unlimited).
     ///
@@ -144,7 +137,7 @@ impl Engine {
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn set_max_string_size(&mut self, max_size: usize) -> &mut Self {
-        self.limits.max_string_size = if max_size == usize::MAX { 0 } else { max_size };
+        self.limits.max_string_size = NonZeroUsize::new(max_size);
         self
     }
     /// The maximum length of [strings][crate::ImmutableString] (0 for unlimited).
@@ -153,7 +146,7 @@ impl Engine {
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn max_string_size(&self) -> usize {
-        self.limits.max_string_size
+        self.limits.max_string_size.map_or(0, NonZeroUsize::get)
     }
     /// Set the maximum length of [arrays][crate::Array] (0 for unlimited).
     ///
@@ -162,7 +155,7 @@ impl Engine {
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
     pub fn set_max_array_size(&mut self, max_size: usize) -> &mut Self {
-        self.limits.max_array_size = if max_size == usize::MAX { 0 } else { max_size };
+        self.limits.max_array_size = NonZeroUsize::new(max_size);
         self
     }
     /// The maximum length of [arrays][crate::Array] (0 for unlimited).
@@ -172,7 +165,7 @@ impl Engine {
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
     pub fn max_array_size(&self) -> usize {
-        self.limits.max_array_size
+        self.limits.max_array_size.map_or(0, NonZeroUsize::get)
     }
     /// Set the maximum size of [object maps][crate::Map] (0 for unlimited).
     ///
@@ -181,7 +174,7 @@ impl Engine {
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
     pub fn set_max_map_size(&mut self, max_size: usize) -> &mut Self {
-        self.limits.max_map_size = if max_size == usize::MAX { 0 } else { max_size };
+        self.limits.max_map_size = NonZeroUsize::new(max_size);
         self
     }
     /// The maximum size of [object maps][crate::Map] (0 for unlimited).
@@ -191,7 +184,7 @@ impl Engine {
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
     pub fn max_map_size(&self) -> usize {
-        self.limits.max_map_size
+        self.limits.max_map_size.map_or(0, NonZeroUsize::get)
     }
     /// Set the module resolution service used by the [`Engine`].
     ///

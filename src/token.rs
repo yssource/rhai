@@ -8,6 +8,7 @@ use crate::stdlib::{
     borrow::Cow,
     char, fmt, format,
     iter::Peekable,
+    num::NonZeroUsize,
     str::{Chars, FromStr},
     string::{String, ToString},
 };
@@ -747,7 +748,7 @@ impl From<Token> for String {
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct TokenizeState {
     /// Maximum length of a string (0 = unlimited).
-    pub max_string_size: usize,
+    pub max_string_size: Option<NonZeroUsize>,
     /// Can the next token be a unary operator?
     pub non_unary: bool,
     /// Is the tokenizer currently inside a block comment?
@@ -796,8 +797,10 @@ pub fn parse_string_literal(
 
         pos.advance();
 
-        if state.max_string_size > 0 && result.len() > state.max_string_size {
-            return Err((LexError::StringTooLong(state.max_string_size), *pos));
+        if let Some(max) = state.max_string_size {
+            if result.len() > max.get() {
+                return Err((LexError::StringTooLong(max.get()), *pos));
+            }
         }
 
         match next_char {
@@ -902,8 +905,10 @@ pub fn parse_string_literal(
 
     let s = result.iter().collect::<String>();
 
-    if state.max_string_size > 0 && s.len() > state.max_string_size {
-        return Err((LexError::StringTooLong(state.max_string_size), *pos));
+    if let Some(max) = state.max_string_size {
+        if s.len() > max.get() {
+            return Err((LexError::StringTooLong(max.get()), *pos));
+        }
     }
 
     Ok(s)
@@ -1801,7 +1806,7 @@ impl Engine {
                 #[cfg(not(feature = "unchecked"))]
                 max_string_size: self.limits.max_string_size,
                 #[cfg(feature = "unchecked")]
-                max_string_size: 0,
+                max_string_size: None,
                 non_unary: false,
                 comment_level: 0,
                 end_with_none: false,
