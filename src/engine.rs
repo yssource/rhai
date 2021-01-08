@@ -7,7 +7,7 @@ use crate::fn_native::{
     CallableFunction, IteratorFn, OnDebugCallback, OnPrintCallback, OnProgressCallback,
     OnVarCallback,
 };
-use crate::module::NamespaceRef;
+use crate::module::{resolvers::StaticModuleResolver, NamespaceRef};
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
@@ -26,8 +26,8 @@ use crate::stdlib::{
 use crate::syntax::CustomSyntax;
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
-    calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position, Scope,
-    Shared, StaticVec,
+    calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, ModuleResolver,
+    Position, Scope, Shared, StaticVec,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -516,6 +516,8 @@ pub struct State {
     pub operations: u64,
     /// Number of modules loaded.
     pub modules: usize,
+    /// Embedded module resolver.
+    pub resolver: Option<Shared<StaticModuleResolver>>,
     /// Cached lookup values for function hashes.
     pub functions_cache: HashMap<
         NonZeroU64,
@@ -2328,7 +2330,19 @@ impl Engine {
                     .eval_expr(scope, mods, state, lib, this_ptr, &expr, level)?
                     .try_cast::<ImmutableString>()
                 {
-                    let module = self.module_resolver.resolve(self, &path, expr.position())?;
+                    let expr_pos = expr.position();
+
+                    let module = state
+                        .resolver
+                        .as_ref()
+                        .and_then(|r| match r.resolve(self, &path, expr_pos) {
+                            Ok(m) => return Some(Ok(m)),
+                            Err(err) => match *err {
+                                EvalAltResult::ErrorModuleNotFound(_, _) => None,
+                                _ => return Some(Err(err)),
+                            },
+                        })
+                        .unwrap_or_else(|| self.module_resolver.resolve(self, &path, expr_pos))?;
 
                     if let Some(name_def) = alias {
                         if !module.is_indexed() {

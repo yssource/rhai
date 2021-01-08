@@ -889,6 +889,61 @@ impl Engine {
     pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, ParseError> {
         self.compile_scripts_with_scope(scope, &[script])
     }
+    /// Compile a string into an [`AST`] using own scope, which can be used later for evaluation,
+    /// embedding all imported modules.
+    ///
+    /// Modules referred by `import` statements containing literal string paths are eagerly resolved
+    /// via the current [module resolver][crate::ModuleResolver] and embedded into the resultant
+    /// [`AST`]. When it is evaluated later, `import` statement directly recall pre-resolved
+    /// [modules][Module] and the resolution process is not performed again.
+    ///
+    /// Not available under `no_module`.
+    #[cfg(not(feature = "no_module"))]
+    pub fn compile_into_self_contained(
+        &self,
+        scope: &Scope,
+        script: &str,
+    ) -> Result<AST, Box<EvalAltResult>> {
+        use crate::{
+            ast::{Expr, Stmt},
+            fn_native::shared_take_or_clone,
+            module::resolvers::StaticModuleResolver,
+            stdlib::collections::HashMap,
+            ImmutableString,
+        };
+
+        let mut ast = self.compile_scripts_with_scope(scope, &[script])?;
+        let mut imports = HashMap::<ImmutableString, Position>::new();
+
+        ast.statements()
+            .iter()
+            .chain(ast.iter_fn_def().map(|f| &f.body))
+            .for_each(|stmt| {
+                stmt.walk(
+                    &mut |stmt| match stmt {
+                        Stmt::Import(Expr::StringConstant(s, pos), _, _)
+                            if !imports.contains_key(s) =>
+                        {
+                            imports.insert(s.clone(), *pos);
+                        }
+                        _ => (),
+                    },
+                    &mut |_| {},
+                )
+            });
+
+        if !imports.is_empty() {
+            let mut resolver = StaticModuleResolver::new();
+            for (path, pos) in imports {
+                let module = self.module_resolver.resolve(self, &path, pos)?;
+                let module = shared_take_or_clone(module);
+                resolver.insert(path, module);
+            }
+            ast.set_resolver(resolver);
+        }
+
+        Ok(ast)
+    }
     /// When passed a list of strings, first join the strings into one large script,
     /// and then compile them into an [`AST`] using own scope, which can be used later for evaluation.
     ///
@@ -1457,6 +1512,7 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let state = &mut State {
             source: ast.clone_source(),
+            resolver: ast.shared_resolver(),
             ..Default::default()
         };
         self.eval_statements_raw(scope, mods, state, ast.statements(), &[ast.lib()], level)
@@ -1524,6 +1580,7 @@ impl Engine {
         let mods = &mut (&self.global_sub_modules).into();
         let state = &mut State {
             source: ast.clone_source(),
+            resolver: ast.shared_resolver(),
             ..Default::default()
         };
         self.eval_statements_raw(scope, mods, state, ast.statements(), &[ast.lib()], 0)?;

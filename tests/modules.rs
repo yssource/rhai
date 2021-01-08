@@ -1,7 +1,8 @@
 #![cfg(not(feature = "no_module"))]
 use rhai::{
-    module_resolvers::StaticModuleResolver, Dynamic, Engine, EvalAltResult, FnNamespace,
-    ImmutableString, Module, ParseError, ParseErrorType, Scope, INT,
+    module_resolvers::{DummyModuleResolver, StaticModuleResolver},
+    Dynamic, Engine, EvalAltResult, FnNamespace, ImmutableString, Module, ParseError,
+    ParseErrorType, Scope, INT,
 };
 
 #[test]
@@ -245,6 +246,20 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
             "#,
         )?;
     }
+
+    let script = r#"
+        import "hello" as h;
+        h::answer
+    "#;
+    let mut scope = Scope::new();
+
+    let ast = engine.compile_into_self_contained(&mut scope, script)?;
+
+    engine.set_module_resolver(DummyModuleResolver::new());
+
+    assert_eq!(engine.eval_ast::<INT>(&ast)?, 42);
+
+    assert!(engine.eval::<INT>(script).is_err());
 
     Ok(())
 }

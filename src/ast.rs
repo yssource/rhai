@@ -2,7 +2,7 @@
 
 use crate::dynamic::{AccessMode, Union};
 use crate::fn_native::shared_make_mut;
-use crate::module::NamespaceRef;
+use crate::module::{resolvers::StaticModuleResolver, NamespaceRef};
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
@@ -170,6 +170,8 @@ pub struct AST {
     statements: Vec<Stmt>,
     /// Script-defined functions.
     functions: Shared<Module>,
+    /// Embedded module resolver, if any.
+    resolver: Option<Shared<StaticModuleResolver>>,
 }
 
 impl Default for AST {
@@ -179,6 +181,7 @@ impl Default for AST {
             source: None,
             statements: Vec::with_capacity(16),
             functions: Default::default(),
+            resolver: None,
         }
     }
 }
@@ -194,6 +197,7 @@ impl AST {
             source: None,
             statements: statements.into_iter().collect(),
             functions: functions.into(),
+            resolver: None,
         }
     }
     /// Create a new [`AST`] with a source name.
@@ -207,6 +211,7 @@ impl AST {
             source: Some(source.into()),
             statements: statements.into_iter().collect(),
             functions: functions.into(),
+            resolver: None,
         }
     }
     /// Get the source.
@@ -269,6 +274,28 @@ impl AST {
     pub fn lib(&self) -> &Module {
         &self.functions
     }
+    /// Get the embedded [module resolver][`ModuleResolver`].
+    #[cfg(not(feature = "internals"))]
+    #[inline(always)]
+    pub(crate) fn shared_resolver(&self) -> Option<Shared<StaticModuleResolver>> {
+        self.resolver.clone()
+    }
+    /// _(INTERNALS)_ Get the embedded [module resolver][`ModuleResolver`].
+    /// Exported under the `internals` feature only.
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    pub fn resolver(&self) -> Option<&dyn crate::ModuleResolver> {
+        self.resolver.map(|r| &*r)
+    }
+    /// Set the embedded [module resolver][`ModuleResolver`].
+    #[inline(always)]
+    pub(crate) fn set_resolver(
+        &mut self,
+        resolver: impl Into<Shared<StaticModuleResolver>>,
+    ) -> &mut Self {
+        self.resolver = Some(resolver.into());
+        self
+    }
     /// Clone the [`AST`]'s functions into a new [`AST`].
     /// No statements are cloned.
     ///
@@ -298,6 +325,7 @@ impl AST {
             source: self.source.clone(),
             statements: Default::default(),
             functions: functions.into(),
+            resolver: self.resolver.clone(),
         }
     }
     /// Clone the [`AST`]'s script statements into a new [`AST`].
@@ -308,6 +336,7 @@ impl AST {
             source: self.source.clone(),
             statements: self.statements.clone(),
             functions: Default::default(),
+            resolver: self.resolver.clone(),
         }
     }
     /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged, version
@@ -605,6 +634,16 @@ impl AST {
     /// Not available under [`no_function`].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    pub(crate) fn iter_fn_def(&self) -> impl Iterator<Item = &ScriptFnDef> {
+        self.functions
+            .iter_script_fn()
+            .map(|(_, _, _, _, fn_def)| fn_def)
+    }
+    /// Iterate through all function definitions.
+    ///
+    /// Not available under [`no_function`].
+    #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
     pub fn iter_functions<'a>(&'a self) -> impl Iterator<Item = ScriptFnMetadata> + 'a {
         self.functions
             .iter_script_fn()
@@ -886,6 +925,53 @@ impl Stmt {
 
             #[cfg(not(feature = "no_closure"))]
             Self::Share(_) => false,
+        }
+    }
+    /// Recursively walk this statement.
+    #[inline(always)]
+    pub fn walk(&self, process_stmt: &mut impl FnMut(&Stmt), process_expr: &mut impl FnMut(&Expr)) {
+        process_stmt(self);
+
+        match self {
+            Self::Let(_, Some(e), _, _) | Self::Const(_, Some(e), _, _) => {
+                e.walk(process_stmt, process_expr)
+            }
+            Self::If(e, x, _) => {
+                e.walk(process_stmt, process_expr);
+                x.0.walk(process_stmt, process_expr);
+                if let Some(ref s) = x.1 {
+                    s.walk(process_stmt, process_expr);
+                }
+            }
+            Self::Switch(e, x, _) => {
+                e.walk(process_stmt, process_expr);
+                x.0.values()
+                    .for_each(|s| s.walk(process_stmt, process_expr));
+                if let Some(ref s) = x.1 {
+                    s.walk(process_stmt, process_expr);
+                }
+            }
+            Self::While(e, s, _) | Self::Do(s, e, _, _) => {
+                e.walk(process_stmt, process_expr);
+                s.walk(process_stmt, process_expr);
+            }
+            Self::For(e, x, _) => {
+                e.walk(process_stmt, process_expr);
+                x.1.walk(process_stmt, process_expr);
+            }
+            Self::Assignment(x, _) => {
+                x.0.walk(process_stmt, process_expr);
+                x.2.walk(process_stmt, process_expr);
+            }
+            Self::Block(x, _) => x.iter().for_each(|s| s.walk(process_stmt, process_expr)),
+            Self::TryCatch(x, _, _) => {
+                x.0.walk(process_stmt, process_expr);
+                x.2.walk(process_stmt, process_expr);
+            }
+            Self::Expr(e) | Self::Return(_, Some(e), _) | Self::Import(e, _, _) => {
+                e.walk(process_stmt, process_expr)
+            }
+            _ => (),
         }
     }
 }
@@ -1306,6 +1392,28 @@ impl Expr {
             },
 
             Self::Custom(_, _) => false,
+        }
+    }
+    /// Recursively walk this expression.
+    #[inline(always)]
+    pub fn walk(&self, process_stmt: &mut impl FnMut(&Stmt), process_expr: &mut impl FnMut(&Expr)) {
+        process_expr(self);
+
+        match self {
+            Self::Stmt(x, _) => x.iter().for_each(|s| s.walk(process_stmt, process_expr)),
+            Self::Array(x, _) => x.iter().for_each(|e| e.walk(process_stmt, process_expr)),
+            Self::Map(x, _) => x
+                .iter()
+                .for_each(|(_, e)| e.walk(process_stmt, process_expr)),
+            Self::Index(x, _) | Expr::In(x, _) | Expr::And(x, _) | Expr::Or(x, _) => {
+                x.lhs.walk(process_stmt, process_expr);
+                x.rhs.walk(process_stmt, process_expr);
+            }
+            Self::Custom(x, _) => x
+                .keywords
+                .iter()
+                .for_each(|e| e.walk(process_stmt, process_expr)),
+            _ => (),
         }
     }
 }
