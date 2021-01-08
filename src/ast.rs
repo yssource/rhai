@@ -280,8 +280,9 @@ impl AST {
     }
     /// Get the embedded [module resolver][`ModuleResolver`].
     #[cfg(not(feature = "no_module"))]
+    #[cfg(not(feature = "internals"))]
     #[inline(always)]
-    pub(crate) fn shared_resolver(
+    pub(crate) fn resolver(
         &self,
     ) -> Option<Shared<crate::module::resolvers::StaticModuleResolver>> {
         self.resolver.clone()
@@ -291,8 +292,8 @@ impl AST {
     #[cfg(not(feature = "no_module"))]
     #[cfg(feature = "internals")]
     #[inline(always)]
-    pub fn resolver(&self) -> Option<&dyn crate::ModuleResolver> {
-        self.resolver.map(|r| &*r)
+    pub fn resolver(&self) -> Option<Shared<crate::module::resolvers::StaticModuleResolver>> {
+        self.resolver.clone()
     }
     /// Set the embedded [module resolver][`ModuleResolver`].
     #[cfg(not(feature = "no_module"))]

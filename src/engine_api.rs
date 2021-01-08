@@ -1520,7 +1520,7 @@ impl Engine {
         let state = &mut State {
             source: ast.clone_source(),
             #[cfg(not(feature = "no_module"))]
-            resolver: ast.shared_resolver(),
+            resolver: ast.resolver(),
             ..Default::default()
         };
         self.eval_statements_raw(scope, mods, state, ast.statements(), &[ast.lib()], level)
@@ -1589,7 +1589,7 @@ impl Engine {
         let state = &mut State {
             source: ast.clone_source(),
             #[cfg(not(feature = "no_module"))]
-            resolver: ast.shared_resolver(),
+            resolver: ast.resolver(),
             ..Default::default()
         };
         self.eval_statements_raw(scope, mods, state, ast.statements(), &[ast.lib()], 0)?;
