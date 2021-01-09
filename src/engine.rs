@@ -516,6 +516,9 @@ pub struct State {
     pub operations: u64,
     /// Number of modules loaded.
     pub modules: usize,
+    /// Embedded module resolver.
+    #[cfg(not(feature = "no_module"))]
+    pub resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
     /// Cached lookup values for function hashes.
     pub functions_cache: HashMap<
         NonZeroU64,
@@ -2328,7 +2331,21 @@ impl Engine {
                     .eval_expr(scope, mods, state, lib, this_ptr, &expr, level)?
                     .try_cast::<ImmutableString>()
                 {
-                    let module = self.module_resolver.resolve(self, &path, expr.position())?;
+                    use crate::ModuleResolver;
+
+                    let expr_pos = expr.position();
+
+                    let module = state
+                        .resolver
+                        .as_ref()
+                        .and_then(|r| match r.resolve(self, &path, expr_pos) {
+                            Ok(m) => return Some(Ok(m)),
+                            Err(err) => match *err {
+                                EvalAltResult::ErrorModuleNotFound(_, _) => None,
+                                _ => return Some(Err(err)),
+                            },
+                        })
+                        .unwrap_or_else(|| self.module_resolver.resolve(self, &path, expr_pos))?;
 
                     if let Some(name_def) = alias {
                         if !module.is_indexed() {
