@@ -168,27 +168,48 @@ impl fmt::Debug for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Module({}\n    modules: {}\n    vars: {}\n    functions: {}\n)",
+            "Module({}\n{}{}{})",
             if let Some(ref id) = self.id {
-                format!("id: {:?}", id)
+                format!("id: {:?},", id)
             } else {
                 "".to_string()
             },
-            self.modules
-                .keys()
-                .map(|m| m.as_str())
-                .collect::<Vec<_>>()
-                .join(", "),
-            self.variables
-                .iter()
-                .map(|(k, v)| format!("{}={:?}", k, v))
-                .collect::<Vec<_>>()
-                .join(", "),
-            self.functions
-                .values()
-                .map(|FuncInfo { func, .. }| func.to_string())
-                .collect::<Vec<_>>()
-                .join(", "),
+            if !self.modules.is_empty() {
+                format!(
+                    "    modules: {}\n",
+                    self.modules
+                        .keys()
+                        .map(|m| m.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                "".to_string()
+            },
+            if !self.variables.is_empty() {
+                format!(
+                    "    vars: {}\n",
+                    self.variables
+                        .iter()
+                        .map(|(k, v)| format!("{}={:?}", k, v))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                "".to_string()
+            },
+            if !self.functions.is_empty() {
+                format!(
+                    "    functions: {}\n",
+                    self.functions
+                        .values()
+                        .map(|FuncInfo { func, .. }| func.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                "".to_string()
+            }
         )
     }
 }

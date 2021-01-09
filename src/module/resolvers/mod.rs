@@ -44,7 +44,7 @@ pub trait ModuleResolver: SendSync {
         engine: &Engine,
         path: &str,
         pos: Position,
-    ) -> Result<Option<AST>, Box<EvalAltResult>> {
-        Ok(None)
+    ) -> Option<Result<AST, Box<EvalAltResult>>> {
+        None
     }
 }
