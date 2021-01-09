@@ -218,24 +218,32 @@ impl AST {
             resolver: None,
         }
     }
-    /// Get the source.
+    /// Get the source, if any.
     #[inline(always)]
     pub fn source(&self) -> Option<&str> {
         self.source.as_ref().map(|s| s.as_str())
     }
-    /// Clone the source.
+    /// Clone the source, if any.
     #[inline(always)]
     pub(crate) fn clone_source(&self) -> Option<ImmutableString> {
         self.source.clone()
     }
     /// Set the source.
     #[inline(always)]
-    pub fn set_source<S: Into<ImmutableString>>(&mut self, source: Option<S>) {
-        self.source = source.map(|s| s.into());
+    pub fn set_source(&mut self, source: impl Into<ImmutableString>) -> &mut Self {
+        self.source = Some(source.into());
 
         if let Some(module) = Shared::get_mut(&mut self.functions) {
             module.set_id(self.source.clone());
         }
+
+        self
+    }
+    /// Clear the source.
+    #[inline(always)]
+    pub fn clear_source(&mut self) -> &mut Self {
+        self.source = None;
+        self
     }
     /// Get the statements.
     #[cfg(not(feature = "internals"))]

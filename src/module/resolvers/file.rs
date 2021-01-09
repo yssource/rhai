@@ -212,7 +212,7 @@ impl ModuleResolver for FileModuleResolver {
                 _ => Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos)),
             })?;
 
-        ast.set_source(Some(path));
+        ast.set_source(path);
 
         // Make a module from the AST
         let m: Shared<Module> = Module::eval_ast_as_new(scope, &ast, engine)
