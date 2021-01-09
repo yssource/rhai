@@ -684,10 +684,9 @@ impl AST {
     }
     /// Recursively walk the [`AST`], including function bodies (if any).
     #[cfg(not(feature = "internals"))]
+    #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub(crate) fn walk(&self, on_node: &mut impl FnMut(&[ASTNode])) {
-        let mut path = Default::default();
-
         self.statements()
             .iter()
             .chain({
@@ -700,15 +699,13 @@ impl AST {
                     crate::stdlib::iter::empty()
                 }
             })
-            .for_each(|stmt| stmt.walk(&mut path, on_node));
+            .for_each(|stmt| stmt.walk(&mut Default::default(), on_node));
     }
     /// _(INTERNALS)_ Recursively walk the [`AST`], including function bodies (if any).
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]
     pub fn walk(&self, on_node: &mut impl FnMut(&[ASTNode])) {
-        let mut path = Default::default();
-
         self.statements()
             .iter()
             .chain({
@@ -721,7 +718,7 @@ impl AST {
                     crate::stdlib::iter::empty()
                 }
             })
-            .for_each(|stmt| stmt.walk(&mut path, on_node));
+            .for_each(|stmt| stmt.walk(&mut Default::default(), on_node));
     }
 }
 

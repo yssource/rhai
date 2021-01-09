@@ -1963,7 +1963,7 @@ impl Engine {
     ///                ));
     ///
     /// let mut ast = engine.compile(r#"let x = "hello"; debug(x);"#)?;
-    /// ast.set_source(Some("world"));
+    /// ast.set_source("world");
     /// engine.consume_ast(&ast)?;
     ///
     /// assert_eq!(*result.read().unwrap(), r#"world @ 1:18 > "hello""#);
