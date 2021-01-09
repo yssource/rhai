@@ -10,11 +10,13 @@ Breaking changes
 * The error variant `EvalAltResult::ErrorInFunctionCall` has a new parameter holding the _source_ of the function.
 * `ParseErrorType::WrongFnDefinition` is renamed `FnWrongDefinition`.
 * Redefining an existing function within the same script now throws a new `ParseErrorType::FnDuplicatedDefinition`. This is to prevent accidental overwriting an earlier function definition.
+* `AST::set_source` is now split into `AST::set_source` and `AST::clear_source`.
 
 New features
 ------------
 
 * `Engine::compile_to_self_contained` compiles a script into an `AST` and _eagerly_ resolves all `import` statements with string literal paths. The resolved modules are directly embedded into the `AST`. When the `AST` is later evaluated, `import` statements directly yield the pre-resolved modules without going through the resolution process once again.
+* `AST::walk`, `Stmt::walk` and `Expr::walk` internal API's to recursively walk an `AST`.
 
 Enhancements
 ------------

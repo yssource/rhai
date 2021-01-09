@@ -176,11 +176,11 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
         assert_eq!(
             engine.eval::<INT>(
                 r#"
-                        import "hello" as h;
-                        let x = 21;
-                        h::sum_of_three_args(x, 14, 26, 2.0);
-                        x
-                    "#
+                    import "hello" as h;
+                    let x = 21;
+                    h::sum_of_three_args(x, 14, 26, 2.0);
+                    x
+                "#
             )?,
             42
         );
@@ -247,19 +247,25 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
         )?;
     }
 
-    let script = r#"
-        import "hello" as h;
-        h::answer
-    "#;
-    let mut scope = Scope::new();
+    #[cfg(not(feature = "no_function"))]
+    {
+        let script = r#"
+            fn foo() {
+                import "hello" as h;
+                h::answer
+            }
+            foo() + { import "hello" as h; h::answer }
+        "#;
+        let mut scope = Scope::new();
 
-    let ast = engine.compile_into_self_contained(&mut scope, script)?;
+        let ast = engine.compile_into_self_contained(&mut scope, script)?;
 
-    engine.set_module_resolver(DummyModuleResolver::new());
+        engine.set_module_resolver(DummyModuleResolver::new());
 
-    assert_eq!(engine.eval_ast::<INT>(&ast)?, 42);
+        assert_eq!(engine.eval_ast::<INT>(&ast)?, 84);
 
-    assert!(engine.eval::<INT>(script).is_err());
+        assert!(engine.eval::<INT>(script).is_err());
+    }
 
     Ok(())
 }
