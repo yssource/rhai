@@ -25,7 +25,7 @@ fn test_print_debug() -> Result<(), Box<EvalAltResult>> {
     // Evaluate script
     engine.consume("print(40 + 2)")?;
     let mut ast = engine.compile(r#"let x = "hello!"; debug(x)"#)?;
-    ast.set_source(Some("world"));
+    ast.set_source("world");
     engine.consume_ast(&ast)?;
 
     // 'logbook' captures all the 'print' and 'debug' output
