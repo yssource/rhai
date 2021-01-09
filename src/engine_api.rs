@@ -903,47 +903,53 @@ impl Engine {
         script: &str,
     ) -> Result<AST, Box<EvalAltResult>> {
         use crate::{
-            ast::{Expr, Stmt},
+            ast::{ASTNode, Expr, Stmt},
             fn_native::shared_take_or_clone,
             module::resolvers::StaticModuleResolver,
-            stdlib::collections::HashMap,
+            stdlib::collections::HashSet,
             ImmutableString,
         };
 
-        let mut ast = self.compile_scripts_with_scope(scope, &[script])?;
-        let mut imports = HashMap::<ImmutableString, Position>::new();
-
-        ast.statements()
-            .iter()
-            .chain({
-                #[cfg(not(feature = "no_function"))]
+        fn collect_imports(
+            ast: &AST,
+            resolver: &StaticModuleResolver,
+            imports: &mut HashSet<ImmutableString>,
+        ) {
+            ast.walk(&mut |path| match path.last().unwrap() {
+                // Collect all `import` statements with a string constant path
+                ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
+                    if !resolver.contains_path(s) && !imports.contains(s) =>
                 {
-                    ast.iter_fn_def().map(|f| &f.body)
+                    imports.insert(s.clone());
                 }
-                #[cfg(feature = "no_function")]
-                {
-                    crate::stdlib::iter::empty()
-                }
-            })
-            .for_each(|stmt| {
-                stmt.walk(
-                    &mut |stmt| match stmt {
-                        Stmt::Import(Expr::StringConstant(s, pos), _, _)
-                            if !imports.contains_key(s) =>
-                        {
-                            imports.insert(s.clone(), *pos);
-                        }
-                        _ => (),
-                    },
-                    &mut |_| {},
-                )
+                _ => (),
             });
+        }
+
+        let mut resolver = StaticModuleResolver::new();
+        let mut ast = self.compile_scripts_with_scope(scope, &[script])?;
+        let mut imports = HashSet::<ImmutableString>::new();
+
+        collect_imports(&ast, &mut resolver, &mut imports);
 
         if !imports.is_empty() {
-            let mut resolver = StaticModuleResolver::new();
-            for (path, pos) in imports {
-                let module = self.module_resolver.resolve(self, &path, pos)?;
-                let module = shared_take_or_clone(module);
+            while let Some(path) = imports.iter().next() {
+                let path = path.clone();
+
+                if let Some(module_ast) =
+                    self.module_resolver
+                        .resolve_ast(self, &path, Position::NONE)?
+                {
+                    collect_imports(&module_ast, &mut resolver, &mut imports);
+                }
+
+                let module = shared_take_or_clone(self.module_resolver.resolve(
+                    self,
+                    &path,
+                    Position::NONE,
+                )?);
+
+                imports.remove(&path);
                 resolver.insert(path, module);
             }
             ast.set_resolver(resolver);

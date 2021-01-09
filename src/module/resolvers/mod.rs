@@ -1,6 +1,6 @@
 use crate::fn_native::SendSync;
 use crate::stdlib::boxed::Box;
-use crate::{Engine, EvalAltResult, Module, Position, Shared};
+use crate::{Engine, EvalAltResult, Module, Position, Shared, AST};
 
 mod dummy;
 pub use dummy::DummyModuleResolver;
@@ -28,4 +28,23 @@ pub trait ModuleResolver: SendSync {
         path: &str,
         pos: Position,
     ) -> Result<Shared<Module>, Box<EvalAltResult>>;
+
+    /// Resolve a module into an `AST` based on a path string.
+    ///
+    /// Returns [`None`] (default) if such resolution is not supported
+    /// (e.g. if the module is Rust-based).
+    ///
+    /// ## Low-Level API
+    ///
+    /// Override the default implementation of this method if the module resolver
+    /// serves modules based on compiled Rhai scripts.
+    #[allow(unused_variables)]
+    fn resolve_ast(
+        &self,
+        engine: &Engine,
+        path: &str,
+        pos: Position,
+    ) -> Result<Option<AST>, Box<EvalAltResult>> {
+        Ok(None)
+    }
 }

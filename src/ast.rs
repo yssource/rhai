@@ -682,6 +682,47 @@ impl AST {
     pub fn clear_statements(&mut self) {
         self.statements = vec![];
     }
+    /// Recursively walk the [`AST`], including function bodies (if any).
+    #[cfg(not(feature = "internals"))]
+    #[inline(always)]
+    pub(crate) fn walk(&self, on_node: &mut impl FnMut(&[ASTNode])) {
+        let mut path = Default::default();
+
+        self.statements()
+            .iter()
+            .chain({
+                #[cfg(not(feature = "no_function"))]
+                {
+                    self.iter_fn_def().map(|f| &f.body)
+                }
+                #[cfg(feature = "no_function")]
+                {
+                    crate::stdlib::iter::empty()
+                }
+            })
+            .for_each(|stmt| stmt.walk(&mut path, on_node));
+    }
+    /// _(INTERNALS)_ Recursively walk the [`AST`], including function bodies (if any).
+    /// Exported under the `internals` feature only.
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    pub fn walk(&self, on_node: &mut impl FnMut(&[ASTNode])) {
+        let mut path = Default::default();
+
+        self.statements()
+            .iter()
+            .chain({
+                #[cfg(not(feature = "no_function"))]
+                {
+                    self.iter_fn_def().map(|f| &f.body)
+                }
+                #[cfg(feature = "no_function")]
+                {
+                    crate::stdlib::iter::empty()
+                }
+            })
+            .for_each(|stmt| stmt.walk(&mut path, on_node));
+    }
 }
 
 impl<A: AsRef<AST>> Add<A> for &AST {
@@ -747,6 +788,30 @@ pub enum ReturnType {
     Return,
     /// `throw` statement.
     Exception,
+}
+
+/// _(INTERNALS)_ An [`AST`] node, consisting of either an [`Expr`] or a [`Stmt`].
+/// Exported under the `internals` feature only.
+///
+/// # WARNING
+///
+/// This type is volatile and may change.
+#[derive(Debug, Clone, Hash)]
+pub enum ASTNode<'a> {
+    Stmt(&'a Stmt),
+    Expr(&'a Expr),
+}
+
+impl<'a> From<&'a Stmt> for ASTNode<'a> {
+    fn from(stmt: &'a Stmt) -> Self {
+        Self::Stmt(stmt)
+    }
+}
+
+impl<'a> From<&'a Expr> for ASTNode<'a> {
+    fn from(expr: &'a Expr) -> Self {
+        Self::Expr(expr)
+    }
 }
 
 /// _(INTERNALS)_ A statement.
@@ -949,50 +1014,50 @@ impl Stmt {
     }
     /// Recursively walk this statement.
     #[inline(always)]
-    pub fn walk(&self, process_stmt: &mut impl FnMut(&Stmt), process_expr: &mut impl FnMut(&Expr)) {
-        process_stmt(self);
+    pub fn walk<'a>(&'a self, path: &mut Vec<ASTNode<'a>>, on_node: &mut impl FnMut(&[ASTNode])) {
+        path.push(self.into());
+        on_node(path);
 
         match self {
-            Self::Let(_, Some(e), _, _) | Self::Const(_, Some(e), _, _) => {
-                e.walk(process_stmt, process_expr)
-            }
+            Self::Let(_, Some(e), _, _) | Self::Const(_, Some(e), _, _) => e.walk(path, on_node),
             Self::If(e, x, _) => {
-                e.walk(process_stmt, process_expr);
-                x.0.walk(process_stmt, process_expr);
+                e.walk(path, on_node);
+                x.0.walk(path, on_node);
                 if let Some(ref s) = x.1 {
-                    s.walk(process_stmt, process_expr);
+                    s.walk(path, on_node);
                 }
             }
             Self::Switch(e, x, _) => {
-                e.walk(process_stmt, process_expr);
-                x.0.values()
-                    .for_each(|s| s.walk(process_stmt, process_expr));
+                e.walk(path, on_node);
+                x.0.values().for_each(|s| s.walk(path, on_node));
                 if let Some(ref s) = x.1 {
-                    s.walk(process_stmt, process_expr);
+                    s.walk(path, on_node);
                 }
             }
             Self::While(e, s, _) | Self::Do(s, e, _, _) => {
-                e.walk(process_stmt, process_expr);
-                s.walk(process_stmt, process_expr);
+                e.walk(path, on_node);
+                s.walk(path, on_node);
             }
             Self::For(e, x, _) => {
-                e.walk(process_stmt, process_expr);
-                x.1.walk(process_stmt, process_expr);
+                e.walk(path, on_node);
+                x.1.walk(path, on_node);
             }
             Self::Assignment(x, _) => {
-                x.0.walk(process_stmt, process_expr);
-                x.2.walk(process_stmt, process_expr);
+                x.0.walk(path, on_node);
+                x.2.walk(path, on_node);
             }
-            Self::Block(x, _) => x.iter().for_each(|s| s.walk(process_stmt, process_expr)),
+            Self::Block(x, _) => x.iter().for_each(|s| s.walk(path, on_node)),
             Self::TryCatch(x, _, _) => {
-                x.0.walk(process_stmt, process_expr);
-                x.2.walk(process_stmt, process_expr);
+                x.0.walk(path, on_node);
+                x.2.walk(path, on_node);
             }
-            Self::Expr(e) | Self::Return(_, Some(e), _) => e.walk(process_stmt, process_expr),
+            Self::Expr(e) | Self::Return(_, Some(e), _) => e.walk(path, on_node),
             #[cfg(not(feature = "no_module"))]
-            Self::Import(e, _, _) => e.walk(process_stmt, process_expr),
+            Self::Import(e, _, _) => e.walk(path, on_node),
             _ => (),
         }
+
+        path.pop().unwrap();
     }
 }
 
@@ -1416,25 +1481,23 @@ impl Expr {
     }
     /// Recursively walk this expression.
     #[inline(always)]
-    pub fn walk(&self, process_stmt: &mut impl FnMut(&Stmt), process_expr: &mut impl FnMut(&Expr)) {
-        process_expr(self);
+    pub fn walk<'a>(&'a self, path: &mut Vec<ASTNode<'a>>, on_node: &mut impl FnMut(&[ASTNode])) {
+        path.push(self.into());
+        on_node(path);
 
         match self {
-            Self::Stmt(x, _) => x.iter().for_each(|s| s.walk(process_stmt, process_expr)),
-            Self::Array(x, _) => x.iter().for_each(|e| e.walk(process_stmt, process_expr)),
-            Self::Map(x, _) => x
-                .iter()
-                .for_each(|(_, e)| e.walk(process_stmt, process_expr)),
+            Self::Stmt(x, _) => x.iter().for_each(|s| s.walk(path, on_node)),
+            Self::Array(x, _) => x.iter().for_each(|e| e.walk(path, on_node)),
+            Self::Map(x, _) => x.iter().for_each(|(_, e)| e.walk(path, on_node)),
             Self::Index(x, _) | Expr::In(x, _) | Expr::And(x, _) | Expr::Or(x, _) => {
-                x.lhs.walk(process_stmt, process_expr);
-                x.rhs.walk(process_stmt, process_expr);
+                x.lhs.walk(path, on_node);
+                x.rhs.walk(path, on_node);
             }
-            Self::Custom(x, _) => x
-                .keywords
-                .iter()
-                .for_each(|e| e.walk(process_stmt, process_expr)),
+            Self::Custom(x, _) => x.keywords.iter().for_each(|e| e.walk(path, on_node)),
             _ => (),
         }
+
+        path.pop().unwrap();
     }
 }
 

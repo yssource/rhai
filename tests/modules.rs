@@ -176,11 +176,11 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
         assert_eq!(
             engine.eval::<INT>(
                 r#"
-                        import "hello" as h;
-                        let x = 21;
-                        h::sum_of_three_args(x, 14, 26, 2.0);
-                        x
-                    "#
+                    import "hello" as h;
+                    let x = 21;
+                    h::sum_of_three_args(x, 14, 26, 2.0);
+                    x
+                "#
             )?,
             42
         );

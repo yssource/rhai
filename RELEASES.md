@@ -16,6 +16,7 @@ New features
 ------------
 
 * `Engine::compile_to_self_contained` compiles a script into an `AST` and _eagerly_ resolves all `import` statements with string literal paths. The resolved modules are directly embedded into the `AST`. When the `AST` is later evaluated, `import` statements directly yield the pre-resolved modules without going through the resolution process once again.
+* `AST::walk`, `Stmt::walk` and `Expr::walk` internal API's to recursively walk an `AST`.
 
 Enhancements
 ------------
