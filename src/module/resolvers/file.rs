@@ -240,14 +240,12 @@ impl ModuleResolver for FileModuleResolver {
         file_path.set_extension(&self.extension); // Force extension
 
         // Load the script file and compile it
-        let mut ast = engine
-            .compile_file(file_path.clone())
-            .map_err(|err| match *err {
-                EvalAltResult::ErrorSystem(_, err) if err.is::<IoError>() => {
-                    Box::new(EvalAltResult::ErrorModuleNotFound(path.to_string(), pos))
-                }
-                _ => Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos)),
-            })?;
+        let mut ast = engine.compile_file(file_path).map_err(|err| match *err {
+            EvalAltResult::ErrorSystem(_, err) if err.is::<IoError>() => {
+                Box::new(EvalAltResult::ErrorModuleNotFound(path.to_string(), pos))
+            }
+            _ => Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos)),
+        })?;
 
         ast.set_source(path);
 
