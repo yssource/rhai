@@ -7,15 +7,21 @@ use crate::stdlib::{
 };
 use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 
-/// [Module] resolution service that loads [module][Module] script files from the file system.
+/// A [module][Module] resolution service that loads [module][Module] script files from the file system.
 ///
-/// Script files are cached so they are are not reloaded and recompiled in subsequent requests.
+/// ## Caching
 ///
-/// # Function Namespace
+/// Resolved [Modules][Module] are cached internally so script files are not reloaded and recompiled
+/// for subsequent requests.
 ///
-/// When a function within a script file module is called, all functions in the _global_ namespace
-/// plus all those defined within the same module are _merged_ into a _unified_ namespace before
-/// the call.  Therefore, functions in a module script can always cross-call each other.
+/// Use [`clear_cache`][FileModuleResolver::clear_cache] or
+/// [`clear_cache_for_path`][FileModuleResolver::clear_cache_for_path] to clear the internal cache.
+///
+/// ## Namespace
+///
+/// When a function within a script file module is called, all functions defined within the same
+/// script are available, evan `private` ones.  In other words, functions defined in a module script
+/// can always cross-call each other.
 ///
 /// # Example
 ///
@@ -146,6 +152,16 @@ impl FileModuleResolver {
         self
     }
 
+    /// Is a particular path cached?
+    #[inline(always)]
+    pub fn is_cached(&self, path: &str) -> bool {
+        let file_path = self.get_file_path(path);
+
+        #[cfg(not(feature = "sync"))]
+        return self.cache.borrow_mut().contains_key(&file_path);
+        #[cfg(feature = "sync")]
+        return self.cache.write().unwrap().contains_key(&file_path);
+    }
     /// Empty the internal cache.
     #[inline(always)]
     pub fn clear_cache(&mut self) {
@@ -154,25 +170,33 @@ impl FileModuleResolver {
         #[cfg(feature = "sync")]
         self.cache.write().unwrap().clear();
     }
-
     /// Remove the specified path from internal cache.
     ///
     /// The next time this path is resolved, the script file will be loaded once again.
     #[inline(always)]
-    pub fn clear_cache_for_path(&mut self, path: impl AsRef<Path>) -> Option<Shared<Module>> {
+    pub fn clear_cache_for_path(&mut self, path: &str) -> Option<Shared<Module>> {
+        let file_path = self.get_file_path(path);
+
         #[cfg(not(feature = "sync"))]
         return self
             .cache
             .borrow_mut()
-            .remove_entry(path.as_ref())
+            .remove_entry(&file_path)
             .map(|(_, v)| v);
         #[cfg(feature = "sync")]
         return self
             .cache
             .write()
             .unwrap()
-            .remove_entry(path.as_ref())
+            .remove_entry(&file_path)
             .map(|(_, v)| v);
+    }
+    /// Construct a full file path.
+    fn get_file_path(&self, path: &str) -> PathBuf {
+        let mut file_path = self.base_path.clone();
+        file_path.push(path);
+        file_path.set_extension(&self.extension); // Force extension
+        file_path
     }
 }
 
@@ -184,9 +208,7 @@ impl ModuleResolver for FileModuleResolver {
         pos: Position,
     ) -> Result<Shared<Module>, Box<EvalAltResult>> {
         // Construct the script file path
-        let mut file_path = self.base_path.clone();
-        file_path.push(path);
-        file_path.set_extension(&self.extension); // Force extension
+        let file_path = self.get_file_path(path);
 
         // See if it is cached
         {
@@ -228,6 +250,9 @@ impl ModuleResolver for FileModuleResolver {
         Ok(m)
     }
 
+    /// Resolve an `AST` based on a path string.
+    ///
+    /// The file system is accessed during each call; the internal cache is by-passed.
     fn resolve_ast(
         &self,
         engine: &Engine,
@@ -235,9 +260,7 @@ impl ModuleResolver for FileModuleResolver {
         pos: Position,
     ) -> Option<Result<crate::AST, Box<EvalAltResult>>> {
         // Construct the script file path
-        let mut file_path = self.base_path.clone();
-        file_path.push(path);
-        file_path.set_extension(&self.extension); // Force extension
+        let file_path = self.get_file_path(path);
 
         // Load the script file and compile it
         match engine.compile_file(file_path).map_err(|err| match *err {
