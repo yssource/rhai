@@ -266,6 +266,8 @@ impl Dynamic {
         }
     }
     /// Is the value held by this [`Dynamic`] shared?
+    ///
+    /// Always [`false`] under the `no_closure` feature.
     #[inline(always)]
     pub fn is_shared(&self) -> bool {
         match self.0 {

@@ -78,7 +78,7 @@ Running `mdbook build` builds it.
 Playground
 ----------
 
-An [Online Playground](https://alvinhochun.github.io/rhai-demo/) is available with syntax-highlighting editor.
+An [Online Playground](https://rhaiscript.github.io/playground) is available with syntax-highlighting editor.
 Scripts can be evaluated directly from the editor.
 
 

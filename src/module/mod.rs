@@ -221,6 +221,31 @@ impl AsRef<Module> for Module {
     }
 }
 
+impl<M: AsRef<Module>> Add<M> for &Module {
+    type Output = Module;
+
+    fn add(self, rhs: M) -> Self::Output {
+        let mut module = self.clone();
+        module.merge(rhs.as_ref());
+        module
+    }
+}
+
+impl<M: AsRef<Module>> Add<M> for Module {
+    type Output = Self;
+
+    fn add(mut self, rhs: M) -> Self::Output {
+        self.merge(rhs.as_ref());
+        self
+    }
+}
+
+impl<M: Into<Module>> AddAssign<M> for Module {
+    fn add_assign(&mut self, rhs: M) {
+        self.combine(rhs.into());
+    }
+}
+
 impl Module {
     /// Create a new [`Module`].
     ///
@@ -1983,13 +2008,16 @@ impl Module {
 ///
 /// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
-pub struct NamespaceRef(Option<NonZeroUsize>, StaticVec<Ident>);
+pub struct NamespaceRef {
+    index: Option<NonZeroUsize>,
+    path: StaticVec<Ident>,
+}
 
 impl fmt::Debug for NamespaceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.1, f)?;
+        fmt::Debug::fmt(&self.path, f)?;
 
-        if let Some(index) = self.0 {
+        if let Some(index) = self.index {
             write!(f, " -> {}", index)
         } else {
             Ok(())
@@ -2001,19 +2029,19 @@ impl Deref for NamespaceRef {
     type Target = StaticVec<Ident>;
 
     fn deref(&self) -> &Self::Target {
-        &self.1
+        &self.path
     }
 }
 
 impl DerefMut for NamespaceRef {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.1
+        &mut self.path
     }
 }
 
 impl fmt::Display for NamespaceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for Ident { name, .. } in self.1.iter() {
+        for Ident { name, .. } in self.path.iter() {
             write!(f, "{}{}", name, Token::DoubleColon.syntax())?;
         }
         Ok(())
@@ -2021,45 +2049,20 @@ impl fmt::Display for NamespaceRef {
 }
 
 impl From<StaticVec<Ident>> for NamespaceRef {
-    fn from(modules: StaticVec<Ident>) -> Self {
-        Self(None, modules)
-    }
-}
-
-impl<M: AsRef<Module>> Add<M> for &Module {
-    type Output = Module;
-
-    fn add(self, rhs: M) -> Self::Output {
-        let mut module = self.clone();
-        module.merge(rhs.as_ref());
-        module
-    }
-}
-
-impl<M: AsRef<Module>> Add<M> for Module {
-    type Output = Self;
-
-    fn add(mut self, rhs: M) -> Self::Output {
-        self.merge(rhs.as_ref());
-        self
-    }
-}
-
-impl<M: Into<Module>> AddAssign<M> for Module {
-    fn add_assign(&mut self, rhs: M) {
-        self.combine(rhs.into());
+    fn from(path: StaticVec<Ident>) -> Self {
+        Self { index: None, path }
     }
 }
 
 impl NamespaceRef {
     /// Get the [`Scope`][crate::Scope] index offset.
     pub(crate) fn index(&self) -> Option<NonZeroUsize> {
-        self.0
+        self.index
     }
     /// Set the [`Scope`][crate::Scope] index offset.
     #[cfg(not(feature = "no_module"))]
     pub(crate) fn set_index(&mut self, index: Option<NonZeroUsize>) {
-        self.0 = index
+        self.index = index
     }
 }
 

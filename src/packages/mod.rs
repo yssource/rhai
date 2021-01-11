@@ -50,13 +50,15 @@ pub trait Package {
     }
 }
 
-/// Macro that makes it easy to define a _package_ (which is basically a shared module)
+/// Macro that makes it easy to define a _package_ (which is basically a shared [module][Module])
 /// and register functions into it.
 ///
 /// Functions can be added to the package using the standard module methods such as
 /// [`set_fn_2`][Module::set_fn_2], [`set_fn_3_mut`][Module::set_fn_3_mut], [`set_fn_0`][Module::set_fn_0] etc.
 ///
 /// # Example
+///
+/// Define a package named `MyPackage` with a single function named `my_add`:
 ///
 /// ```
 /// use rhai::{Dynamic, EvalAltResult};
@@ -70,8 +72,6 @@ pub trait Package {
 ///     lib.set_fn_2("my_add", add);
 /// });
 /// ```
-///
-/// The above defines a package named 'MyPackage' with a single function named 'my_add'.
 #[macro_export]
 macro_rules! def_package {
     ($root:ident : $package:ident : $comment:expr , $lib:ident , $block:stmt) => {
