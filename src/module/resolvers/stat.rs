@@ -1,7 +1,7 @@
 use crate::stdlib::{boxed::Box, collections::HashMap, ops::AddAssign, string::String};
 use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 
-/// [Module] resolution service that serves [modules][Module] added into it.
+/// A static [module][Module] resolution service that serves [modules][Module] added into it.
 ///
 /// # Example
 ///

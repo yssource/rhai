@@ -1,4 +1,4 @@
-//! This crate contains procedural macros to make creating Rhai plugin-modules much easier.
+//! This crate contains procedural macros to make creating Rhai plugin modules much easier.
 //!
 //! # Export an Entire Rust Module to a Rhai `Module`
 //!
@@ -184,7 +184,7 @@ pub fn export_module(
     proc_macro::TokenStream::from(tokens)
 }
 
-/// Macro to generate a Rhai `Module` from a _plugin module_ defined via `#[export_module]`.
+/// Macro to generate a Rhai `Module` from a _plugin module_ defined via [`#[export_module]`][export_module].
 ///
 /// # Usage
 ///
@@ -223,8 +223,8 @@ pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::Toke
 /// Functions and variables in the plugin module overrides any existing similarly-named
 /// functions and variables in the target module.
 ///
-/// This call is intended to be used within the `def_package!` macro to define a custom
-/// package based on a plugin module.
+/// This call is intended to be used within the [`def_package!`][crate::def_package] macro to define
+/// a custom package based on a plugin module.
 ///
 /// All sub-modules, if any, in the plugin module are _flattened_ and their functions/variables
 /// registered at the top level because packages require so.
@@ -269,7 +269,7 @@ pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro
     proc_macro::TokenStream::from(tokens)
 }
 
-/// Macro to register a _plugin function_ (defined via `#[export_fn]`) into an `Engine`.
+/// Macro to register a _plugin function_ (defined via [`#[export_fn]`][export_fn]) into an `Engine`.
 ///
 /// # Usage
 ///

@@ -168,27 +168,48 @@ impl fmt::Debug for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Module({}\n    modules: {}\n    vars: {}\n    functions: {}\n)",
+            "Module({}\n{}{}{})",
             if let Some(ref id) = self.id {
-                format!("id: {:?}", id)
+                format!("id: {:?},", id)
             } else {
                 "".to_string()
             },
-            self.modules
-                .keys()
-                .map(|m| m.as_str())
-                .collect::<Vec<_>>()
-                .join(", "),
-            self.variables
-                .iter()
-                .map(|(k, v)| format!("{}={:?}", k, v))
-                .collect::<Vec<_>>()
-                .join(", "),
-            self.functions
-                .values()
-                .map(|FuncInfo { func, .. }| func.to_string())
-                .collect::<Vec<_>>()
-                .join(", "),
+            if !self.modules.is_empty() {
+                format!(
+                    "    modules: {}\n",
+                    self.modules
+                        .keys()
+                        .map(|m| m.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                "".to_string()
+            },
+            if !self.variables.is_empty() {
+                format!(
+                    "    vars: {}\n",
+                    self.variables
+                        .iter()
+                        .map(|(k, v)| format!("{}={:?}", k, v))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                "".to_string()
+            },
+            if !self.functions.is_empty() {
+                format!(
+                    "    functions: {}\n",
+                    self.functions
+                        .values()
+                        .map(|FuncInfo { func, .. }| func.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                "".to_string()
+            }
         )
     }
 }
@@ -197,6 +218,31 @@ impl AsRef<Module> for Module {
     #[inline(always)]
     fn as_ref(&self) -> &Module {
         self
+    }
+}
+
+impl<M: AsRef<Module>> Add<M> for &Module {
+    type Output = Module;
+
+    fn add(self, rhs: M) -> Self::Output {
+        let mut module = self.clone();
+        module.merge(rhs.as_ref());
+        module
+    }
+}
+
+impl<M: AsRef<Module>> Add<M> for Module {
+    type Output = Self;
+
+    fn add(mut self, rhs: M) -> Self::Output {
+        self.merge(rhs.as_ref());
+        self
+    }
+}
+
+impl<M: Into<Module>> AddAssign<M> for Module {
+    fn add_assign(&mut self, rhs: M) {
+        self.combine(rhs.into());
     }
 }
 
@@ -1962,13 +2008,16 @@ impl Module {
 ///
 /// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
-pub struct NamespaceRef(Option<NonZeroUsize>, StaticVec<Ident>);
+pub struct NamespaceRef {
+    index: Option<NonZeroUsize>,
+    path: StaticVec<Ident>,
+}
 
 impl fmt::Debug for NamespaceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.1, f)?;
+        fmt::Debug::fmt(&self.path, f)?;
 
-        if let Some(index) = self.0 {
+        if let Some(index) = self.index {
             write!(f, " -> {}", index)
         } else {
             Ok(())
@@ -1980,19 +2029,19 @@ impl Deref for NamespaceRef {
     type Target = StaticVec<Ident>;
 
     fn deref(&self) -> &Self::Target {
-        &self.1
+        &self.path
     }
 }
 
 impl DerefMut for NamespaceRef {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.1
+        &mut self.path
     }
 }
 
 impl fmt::Display for NamespaceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for Ident { name, .. } in self.1.iter() {
+        for Ident { name, .. } in self.path.iter() {
             write!(f, "{}{}", name, Token::DoubleColon.syntax())?;
         }
         Ok(())
@@ -2000,45 +2049,20 @@ impl fmt::Display for NamespaceRef {
 }
 
 impl From<StaticVec<Ident>> for NamespaceRef {
-    fn from(modules: StaticVec<Ident>) -> Self {
-        Self(None, modules)
-    }
-}
-
-impl<M: AsRef<Module>> Add<M> for &Module {
-    type Output = Module;
-
-    fn add(self, rhs: M) -> Self::Output {
-        let mut module = self.clone();
-        module.merge(rhs.as_ref());
-        module
-    }
-}
-
-impl<M: AsRef<Module>> Add<M> for Module {
-    type Output = Self;
-
-    fn add(mut self, rhs: M) -> Self::Output {
-        self.merge(rhs.as_ref());
-        self
-    }
-}
-
-impl<M: Into<Module>> AddAssign<M> for Module {
-    fn add_assign(&mut self, rhs: M) {
-        self.combine(rhs.into());
+    fn from(path: StaticVec<Ident>) -> Self {
+        Self { index: None, path }
     }
 }
 
 impl NamespaceRef {
     /// Get the [`Scope`][crate::Scope] index offset.
     pub(crate) fn index(&self) -> Option<NonZeroUsize> {
-        self.0
+        self.index
     }
     /// Set the [`Scope`][crate::Scope] index offset.
     #[cfg(not(feature = "no_module"))]
     pub(crate) fn set_index(&mut self, index: Option<NonZeroUsize>) {
-        self.0 = index
+        self.index = index
     }
 }
 

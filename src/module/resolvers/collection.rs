@@ -1,7 +1,7 @@
 use crate::stdlib::{boxed::Box, ops::AddAssign, vec::Vec};
 use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 
-/// [Module] resolution service that holds a collection of [module][Module] resolves,
+/// [Module] resolution service that holds a collection of module resolvers,
 /// to be searched in sequential order.
 ///
 /// # Example

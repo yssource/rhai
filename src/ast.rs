@@ -295,7 +295,7 @@ impl AST {
     ) -> Option<Shared<crate::module::resolvers::StaticModuleResolver>> {
         self.resolver.clone()
     }
-    /// _(INTERNALS)_ Get the embedded [module resolver][`ModuleResolver`].
+    /// _(INTERNALS)_ Get the embedded [module resolver][crate::ModuleResolver].
     /// Exported under the `internals` feature only.
     #[cfg(not(feature = "no_module"))]
     #[cfg(feature = "internals")]
@@ -318,7 +318,7 @@ impl AST {
     ///
     /// This operation is cheap because functions are shared.
     ///
-    /// Not available under [`no_function`].
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clone_functions_only(&self) -> Self {
@@ -329,7 +329,7 @@ impl AST {
     ///
     /// This operation is cheap because functions are shared.
     ///
-    /// Not available under [`no_function`].
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clone_functions_only_filtered(
@@ -614,7 +614,7 @@ impl AST {
     }
     /// Filter out the functions, retaining only some based on a filter predicate.
     ///
-    /// Not available under [`no_function`].
+    /// Not available under `no_function`.
     ///
     /// # Example
     ///
@@ -661,7 +661,7 @@ impl AST {
     }
     /// Iterate through all function definitions.
     ///
-    /// Not available under [`no_function`].
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn iter_functions<'a>(&'a self) -> impl Iterator<Item = ScriptFnMetadata> + 'a {
@@ -671,7 +671,7 @@ impl AST {
     }
     /// Clear all function definitions in the [`AST`].
     ///
-    /// Not available under [`no_function`].
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clear_functions(&mut self) {

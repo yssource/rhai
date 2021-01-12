@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 0.19.10
 ===============
 
+Bug fixes
+---------
+
+* Bug in `FileModuleResolver::clear_cache_for_path` path mapping fixed.
+
 Breaking changes
 ----------------
 
@@ -15,7 +20,7 @@ Breaking changes
 New features
 ------------
 
-* `Engine::compile_to_self_contained` compiles a script into an `AST` and _eagerly_ resolves all `import` statements with string literal paths. The resolved modules are directly embedded into the `AST`. When the `AST` is later evaluated, `import` statements directly yield the pre-resolved modules without going through the resolution process once again.
+* `Engine::compile_into_self_contained` compiles a script into an `AST` and _eagerly_ resolves all `import` statements with string literal paths. The resolved modules are directly embedded into the `AST`. When the `AST` is later evaluated, `import` statements directly yield the pre-resolved modules without going through the resolution process once again.
 * `AST::walk`, `Stmt::walk` and `Expr::walk` internal API's to recursively walk an `AST`.
 
 Enhancements
@@ -24,6 +29,7 @@ Enhancements
 * Source information is provided when there is an error within a call to a function defined in another module.
 * Source information is provided to the `NativeCallContext` for native Rust functions.
 * `EvalAltResult::clear_position` to clear the position information of an error - useful when only the message is needed and the position doesn't need to be printed out.
+* A new optional function `resolve_ast` is added to the `ModuleResolver` trait for advanced usage.
 
 
 Version 0.19.9

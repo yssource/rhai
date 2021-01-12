@@ -936,11 +936,15 @@ impl Engine {
             while let Some(path) = imports.iter().next() {
                 let path = path.clone();
 
-                if let Some(module_ast) =
-                    self.module_resolver
-                        .resolve_ast(self, &path, Position::NONE)?
+                match self
+                    .module_resolver
+                    .resolve_ast(self, &path, Position::NONE)
                 {
-                    collect_imports(&module_ast, &mut resolver, &mut imports);
+                    Some(Ok(module_ast)) => {
+                        collect_imports(&module_ast, &mut resolver, &mut imports)
+                    }
+                    Some(err @ Err(_)) => return err,
+                    None => (),
                 }
 
                 let module = shared_take_or_clone(self.module_resolver.resolve(

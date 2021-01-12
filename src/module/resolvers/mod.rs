@@ -29,7 +29,7 @@ pub trait ModuleResolver: SendSync {
         pos: Position,
     ) -> Result<Shared<Module>, Box<EvalAltResult>>;
 
-    /// Resolve a module into an `AST` based on a path string.
+    /// Resolve an `AST` based on a path string.
     ///
     /// Returns [`None`] (default) if such resolution is not supported
     /// (e.g. if the module is Rust-based).
@@ -44,7 +44,7 @@ pub trait ModuleResolver: SendSync {
         engine: &Engine,
         path: &str,
         pos: Position,
-    ) -> Result<Option<AST>, Box<EvalAltResult>> {
-        Ok(None)
+    ) -> Option<Result<AST, Box<EvalAltResult>>> {
+        None
     }
 }
