@@ -8,6 +8,7 @@ Bug fixes
 ---------
 
 * Bug in `FileModuleResolver::clear_cache_for_path` path mapping fixed.
+* Some optimizer fringe cases is fixed - related to constants propagation when the evil `eval` is present.
 
 Breaking changes
 ----------------

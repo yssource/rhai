@@ -1070,6 +1070,8 @@ pub struct CustomExpr {
     pub keywords: StaticVec<Expr>,
     /// List of tokens actually parsed.
     pub tokens: Vec<ImmutableString>,
+    /// Delta number of variables in the scope.
+    pub scope_delta: isize,
 }
 
 impl fmt::Debug for CustomExpr {
