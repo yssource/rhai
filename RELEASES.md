@@ -7,8 +7,9 @@ Version 0.19.10
 Bug fixes
 ---------
 
+* `no_std` feature now compiles correctly (bug introduced in `0.19.9`).
 * Bug in `FileModuleResolver::clear_cache_for_path` path mapping fixed.
-* Some optimizer fringe cases is fixed - related to constants propagation when the evil `eval` is present.
+* Some optimizer fringe cases are fixed - related to constants propagation when the evil `eval` is present.
 
 Breaking changes
 ----------------

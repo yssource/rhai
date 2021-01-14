@@ -101,6 +101,14 @@ impl Engine {
     /// * `keywords` holds a slice of strings that define the custom syntax.  
     /// * `new_vars` is the number of new variables declared by this custom syntax, or the number of variables removed (if negative).
     /// * `func` is the implementation function.
+    ///
+    /// # Notes
+    ///
+    /// If `new_vars` is positive, then a number of new variables are expected to be pushed into the
+    /// current [`Scope`][crate::Scope].
+    ///
+    /// If `new_vars` is negative, then it is expected that only the top `new_vars` variables in the
+    /// current [`Scope`][crate::Scope] will be _popped_.  Do not randomly remove variables.
     pub fn register_custom_syntax<S: AsRef<str> + Into<ImmutableString>>(
         &mut self,
         keywords: impl AsRef<[S]>,

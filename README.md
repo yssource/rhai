@@ -70,15 +70,13 @@ Documentation
 
 See [The Rhai Book](https://rhaiscript.github.io/book) for details on the Rhai scripting engine and language.
 
-To build _The Book_, first install [`mdbook`](https://github.com/rust-lang/mdBook)
-and [`mdbook-tera`](https://github.com/avitex/mdbook-tera) (for templating).
-Running `mdbook build` builds it.
-
 
 Playground
 ----------
 
-An [Online Playground](https://rhaiscript.github.io/playground) is available with syntax-highlighting editor.
+An [Online Playground](https://rhaiscript.github.io/playground) is available with
+syntax-highlighting editor, powered by WebAssembly.
+
 Scripts can be evaluated directly from the editor.
 
 
