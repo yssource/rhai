@@ -1995,7 +1995,14 @@ fn parse_custom_syntax(
         }
     }
 
-    Ok(Expr::Custom(Box::new(CustomExpr { keywords, tokens }), pos))
+    Ok(Expr::Custom(
+        Box::new(CustomExpr {
+            keywords,
+            tokens,
+            scope_delta: syntax.scope_delta,
+        }),
+        pos,
+    ))
 }
 
 /// Parse an expression.

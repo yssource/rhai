@@ -1058,29 +1058,20 @@ impl Stmt {
     }
 }
 
-/// _(INTERNALS)_ A custom syntax definition.
+/// _(INTERNALS)_ A custom syntax expression.
 /// Exported under the `internals` feature only.
 ///
 /// # WARNING
 ///
 /// This type is volatile and may change.
-#[derive(Clone, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub struct CustomExpr {
     /// List of keywords.
     pub keywords: StaticVec<Expr>,
     /// List of tokens actually parsed.
     pub tokens: Vec<ImmutableString>,
-}
-
-impl fmt::Debug for CustomExpr {
-    #[inline(always)]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("CustomExpr { keywords:")?;
-        fmt::Debug::fmt(&self.keywords, f)?;
-        f.write_str(", tokens:")?;
-        fmt::Debug::fmt(&self.tokens, f)?;
-        f.write_str("}")
-    }
+    /// Delta number of variables in the scope.
+    pub scope_delta: isize,
 }
 
 /// _(INTERNALS)_ A binary expression.

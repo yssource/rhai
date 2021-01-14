@@ -58,6 +58,8 @@ struct State<'a> {
     changed: bool,
     /// Collection of constants to use for eager function evaluations.
     variables: Vec<(String, AccessMode, Expr)>,
+    /// Activate constants propagation?
+    propagate_constants: bool,
     /// An [`Engine`] instance for eager function evaluation.
     engine: &'a Engine,
     /// Collection of sub-modules.
@@ -75,6 +77,7 @@ impl<'a> State<'a> {
         Self {
             changed: false,
             variables: vec![],
+            propagate_constants: true,
             engine,
             mods: (&engine.global_sub_modules).into(),
             lib,
@@ -109,6 +112,10 @@ impl<'a> State<'a> {
     /// Look up a constant from the list.
     #[inline]
     pub fn find_constant(&self, name: &str) -> Option<&Expr> {
+        if !self.propagate_constants {
+            return None;
+        }
+
         for (n, access, expr) in self.variables.iter().rev() {
             if n == name {
                 return if access.is_read_only() {
@@ -160,26 +167,37 @@ fn optimize_stmt_block(
 ) -> Stmt {
     let orig_len = statements.len(); // Original number of statements in the block, for change detection
     let orig_constants_len = state.variables.len(); // Original number of constants in the state, for restore later
+    let orig_propagate_constants = state.propagate_constants;
 
     // Optimize each statement in the block
-    statements.iter_mut().for_each(|stmt| match stmt {
-        // Add constant literals into the state
-        Stmt::Const(var_def, Some(expr), _, _) if expr.is_constant() => {
-            state.push_var(&var_def.name, AccessMode::ReadOnly, mem::take(expr));
+    statements.iter_mut().for_each(|stmt| {
+        match stmt {
+            // Add constant literals into the state
+            Stmt::Const(var_def, Some(value_expr), _, _) => {
+                optimize_expr(value_expr, state);
+
+                if value_expr.is_constant() {
+                    state.push_var(&var_def.name, AccessMode::ReadOnly, value_expr.clone());
+                }
+            }
+            Stmt::Const(var_def, None, _, _) => {
+                state.push_var(&var_def.name, AccessMode::ReadOnly, Expr::Unit(var_def.pos));
+            }
+            // Add variables into the state
+            Stmt::Let(var_def, expr, _, _) => {
+                if let Some(value_expr) = expr {
+                    optimize_expr(value_expr, state);
+                }
+
+                state.push_var(
+                    &var_def.name,
+                    AccessMode::ReadWrite,
+                    Expr::Unit(var_def.pos),
+                );
+            }
+            // Optimize the statement
+            _ => optimize_stmt(stmt, state, preserve_result),
         }
-        Stmt::Const(var_def, None, _, _) => {
-            state.push_var(&var_def.name, AccessMode::ReadOnly, Expr::Unit(var_def.pos));
-        }
-        // Add variables into the state
-        Stmt::Let(var_def, _, _, _) => {
-            state.push_var(
-                &var_def.name,
-                AccessMode::ReadWrite,
-                Expr::Unit(var_def.pos),
-            );
-        }
-        // Optimize the statement
-        _ => optimize_stmt(stmt, state, preserve_result),
     });
 
     // Remove all raw expression statements that are pure except for the very last statement
@@ -250,6 +268,8 @@ fn optimize_stmt_block(
 
     // Pop the stack and remove all the local constants
     state.restore_var(orig_constants_len);
+
+    state.propagate_constants = orig_propagate_constants;
 
     match &statements[..] {
         // No statements in block - change to No-op
@@ -637,6 +657,10 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             (lhs, rhs) => { optimize_expr(lhs, state); optimize_expr(rhs, state); }
         },
 
+        // eval!
+        Expr::FnCall(x, _) if x.name == KEYWORD_EVAL => {
+            state.propagate_constants = false;
+        }
         // Do not call some special keywords
         Expr::FnCall(x, _) if DONT_EVAL_KEYWORDS.contains(&x.name.as_ref()) => {
             x.args.iter_mut().for_each(|a| optimize_expr(a, state));
@@ -726,7 +750,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         }
 
         // Custom syntax
-        Expr::Custom(x, _) => x.keywords.iter_mut().for_each(|expr| optimize_expr(expr, state)),
+        Expr::Custom(x, _) => {
+            if x.scope_delta != 0 {
+                state.propagate_constants = false;
+            }
+            x.keywords.iter_mut().for_each(|expr| optimize_expr(expr, state));
+        }
 
         // All other expressions - skip
         _ => (),
@@ -790,7 +819,11 @@ fn optimize_top_level(
                 Stmt::Const(var_def, None, _, _) => {
                     state.push_var(&var_def.name, AccessMode::ReadOnly, Expr::Unit(var_def.pos));
                 }
-                Stmt::Let(var_def, _, _, _) => {
+                Stmt::Let(var_def, expr, _, _) => {
+                    if let Some(value_expr) = expr {
+                        optimize_expr(value_expr, &mut state);
+                    }
+
                     state.push_var(
                         &var_def.name,
                         AccessMode::ReadWrite,
