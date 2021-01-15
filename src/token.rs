@@ -768,10 +768,13 @@ pub struct TokenizeState {
 ///
 /// This trait is volatile and may change.
 pub trait InputStream {
-    fn unread(&mut self, ch: char);
-    /// Get the next character
+    /// Un-get a character back into the `InputStream`.
+    /// The next [`get_next`][InputStream::get_next] or [`peek_next`][InputStream::peek_next]
+    /// will return this character instead.
+    fn unget(&mut self, ch: char);
+    /// Get the next character from the `InputStream`.
     fn get_next(&mut self) -> Option<char>;
-    /// Peek the next character
+    /// Peek the next character in the `InputStream`.
     fn peek_next(&mut self) -> Option<char>;
 }
 
@@ -1088,12 +1091,12 @@ fn get_next_token_inner(
                                 }
                                 // _ - cannot follow a decimal point
                                 '_' => {
-                                    stream.unread(next_char);
+                                    stream.unget(next_char);
                                     break;
                                 }
                                 // .. - reserved symbol, not a floating-point number
                                 '.' => {
-                                    stream.unread(next_char);
+                                    stream.unget(next_char);
                                     break;
                                 }
                                 // symbol after period - probably a float
@@ -1104,7 +1107,7 @@ fn get_next_token_inner(
                                 }
                                 // Not a floating-point number
                                 _ => {
-                                    stream.unread(next_char);
+                                    stream.unget(next_char);
                                     break;
                                 }
                             }
@@ -1634,12 +1637,10 @@ pub struct MultiInputsStream<'a> {
 }
 
 impl InputStream for MultiInputsStream<'_> {
-    /// Buffer a character.
     #[inline(always)]
-    fn unread(&mut self, ch: char) {
+    fn unget(&mut self, ch: char) {
         self.buf = Some(ch);
     }
-    /// Get the next character
     fn get_next(&mut self) -> Option<char> {
         if let Some(ch) = self.buf.take() {
             return Some(ch);
@@ -1658,7 +1659,6 @@ impl InputStream for MultiInputsStream<'_> {
             }
         }
     }
-    /// Peek the next character
     fn peek_next(&mut self) -> Option<char> {
         if let Some(ch) = self.buf {
             return Some(ch);
