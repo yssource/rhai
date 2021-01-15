@@ -61,8 +61,10 @@ impl BuildHasher for StraightHasherBuilder {
 pub fn get_hasher() -> impl Hasher {
     #[cfg(feature = "no_std")]
     let s: ahash::AHasher = Default::default();
+    // #[cfg(not(feature = "no_std"))]
+    // let s = crate::stdlib::collections::hash_map::DefaultHasher::new();
     #[cfg(not(feature = "no_std"))]
-    let s = crate::stdlib::collections::hash_map::DefaultHasher::new();
+    let s: fxhash::FxHasher64 = Default::default();
 
     s
 }

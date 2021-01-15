@@ -23,7 +23,8 @@ keywords = [ "scripting" ]
 categories = [ "no-std", "embedded", "wasm", "parser-implementations" ]
 
 [dependencies]
-smallvec = { version = "1.4.2", default-features = false }
+smallvec = { version = "1.4", default-features = false }
+fxhash = { version = "0.2" }
 rhai_codegen = { version = "0.3", path = "codegen" }
 
 [features]
