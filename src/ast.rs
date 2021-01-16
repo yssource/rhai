@@ -266,10 +266,19 @@ impl AST {
         &mut self.statements
     }
     /// Get the internal shared [`Module`] containing all script-defined functions.
+    #[cfg(not(feature = "internals"))]
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub(crate) fn shared_lib(&self) -> Shared<Module> {
+        self.functions.clone()
+    }
+    /// Get the internal shared [`Module`] containing all script-defined functions.
+    #[cfg(feature = "internals")]
+    #[cfg(not(feature = "no_module"))]
+    #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
+    pub fn shared_lib(&self) -> Shared<Module> {
         self.functions.clone()
     }
     /// Get the internal [`Module`] containing all script-defined functions.
