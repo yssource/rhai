@@ -23,8 +23,8 @@ keywords = [ "scripting" ]
 categories = [ "no-std", "embedded", "wasm", "parser-implementations" ]
 
 [dependencies]
-smallvec = { version = "1.4", default-features = false }
-ahash = { version = "0.3.2", default-features = false, features = ["compile-time-rng"] }
+smallvec = { version = "1.6", default-features = false, features = ["union"] }
+ahash = { version = "0.5", default-features = false }
 rhai_codegen = { version = "0.3", path = "codegen" }
 
 [features]
@@ -46,7 +46,7 @@ unicode-xid-ident = ["unicode-xid"] # allow Unicode Standard Annex #31 for ident
 metadata = [ "serde", "serde_json"] # enables exporting functions metadata to JSON
 
 # compiling for no-std
-no_std = [ "smallvec/union", "num-traits/libm", "hashbrown", "core-error", "libm" ]
+no_std = [ "smallvec/union", "num-traits/libm", "hashbrown", "core-error", "libm", "ahash/compile-time-rng" ]
 
 [profile.release]
 lto = "fat"
@@ -55,46 +55,46 @@ codegen-units = 1
 #panic = 'abort'     # remove stack backtrace for no-std
 
 [dependencies.libm]
-version = "0.2.1"
+version = "0.2"
 default_features = false
 optional = true
 
 [dependencies.num-traits]
-version = "0.2.11"
+version = "0.2"
 default-features = false
 optional = true
 
 [dependencies.core-error]
-version = "0.0.0"
+version = "0.0"
 default_features = false
 features = ["alloc"]
 optional = true
 
 [dependencies.hashbrown]
-version = "0.7.1"
+version = "0.7"
 default-features = false
 features = ["ahash", "nightly", "inline-more"]
 optional = true
 
 [dependencies.serde]
-version = "1.0.116"
+version = "1.0"
 default_features = false
 features = ["derive", "alloc"]
 optional = true
 
 [dependencies.serde_json]
-version = "1.0.60"
+version = "1.0"
 default_features = false
 features = ["alloc"]
 optional = true
 
 [dependencies.unicode-xid]
-version = "0.2.1"
+version = "0.2"
 default_features = false
 optional = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-instant= { version = "0.1.7", features = ["wasm-bindgen"] } # WASM implementation of std::time::Instant
+instant= { version = "0.1", features = ["wasm-bindgen"] } # WASM implementation of std::time::Instant
 
 [package.metadata.docs.rs]
 features = [ "serde", "internals" ]
