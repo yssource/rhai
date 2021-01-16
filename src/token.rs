@@ -150,7 +150,7 @@ impl fmt::Debug for Position {
 /// _(INTERNALS)_ A Rhai language token.
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Debug, PartialEq, Clone)]
@@ -742,7 +742,7 @@ impl From<Token> for String {
 /// _(INTERNALS)_ State of the tokenizer.
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
@@ -764,7 +764,7 @@ pub struct TokenizeState {
 /// _(INTERNALS)_ Trait that encapsulates a peekable character input stream.
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This trait is volatile and may change.
 pub trait InputStream {
@@ -781,9 +781,9 @@ pub trait InputStream {
 /// _(INTERNALS)_ Parse a string literal wrapped by `enclosing_char`.
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile API
 ///
-/// This type is volatile and may change.
+/// This function is volatile and may change.
 pub fn parse_string_literal(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
@@ -976,9 +976,9 @@ fn scan_block_comment(
 /// _(INTERNALS)_ Get the next token from the `stream`.
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile API
 ///
-/// This type is volatile and may change.
+/// This function is volatile and may change.
 #[inline]
 pub fn get_next_token(
     stream: &mut impl InputStream,
