@@ -4,10 +4,8 @@ use super::str::ImmutableStringDeserializer;
 use crate::dynamic::Union;
 use crate::stdlib::{any::type_name, boxed::Box, fmt, string::ToString};
 use crate::{Dynamic, EvalAltResult, ImmutableString, LexError, Position};
-use serde::de::{
-    DeserializeSeed, Deserializer, Error, IntoDeserializer, MapAccess, SeqAccess, Visitor,
-};
-use serde::Deserialize;
+use serde::de::{DeserializeSeed, Error, IntoDeserializer, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
@@ -50,13 +48,9 @@ impl<'de> DynamicDeserializer<'de> {
         visitor: V,
     ) -> Result<V::Value, Box<EvalAltResult>> {
         #[cfg(not(feature = "only_i32"))]
-        {
-            visitor.visit_i64(v)
-        }
+        return visitor.visit_i64(v);
         #[cfg(feature = "only_i32")]
-        {
-            visitor.visit_i32(v)
-        }
+        return visitor.visit_i32(v);
     }
 }
 

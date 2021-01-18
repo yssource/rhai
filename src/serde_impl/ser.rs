@@ -4,9 +4,8 @@ use crate::stdlib::{boxed::Box, fmt, string::ToString};
 use crate::{Dynamic, EvalAltResult, Position};
 use serde::ser::{
     Error, SerializeMap, SerializeSeq, SerializeStruct, SerializeTuple, SerializeTupleStruct,
-    Serializer,
 };
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;

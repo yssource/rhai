@@ -22,7 +22,7 @@ Supported targets and builds
 * All common CPU targets for Windows, Linux and MacOS.
 * WebAssembly (WASM)
 * `no-std`
-* Minimum Rust version 1.45
+* Minimum Rust version 1.49
 
 
 Standard features

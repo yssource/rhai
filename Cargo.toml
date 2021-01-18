@@ -97,4 +97,4 @@ optional = true
 instant= { version = "0.1", features = ["wasm-bindgen"] } # WASM implementation of std::time::Instant
 
 [package.metadata.docs.rs]
-features = [ "serde", "internals" ]
+features = [ "metadata", "internals" ]
