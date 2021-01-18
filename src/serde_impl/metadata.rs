@@ -145,7 +145,14 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
                 .or_else(|| Some("()".to_string())),
             signature: info.gen_signature(),
             doc_comments: if info.func.is_script() {
-                info.func.get_fn_def().comments.clone()
+                #[cfg(feature = "no_function")]
+                {
+                    unreachable!()
+                }
+                #[cfg(not(feature = "no_function"))]
+                {
+                    info.func.get_fn_def().comments.clone()
+                }
             } else {
                 Default::default()
             },
@@ -212,7 +219,7 @@ impl Engine {
     /// 4) Functions in global modules (optional)
     pub fn gen_fn_metadata_with_ast_to_json(
         &self,
-        ast: &AST,
+        _ast: &AST,
         include_global: bool,
     ) -> serde_json::Result<String> {
         let mut global: ModuleMetadata = Default::default();
@@ -233,7 +240,8 @@ impl Engine {
             .map(|f| f.into())
             .for_each(|info| global.functions.push(info));
 
-        ast.iter_functions()
+        #[cfg(not(feature = "no_function"))]
+        _ast.iter_functions()
             .map(|f| f.into())
             .for_each(|info| global.functions.push(info));
 

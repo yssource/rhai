@@ -7,9 +7,9 @@ use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
     fmt,
-    hash::{Hash, Hasher},
+    hash::Hash,
     num::{NonZeroU64, NonZeroUsize},
-    ops::{Add, AddAssign, Deref, DerefMut},
+    ops::{Add, AddAssign},
     string::String,
     vec,
     vec::Vec,
@@ -1131,7 +1131,7 @@ pub struct FloatWrapper(FLOAT);
 
 #[cfg(not(feature = "no_float"))]
 impl Hash for FloatWrapper {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+    fn hash<H: crate::stdlib::hash::Hasher>(&self, state: &mut H) {
         self.0.to_le_bytes().hash(state);
     }
 }
@@ -1151,7 +1151,7 @@ impl AsMut<FLOAT> for FloatWrapper {
 }
 
 #[cfg(not(feature = "no_float"))]
-impl Deref for FloatWrapper {
+impl crate::stdlib::ops::Deref for FloatWrapper {
     type Target = FLOAT;
 
     fn deref(&self) -> &Self::Target {
@@ -1160,7 +1160,7 @@ impl Deref for FloatWrapper {
 }
 
 #[cfg(not(feature = "no_float"))]
-impl DerefMut for FloatWrapper {
+impl crate::stdlib::ops::DerefMut for FloatWrapper {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
