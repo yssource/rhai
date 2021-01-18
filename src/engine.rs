@@ -45,7 +45,7 @@ pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 /// _(INTERNALS)_ A stack of imported [modules][Module].
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 //
@@ -498,7 +498,7 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 /// _(INTERNALS)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Default)]
@@ -538,7 +538,7 @@ impl State {
 /// _(INTERNALS)_ A type containing all the limits imposed by the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[cfg(not(feature = "unchecked"))]

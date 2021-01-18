@@ -178,8 +178,9 @@ impl fmt::Display for EvalAltResult {
 
             Self::ErrorDotExpr(s, _) if !s.is_empty() => write!(f, "{}", s)?,
 
-            Self::ErrorIndexingType(_, _)
-            | Self::ErrorUnboundThis(_)
+            Self::ErrorIndexingType(s, _) => write!(f, "Indexer not registered for type '{}'", s)?,
+
+            Self::ErrorUnboundThis(_)
             | Self::ErrorFor(_)
             | Self::ErrorInExpr(_)
             | Self::ErrorDotExpr(_, _)

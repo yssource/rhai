@@ -2,7 +2,7 @@
 
 use rhai::{
     serde::{from_dynamic, to_dynamic},
-    Dynamic, Engine, EvalAltResult, INT,
+    Dynamic, Engine, EvalAltResult, ImmutableString, INT,
 };
 use serde::{Deserialize, Serialize};
 
@@ -290,15 +290,15 @@ fn test_serde_ser_untagged_enum() -> Result<(), Box<EvalAltResult>> {
 
 #[test]
 fn test_serde_de_primary_types() -> Result<(), Box<EvalAltResult>> {
-    assert_eq!(42_u16, from_dynamic(&Dynamic::from(42_u16))?);
-    assert_eq!(42 as INT, from_dynamic(&(42 as INT).into())?);
-    assert_eq!(true, from_dynamic(&true.into())?);
-    assert_eq!((), from_dynamic(&().into())?);
+    assert_eq!(42, from_dynamic::<u16>(&Dynamic::from(42_u16))?);
+    assert_eq!(42, from_dynamic::<INT>(&(42 as INT).into())?);
+    assert_eq!(true, from_dynamic::<bool>(&true.into())?);
+    assert_eq!((), from_dynamic::<()>(&().into())?);
 
     #[cfg(not(feature = "no_float"))]
     {
-        assert_eq!(123.456_f64, from_dynamic(&123.456_f64.into())?);
-        assert_eq!(123.456_f32, from_dynamic(&Dynamic::from(123.456_f32))?);
+        assert_eq!(123.456, from_dynamic::<f64>(&123.456_f64.into())?);
+        assert_eq!(123.456, from_dynamic::<f32>(&Dynamic::from(123.456_f32))?);
     }
 
     assert_eq!(
@@ -311,14 +311,14 @@ fn test_serde_de_primary_types() -> Result<(), Box<EvalAltResult>> {
 
 #[test]
 fn test_serde_de_integer_types() -> Result<(), Box<EvalAltResult>> {
-    assert_eq!(42_i8, from_dynamic(&Dynamic::from(42 as INT))?);
-    assert_eq!(42_i16, from_dynamic(&Dynamic::from(42 as INT))?);
-    assert_eq!(42_i32, from_dynamic(&Dynamic::from(42 as INT))?);
-    assert_eq!(42_i64, from_dynamic(&Dynamic::from(42 as INT))?);
-    assert_eq!(42_u8, from_dynamic(&Dynamic::from(42 as INT))?);
-    assert_eq!(42_u16, from_dynamic(&Dynamic::from(42 as INT))?);
-    assert_eq!(42_u32, from_dynamic(&Dynamic::from(42 as INT))?);
-    assert_eq!(42_u64, from_dynamic(&Dynamic::from(42 as INT))?);
+    assert_eq!(42, from_dynamic::<i8>(&Dynamic::from(42 as INT))?);
+    assert_eq!(42, from_dynamic::<i16>(&Dynamic::from(42 as INT))?);
+    assert_eq!(42, from_dynamic::<i32>(&Dynamic::from(42 as INT))?);
+    assert_eq!(42, from_dynamic::<i64>(&Dynamic::from(42 as INT))?);
+    assert_eq!(42, from_dynamic::<u8>(&Dynamic::from(42 as INT))?);
+    assert_eq!(42, from_dynamic::<u16>(&Dynamic::from(42 as INT))?);
+    assert_eq!(42, from_dynamic::<u32>(&Dynamic::from(42 as INT))?);
+    assert_eq!(42, from_dynamic::<u64>(&Dynamic::from(42 as INT))?);
 
     Ok(())
 }
@@ -632,6 +632,45 @@ fn test_serde_de_untagged_enum() -> Result<(), Box<EvalAltResult>> {
         MyEnum::VariantStruct2 { b: 123 },
         from_dynamic(&map.into()).unwrap()
     );
+
+    Ok(())
+}
+
+#[test]
+#[cfg(feature = "metadata")]
+#[cfg(not(feature = "no_object"))]
+#[cfg(not(feature = "no_index"))]
+fn test_serde_json() -> serde_json::Result<()> {
+    let s: ImmutableString = "hello".into();
+    assert_eq!(serde_json::to_string(&s)?, r#""hello""#);
+
+    let mut map = Map::new();
+    map.insert("a".into(), (123 as INT).into());
+
+    let arr: Array = vec![(1 as INT).into(), (2 as INT).into(), (3 as INT).into()];
+    map.insert("b".into(), arr.into());
+    map.insert("c".into(), true.into());
+    let d: Dynamic = map.into();
+
+    let json = serde_json::to_string(&d)?;
+
+    assert!(json.contains("\"a\":123"));
+    assert!(json.contains("\"b\":[1,2,3]"));
+    assert!(json.contains("\"c\":true"));
+
+    let d2: Dynamic = serde_json::from_str(&json)?;
+
+    assert!(d2.is::<Map>());
+
+    let mut m = d2.cast::<Map>();
+
+    assert_eq!(m["a"].as_int().unwrap(), 123);
+    assert!(m["c"].as_bool().unwrap());
+
+    let a = m.remove("b").unwrap().cast::<Array>();
+
+    assert_eq!(a.len(), 3);
+    assert_eq!(format!("{:?}", a), "[1, 2, 3]");
 
     Ok(())
 }

@@ -1,6 +1,25 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.11
+===============
+
+Breaking changes
+----------------
+
+Rust compiler requirement raised to 1.49.
+
+Bug fixes
+---------
+
+* Fixes compilation errors in `metadata` feature build.
+
+Enhancements
+------------
+
+* `ahash` is used to hash function call parameters. This should yield speed improvements.
+
+
 Version 0.19.10
 ===============
 

@@ -22,7 +22,7 @@ Supported targets and builds
 * All common CPU targets for Windows, Linux and MacOS.
 * WebAssembly (WASM)
 * `no-std`
-* Minimum Rust version 1.45
+* Minimum Rust version 1.49
 
 
 Standard features
@@ -35,7 +35,7 @@ Standard features
 * Freely pass Rust variables/constants into a script via an external [`Scope`](https://rhaiscript.github.io/book/rust/scope.html) - all clonable Rust types are supported; no need to implement any special trait.
 * Easily [call a script-defined function](https://rhaiscript.github.io/book/engine/call-fn.html) from Rust.
 * Relatively little `unsafe` code (yes there are some for performance reasons).
-* Few dependencies (currently only [`smallvec`](https://crates.io/crates/smallvec)).
+* Few dependencies (currently only [`smallvec`](https://crates.io/crates/smallvec) and [`ahash`](https://crates.io/crates/ahash)).
 * Re-entrant scripting engine can be made `Send + Sync` (via the `sync` feature).
 * Scripts are [optimized](https://rhaiscript.github.io/book/engine/optimize.html) (useful for template-based machine-generated scripts) for repeated evaluations.
 * Easy custom API development via [plugins](https://rhaiscript.github.io/book/plugins/index.html) system powered by procedural macros.

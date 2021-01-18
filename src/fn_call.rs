@@ -269,7 +269,7 @@ impl Engine {
         if let Some(prop) = extract_prop_from_getter(fn_name) {
             return EvalAltResult::ErrorDotExpr(
                 format!(
-                    "Failed to get property '{}' of '{}' - the property may not exist, or it may be write-only",
+                    "Unknown property '{}' - a getter is not registered for type '{}'",
                     prop,
                     self.map_type_name(args[0].type_name())
                 ),
@@ -283,7 +283,7 @@ impl Engine {
         if let Some(prop) = extract_prop_from_setter(fn_name) {
             return EvalAltResult::ErrorDotExpr(
                 format!(
-                    "Failed to set property '{}' of '{}' - the property may not exist, may be read-only, or '{}' is the wrong type",
+                    "No writable property '{}' - a setter is not registered for type '{}' to handle '{}'",
                     prop,
                     self.map_type_name(args[0].type_name()),
                     self.map_type_name(args[1].type_name()),

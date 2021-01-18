@@ -7,9 +7,9 @@ use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
     fmt,
-    hash::{Hash, Hasher},
+    hash::Hash,
     num::{NonZeroU64, NonZeroUsize},
-    ops::{Add, AddAssign, Deref, DerefMut},
+    ops::{Add, AddAssign},
     string::String,
     vec,
     vec::Vec,
@@ -60,7 +60,7 @@ impl FnAccess {
 /// _(INTERNALS)_ A type containing information on a scripted function.
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone)]
@@ -266,10 +266,21 @@ impl AST {
         &mut self.statements
     }
     /// Get the internal shared [`Module`] containing all script-defined functions.
+    #[cfg(not(feature = "internals"))]
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub(crate) fn shared_lib(&self) -> Shared<Module> {
+        self.functions.clone()
+    }
+    /// _(INTERNALS)_ Get the internal shared [`Module`] containing all script-defined functions.
+    /// Exported under the `internals` feature only.
+    #[cfg(feature = "internals")]
+    #[deprecated = "this method is volatile and may change"]
+    #[cfg(not(feature = "no_module"))]
+    #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
+    pub fn shared_lib(&self) -> Shared<Module> {
         self.functions.clone()
     }
     /// Get the internal [`Module`] containing all script-defined functions.
@@ -755,7 +766,7 @@ impl AsRef<Module> for AST {
 /// _(INTERNALS)_ An identifier containing an [immutable string][ImmutableString] name and a [position][Position].
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -776,7 +787,7 @@ impl fmt::Debug for Ident {
 /// _(INTERNALS)_ A type encapsulating the mode of a `return`/`throw` statement.
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
@@ -790,7 +801,7 @@ pub enum ReturnType {
 /// _(INTERNALS)_ An [`AST`] node, consisting of either an [`Expr`] or a [`Stmt`].
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
@@ -814,7 +825,7 @@ impl<'a> From<&'a Expr> for ASTNode<'a> {
 /// _(INTERNALS)_ A statement.
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
@@ -1061,7 +1072,7 @@ impl Stmt {
 /// _(INTERNALS)_ A custom syntax expression.
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
@@ -1077,7 +1088,7 @@ pub struct CustomExpr {
 /// _(INTERNALS)_ A binary expression.
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
@@ -1091,7 +1102,7 @@ pub struct BinaryExpr {
 /// _(INTERNALS)_ A function call.
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Default, Hash)]
@@ -1120,7 +1131,7 @@ pub struct FloatWrapper(FLOAT);
 
 #[cfg(not(feature = "no_float"))]
 impl Hash for FloatWrapper {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+    fn hash<H: crate::stdlib::hash::Hasher>(&self, state: &mut H) {
         self.0.to_le_bytes().hash(state);
     }
 }
@@ -1140,7 +1151,7 @@ impl AsMut<FLOAT> for FloatWrapper {
 }
 
 #[cfg(not(feature = "no_float"))]
-impl Deref for FloatWrapper {
+impl crate::stdlib::ops::Deref for FloatWrapper {
     type Target = FLOAT;
 
     fn deref(&self) -> &Self::Target {
@@ -1149,7 +1160,7 @@ impl Deref for FloatWrapper {
 }
 
 #[cfg(not(feature = "no_float"))]
-impl DerefMut for FloatWrapper {
+impl crate::stdlib::ops::DerefMut for FloatWrapper {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -1186,7 +1197,7 @@ impl FloatWrapper {
 /// _(INTERNALS)_ An expression sub-tree.
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]

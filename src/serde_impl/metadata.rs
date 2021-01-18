@@ -2,7 +2,6 @@ use crate::stdlib::{
     cmp::Ordering,
     collections::BTreeMap,
     string::{String, ToString},
-    vec,
     vec::Vec,
 };
 use crate::{Engine, AST};
@@ -89,7 +88,7 @@ struct FnMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub return_type: Option<String>,
     pub signature: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub doc_comments: Vec<String>,
 }
 
@@ -125,34 +124,35 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
                 FnType::Native
             },
             num_params: info.params,
-            params: if let Some(ref names) = info.param_names {
-                names
-                    .iter()
-                    .take(info.params)
-                    .map(|s| {
-                        let mut seg = s.splitn(2, ':');
-                        let name = seg
-                            .next()
-                            .map(|s| s.trim().to_string())
-                            .unwrap_or("_".to_string());
-                        let typ = seg.next().map(|s| s.trim().to_string());
-                        FnParam { name, typ }
-                    })
-                    .collect()
-            } else {
-                vec![]
-            },
-            return_type: if let Some(ref names) = info.param_names {
-                names
-                    .last()
-                    .map(|s| s.to_string())
-                    .or_else(|| Some("()".to_string()))
-            } else {
-                None
-            },
+            params: info
+                .param_names
+                .iter()
+                .take(info.params)
+                .map(|s| {
+                    let mut seg = s.splitn(2, ':');
+                    let name = seg
+                        .next()
+                        .map(|s| s.trim().to_string())
+                        .unwrap_or("_".to_string());
+                    let typ = seg.next().map(|s| s.trim().to_string());
+                    FnParam { name, typ }
+                })
+                .collect(),
+            return_type: info
+                .param_names
+                .last()
+                .map(|s| s.to_string())
+                .or_else(|| Some("()".to_string())),
             signature: info.gen_signature(),
             doc_comments: if info.func.is_script() {
-                info.func.get_fn_def().comments.clone()
+                #[cfg(feature = "no_function")]
+                {
+                    unreachable!()
+                }
+                #[cfg(not(feature = "no_function"))]
+                {
+                    info.func.get_fn_def().comments.clone()
+                }
             } else {
                 Default::default()
             },
@@ -178,11 +178,7 @@ impl From<crate::ScriptFnMetadata<'_>> for FnMetadata {
                 .collect(),
             return_type: Some("Dynamic".to_string()),
             signature: info.to_string(),
-            doc_comments: if info.comments.is_empty() {
-                None
-            } else {
-                Some(info.comments.iter().map(|s| s.to_string()).collect())
-            },
+            doc_comments: info.comments.iter().map(|s| s.to_string()).collect(),
         }
     }
 }
@@ -211,10 +207,10 @@ impl From<&crate::Module> for ModuleMetadata {
     }
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "metadata")]
 impl Engine {
-    /// Generate a list of all functions (including those defined in an [`AST`][crate::AST])
-    /// in JSON format.  Available only under the `metadata` feature.
+    /// _(METADATA)_ Generate a list of all functions (including those defined in an
+    /// [`AST`][crate::AST]) in JSON format.  Available only under the `metadata` feature.
     ///
     /// Functions from the following sources are included:
     /// 1) Functions defined in an [`AST`][crate::AST]
@@ -223,7 +219,7 @@ impl Engine {
     /// 4) Functions in global modules (optional)
     pub fn gen_fn_metadata_with_ast_to_json(
         &self,
-        ast: &AST,
+        _ast: &AST,
         include_global: bool,
     ) -> serde_json::Result<String> {
         let mut global: ModuleMetadata = Default::default();
@@ -244,11 +240,10 @@ impl Engine {
             .map(|f| f.into())
             .for_each(|info| global.functions.push(info));
 
-        if let Some(ast) = ast {
-            ast.iter_functions()
-                .map(|f| f.into())
-                .for_each(|info| global.functions.push(info));
-        }
+        #[cfg(not(feature = "no_function"))]
+        _ast.iter_functions()
+            .map(|f| f.into())
+            .for_each(|info| global.functions.push(info));
 
         global.functions.sort();
 

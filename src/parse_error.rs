@@ -11,7 +11,7 @@ use crate::{EvalAltResult, Position};
 /// _(INTERNALS)_ Error encountered when tokenizing the script text.
 /// Exported under the `internals` feature only.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]

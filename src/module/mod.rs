@@ -1676,9 +1676,8 @@ impl Module {
     }
 
     /// Get an iterator to the functions in the [`Module`].
-    #[cfg(not(feature = "no_optimize"))]
-    #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[allow(dead_code)]
     pub(crate) fn iter_fn(&self) -> impl Iterator<Item = &FuncInfo> {
         self.functions.values()
     }
@@ -2004,7 +2003,7 @@ impl Module {
 /// A [`StaticVec`] is used because most namespace-qualified access contains only one level,
 /// and it is wasteful to always allocate a [`Vec`] with one element.
 ///
-/// # WARNING
+/// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
