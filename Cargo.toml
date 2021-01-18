@@ -48,6 +48,10 @@ metadata = [ "serde", "serde_json"] # enables exporting functions metadata to JS
 # compiling for no-std
 no_std = [ "smallvec/union", "num-traits/libm", "hashbrown", "core-error", "libm", "ahash/compile-time-rng" ]
 
+# compiling for WASM
+wasm-bindgen = [ "instant/wasm-bindgen" ]
+stdweb = [ "instant/stdweb" ]
+
 [profile.release]
 lto = "fat"
 codegen-units = 1
@@ -94,7 +98,7 @@ default_features = false
 optional = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-instant= { version = "0.1", features = ["wasm-bindgen"] } # WASM implementation of std::time::Instant
+instant= { version = "0.1" } # WASM implementation of std::time::Instant
 
 [package.metadata.docs.rs]
 features = [ "metadata", "internals" ]
