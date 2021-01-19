@@ -34,7 +34,7 @@ impl Serialize for Dynamic {
             }
             Union::FnPtr(f, _) => ser.serialize_str(f.fn_name()),
             #[cfg(not(feature = "no_std"))]
-            Union::TimeStamp(_, _) => unimplemented!("serialization of timestamp is not supported"),
+            Union::TimeStamp(x, _) => ser.serialize_str((**x).type_name()),
 
             Union::Variant(v, _) => ser.serialize_str((***v).type_name()),
 
