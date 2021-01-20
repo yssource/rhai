@@ -28,22 +28,22 @@ Supported targets and builds
 Standard features
 -----------------
 
-* Easy-to-use language similar to JavaScript+Rust with dynamic typing.
-* Fairly low compile-time overhead.
-* Fairly efficient evaluation (1 million iterations in 0.3 sec on a single core, 2.3 GHz Linux VM).
+* Simple language similar to JavaScript+Rust with dynamic typing.
+* Fairly efficient evaluation (1 million iterations in 0.3 sec on a single-core, 2.3 GHz Linux VM).
 * Tight integration with native Rust [functions](https://rhaiscript.github.io/book/rust/functions.html) and [types]([#custom-types-and-methods](https://rhaiscript.github.io/book/rust/custom.html)), including [getters/setters](https://rhaiscript.github.io/book/rust/getters-setters.html), [methods](https://rhaiscript.github.io/book/rust/custom.html) and [indexers](https://rhaiscript.github.io/book/rust/indexers.html).
 * Freely pass Rust variables/constants into a script via an external [`Scope`](https://rhaiscript.github.io/book/rust/scope.html) - all clonable Rust types are supported; no need to implement any special trait.
 * Easily [call a script-defined function](https://rhaiscript.github.io/book/engine/call-fn.html) from Rust.
 * Relatively little `unsafe` code (yes there are some for performance reasons).
 * Few dependencies (currently only [`smallvec`](https://crates.io/crates/smallvec) and [`ahash`](https://crates.io/crates/ahash)).
 * Re-entrant scripting engine can be made `Send + Sync` (via the `sync` feature).
-* Scripts are [optimized](https://rhaiscript.github.io/book/engine/optimize.html) (useful for template-based machine-generated scripts) for repeated evaluations.
+* Compile once to AST form for repeated evaluations.
+* Scripts are [optimized](https://rhaiscript.github.io/book/engine/optimize.html) (useful for template-based machine-generated scripts).
 * Easy custom API development via [plugins](https://rhaiscript.github.io/book/plugins/index.html) system powered by procedural macros.
 * [Function overloading](https://rhaiscript.github.io/book/language/overload.html) and [operator overloading](https://rhaiscript.github.io/book/rust/operators.html).
 * Dynamic dispatch via [function pointers](https://rhaiscript.github.io/book/language/fn-ptr.html) with additional support for [currying](https://rhaiscript.github.io/book/language/fn-curry.html).
 * [Closures](https://rhaiscript.github.io/book/language/fn-closure.html) (anonymous functions) that can capture shared values.
 * Some syntactic support for [object-oriented programming (OOP)](https://rhaiscript.github.io/book/language/oop.html).
-* Organize code base with dynamically-loadable [modules](https://rhaiscript.github.io/book/language/modules.html).
+* Organize code base with dynamically-loadable [modules](https://rhaiscript.github.io/book/language/modules.html), optionally overriding the resolution process
 * Serialization/deserialization support via [serde](https://crates.io/crates/serde) (requires the `serde` feature).
 * Support for [minimal builds](https://rhaiscript.github.io/book/start/builds/minimal.html) by excluding unneeded language [features](https://rhaiscript.github.io/book/start/features.html).
 

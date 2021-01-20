@@ -4,6 +4,10 @@ Rhai Release Notes
 Version 0.19.11
 ===============
 
+This version streamlines compiling for WASM.
+
+Rust compiler minimum version is raised to 1.49.
+
 Breaking changes
 ----------------
 
@@ -14,10 +18,16 @@ Bug fixes
 
 * Fixes compilation errors in `metadata` feature build.
 
+New features
+------------
+
+* Two new features, `wasm-bindgen` and `stdweb`, to specify the JS interop layer for WASM builds. `wasm-bindgen` used to be required.
+
 Enhancements
 ------------
 
 * `ahash` is used to hash function call parameters. This should yield speed improvements.
+* `Dynamic` and `ImmutableString` now implement `serde::Serialize` and `serde::Deserialize`.
 
 
 Version 0.19.10
