@@ -55,48 +55,52 @@ pub type Locked<T> = crate::stdlib::sync::RwLock<T>;
 
 /// Context of a native Rust function call.
 #[derive(Debug, Copy, Clone)]
-pub struct NativeCallContext<'e, 's, 'a, 'm, 'pm: 'm> {
+pub struct NativeCallContext<'e, 'n, 's, 'a, 'm, 'pm: 'm> {
     engine: &'e Engine,
+    fn_name: &'n str,
     source: Option<&'s str>,
     pub(crate) mods: Option<&'a Imports>,
     pub(crate) lib: &'m [&'pm Module],
 }
 
-impl<'e, 's, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized>
-    From<(&'e Engine, Option<&'s ImmutableString>, &'a Imports, &'m M)>
-    for NativeCallContext<'e, 's, 'a, 'm, 'pm>
+impl<'e, 'n, 's, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized>
+    From<(&'e Engine, &'n str, Option<&'s str>, &'a Imports, &'m M)>
+    for NativeCallContext<'e, 'n, 's, 'a, 'm, 'pm>
 {
     #[inline(always)]
-    fn from(value: (&'e Engine, Option<&'s ImmutableString>, &'a Imports, &'m M)) -> Self {
+    fn from(value: (&'e Engine, &'n str, Option<&'s str>, &'a Imports, &'m M)) -> Self {
         Self {
             engine: value.0,
-            source: value.1.map(|s| s.as_str()),
-            mods: Some(value.2),
-            lib: value.3.as_ref(),
+            fn_name: value.1,
+            source: value.2,
+            mods: Some(value.3),
+            lib: value.4.as_ref(),
         }
     }
 }
 
-impl<'e, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized> From<(&'e Engine, &'m M)>
-    for NativeCallContext<'e, '_, '_, 'm, 'pm>
+impl<'e, 'n, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized> From<(&'e Engine, &'n str, &'m M)>
+    for NativeCallContext<'e, 'n, '_, '_, 'm, 'pm>
 {
     #[inline(always)]
-    fn from(value: (&'e Engine, &'m M)) -> Self {
+    fn from(value: (&'e Engine, &'n str, &'m M)) -> Self {
         Self {
             engine: value.0,
+            fn_name: value.1,
             source: None,
             mods: None,
-            lib: value.1.as_ref(),
+            lib: value.2.as_ref(),
         }
     }
 }
 
-impl<'e, 's, 'a, 'm, 'pm> NativeCallContext<'e, 's, 'a, 'm, 'pm> {
+impl<'e, 'n, 's, 'a, 'm, 'pm> NativeCallContext<'e, 'n, 's, 'a, 'm, 'pm> {
     /// Create a new [`NativeCallContext`].
     #[inline(always)]
-    pub fn new(engine: &'e Engine, lib: &'m impl AsRef<[&'pm Module]>) -> Self {
+    pub fn new(engine: &'e Engine, fn_name: &'n str, lib: &'m impl AsRef<[&'pm Module]>) -> Self {
         Self {
             engine,
+            fn_name,
             source: None,
             mods: None,
             lib: lib.as_ref(),
@@ -109,13 +113,14 @@ impl<'e, 's, 'a, 'm, 'pm> NativeCallContext<'e, 's, 'a, 'm, 'pm> {
     #[inline(always)]
     pub fn new_with_all_fields(
         engine: &'e Engine,
-        source: &'s Option<ImmutableString>,
+        fn_name: &'n str,
+        source: &'s Option<&str>,
         imports: &'a mut Imports,
         lib: &'m impl AsRef<[&'pm Module]>,
     ) -> Self {
         Self {
             engine,
-            source: source.as_ref().map(|s| s.as_str()),
+            source: source.clone(),
             mods: Some(imports),
             lib: lib.as_ref(),
         }
@@ -124,6 +129,11 @@ impl<'e, 's, 'a, 'm, 'pm> NativeCallContext<'e, 's, 'a, 'm, 'pm> {
     #[inline(always)]
     pub fn engine(&self) -> &Engine {
         self.engine
+    }
+    /// Name of the function called.
+    #[inline(always)]
+    pub fn fn_name(&self) -> &str {
+        self.fn_name
     }
     /// The current source.
     #[inline(always)]

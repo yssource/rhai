@@ -211,12 +211,13 @@ impl Engine {
                 state.source.as_ref()
             } else {
                 source.as_ref()
-            };
+            }
+            .map(|s| s.as_str());
             let result = if func.is_plugin_fn() {
                 func.get_plugin_fn()
-                    .call((self, source, mods, lib).into(), args)
+                    .call((self, fn_name, source, mods, lib).into(), args)
             } else {
-                func.get_native_fn()((self, source, mods, lib).into(), args)
+                func.get_native_fn()((self, fn_name, source, mods, lib).into(), args)
             };
 
             // Restore the original reference
@@ -1236,10 +1237,10 @@ impl Engine {
 
                 result
             }
-            Some(f) if f.is_plugin_fn() => f
-                .get_plugin_fn()
-                .clone()
-                .call((self, module.id_raw(), &*mods, lib).into(), args.as_mut()),
+            Some(f) if f.is_plugin_fn() => f.get_plugin_fn().clone().call(
+                (self, fn_name, module.id(), &*mods, lib).into(),
+                args.as_mut(),
+            ),
             Some(f) if f.is_native() => {
                 if !f.is_method() {
                     // Clone first argument
@@ -1250,7 +1251,10 @@ impl Engine {
                     }
                 }
 
-                f.get_native_fn()((self, module.id_raw(), &*mods, lib).into(), args.as_mut())
+                f.get_native_fn()(
+                    (self, fn_name, module.id(), &*mods, lib).into(),
+                    args.as_mut(),
+                )
             }
             Some(f) => unreachable!("unknown function type: {:?}", f),
             None if def_val.is_some() => Ok(def_val.unwrap().clone()),

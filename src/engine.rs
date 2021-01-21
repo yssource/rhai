@@ -1971,12 +1971,16 @@ impl Engine {
                             let args = &mut [lhs_ptr_inner, &mut rhs_val];
 
                             // Overriding exact implementation
-                            let source = source.or_else(|| state.source.as_ref());
+                            let source =
+                                source.or_else(|| state.source.as_ref()).map(|s| s.as_str());
                             if func.is_plugin_fn() {
                                 func.get_plugin_fn()
-                                    .call((self, source, &*mods, lib).into(), args)?;
+                                    .call((self, op.as_ref(), source, &*mods, lib).into(), args)?;
                             } else {
-                                func.get_native_fn()((self, source, &*mods, lib).into(), args)?;
+                                func.get_native_fn()(
+                                    (self, op.as_ref(), source, &*mods, lib).into(),
+                                    args,
+                                )?;
                             }
                         }
                         // Built-in op-assignment function

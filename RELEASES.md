@@ -11,7 +11,8 @@ Rust compiler minimum version is raised to 1.49.
 Breaking changes
 ----------------
 
-Rust compiler requirement raised to 1.49.
+* Rust compiler requirement raised to 1.49.
+* `NativeCallContext::new` taker an additional parameter containing the name of the function called.
 
 Bug fixes
 ---------
@@ -28,6 +29,7 @@ Enhancements
 
 * `ahash` is used to hash function call parameters. This should yield speed improvements.
 * `Dynamic` and `ImmutableString` now implement `serde::Serialize` and `serde::Deserialize`.
+* `NativeCallContext` has a new field containing the name of the function called, useful when the same Rust function is registered under multiple names in Rhai.
 
 
 Version 0.19.10
