@@ -1210,16 +1210,18 @@ impl Engine {
             r => r,
         };
 
+        // Clone first argument if the function is not a method after-all
+        if let Some(first) = first_arg_value {
+            if !func.map(|f| f.is_method()).unwrap_or(true) {
+                let first_val = args[0].clone();
+                args[0] = first;
+                *args[0] = first_val;
+            }
+        }
+
         match func {
             #[cfg(not(feature = "no_function"))]
             Some(f) if f.is_script() => {
-                // Clone first argument
-                if let Some(first) = first_arg_value {
-                    let first_val = args[0].clone();
-                    args[0] = first;
-                    *args[0] = first_val;
-                }
-
                 let args = args.as_mut();
                 let new_scope = &mut Default::default();
                 let fn_def = f.get_fn_def().clone();
@@ -1241,21 +1243,10 @@ impl Engine {
                 (self, fn_name, module.id(), &*mods, lib).into(),
                 args.as_mut(),
             ),
-            Some(f) if f.is_native() => {
-                if !f.is_method() {
-                    // Clone first argument
-                    if let Some(first) = first_arg_value {
-                        let first_val = args[0].clone();
-                        args[0] = first;
-                        *args[0] = first_val;
-                    }
-                }
-
-                f.get_native_fn()(
-                    (self, fn_name, module.id(), &*mods, lib).into(),
-                    args.as_mut(),
-                )
-            }
+            Some(f) if f.is_native() => f.get_native_fn()(
+                (self, fn_name, module.id(), &*mods, lib).into(),
+                args.as_mut(),
+            ),
             Some(f) => unreachable!("unknown function type: {:?}", f),
             None if def_val.is_some() => Ok(def_val.unwrap().clone()),
             None => EvalAltResult::ErrorFunctionNotFound(
