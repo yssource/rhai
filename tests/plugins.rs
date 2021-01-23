@@ -101,3 +101,32 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_plugins_parameters() -> Result<(), Box<EvalAltResult>> {
+    #[export_module]
+    mod rhai_std {
+        use rhai::*;
+
+        pub fn noop(_: &str) {}
+    }
+
+    let mut engine = Engine::new();
+
+    let std = exported_module!(rhai_std);
+
+    engine.register_static_module("std", std.into());
+
+    assert_eq!(
+        engine.eval::<String>(
+            r#"
+                let s = "hello";
+                std::noop(s);
+                s
+            "#
+        )?,
+        "hello"
+    );
+
+    Ok(())
+}

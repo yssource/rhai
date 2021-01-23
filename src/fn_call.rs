@@ -211,12 +211,13 @@ impl Engine {
                 state.source.as_ref()
             } else {
                 source.as_ref()
-            };
+            }
+            .map(|s| s.as_str());
             let result = if func.is_plugin_fn() {
                 func.get_plugin_fn()
-                    .call((self, source, mods, lib).into(), args)
+                    .call((self, fn_name, source, mods, lib).into(), args)
             } else {
-                func.get_native_fn()((self, source, mods, lib).into(), args)
+                func.get_native_fn()((self, fn_name, source, mods, lib).into(), args)
             };
 
             // Restore the original reference
@@ -1209,16 +1210,18 @@ impl Engine {
             r => r,
         };
 
+        // Clone first argument if the function is not a method after-all
+        if let Some(first) = first_arg_value {
+            if !func.map(|f| f.is_method()).unwrap_or(true) {
+                let first_val = args[0].clone();
+                args[0] = first;
+                *args[0] = first_val;
+            }
+        }
+
         match func {
             #[cfg(not(feature = "no_function"))]
             Some(f) if f.is_script() => {
-                // Clone first argument
-                if let Some(first) = first_arg_value {
-                    let first_val = args[0].clone();
-                    args[0] = first;
-                    *args[0] = first_val;
-                }
-
                 let args = args.as_mut();
                 let new_scope = &mut Default::default();
                 let fn_def = f.get_fn_def().clone();
@@ -1236,22 +1239,14 @@ impl Engine {
 
                 result
             }
-            Some(f) if f.is_plugin_fn() => f
-                .get_plugin_fn()
-                .clone()
-                .call((self, module.id_raw(), &*mods, lib).into(), args.as_mut()),
-            Some(f) if f.is_native() => {
-                if !f.is_method() {
-                    // Clone first argument
-                    if let Some(first) = first_arg_value {
-                        let first_val = args[0].clone();
-                        args[0] = first;
-                        *args[0] = first_val;
-                    }
-                }
-
-                f.get_native_fn()((self, module.id_raw(), &*mods, lib).into(), args.as_mut())
-            }
+            Some(f) if f.is_plugin_fn() => f.get_plugin_fn().clone().call(
+                (self, fn_name, module.id(), &*mods, lib).into(),
+                args.as_mut(),
+            ),
+            Some(f) if f.is_native() => f.get_native_fn()(
+                (self, fn_name, module.id(), &*mods, lib).into(),
+                args.as_mut(),
+            ),
             Some(f) => unreachable!("unknown function type: {:?}", f),
             None if def_val.is_some() => Ok(def_val.unwrap().clone()),
             None => EvalAltResult::ErrorFunctionNotFound(

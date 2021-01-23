@@ -327,10 +327,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
 
             *stmt = if preserve_result {
                 // -> { expr, Noop }
-                let mut statements = Vec::new();
-                statements.push(Stmt::Expr(expr));
-                statements.push(mem::take(&mut x.0));
-                Stmt::Block(statements, pos)
+                Stmt::Block(vec![Stmt::Expr(expr), mem::take(&mut x.0)], pos)
             } else {
                 // -> expr
                 Stmt::Expr(expr)
@@ -415,8 +412,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                 Stmt::Break(pos) => {
                     // Only a single break statement - turn into running the guard expression once
                     state.set_dirty();
-                    let mut statements = Vec::new();
-                    statements.push(Stmt::Expr(mem::take(condition)));
+                    let mut statements = vec![Stmt::Expr(mem::take(condition))];
                     if preserve_result {
                         statements.push(Stmt::Noop(pos))
                     }
