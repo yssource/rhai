@@ -120,6 +120,7 @@ impl<'e, 'n, 's, 'a, 'm, 'pm> NativeCallContext<'e, 'n, 's, 'a, 'm, 'pm> {
     ) -> Self {
         Self {
             engine,
+            fn_name,
             source: source.clone(),
             mods: Some(imports),
             lib: lib.as_ref(),
