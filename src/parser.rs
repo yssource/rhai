@@ -1338,7 +1338,7 @@ fn parse_unary(
         Token::Bang => {
             let pos = eat_token(input, Token::Bang);
             let mut args = StaticVec::new();
-            let expr = parse_primary(input, state, lib, settings.level_up())?;
+            let expr = parse_unary(input, state, lib, settings.level_up())?;
             args.push(expr);
 
             let op = "!";

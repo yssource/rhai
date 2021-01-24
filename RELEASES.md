@@ -19,6 +19,7 @@ Bug fixes
 
 * Parameters passed to plugin module functions were sometimes erroneously consumed. This is now fixed.
 * Fixes compilation errors in `metadata` feature build.
+* Stacking `!` operators now work properly.
 
 New features
 ------------
