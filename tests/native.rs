@@ -1,4 +1,4 @@
-use rhai::{Dynamic, Engine, EvalAltResult, NativeCallContext, RegisterFn, INT};
+use rhai::{Dynamic, Engine, EvalAltResult, NativeCallContext, INT};
 use std::any::TypeId;
 
 #[test]
