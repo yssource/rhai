@@ -1337,22 +1337,14 @@ impl Dynamic {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(cell, _) => {
                 #[cfg(not(feature = "sync"))]
-                {
-                    let inner = cell.borrow();
-                    match &inner.0 {
-                        Union::Str(s, _) => Ok(s.clone()),
-                        Union::FnPtr(f, _) => Ok(f.clone().take_data().0),
-                        _ => Err((*inner).type_name()),
-                    }
-                }
+                let data = cell.borrow();
                 #[cfg(feature = "sync")]
-                {
-                    let inner = cell.read().unwrap();
-                    match &inner.0 {
-                        Union::Str(s, _) => Ok(s.clone()),
-                        Union::FnPtr(f, _) => Ok(f.clone().take_data().0),
-                        _ => Err((*inner).type_name()),
-                    }
+                let data = cell.read().unwrap();
+
+                match &data.0 {
+                    Union::Str(s, _) => Ok(s.clone()),
+                    Union::FnPtr(f, _) => Ok(f.get_fn_name().clone()),
+                    _ => Err((*data).type_name()),
                 }
             }
             _ => Err(self.type_name()),
