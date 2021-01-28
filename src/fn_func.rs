@@ -8,6 +8,7 @@ use crate::stdlib::{boxed::Box, string::ToString};
 use crate::{Engine, EvalAltResult, ParseError, Scope, AST};
 
 /// Trait to create a Rust closure from a script.
+/// Not available under `no_function`.
 pub trait Func<ARGS, RET> {
     type Output;
 

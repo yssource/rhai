@@ -122,7 +122,6 @@ pub type FLOAT = f32;
 pub use ast::{FnAccess, ScriptFnMetadata, AST};
 pub use dynamic::Dynamic;
 pub use engine::{Engine, EvalContext};
-pub use fn_args::FuncArgs;
 pub use fn_native::{FnPtr, NativeCallContext, Shared};
 pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::{FnNamespace, Module};
@@ -147,6 +146,9 @@ pub use rhai_codegen::*;
 #[cfg(not(feature = "no_function"))]
 pub use fn_func::Func;
 
+#[cfg(not(feature = "no_function"))]
+pub use fn_args::FuncArgs;
+
 /// Variable-sized array of [`Dynamic`] values.
 ///
 /// Not available under `no_index`.
@@ -164,7 +166,7 @@ pub use module::ModuleResolver;
 
 /// Module containing all built-in _module resolvers_ available to Rhai.
 #[cfg(not(feature = "no_module"))]
-pub use crate::module::resolvers as module_resolvers;
+pub use module::resolvers as module_resolvers;
 
 /// _(SERDE)_ Serialization and deserialization support for [`serde`](https://crates.io/crates/serde).
 /// Exported under the `serde` feature.
