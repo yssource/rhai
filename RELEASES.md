@@ -13,6 +13,7 @@ Breaking changes
 
 * Rust compiler requirement raised to 1.49.
 * `NativeCallContext::new` taker an additional parameter containing the name of the function called.
+* `Engine::set_doc_comments` is renamed `Engine::enable_doc_comments`.
 
 Bug fixes
 ---------
