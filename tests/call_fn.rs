@@ -1,22 +1,6 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, FnPtr, Func, ParseErrorType, RegisterFn, Scope, INT};
-use std::any::TypeId;
-
-#[test]
-fn test_fn() -> Result<(), Box<EvalAltResult>> {
-    let engine = Engine::new();
-
-    // Expect duplicated parameters error
-    assert_eq!(
-        *engine
-            .compile("fn hello(x, x) { x }")
-            .expect_err("should be error")
-            .0,
-        ParseErrorType::FnDuplicatedParam("hello".to_string(), "x".to_string())
-    );
-
-    Ok(())
-}
+use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Func, FuncArgs, RegisterFn, Scope, INT};
+use std::{any::TypeId, iter::once};
 
 #[test]
 fn test_call_fn() -> Result<(), Box<EvalAltResult>> {
@@ -65,6 +49,46 @@ fn test_call_fn() -> Result<(), Box<EvalAltResult>> {
             .expect("variable foo should exist"),
         1
     );
+
+    Ok(())
+}
+
+struct Options {
+    pub foo: bool,
+    pub bar: String,
+    pub baz: INT,
+}
+
+impl FuncArgs for Options {
+    fn parse<C: Extend<Dynamic>>(self, container: &mut C) {
+        container.extend(once(self.foo.into()));
+        container.extend(once(self.bar.into()));
+        container.extend(once(self.baz.into()));
+    }
+}
+
+#[test]
+fn test_call_fn_args() -> Result<(), Box<EvalAltResult>> {
+    let options = Options {
+        foo: false,
+        bar: "world".to_string(),
+        baz: 42,
+    };
+
+    let engine = Engine::new();
+    let mut scope = Scope::new();
+
+    let ast = engine.compile(
+        r#"
+            fn hello(x, y, z) {
+                if x { "hello " + y } else { y + z }
+            }
+        "#,
+    )?;
+
+    let result: String = engine.call_fn(&mut scope, &ast, "hello", options)?;
+
+    assert_eq!(result, "world42");
 
     Ok(())
 }

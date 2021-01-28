@@ -122,6 +122,7 @@ pub type FLOAT = f32;
 pub use ast::{FnAccess, ScriptFnMetadata, AST};
 pub use dynamic::Dynamic;
 pub use engine::{Engine, EvalContext};
+pub use fn_args::FuncArgs;
 pub use fn_native::{FnPtr, NativeCallContext, Shared};
 pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::{FnNamespace, Module};
