@@ -1338,7 +1338,7 @@ fn parse_unary(
         Token::Bang => {
             let pos = eat_token(input, Token::Bang);
             let mut args = StaticVec::new();
-            let expr = parse_primary(input, state, lib, settings.level_up())?;
+            let expr = parse_unary(input, state, lib, settings.level_up())?;
             args.push(expr);
 
             let op = "!";
@@ -2870,7 +2870,9 @@ fn parse_fn(
 
 /// Creates a curried expression from a list of external variables
 #[cfg(not(feature = "no_function"))]
+#[cfg(not(feature = "no_closure"))]
 fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Position) -> Expr {
+    // If there are no captured variables, no need to curry
     if externals.is_empty() {
         return fn_expr;
     }
@@ -2880,14 +2882,8 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
 
     args.push(fn_expr);
 
-    #[cfg(not(feature = "no_closure"))]
     externals.iter().for_each(|x| {
-        args.push(Expr::Variable(Box::new((None, None, x.clone().into()))));
-    });
-
-    #[cfg(feature = "no_closure")]
-    externals.into_iter().for_each(|x| {
-        args.push(Expr::Variable(Box::new((None, None, x.clone().into()))));
+        args.push(Expr::Variable(Box::new((None, None, x.clone()))));
     });
 
     let curry_func = crate::engine::KEYWORD_FN_PTR_CURRY;
@@ -2904,21 +2900,12 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
         pos,
     );
 
-    // If there are captured variables, convert the entire expression into a statement block,
-    // then insert the relevant `Share` statements.
-    #[cfg(not(feature = "no_closure"))]
-    {
-        // Statement block
-        let mut statements: StaticVec<_> = Default::default();
-        // Insert `Share` statements
-        statements.extend(externals.into_iter().map(|x| Stmt::Share(x)));
-        // Final expression
-        statements.push(Stmt::Expr(expr));
-        Expr::Stmt(Box::new(statements), pos)
-    }
-
-    #[cfg(feature = "no_closure")]
-    return expr;
+    // Convert the entire expression into a statement block, then insert the relevant
+    // [`Share`][Stmt::Share] statements.
+    let mut statements: StaticVec<_> = Default::default();
+    statements.extend(externals.into_iter().map(Stmt::Share));
+    statements.push(Stmt::Expr(expr));
+    Expr::Stmt(Box::new(statements), pos)
 }
 
 /// Parse an anonymous function definition.
@@ -3029,11 +3016,8 @@ fn parse_anon_fn(
 
     let expr = Expr::FnPointer(fn_name, settings.pos);
 
-    let expr = if cfg!(not(feature = "no_closure")) {
-        make_curry_from_externals(expr, externals, settings.pos)
-    } else {
-        expr
-    };
+    #[cfg(not(feature = "no_closure"))]
+    let expr = make_curry_from_externals(expr, externals, settings.pos);
 
     Ok((expr, script))
 }

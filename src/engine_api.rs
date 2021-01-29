@@ -1650,7 +1650,8 @@ impl Engine {
         name: &str,
         args: impl crate::fn_args::FuncArgs,
     ) -> Result<T, Box<EvalAltResult>> {
-        let mut arg_values = args.into_vec();
+        let mut arg_values: crate::StaticVec<_> = Default::default();
+        args.parse(&mut arg_values);
         let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
         let result =

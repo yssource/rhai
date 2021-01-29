@@ -17,9 +17,10 @@ license = "MIT OR Apache-2.0"
 include = [
     "**/*.rs",
     "scripts/*.rhai",
+    "**/*.md",
     "Cargo.toml"
 ]
-keywords = [ "scripting" ]
+keywords = [ "scripting", "scripting-engine", "scripting language", "embedded" ]
 categories = [ "no-std", "embedded", "wasm", "parser-implementations" ]
 
 [dependencies]

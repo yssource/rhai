@@ -12,10 +12,10 @@ fn test_comments() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval::<INT>(
             r#"
-            let /* I am a
-                multi-line
-                    comment, yay!
-                */ x = 42; x
+                let /* I am a
+                    multi-line
+                        comment, yay!
+                    */ x = 42; x
             "#
         )?,
         42
@@ -88,7 +88,7 @@ fn test_comments_doc() -> Result<(), Box<EvalAltResult>> {
         )
         .is_err());
 
-    engine.set_doc_comments(false);
+    engine.enable_doc_comments(false);
 
     engine.compile(
         r"

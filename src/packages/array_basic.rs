@@ -29,7 +29,7 @@ macro_rules! gen_array_functions {
                 pub fn insert(list: &mut Array, position: INT, item: $arg_type) {
                     if position <= 0 {
                         list.insert(0, Dynamic::from(item));
-                    } else if (position as usize) >= list.len() - 1 {
+                    } else if (position as usize) >= list.len() {
                         push(list, item);
                     } else {
                         list.insert(position as usize, Dynamic::from(item));

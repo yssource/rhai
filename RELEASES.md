@@ -8,17 +8,20 @@ This version streamlines compiling for WASM.
 
 Rust compiler minimum version is raised to 1.49.
 
-Breaking changes
-----------------
-
-* Rust compiler requirement raised to 1.49.
-* `NativeCallContext::new` taker an additional parameter containing the name of the function called.
-
 Bug fixes
 ---------
 
 * Parameters passed to plugin module functions were sometimes erroneously consumed. This is now fixed.
 * Fixes compilation errors in `metadata` feature build.
+* Stacking `!` operators now work properly.
+* Off-by-one error in `insert` method for arrays is fixed.
+
+Breaking changes
+----------------
+
+* Rust compiler requirement raised to 1.49.
+* `NativeCallContext::new` taker an additional parameter containing the name of the function called.
+* `Engine::set_doc_comments` is renamed `Engine::enable_doc_comments`.
 
 New features
 ------------

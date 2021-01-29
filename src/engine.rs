@@ -545,32 +545,37 @@ impl State {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Limits {
     /// Maximum levels of call-stack to prevent infinite recursion.
-    /// Not available under `no_function`.
     ///
     /// Set to zero to effectively disable function calls.
+    ///
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     pub max_call_stack_depth: usize,
     /// Maximum depth of statements/expressions at global level.
     pub max_expr_depth: Option<NonZeroUsize>,
     /// Maximum depth of statements/expressions in functions.
+    ///
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     pub max_function_expr_depth: Option<NonZeroUsize>,
     /// Maximum number of operations allowed to run.
     pub max_operations: Option<NonZeroU64>,
     /// Maximum number of [modules][Module] allowed to load.
-    /// Not available under `no_module`.
     ///
     /// Set to zero to effectively disable loading any [module][Module].
+    ///
+    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     pub max_modules: usize,
     /// Maximum length of a [string][ImmutableString].
     pub max_string_size: Option<NonZeroUsize>,
     /// Maximum length of an [array][Array].
+    ///
     /// Not available under `no_index`.
     #[cfg(not(feature = "no_index"))]
     pub max_array_size: Option<NonZeroUsize>,
     /// Maximum number of properties in an [object map][Map].
+    ///
     /// Not available under `no_object`.
     #[cfg(not(feature = "no_object"))]
     pub max_map_size: Option<NonZeroUsize>,

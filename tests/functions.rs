@@ -51,6 +51,22 @@ fn test_functions() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[test]
+fn test_functions_params() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    // Expect duplicated parameters error
+    assert_eq!(
+        *engine
+            .compile("fn hello(x, x) { x }")
+            .expect_err("should be error")
+            .0,
+        ParseErrorType::FnDuplicatedParam("hello".to_string(), "x".to_string())
+    );
+
+    Ok(())
+}
+
 #[cfg(not(feature = "no_function"))]
 #[test]
 fn test_functions_namespaces() -> Result<(), Box<EvalAltResult>> {

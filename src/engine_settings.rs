@@ -34,7 +34,7 @@ impl Engine {
     }
     /// Enable/disable doc-comments.
     #[inline(always)]
-    pub fn set_doc_comments(&mut self, enable: bool) -> &mut Self {
+    pub fn enable_doc_comments(&mut self, enable: bool) -> &mut Self {
         self.disable_doc_comments = !enable;
         self
     }

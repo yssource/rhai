@@ -62,9 +62,9 @@ fn test_internal_fn_overloading() -> Result<(), Box<EvalAltResult>> {
         *engine
             .compile(
                 r"
-                fn abc(x) { x + 42 }
-                fn abc(x) { x - 42 }
-            "
+                    fn abc(x) { x + 42 }
+                    fn abc(x) { x - 42 }
+                "
             )
             .expect_err("should error")
             .0,
