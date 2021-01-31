@@ -1083,9 +1083,7 @@ fn parse_primary(
             match input.peek().unwrap().0 {
                 // Function call is allowed to have reserved keyword
                 Token::LeftParen | Token::Bang => {
-                    if s == KEYWORD_THIS {
-                        return Err(PERR::Reserved(s).into_err(settings.pos));
-                    } else if is_keyword_function(&s) {
+                    if is_keyword_function(&s) {
                         let var_name_def = Ident {
                             name: state.get_interned_string(s),
                             pos: settings.pos,
@@ -1213,13 +1211,21 @@ fn parse_primary(
             // Property access
             #[cfg(not(feature = "no_object"))]
             (expr, Token::Period) => {
-                // prevents capturing of the object properties as vars: xxx.<var>
-                #[cfg(not(feature = "no_closure"))]
-                if let (Token::Identifier(_), _) = input.peek().unwrap() {
-                    state.allow_capture = false;
+                // Expression after dot must start with an identifier
+                match input.peek().unwrap() {
+                    (Token::Identifier(_), _) => {
+                        #[cfg(not(feature = "no_closure"))]
+                        {
+                            // Prevents capturing of the object properties as vars: xxx.<var>
+                            state.allow_capture = false;
+                        }
+                    }
+                    (Token::Reserved(s), _) if is_keyword_function(s) => (),
+                    (_, pos) => return Err(PERR::PropertyExpected.into_err(*pos)),
                 }
 
                 let rhs = parse_primary(input, state, lib, settings.level_up())?;
+
                 make_dot_expr(state, expr, rhs, tail_pos)?
             }
             // Unknown postfix operator
@@ -1514,23 +1520,26 @@ fn make_dot_expr(
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(x)) if x.1.is_some() => {
-            return Err(PERR::PropertyExpected.into_err(x.1.unwrap().1[0].pos));
+            return Err(PERR::PropertyExpected.into_err(x.1.unwrap().1[0].pos))
         }
         // lhs.prop
         (lhs, prop @ Expr::Property(_)) => {
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs: prop }), op_pos)
         }
         // lhs.dot_lhs.dot_rhs
-        (lhs, Expr::Dot(x, pos)) => {
-            let rhs = Expr::Dot(
-                Box::new(BinaryExpr {
-                    lhs: x.lhs.into_property(state),
-                    rhs: x.rhs,
-                }),
-                pos,
-            );
-            Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
-        }
+        (lhs, Expr::Dot(x, pos)) => match x.lhs {
+            Expr::Variable(_) | Expr::Property(_) | Expr::FnCall(_, _) => {
+                let rhs = Expr::Dot(
+                    Box::new(BinaryExpr {
+                        lhs: x.lhs.into_property(state),
+                        rhs: x.rhs,
+                    }),
+                    pos,
+                );
+                Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
+            }
+            _ => unreachable!("invalid dot expression: {:?}", x.lhs),
+        },
         // lhs.idx_lhs[idx_rhs]
         (lhs, Expr::Index(x, pos)) => {
             let rhs = Expr::Index(
@@ -1555,14 +1564,14 @@ fn make_dot_expr(
                     x.name, x.name
                 ),
             )
-            .into_err(pos));
+            .into_err(pos))
         }
         // lhs.func!(...)
         (_, Expr::FnCall(x, pos)) if x.capture => {
             return Err(PERR::MalformedCapture(
                 "method-call style does not support capturing".into(),
             )
-            .into_err(pos));
+            .into_err(pos))
         }
         // lhs.func(...)
         (lhs, func @ Expr::FnCall(_, _)) => {
