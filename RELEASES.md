@@ -15,6 +15,7 @@ Bug fixes
 * Fixes compilation errors in `metadata` feature build.
 * Stacking `!` operators now work properly.
 * Off-by-one error in `insert` method for arrays is fixed.
+* Invalid property access now throws the appropriate error instead of panics.
 
 Breaking changes
 ----------------
