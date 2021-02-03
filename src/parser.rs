@@ -1036,9 +1036,9 @@ fn parse_primary(
             match input.peek().unwrap().0 {
                 // Function call
                 Token::LeftParen | Token::Bang => {
-                    // Once the identifier consumed we must enable next variables capturing
                     #[cfg(not(feature = "no_closure"))]
                     {
+                        // Once the identifier consumed we must enable next variables capturing
                         state.allow_capture = true;
                     }
                     let var_name_def = Ident {
@@ -1050,9 +1050,9 @@ fn parse_primary(
                 // Namespace qualification
                 #[cfg(not(feature = "no_module"))]
                 Token::DoubleColon => {
-                    // Once the identifier consumed we must enable next variables capturing
                     #[cfg(not(feature = "no_closure"))]
                     {
+                        // Once the identifier consumed we must enable next variables capturing
                         state.allow_capture = true;
                     }
                     let var_name_def = Ident {
@@ -1082,36 +1082,30 @@ fn parse_primary(
 
             match input.peek().unwrap().0 {
                 // Function call is allowed to have reserved keyword
-                Token::LeftParen | Token::Bang => {
-                    if is_keyword_function(&s) {
-                        let var_name_def = Ident {
-                            name: state.get_interned_string(s),
-                            pos: settings.pos,
-                        };
-                        Expr::Variable(Box::new((None, None, var_name_def)))
-                    } else {
-                        return Err(PERR::Reserved(s).into_err(settings.pos));
-                    }
+                Token::LeftParen | Token::Bang if is_keyword_function(&s) => {
+                    let var_name_def = Ident {
+                        name: state.get_interned_string(s),
+                        pos: settings.pos,
+                    };
+                    Expr::Variable(Box::new((None, None, var_name_def)))
                 }
-                // Access to `this` as a variable is OK
+                // Access to `this` as a variable is OK within a function scope
+                _ if s == KEYWORD_THIS && settings.is_function_scope => {
+                    let var_name_def = Ident {
+                        name: state.get_interned_string(s),
+                        pos: settings.pos,
+                    };
+                    Expr::Variable(Box::new((None, None, var_name_def)))
+                }
+                // Cannot access to `this` as a variable not in a function scope
                 _ if s == KEYWORD_THIS => {
-                    if !settings.is_function_scope {
-                        let msg = format!("'{}' can only be used in functions", s);
-                        return Err(LexError::ImproperSymbol(s, msg).into_err(settings.pos));
-                    } else {
-                        let var_name_def = Ident {
-                            name: state.get_interned_string(s),
-                            pos: settings.pos,
-                        };
-                        Expr::Variable(Box::new((None, None, var_name_def)))
-                    }
+                    let msg = format!("'{}' can only be used in functions", s);
+                    return Err(LexError::ImproperSymbol(s, msg).into_err(settings.pos));
                 }
                 _ if is_valid_identifier(s.chars()) => {
-                    return Err(PERR::Reserved(s).into_err(settings.pos));
+                    return Err(PERR::Reserved(s).into_err(settings.pos))
                 }
-                _ => {
-                    return Err(LexError::UnexpectedInput(s).into_err(settings.pos));
-                }
+                _ => return Err(LexError::UnexpectedInput(s).into_err(settings.pos)),
             }
         }
 
@@ -1125,9 +1119,7 @@ fn parse_primary(
         }
 
         _ => {
-            return Err(
-                LexError::UnexpectedInput(token.syntax().to_string()).into_err(settings.pos)
-            );
+            return Err(LexError::UnexpectedInput(token.syntax().to_string()).into_err(settings.pos))
         }
     };
 
@@ -2275,6 +2267,12 @@ fn parse_let(
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
+    let name = state.get_interned_string(name);
+    let var_def = Ident {
+        name: name.clone(),
+        pos,
+    };
+
     // let name = ...
     let expr = if match_token(input, Token::Equals).0 {
         // let name = expr
@@ -2283,21 +2281,13 @@ fn parse_let(
         None
     };
 
+    state.stack.push((name, var_type));
+
     match var_type {
         // let name = expr
-        AccessMode::ReadWrite => {
-            let name = state.get_interned_string(name);
-            state.stack.push((name.clone(), AccessMode::ReadWrite));
-            let var_def = Ident { name, pos };
-            Ok(Stmt::Let(Box::new(var_def), expr, export, settings.pos))
-        }
+        AccessMode::ReadWrite => Ok(Stmt::Let(Box::new(var_def), expr, export, settings.pos)),
         // const name = { expr:constant }
-        AccessMode::ReadOnly => {
-            let name = state.get_interned_string(name);
-            state.stack.push((name.clone(), AccessMode::ReadOnly));
-            let var_def = Ident { name, pos };
-            Ok(Stmt::Const(Box::new(var_def), expr, export, settings.pos))
-        }
+        AccessMode::ReadOnly => Ok(Stmt::Const(Box::new(var_def), expr, export, settings.pos)),
     }
 }
 

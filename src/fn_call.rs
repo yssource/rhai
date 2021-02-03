@@ -914,59 +914,6 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let args_expr = args_expr.as_ref();
 
-        // Handle Fn()
-        if fn_name == KEYWORD_FN_PTR && args_expr.len() == 1 {
-            let hash_fn =
-                calc_native_fn_hash(empty(), fn_name, once(TypeId::of::<ImmutableString>()));
-
-            if !self.has_override(Some(mods), lib, hash_fn, hash_script, pub_only) {
-                // Fn - only in function call style
-                return self
-                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
-                    .take_immutable_string()
-                    .map_err(|typ| {
-                        self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
-                    })
-                    .and_then(|s| FnPtr::try_from(s))
-                    .map(Into::<Dynamic>::into)
-                    .map_err(|err| err.fill_position(args_expr[0].position()));
-            }
-        }
-
-        // Handle curry()
-        if fn_name == KEYWORD_FN_PTR_CURRY && args_expr.len() > 1 {
-            let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-
-            if !fn_ptr.is::<FnPtr>() {
-                return Err(self.make_type_mismatch_err::<FnPtr>(
-                    self.map_type_name(fn_ptr.type_name()),
-                    args_expr[0].position(),
-                ));
-            }
-
-            let (fn_name, mut fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
-
-            // Append the new curried arguments to the existing list.
-
-            args_expr
-                .iter()
-                .skip(1)
-                .try_for_each(|expr| -> Result<(), Box<EvalAltResult>> {
-                    fn_curry.push(self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?);
-                    Ok(())
-                })?;
-
-            return Ok(FnPtr::new_unchecked(fn_name, fn_curry).into());
-        }
-
-        // Handle is_shared()
-        #[cfg(not(feature = "no_closure"))]
-        if fn_name == crate::engine::KEYWORD_IS_SHARED && args_expr.len() == 1 {
-            let value = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-
-            return Ok(value.is_shared().into());
-        }
-
         // Handle call() - Redirect function call
         let redirected;
         let mut args_expr = args_expr.as_ref();
@@ -999,6 +946,58 @@ impl Engine {
             // Recalculate hash
             let args_len = args_expr.len() + curry.len();
             hash_script = calc_script_fn_hash(empty(), name, args_len);
+        }
+
+        // Handle Fn()
+        if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
+            let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
+
+            if !self.has_override(Some(mods), lib, hash_fn, hash_script, pub_only) {
+                // Fn - only in function call style
+                return self
+                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
+                    .take_immutable_string()
+                    .map_err(|typ| {
+                        self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
+                    })
+                    .and_then(|s| FnPtr::try_from(s))
+                    .map(Into::<Dynamic>::into)
+                    .map_err(|err| err.fill_position(args_expr[0].position()));
+            }
+        }
+
+        // Handle curry()
+        if name == KEYWORD_FN_PTR_CURRY && args_expr.len() > 1 {
+            let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+
+            if !fn_ptr.is::<FnPtr>() {
+                return Err(self.make_type_mismatch_err::<FnPtr>(
+                    self.map_type_name(fn_ptr.type_name()),
+                    args_expr[0].position(),
+                ));
+            }
+
+            let (name, mut fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
+
+            // Append the new curried arguments to the existing list.
+
+            args_expr
+                .iter()
+                .skip(1)
+                .try_for_each(|expr| -> Result<(), Box<EvalAltResult>> {
+                    fn_curry.push(self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?);
+                    Ok(())
+                })?;
+
+            return Ok(FnPtr::new_unchecked(name, fn_curry).into());
+        }
+
+        // Handle is_shared()
+        #[cfg(not(feature = "no_closure"))]
+        if name == crate::engine::KEYWORD_IS_SHARED && args_expr.len() == 1 {
+            let value = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+
+            return Ok(value.is_shared().into());
         }
 
         // Handle is_def_var()
@@ -1055,8 +1054,9 @@ impl Engine {
             // No arguments
             args = Default::default();
         } else {
-            // If the first argument is a variable, and there is no curried arguments, convert to method-call style
-            // in order to leverage potential &mut first argument and avoid cloning the value
+            // If the first argument is a variable, and there is no curried arguments,
+            // convert to method-call style in order to leverage potential &mut first argument and
+            // avoid cloning the value
             if curry.is_empty() && args_expr[0].get_variable_access(false).is_some() {
                 // func(x, ...) -> x.func(...)
                 arg_values = args_expr
