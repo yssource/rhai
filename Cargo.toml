@@ -20,7 +20,7 @@ include = [
     "**/*.md",
     "Cargo.toml"
 ]
-keywords = [ "scripting", "scripting-engine", "scripting language", "embedded" ]
+keywords = [ "scripting", "scripting-engine", "scripting-language", "embedded" ]
 categories = [ "no-std", "embedded", "wasm", "parser-implementations" ]
 
 [dependencies]
