@@ -392,10 +392,10 @@ impl Engine {
 
         // Merge in encapsulated environment, if any
         let mut lib_merged: StaticVec<_>;
+        let mut old_cache = None;
 
         let unified_lib = if let Some(ref env_lib) = fn_def.lib {
-            // If the library is modified, clear the functions lookup cache
-            state.functions_cache.clear();
+            old_cache = Some(mem::take(&mut state.functions_cache));
 
             lib_merged = Default::default();
             lib_merged.push(env_lib.as_ref());
@@ -466,6 +466,10 @@ impl Engine {
         scope.rewind(prev_scope_len);
         mods.truncate(prev_mods_len);
         state.scope_level = orig_scope_level;
+
+        if let Some(cache) = old_cache {
+            state.functions_cache = cache;
+        }
 
         result
     }
