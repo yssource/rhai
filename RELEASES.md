@@ -4,6 +4,12 @@ Rhai Release Notes
 Version 0.19.12
 ===============
 
+Breaking changes
+----------------
+
+* `Dynamic::into_shared` is no longer available under `no_closure`. It used to panic.
+
+
 Version 0.19.11
 ===============
 

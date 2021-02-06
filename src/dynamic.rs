@@ -761,6 +761,8 @@ impl Dynamic {
     /// [`Arc`][std::sync::Arc]`<`[`RwLock`][std::sync::RwLock]`<`[`Dynamic`]`>>`
     /// depending on the `sync` feature.
     ///
+    /// Not available under [`no_closure`].
+    ///
     /// Shared [`Dynamic`] values are relatively cheap to clone as they simply increment the
     /// reference counts.
     ///
@@ -772,11 +774,11 @@ impl Dynamic {
     /// # Panics
     ///
     /// Panics under the `no_closure` feature.
+    #[cfg(not(feature = "no_closure"))]
     #[inline(always)]
     pub fn into_shared(self) -> Self {
         let _access = self.access_mode();
 
-        #[cfg(not(feature = "no_closure"))]
         return match self.0 {
             Union::Shared(_, _) => self,
             _ => Self(Union::Shared(crate::Locked::new(self).into(), _access)),
