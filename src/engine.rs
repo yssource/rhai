@@ -519,8 +519,8 @@ pub struct State {
     /// Embedded module resolver.
     #[cfg(not(feature = "no_module"))]
     pub resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
-    /// Cached lookup values for function hashes.
-    pub functions_caches: StaticVec<
+    /// Functions resolution cache.
+    fn_resolution_caches: StaticVec<
         HashMap<
             NonZeroU64,
             Option<(CallableFunction, Option<ImmutableString>)>,
@@ -534,6 +534,40 @@ impl State {
     #[inline(always)]
     pub fn is_global(&self) -> bool {
         self.scope_level == 0
+    }
+    /// Get the current functions resolution cache.
+    pub fn fn_resolution_cache(
+        &self,
+    ) -> Option<
+        &HashMap<
+            NonZeroU64,
+            Option<(CallableFunction, Option<ImmutableString>)>,
+            StraightHasherBuilder,
+        >,
+    > {
+        self.fn_resolution_caches.last()
+    }
+    /// Get a mutable reference to the current functions resolution cache.
+    pub fn fn_resolution_cache_mut(
+        &mut self,
+    ) -> &mut HashMap<
+        NonZeroU64,
+        Option<(CallableFunction, Option<ImmutableString>)>,
+        StraightHasherBuilder,
+    > {
+        if self.fn_resolution_caches.is_empty() {
+            self.fn_resolution_caches
+                .push(HashMap::with_capacity_and_hasher(16, StraightHasherBuilder));
+        }
+        self.fn_resolution_caches.last_mut().unwrap()
+    }
+    /// Push an empty functions resolution cache onto the stack and make it current.
+    pub fn push_fn_resolution_cache(&mut self) {
+        self.fn_resolution_caches.push(Default::default());
+    }
+    /// Remove the current functions resolution cache and make the last one current.
+    pub fn pop_fn_resolution_cache(&mut self) {
+        self.fn_resolution_caches.pop();
     }
 }
 
@@ -1874,9 +1908,11 @@ impl Engine {
                 Stmt::Import(_, _, _) => {
                     // When imports list is modified, clear the functions lookup cache
                     if _has_imports {
-                        state.functions_caches.last_mut().map(|c| c.clear());
+                        state.fn_resolution_caches.last_mut().map(|c| c.clear());
                     } else if restore {
-                        state.functions_caches.push(Default::default());
+                        state
+                            .fn_resolution_caches
+                            .push(HashMap::with_capacity_and_hasher(16, StraightHasherBuilder));
                         _has_imports = true;
                     }
                 }
@@ -1890,7 +1926,7 @@ impl Engine {
             scope.rewind(prev_scope_len);
             if _has_imports {
                 // If imports list is modified, pop the functions lookup cache
-                state.functions_caches.pop();
+                state.fn_resolution_caches.pop();
             }
             mods.truncate(prev_mods_len);
             state.scope_level -= 1;
