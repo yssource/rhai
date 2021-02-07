@@ -1868,6 +1868,7 @@ impl Engine {
             .into_iter()
             .try_fold(Default::default(), |_, stmt| {
                 match stmt {
+                    #[cfg(not(feature = "no_module"))]
                     Stmt::Import(_, _, _) => {
                         // When imports list is modified, clear the functions lookup cache
                         if has_imports {
