@@ -176,28 +176,37 @@ impl Engine {
         self.inc_operations(state, pos)?;
 
         // Check if function access already in the cache
-        let func = &*state.functions_cache.entry(hash_fn).or_insert_with(|| {
-            // Search for the native function
-            // First search registered functions (can override packages)
-            // Then search packages
-            // Finally search modules
+        if state.functions_caches.is_empty() {
+            state.functions_caches.push(Default::default());
+        }
 
-            //lib.get_fn(hash_fn, pub_only)
-            self.global_namespace
-                .get_fn(hash_fn, pub_only)
-                .cloned()
-                .map(|f| (f, None))
-                .or_else(|| {
-                    self.global_modules.iter().find_map(|m| {
-                        m.get_fn(hash_fn, false)
-                            .map(|f| (f.clone(), m.id_raw().cloned()))
+        let func = &*state
+            .functions_caches
+            .last_mut()
+            .unwrap()
+            .entry(hash_fn)
+            .or_insert_with(|| {
+                // Search for the native function
+                // First search registered functions (can override packages)
+                // Then search packages
+                // Finally search modules
+
+                //lib.get_fn(hash_fn, pub_only)
+                self.global_namespace
+                    .get_fn(hash_fn, pub_only)
+                    .cloned()
+                    .map(|f| (f, None))
+                    .or_else(|| {
+                        self.global_modules.iter().find_map(|m| {
+                            m.get_fn(hash_fn, false)
+                                .map(|f| (f.clone(), m.id_raw().cloned()))
+                        })
                     })
-                })
-                .or_else(|| {
-                    mods.get_fn(hash_fn)
-                        .map(|(f, source)| (f.clone(), source.cloned()))
-                })
-        });
+                    .or_else(|| {
+                        mods.get_fn(hash_fn)
+                            .map(|(f, source)| (f.clone(), source.cloned()))
+                    })
+            });
 
         if let Some((func, source)) = func {
             assert!(func.is_native());
@@ -392,11 +401,11 @@ impl Engine {
 
         // Merge in encapsulated environment, if any
         let mut lib_merged: StaticVec<_>;
+        let mut unified = false;
 
         let unified_lib = if let Some(ref env_lib) = fn_def.lib {
-            // If the library is modified, clear the functions lookup cache
-            state.functions_cache.clear();
-
+            unified = true;
+            state.functions_caches.push(Default::default());
             lib_merged = Default::default();
             lib_merged.push(env_lib.as_ref());
             lib_merged.extend(lib.iter().cloned());
@@ -467,6 +476,10 @@ impl Engine {
         mods.truncate(prev_mods_len);
         state.scope_level = orig_scope_level;
 
+        if unified {
+            state.functions_caches.pop();
+        }
+
         result
     }
 
@@ -475,6 +488,7 @@ impl Engine {
     pub(crate) fn has_override_by_name_and_arguments(
         &self,
         mods: Option<&Imports>,
+        state: Option<&mut State>,
         lib: &[&Module],
         fn_name: &str,
         arg_types: impl AsRef<[TypeId]>,
@@ -484,7 +498,7 @@ impl Engine {
         let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_types.iter().cloned());
         let hash_script = calc_script_fn_hash(empty(), fn_name, arg_types.len());
 
-        self.has_override(mods, lib, hash_fn, hash_script, pub_only)
+        self.has_override(mods, state, lib, hash_fn, hash_script, pub_only)
     }
 
     // Has a system function an override?
@@ -492,23 +506,68 @@ impl Engine {
     pub(crate) fn has_override(
         &self,
         mods: Option<&Imports>,
+        mut state: Option<&mut State>,
         lib: &[&Module],
         hash_fn: Option<NonZeroU64>,
         hash_script: Option<NonZeroU64>,
         pub_only: bool,
     ) -> bool {
+        // Check if it is already in the cache
+        if let Some(state) = state.as_mut() {
+            if let Some(hash) = hash_script {
+                match state.functions_caches.last().map_or(None, |c| c.get(&hash)) {
+                    Some(v) => return v.is_some(),
+                    None => (),
+                }
+            }
+            if let Some(hash) = hash_fn {
+                match state.functions_caches.last().map_or(None, |c| c.get(&hash)) {
+                    Some(v) => return v.is_some(),
+                    None => (),
+                }
+            }
+        }
+
         // First check script-defined functions
-        hash_script.map(|hash| lib.iter().any(|&m| m.contains_fn(hash, pub_only))).unwrap_or(false)
-            //|| hash_fn.map(|hash| lib.iter().any(|&m| m.contains_fn(hash, pub_only))).unwrap_or(false)
+        let r = hash_script.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, pub_only)))
+            //|| hash_fn.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, pub_only)))
             // Then check registered functions
-            //|| hash_script.map(|hash| self.global_namespace.contains_fn(hash, pub_only)).unwrap_or(false)
-            || hash_fn.map(|hash| self.global_namespace.contains_fn(hash, false)).unwrap_or(false)
+            //|| hash_script.map_or(false, |hash| self.global_namespace.contains_fn(hash, pub_only))
+            || hash_fn.map_or(false, |hash| self.global_namespace.contains_fn(hash, false))
             // Then check packages
-            || hash_script.map(|hash| self.global_modules.iter().any(|m| m.contains_fn(hash, false))).unwrap_or(false)
-            || hash_fn.map(|hash| self.global_modules.iter().any(|m| m.contains_fn(hash, false))).unwrap_or(false)
+            || hash_script.map_or(false, |hash| self.global_modules.iter().any(|m| m.contains_fn(hash, false)))
+            || hash_fn.map_or(false, |hash| self.global_modules.iter().any(|m| m.contains_fn(hash, false)))
             // Then check imported modules
-            || hash_script.map(|hash| mods.map(|m| m.contains_fn(hash)).unwrap_or(false)).unwrap_or(false)
-            || hash_fn.map(|hash| mods.map(|m| m.contains_fn(hash)).unwrap_or(false)).unwrap_or(false)
+            || hash_script.map_or(false, |hash| mods.map_or(false, |m| m.contains_fn(hash)))
+            || hash_fn.map_or(false, |hash| mods.map_or(false, |m| m.contains_fn(hash)));
+
+        // If there is no override, put that information into the cache
+        if !r {
+            if let Some(state) = state.as_mut() {
+                if let Some(hash) = hash_script {
+                    if state.functions_caches.is_empty() {
+                        state.functions_caches.push(Default::default());
+                    }
+                    state
+                        .functions_caches
+                        .last_mut()
+                        .unwrap()
+                        .insert(hash, None);
+                }
+                if let Some(hash) = hash_fn {
+                    if state.functions_caches.is_empty() {
+                        state.functions_caches.push(Default::default());
+                    }
+                    state
+                        .functions_caches
+                        .last_mut()
+                        .unwrap()
+                        .insert(hash, None);
+                }
+            }
+        }
+
+        r
     }
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
@@ -547,7 +606,14 @@ impl Engine {
             // type_of
             KEYWORD_TYPE_OF
                 if args.len() == 1
-                    && !self.has_override(Some(mods), lib, hash_fn, hash_script, pub_only) =>
+                    && !self.has_override(
+                        Some(mods),
+                        Some(state),
+                        lib,
+                        hash_fn,
+                        hash_script,
+                        pub_only,
+                    ) =>
             {
                 Ok((
                     self.map_type_name(args[0].type_name()).to_string().into(),
@@ -559,7 +625,14 @@ impl Engine {
             //           by a function pointer so it isn't caught at parse time.
             KEYWORD_FN_PTR | KEYWORD_EVAL
                 if args.len() == 1
-                    && !self.has_override(Some(mods), lib, hash_fn, hash_script, pub_only) =>
+                    && !self.has_override(
+                        Some(mods),
+                        Some(state),
+                        lib,
+                        hash_fn,
+                        hash_script,
+                        pub_only,
+                    ) =>
             {
                 EvalAltResult::ErrorRuntime(
                     format!(
@@ -575,25 +648,37 @@ impl Engine {
             // Script-like function found
             #[cfg(not(feature = "no_function"))]
             _ if hash_script.is_some()
-                && self.has_override(Some(mods), lib, None, hash_script, pub_only) =>
+                && self.has_override(Some(mods), Some(state), lib, None, hash_script, pub_only) =>
             {
                 let hash_script = hash_script.unwrap();
 
-                // Get function
-                let (func, mut source) = lib
-                    .iter()
-                    .find_map(|&m| {
-                        m.get_fn(hash_script, pub_only)
-                            .map(|f| (f, m.id_raw().cloned()))
+                // Check if function access already in the cache
+                if state.functions_caches.is_empty() {
+                    state.functions_caches.push(Default::default());
+                }
+
+                let (func, source) = state
+                    .functions_caches
+                    .last_mut()
+                    .unwrap()
+                    .entry(hash_script)
+                    .or_insert_with(|| {
+                        lib.iter()
+                            .find_map(|&m| {
+                                m.get_fn(hash_script, pub_only)
+                                    .map(|f| (f.clone(), m.id_raw().cloned()))
+                            })
+                            //.or_else(|| self.global_namespace.get_fn(hash_script, pub_only))
+                            .or_else(|| {
+                                self.global_modules.iter().find_map(|m| {
+                                    m.get_fn(hash_script, false)
+                                        .map(|f| (f.clone(), m.id_raw().cloned()))
+                                })
+                            })
+                        //.or_else(|| mods.iter().find_map(|(_, m)| m.get_qualified_fn(hash_script).map(|f| (f, m.id_raw().clone()))))
                     })
-                    //.or_else(|| self.global_namespace.get_fn(hash_script, pub_only))
-                    .or_else(|| {
-                        self.global_modules.iter().find_map(|m| {
-                            m.get_fn(hash_script, false)
-                                .map(|f| (f, m.id_raw().cloned()))
-                        })
-                    })
-                    //.or_else(|| mods.iter().find_map(|(_, m)| m.get_qualified_fn(hash_script).map(|f| (f, m.id_raw().clone()))))
+                    .as_ref()
+                    .map(|(f, s)| (f.clone(), s.clone()))
                     .unwrap();
 
                 assert!(func.is_script());
@@ -620,7 +705,8 @@ impl Engine {
                     // Method call of script function - map first argument to `this`
                     let (first, rest) = args.split_first_mut().unwrap();
 
-                    mem::swap(&mut state.source, &mut source);
+                    let orig_source = mem::take(&mut state.source);
+                    state.source = source;
 
                     let level = _level + 1;
 
@@ -637,7 +723,7 @@ impl Engine {
                     );
 
                     // Restore the original source
-                    state.source = source;
+                    state.source = orig_source;
 
                     result?
                 } else {
@@ -646,7 +732,8 @@ impl Engine {
                     let mut backup: ArgBackup = Default::default();
                     backup.change_first_arg_to_copy(is_ref, args);
 
-                    mem::swap(&mut state.source, &mut source);
+                    let orig_source = mem::take(&mut state.source);
+                    state.source = source;
 
                     let level = _level + 1;
 
@@ -654,7 +741,7 @@ impl Engine {
                         .call_script_fn(scope, mods, state, lib, &mut None, func, args, pos, level);
 
                     // Restore the original source
-                    state.source = source;
+                    state.source = orig_source;
 
                     // Restore the original reference
                     backup.restore_first_arg(args);
@@ -914,59 +1001,6 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let args_expr = args_expr.as_ref();
 
-        // Handle Fn()
-        if fn_name == KEYWORD_FN_PTR && args_expr.len() == 1 {
-            let hash_fn =
-                calc_native_fn_hash(empty(), fn_name, once(TypeId::of::<ImmutableString>()));
-
-            if !self.has_override(Some(mods), lib, hash_fn, hash_script, pub_only) {
-                // Fn - only in function call style
-                return self
-                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
-                    .take_immutable_string()
-                    .map_err(|typ| {
-                        self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
-                    })
-                    .and_then(|s| FnPtr::try_from(s))
-                    .map(Into::<Dynamic>::into)
-                    .map_err(|err| err.fill_position(args_expr[0].position()));
-            }
-        }
-
-        // Handle curry()
-        if fn_name == KEYWORD_FN_PTR_CURRY && args_expr.len() > 1 {
-            let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-
-            if !fn_ptr.is::<FnPtr>() {
-                return Err(self.make_type_mismatch_err::<FnPtr>(
-                    self.map_type_name(fn_ptr.type_name()),
-                    args_expr[0].position(),
-                ));
-            }
-
-            let (fn_name, mut fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
-
-            // Append the new curried arguments to the existing list.
-
-            args_expr
-                .iter()
-                .skip(1)
-                .try_for_each(|expr| -> Result<(), Box<EvalAltResult>> {
-                    fn_curry.push(self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?);
-                    Ok(())
-                })?;
-
-            return Ok(FnPtr::new_unchecked(fn_name, fn_curry).into());
-        }
-
-        // Handle is_shared()
-        #[cfg(not(feature = "no_closure"))]
-        if fn_name == crate::engine::KEYWORD_IS_SHARED && args_expr.len() == 1 {
-            let value = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-
-            return Ok(value.is_shared().into());
-        }
-
         // Handle call() - Redirect function call
         let redirected;
         let mut args_expr = args_expr.as_ref();
@@ -975,7 +1009,7 @@ impl Engine {
 
         if name == KEYWORD_FN_PTR_CALL
             && args_expr.len() >= 1
-            && !self.has_override(Some(mods), lib, None, hash_script, pub_only)
+            && !self.has_override(Some(mods), Some(state), lib, None, hash_script, pub_only)
         {
             let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
@@ -1001,11 +1035,63 @@ impl Engine {
             hash_script = calc_script_fn_hash(empty(), name, args_len);
         }
 
+        // Handle Fn()
+        if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
+            let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
+
+            if !self.has_override(Some(mods), Some(state), lib, hash_fn, hash_script, pub_only) {
+                // Fn - only in function call style
+                return self
+                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
+                    .take_immutable_string()
+                    .map_err(|typ| {
+                        self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
+                    })
+                    .and_then(|s| FnPtr::try_from(s))
+                    .map(Into::<Dynamic>::into)
+                    .map_err(|err| err.fill_position(args_expr[0].position()));
+            }
+        }
+
+        // Handle curry()
+        if name == KEYWORD_FN_PTR_CURRY && args_expr.len() > 1 {
+            let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+
+            if !fn_ptr.is::<FnPtr>() {
+                return Err(self.make_type_mismatch_err::<FnPtr>(
+                    self.map_type_name(fn_ptr.type_name()),
+                    args_expr[0].position(),
+                ));
+            }
+
+            let (name, mut fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
+
+            // Append the new curried arguments to the existing list.
+
+            args_expr
+                .iter()
+                .skip(1)
+                .try_for_each(|expr| -> Result<(), Box<EvalAltResult>> {
+                    fn_curry.push(self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?);
+                    Ok(())
+                })?;
+
+            return Ok(FnPtr::new_unchecked(name, fn_curry).into());
+        }
+
+        // Handle is_shared()
+        #[cfg(not(feature = "no_closure"))]
+        if name == crate::engine::KEYWORD_IS_SHARED && args_expr.len() == 1 {
+            let value = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+
+            return Ok(value.is_shared().into());
+        }
+
         // Handle is_def_var()
         if name == KEYWORD_IS_DEF_VAR && args_expr.len() == 1 {
             let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
 
-            if !self.has_override(Some(mods), lib, hash_fn, hash_script, pub_only) {
+            if !self.has_override(Some(mods), Some(state), lib, hash_fn, hash_script, pub_only) {
                 let var_name =
                     self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
                 let var_name = var_name.as_str().map_err(|err| {
@@ -1019,7 +1105,7 @@ impl Engine {
         if name == KEYWORD_EVAL && args_expr.len() == 1 {
             let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
 
-            if !self.has_override(Some(mods), lib, hash_fn, hash_script, pub_only) {
+            if !self.has_override(Some(mods), Some(state), lib, hash_fn, hash_script, pub_only) {
                 // eval - only in function call style
                 let prev_len = scope.len();
                 let script =
@@ -1055,8 +1141,9 @@ impl Engine {
             // No arguments
             args = Default::default();
         } else {
-            // If the first argument is a variable, and there is no curried arguments, convert to method-call style
-            // in order to leverage potential &mut first argument and avoid cloning the value
+            // If the first argument is a variable, and there is no curried arguments,
+            // convert to method-call style in order to leverage potential &mut first argument and
+            // avoid cloning the value
             if curry.is_empty() && args_expr[0].get_variable_access(false).is_some() {
                 // func(x, ...) -> x.func(...)
                 arg_values = args_expr

@@ -149,8 +149,7 @@ impl Engine {
                 s if segments.is_empty()
                     && token
                         .as_ref()
-                        .map(|v| v.is_keyword() || v.is_reserved())
-                        .unwrap_or(false) =>
+                        .map_or(false, |v| v.is_keyword() || v.is_reserved()) =>
                 {
                     return Err(LexError::ImproperSymbol(
                         s.to_string(),

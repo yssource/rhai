@@ -1305,7 +1305,7 @@ impl Expr {
             _ => return None,
         })
     }
-    /// Is the expression a simple variable access?
+    /// Return the variable name if the expression a simple variable access.
     #[inline(always)]
     pub(crate) fn get_variable_access(&self, non_qualified: bool) -> Option<&str> {
         match self {
