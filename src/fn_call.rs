@@ -768,10 +768,10 @@ impl Engine {
         }
     }
 
-    /// Evaluate a list of statements with an empty state and no `this` pointer.
+    /// Evaluate a list of statements with no `this` pointer.
     /// This is commonly used to evaluate a list of statements in an [`AST`] or a script function body.
     #[inline]
-    pub(crate) fn eval_statements_raw<'a>(
+    pub(crate) fn eval_global_statements<'a>(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
@@ -780,11 +780,7 @@ impl Engine {
         lib: &[&Module],
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        statements
-            .into_iter()
-            .try_fold(Dynamic::UNIT, |_, stmt| {
-                self.eval_stmt(scope, mods, state, lib, &mut None, stmt, level)
-            })
+        self.eval_stmt_block(scope, mods, state, lib, &mut None, statements, false, level)
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
                 EvalAltResult::LoopBreak(_, _) => {
@@ -826,14 +822,14 @@ impl Engine {
         }
 
         // Evaluate the AST
-        let mut new_state = State {
+        let new_state = &mut State {
             source: state.source.clone(),
             operations: state.operations,
             ..Default::default()
         };
 
         let result =
-            self.eval_statements_raw(scope, mods, &mut new_state, ast.statements(), lib, level);
+            self.eval_global_statements(scope, mods, new_state, ast.statements(), lib, level);
 
         state.operations = new_state.operations;
         result

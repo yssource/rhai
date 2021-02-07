@@ -1712,7 +1712,7 @@ impl Engine {
 
             // Statement block
             Expr::Stmt(x, _) => {
-                self.eval_stmt_block(scope, mods, state, lib, this_ptr, x.as_ref(), level)
+                self.eval_stmt_block(scope, mods, state, lib, this_ptr, x.as_ref(), true, level)
             }
 
             // lhs[idx_expr]
@@ -1856,45 +1856,49 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         statements: impl IntoIterator<Item = &'a Stmt>,
+        restore: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut has_imports = false;
+        let mut _has_imports = false;
         let prev_always_search = state.always_search;
         let prev_scope_len = scope.len();
         let prev_mods_len = mods.len();
-        state.scope_level += 1;
 
-        let result = statements
-            .into_iter()
-            .try_fold(Default::default(), |_, stmt| {
-                match stmt {
-                    #[cfg(not(feature = "no_module"))]
-                    Stmt::Import(_, _, _) => {
-                        // When imports list is modified, clear the functions lookup cache
-                        if has_imports {
-                            state.functions_caches.last_mut().map(|c| c.clear());
-                        } else {
-                            state.functions_caches.push(Default::default());
-                        }
-                        has_imports = true;
-                    }
-                    _ => (),
-                }
-
-                self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
-            });
-
-        scope.rewind(prev_scope_len);
-        if has_imports {
-            // If imports list is modified, pop the functions lookup cache
-            state.functions_caches.pop();
+        if restore {
+            state.scope_level += 1;
         }
-        mods.truncate(prev_mods_len);
-        state.scope_level -= 1;
 
-        // The impact of new local variables goes away at the end of a block
-        // because any new variables introduced will go out of scope
-        state.always_search = prev_always_search;
+        let result = statements.into_iter().try_fold(Dynamic::UNIT, |_, stmt| {
+            #[cfg(not(feature = "no_module"))]
+            match stmt {
+                Stmt::Import(_, _, _) => {
+                    // When imports list is modified, clear the functions lookup cache
+                    if _has_imports {
+                        state.functions_caches.last_mut().map(|c| c.clear());
+                    } else if restore {
+                        state.functions_caches.push(Default::default());
+                        _has_imports = true;
+                    }
+                }
+                _ => (),
+            }
+
+            self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
+        });
+
+        if restore {
+            scope.rewind(prev_scope_len);
+            if _has_imports {
+                // If imports list is modified, pop the functions lookup cache
+                state.functions_caches.pop();
+            }
+            mods.truncate(prev_mods_len);
+            state.scope_level -= 1;
+
+            // The impact of new local variables goes away at the end of a block
+            // because any new variables introduced will go out of scope
+            state.always_search = prev_always_search;
+        }
 
         result
     }
@@ -2088,7 +2092,7 @@ impl Engine {
 
             // Block scope
             Stmt::Block(statements, _) => {
-                self.eval_stmt_block(scope, mods, state, lib, this_ptr, statements, level)
+                self.eval_stmt_block(scope, mods, state, lib, this_ptr, statements, true, level)
             }
 
             // If statement

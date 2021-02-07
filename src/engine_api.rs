@@ -1533,7 +1533,9 @@ impl Engine {
             resolver: ast.resolver(),
             ..Default::default()
         };
-        self.eval_statements_raw(scope, mods, state, ast.statements(), &[ast.lib()], level)
+        let statements = ast.statements();
+        let lib = &[ast.lib()];
+        self.eval_global_statements(scope, mods, state, statements, lib, level)
     }
     /// Evaluate a file, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
@@ -1602,7 +1604,9 @@ impl Engine {
             resolver: ast.resolver(),
             ..Default::default()
         };
-        self.eval_statements_raw(scope, mods, state, ast.statements(), &[ast.lib()], 0)?;
+        let statements = ast.statements();
+        let lib = &[ast.lib()];
+        self.eval_global_statements(scope, mods, state, statements, lib, 0)?;
         Ok(())
     }
     /// Call a script function defined in an [`AST`] with multiple arguments.

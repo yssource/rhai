@@ -4,14 +4,7 @@ use rhai::{Engine, EvalAltResult, LexError, ParseErrorType, RegisterFn, Scope, I
 fn test_eval() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
-    assert_eq!(
-        engine.eval::<INT>(
-            r#"
-                eval("40 + 2")
-            "#
-        )?,
-        42
-    );
+    assert_eq!(engine.eval::<INT>(r#"eval("40 + 2")"#)?, 42);
 
     Ok(())
 }
@@ -62,7 +55,7 @@ fn test_eval_function() -> Result<(), Box<EvalAltResult>> {
                 script +=    "x + y";
 
                 eval(script) + x + y
-    "#
+            "#
         )?,
         84
     );
