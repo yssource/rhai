@@ -1731,8 +1731,7 @@ fn parse_binary_op(
                     .engine
                     .custom_keywords
                     .get(c)
-                    .map(Option::is_some)
-                    .unwrap_or(false)
+                    .map_or(false, Option::is_some)
                 {
                     state.engine.custom_keywords.get(c).unwrap().unwrap().get()
                 } else {
@@ -1763,8 +1762,7 @@ fn parse_binary_op(
                     .engine
                     .custom_keywords
                     .get(c)
-                    .map(Option::is_some)
-                    .unwrap_or(false)
+                    .map_or(false, Option::is_some)
                 {
                     state.engine.custom_keywords.get(c).unwrap().unwrap().get()
                 } else {
@@ -1875,8 +1873,7 @@ fn parse_binary_op(
                     .engine
                     .custom_keywords
                     .get(&s)
-                    .map(Option::is_some)
-                    .unwrap_or(false) =>
+                    .map_or(false, Option::is_some) =>
             {
                 let hash_script = if is_valid_identifier(s.chars()) {
                     // Accept non-native functions for custom operators

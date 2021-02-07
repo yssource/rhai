@@ -619,8 +619,7 @@ impl Module {
         if public_only {
             self.functions
                 .get(&hash_fn)
-                .map(|FuncInfo { access, .. }| access.is_public())
-                .unwrap_or(false)
+                .map_or(false, |FuncInfo { access, .. }| access.is_public())
         } else {
             self.functions.contains_key(&hash_fn)
         }
