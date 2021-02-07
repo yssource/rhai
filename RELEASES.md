@@ -9,6 +9,11 @@ Breaking changes
 
 * `Dynamic::into_shared` is no longer available under `no_closure`. It used to panic.
 
+Enhancements
+------------
+
+* Functions resolution cache is used in more cases, making repeated function calls faster.
+
 
 Version 0.19.11
 ===============

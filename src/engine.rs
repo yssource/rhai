@@ -520,10 +520,12 @@ pub struct State {
     #[cfg(not(feature = "no_module"))]
     pub resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
     /// Cached lookup values for function hashes.
-    pub functions_cache: HashMap<
-        NonZeroU64,
-        Option<(CallableFunction, Option<ImmutableString>)>,
-        StraightHasherBuilder,
+    pub functions_caches: StaticVec<
+        HashMap<
+            NonZeroU64,
+            Option<(CallableFunction, Option<ImmutableString>)>,
+            StraightHasherBuilder,
+        >,
     >,
 }
 
@@ -1856,6 +1858,7 @@ impl Engine {
         statements: impl IntoIterator<Item = &'a Stmt>,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let mut has_imports = false;
         let prev_always_search = state.always_search;
         let prev_scope_len = scope.len();
         let prev_mods_len = mods.len();
@@ -1864,13 +1867,26 @@ impl Engine {
         let result = statements
             .into_iter()
             .try_fold(Default::default(), |_, stmt| {
+                match stmt {
+                    Stmt::Import(_, _, _) => {
+                        // When imports list is modified, clear the functions lookup cache
+                        if has_imports {
+                            state.functions_caches.last_mut().map(|c| c.clear());
+                        } else {
+                            state.functions_caches.push(Default::default());
+                        }
+                        has_imports = true;
+                    }
+                    _ => (),
+                }
+
                 self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
             });
 
         scope.rewind(prev_scope_len);
-        if mods.len() != prev_mods_len {
-            // If imports list is modified, clear the functions lookup cache
-            state.functions_cache.clear();
+        if has_imports {
+            // If imports list is modified, pop the functions lookup cache
+            state.functions_caches.pop();
         }
         mods.truncate(prev_mods_len);
         state.scope_level -= 1;
@@ -2365,8 +2381,6 @@ impl Engine {
                         } else {
                             mods.push(name_def.name.clone(), module);
                         }
-                        // When imports list is modified, clear the functions lookup cache
-                        state.functions_cache.clear();
                     }
 
                     state.modules += 1;

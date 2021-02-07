@@ -176,28 +176,37 @@ impl Engine {
         self.inc_operations(state, pos)?;
 
         // Check if function access already in the cache
-        let func = &*state.functions_cache.entry(hash_fn).or_insert_with(|| {
-            // Search for the native function
-            // First search registered functions (can override packages)
-            // Then search packages
-            // Finally search modules
+        if state.functions_caches.is_empty() {
+            state.functions_caches.push(Default::default());
+        }
 
-            //lib.get_fn(hash_fn, pub_only)
-            self.global_namespace
-                .get_fn(hash_fn, pub_only)
-                .cloned()
-                .map(|f| (f, None))
-                .or_else(|| {
-                    self.global_modules.iter().find_map(|m| {
-                        m.get_fn(hash_fn, false)
-                            .map(|f| (f.clone(), m.id_raw().cloned()))
+        let func = &*state
+            .functions_caches
+            .last_mut()
+            .unwrap()
+            .entry(hash_fn)
+            .or_insert_with(|| {
+                // Search for the native function
+                // First search registered functions (can override packages)
+                // Then search packages
+                // Finally search modules
+
+                //lib.get_fn(hash_fn, pub_only)
+                self.global_namespace
+                    .get_fn(hash_fn, pub_only)
+                    .cloned()
+                    .map(|f| (f, None))
+                    .or_else(|| {
+                        self.global_modules.iter().find_map(|m| {
+                            m.get_fn(hash_fn, false)
+                                .map(|f| (f.clone(), m.id_raw().cloned()))
+                        })
                     })
-                })
-                .or_else(|| {
-                    mods.get_fn(hash_fn)
-                        .map(|(f, source)| (f.clone(), source.cloned()))
-                })
-        });
+                    .or_else(|| {
+                        mods.get_fn(hash_fn)
+                            .map(|(f, source)| (f.clone(), source.cloned()))
+                    })
+            });
 
         if let Some((func, source)) = func {
             assert!(func.is_native());
@@ -392,11 +401,11 @@ impl Engine {
 
         // Merge in encapsulated environment, if any
         let mut lib_merged: StaticVec<_>;
-        let mut old_cache = None;
+        let mut unified = false;
 
         let unified_lib = if let Some(ref env_lib) = fn_def.lib {
-            old_cache = Some(mem::take(&mut state.functions_cache));
-
+            unified = true;
+            state.functions_caches.push(Default::default());
             lib_merged = Default::default();
             lib_merged.push(env_lib.as_ref());
             lib_merged.extend(lib.iter().cloned());
@@ -467,8 +476,8 @@ impl Engine {
         mods.truncate(prev_mods_len);
         state.scope_level = orig_scope_level;
 
-        if let Some(cache) = old_cache {
-            state.functions_cache = cache;
+        if unified {
+            state.functions_caches.pop();
         }
 
         result
@@ -506,13 +515,13 @@ impl Engine {
         // Check if it is already in the cache
         if let Some(state) = state.as_mut() {
             if let Some(hash) = hash_script {
-                match state.functions_cache.get(&hash) {
+                match state.functions_caches.last().map_or(None, |c| c.get(&hash)) {
                     Some(v) => return v.is_some(),
                     None => (),
                 }
             }
             if let Some(hash) = hash_fn {
-                match state.functions_cache.get(&hash) {
+                match state.functions_caches.last().map_or(None, |c| c.get(&hash)) {
                     Some(v) => return v.is_some(),
                     None => (),
                 }
@@ -536,10 +545,24 @@ impl Engine {
         if !r {
             if let Some(state) = state.as_mut() {
                 if let Some(hash) = hash_script {
-                    state.functions_cache.insert(hash, None);
+                    if state.functions_caches.is_empty() {
+                        state.functions_caches.push(Default::default());
+                    }
+                    state
+                        .functions_caches
+                        .last_mut()
+                        .unwrap()
+                        .insert(hash, None);
                 }
                 if let Some(hash) = hash_fn {
-                    state.functions_cache.insert(hash, None);
+                    if state.functions_caches.is_empty() {
+                        state.functions_caches.push(Default::default());
+                    }
+                    state
+                        .functions_caches
+                        .last_mut()
+                        .unwrap()
+                        .insert(hash, None);
                 }
             }
         }
@@ -630,8 +653,14 @@ impl Engine {
                 let hash_script = hash_script.unwrap();
 
                 // Check if function access already in the cache
+                if state.functions_caches.is_empty() {
+                    state.functions_caches.push(Default::default());
+                }
+
                 let (func, source) = state
-                    .functions_cache
+                    .functions_caches
+                    .last_mut()
+                    .unwrap()
                     .entry(hash_script)
                     .or_insert_with(|| {
                         lib.iter()
