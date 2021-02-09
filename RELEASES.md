@@ -55,6 +55,7 @@ Enhancements
 * `ahash` is used to hash function call parameters. This should yield speed improvements.
 * `Dynamic` and `ImmutableString` now implement `serde::Serialize` and `serde::Deserialize`.
 * `NativeCallContext` has a new field containing the name of the function called, useful when the same Rust function is registered under multiple names in Rhai.
+* New functions `PI()` and `E()` to return mathematical constants, and `to_radians` and `to_degrees` to convert between radians and degrees.
 
 
 Version 0.19.10
