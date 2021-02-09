@@ -4,6 +4,12 @@ Rhai Release Notes
 Version 0.19.12
 ===============
 
+Bug fixes
+---------
+
+* Empty statements (i.e. statements with only one `;`) now parse correctly and no longer hang.
+* `continue`, `break` and `return` statements no longer panic inside a `try .. catch` block.
+
 Breaking changes
 ----------------
 

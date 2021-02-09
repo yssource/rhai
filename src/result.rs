@@ -272,6 +272,15 @@ impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
 }
 
 impl EvalAltResult {
+    /// Is this a pseudo error?  A pseudo error is one that does not occur naturally.
+    ///
+    /// [`LoopBreak`][EvalAltResult::LoopBreak] or [`Return`][EvalAltResult::Return] are pseudo errors.
+    pub fn is_pseudo_error(&self) -> bool {
+        match self {
+            Self::LoopBreak(_, _) | Self::Return(_, _) => true,
+            _ => false,
+        }
+    }
     /// Can this error be caught?
     ///
     /// # Panics

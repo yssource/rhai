@@ -2571,7 +2571,10 @@ fn parse_stmt(
 
     match token {
         // ; - empty statement
-        Token::SemiColon => Ok(Stmt::Noop(settings.pos)),
+        Token::SemiColon => {
+            eat_token(input, Token::SemiColon);
+            Ok(Stmt::Noop(settings.pos))
+        }
 
         // { - statements block
         Token::LeftBrace => Ok(parse_block(input, state, lib, settings.level_up())?),

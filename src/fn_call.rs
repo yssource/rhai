@@ -175,15 +175,11 @@ impl Engine {
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state, pos)?;
 
-        // Check if function access already in the cache
-        if state.functions_caches.is_empty() {
-            state.functions_caches.push(Default::default());
-        }
+        let source = state.source.clone();
 
+        // Check if function access already in the cache
         let func = &*state
-            .functions_caches
-            .last_mut()
-            .unwrap()
+            .fn_resolution_cache_mut()
             .entry(hash_fn)
             .or_insert_with(|| {
                 // Search for the native function
@@ -208,7 +204,7 @@ impl Engine {
                     })
             });
 
-        if let Some((func, source)) = func {
+        if let Some((func, src)) = func {
             assert!(func.is_native());
 
             // Calling pure function but the first argument is a reference?
@@ -216,12 +212,7 @@ impl Engine {
             backup.change_first_arg_to_copy(is_ref && func.is_pure(), args);
 
             // Run external function
-            let source = if source.is_none() {
-                state.source.as_ref()
-            } else {
-                source.as_ref()
-            }
-            .map(|s| s.as_str());
+            let source = src.as_ref().or_else(|| source.as_ref()).map(|s| s.as_str());
             let result = if func.is_plugin_fn() {
                 func.get_plugin_fn()
                     .call((self, fn_name, source, mods, lib).into(), args)
@@ -405,7 +396,7 @@ impl Engine {
 
         let unified_lib = if let Some(ref env_lib) = fn_def.lib {
             unified = true;
-            state.functions_caches.push(Default::default());
+            state.push_fn_resolution_cache();
             lib_merged = Default::default();
             lib_merged.push(env_lib.as_ref());
             lib_merged.extend(lib.iter().cloned());
@@ -477,7 +468,7 @@ impl Engine {
         state.scope_level = orig_scope_level;
 
         if unified {
-            state.functions_caches.pop();
+            state.pop_fn_resolution_cache();
         }
 
         result
@@ -515,13 +506,13 @@ impl Engine {
         // Check if it is already in the cache
         if let Some(state) = state.as_mut() {
             if let Some(hash) = hash_script {
-                match state.functions_caches.last().map_or(None, |c| c.get(&hash)) {
+                match state.fn_resolution_cache().map_or(None, |c| c.get(&hash)) {
                     Some(v) => return v.is_some(),
                     None => (),
                 }
             }
             if let Some(hash) = hash_fn {
-                match state.functions_caches.last().map_or(None, |c| c.get(&hash)) {
+                match state.fn_resolution_cache().map_or(None, |c| c.get(&hash)) {
                     Some(v) => return v.is_some(),
                     None => (),
                 }
@@ -545,24 +536,10 @@ impl Engine {
         if !r {
             if let Some(state) = state.as_mut() {
                 if let Some(hash) = hash_script {
-                    if state.functions_caches.is_empty() {
-                        state.functions_caches.push(Default::default());
-                    }
-                    state
-                        .functions_caches
-                        .last_mut()
-                        .unwrap()
-                        .insert(hash, None);
+                    state.fn_resolution_cache_mut().insert(hash, None);
                 }
                 if let Some(hash) = hash_fn {
-                    if state.functions_caches.is_empty() {
-                        state.functions_caches.push(Default::default());
-                    }
-                    state
-                        .functions_caches
-                        .last_mut()
-                        .unwrap()
-                        .insert(hash, None);
+                    state.fn_resolution_cache_mut().insert(hash, None);
                 }
             }
         }
@@ -653,14 +630,8 @@ impl Engine {
                 let hash_script = hash_script.unwrap();
 
                 // Check if function access already in the cache
-                if state.functions_caches.is_empty() {
-                    state.functions_caches.push(Default::default());
-                }
-
                 let (func, source) = state
-                    .functions_caches
-                    .last_mut()
-                    .unwrap()
+                    .fn_resolution_cache_mut()
                     .entry(hash_script)
                     .or_insert_with(|| {
                         lib.iter()
@@ -768,10 +739,10 @@ impl Engine {
         }
     }
 
-    /// Evaluate a list of statements with an empty state and no `this` pointer.
+    /// Evaluate a list of statements with no `this` pointer.
     /// This is commonly used to evaluate a list of statements in an [`AST`] or a script function body.
     #[inline]
-    pub(crate) fn eval_statements_raw<'a>(
+    pub(crate) fn eval_global_statements<'a>(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
@@ -780,11 +751,7 @@ impl Engine {
         lib: &[&Module],
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        statements
-            .into_iter()
-            .try_fold(Dynamic::UNIT, |_, stmt| {
-                self.eval_stmt(scope, mods, state, lib, &mut None, stmt, level)
-            })
+        self.eval_stmt_block(scope, mods, state, lib, &mut None, statements, false, level)
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
                 EvalAltResult::LoopBreak(_, _) => {
@@ -826,14 +793,12 @@ impl Engine {
         }
 
         // Evaluate the AST
-        let mut new_state = State {
-            source: state.source.clone(),
-            operations: state.operations,
-            ..Default::default()
-        };
+        let mut new_state: State = Default::default();
+        new_state.source = state.source.clone();
+        new_state.operations = state.operations;
 
         let result =
-            self.eval_statements_raw(scope, mods, &mut new_state, ast.statements(), lib, level);
+            self.eval_global_statements(scope, mods, &mut new_state, ast.statements(), lib, level);
 
         state.operations = new_state.operations;
         result

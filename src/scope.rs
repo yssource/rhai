@@ -449,14 +449,14 @@ impl<'a> Scope<'a> {
     ///
     /// let mut iter = my_scope.iter();
     ///
-    /// let (name, constant, value) = iter.next().unwrap();
+    /// let (name, is_constant, value) = iter.next().unwrap();
     /// assert_eq!(name, "x");
-    /// assert!(!constant);
+    /// assert!(!is_constant);
     /// assert_eq!(value.cast::<i64>(), 42);
     ///
-    /// let (name, constant, value) = iter.next().unwrap();
+    /// let (name, is_constant, value) = iter.next().unwrap();
     /// assert_eq!(name, "foo");
-    /// assert!(constant);
+    /// assert!(is_constant);
     /// assert_eq!(value.cast::<String>(), "hello");
     /// ```
     #[inline(always)]
@@ -467,7 +467,7 @@ impl<'a> Scope<'a> {
     /// Get an iterator to entries in the [`Scope`].
     /// Shared values are not expanded.
     #[inline(always)]
-    pub fn iter_raw<'x: 'a>(&'x self) -> impl Iterator<Item = (&'a str, bool, &'x Dynamic)> + 'x {
+    pub fn iter_raw(&self) -> impl Iterator<Item = (&str, bool, &Dynamic)> {
         self.names
             .iter()
             .zip(self.values.iter())
