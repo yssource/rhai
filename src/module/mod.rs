@@ -374,7 +374,7 @@ impl Module {
 
     /// Generate signatures for all the functions in the [`Module`].
     #[inline(always)]
-    pub fn gen_fn_signatures<'a>(&'a self) -> impl Iterator<Item = String> + 'a {
+    pub fn gen_fn_signatures(&self) -> impl Iterator<Item = String> + '_ {
         self.functions
             .values()
             .filter(|FuncInfo { access, .. }| !access.is_private())
@@ -1691,9 +1691,9 @@ impl Module {
     /// 5) Shared reference to function definition [`ScriptFnDef`][crate::ast::ScriptFnDef].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
-    pub(crate) fn iter_script_fn<'a>(
-        &'a self,
-    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &ScriptFnDef)> + 'a {
+    pub(crate) fn iter_script_fn(
+        &self,
+    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &ScriptFnDef)> + '_ {
         self.functions.values().filter(|f| f.func.is_script()).map(
             |FuncInfo {
                  namespace,
