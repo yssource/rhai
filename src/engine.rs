@@ -569,6 +569,14 @@ impl State {
     pub fn pop_fn_resolution_cache(&mut self) {
         self.fn_resolution_caches.pop();
     }
+    /// Clear the current functions resolution cache.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there is no current functions resolution cache.
+    pub fn clear_fn_resolution_cache(&mut self) {
+        self.fn_resolution_caches.last_mut().unwrap().clear();
+    }
 }
 
 /// _(INTERNALS)_ A type containing all the limits imposed by the [`Engine`].
@@ -1908,11 +1916,9 @@ impl Engine {
                 Stmt::Import(_, _, _) => {
                     // When imports list is modified, clear the functions lookup cache
                     if _has_imports {
-                        state.fn_resolution_caches.last_mut().map(|c| c.clear());
+                        state.clear_fn_resolution_cache();
                     } else if restore {
-                        state
-                            .fn_resolution_caches
-                            .push(HashMap::with_capacity_and_hasher(16, StraightHasherBuilder));
+                        state.push_fn_resolution_cache();
                         _has_imports = true;
                     }
                 }
@@ -1926,7 +1932,7 @@ impl Engine {
             scope.rewind(prev_scope_len);
             if _has_imports {
                 // If imports list is modified, pop the functions lookup cache
-                state.fn_resolution_caches.pop();
+                state.pop_fn_resolution_cache();
             }
             mods.truncate(prev_mods_len);
             state.scope_level -= 1;
@@ -2286,6 +2292,7 @@ impl Engine {
 
                 match result {
                     Ok(_) => result,
+                    Err(err) if err.is_pseudo_error() => Err(err),
                     Err(err) if !err.is_catchable() => Err(err),
                     Err(mut err) => {
                         let value = match *err {
