@@ -14,10 +14,10 @@ fn test_math() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<INT>("3 % 2")?, 1);
 
     #[cfg(not(feature = "no_float"))]
-    assert!((engine.eval::<FLOAT>("sin(30.0)")? - 0.5).abs() < 0.001);
+    assert!((engine.eval::<FLOAT>("sin(PI()/6.0)")? - 0.5).abs() < 0.001);
 
     #[cfg(not(feature = "no_float"))]
-    assert!(engine.eval::<FLOAT>("cos(90.0)")?.abs() < 0.001);
+    assert!(engine.eval::<FLOAT>("cos(PI()/2.0)")?.abs() < 0.001);
 
     #[cfg(not(feature = "only_i32"))]
     assert_eq!(

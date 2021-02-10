@@ -288,8 +288,8 @@ impl Engine {
                     return Err(format!("'{}' is a reserved keyword", keyword).into());
                 }
             }
-            // Active standard operators cannot be made custom
-            Some(token) if token.is_operator() => {
+            // Active standard symbols cannot be made custom
+            Some(token) if token.is_symbol() => {
                 if !self.disabled_symbols.contains(token.syntax().as_ref()) {
                     return Err(format!("'{}' is a reserved operator", keyword).into());
                 }

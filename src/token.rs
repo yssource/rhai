@@ -194,7 +194,7 @@ pub enum Token {
     Divide,
     /// `%`
     Modulo,
-    /// `~`
+    /// `**`
     PowerOf,
     /// `<<`
     LeftShift,
@@ -305,7 +305,7 @@ pub enum Token {
     XOrAssign,
     /// `%=`
     ModuloAssign,
-    /// `~=`
+    /// `**=`
     PowerOfAssign,
     /// `private`
     ///
@@ -422,8 +422,8 @@ impl Token {
                 XOr => "^",
                 Modulo => "%",
                 ModuloAssign => "%=",
-                PowerOf => "~",
-                PowerOfAssign => "~=",
+                PowerOf => "**",
+                PowerOfAssign => "**=",
 
                 #[cfg(not(feature = "no_function"))]
                 Fn => "fn",
@@ -511,8 +511,8 @@ impl Token {
             "^" => XOr,
             "%" => Modulo,
             "%=" => ModuloAssign,
-            "~" => PowerOf,
-            "~=" => PowerOfAssign,
+            "**" => PowerOf,
+            "**=" => PowerOfAssign,
 
             #[cfg(not(feature = "no_function"))]
             "fn" => Fn,
@@ -532,7 +532,7 @@ impl Token {
             #[cfg(feature = "no_module")]
             "import" | "export" | "as" => Reserved(syntax.into()),
 
-            "===" | "!==" | "->" | "<-" | ":=" | "**" | "::<" | "(*" | "*)" | "#" | "public"
+            "===" | "!==" | "->" | "<-" | ":=" | "~" | "::<" | "(*" | "*)" | "#" | "public"
             | "new" | "use" | "module" | "package" | "var" | "static" | "begin" | "end"
             | "shared" | "with" | "each" | "then" | "goto" | "unless" | "exit" | "match"
             | "case" | "default" | "void" | "null" | "nil" | "spawn" | "thread" | "go" | "sync"
@@ -599,6 +599,8 @@ impl Token {
             DivideAssign     |
             LeftShiftAssign  |
             RightShiftAssign |
+            PowerOf          |
+            PowerOfAssign    |
             AndAssign        |
             OrAssign         |
             XOrAssign        |
@@ -609,9 +611,7 @@ impl Token {
             ModuloAssign     |
             Return           |
             Throw            |
-            PowerOf          |
-            In               |
-            PowerOfAssign    => true,
+            In               => true,
 
             _ => false,
         }
@@ -623,9 +623,9 @@ impl Token {
 
         match self {
             // Assignments are not considered expressions - set to zero
-            Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | LeftShiftAssign
-            | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
-            | PowerOfAssign => 0,
+            Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | PowerOfAssign
+            | LeftShiftAssign | RightShiftAssign | AndAssign | OrAssign | XOrAssign
+            | ModuloAssign => 0,
 
             Or | XOr | Pipe => 30,
 
@@ -657,19 +657,22 @@ impl Token {
 
         match self {
             // Assignments bind to the right
-            Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | LeftShiftAssign
-            | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
-            | PowerOfAssign => true,
+            Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | PowerOfAssign
+            | LeftShiftAssign | RightShiftAssign | AndAssign | OrAssign | XOrAssign
+            | ModuloAssign => true,
 
             // Property access binds to the right
             Period => true,
+
+            // Exponentiation binds to the right
+            PowerOf => true,
 
             _ => false,
         }
     }
 
-    /// Is this token an operator?
-    pub fn is_operator(&self) -> bool {
+    /// Is this token a standard symbol used in the language?
+    pub fn is_symbol(&self) -> bool {
         use Token::*;
 
         match self {
@@ -1284,10 +1287,6 @@ fn get_next_token_inner(
             ('-', _) if !state.non_unary => return Some((Token::UnaryMinus, start_pos)),
             ('-', _) => return Some((Token::Minus, start_pos)),
 
-            ('*', '*') => {
-                eat_next(stream, pos);
-                return Some((Token::Reserved("**".into()), start_pos));
-            }
             ('*', ')') => {
                 eat_next(stream, pos);
                 return Some((Token::Reserved("*)".into()), start_pos));
@@ -1295,6 +1294,19 @@ fn get_next_token_inner(
             ('*', '=') => {
                 eat_next(stream, pos);
                 return Some((Token::MultiplyAssign, start_pos));
+            }
+            ('*', '*') => {
+                eat_next(stream, pos);
+
+                return Some((
+                    if stream.peek_next() == Some('=') {
+                        eat_next(stream, pos);
+                        Token::PowerOfAssign
+                    } else {
+                        Token::PowerOf
+                    },
+                    start_pos,
+                ));
             }
             ('*', _) => return Some((Token::Multiply, start_pos)),
 
@@ -1490,17 +1502,13 @@ fn get_next_token_inner(
             }
             ('^', _) => return Some((Token::XOr, start_pos)),
 
+            ('~', _) => return Some((Token::Reserved("~".into()), start_pos)),
+
             ('%', '=') => {
                 eat_next(stream, pos);
                 return Some((Token::ModuloAssign, start_pos));
             }
             ('%', _) => return Some((Token::Modulo, start_pos)),
-
-            ('~', '=') => {
-                eat_next(stream, pos);
-                return Some((Token::PowerOfAssign, start_pos));
-            }
-            ('~', _) => return Some((Token::PowerOf, start_pos)),
 
             ('@', _) => return Some((Token::Reserved("@".into()), start_pos)),
 

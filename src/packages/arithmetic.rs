@@ -68,7 +68,7 @@ macro_rules! gen_arithmetic_functions {
                         Ok(Dynamic::from(x % y))
                     }
                 }
-                #[rhai_fn(name = "~", return_raw)]
+                #[rhai_fn(name = "**", return_raw)]
                 pub fn power(x: INT, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
                     if cfg!(not(feature = "unchecked")) {
                         if cfg!(not(feature = "only_i32")) && y > (u32::MAX as INT) {
@@ -246,7 +246,7 @@ mod f32_functions {
         pub fn modulo(x: f32, y: f32) -> f32 {
             x % y
         }
-        #[rhai_fn(name = "~", return_raw)]
+        #[rhai_fn(name = "**", return_raw)]
         pub fn pow_f_f(x: f32, y: f32) -> Result<Dynamic, Box<EvalAltResult>> {
             Ok(Dynamic::from(x.powf(y)))
         }
@@ -271,7 +271,7 @@ mod f32_functions {
             1
         }
     }
-    #[rhai_fn(name = "~", return_raw)]
+    #[rhai_fn(name = "**", return_raw)]
     pub fn pow_f_i(x: f32, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && y > (i32::MAX as INT) {
             Err(make_err(format!(
@@ -309,7 +309,7 @@ mod f64_functions {
         pub fn modulo(x: f64, y: f64) -> f64 {
             x % y
         }
-        #[rhai_fn(name = "~", return_raw)]
+        #[rhai_fn(name = "**", return_raw)]
         pub fn pow_f_f(x: f64, y: f64) -> Result<Dynamic, Box<EvalAltResult>> {
             Ok(Dynamic::from(x.powf(y)))
         }
@@ -334,7 +334,7 @@ mod f64_functions {
             1
         }
     }
-    #[rhai_fn(name = "~", return_raw)]
+    #[rhai_fn(name = "**", return_raw)]
     pub fn pow_f_i(x: FLOAT, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && y > (i32::MAX as INT) {
             Err(make_err(format!(
