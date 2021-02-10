@@ -13,8 +13,12 @@ Bug fixes
 Breaking changes
 ----------------
 
-* Trigonometry functions now take radians and return radians instead of degrees.
+* In order to be consistent with other scripting languages:
+  * the power/exponentiation operator is changed from `~` to `**`; `~` is now a reserved symbol
+  * the power/exponentiation operator now binds to the right
+  * trigonometry functions now take radians and return radians instead of degrees
 * `Dynamic::into_shared` is no longer available under `no_closure`. It used to panic.
+* `Token::is_operator` is renamed to `Token::is_symbol`.
 
 Enhancements
 ------------
