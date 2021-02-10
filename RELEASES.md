@@ -13,6 +13,7 @@ Bug fixes
 Breaking changes
 ----------------
 
+* Trigonometry functions now take radians and return radians instead of degrees.
 * `Dynamic::into_shared` is no longer available under `no_closure`. It used to panic.
 
 Enhancements

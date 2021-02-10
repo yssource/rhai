@@ -112,40 +112,40 @@ mod trig_functions {
     use crate::FLOAT;
 
     pub fn sin(x: FLOAT) -> FLOAT {
-        x.to_radians().sin()
+        x.sin()
     }
     pub fn cos(x: FLOAT) -> FLOAT {
-        x.to_radians().cos()
+        x.cos()
     }
     pub fn tan(x: FLOAT) -> FLOAT {
-        x.to_radians().tan()
+        x.tan()
     }
     pub fn sinh(x: FLOAT) -> FLOAT {
-        x.to_radians().sinh()
+        x.sinh()
     }
     pub fn cosh(x: FLOAT) -> FLOAT {
-        x.to_radians().cosh()
+        x.cosh()
     }
     pub fn tanh(x: FLOAT) -> FLOAT {
-        x.to_radians().tanh()
+        x.tanh()
     }
     pub fn asin(x: FLOAT) -> FLOAT {
-        x.asin().to_degrees()
+        x.asin()
     }
     pub fn acos(x: FLOAT) -> FLOAT {
-        x.acos().to_degrees()
+        x.acos()
     }
     pub fn atan(x: FLOAT) -> FLOAT {
-        x.atan().to_degrees()
+        x.atan()
     }
     pub fn asinh(x: FLOAT) -> FLOAT {
-        x.asinh().to_degrees()
+        x.asinh()
     }
     pub fn acosh(x: FLOAT) -> FLOAT {
-        x.acosh().to_degrees()
+        x.acosh()
     }
     pub fn atanh(x: FLOAT) -> FLOAT {
-        x.atanh().to_degrees()
+        x.atanh()
     }
 }
 
