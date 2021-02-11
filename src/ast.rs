@@ -1176,6 +1176,9 @@ impl fmt::Debug for FloatWrapper {
 #[cfg(not(feature = "no_float"))]
 impl fmt::Display for FloatWrapper {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        #[cfg(feature = "no_std")]
+        use num_traits::Float;
+
         let abs = self.0.abs();
         if abs > 10000000000000.0 || abs < 0.0000000000001 {
             write!(f, "{:e}", self.0)

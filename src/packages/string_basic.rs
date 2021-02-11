@@ -83,6 +83,9 @@ fn to_debug<T: Debug>(x: &mut T) -> ImmutableString {
 }
 #[cfg(not(feature = "no_float"))]
 fn print_f64(x: &mut f64) -> ImmutableString {
+    #[cfg(feature = "no_std")]
+    use num_traits::Float;
+
     let abs = x.abs();
     if abs > 10000000000000.0 || abs < 0.0000000000001 {
         format!("{:e}", x).into()
@@ -92,6 +95,9 @@ fn print_f64(x: &mut f64) -> ImmutableString {
 }
 #[cfg(not(feature = "no_float"))]
 fn print_f32(x: &mut f32) -> ImmutableString {
+    #[cfg(feature = "no_std")]
+    use num_traits::Float;
+
     let abs = x.abs();
     if abs > 10000000000000.0 || abs < 0.0000000000001 {
         format!("{:e}", x).into()
