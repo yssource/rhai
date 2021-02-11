@@ -68,8 +68,10 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
 
     #[cfg(not(feature = "no_float"))]
     {
-        reg_print_functions!(lib += print_float; f32, f64);
-        reg_debug_functions!(lib += debug_float; f32, f64);
+        reg_print_functions!(lib += print_float_64; f64);
+        reg_debug_functions!(lib += print_float_64; f64);
+        reg_print_functions!(lib += print_float_32; f32);
+        reg_debug_functions!(lib += print_float_32; f32);
     }
 });
 
@@ -78,6 +80,24 @@ fn to_string<T: Display>(x: &mut T) -> ImmutableString {
 }
 fn to_debug<T: Debug>(x: &mut T) -> ImmutableString {
     format!("{:?}", x).into()
+}
+#[cfg(not(feature = "no_float"))]
+fn print_f64(x: &mut f64) -> ImmutableString {
+    let abs = x.abs();
+    if abs > 10000000000000.0 || abs < 0.0000000000001 {
+        format!("{:e}", x).into()
+    } else {
+        x.to_string().into()
+    }
+}
+#[cfg(not(feature = "no_float"))]
+fn print_f32(x: &mut f32) -> ImmutableString {
+    let abs = x.abs();
+    if abs > 10000000000000.0 || abs < 0.0000000000001 {
+        format!("{:e}", x).into()
+    } else {
+        x.to_string().into()
+    }
 }
 
 gen_functions!(print_basic => to_string(INT, bool, char, FnPtr));
@@ -102,10 +122,10 @@ gen_functions!(print_num_128 => to_string(i128, u128));
 gen_functions!(debug_num_128 => to_debug(i128, u128));
 
 #[cfg(not(feature = "no_float"))]
-gen_functions!(print_float => to_string(f32, f64));
+gen_functions!(print_float_64 => print_f64(f64));
 
 #[cfg(not(feature = "no_float"))]
-gen_functions!(debug_float => to_debug(f32, f64));
+gen_functions!(print_float_32 => print_f32(f32));
 
 // Register print and debug
 

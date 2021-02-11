@@ -1169,14 +1169,19 @@ impl crate::stdlib::ops::DerefMut for FloatWrapper {
 #[cfg(not(feature = "no_float"))]
 impl fmt::Debug for FloatWrapper {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        fmt::Display::fmt(self, f)
     }
 }
 
 #[cfg(not(feature = "no_float"))]
 impl fmt::Display for FloatWrapper {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        let abs = self.0.abs();
+        if abs > 10000000000000.0 || abs < 0.0000000000001 {
+            write!(f, "{:e}", self.0)
+        } else {
+            self.0.fmt(f)
+        }
     }
 }
 
