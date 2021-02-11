@@ -1488,10 +1488,15 @@ impl Expr {
             Self::Stmt(x, _) => x.iter().for_each(|s| s.walk(path, on_node)),
             Self::Array(x, _) => x.iter().for_each(|e| e.walk(path, on_node)),
             Self::Map(x, _) => x.iter().for_each(|(_, e)| e.walk(path, on_node)),
-            Self::Index(x, _) | Expr::In(x, _) | Expr::And(x, _) | Expr::Or(x, _) => {
+            Self::Index(x, _)
+            | Self::Dot(x, _)
+            | Expr::In(x, _)
+            | Expr::And(x, _)
+            | Expr::Or(x, _) => {
                 x.lhs.walk(path, on_node);
                 x.rhs.walk(path, on_node);
             }
+            Self::FnCall(x, _) => x.args.iter().for_each(|e| e.walk(path, on_node)),
             Self::Custom(x, _) => x.keywords.iter().for_each(|e| e.walk(path, on_node)),
             _ => (),
         }

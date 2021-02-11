@@ -7,16 +7,21 @@ const EPSILON: FLOAT = 0.000_000_000_1;
 fn test_float() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
-    assert_eq!(
-        engine.eval::<bool>("let x = 0.0; let y = 1.0; x < y")?,
-        true
-    );
-    assert_eq!(
-        engine.eval::<bool>("let x = 0.0; let y = 1.0; x > y")?,
-        false
-    );
+    assert!(engine.eval::<bool>("let x = 0.0; let y = 1.0; x < y")?,);
+    assert!(!engine.eval::<bool>("let x = 0.0; let y = 1.0; x > y")?,);
     assert_eq!(engine.eval::<bool>("let x = 0.; let y = 1.; x > y")?, false);
     assert!((engine.eval::<FLOAT>("let x = 9.9999; x")? - 9.9999 as FLOAT).abs() < EPSILON);
+
+    Ok(())
+}
+
+#[test]
+fn test_float_scientific() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert!(engine.eval::<bool>("123.456 == 1.23456e2")?);
+    assert!(engine.eval::<bool>("123.456 == 1.23456e+2")?);
+    assert!(engine.eval::<bool>("123.456 == 123456e-3")?);
 
     Ok(())
 }

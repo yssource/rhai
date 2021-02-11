@@ -1000,7 +1000,7 @@ pub fn get_next_token(
 
 /// Test if the given character is a hex character.
 #[inline(always)]
-fn is_hex_char(c: char) -> bool {
+fn is_hex_digit(c: char) -> bool {
     match c {
         'a'..='f' => true,
         'A'..='F' => true,
@@ -1009,20 +1009,11 @@ fn is_hex_char(c: char) -> bool {
     }
 }
 
-/// Test if the given character is an octal character.
+/// Test if the given character is a numeric digit.
 #[inline(always)]
-fn is_octal_char(c: char) -> bool {
+fn is_numeric_digit(c: char) -> bool {
     match c {
-        '0'..='7' => true,
-        _ => false,
-    }
-}
-
-/// Test if the given character is a binary character.
-#[inline(always)]
-fn is_binary_char(c: char) -> bool {
-    match c {
-        '0' | '1' => true,
+        '0'..='9' => true,
         _ => false,
     }
 }
@@ -1073,11 +1064,12 @@ fn get_next_token_inner(
             ('0'..='9', _) => {
                 let mut result: StaticVec<char> = Default::default();
                 let mut radix_base: Option<u32> = None;
+                let mut valid: fn(char) -> bool = is_numeric_digit;
                 result.push(c);
 
                 while let Some(next_char) = stream.peek_next() {
                     match next_char {
-                        '0'..='9' | '_' => {
+                        ch if valid(ch) || ch == '_' => {
                             result.push(next_char);
                             eat_next(stream, pos);
                         }
@@ -1090,7 +1082,7 @@ fn get_next_token_inner(
                                 // digits after period - accept the period
                                 '0'..='9' => {
                                     result.push(next_char);
-                                    pos.advance()
+                                    pos.advance();
                                 }
                                 // _ - cannot follow a decimal point
                                 '_' => {
@@ -1114,28 +1106,43 @@ fn get_next_token_inner(
                                     break;
                                 }
                             }
+                        }
+                        #[cfg(not(feature = "no_float"))]
+                        'e' => {
+                            stream.get_next().unwrap();
 
-                            while let Some(next_char_in_float) = stream.peek_next() {
-                                match next_char_in_float {
-                                    '0'..='9' | '_' => {
-                                        result.push(next_char_in_float);
-                                        eat_next(stream, pos);
-                                    }
-                                    _ => break,
+                            // Check if followed by digits or +/-
+                            match stream.peek_next().unwrap_or('\0') {
+                                // digits after e - accept the e
+                                '0'..='9' => {
+                                    result.push(next_char);
+                                    pos.advance();
+                                }
+                                // +/- after e - accept the e and the sign
+                                '+' | '-' => {
+                                    result.push(next_char);
+                                    pos.advance();
+                                    result.push(stream.get_next().unwrap());
+                                    pos.advance();
+                                }
+                                // Not a floating-point number
+                                _ => {
+                                    stream.unget(next_char);
+                                    break;
                                 }
                             }
                         }
-                        // 0x????, 0o????, 0b????
+                        // 0x????, 0o????, 0b???? at beginning
                         ch @ 'x' | ch @ 'o' | ch @ 'b' | ch @ 'X' | ch @ 'O' | ch @ 'B'
-                            if c == '0' =>
+                            if c == '0' && result.len() <= 1 =>
                         {
                             result.push(next_char);
                             eat_next(stream, pos);
 
-                            let valid = match ch {
-                                'x' | 'X' => is_hex_char,
-                                'o' | 'O' => is_octal_char,
-                                'b' | 'B' => is_binary_char,
+                            valid = match ch {
+                                'x' | 'X' => is_hex_digit,
+                                'o' | 'O' => is_numeric_digit,
+                                'b' | 'B' => is_numeric_digit,
                                 _ => unreachable!("expecting 'x', 'o' or 'b', but gets {}", ch),
                             };
 
@@ -1145,15 +1152,6 @@ fn get_next_token_inner(
                                 'b' | 'B' => 2,
                                 _ => unreachable!("expecting 'x', 'o' or 'b', but gets {}", ch),
                             });
-
-                            while let Some(next_char_in_escape_seq) = stream.peek_next() {
-                                if !valid(next_char_in_escape_seq) {
-                                    break;
-                                }
-
-                                result.push(next_char_in_escape_seq);
-                                eat_next(stream, pos);
-                            }
                         }
 
                         _ => break,

@@ -577,7 +577,7 @@ impl Engine {
 
         // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
         let arg_types = args.iter().map(|a| a.type_id());
-        let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_types);
+        let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_types).unwrap();
 
         match fn_name {
             // type_of
@@ -587,7 +587,7 @@ impl Engine {
                         Some(mods),
                         Some(state),
                         lib,
-                        hash_fn,
+                        Some(hash_fn),
                         hash_script,
                         pub_only,
                     ) =>
@@ -606,7 +606,7 @@ impl Engine {
                         Some(mods),
                         Some(state),
                         lib,
-                        hash_fn,
+                        Some(hash_fn),
                         hash_script,
                         pub_only,
                     ) =>
@@ -622,14 +622,11 @@ impl Engine {
                 .into()
             }
 
-            // Script-like function found
             #[cfg(not(feature = "no_function"))]
-            _ if hash_script.is_some()
-                && self.has_override(Some(mods), Some(state), lib, None, hash_script, pub_only) =>
-            {
+            _ if hash_script.is_some() => {
                 let hash_script = hash_script.unwrap();
 
-                // Check if function access already in the cache
+                // Check if script function access already in the cache
                 let (func, source) = state
                     .fn_resolution_cache_mut()
                     .entry(hash_script)
@@ -649,92 +646,92 @@ impl Engine {
                         //.or_else(|| mods.iter().find_map(|(_, m)| m.get_qualified_fn(hash_script).map(|f| (f, m.id_raw().clone()))))
                     })
                     .as_ref()
-                    .map(|(f, s)| (f.clone(), s.clone()))
-                    .unwrap();
+                    .map(|(f, s)| (Some(f.clone()), s.clone()))
+                    .unwrap_or((None, None));
 
-                assert!(func.is_script());
+                if let Some(func) = func {
+                    // Script function call
+                    assert!(func.is_script());
 
-                let func = func.get_fn_def();
+                    let func = func.get_fn_def();
 
-                let scope: &mut Scope = &mut Default::default();
+                    let scope: &mut Scope = &mut Default::default();
 
-                // Move captured variables into scope
-                #[cfg(not(feature = "no_closure"))]
-                if let Some(captured) = _capture_scope {
-                    if !func.externals.is_empty() {
-                        captured
-                            .into_iter()
-                            .filter(|(name, _, _)| func.externals.iter().any(|ex| ex == name))
-                            .for_each(|(name, value, _)| {
-                                // Consume the scope values.
-                                scope.push_dynamic(name, value);
-                            });
+                    // Move captured variables into scope
+                    #[cfg(not(feature = "no_closure"))]
+                    if let Some(captured) = _capture_scope {
+                        if !func.externals.is_empty() {
+                            captured
+                                .into_iter()
+                                .filter(|(name, _, _)| func.externals.iter().any(|ex| ex == name))
+                                .for_each(|(name, value, _)| {
+                                    // Consume the scope values.
+                                    scope.push_dynamic(name, value);
+                                });
+                        }
                     }
-                }
 
-                let result = if _is_method {
-                    // Method call of script function - map first argument to `this`
-                    let (first, rest) = args.split_first_mut().unwrap();
+                    let result = if _is_method {
+                        // Method call of script function - map first argument to `this`
+                        let (first, rest) = args.split_first_mut().unwrap();
 
-                    let orig_source = mem::take(&mut state.source);
-                    state.source = source;
+                        let orig_source = mem::take(&mut state.source);
+                        state.source = source;
 
-                    let level = _level + 1;
+                        let level = _level + 1;
 
-                    let result = self.call_script_fn(
-                        scope,
-                        mods,
-                        state,
-                        lib,
-                        &mut Some(*first),
-                        func,
-                        rest,
-                        pos,
-                        level,
-                    );
+                        let result = self.call_script_fn(
+                            scope,
+                            mods,
+                            state,
+                            lib,
+                            &mut Some(*first),
+                            func,
+                            rest,
+                            pos,
+                            level,
+                        );
 
-                    // Restore the original source
-                    state.source = orig_source;
+                        // Restore the original source
+                        state.source = orig_source;
 
-                    result?
+                        result?
+                    } else {
+                        // Normal call of script function
+                        // The first argument is a reference?
+                        let mut backup: ArgBackup = Default::default();
+                        backup.change_first_arg_to_copy(is_ref, args);
+
+                        let orig_source = mem::take(&mut state.source);
+                        state.source = source;
+
+                        let level = _level + 1;
+
+                        let result = self.call_script_fn(
+                            scope, mods, state, lib, &mut None, func, args, pos, level,
+                        );
+
+                        // Restore the original source
+                        state.source = orig_source;
+
+                        // Restore the original reference
+                        backup.restore_first_arg(args);
+
+                        result?
+                    };
+
+                    Ok((result, false))
                 } else {
-                    // Normal call of script function
-                    // The first argument is a reference?
-                    let mut backup: ArgBackup = Default::default();
-                    backup.change_first_arg_to_copy(is_ref, args);
-
-                    let orig_source = mem::take(&mut state.source);
-                    state.source = source;
-
-                    let level = _level + 1;
-
-                    let result = self
-                        .call_script_fn(scope, mods, state, lib, &mut None, func, args, pos, level);
-
-                    // Restore the original source
-                    state.source = orig_source;
-
-                    // Restore the original reference
-                    backup.restore_first_arg(args);
-
-                    result?
-                };
-
-                Ok((result, false))
+                    // Native function call
+                    self.call_native_fn(
+                        mods, state, lib, fn_name, hash_fn, args, is_ref, pub_only, pos, def_val,
+                    )
+                }
             }
 
-            // Normal native function call
+            // Native function call
             _ => self.call_native_fn(
-                mods,
-                state,
-                lib,
-                fn_name,
-                hash_fn.unwrap(),
-                args,
-                is_ref,
-                pub_only,
-                pos,
-                def_val,
+                mods, state, lib, fn_name, hash_fn, args, is_ref, pub_only, pos, def_val,
             ),
         }
     }

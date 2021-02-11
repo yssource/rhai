@@ -20,6 +20,11 @@ Breaking changes
 * `Dynamic::into_shared` is no longer available under `no_closure`. It used to panic.
 * `Token::is_operator` is renamed to `Token::is_symbol`.
 
+New features
+------------
+
+* Scientific notation is supported for floating-point number literals.
+
 Enhancements
 ------------
 
