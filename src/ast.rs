@@ -10,6 +10,7 @@ use crate::stdlib::{
     hash::Hash,
     num::{NonZeroU64, NonZeroUsize},
     ops::{Add, AddAssign},
+    str::FromStr,
     string::String,
     vec,
     vec::Vec,
@@ -1126,7 +1127,7 @@ pub struct FnCallExpr {
 
 /// A type that wraps a [`FLOAT`] and implements [`Hash`].
 #[cfg(not(feature = "no_float"))]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct FloatWrapper(FLOAT);
 
 #[cfg(not(feature = "no_float"))]
@@ -1192,6 +1193,15 @@ impl fmt::Display for FloatWrapper {
 impl From<FLOAT> for FloatWrapper {
     fn from(value: FLOAT) -> Self {
         Self::new(value)
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+impl FromStr for FloatWrapper {
+    type Err = <FLOAT as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        FLOAT::from_str(s).map(Into::<Self>::into)
     }
 }
 

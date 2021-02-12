@@ -15,7 +15,7 @@ use crate::stdlib::{
 use crate::{Engine, LexError, StaticVec, INT};
 
 #[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
+use crate::ast::FloatWrapper;
 
 type LERR = LexError;
 
@@ -153,7 +153,7 @@ impl fmt::Debug for Position {
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Hash)]
 pub enum Token {
     /// An `INT` constant.
     IntegerConstant(INT),
@@ -161,7 +161,7 @@ pub enum Token {
     ///
     /// Reserved under the `no_float` feature.
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(FLOAT),
+    FloatConstant(FloatWrapper),
     /// An identifier.
     Identifier(String),
     /// A character constant.
@@ -1180,7 +1180,8 @@ fn get_next_token_inner(
 
                     // If integer parsing is unnecessary, try float instead
                     #[cfg(not(feature = "no_float"))]
-                    let num = num.or_else(|_| FLOAT::from_str(&out).map(Token::FloatConstant));
+                    let num =
+                        num.or_else(|_| FloatWrapper::from_str(&out).map(Token::FloatConstant));
 
                     return Some((
                         num.unwrap_or_else(|_| {
