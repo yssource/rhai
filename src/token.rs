@@ -15,7 +15,10 @@ use crate::stdlib::{
 use crate::{Engine, LexError, StaticVec, INT};
 
 #[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
+use crate::ast::FloatWrapper;
+
+#[cfg(feature = "decimal")]
+use rust_decimal::Decimal;
 
 type LERR = LexError;
 
@@ -153,7 +156,7 @@ impl fmt::Debug for Position {
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Hash)]
 pub enum Token {
     /// An `INT` constant.
     IntegerConstant(INT),
@@ -161,7 +164,12 @@ pub enum Token {
     ///
     /// Reserved under the `no_float` feature.
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(FLOAT),
+    FloatConstant(FloatWrapper),
+    /// A [`Decimal`] constant.
+    ///
+    /// Requires the `decimal` feature.
+    #[cfg(feature = "decimal")]
+    DecimalConstant(Decimal),
     /// An identifier.
     Identifier(String),
     /// A character constant.
@@ -348,6 +356,8 @@ impl Token {
             IntegerConstant(i) => i.to_string().into(),
             #[cfg(not(feature = "no_float"))]
             FloatConstant(f) => f.to_string().into(),
+            #[cfg(feature = "decimal")]
+            DecimalConstant(d) => d.to_string().into(),
             StringConstant(_) => "string".into(),
             CharConstant(c) => c.to_string().into(),
             Identifier(s) => s.clone().into(),
@@ -1073,7 +1083,7 @@ fn get_next_token_inner(
                             result.push(next_char);
                             eat_next(stream, pos);
                         }
-                        #[cfg(not(feature = "no_float"))]
+                        #[cfg(any(not(feature = "no_float"), feature = "decimal"))]
                         '.' => {
                             stream.get_next().unwrap();
 
@@ -1180,7 +1190,12 @@ fn get_next_token_inner(
 
                     // If integer parsing is unnecessary, try float instead
                     #[cfg(not(feature = "no_float"))]
-                    let num = num.or_else(|_| FLOAT::from_str(&out).map(Token::FloatConstant));
+                    let num =
+                        num.or_else(|_| FloatWrapper::from_str(&out).map(Token::FloatConstant));
+
+                    // Then try decimal
+                    #[cfg(feature = "decimal")]
+                    let num = num.or_else(|_| Decimal::from_str(&out).map(Token::DecimalConstant));
 
                     return Some((
                         num.unwrap_or_else(|_| {

@@ -128,12 +128,26 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             Union::Bool(_, _) => self.deserialize_bool(visitor),
             Union::Str(_, _) => self.deserialize_str(visitor),
             Union::Char(_, _) => self.deserialize_char(visitor),
+
             #[cfg(not(feature = "only_i32"))]
             Union::Int(_, _) => self.deserialize_i64(visitor),
             #[cfg(feature = "only_i32")]
             Union::Int(_, _) => self.deserialize_i32(visitor),
+
             #[cfg(not(feature = "no_float"))]
+            #[cfg(not(feature = "f32_float"))]
             Union::Float(_, _) => self.deserialize_f64(visitor),
+            #[cfg(not(feature = "no_float"))]
+            #[cfg(feature = "f32_float")]
+            Union::Float(_, _) => self.deserialize_f32(visitor),
+
+            #[cfg(feature = "decimal")]
+            #[cfg(not(feature = "f32_float"))]
+            Union::Decimal(_, _) => self.deserialize_f64(visitor),
+            #[cfg(feature = "decimal")]
+            #[cfg(feature = "f32_float")]
+            Union::Decimal(_, _) => self.deserialize_f32(visitor),
+
             #[cfg(not(feature = "no_index"))]
             Union::Array(_, _) => self.deserialize_seq(visitor),
             #[cfg(not(feature = "no_object"))]
@@ -278,6 +292,19 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             .map_or_else(|| self.type_error(), |&x| _visitor.visit_f32(x));
 
         #[cfg(feature = "no_float")]
+        #[cfg(feature = "decimal")]
+        {
+            use rust_decimal::prelude::ToPrimitive;
+
+            return self
+                .value
+                .downcast_ref::<rust_decimal::Decimal>()
+                .and_then(|&x| x.to_f32())
+                .map_or_else(|| self.type_error(), |v| _visitor.visit_f32(v));
+        }
+
+        #[cfg(feature = "no_float")]
+        #[cfg(not(feature = "decimal"))]
         return self.type_error_str("f32");
     }
 
@@ -289,6 +316,19 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             .map_or_else(|| self.type_error(), |&x| _visitor.visit_f64(x));
 
         #[cfg(feature = "no_float")]
+        #[cfg(feature = "decimal")]
+        {
+            use rust_decimal::prelude::ToPrimitive;
+
+            return self
+                .value
+                .downcast_ref::<rust_decimal::Decimal>()
+                .and_then(|&x| x.to_f64())
+                .map_or_else(|| self.type_error(), |v| _visitor.visit_f64(v));
+        }
+
+        #[cfg(feature = "no_float")]
+        #[cfg(not(feature = "decimal"))]
         return self.type_error_str("f64");
     }
 

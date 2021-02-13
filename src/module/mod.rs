@@ -1334,12 +1334,12 @@ impl Module {
     #[inline(always)]
     pub fn set_indexer_get_set_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
         &mut self,
-        getter: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
-        setter: impl Fn(&mut A, B, T) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
+        get_fn: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
+        set_fn: impl Fn(&mut A, B, T) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> (NonZeroU64, NonZeroU64) {
         (
-            self.set_indexer_get_fn(getter),
-            self.set_indexer_set_fn(setter),
+            self.set_indexer_get_fn(get_fn),
+            self.set_indexer_set_fn(set_fn),
         )
     }
 
@@ -1570,7 +1570,7 @@ impl Module {
     pub(crate) fn merge_filtered(
         &mut self,
         other: &Self,
-        mut _filter: &mut impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
+        _filter: &impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> &mut Self {
         #[cfg(not(feature = "no_function"))]
         other.modules.iter().for_each(|(k, v)| {
@@ -1625,7 +1625,7 @@ impl Module {
     #[inline]
     pub(crate) fn retain_script_functions(
         &mut self,
-        mut filter: impl FnMut(FnNamespace, FnAccess, &str, usize) -> bool,
+        filter: impl Fn(FnNamespace, FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
         self.functions.retain(
             |_,

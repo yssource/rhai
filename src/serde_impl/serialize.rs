@@ -12,16 +12,42 @@ impl Serialize for Dynamic {
             Union::Bool(x, _) => ser.serialize_bool(*x),
             Union::Str(s, _) => ser.serialize_str(s.as_str()),
             Union::Char(c, _) => ser.serialize_str(&c.to_string()),
+
             #[cfg(not(feature = "only_i32"))]
             Union::Int(x, _) => ser.serialize_i64(*x),
             #[cfg(feature = "only_i32")]
             Union::Int(x, _) => ser.serialize_i32(*x),
+
             #[cfg(not(feature = "no_float"))]
             #[cfg(not(feature = "f32_float"))]
             Union::Float(x, _) => ser.serialize_f64(**x),
             #[cfg(not(feature = "no_float"))]
             #[cfg(feature = "f32_float")]
             Union::Float(x, _) => ser.serialize_f32(*x),
+
+            #[cfg(feature = "decimal")]
+            #[cfg(not(feature = "f32_float"))]
+            Union::Decimal(x, _) => {
+                use rust_decimal::prelude::ToPrimitive;
+
+                if let Some(v) = x.to_f64() {
+                    ser.serialize_f64(v)
+                } else {
+                    ser.serialize_str(&x.to_string())
+                }
+            }
+            #[cfg(feature = "decimal")]
+            #[cfg(feature = "f32_float")]
+            Union::Decimal(x, _) => {
+                use rust_decimal::prelude::ToPrimitive;
+
+                if let Some(v) = x.to_f32() {
+                    ser.serialize_f32(v)
+                } else {
+                    ser.serialize_str(&x.to_string())
+                }
+            }
+
             #[cfg(not(feature = "no_index"))]
             Union::Array(a, _) => (**a).serialize(ser),
             #[cfg(not(feature = "no_object"))]

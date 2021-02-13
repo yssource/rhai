@@ -5,11 +5,14 @@ use rhai::{
     Dynamic, Engine, EvalAltResult, ImmutableString, INT,
 };
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 #[cfg(not(feature = "no_index"))]
 use rhai::Array;
 #[cfg(not(feature = "no_object"))]
 use rhai::Map;
+#[cfg(feature = "decimal")]
+use rust_decimal::Decimal;
 
 #[test]
 fn test_serde_ser_primary_types() -> Result<(), Box<EvalAltResult>> {
@@ -23,6 +26,13 @@ fn test_serde_ser_primary_types() -> Result<(), Box<EvalAltResult>> {
     {
         assert!(to_dynamic(123.456_f64)?.is::<f64>());
         assert!(to_dynamic(123.456_f32)?.is::<f32>());
+    }
+
+    #[cfg(feature = "no_float")]
+    #[cfg(feature = "decimal")]
+    {
+        assert!(to_dynamic(123.456_f64)?.is::<Decimal>());
+        assert!(to_dynamic(123.456_f32)?.is::<Decimal>());
     }
 
     assert!(to_dynamic("hello".to_string())?.is::<String>());
@@ -299,6 +309,15 @@ fn test_serde_de_primary_types() -> Result<(), Box<EvalAltResult>> {
     {
         assert_eq!(123.456, from_dynamic::<f64>(&123.456_f64.into())?);
         assert_eq!(123.456, from_dynamic::<f32>(&Dynamic::from(123.456_f32))?);
+    }
+
+    #[cfg(feature = "no_float")]
+    #[cfg(feature = "decimal")]
+    {
+        let d: Dynamic = Decimal::from_str("123.456").unwrap().into();
+
+        assert_eq!(123.456, from_dynamic::<f64>(&d)?);
+        assert_eq!(123.456, from_dynamic::<f32>(&d)?);
     }
 
     assert_eq!(

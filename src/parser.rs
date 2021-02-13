@@ -958,6 +958,12 @@ fn parse_primary(
             input.next().unwrap();
             Expr::FloatConstant(x, settings.pos)
         }
+        #[cfg(feature = "decimal")]
+        Token::DecimalConstant(x) => {
+            let x = (*x).into();
+            input.next().unwrap();
+            Expr::DynamicConstant(Box::new(x), settings.pos)
+        }
 
         // { - block statement as expression
         Token::LeftBrace if settings.allow_stmt_expr => {

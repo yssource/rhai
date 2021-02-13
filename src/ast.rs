@@ -21,7 +21,7 @@ use crate::{
 };
 
 #[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
+use crate::{stdlib::str::FromStr, FLOAT};
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
@@ -345,10 +345,10 @@ impl AST {
     #[inline(always)]
     pub fn clone_functions_only_filtered(
         &self,
-        mut filter: impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
+        filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> Self {
         let mut functions: Module = Default::default();
-        functions.merge_filtered(&self.functions, &mut filter);
+        functions.merge_filtered(&self.functions, &filter);
         Self {
             source: self.source.clone(),
             statements: Default::default(),
@@ -530,7 +530,7 @@ impl AST {
     pub fn merge_filtered(
         &self,
         other: &Self,
-        mut filter: impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
+        filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> Self {
         let Self {
             statements,
@@ -552,7 +552,7 @@ impl AST {
         let source = other.source.clone().or_else(|| self.source.clone());
 
         let mut functions = functions.as_ref().clone();
-        functions.merge_filtered(&other.functions, &mut filter);
+        functions.merge_filtered(&other.functions, &filter);
 
         if let Some(source) = source {
             Self::new_with_source(ast, functions, source)
@@ -615,11 +615,11 @@ impl AST {
     pub fn combine_filtered(
         &mut self,
         other: Self,
-        mut filter: impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
+        filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> &mut Self {
         self.statements.extend(other.statements.into_iter());
         if !other.functions.is_empty() {
-            shared_make_mut(&mut self.functions).merge_filtered(&other.functions, &mut filter);
+            shared_make_mut(&mut self.functions).merge_filtered(&other.functions, &filter);
         }
         self
     }
@@ -652,7 +652,7 @@ impl AST {
     #[inline(always)]
     pub fn retain_functions(
         &mut self,
-        filter: impl FnMut(FnNamespace, FnAccess, &str, usize) -> bool,
+        filter: impl Fn(FnNamespace, FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
         if !self.functions.is_empty() {
             shared_make_mut(&mut self.functions).retain_script_functions(filter);
@@ -1126,7 +1126,7 @@ pub struct FnCallExpr {
 
 /// A type that wraps a [`FLOAT`] and implements [`Hash`].
 #[cfg(not(feature = "no_float"))]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct FloatWrapper(FLOAT);
 
 #[cfg(not(feature = "no_float"))]
@@ -1169,14 +1169,22 @@ impl crate::stdlib::ops::DerefMut for FloatWrapper {
 #[cfg(not(feature = "no_float"))]
 impl fmt::Debug for FloatWrapper {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        fmt::Display::fmt(self, f)
     }
 }
 
 #[cfg(not(feature = "no_float"))]
 impl fmt::Display for FloatWrapper {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        #[cfg(feature = "no_std")]
+        use num_traits::Float;
+
+        let abs = self.0.abs();
+        if abs > 10000000000000.0 || abs < 0.0000000000001 {
+            write!(f, "{:e}", self.0)
+        } else {
+            self.0.fmt(f)
+        }
     }
 }
 
@@ -1184,6 +1192,15 @@ impl fmt::Display for FloatWrapper {
 impl From<FLOAT> for FloatWrapper {
     fn from(value: FLOAT) -> Self {
         Self::new(value)
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+impl FromStr for FloatWrapper {
+    type Err = <FLOAT as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        FLOAT::from_str(s).map(Into::<Self>::into)
     }
 }
 
