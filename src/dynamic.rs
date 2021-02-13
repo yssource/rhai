@@ -152,25 +152,38 @@ pub struct Dynamic(pub(crate) Union);
 ///
 /// Most variants are boxed to reduce the size.
 pub enum Union {
+    /// The Unit value - ().
     Unit((), AccessMode),
+    /// A boolean value.
     Bool(bool, AccessMode),
+    /// An [`ImmutableString`] value.
     Str(ImmutableString, AccessMode),
+    /// A character value.
     Char(char, AccessMode),
+    /// An integer value.
     Int(INT, AccessMode),
+    /// A floating-point value.
     #[cfg(not(feature = "no_float"))]
     Float(FloatWrapper, AccessMode),
+    /// A fixed-precision decimal value.
     #[cfg(feature = "decimal")]
     Decimal(Box<Decimal>, AccessMode),
+    /// An array value.
     #[cfg(not(feature = "no_index"))]
     Array(Box<Array>, AccessMode),
+    /// An object map value.
     #[cfg(not(feature = "no_object"))]
     Map(Box<Map>, AccessMode),
+    /// A function pointer.
     FnPtr(Box<FnPtr>, AccessMode),
+    /// A timestamp value.
     #[cfg(not(feature = "no_std"))]
     TimeStamp(Box<Instant>, AccessMode),
 
+    /// Any type as a trait object.
     Variant(Box<Box<dyn Variant>>, AccessMode),
 
+    /// A _shared_ value of any type.
     #[cfg(not(feature = "no_closure"))]
     Shared(crate::Shared<crate::Locked<Dynamic>>, AccessMode),
 }

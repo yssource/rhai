@@ -9,6 +9,7 @@ Bug fixes
 
 * Empty statements (i.e. statements with only one `;`) now parse correctly and no longer hang.
 * `continue`, `break` and `return` statements no longer panic inside a `try .. catch` block.
+* `round` function for `f64` is now implemented correctly.
 
 Breaking changes
 ----------------

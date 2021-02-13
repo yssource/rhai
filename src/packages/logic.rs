@@ -1,5 +1,10 @@
+#![allow(non_snake_case)]
+
 use crate::def_package;
 use crate::plugin::*;
+
+#[cfg(feature = "decimal")]
+use rust_decimal::Decimal;
 
 #[cfg(any(
     not(feature = "no_float"),
@@ -70,6 +75,9 @@ def_package!(crate:LogicPackage:"Logical operators.", lib, {
         reg_functions!(lib += float; f64);
     }
 
+    #[cfg(feature = "decimal")]
+    reg_functions!(lib += decimal; Decimal);
+
     set_exported_fn!(lib, "!", not);
 });
 
@@ -95,3 +103,6 @@ gen_cmp_functions!(float => f32);
 #[cfg(not(feature = "no_float"))]
 #[cfg(feature = "f32_float")]
 gen_cmp_functions!(float => f64);
+
+#[cfg(feature = "decimal")]
+gen_cmp_functions!(decimal => Decimal);
