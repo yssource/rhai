@@ -39,6 +39,7 @@ macro_rules! gen_conversion_as_functions {
     }
 }
 
+#[cfg(feature = "decimal")]
 macro_rules! gen_conversion_into_functions {
     ($root:ident => $func_name:ident ( $($arg_type:ident),+ ) -> $result_type:ty) => {
         pub mod $root { $(pub mod $arg_type {
