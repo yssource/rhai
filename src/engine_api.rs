@@ -699,11 +699,11 @@ impl Engine {
     #[inline(always)]
     pub fn register_indexer_get_set<T: Variant + Clone, X: Variant + Clone, U: Variant + Clone>(
         &mut self,
-        getter: impl Fn(&mut T, X) -> U + SendSync + 'static,
-        setter: impl Fn(&mut T, X, U) -> () + SendSync + 'static,
+        get_fn: impl Fn(&mut T, X) -> U + SendSync + 'static,
+        set_fn: impl Fn(&mut T, X, U) -> () + SendSync + 'static,
     ) -> &mut Self {
-        self.register_indexer_get(getter)
-            .register_indexer_set(setter)
+        self.register_indexer_get(get_fn)
+            .register_indexer_set(set_fn)
     }
     /// Register a shared [`Module`] into the global namespace of [`Engine`].
     ///

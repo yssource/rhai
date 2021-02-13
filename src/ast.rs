@@ -346,10 +346,10 @@ impl AST {
     #[inline(always)]
     pub fn clone_functions_only_filtered(
         &self,
-        mut filter: impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
+        filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> Self {
         let mut functions: Module = Default::default();
-        functions.merge_filtered(&self.functions, &mut filter);
+        functions.merge_filtered(&self.functions, &filter);
         Self {
             source: self.source.clone(),
             statements: Default::default(),
@@ -531,7 +531,7 @@ impl AST {
     pub fn merge_filtered(
         &self,
         other: &Self,
-        mut filter: impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
+        filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> Self {
         let Self {
             statements,
@@ -553,7 +553,7 @@ impl AST {
         let source = other.source.clone().or_else(|| self.source.clone());
 
         let mut functions = functions.as_ref().clone();
-        functions.merge_filtered(&other.functions, &mut filter);
+        functions.merge_filtered(&other.functions, &filter);
 
         if let Some(source) = source {
             Self::new_with_source(ast, functions, source)
@@ -616,11 +616,11 @@ impl AST {
     pub fn combine_filtered(
         &mut self,
         other: Self,
-        mut filter: impl FnMut(FnNamespace, FnAccess, bool, &str, usize) -> bool,
+        filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> &mut Self {
         self.statements.extend(other.statements.into_iter());
         if !other.functions.is_empty() {
-            shared_make_mut(&mut self.functions).merge_filtered(&other.functions, &mut filter);
+            shared_make_mut(&mut self.functions).merge_filtered(&other.functions, &filter);
         }
         self
     }
@@ -653,7 +653,7 @@ impl AST {
     #[inline(always)]
     pub fn retain_functions(
         &mut self,
-        filter: impl FnMut(FnNamespace, FnAccess, &str, usize) -> bool,
+        filter: impl Fn(FnNamespace, FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
         if !self.functions.is_empty() {
             shared_make_mut(&mut self.functions).retain_script_functions(filter);

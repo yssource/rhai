@@ -19,6 +19,7 @@ Breaking changes
   * trigonometry functions now take radians and return radians instead of degrees
 * `Dynamic::into_shared` is no longer available under `no_closure`. It used to panic.
 * `Token::is_operator` is renamed to `Token::is_symbol`.
+* `AST::clone_functions_only_filtered`, `AST::merge_filtered`, `AST::combine_filtered` and `AST::retain_functions` now take `Fn` instead of `FnMut` as the filter predicate.
 
 New features
 ------------
