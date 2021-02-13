@@ -86,6 +86,27 @@ impl<'d> Visitor<'d> for DynamicVisitor {
         return self.visit_f32(v as f32);
     }
 
+    #[cfg(feature = "no_float")]
+    #[cfg(feature = "decimal")]
+    fn visit_f32<E: Error>(self, v: f32) -> Result<Self::Value, E> {
+        use crate::stdlib::convert::TryFrom;
+        use rust_decimal::Decimal;
+
+        Decimal::try_from(v)
+            .map(|v| v.into())
+            .map_err(Error::custom)
+    }
+    #[cfg(feature = "no_float")]
+    #[cfg(feature = "decimal")]
+    fn visit_f64<E: Error>(self, v: f64) -> Result<Self::Value, E> {
+        use crate::stdlib::convert::TryFrom;
+        use rust_decimal::Decimal;
+
+        Decimal::try_from(v)
+            .map(|v| v.into())
+            .map_err(Error::custom)
+    }
+
     fn visit_char<E: Error>(self, v: char) -> Result<Self::Value, E> {
         self.visit_string(v.to_string())
     }

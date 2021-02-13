@@ -25,6 +25,7 @@ New features
 ------------
 
 * Scientific notation is supported for floating-point number literals.
+* A new feature, `decimal`, enables the [`Decimal`](https://crates.io/crates/rust_decimal) data type. When both `no_float` and `decimal` features are enabled, floating-point literals parse to `Decimal`.
 
 Enhancements
 ------------

@@ -197,6 +197,10 @@ def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
         combine_with_exported_module!(lib, "f32", f32_functions);
         combine_with_exported_module!(lib, "f64", f64_functions);
     }
+
+    // Decimal functions
+    #[cfg(feature = "decimal")]
+    combine_with_exported_module!(lib, "decimal", decimal_functions);
 });
 
 gen_arithmetic_functions!(arith_basic => INT);
@@ -257,7 +261,7 @@ mod f32_functions {
     }
     #[rhai_fn(name = "+")]
     pub fn plus(x: f32) -> f32 {
-        -x
+        x
     }
     pub fn abs(x: f32) -> f32 {
         x.abs()
@@ -320,7 +324,7 @@ mod f64_functions {
     }
     #[rhai_fn(name = "+")]
     pub fn plus(x: f64) -> f64 {
-        -x
+        x
     }
     pub fn abs(x: f64) -> f64 {
         x.abs()
@@ -343,6 +347,133 @@ mod f64_functions {
             )))
         } else {
             Ok(x.powi(y as i32).into())
+        }
+    }
+}
+
+#[cfg(feature = "decimal")]
+#[export_module]
+mod decimal_functions {
+    use rust_decimal::{prelude::Zero, Decimal};
+
+    #[rhai_fn(name = "+", return_raw)]
+    pub fn add_dd(x: Decimal, y: Decimal) -> Result<Dynamic, Box<EvalAltResult>> {
+        if cfg!(not(feature = "unchecked")) {
+            x.checked_add(y)
+                .ok_or_else(|| make_err(format!("Addition overflow: {} + {}", x, y)))
+                .map(Dynamic::from)
+        } else {
+            Ok(Dynamic::from(x + y))
+        }
+    }
+    #[rhai_fn(name = "+", return_raw)]
+    pub fn add_id(x: INT, y: Decimal) -> Result<Dynamic, Box<EvalAltResult>> {
+        add_dd(x.into(), y)
+    }
+    #[rhai_fn(name = "+", return_raw)]
+    pub fn add_di(x: Decimal, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        add_dd(x, y.into())
+    }
+    #[rhai_fn(name = "-", return_raw)]
+    pub fn subtract_dd(x: Decimal, y: Decimal) -> Result<Dynamic, Box<EvalAltResult>> {
+        if cfg!(not(feature = "unchecked")) {
+            x.checked_sub(y)
+                .ok_or_else(|| make_err(format!("Subtraction overflow: {} - {}", x, y)))
+                .map(Dynamic::from)
+        } else {
+            Ok(Dynamic::from(x - y))
+        }
+    }
+    #[rhai_fn(name = "-", return_raw)]
+    pub fn subtract_id(x: INT, y: Decimal) -> Result<Dynamic, Box<EvalAltResult>> {
+        subtract_dd(x.into(), y)
+    }
+    #[rhai_fn(name = "-", return_raw)]
+    pub fn subtract_di(x: Decimal, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        subtract_dd(x, y.into())
+    }
+    #[rhai_fn(name = "*", return_raw)]
+    pub fn multiply_dd(x: Decimal, y: Decimal) -> Result<Dynamic, Box<EvalAltResult>> {
+        if cfg!(not(feature = "unchecked")) {
+            x.checked_mul(y)
+                .ok_or_else(|| make_err(format!("Multiplication overflow: {} * {}", x, y)))
+                .map(Dynamic::from)
+        } else {
+            Ok(Dynamic::from(x * y))
+        }
+    }
+    #[rhai_fn(name = "*", return_raw)]
+    pub fn multiply_id(x: INT, y: Decimal) -> Result<Dynamic, Box<EvalAltResult>> {
+        multiply_dd(x.into(), y)
+    }
+    #[rhai_fn(name = "*", return_raw)]
+    pub fn multiply_di(x: Decimal, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        multiply_dd(x, y.into())
+    }
+    #[rhai_fn(name = "/", return_raw)]
+    pub fn divide_dd(x: Decimal, y: Decimal) -> Result<Dynamic, Box<EvalAltResult>> {
+        if cfg!(not(feature = "unchecked")) {
+            // Detect division by zero
+            if y == Decimal::zero() {
+                Err(make_err(format!("Division by zero: {} / {}", x, y)))
+            } else {
+                x.checked_div(y)
+                    .ok_or_else(|| make_err(format!("Division overflow: {} / {}", x, y)))
+                    .map(Dynamic::from)
+            }
+        } else {
+            Ok(Dynamic::from(x / y))
+        }
+    }
+    #[rhai_fn(name = "/", return_raw)]
+    pub fn divide_id(x: INT, y: Decimal) -> Result<Dynamic, Box<EvalAltResult>> {
+        divide_dd(x.into(), y)
+    }
+    #[rhai_fn(name = "/", return_raw)]
+    pub fn divide_di(x: Decimal, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        divide_dd(x, y.into())
+    }
+    #[rhai_fn(name = "%", return_raw)]
+    pub fn modulo_dd(x: Decimal, y: Decimal) -> Result<Dynamic, Box<EvalAltResult>> {
+        if cfg!(not(feature = "unchecked")) {
+            x.checked_rem(y)
+                .ok_or_else(|| {
+                    make_err(format!(
+                        "Modulo division by zero or overflow: {} % {}",
+                        x, y
+                    ))
+                })
+                .map(Dynamic::from)
+        } else {
+            Ok(Dynamic::from(x % y))
+        }
+    }
+    #[rhai_fn(name = "%", return_raw)]
+    pub fn modulo_id(x: INT, y: Decimal) -> Result<Dynamic, Box<EvalAltResult>> {
+        modulo_dd(x.into(), y)
+    }
+    #[rhai_fn(name = "%", return_raw)]
+    pub fn modulo_di(x: Decimal, y: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        modulo_dd(x, y.into())
+    }
+    #[rhai_fn(name = "-")]
+    pub fn neg(x: Decimal) -> Decimal {
+        -x
+    }
+    #[rhai_fn(name = "+")]
+    pub fn plus(x: Decimal) -> Decimal {
+        x
+    }
+    pub fn abs(x: Decimal) -> Decimal {
+        x.abs()
+    }
+    pub fn sign(x: Decimal) -> INT {
+        if x == Decimal::zero() {
+            0
+        } else if x.is_sign_negative() {
+            -1
+        } else {
+            1
         }
     }
 }

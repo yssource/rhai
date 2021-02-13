@@ -16,6 +16,9 @@ use num_traits::float::Float;
 #[cfg(not(feature = "no_float"))]
 use crate::stdlib::format;
 
+#[cfg(feature = "decimal")]
+use rust_decimal::Decimal;
+
 #[allow(dead_code)]
 #[cfg(feature = "only_i32")]
 pub const MAX_INT: INT = i32::MAX;
@@ -23,7 +26,7 @@ pub const MAX_INT: INT = i32::MAX;
 #[cfg(not(feature = "only_i32"))]
 pub const MAX_INT: INT = i64::MAX;
 
-macro_rules! gen_conversion_functions {
+macro_rules! gen_conversion_as_functions {
     ($root:ident => $func_name:ident ( $($arg_type:ident),+ ) -> $result_type:ty) => {
         pub mod $root { $(pub mod $arg_type {
             use super::super::*;
@@ -31,6 +34,19 @@ macro_rules! gen_conversion_functions {
             #[export_fn]
             pub fn $func_name(x: $arg_type) -> $result_type {
                 x as $result_type
+            }
+        })* }
+    }
+}
+
+macro_rules! gen_conversion_into_functions {
+    ($root:ident => $func_name:ident ( $($arg_type:ident),+ ) -> $result_type:ty) => {
+        pub mod $root { $(pub mod $arg_type {
+            use super::super::*;
+
+            #[export_fn]
+            pub fn $func_name(x: $arg_type) -> $result_type {
+                x.into()
             }
         })* }
     }
@@ -75,6 +91,18 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
             #[cfg(not(target_arch = "wasm32"))]
             reg_functions!(lib += num_128_to_float::to_float(i128, u128));
         }
+    }
+
+    // Decimal functions
+    #[cfg(feature = "decimal")]
+    {
+        combine_with_exported_module!(lib, "decimal", decimal_functions);
+
+        reg_functions!(lib += basic_to_decimal::to_decimal(INT));
+
+        #[cfg(not(feature = "only_i32"))]
+        #[cfg(not(feature = "only_i64"))]
+        reg_functions!(lib += numbers_to_decimal::to_decimal(i8, u8, i16, u16, i32, u32, i64, u64));
     }
 });
 
@@ -267,27 +295,75 @@ mod float_functions {
     }
 }
 
+#[cfg(feature = "decimal")]
+#[export_module]
+mod decimal_functions {
+    use rust_decimal::Decimal;
+
+    #[rhai_fn(name = "floor", get = "floor")]
+    pub fn floor(x: Decimal) -> Decimal {
+        x.floor()
+    }
+    #[rhai_fn(name = "ceiling", get = "ceiling")]
+    pub fn ceiling(x: Decimal) -> Decimal {
+        x.ceil()
+    }
+    #[rhai_fn(name = "round", get = "round")]
+    pub fn round(x: Decimal) -> Decimal {
+        x.ceil()
+    }
+    #[rhai_fn(name = "int", get = "int")]
+    pub fn int(x: Decimal) -> Decimal {
+        x.trunc()
+    }
+    #[rhai_fn(name = "fraction", get = "fraction")]
+    pub fn fraction(x: Decimal) -> Decimal {
+        x.fract()
+    }
+    #[rhai_fn(return_raw)]
+    pub fn parse_decimal(s: &str) -> Result<Dynamic, Box<EvalAltResult>> {
+        s.trim()
+            .parse::<Decimal>()
+            .map(Into::<Dynamic>::into)
+            .map_err(|err| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Error parsing decimal number '{}': {}", s, err),
+                    Position::NONE,
+                )
+                .into()
+            })
+    }
+}
+
 #[cfg(not(feature = "no_float"))]
-gen_conversion_functions!(basic_to_float => to_float (INT) -> FLOAT);
+gen_conversion_as_functions!(basic_to_float => to_float (INT) -> FLOAT);
 
 #[cfg(not(feature = "no_float"))]
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-gen_conversion_functions!(numbers_to_float => to_float (i8, u8, i16, u16, i32, u32, i64, u64) -> FLOAT);
+gen_conversion_as_functions!(numbers_to_float => to_float (i8, u8, i16, u16, i32, u32, i64, u64) -> FLOAT);
 
 #[cfg(not(feature = "no_float"))]
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
 #[cfg(not(target_arch = "wasm32"))]
-gen_conversion_functions!(num_128_to_float => to_float (i128, u128) -> FLOAT);
+gen_conversion_as_functions!(num_128_to_float => to_float (i128, u128) -> FLOAT);
 
-gen_conversion_functions!(basic_to_int => to_int (char) -> INT);
+gen_conversion_as_functions!(basic_to_int => to_int (char) -> INT);
 
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-gen_conversion_functions!(numbers_to_int => to_int (i8, u8, i16, u16, i32, u32, i64, u64) -> INT);
+gen_conversion_as_functions!(numbers_to_int => to_int (i8, u8, i16, u16, i32, u32, i64, u64) -> INT);
 
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
 #[cfg(not(target_arch = "wasm32"))]
-gen_conversion_functions!(num_128_to_int => to_int (i128, u128) -> INT);
+gen_conversion_as_functions!(num_128_to_int => to_int (i128, u128) -> INT);
+
+#[cfg(feature = "decimal")]
+gen_conversion_into_functions!(basic_to_decimal => to_decimal (INT) -> Decimal);
+
+#[cfg(feature = "decimal")]
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
+gen_conversion_into_functions!(numbers_to_decimal => to_decimal (i8, u8, i16, u16, i32, u32, i64, u64) -> Decimal);

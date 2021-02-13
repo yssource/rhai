@@ -214,11 +214,35 @@ impl Serializer for &mut DynamicSerializer {
     }
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Box<EvalAltResult>> {
-        Ok(Dynamic::from(v))
+        #[cfg(any(not(feature = "no_float"), not(feature = "decimal")))]
+        return Ok(Dynamic::from(v));
+
+        #[cfg(feature = "no_float")]
+        #[cfg(feature = "decimal")]
+        {
+            use crate::stdlib::convert::TryFrom;
+            use rust_decimal::Decimal;
+
+            Decimal::try_from(v)
+                .map(|v| v.into())
+                .map_err(Error::custom)
+        }
     }
 
     fn serialize_f64(self, v: f64) -> Result<Self::Ok, Box<EvalAltResult>> {
-        Ok(Dynamic::from(v))
+        #[cfg(any(not(feature = "no_float"), not(feature = "decimal")))]
+        return Ok(Dynamic::from(v));
+
+        #[cfg(feature = "no_float")]
+        #[cfg(feature = "decimal")]
+        {
+            use crate::stdlib::convert::TryFrom;
+            use rust_decimal::Decimal;
+
+            Decimal::try_from(v)
+                .map(|v| v.into())
+                .map_err(Error::custom)
+        }
     }
 
     fn serialize_char(self, v: char) -> Result<Self::Ok, Box<EvalAltResult>> {

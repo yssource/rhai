@@ -15,6 +15,9 @@ use crate::Array;
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
 
+#[cfg(feature = "decimal")]
+use rust_decimal::Decimal;
+
 const FUNC_TO_STRING: &'static str = "to_string";
 const FUNC_TO_DEBUG: &'static str = "to_debug";
 
@@ -72,6 +75,12 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
         reg_debug_functions!(lib += print_float_64; f64);
         reg_print_functions!(lib += print_float_32; f32);
         reg_debug_functions!(lib += print_float_32; f32);
+    }
+
+    #[cfg(feature = "decimal")]
+    {
+        reg_print_functions!(lib += print_decimal; Decimal);
+        reg_debug_functions!(lib += debug_decimal; Decimal);
     }
 });
 
@@ -132,6 +141,12 @@ gen_functions!(print_float_64 => print_f64(f64));
 
 #[cfg(not(feature = "no_float"))]
 gen_functions!(print_float_32 => print_f32(f32));
+
+#[cfg(feature = "decimal")]
+gen_functions!(print_decimal => to_string(Decimal));
+
+#[cfg(feature = "decimal")]
+gen_functions!(debug_decimal => to_debug(Decimal));
 
 // Register print and debug
 

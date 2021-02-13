@@ -10,7 +10,6 @@ use crate::stdlib::{
     hash::Hash,
     num::{NonZeroU64, NonZeroUsize},
     ops::{Add, AddAssign},
-    str::FromStr,
     string::String,
     vec,
     vec::Vec,
@@ -22,7 +21,7 @@ use crate::{
 };
 
 #[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
+use crate::{stdlib::str::FromStr, FLOAT};
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;

@@ -15,6 +15,9 @@ use crate::{FnPtr, ImmutableString, INT};
 #[cfg(not(feature = "no_float"))]
 use crate::{ast::FloatWrapper, FLOAT};
 
+#[cfg(feature = "decimal")]
+use rust_decimal::Decimal;
+
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
 
@@ -25,6 +28,7 @@ use crate::Map;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::stdlib::time::Instant;
 
+use fmt::Debug;
 #[cfg(not(feature = "no_std"))]
 #[cfg(target_arch = "wasm32")]
 use instant::Instant;
@@ -155,6 +159,8 @@ pub enum Union {
     Int(INT, AccessMode),
     #[cfg(not(feature = "no_float"))]
     Float(FloatWrapper, AccessMode),
+    #[cfg(feature = "decimal")]
+    Decimal(Box<Decimal>, AccessMode),
     #[cfg(not(feature = "no_index"))]
     Array(Box<Array>, AccessMode),
     #[cfg(not(feature = "no_object"))]
@@ -305,6 +311,8 @@ impl Dynamic {
             Union::Int(_, _) => TypeId::of::<INT>(),
             #[cfg(not(feature = "no_float"))]
             Union::Float(_, _) => TypeId::of::<FLOAT>(),
+            #[cfg(feature = "decimal")]
+            Union::Decimal(_, _) => TypeId::of::<Decimal>(),
             #[cfg(not(feature = "no_index"))]
             Union::Array(_, _) => TypeId::of::<Array>(),
             #[cfg(not(feature = "no_object"))]
@@ -338,6 +346,8 @@ impl Dynamic {
             Union::Int(_, _) => type_name::<INT>(),
             #[cfg(not(feature = "no_float"))]
             Union::Float(_, _) => type_name::<FLOAT>(),
+            #[cfg(feature = "decimal")]
+            Union::Decimal(_, _) => "decimal",
             #[cfg(not(feature = "no_index"))]
             Union::Array(_, _) => "array",
             #[cfg(not(feature = "no_object"))]
@@ -408,6 +418,10 @@ pub(crate) fn map_std_type_name(name: &str) -> &str {
     } else if name == type_name::<FnPtr>() {
         "Fn"
     } else {
+        #[cfg(feature = "decimal")]
+        if name == type_name::<Decimal>() {
+            return "decimal";
+        }
         #[cfg(not(feature = "no_index"))]
         if name == type_name::<Array>() {
             return "array";
@@ -435,6 +449,8 @@ impl fmt::Display for Dynamic {
             Union::Int(value, _) => fmt::Display::fmt(value, f),
             #[cfg(not(feature = "no_float"))]
             Union::Float(value, _) => fmt::Display::fmt(value, f),
+            #[cfg(feature = "decimal")]
+            Union::Decimal(value, _) => fmt::Display::fmt(value, f),
             #[cfg(not(feature = "no_index"))]
             Union::Array(value, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
@@ -474,6 +490,8 @@ impl fmt::Debug for Dynamic {
             Union::Int(value, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_float"))]
             Union::Float(value, _) => fmt::Debug::fmt(value, f),
+            #[cfg(feature = "decimal")]
+            Union::Decimal(value, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_index"))]
             Union::Array(value, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
@@ -518,6 +536,10 @@ impl Clone for Dynamic {
             Union::Int(value, _) => Self(Union::Int(value, AccessMode::ReadWrite)),
             #[cfg(not(feature = "no_float"))]
             Union::Float(value, _) => Self(Union::Float(value, AccessMode::ReadWrite)),
+            #[cfg(feature = "decimal")]
+            Union::Decimal(ref value, _) => {
+                Self(Union::Decimal(value.clone(), AccessMode::ReadWrite))
+            }
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref value, _) => Self(Union::Array(value.clone(), AccessMode::ReadWrite)),
             #[cfg(not(feature = "no_object"))]
@@ -582,6 +604,8 @@ impl Dynamic {
 
             #[cfg(not(feature = "no_float"))]
             Union::Float(_, access) => access,
+            #[cfg(feature = "decimal")]
+            Union::Decimal(_, access) => access,
             #[cfg(not(feature = "no_index"))]
             Union::Array(_, access) => access,
             #[cfg(not(feature = "no_object"))]
@@ -605,6 +629,8 @@ impl Dynamic {
 
             #[cfg(not(feature = "no_float"))]
             Union::Float(_, access) => *access = typ,
+            #[cfg(feature = "decimal")]
+            Union::Decimal(_, access) => *access = typ,
             #[cfg(not(feature = "no_index"))]
             Union::Array(_, access) => *access = typ,
             #[cfg(not(feature = "no_object"))]
@@ -683,6 +709,13 @@ impl Dynamic {
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
             return <dyn Any>::downcast_ref::<FLOAT>(&value)
+                .unwrap()
+                .clone()
+                .into();
+        }
+        #[cfg(feature = "decimal")]
+        if TypeId::of::<T>() == TypeId::of::<Decimal>() {
+            return <dyn Any>::downcast_ref::<Decimal>(&value)
                 .unwrap()
                 .clone()
                 .into();
@@ -841,6 +874,14 @@ impl Dynamic {
         if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
             return match self.0 {
                 Union::Float(value, _) => unsafe_try_cast(*value),
+                _ => None,
+            };
+        }
+
+        #[cfg(feature = "decimal")]
+        if TypeId::of::<T>() == TypeId::of::<Decimal>() {
+            return match self.0 {
+                Union::Decimal(value, _) => unsafe_try_cast(*value),
                 _ => None,
             };
         }
@@ -1113,6 +1154,13 @@ impl Dynamic {
                 _ => None,
             };
         }
+        #[cfg(feature = "decimal")]
+        if TypeId::of::<T>() == TypeId::of::<Decimal>() {
+            return match &self.0 {
+                Union::Decimal(value, _) => <dyn Any>::downcast_ref::<T>(value.as_ref()),
+                _ => None,
+            };
+        }
         if TypeId::of::<T>() == TypeId::of::<bool>() {
             return match &self.0 {
                 Union::Bool(value, _) => <dyn Any>::downcast_ref::<T>(value),
@@ -1202,6 +1250,13 @@ impl Dynamic {
                 _ => None,
             };
         }
+        #[cfg(feature = "decimal")]
+        if TypeId::of::<T>() == TypeId::of::<Decimal>() {
+            return match &mut self.0 {
+                Union::Decimal(value, _) => <dyn Any>::downcast_mut::<T>(value.as_mut()),
+                _ => None,
+            };
+        }
         if TypeId::of::<T>() == TypeId::of::<bool>() {
             return match &mut self.0 {
                 Union::Bool(value, _) => <dyn Any>::downcast_mut::<T>(value),
@@ -1277,11 +1332,27 @@ impl Dynamic {
     }
     /// Cast the [`Dynamic`] as the system floating-point type [`FLOAT`] and return it.
     /// Returns the name of the actual type if the cast fails.
+    ///
+    /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     #[inline(always)]
     pub fn as_float(&self) -> Result<FLOAT, &'static str> {
         match self.0 {
             Union::Float(n, _) => Ok(*n),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(_, _) => self.read_lock().map(|v| *v).ok_or_else(|| self.type_name()),
+            _ => Err(self.type_name()),
+        }
+    }
+    /// Cast the [`Dynamic`] as a [`Decimal`] and return it.
+    /// Returns the name of the actual type if the cast fails.
+    ///
+    /// Available only under `decimal`.
+    #[cfg(feature = "decimal")]
+    #[inline(always)]
+    pub fn as_decimal(self) -> Result<Decimal, &'static str> {
+        match self.0 {
+            Union::Decimal(n, _) => Ok(*n),
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _) => self.read_lock().map(|v| *v).ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
@@ -1312,7 +1383,7 @@ impl Dynamic {
     /// Cast the [`Dynamic`] as a [`String`] and return the string slice.
     /// Returns the name of the actual type if the cast fails.
     ///
-    /// Cast is failing if `self` is Shared Dynamic
+    /// Fails if `self` is _shared_.
     #[inline(always)]
     pub fn as_str(&self) -> Result<&str, &'static str> {
         match &self.0 {
@@ -1384,6 +1455,16 @@ impl From<FloatWrapper> for Dynamic {
     #[inline(always)]
     fn from(value: FloatWrapper) -> Self {
         Self(Union::Float(value, AccessMode::ReadWrite))
+    }
+}
+#[cfg(feature = "decimal")]
+impl From<Decimal> for Dynamic {
+    #[inline(always)]
+    fn from(value: Decimal) -> Self {
+        Self(Union::Decimal(
+            Box::new(value.into()),
+            AccessMode::ReadWrite,
+        ))
     }
 }
 impl From<char> for Dynamic {
