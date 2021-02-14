@@ -302,7 +302,7 @@ mod float_functions {
 #[cfg(feature = "decimal")]
 #[export_module]
 mod decimal_functions {
-    use rust_decimal::Decimal;
+    use rust_decimal::{prelude::FromStr, Decimal};
 
     #[rhai_fn(name = "floor", get = "floor")]
     pub fn floor(x: Decimal) -> Decimal {
@@ -433,8 +433,8 @@ mod decimal_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn parse_decimal(s: &str) -> Result<Dynamic, Box<EvalAltResult>> {
-        s.trim()
-            .parse::<Decimal>()
+        Decimal::from_str(s)
+            .or_else(|_| Decimal::from_scientific(s))
             .map(Into::<Dynamic>::into)
             .map_err(|err| {
                 EvalAltResult::ErrorArithmetic(
