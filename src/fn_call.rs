@@ -1325,8 +1325,6 @@ pub fn run_builtin_binary_op(
     x: &Dynamic,
     y: &Dynamic,
 ) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
-    use crate::packages::arithmetic::arith_basic::INT::functions::*;
-
     let args_type = x.type_id();
     let second_type = y.type_id();
 
@@ -1358,6 +1356,8 @@ pub fn run_builtin_binary_op(
         let y = y.clone().cast::<INT>();
 
         if cfg!(not(feature = "unchecked")) {
+            use crate::packages::arithmetic::arith_basic::INT::functions::*;
+
             match op {
                 "+" => return add(x, y).map(Some),
                 "-" => return subtract(x, y).map(Some),
@@ -1465,6 +1465,44 @@ pub fn run_builtin_binary_op(
         }
     }
 
+    #[cfg(feature = "decimal")]
+    if args_type == TypeId::of::<rust_decimal::Decimal>() {
+        let x = x.clone().cast::<rust_decimal::Decimal>();
+        let y = y.clone().cast::<rust_decimal::Decimal>();
+
+        if cfg!(not(feature = "unchecked")) {
+            use crate::packages::arithmetic::decimal_functions::*;
+
+            match op {
+                "+" => return add(x, y).map(Some),
+                "-" => return subtract(x, y).map(Some),
+                "*" => return multiply(x, y).map(Some),
+                "/" => return divide(x, y).map(Some),
+                "%" => return modulo(x, y).map(Some),
+                _ => (),
+            }
+        } else {
+            match op {
+                "+" => return Ok(Some((x + y).into())),
+                "-" => return Ok(Some((x - y).into())),
+                "*" => return Ok(Some((x * y).into())),
+                "/" => return Ok(Some((x / y).into())),
+                "%" => return Ok(Some((x % y).into())),
+                _ => (),
+            }
+        }
+
+        match op {
+            "==" => return Ok(Some((x == y).into())),
+            "!=" => return Ok(Some((x != y).into())),
+            ">" => return Ok(Some((x > y).into())),
+            ">=" => return Ok(Some((x >= y).into())),
+            "<" => return Ok(Some((x < y).into())),
+            "<=" => return Ok(Some((x <= y).into())),
+            _ => (),
+        }
+    }
+
     Ok(None)
 }
 
@@ -1474,8 +1512,6 @@ pub fn run_builtin_op_assignment(
     x: &mut Dynamic,
     y: &Dynamic,
 ) -> Result<Option<()>, Box<EvalAltResult>> {
-    use crate::packages::arithmetic::arith_basic::INT::functions::*;
-
     let args_type = x.type_id();
     let second_type = y.type_id();
 
@@ -1498,13 +1534,15 @@ pub fn run_builtin_op_assignment(
         let mut x = x.write_lock::<INT>().unwrap();
 
         if cfg!(not(feature = "unchecked")) {
+            use crate::packages::arithmetic::arith_basic::INT::functions::*;
+
             match op {
                 "+=" => return Ok(Some(*x = add(*x, y)?.as_int().unwrap())),
                 "-=" => return Ok(Some(*x = subtract(*x, y)?.as_int().unwrap())),
                 "*=" => return Ok(Some(*x = multiply(*x, y)?.as_int().unwrap())),
                 "/=" => return Ok(Some(*x = divide(*x, y)?.as_int().unwrap())),
                 "%=" => return Ok(Some(*x = modulo(*x, y)?.as_int().unwrap())),
-                "~=" => return Ok(Some(*x = power(*x, y)?.as_int().unwrap())),
+                "**=" => return Ok(Some(*x = power(*x, y)?.as_int().unwrap())),
                 ">>=" => return Ok(Some(*x = shift_right(*x, y)?.as_int().unwrap())),
                 "<<=" => return Ok(Some(*x = shift_left(*x, y)?.as_int().unwrap())),
                 _ => (),
@@ -1516,7 +1554,7 @@ pub fn run_builtin_op_assignment(
                 "*=" => return Ok(Some(*x *= y)),
                 "/=" => return Ok(Some(*x /= y)),
                 "%=" => return Ok(Some(*x %= y)),
-                "~=" => return Ok(Some(*x = x.pow(y as u32))),
+                "**=" => return Ok(Some(*x = x.pow(y as u32))),
                 ">>=" => return Ok(Some(*x = *x >> y)),
                 "<<=" => return Ok(Some(*x = *x << y)),
                 _ => (),
@@ -1567,8 +1605,36 @@ pub fn run_builtin_op_assignment(
             "*=" => return Ok(Some(*x *= y)),
             "/=" => return Ok(Some(*x /= y)),
             "%=" => return Ok(Some(*x %= y)),
-            "~=" => return Ok(Some(*x = x.powf(y))),
+            "**=" => return Ok(Some(*x = x.powf(y))),
             _ => (),
+        }
+    }
+
+    #[cfg(feature = "decimal")]
+    if args_type == TypeId::of::<rust_decimal::Decimal>() {
+        let y = y.clone().cast::<rust_decimal::Decimal>();
+        let mut x = x.write_lock::<rust_decimal::Decimal>().unwrap();
+
+        if cfg!(not(feature = "unchecked")) {
+            use crate::packages::arithmetic::decimal_functions::*;
+
+            match op {
+                "+=" => return Ok(Some(*x = add(*x, y)?.as_decimal().unwrap())),
+                "-=" => return Ok(Some(*x = subtract(*x, y)?.as_decimal().unwrap())),
+                "*=" => return Ok(Some(*x = multiply(*x, y)?.as_decimal().unwrap())),
+                "/=" => return Ok(Some(*x = divide(*x, y)?.as_decimal().unwrap())),
+                "%=" => return Ok(Some(*x = modulo(*x, y)?.as_decimal().unwrap())),
+                _ => (),
+            }
+        } else {
+            match op {
+                "+=" => return Ok(Some(*x += y)),
+                "-=" => return Ok(Some(*x -= y)),
+                "*=" => return Ok(Some(*x *= y)),
+                "/=" => return Ok(Some(*x /= y)),
+                "%=" => return Ok(Some(*x %= y)),
+                _ => (),
+            }
         }
     }
 
