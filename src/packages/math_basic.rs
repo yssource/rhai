@@ -302,7 +302,10 @@ mod float_functions {
 #[cfg(feature = "decimal")]
 #[export_module]
 mod decimal_functions {
-    use rust_decimal::Decimal;
+    use rust_decimal::{
+        prelude::{FromStr, RoundingStrategy},
+        Decimal,
+    };
 
     #[rhai_fn(name = "floor", get = "floor")]
     pub fn floor(x: Decimal) -> Decimal {
@@ -316,14 +319,11 @@ mod decimal_functions {
     pub fn round(x: Decimal) -> Decimal {
         x.round()
     }
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(name = "round", return_raw)]
     pub fn round_dp(x: Decimal, dp: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) {
             if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
-                return Err(make_err(format!(
-                    "Decimal value {} round to too many decimal points: {}",
-                    x, dp
-                )));
+                return Ok(x.into());
             }
             if dp < 0 {
                 return Err(make_err(format!(
@@ -333,16 +333,13 @@ mod decimal_functions {
             }
         }
 
-        Ok(Dynamic::from(x.round_dp(dp as u32)))
+        Ok(x.round_dp(dp as u32).into())
     }
     #[rhai_fn(return_raw)]
     pub fn round_up(x: Decimal, dp: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) {
             if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
-                return Err(make_err(format!(
-                    "Decimal value {} round to too many decimal points: {}",
-                    x, dp
-                )));
+                return Ok(x.into());
             }
             if dp < 0 {
                 return Err(make_err(format!(
@@ -352,19 +349,16 @@ mod decimal_functions {
             }
         }
 
-        Ok(Dynamic::from(x.round_dp_with_strategy(
-            dp as u32,
-            rust_decimal::prelude::RoundingStrategy::RoundUp,
-        )))
+        Ok(
+            x.round_dp_with_strategy(dp as u32, RoundingStrategy::RoundUp)
+                .into(),
+        )
     }
     #[rhai_fn(return_raw)]
     pub fn round_down(x: Decimal, dp: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) {
             if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
-                return Err(make_err(format!(
-                    "Decimal value {} round to too many decimal points: {}",
-                    x, dp
-                )));
+                return Ok(x.into());
             }
             if dp < 0 {
                 return Err(make_err(format!(
@@ -374,19 +368,16 @@ mod decimal_functions {
             }
         }
 
-        Ok(Dynamic::from(x.round_dp_with_strategy(
-            dp as u32,
-            rust_decimal::prelude::RoundingStrategy::RoundDown,
-        )))
+        Ok(
+            x.round_dp_with_strategy(dp as u32, RoundingStrategy::RoundDown)
+                .into(),
+        )
     }
     #[rhai_fn(return_raw)]
     pub fn round_half_up(x: Decimal, dp: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) {
             if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
-                return Err(make_err(format!(
-                    "Decimal value {} round to too many decimal points: {}",
-                    x, dp
-                )));
+                return Ok(x.into());
             }
             if dp < 0 {
                 return Err(make_err(format!(
@@ -396,19 +387,16 @@ mod decimal_functions {
             }
         }
 
-        Ok(Dynamic::from(x.round_dp_with_strategy(
-            dp as u32,
-            rust_decimal::prelude::RoundingStrategy::RoundHalfUp,
-        )))
+        Ok(
+            x.round_dp_with_strategy(dp as u32, RoundingStrategy::RoundHalfUp)
+                .into(),
+        )
     }
     #[rhai_fn(return_raw)]
     pub fn round_half_down(x: Decimal, dp: INT) -> Result<Dynamic, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) {
             if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
-                return Err(make_err(format!(
-                    "Decimal value {} round to too many decimal points: {}",
-                    x, dp
-                )));
+                return Ok(x.into());
             }
             if dp < 0 {
                 return Err(make_err(format!(
@@ -418,10 +406,10 @@ mod decimal_functions {
             }
         }
 
-        Ok(Dynamic::from(x.round_dp_with_strategy(
-            dp as u32,
-            rust_decimal::prelude::RoundingStrategy::RoundHalfDown,
-        )))
+        Ok(
+            x.round_dp_with_strategy(dp as u32, RoundingStrategy::RoundHalfDown)
+                .into(),
+        )
     }
     #[rhai_fn(name = "int", get = "int")]
     pub fn int(x: Decimal) -> Decimal {
@@ -433,8 +421,8 @@ mod decimal_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn parse_decimal(s: &str) -> Result<Dynamic, Box<EvalAltResult>> {
-        s.trim()
-            .parse::<Decimal>()
+        Decimal::from_str(s)
+            .or_else(|_| Decimal::from_scientific(s))
             .map(Into::<Dynamic>::into)
             .map_err(|err| {
                 EvalAltResult::ErrorArithmetic(

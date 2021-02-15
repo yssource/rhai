@@ -22,6 +22,10 @@ use rust_decimal::Decimal;
 
 type LERR = LexError;
 
+/// Separator character for numbers.
+const NUM_SEP: char = '_';
+
+/// A stream of tokens.
 pub type TokenStream<'a, 't> = Peekable<TokenIterator<'a, 't>>;
 
 /// A location (line number + character position) in the input script.
@@ -1079,7 +1083,7 @@ fn get_next_token_inner(
 
                 while let Some(next_char) = stream.peek_next() {
                     match next_char {
-                        ch if valid(ch) || ch == '_' => {
+                        ch if valid(ch) || ch == NUM_SEP => {
                             result.push(next_char);
                             eat_next(stream, pos);
                         }
@@ -1174,7 +1178,7 @@ fn get_next_token_inner(
 
                 // Parse number
                 if let Some(radix) = radix_base {
-                    let out: String = result.iter().skip(2).filter(|&&c| c != '_').collect();
+                    let out: String = result.iter().skip(2).filter(|&&c| c != NUM_SEP).collect();
 
                     return Some((
                         INT::from_str_radix(&out, radix)
@@ -1185,7 +1189,7 @@ fn get_next_token_inner(
                         start_pos,
                     ));
                 } else {
-                    let out: String = result.iter().filter(|&&c| c != '_').collect();
+                    let out: String = result.iter().filter(|&&c| c != NUM_SEP).collect();
                     let num = INT::from_str(&out).map(Token::IntegerConstant);
 
                     // If integer parsing is unnecessary, try float instead
@@ -1196,6 +1200,11 @@ fn get_next_token_inner(
                     // Then try decimal
                     #[cfg(feature = "decimal")]
                     let num = num.or_else(|_| Decimal::from_str(&out).map(Token::DecimalConstant));
+
+                    // Then try decimal in scientific notation
+                    #[cfg(feature = "decimal")]
+                    let num =
+                        num.or_else(|_| Decimal::from_scientific(&out).map(Token::DecimalConstant));
 
                     return Some((
                         num.unwrap_or_else(|_| {
