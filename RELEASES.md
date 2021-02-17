@@ -33,6 +33,7 @@ Enhancements
 
 * Functions resolution cache is used in more cases, making repeated function calls faster.
 * Added `atan(x, y)` and `hypot(x, y)` to `BasicMathPackage`.
+* Added standard arithmetic operators between `FLOAT` and `INT`.
 
 
 Version 0.19.11

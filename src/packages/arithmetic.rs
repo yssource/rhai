@@ -255,6 +255,48 @@ mod f32_functions {
             Ok(Dynamic::from(x.powf(y)))
         }
     }
+
+    #[rhai_fn(name = "+")]
+    pub fn add_if(x: INT, y: f32) -> f32 {
+        (x as f32) + (y as f32)
+    }
+    #[rhai_fn(name = "+")]
+    pub fn add_fi(x: f32, y: INT) -> f32 {
+        (x as f32) + (y as f32)
+    }
+    #[rhai_fn(name = "-")]
+    pub fn subtract_if(x: INT, y: f32) -> f32 {
+        (x as f32) - (y as f32)
+    }
+    #[rhai_fn(name = "-")]
+    pub fn subtract_fi(x: f32, y: INT) -> f32 {
+        (x as f32) - (y as f32)
+    }
+    #[rhai_fn(name = "*")]
+    pub fn multiply_if(x: INT, y: f32) -> f32 {
+        (x as f32) * (y as f32)
+    }
+    #[rhai_fn(name = "*")]
+    pub fn multiply_fi(x: f32, y: INT) -> f32 {
+        (x as f32) * (y as f32)
+    }
+    #[rhai_fn(name = "/")]
+    pub fn divide_if(x: INT, y: f32) -> f32 {
+        (x as f32) / (y as f32)
+    }
+    #[rhai_fn(name = "/")]
+    pub fn divide_fi(x: f32, y: INT) -> f32 {
+        (x as f32) / (y as f32)
+    }
+    #[rhai_fn(name = "%")]
+    pub fn modulo_if(x: INT, y: f32) -> f32 {
+        (x as f32) % (y as f32)
+    }
+    #[rhai_fn(name = "%")]
+    pub fn modulo_fi(x: f32, y: INT) -> f32 {
+        (x as f32) % (y as f32)
+    }
+
     #[rhai_fn(name = "-")]
     pub fn neg(x: f32) -> f32 {
         -x
@@ -314,10 +356,52 @@ mod f64_functions {
             x % y
         }
         #[rhai_fn(name = "**", return_raw)]
-        pub fn pow_f_f(x: f64, y: f64) -> Result<Dynamic, Box<EvalAltResult>> {
-            Ok(Dynamic::from(x.powf(y)))
+        pub fn pow_f_f(x: f64, y: f64) -> f64 {
+            x.powf(y)
         }
     }
+
+    #[rhai_fn(name = "+")]
+    pub fn add_if(x: INT, y: f64) -> f64 {
+        (x as f64) + (y as f64)
+    }
+    #[rhai_fn(name = "+")]
+    pub fn add_fi(x: f64, y: INT) -> f64 {
+        (x as f64) + (y as f64)
+    }
+    #[rhai_fn(name = "-")]
+    pub fn subtract_if(x: INT, y: f64) -> f64 {
+        (x as f64) - (y as f64)
+    }
+    #[rhai_fn(name = "-")]
+    pub fn subtract_fi(x: f64, y: INT) -> f64 {
+        (x as f64) - (y as f64)
+    }
+    #[rhai_fn(name = "*")]
+    pub fn multiply_if(x: INT, y: f64) -> f64 {
+        (x as f64) * (y as f64)
+    }
+    #[rhai_fn(name = "*")]
+    pub fn multiply_fi(x: f64, y: INT) -> f64 {
+        (x as f64) * (y as f64)
+    }
+    #[rhai_fn(name = "/")]
+    pub fn divide_if(x: INT, y: f64) -> f64 {
+        (x as f64) / (y as f64)
+    }
+    #[rhai_fn(name = "/")]
+    pub fn divide_fi(x: f64, y: INT) -> f64 {
+        (x as f64) / (y as f64)
+    }
+    #[rhai_fn(name = "%")]
+    pub fn modulo_if(x: INT, y: f64) -> f64 {
+        (x as f64) % (y as f64)
+    }
+    #[rhai_fn(name = "%")]
+    pub fn modulo_fi(x: f64, y: INT) -> f64 {
+        (x as f64) % (y as f64)
+    }
+
     #[rhai_fn(name = "-")]
     pub fn neg(x: f64) -> f64 {
         -x
