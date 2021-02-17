@@ -250,9 +250,9 @@ mod f32_functions {
         pub fn modulo(x: f32, y: f32) -> f32 {
             x % y
         }
-        #[rhai_fn(name = "**", return_raw)]
-        pub fn pow_f_f(x: f32, y: f32) -> Result<Dynamic, Box<EvalAltResult>> {
-            Ok(Dynamic::from(x.powf(y)))
+        #[rhai_fn(name = "**")]
+        pub fn pow_f_f(x: f32, y: f32) -> f32 {
+            x.powf(y)
         }
     }
 
@@ -355,7 +355,7 @@ mod f64_functions {
         pub fn modulo(x: f64, y: f64) -> f64 {
             x % y
         }
-        #[rhai_fn(name = "**", return_raw)]
+        #[rhai_fn(name = "**")]
         pub fn pow_f_f(x: f64, y: f64) -> f64 {
             x.powf(y)
         }
