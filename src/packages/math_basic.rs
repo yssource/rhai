@@ -170,6 +170,10 @@ mod trig_functions {
     pub fn atan(x: FLOAT) -> FLOAT {
         x.atan()
     }
+    #[rhai_fn(name = "atan")]
+    pub fn atan2(x: FLOAT, y: FLOAT) -> FLOAT {
+        x.atan2(y)
+    }
     pub fn asinh(x: FLOAT) -> FLOAT {
         x.asinh()
     }
@@ -178,6 +182,9 @@ mod trig_functions {
     }
     pub fn atanh(x: FLOAT) -> FLOAT {
         x.atanh()
+    }
+    pub fn hypot(x: FLOAT, y: FLOAT) -> FLOAT {
+        x.hypot(y)
     }
 }
 

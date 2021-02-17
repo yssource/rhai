@@ -32,6 +32,7 @@ Enhancements
 ------------
 
 * Functions resolution cache is used in more cases, making repeated function calls faster.
+* Added `atan(x, y)` and `hypot(x, y)` to `BasicMathPackage`.
 
 
 Version 0.19.11
