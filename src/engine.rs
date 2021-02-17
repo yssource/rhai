@@ -627,17 +627,17 @@ pub struct Limits {
 
 /// Context of a script evaluation process.
 #[derive(Debug)]
-pub struct EvalContext<'e, 'x, 'px: 'x, 'a, 's, 'm, 'pm: 'm, 't, 'pt: 't> {
+pub struct EvalContext<'e, 'x, 'px: 'x, 'a, 's, 'm, 't, 'pt: 't> {
     pub(crate) engine: &'e Engine,
     pub(crate) scope: &'x mut Scope<'px>,
     pub(crate) mods: &'a mut Imports,
     pub(crate) state: &'s mut State,
-    pub(crate) lib: &'m [&'pm Module],
+    pub(crate) lib: &'m [&'m Module],
     pub(crate) this_ptr: &'t mut Option<&'pt mut Dynamic>,
     pub(crate) level: usize,
 }
 
-impl<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 'pm, 't, 'pt> {
+impl<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> {
     /// The current [`Engine`].
     #[inline(always)]
     pub fn engine(&self) -> &Engine {
