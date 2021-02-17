@@ -4,6 +4,12 @@ Rhai Release Notes
 Version 0.19.12
 ===============
 
+This version is an incremental release with a number of enhancements and bug fixes.
+
+Notice that there are a number of breaking changes, especially with regards to replacing the `~`
+exponential  operator with `**`, and the addition of the `decimal` feature that turns on
+[`Decimal`](https://crates.io/crates/rust_decimal) support.
+
 Bug fixes
 ---------
 
