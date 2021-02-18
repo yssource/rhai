@@ -33,11 +33,11 @@ pub fn parse_register_macro(
         ));
     }
     let export_name = match &items[1] {
-        syn::Expr::Lit(litstr) => quote_spanned!(items[1].span()=>
-                                                 #litstr.to_string()),
+        syn::Expr::Lit(lit_str) => quote_spanned!(items[1].span()=>
+                                                 #lit_str.to_string()),
         expr => quote! { #expr },
     };
-    let rust_modpath = if let syn::Expr::Path(ref path) = &items[2] {
+    let rust_mod_path = if let syn::Expr::Path(ref path) = &items[2] {
         path.path.clone()
     } else {
         return Err(syn::Error::new(
@@ -46,5 +46,5 @@ pub fn parse_register_macro(
         ));
     };
     let module = items.remove(0);
-    Ok((module, export_name, rust_modpath))
+    Ok((module, export_name, rust_mod_path))
 }

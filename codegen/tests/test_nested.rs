@@ -29,7 +29,7 @@ fn one_fn_module_nested_attr_test() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
-pub mod one_fn_submodule_nested_attr {
+pub mod one_fn_sub_module_nested_attr {
     use rhai::plugin::*;
 
     #[export_module]
@@ -47,9 +47,9 @@ pub mod one_fn_submodule_nested_attr {
 }
 
 #[test]
-fn one_fn_submodule_nested_attr_test() -> Result<(), Box<EvalAltResult>> {
+fn one_fn_sub_module_nested_attr_test() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
-    let m = rhai::exported_module!(crate::one_fn_submodule_nested_attr::advanced_math);
+    let m = rhai::exported_module!(crate::one_fn_sub_module_nested_attr::advanced_math);
     engine.register_static_module("Math::Advanced", m.into());
 
     assert_eq!(

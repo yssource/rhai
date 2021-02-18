@@ -14,11 +14,11 @@ pub(crate) type ExportedConst = (String, Box<syn::Type>, syn::Expr);
 pub(crate) fn generate_body(
     fns: &mut [ExportedFn],
     consts: &[ExportedConst],
-    submodules: &mut [Module],
+    sub_modules: &mut [Module],
     parent_scope: &ExportScope,
 ) -> proc_macro2::TokenStream {
-    let mut set_fn_stmts: Vec<syn::Stmt> = Vec::new();
-    let mut set_const_stmts: Vec<syn::Stmt> = Vec::new();
+    let mut set_fn_statements: Vec<syn::Stmt> = Vec::new();
+    let mut set_const_statements: Vec<syn::Stmt> = Vec::new();
     let mut add_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
     let mut set_flattened_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
     let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
@@ -27,7 +27,7 @@ pub(crate) fn generate_body(
     for (const_name, _, _) in consts {
         let const_literal = syn::LitStr::new(&const_name, proc_macro2::Span::call_site());
         let const_ref = syn::Ident::new(&const_name, proc_macro2::Span::call_site());
-        set_const_stmts.push(
+        set_const_statements.push(
             syn::parse2::<syn::Stmt>(quote! {
                 m.set_var(#const_literal, #const_ref);
             })
@@ -35,17 +35,17 @@ pub(crate) fn generate_body(
         );
     }
 
-    for itemmod in submodules {
-        itemmod.update_scope(&parent_scope);
-        if itemmod.skipped() {
+    for item_mod in sub_modules {
+        item_mod.update_scope(&parent_scope);
+        if item_mod.skipped() {
             continue;
         }
-        let module_name = itemmod.module_name();
+        let module_name = item_mod.module_name();
         let exported_name: syn::LitStr = syn::LitStr::new(
-            itemmod.exported_name().as_ref(),
+            item_mod.exported_name().as_ref(),
             proc_macro2::Span::call_site(),
         );
-        let cfg_attrs: Vec<&syn::Attribute> = itemmod
+        let cfg_attrs: Vec<&syn::Attribute> = item_mod
             .attrs()
             .iter()
             .filter(|&a| a.path.get_ident().map(|i| *i == "cfg").unwrap_or(false))
@@ -83,7 +83,7 @@ pub(crate) fn generate_body(
 
         let fn_input_names: Vec<String> = function
             .arg_list()
-            .map(|fnarg| match fnarg {
+            .map(|fn_arg| match fn_arg {
                 syn::FnArg::Receiver(_) => panic!("internal error: receiver fn outside impl!?"),
                 syn::FnArg::Typed(syn::PatType { pat, ty, .. }) => {
                     format!("{}: {}", pat.to_token_stream(), print_type(ty))
@@ -93,7 +93,7 @@ pub(crate) fn generate_body(
 
         let fn_input_types: Vec<syn::Expr> = function
             .arg_list()
-            .map(|fnarg| match fnarg {
+            .map(|fn_arg| match fn_arg {
                 syn::FnArg::Receiver(_) => panic!("internal error: receiver fn outside impl!?"),
                 syn::FnArg::Typed(syn::PatType { ref ty, .. }) => {
                     let arg_type = match flatten_type_groups(ty.as_ref()) {
@@ -169,7 +169,7 @@ pub(crate) fn generate_body(
                 },
                 fn_literal.span(),
             );
-            set_fn_stmts.push(
+            set_fn_statements.push(
                 syn::parse2::<syn::Stmt>(quote! {
                     m.set_fn(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
                                 Some(&[#(#fn_input_names,)* #return_type]), &[#(#fn_input_types),*],
@@ -190,7 +190,7 @@ pub(crate) fn generate_body(
         gen_fn_tokens.push(function.generate_return_type(&fn_token_name.to_string()));
     }
 
-    let mut generate_fncall = syn::parse2::<syn::ItemMod>(quote! {
+    let mut generate_fn_call = syn::parse2::<syn::ItemMod>(quote! {
         pub mod generate_info {
             #[allow(unused_imports)]
             use super::*;
@@ -203,8 +203,8 @@ pub(crate) fn generate_body(
             }
             #[allow(unused_mut)]
             pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                #(#set_fn_stmts)*
-                #(#set_const_stmts)*
+                #(#set_fn_statements)*
+                #(#set_const_statements)*
 
                 if flatten {
                     #(#set_flattened_mod_blocks)*
@@ -216,7 +216,7 @@ pub(crate) fn generate_body(
     })
     .unwrap();
 
-    let (_, generate_call_content) = generate_fncall.content.take().unwrap();
+    let (_, generate_call_content) = generate_fn_call.content.take().unwrap();
 
     quote! {
         #(#generate_call_content)*
@@ -225,39 +225,39 @@ pub(crate) fn generate_body(
 }
 
 pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::Error> {
-    fn make_key(name: impl ToString, itemfn: &ExportedFn) -> String {
-        itemfn
+    fn make_key(name: impl ToString, item_fn: &ExportedFn) -> String {
+        item_fn
             .arg_list()
-            .fold(name.to_string(), |mut argstr, fnarg| {
-                let type_string: String = match fnarg {
+            .fold(name.to_string(), |mut arg_str, fn_arg| {
+                let type_string: String = match fn_arg {
                     syn::FnArg::Receiver(_) => unimplemented!("receiver rhai_fns not implemented"),
                     syn::FnArg::Typed(syn::PatType { ref ty, .. }) => print_type(ty),
                 };
-                argstr.push('.');
-                argstr.push_str(&type_string);
-                argstr
+                arg_str.push('.');
+                arg_str.push_str(&type_string);
+                arg_str
             })
     }
 
     let mut renames = HashMap::<String, proc_macro2::Span>::new();
     let mut fn_defs = HashMap::<String, proc_macro2::Span>::new();
 
-    for itemfn in fns.iter() {
-        if !itemfn.params().name.is_empty() || itemfn.params().special != FnSpecialAccess::None {
-            let mut names: Vec<_> = itemfn
+    for item_fn in fns.iter() {
+        if !item_fn.params().name.is_empty() || item_fn.params().special != FnSpecialAccess::None {
+            let mut names: Vec<_> = item_fn
                 .params()
                 .name
                 .iter()
                 .map(|n| (n.clone(), n.clone()))
                 .collect();
 
-            if let Some((s, n, _)) = itemfn.params().special.get_fn_name() {
+            if let Some((s, n, _)) = item_fn.params().special.get_fn_name() {
                 names.push((s, n));
             }
 
             for (name, fn_name) in names {
-                let current_span = itemfn.params().span.unwrap();
-                let key = make_key(&name, itemfn);
+                let current_span = item_fn.params().span.unwrap();
+                let key = make_key(&name, item_fn);
                 if let Some(other_span) = renames.insert(key, current_span) {
                     let mut err = syn::Error::new(
                         current_span,
@@ -271,7 +271,7 @@ pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::
                 }
             }
         } else {
-            let ident = itemfn.name();
+            let ident = item_fn.name();
             if let Some(other_span) = fn_defs.insert(ident.to_string(), ident.span()) {
                 let mut err = syn::Error::new(
                     ident.span(),
@@ -283,7 +283,7 @@ pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::
                 ));
                 return Err(err);
             }
-            let key = make_key(ident, itemfn);
+            let key = make_key(ident, item_fn);
             if let Some(fn_span) = renames.get(&key) {
                 let mut err = syn::Error::new(
                     ident.span(),

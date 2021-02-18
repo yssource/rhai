@@ -378,8 +378,8 @@ impl Parse for ExportedFn {
         }
 
         // Check return type.
-        if let syn::ReturnType::Type(_, ref rtype) = fn_all.sig.output {
-            match flatten_type_groups(rtype.as_ref()) {
+        if let syn::ReturnType::Type(_, ref ret_type) = fn_all.sig.output {
+            match flatten_type_groups(ret_type.as_ref()) {
                 syn::Type::Ptr(_) => {
                     return Err(syn::Error::new(
                         fn_all.sig.output.span(),
@@ -495,8 +495,8 @@ impl ExportedFn {
     }
 
     pub(crate) fn return_type(&self) -> Option<&syn::Type> {
-        if let syn::ReturnType::Type(_, ref rtype) = self.signature.output {
-            Some(flatten_type_groups(rtype))
+        if let syn::ReturnType::Type(_, ref ret_type) = self.signature.output {
+            Some(flatten_type_groups(ret_type))
         } else {
             None
         }
@@ -616,8 +616,8 @@ impl ExportedFn {
         let arguments: Vec<syn::Ident> = dynamic_signature
             .inputs
             .iter()
-            .filter_map(|fnarg| {
-                if let syn::FnArg::Typed(syn::PatType { ref pat, .. }) = fnarg {
+            .filter_map(|fn_arg| {
+                if let syn::FnArg::Typed(syn::PatType { ref pat, .. }) = fn_arg {
                     if let syn::Pat::Ident(ref ident) = pat.as_ref() {
                         Some(ident.ident.clone())
                     } else {
@@ -718,7 +718,7 @@ impl ExportedFn {
         let arg_count = self.arg_count();
         let is_method_call = self.mutable_receiver();
 
-        let mut unpack_stmts: Vec<syn::Stmt> = Vec::new();
+        let mut unpack_statements: Vec<syn::Stmt> = Vec::new();
         let mut unpack_exprs: Vec<syn::Expr> = Vec::new();
         let mut input_type_names: Vec<String> = Vec::new();
         let mut input_type_exprs: Vec<syn::Expr> = Vec::new();
@@ -748,7 +748,7 @@ impl ExportedFn {
                     };
                     let downcast_span = quote_spanned!(
                         arg_type.span()=> &mut args[0usize].write_lock::<#arg_type>().unwrap());
-                    unpack_stmts.push(
+                    unpack_statements.push(
                         syn::parse2::<syn::Stmt>(quote! {
                             let #var = #downcast_span;
                         })
@@ -811,7 +811,7 @@ impl ExportedFn {
                         }
                     };
 
-                    unpack_stmts.push(
+                    unpack_statements.push(
                         syn::parse2::<syn::Stmt>(quote! {
                             let #var = #downcast_span;
                         })
@@ -847,8 +847,8 @@ impl ExportedFn {
         // that as needing to borrow the entire array, all of the previous argument unpacking via
         // clone needs to happen first.
         if is_method_call {
-            let arg0 = unpack_stmts.remove(0);
-            unpack_stmts.push(arg0);
+            let arg0 = unpack_statements.remove(0);
+            unpack_statements.push(arg0);
         }
 
         // Handle "raw returns", aka cases where the result is a dynamic or an error.
@@ -881,7 +881,7 @@ impl ExportedFn {
                     debug_assert_eq!(args.len(), #arg_count,
                                      "wrong arg count: {} != {}",
                                      args.len(), #arg_count);
-                    #(#unpack_stmts)*
+                    #(#unpack_statements)*
                     #return_expr
                 }
 
