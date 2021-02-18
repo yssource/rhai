@@ -64,6 +64,20 @@ impl Default for Scope<'_> {
     }
 }
 
+impl<'a> IntoIterator for Scope<'a> {
+    type Item = (Cow<'a, str>, Dynamic);
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Box::new(
+            self.values
+                .into_iter()
+                .zip(self.names.into_iter())
+                .map(|(value, (name, _))| (name, value)),
+        )
+    }
+}
+
 impl<'a> Scope<'a> {
     /// Create a new [`Scope`].
     ///

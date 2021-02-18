@@ -12,8 +12,10 @@ Bug fixes
 Enhancements
 ------------
 
+* Comparisons between `FLOAT`/[`Decimal`](https://crates.io/crates/rust_decimal) and `INT` are now built in.
 * Error position in `eval` statements is now wrapped in an `EvalAltResult::ErrorInFunctionCall`.
 * `Position` now implements `Add` and `AddAssign`.
+* `Scope` now implements `IntoIterator`.
 
 
 Version 0.19.12
@@ -54,7 +56,7 @@ Enhancements
 
 * Functions resolution cache is used in more cases, making repeated function calls faster.
 * Added `atan(x, y)` and `hypot(x, y)` to `BasicMathPackage`.
-* Added standard arithmetic operators between `FLOAT` and `INT`.
+* Added standard arithmetic operators between `FLOAT`/[`Decimal`](https://crates.io/crates/rust_decimal) and `INT`.
 
 
 Version 0.19.11
