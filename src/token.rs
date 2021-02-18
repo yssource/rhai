@@ -9,6 +9,7 @@ use crate::stdlib::{
     char, fmt, format,
     iter::Peekable,
     num::NonZeroUsize,
+    ops::{Add, AddAssign},
     str::{Chars, FromStr},
     string::{String, ToString},
 };
@@ -120,7 +121,7 @@ impl Position {
     /// Is this [`Position`] at the beginning of a line?
     #[inline(always)]
     pub fn is_beginning_of_line(self) -> bool {
-        self.line == 0 && !self.is_none()
+        self.pos == 0 && !self.is_none()
     }
     /// Is there no [`Position`]?
     #[inline(always)]
@@ -151,6 +152,31 @@ impl fmt::Debug for Position {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}", self.line, self.pos)
+    }
+}
+
+impl Add for Position {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        if rhs.is_none() {
+            self
+        } else {
+            Self {
+                line: self.line + rhs.line - 1,
+                pos: if rhs.is_beginning_of_line() {
+                    self.pos
+                } else {
+                    self.pos + rhs.pos - 1
+                },
+            }
+        }
+    }
+}
+
+impl AddAssign for Position {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
     }
 }
 
