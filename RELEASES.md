@@ -1,6 +1,21 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.13
+===============
+
+Bug fixes
+---------
+
+* Bug in `Position::is_beginning_of_line` is fixed.
+
+Enhancements
+------------
+
+* Error position in `eval` statements is now wrapped in an `EvalAltResult::ErrorInFunctionCall`.
+* `Position` now implements `Add` and `AddAssign`.
+
+
 Version 0.19.12
 ===============
 

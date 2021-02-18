@@ -798,6 +798,7 @@ impl Engine {
             self.eval_global_statements(scope, mods, &mut new_state, ast.statements(), lib, level);
 
         state.operations = new_state.operations;
+
         result
     }
 
@@ -1067,17 +1068,27 @@ impl Engine {
         if name == KEYWORD_EVAL && args_expr.len() == 1 {
             let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
 
+            let script_expr = &args_expr[0];
+
             if !self.has_override(Some(mods), Some(state), lib, hash_fn, hash_script, pub_only) {
+                let script_pos = script_expr.position();
+
                 // eval - only in function call style
                 let prev_len = scope.len();
                 let script =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+                    self.eval_expr(scope, mods, state, lib, this_ptr, script_expr, level)?;
                 let script = script.as_str().map_err(|typ| {
-                    self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
+                    self.make_type_mismatch_err::<ImmutableString>(typ, script_pos)
                 })?;
-                let pos = args_expr[0].position();
-                let result =
-                    self.eval_script_expr_in_place(scope, mods, state, lib, script, pos, level + 1);
+                let result = self.eval_script_expr_in_place(
+                    scope,
+                    mods,
+                    state,
+                    lib,
+                    script,
+                    script_pos,
+                    level + 1,
+                );
 
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
@@ -1085,7 +1096,18 @@ impl Engine {
                     state.always_search = true;
                 }
 
-                return result;
+                return result.map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                        KEYWORD_EVAL.to_string(),
+                        state
+                            .source
+                            .as_ref()
+                            .map_or_else(|| "", |s| s.as_str())
+                            .to_string(),
+                        err,
+                        pos,
+                    ))
+                });
             }
         }
 
