@@ -1219,6 +1219,83 @@ mod generate_tests {
     }
 
     #[test]
+    fn mut_ref_pure_fn_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod ref_fn {
+                #[rhai_fn(pure)]
+                pub fn foo(x: &mut FLOAT, y: INT) -> FLOAT {
+                    *x + y as FLOAT
+                }
+            }
+        };
+
+        let expected_tokens = quote! {
+            pub mod ref_fn {
+                pub fn foo(x: &mut FLOAT, y: INT) -> FLOAT {
+                    *x + y as FLOAT
+                }
+                #[allow(unused_imports)]
+                use super::*;
+
+                pub fn rhai_module_generate() -> Module {
+                    let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m.build_index();
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    m.set_fn("foo", FnNamespace::Internal, FnAccess::Public,
+                             Some(&["x: &mut FLOAT", "y: INT", "FLOAT"]), &[core::any::TypeId::of::<FLOAT>(), core::any::TypeId::of::<INT>()],
+                             foo_token().into());
+                    if flatten {} else {}
+                }
+                #[allow(non_camel_case_types)]
+                struct foo_token();
+                impl PluginFunction for foo_token {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
+                        debug_assert_eq!(args.len(), 2usize,
+                                            "wrong arg count: {} != {}", args.len(), 2usize);
+                        let arg1 = mem::take(args[1usize]).cast::<INT>();
+                        let arg0 = &mut args[0usize].write_lock::<FLOAT>().unwrap();
+                        Ok(Dynamic::from(foo(arg0, arg1)))
+                    }
+
+                    fn is_method_call(&self) -> bool { true }
+                    fn is_variadic(&self) -> bool { false }
+                    fn clone_boxed(&self) -> Box<dyn PluginFunction> {
+                        Box::new(foo_token())
+                    }
+                    fn input_names(&self) -> Box<[&'static str]> {
+                        new_vec!["x: &mut FLOAT", "y: INT"].into_boxed_slice()
+                    }
+                    fn input_types(&self) -> Box<[TypeId]> {
+                        new_vec![TypeId::of::<FLOAT>(), TypeId::of::<INT>()].into_boxed_slice()
+                    }
+                    fn return_type(&self) -> &'static str {
+                        "FLOAT"
+                    }
+                }
+                pub fn foo_token_callable() -> CallableFunction {
+                    foo_token().into()
+                }
+                pub fn foo_token_input_names() -> Box<[&'static str]> {
+                    foo_token().input_names()
+                }
+                pub fn foo_token_input_types() -> Box<[TypeId]> {
+                    foo_token().input_types()
+                }
+                pub fn foo_token_return_type() -> &'static str {
+                    foo_token().return_type()
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert_streams_eq(item_mod.generate(), expected_tokens);
+    }
+
+    #[test]
     fn one_mut_ref_fn_module() {
         let input_tokens: TokenStream = quote! {
             pub mod ref_fn {
@@ -1255,6 +1332,11 @@ mod generate_tests {
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
+                        if args[0usize].is_read_only() {
+                            return Err(Box::new(
+                                EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
+                            ));
+                        }
                         let arg0 = &mut args[0usize].write_lock::<FLOAT>().unwrap();
                         Ok(Dynamic::from(increment(arg0)))
                     }
@@ -1333,6 +1415,11 @@ mod generate_tests {
                         fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                             debug_assert_eq!(args.len(), 1usize,
                                                 "wrong arg count: {} != {}", args.len(), 1usize);
+                            if args[0usize].is_read_only() {
+                                return Err(Box::new(
+                                    EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
+                                ));
+                            }
                             let arg0 = &mut args[0usize].write_lock::<FLOAT>().unwrap();
                             Ok(Dynamic::from(increment(arg0)))
                         }
@@ -1432,6 +1519,11 @@ mod generate_tests {
                         fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                             debug_assert_eq!(args.len(), 1usize,
                                                 "wrong arg count: {} != {}", args.len(), 1usize);
+                            if args[0usize].is_read_only() {
+                                return Err(Box::new(
+                                    EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
+                                ));
+                            }
                             let arg0 = &mut args[0usize].write_lock::<FLOAT>().unwrap();
                             Ok(Dynamic::from(increment(arg0)))
                         }
@@ -1530,6 +1622,11 @@ mod generate_tests {
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
+                        if args[0usize].is_read_only() {
+                            return Err(Box::new(
+                                EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
+                            ));
+                        }
                         let arg0 = &mut args[0usize].write_lock::<u64>().unwrap();
                         Ok(Dynamic::from(int_foo(arg0)))
                     }
@@ -1607,6 +1704,11 @@ mod generate_tests {
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 1usize,
                                             "wrong arg count: {} != {}", args.len(), 1usize);
+                        if args[0usize].is_read_only() {
+                            return Err(Box::new(
+                                EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
+                            ));
+                        }
                         let arg0 = &mut args[0usize].write_lock::<u64>().unwrap();
                         Ok(Dynamic::from(int_foo(arg0)))
                     }
@@ -1683,6 +1785,11 @@ mod generate_tests {
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
+                        if args[0usize].is_read_only() {
+                            return Err(Box::new(
+                                EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
+                            ));
+                        }
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg0 = &mut args[0usize].write_lock::<u64>().unwrap();
                         Ok(Dynamic::from(int_foo(arg0, arg1)))
@@ -1763,6 +1870,11 @@ mod generate_tests {
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
+                        if args[0usize].is_read_only() {
+                            return Err(Box::new(
+                                EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
+                            ));
+                        }
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg0 = &mut args[0usize].write_lock::<u64>().unwrap();
                         Ok(Dynamic::from(int_foo(arg0, arg1)))
@@ -1842,6 +1954,11 @@ mod generate_tests {
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
+                        if args[0usize].is_read_only() {
+                            return Err(Box::new(
+                                EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
+                            ));
+                        }
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg0 = &mut args[0usize].write_lock::<MyCollection>().unwrap();
                         Ok(Dynamic::from(get_by_index(arg0, arg1)))
@@ -1927,6 +2044,11 @@ mod generate_tests {
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                             "wrong arg count: {} != {}", args.len(), 2usize);
+                        if args[0usize].is_read_only() {
+                            return Err(Box::new(
+                                EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
+                            ));
+                        }
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg0 = &mut args[0usize].write_lock::<MyCollection>().unwrap();
                         Ok(Dynamic::from(get_by_index(arg0, arg1)))
@@ -2008,6 +2130,11 @@ mod generate_tests {
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 3usize,
                                             "wrong arg count: {} != {}", args.len(), 3usize);
+                        if args[0usize].is_read_only() {
+                            return Err(Box::new(
+                                EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
+                            ));
+                        }
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg2 = mem::take(args[2usize]).cast::<FLOAT>();
                         let arg0 = &mut args[0usize].write_lock::<MyCollection>().unwrap();
@@ -2097,6 +2224,11 @@ mod generate_tests {
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 3usize,
                                             "wrong arg count: {} != {}", args.len(), 3usize);
+                        if args[0usize].is_read_only() {
+                            return Err(Box::new(
+                                EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
+                            ));
+                        }
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg2 = mem::take(args[2usize]).cast::<FLOAT>();
                         let arg0 = &mut args[0usize].write_lock::<MyCollection>().unwrap();
