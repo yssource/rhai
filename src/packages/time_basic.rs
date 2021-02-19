@@ -26,9 +26,9 @@ mod time_functions {
     }
 
     #[rhai_fn(name = "elapsed", get = "elapsed", return_raw)]
-    pub fn elapsed(timestamp: &mut Instant) -> Result<Dynamic, Box<EvalAltResult>> {
+    pub fn elapsed(timestamp: Instant) -> Result<Dynamic, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_float"))]
-        if *timestamp > Instant::now() {
+        if timestamp > Instant::now() {
             Err(make_arithmetic_err("Time-stamp is later than now"))
         } else {
             Ok((timestamp.elapsed().as_secs_f64() as FLOAT).into())
@@ -43,7 +43,7 @@ mod time_functions {
                     "Integer overflow for timestamp.elapsed: {}",
                     seconds
                 )))
-            } else if *timestamp > Instant::now() {
+            } else if timestamp > Instant::now() {
                 Err(make_arithmetic_err("Time-stamp is later than now"))
             } else {
                 Ok((seconds as INT).into())
@@ -52,18 +52,21 @@ mod time_functions {
     }
 
     #[rhai_fn(return_raw, name = "-")]
-    pub fn time_diff(ts1: Instant, ts2: Instant) -> Result<Dynamic, Box<EvalAltResult>> {
+    pub fn time_diff(
+        timestamp: Instant,
+        timestamp2: Instant,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_float"))]
-        return Ok(if ts2 > ts1 {
-            -(ts2 - ts1).as_secs_f64() as FLOAT
+        return Ok(if timestamp2 > timestamp {
+            -(timestamp2 - timestamp).as_secs_f64() as FLOAT
         } else {
-            (ts1 - ts2).as_secs_f64() as FLOAT
+            (timestamp - timestamp2).as_secs_f64() as FLOAT
         }
         .into());
 
         #[cfg(feature = "no_float")]
-        if ts2 > ts1 {
-            let seconds = (ts2 - ts1).as_secs();
+        if timestamp2 > timestamp {
+            let seconds = (timestamp2 - timestamp).as_secs();
 
             if cfg!(not(feature = "unchecked")) && seconds > (MAX_INT as u64) {
                 Err(make_arithmetic_err(format!(
@@ -74,7 +77,7 @@ mod time_functions {
                 Ok((-(seconds as INT)).into())
             }
         } else {
-            let seconds = (ts1 - ts2).as_secs();
+            let seconds = (timestamp - timestamp2).as_secs();
 
             if cfg!(not(feature = "unchecked")) && seconds > (MAX_INT as u64) {
                 Err(make_arithmetic_err(format!(
@@ -89,9 +92,9 @@ mod time_functions {
 
     #[cfg(not(feature = "no_float"))]
     pub mod float_functions {
-        fn add_impl(x: Instant, seconds: FLOAT) -> Result<Instant, Box<EvalAltResult>> {
+        fn add_impl(timestamp: Instant, seconds: FLOAT) -> Result<Instant, Box<EvalAltResult>> {
             if seconds < 0.0 {
-                subtract_impl(x, -seconds)
+                subtract_impl(timestamp, -seconds)
             } else if cfg!(not(feature = "unchecked")) {
                 if seconds > (MAX_INT as FLOAT) {
                     Err(make_arithmetic_err(format!(
@@ -99,7 +102,8 @@ mod time_functions {
                         seconds
                     )))
                 } else {
-                    x.checked_add(Duration::from_millis((seconds * 1000.0) as u64))
+                    timestamp
+                        .checked_add(Duration::from_millis((seconds * 1000.0) as u64))
                         .ok_or_else(|| {
                             make_arithmetic_err(format!(
                                 "Timestamp overflow when adding {} second(s)",
@@ -108,12 +112,15 @@ mod time_functions {
                         })
                 }
             } else {
-                Ok(x + Duration::from_millis((seconds * 1000.0) as u64))
+                Ok(timestamp + Duration::from_millis((seconds * 1000.0) as u64))
             }
         }
-        fn subtract_impl(x: Instant, seconds: FLOAT) -> Result<Instant, Box<EvalAltResult>> {
+        fn subtract_impl(
+            timestamp: Instant,
+            seconds: FLOAT,
+        ) -> Result<Instant, Box<EvalAltResult>> {
             if seconds < 0.0 {
-                add_impl(x, -seconds)
+                add_impl(timestamp, -seconds)
             } else if cfg!(not(feature = "unchecked")) {
                 if seconds > (MAX_INT as FLOAT) {
                     Err(make_arithmetic_err(format!(
@@ -121,7 +128,8 @@ mod time_functions {
                         seconds
                     )))
                 } else {
-                    x.checked_sub(Duration::from_millis((seconds * 1000.0) as u64))
+                    timestamp
+                        .checked_sub(Duration::from_millis((seconds * 1000.0) as u64))
                         .ok_or_else(|| {
                             make_arithmetic_err(format!(
                                 "Timestamp overflow when adding {} second(s)",
@@ -130,38 +138,42 @@ mod time_functions {
                         })
                 }
             } else {
-                Ok(x - Duration::from_millis((seconds * 1000.0) as u64))
+                Ok(timestamp - Duration::from_millis((seconds * 1000.0) as u64))
             }
         }
 
         #[rhai_fn(return_raw, name = "+")]
-        pub fn add(x: Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
-            add_impl(x, seconds).map(Into::<Dynamic>::into)
+        pub fn add(timestamp: Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
+            add_impl(timestamp, seconds).map(Into::<Dynamic>::into)
         }
         #[rhai_fn(return_raw, name = "+=")]
-        pub fn add_assign(x: &mut Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
-            *x = add_impl(*x, seconds)?;
+        pub fn add_assign(
+            timestamp: &mut Instant,
+            seconds: FLOAT,
+        ) -> Result<Dynamic, Box<EvalAltResult>> {
+            *timestamp = add_impl(*timestamp, seconds)?;
             Ok(Dynamic::UNIT)
         }
         #[rhai_fn(return_raw, name = "-")]
-        pub fn subtract(x: Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
-            subtract_impl(x, seconds).map(Into::<Dynamic>::into)
+        pub fn subtract(timestamp: Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
+            subtract_impl(timestamp, seconds).map(Into::<Dynamic>::into)
         }
         #[rhai_fn(return_raw, name = "-=")]
         pub fn subtract_assign(
-            x: &mut Instant,
+            timestamp: &mut Instant,
             seconds: FLOAT,
         ) -> Result<Dynamic, Box<EvalAltResult>> {
-            *x = subtract_impl(*x, seconds)?;
+            *timestamp = subtract_impl(*timestamp, seconds)?;
             Ok(Dynamic::UNIT)
         }
     }
 
-    fn add_impl(x: Instant, seconds: INT) -> Result<Instant, Box<EvalAltResult>> {
+    fn add_impl(timestamp: Instant, seconds: INT) -> Result<Instant, Box<EvalAltResult>> {
         if seconds < 0 {
-            subtract_impl(x, -seconds)
+            subtract_impl(timestamp, -seconds)
         } else if cfg!(not(feature = "unchecked")) {
-            x.checked_add(Duration::from_secs(seconds as u64))
+            timestamp
+                .checked_add(Duration::from_secs(seconds as u64))
                 .ok_or_else(|| {
                     make_arithmetic_err(format!(
                         "Timestamp overflow when adding {} second(s)",
@@ -169,14 +181,15 @@ mod time_functions {
                     ))
                 })
         } else {
-            Ok(x + Duration::from_secs(seconds as u64))
+            Ok(timestamp + Duration::from_secs(seconds as u64))
         }
     }
-    fn subtract_impl(x: Instant, seconds: INT) -> Result<Instant, Box<EvalAltResult>> {
+    fn subtract_impl(timestamp: Instant, seconds: INT) -> Result<Instant, Box<EvalAltResult>> {
         if seconds < 0 {
-            add_impl(x, -seconds)
+            add_impl(timestamp, -seconds)
         } else if cfg!(not(feature = "unchecked")) {
-            x.checked_sub(Duration::from_secs(seconds as u64))
+            timestamp
+                .checked_sub(Duration::from_secs(seconds as u64))
                 .ok_or_else(|| {
                     make_arithmetic_err(format!(
                         "Timestamp overflow when adding {} second(s)",
@@ -184,51 +197,57 @@ mod time_functions {
                     ))
                 })
         } else {
-            Ok(x - Duration::from_secs(seconds as u64))
+            Ok(timestamp - Duration::from_secs(seconds as u64))
         }
     }
 
     #[rhai_fn(return_raw, name = "+")]
-    pub fn add(x: Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
-        add_impl(x, seconds).map(Into::<Dynamic>::into)
+    pub fn add(timestamp: Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        add_impl(timestamp, seconds).map(Into::<Dynamic>::into)
     }
     #[rhai_fn(return_raw, name = "+=")]
-    pub fn add_assign(x: &mut Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
-        *x = add_impl(*x, seconds)?;
+    pub fn add_assign(
+        timestamp: &mut Instant,
+        seconds: INT,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        *timestamp = add_impl(*timestamp, seconds)?;
         Ok(Dynamic::UNIT)
     }
     #[rhai_fn(return_raw, name = "-")]
-    pub fn subtract(x: Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
-        subtract_impl(x, seconds).map(Into::<Dynamic>::into)
+    pub fn subtract(timestamp: Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
+        subtract_impl(timestamp, seconds).map(Into::<Dynamic>::into)
     }
     #[rhai_fn(return_raw, name = "-=")]
-    pub fn subtract_assign(x: &mut Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
-        *x = subtract_impl(*x, seconds)?;
+    pub fn subtract_assign(
+        timestamp: &mut Instant,
+        seconds: INT,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        *timestamp = subtract_impl(*timestamp, seconds)?;
         Ok(Dynamic::UNIT)
     }
 
     #[rhai_fn(name = "==")]
-    pub fn eq(x: Instant, y: Instant) -> bool {
-        x == y
+    pub fn eq(timestamp: Instant, timestamp2: Instant) -> bool {
+        timestamp == timestamp2
     }
     #[rhai_fn(name = "!=")]
-    pub fn ne(x: Instant, y: Instant) -> bool {
-        x != y
+    pub fn ne(timestamp: Instant, timestamp2: Instant) -> bool {
+        timestamp != timestamp2
     }
     #[rhai_fn(name = "<")]
-    pub fn lt(x: Instant, y: Instant) -> bool {
-        x < y
+    pub fn lt(timestamp: Instant, timestamp2: Instant) -> bool {
+        timestamp < timestamp2
     }
     #[rhai_fn(name = "<=")]
-    pub fn lte(x: Instant, y: Instant) -> bool {
-        x <= y
+    pub fn lte(timestamp: Instant, timestamp2: Instant) -> bool {
+        timestamp <= timestamp2
     }
     #[rhai_fn(name = ">")]
-    pub fn gt(x: Instant, y: Instant) -> bool {
-        x > y
+    pub fn gt(timestamp: Instant, timestamp2: Instant) -> bool {
+        timestamp > timestamp2
     }
     #[rhai_fn(name = ">=")]
-    pub fn gte(x: Instant, y: Instant) -> bool {
-        x >= y
+    pub fn gte(timestamp: Instant, timestamp2: Instant) -> bool {
+        timestamp >= timestamp2
     }
 }

@@ -22,22 +22,22 @@ macro_rules! gen_array_functions {
             #[export_module]
             pub mod functions {
                 #[rhai_fn(name = "push", name = "+=")]
-                pub fn push(list: &mut Array, item: $arg_type) {
-                    list.push(Dynamic::from(item));
+                pub fn push(array: &mut Array, item: $arg_type) {
+                    array.push(Dynamic::from(item));
                 }
 
-                pub fn insert(list: &mut Array, position: INT, item: $arg_type) {
+                pub fn insert(array: &mut Array, position: INT, item: $arg_type) {
                     if position <= 0 {
-                        list.insert(0, Dynamic::from(item));
-                    } else if (position as usize) >= list.len() {
-                        push(list, item);
+                        array.insert(0, Dynamic::from(item));
+                    } else if (position as usize) >= array.len() {
+                        push(array, item);
                     } else {
-                        list.insert(position as usize, Dynamic::from(item));
+                        array.insert(position as usize, Dynamic::from(item));
                     }
                 }
 
                 #[rhai_fn(return_raw)]
-                pub fn pad(_ctx: NativeCallContext, list: &mut Array, len: INT, item: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
+                pub fn pad(_ctx: NativeCallContext, array: &mut Array, len: INT, item: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
                     // Check if array will be over max size limit
                     #[cfg(not(feature = "unchecked"))]
                     if _ctx.engine().max_array_size() > 0 && len > 0 && (len as usize) > _ctx.engine().max_array_size() {
@@ -46,8 +46,8 @@ macro_rules! gen_array_functions {
                         ).into();
                     }
 
-                    if len > 0 && len as usize > list.len() {
-                        list.resize(len as usize, Dynamic::from(item));
+                    if len > 0 && len as usize > array.len() {
+                        array.resize(len as usize, Dynamic::from(item));
                     }
 
                     Ok(Dynamic::UNIT)
@@ -90,117 +90,117 @@ def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
 
 #[export_module]
 mod array_functions {
-    #[rhai_fn(name = "len", get = "len")]
-    pub fn len(list: &mut Array) -> INT {
-        list.len() as INT
+    #[rhai_fn(name = "len", get = "len", pure)]
+    pub fn len(array: &mut Array) -> INT {
+        array.len() as INT
     }
     #[rhai_fn(name = "append", name = "+=")]
-    pub fn append(x: &mut Array, y: Array) {
-        x.extend(y);
+    pub fn append(array: &mut Array, y: Array) {
+        array.extend(y);
     }
     #[rhai_fn(name = "+")]
-    pub fn concat(mut x: Array, y: Array) -> Array {
-        x.extend(y);
-        x
+    pub fn concat(mut array: Array, y: Array) -> Array {
+        array.extend(y);
+        array
     }
-    pub fn pop(list: &mut Array) -> Dynamic {
-        list.pop().unwrap_or_else(|| ().into())
+    pub fn pop(array: &mut Array) -> Dynamic {
+        array.pop().unwrap_or_else(|| ().into())
     }
-    pub fn shift(list: &mut Array) -> Dynamic {
-        if list.is_empty() {
+    pub fn shift(array: &mut Array) -> Dynamic {
+        if array.is_empty() {
             ().into()
         } else {
-            list.remove(0)
+            array.remove(0)
         }
     }
-    pub fn remove(list: &mut Array, len: INT) -> Dynamic {
-        if len < 0 || (len as usize) >= list.len() {
+    pub fn remove(array: &mut Array, len: INT) -> Dynamic {
+        if len < 0 || (len as usize) >= array.len() {
             ().into()
         } else {
-            list.remove(len as usize)
+            array.remove(len as usize)
         }
     }
-    pub fn clear(list: &mut Array) {
-        list.clear();
+    pub fn clear(array: &mut Array) {
+        array.clear();
     }
-    pub fn truncate(list: &mut Array, len: INT) {
+    pub fn truncate(array: &mut Array, len: INT) {
         if len >= 0 {
-            list.truncate(len as usize);
+            array.truncate(len as usize);
         } else {
-            list.clear();
+            array.clear();
         }
     }
-    pub fn chop(list: &mut Array, len: INT) {
-        if len as usize >= list.len() {
+    pub fn chop(array: &mut Array, len: INT) {
+        if len as usize >= array.len() {
         } else if len >= 0 {
-            list.drain(0..list.len() - len as usize);
+            array.drain(0..array.len() - len as usize);
         } else {
-            list.clear();
+            array.clear();
         }
     }
-    pub fn reverse(list: &mut Array) {
-        list.reverse();
+    pub fn reverse(array: &mut Array) {
+        array.reverse();
     }
-    pub fn splice(list: &mut Array, start: INT, len: INT, replace: Array) {
+    pub fn splice(array: &mut Array, start: INT, len: INT, replace: Array) {
         let start = if start < 0 {
             0
-        } else if start as usize >= list.len() {
-            list.len() - 1
+        } else if start as usize >= array.len() {
+            array.len() - 1
         } else {
             start as usize
         };
 
         let len = if len < 0 {
             0
-        } else if len as usize > list.len() - start {
-            list.len() - start
+        } else if len as usize > array.len() - start {
+            array.len() - start
         } else {
             len as usize
         };
 
-        list.splice(start..start + len, replace.into_iter());
+        array.splice(start..start + len, replace.into_iter());
     }
-    pub fn extract(list: &mut Array, start: INT, len: INT) -> Array {
+    pub fn extract(array: &mut Array, start: INT, len: INT) -> Array {
         let start = if start < 0 {
             0
-        } else if start as usize >= list.len() {
-            list.len() - 1
+        } else if start as usize >= array.len() {
+            array.len() - 1
         } else {
             start as usize
         };
 
         let len = if len < 0 {
             0
-        } else if len as usize > list.len() - start {
-            list.len() - start
+        } else if len as usize > array.len() - start {
+            array.len() - start
         } else {
             len as usize
         };
 
-        list[start..start + len].iter().cloned().collect()
+        array[start..start + len].iter().cloned().collect()
     }
     #[rhai_fn(name = "extract")]
-    pub fn extract_tail(list: &mut Array, start: INT) -> Array {
+    pub fn extract_tail(array: &mut Array, start: INT) -> Array {
         let start = if start < 0 {
             0
-        } else if start as usize >= list.len() {
-            list.len() - 1
+        } else if start as usize >= array.len() {
+            array.len() - 1
         } else {
             start as usize
         };
 
-        list[start..].iter().cloned().collect()
+        array[start..].iter().cloned().collect()
     }
     #[rhai_fn(return_raw)]
     pub fn map(
         ctx: NativeCallContext,
-        list: &mut Array,
+        array: &mut Array,
         mapper: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut array = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, list.len()));
+        let mut ar = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, array.len()));
 
-        for (i, item) in list.iter().enumerate() {
-            array.push(
+        for (i, item) in array.iter().enumerate() {
+            ar.push(
                 mapper
                     .call_dynamic(ctx, None, [item.clone()])
                     .or_else(|err| match *err {
@@ -222,17 +222,17 @@ mod array_functions {
             );
         }
 
-        Ok(array.into())
+        Ok(ar.into())
     }
     #[rhai_fn(return_raw)]
     pub fn filter(
         ctx: NativeCallContext,
-        list: &mut Array,
+        array: &mut Array,
         filter: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut array = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, list.len()));
+        let mut ar = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, array.len()));
 
-        for (i, item) in list.iter().enumerate() {
+        for (i, item) in array.iter().enumerate() {
             if filter
                 .call_dynamic(ctx, None, [item.clone()])
                 .or_else(|err| match *err {
@@ -254,19 +254,19 @@ mod array_functions {
                 .as_bool()
                 .unwrap_or(false)
             {
-                array.push(item.clone());
+                ar.push(item.clone());
             }
         }
 
-        Ok(array.into())
+        Ok(ar.into())
     }
     #[rhai_fn(return_raw)]
     pub fn index_of(
         ctx: NativeCallContext,
-        list: &mut Array,
+        array: &mut Array,
         filter: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        for (i, item) in list.iter().enumerate() {
+        for (i, item) in array.iter().enumerate() {
             if filter
                 .call_dynamic(ctx, None, [item.clone()])
                 .or_else(|err| match *err {
@@ -297,10 +297,10 @@ mod array_functions {
     #[rhai_fn(return_raw)]
     pub fn some(
         ctx: NativeCallContext,
-        list: &mut Array,
+        array: &mut Array,
         filter: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        for (i, item) in list.iter().enumerate() {
+        for (i, item) in array.iter().enumerate() {
             if filter
                 .call_dynamic(ctx, None, [item.clone()])
                 .or_else(|err| match *err {
@@ -331,10 +331,10 @@ mod array_functions {
     #[rhai_fn(return_raw)]
     pub fn all(
         ctx: NativeCallContext,
-        list: &mut Array,
+        array: &mut Array,
         filter: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        for (i, item) in list.iter().enumerate() {
+        for (i, item) in array.iter().enumerate() {
             if !filter
                 .call_dynamic(ctx, None, [item.clone()])
                 .or_else(|err| match *err {
@@ -365,12 +365,12 @@ mod array_functions {
     #[rhai_fn(return_raw)]
     pub fn reduce(
         ctx: NativeCallContext,
-        list: &mut Array,
+        array: &mut Array,
         reducer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut result: Dynamic = Dynamic::UNIT;
 
-        for (i, item) in list.iter().enumerate() {
+        for (i, item) in array.iter().enumerate() {
             result = reducer
                 .call_dynamic(ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
@@ -396,7 +396,7 @@ mod array_functions {
     #[rhai_fn(name = "reduce", return_raw)]
     pub fn reduce_with_initial(
         ctx: NativeCallContext,
-        list: &mut Array,
+        array: &mut Array,
         reducer: FnPtr,
         initial: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -409,7 +409,7 @@ mod array_functions {
             ))
         })?;
 
-        for (i, item) in list.iter().enumerate() {
+        for (i, item) in array.iter().enumerate() {
             result = reducer
                 .call_dynamic(ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
@@ -435,12 +435,12 @@ mod array_functions {
     #[rhai_fn(return_raw)]
     pub fn reduce_rev(
         ctx: NativeCallContext,
-        list: &mut Array,
+        array: &mut Array,
         reducer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut result: Dynamic = Dynamic::UNIT;
 
-        for (i, item) in list.iter().enumerate().rev() {
+        for (i, item) in array.iter().enumerate().rev() {
             result = reducer
                 .call_dynamic(ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
@@ -466,7 +466,7 @@ mod array_functions {
     #[rhai_fn(name = "reduce_rev", return_raw)]
     pub fn reduce_rev_with_initial(
         ctx: NativeCallContext,
-        list: &mut Array,
+        array: &mut Array,
         reducer: FnPtr,
         initial: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -479,7 +479,7 @@ mod array_functions {
             ))
         })?;
 
-        for (i, item) in list.iter().enumerate().rev() {
+        for (i, item) in array.iter().enumerate().rev() {
             result = reducer
                 .call_dynamic(ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
@@ -505,10 +505,10 @@ mod array_functions {
     #[rhai_fn(return_raw)]
     pub fn sort(
         ctx: NativeCallContext,
-        list: &mut Array,
+        array: &mut Array,
         comparer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        list.sort_by(|x, y| {
+        array.sort_by(|x, y| {
             comparer
                 .call_dynamic(ctx, None, [x.clone(), y.clone()])
                 .ok()
@@ -541,23 +541,23 @@ mod array_functions {
     #[rhai_fn(return_raw)]
     pub fn drain(
         ctx: NativeCallContext,
-        list: &mut Array,
+        array: &mut Array,
         filter: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut drained = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, list.len()));
+        let mut drained = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, array.len()));
 
-        let mut i = list.len();
+        let mut i = array.len();
 
         while i > 0 {
             i -= 1;
 
             if filter
-                .call_dynamic(ctx, None, [list[i].clone()])
+                .call_dynamic(ctx, None, [array[i].clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(ctx, None, [list[i].clone(), (i as INT).into()])
+                        filter.call_dynamic(ctx, None, [array[i].clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -572,52 +572,52 @@ mod array_functions {
                 .as_bool()
                 .unwrap_or(false)
             {
-                drained.push(list.remove(i));
+                drained.push(array.remove(i));
             }
         }
 
         Ok(drained.into())
     }
     #[rhai_fn(name = "drain")]
-    pub fn drain_range(list: &mut Array, start: INT, len: INT) -> Array {
+    pub fn drain_range(array: &mut Array, start: INT, len: INT) -> Array {
         let start = if start < 0 {
             0
-        } else if start as usize >= list.len() {
-            list.len() - 1
+        } else if start as usize >= array.len() {
+            array.len() - 1
         } else {
             start as usize
         };
 
         let len = if len < 0 {
             0
-        } else if len as usize > list.len() - start {
-            list.len() - start
+        } else if len as usize > array.len() - start {
+            array.len() - start
         } else {
             len as usize
         };
 
-        list.drain(start..start + len - 1).collect()
+        array.drain(start..start + len - 1).collect()
     }
     #[rhai_fn(return_raw)]
     pub fn retain(
         ctx: NativeCallContext,
-        list: &mut Array,
+        array: &mut Array,
         filter: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut drained = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, list.len()));
+        let mut drained = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, array.len()));
 
-        let mut i = list.len();
+        let mut i = array.len();
 
         while i > 0 {
             i -= 1;
 
             if !filter
-                .call_dynamic(ctx, None, [list[i].clone()])
+                .call_dynamic(ctx, None, [array[i].clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(ctx, None, [list[i].clone(), (i as INT).into()])
+                        filter.call_dynamic(ctx, None, [array[i].clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -632,51 +632,51 @@ mod array_functions {
                 .as_bool()
                 .unwrap_or(false)
             {
-                drained.push(list.remove(i));
+                drained.push(array.remove(i));
             }
         }
 
         Ok(drained.into())
     }
     #[rhai_fn(name = "retain")]
-    pub fn retain_range(list: &mut Array, start: INT, len: INT) -> Array {
+    pub fn retain_range(array: &mut Array, start: INT, len: INT) -> Array {
         let start = if start < 0 {
             0
-        } else if start as usize >= list.len() {
-            list.len() - 1
+        } else if start as usize >= array.len() {
+            array.len() - 1
         } else {
             start as usize
         };
 
         let len = if len < 0 {
             0
-        } else if len as usize > list.len() - start {
-            list.len() - start
+        } else if len as usize > array.len() - start {
+            array.len() - start
         } else {
             len as usize
         };
 
-        let mut drained = list.drain(start + len..).collect::<Array>();
-        drained.extend(list.drain(..start));
+        let mut drained = array.drain(start + len..).collect::<Array>();
+        drained.extend(array.drain(..start));
 
         drained
     }
     #[rhai_fn(name = "==", return_raw)]
     pub fn equals(
         ctx: NativeCallContext,
-        arr1: &mut Array,
-        mut arr2: Array,
+        array: &mut Array,
+        mut array2: Array,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        if arr1.len() != arr2.len() {
+        if array.len() != array2.len() {
             return Ok(false.into());
         }
-        if arr1.is_empty() {
+        if array.is_empty() {
             return Ok(true.into());
         }
 
         let def_value = Some(false.into());
 
-        for (a1, a2) in arr1.iter_mut().zip(arr2.iter_mut()) {
+        for (a1, a2) in array.iter_mut().zip(array2.iter_mut()) {
             let equals = ctx
                 .call_fn_dynamic_raw(OP_EQUALS, true, false, &mut [a1, a2], def_value.as_ref())
                 .map(|v| v.as_bool().unwrap_or(false))?;
@@ -691,10 +691,10 @@ mod array_functions {
     #[rhai_fn(name = "!=", return_raw)]
     pub fn not_equals(
         ctx: NativeCallContext,
-        arr1: &mut Array,
-        arr2: Array,
+        array: &mut Array,
+        array2: Array,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        equals(ctx, arr1, arr2).map(|r| (!r.as_bool().unwrap()).into())
+        equals(ctx, array, array2).map(|r| (!r.as_bool().unwrap()).into())
     }
 }
 

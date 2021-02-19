@@ -14,13 +14,13 @@ macro_rules! gen_concat_functions {
             #[export_module]
             pub mod functions {
                 #[rhai_fn(name = "+")]
-                pub fn append_func(x: &str, y: $arg_type) -> String {
-                    format!("{}{}", x, y)
+                pub fn append_func(string: &str, arg: $arg_type) -> String {
+                    format!("{}{}", string, arg)
                 }
 
-                #[rhai_fn(name = "+")]
-                pub fn prepend_func(x: &mut $arg_type, y: &str) -> String {
-                    format!("{}{}", x, y)
+                #[rhai_fn(name = "+", pure)]
+                pub fn prepend_func(arg: &mut $arg_type, string: &str) -> String {
+                    format!("{}{}", arg, string)
                 }
             }
         } )* }
@@ -53,7 +53,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     // Register string iterator
     lib.set_iter(
         TypeId::of::<ImmutableString>(),
-        |s: Dynamic| Box::new(s.cast::<ImmutableString>().chars().collect::<Vec<_>>().into_iter().map(Into::into))
+        |string: Dynamic| Box::new(string.cast::<ImmutableString>().chars().collect::<Vec<_>>().into_iter().map(Into::into))
     );
 });
 
@@ -73,104 +73,116 @@ gen_concat_functions!(float => f32, f64);
 
 #[export_module]
 mod string_functions {
+    use crate::ImmutableString;
+
     #[rhai_fn(name = "+")]
-    pub fn add_append_unit(s: ImmutableString, _x: ()) -> ImmutableString {
-        s
+    pub fn add_append_unit(string: ImmutableString, _x: ()) -> ImmutableString {
+        string
     }
     #[rhai_fn(name = "+")]
-    pub fn add_prepend_unit(_x: (), s: ImmutableString) -> ImmutableString {
-        s
+    pub fn add_prepend_unit(_x: (), string: ImmutableString) -> ImmutableString {
+        string
     }
 
     #[rhai_fn(name = "len", get = "len")]
-    pub fn len(s: &str) -> INT {
-        s.chars().count() as INT
+    pub fn len(string: &str) -> INT {
+        string.chars().count() as INT
     }
 
-    pub fn clear(s: &mut ImmutableString) {
-        s.make_mut().clear();
+    pub fn clear(string: &mut ImmutableString) {
+        string.make_mut().clear();
     }
-    pub fn truncate(s: &mut ImmutableString, len: INT) {
+    pub fn truncate(string: &mut ImmutableString, len: INT) {
         if len > 0 {
-            let chars: StaticVec<_> = s.chars().collect();
-            let copy = s.make_mut();
+            let chars: StaticVec<_> = string.chars().collect();
+            let copy = string.make_mut();
             copy.clear();
             copy.extend(chars.into_iter().take(len as usize));
         } else {
-            s.make_mut().clear();
+            string.make_mut().clear();
         }
     }
-    pub fn trim(s: &mut ImmutableString) {
-        let trimmed = s.trim();
+    pub fn trim(string: &mut ImmutableString) {
+        let trimmed = string.trim();
 
-        if trimmed.len() < s.len() {
-            *s = trimmed.to_string().into();
+        if trimmed.len() < string.len() {
+            *string = trimmed.to_string().into();
         }
     }
 
     #[rhai_fn(name = "contains")]
-    pub fn contains_char(s: &str, ch: char) -> bool {
-        s.contains(ch)
+    pub fn contains_char(string: &str, ch: char) -> bool {
+        string.contains(ch)
     }
-    pub fn contains(s: &str, find: ImmutableString) -> bool {
-        s.contains(find.as_str())
+    pub fn contains(string: &str, find_string: &str) -> bool {
+        string.contains(find_string)
     }
 
     #[rhai_fn(name = "index_of")]
-    pub fn index_of_char_starting_from(s: &str, ch: char, start: INT) -> INT {
+    pub fn index_of_char_starting_from(string: &str, ch: char, start: INT) -> INT {
         let start = if start < 0 {
             0
-        } else if start as usize >= s.chars().count() {
+        } else if start as usize >= string.chars().count() {
             return -1 as INT;
         } else {
-            s.chars().take(start as usize).collect::<String>().len()
+            string
+                .chars()
+                .take(start as usize)
+                .collect::<String>()
+                .len()
         };
 
-        s[start..]
+        string[start..]
             .find(ch)
-            .map(|index| s[0..start + index].chars().count() as INT)
+            .map(|index| string[0..start + index].chars().count() as INT)
             .unwrap_or(-1 as INT)
     }
     #[rhai_fn(name = "index_of")]
-    pub fn index_of_char(s: &str, ch: char) -> INT {
-        s.find(ch)
-            .map(|index| s[0..index].chars().count() as INT)
+    pub fn index_of_char(string: &str, ch: char) -> INT {
+        string
+            .find(ch)
+            .map(|index| string[0..index].chars().count() as INT)
             .unwrap_or(-1 as INT)
     }
     #[rhai_fn(name = "index_of")]
-    pub fn index_of_string_starting_from(s: &str, find: ImmutableString, start: INT) -> INT {
+    pub fn index_of_string_starting_from(string: &str, find_string: &str, start: INT) -> INT {
         let start = if start < 0 {
             0
-        } else if start as usize >= s.chars().count() {
+        } else if start as usize >= string.chars().count() {
             return -1 as INT;
         } else {
-            s.chars().take(start as usize).collect::<String>().len()
+            string
+                .chars()
+                .take(start as usize)
+                .collect::<String>()
+                .len()
         };
 
-        s[start..]
-            .find(find.as_str())
-            .map(|index| s[0..start + index].chars().count() as INT)
+        string[start..]
+            .find(find_string)
+            .map(|index| string[0..start + index].chars().count() as INT)
             .unwrap_or(-1 as INT)
     }
     #[rhai_fn(name = "index_of")]
-    pub fn index_of(s: &str, find: ImmutableString) -> INT {
-        s.find(find.as_str())
-            .map(|index| s[0..index].chars().count() as INT)
+    pub fn index_of(string: &str, find_string: &str) -> INT {
+        string
+            .find(find_string)
+            .map(|index| string[0..index].chars().count() as INT)
             .unwrap_or(-1 as INT)
     }
 
-    pub fn sub_string(s: &str, start: INT, len: INT) -> ImmutableString {
-        let offset = if s.is_empty() || len <= 0 {
+    pub fn sub_string(string: &str, start: INT, len: INT) -> ImmutableString {
+        let offset = if string.is_empty() || len <= 0 {
             return "".to_string().into();
         } else if start < 0 {
             0
-        } else if start as usize >= s.chars().count() {
+        } else if start as usize >= string.chars().count() {
             return "".to_string().into();
         } else {
             start as usize
         };
 
-        let chars: StaticVec<_> = s.chars().collect();
+        let chars: StaticVec<_> = string.chars().collect();
 
         let len = if offset + len as usize > chars.len() {
             chars.len() - offset
@@ -187,26 +199,26 @@ mod string_functions {
             .into()
     }
     #[rhai_fn(name = "sub_string")]
-    pub fn sub_string_starting_from(s: &str, start: INT) -> ImmutableString {
-        let len = s.len() as INT;
-        sub_string(s, start, len)
+    pub fn sub_string_starting_from(string: &str, start: INT) -> ImmutableString {
+        let len = string.len() as INT;
+        sub_string(string, start, len)
     }
 
     #[rhai_fn(name = "crop")]
-    pub fn crop(s: &mut ImmutableString, start: INT, len: INT) {
-        let offset = if s.is_empty() || len <= 0 {
-            s.make_mut().clear();
+    pub fn crop(string: &mut ImmutableString, start: INT, len: INT) {
+        let offset = if string.is_empty() || len <= 0 {
+            string.make_mut().clear();
             return;
         } else if start < 0 {
             0
-        } else if start as usize >= s.chars().count() {
-            s.make_mut().clear();
+        } else if start as usize >= string.chars().count() {
+            string.make_mut().clear();
             return;
         } else {
             start as usize
         };
 
-        let chars: StaticVec<_> = s.chars().collect();
+        let chars: StaticVec<_> = string.chars().collect();
 
         let len = if offset + len as usize > chars.len() {
             chars.len() - offset
@@ -214,36 +226,50 @@ mod string_functions {
             len as usize
         };
 
-        let copy = s.make_mut();
+        let copy = string.make_mut();
         copy.clear();
         copy.extend(chars.iter().skip(offset).take(len));
     }
     #[rhai_fn(name = "crop")]
-    pub fn crop_string_starting_from(s: &mut ImmutableString, start: INT) {
-        crop(s, start, s.len() as INT);
+    pub fn crop_string_starting_from(string: &mut ImmutableString, start: INT) {
+        crop(string, start, string.len() as INT);
     }
 
     #[rhai_fn(name = "replace")]
-    pub fn replace(s: &mut ImmutableString, find: ImmutableString, sub: ImmutableString) {
-        *s = s.replace(find.as_str(), sub.as_str()).into();
+    pub fn replace(string: &mut ImmutableString, find_string: &str, substitute_string: &str) {
+        *string = string.replace(find_string, substitute_string).into();
     }
     #[rhai_fn(name = "replace")]
-    pub fn replace_string_with_char(s: &mut ImmutableString, find: ImmutableString, sub: char) {
-        *s = s.replace(find.as_str(), &sub.to_string()).into();
+    pub fn replace_string_with_char(
+        string: &mut ImmutableString,
+        find_string: &str,
+        substitute_char: char,
+    ) {
+        *string = string
+            .replace(find_string, &substitute_char.to_string())
+            .into();
     }
     #[rhai_fn(name = "replace")]
-    pub fn replace_char_with_string(s: &mut ImmutableString, find: char, sub: ImmutableString) {
-        *s = s.replace(&find.to_string(), sub.as_str()).into();
+    pub fn replace_char_with_string(
+        string: &mut ImmutableString,
+        find_char: char,
+        substitute_string: &str,
+    ) {
+        *string = string
+            .replace(&find_char.to_string(), substitute_string)
+            .into();
     }
     #[rhai_fn(name = "replace")]
-    pub fn replace_char(s: &mut ImmutableString, find: char, sub: char) {
-        *s = s.replace(&find.to_string(), &sub.to_string()).into();
+    pub fn replace_char(string: &mut ImmutableString, find_char: char, substitute_char: char) {
+        *string = string
+            .replace(&find_char.to_string(), &substitute_char.to_string())
+            .into();
     }
 
     #[rhai_fn(return_raw)]
     pub fn pad(
         _ctx: NativeCallContext,
-        s: &mut ImmutableString,
+        string: &mut ImmutableString,
         len: INT,
         ch: char,
     ) -> Result<Dynamic, Box<crate::EvalAltResult>> {
@@ -258,17 +284,18 @@ mod string_functions {
         }
 
         if len > 0 {
-            let orig_len = s.chars().count();
+            let orig_len = string.chars().count();
 
             if len as usize > orig_len {
-                let p = s.make_mut();
+                let p = string.make_mut();
 
                 for _ in 0..(len as usize - orig_len) {
                     p.push(ch);
                 }
 
                 #[cfg(not(feature = "unchecked"))]
-                if _ctx.engine().max_string_size() > 0 && s.len() > _ctx.engine().max_string_size()
+                if _ctx.engine().max_string_size() > 0
+                    && string.len() > _ctx.engine().max_string_size()
                 {
                     return crate::EvalAltResult::ErrorDataTooLarge(
                         "Length of string".to_string(),
@@ -284,7 +311,7 @@ mod string_functions {
     #[rhai_fn(name = "pad", return_raw)]
     pub fn pad_with_string(
         _ctx: NativeCallContext,
-        s: &mut ImmutableString,
+        string: &mut ImmutableString,
         len: INT,
         padding: &str,
     ) -> Result<Dynamic, Box<crate::EvalAltResult>> {
@@ -299,11 +326,11 @@ mod string_functions {
         }
 
         if len > 0 {
-            let mut str_len = s.chars().count();
+            let mut str_len = string.chars().count();
             let padding_len = padding.chars().count();
 
             if len as usize > str_len {
-                let p = s.make_mut();
+                let p = string.make_mut();
 
                 while str_len < len as usize {
                     if str_len + padding_len <= len as usize {
@@ -316,7 +343,8 @@ mod string_functions {
                 }
 
                 #[cfg(not(feature = "unchecked"))]
-                if _ctx.engine().max_string_size() > 0 && s.len() > _ctx.engine().max_string_size()
+                if _ctx.engine().max_string_size() > 0
+                    && string.len() > _ctx.engine().max_string_size()
                 {
                     return crate::EvalAltResult::ErrorDataTooLarge(
                         "Length of string".to_string(),
@@ -335,21 +363,19 @@ mod string_functions {
         use crate::Array;
 
         #[rhai_fn(name = "+")]
-        pub fn append(x: &str, y: Array) -> String {
-            format!("{}{:?}", x, y)
+        pub fn append(string: &str, array: Array) -> String {
+            format!("{}{:?}", string, array)
         }
-        #[rhai_fn(name = "+")]
-        pub fn prepend(x: &mut Array, y: &str) -> String {
-            format!("{:?}{}", x, y)
+        #[rhai_fn(name = "+", pure)]
+        pub fn prepend(array: &mut Array, string: &str) -> String {
+            format!("{:?}{}", array, string)
         }
-        pub fn split(s: &str, delimiter: ImmutableString) -> Array {
-            s.split(delimiter.as_str())
-                .map(Into::<Dynamic>::into)
-                .collect()
+        pub fn split(string: &str, delimiter: &str) -> Array {
+            string.split(delimiter).map(Into::<Dynamic>::into).collect()
         }
         #[rhai_fn(name = "split")]
-        pub fn split_char(s: &str, delimiter: char) -> Array {
-            s.split(delimiter).map(Into::<Dynamic>::into).collect()
+        pub fn split_char(string: &str, delimiter: char) -> Array {
+            string.split(delimiter).map(Into::<Dynamic>::into).collect()
         }
     }
 
@@ -358,12 +384,12 @@ mod string_functions {
         use crate::Map;
 
         #[rhai_fn(name = "+")]
-        pub fn append(x: &str, y: Map) -> String {
-            format!("{}#{:?}", x, y)
+        pub fn append(string: &str, map: Map) -> String {
+            format!("{}#{:?}", string, map)
         }
-        #[rhai_fn(name = "+")]
-        pub fn prepend(x: &mut Map, y: &str) -> String {
-            format!("#{:?}{}", x, y)
+        #[rhai_fn(name = "+", pure)]
+        pub fn prepend(map: &mut Map, string: &str) -> String {
+            format!("#{:?}{}", map, string)
         }
     }
 }

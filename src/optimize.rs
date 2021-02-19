@@ -575,7 +575,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         Expr::Array(x, _) => x.iter_mut().for_each(|expr| optimize_expr(expr, state)),
         // #{ key:constant, .. }
         #[cfg(not(feature = "no_object"))]
-        Expr::Map(_, _) if expr.is_constant()=> {
+        Expr::Map(_, _) if expr.is_constant() => {
             state.set_dirty();
             *expr = Expr::DynamicConstant(Box::new(expr.get_constant_value().unwrap()), expr.position());
         }
