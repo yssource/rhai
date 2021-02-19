@@ -70,13 +70,18 @@ def_package!(crate:LogicPackage:"Logical operators.", lib, {
     {
         #[cfg(not(feature = "f32_float"))]
         reg_functions!(lib += float; f32);
+        combine_with_exported_module!(lib, "f32", f32_functions);
 
         #[cfg(feature = "f32_float")]
         reg_functions!(lib += float; f64);
+        combine_with_exported_module!(lib, "f64", f64_functions);
     }
 
     #[cfg(feature = "decimal")]
-    reg_functions!(lib += decimal; Decimal);
+    {
+        reg_functions!(lib += decimal; Decimal);
+        combine_with_exported_module!(lib, "decimal", decimal_functions);
+    }
 
     set_exported_fn!(lib, "!", not);
 });
@@ -106,3 +111,169 @@ gen_cmp_functions!(float => f64);
 
 #[cfg(feature = "decimal")]
 gen_cmp_functions!(decimal => Decimal);
+
+#[cfg(not(feature = "no_float"))]
+#[export_module]
+mod f32_functions {
+    use crate::INT;
+
+    #[rhai_fn(name = "==")]
+    pub fn eq_if(x: INT, y: f32) -> bool {
+        (x as f32) == (y as f32)
+    }
+    #[rhai_fn(name = "==")]
+    pub fn eq_fi(x: f32, y: INT) -> bool {
+        (x as f32) == (y as f32)
+    }
+    #[rhai_fn(name = "!=")]
+    pub fn neq_if(x: INT, y: f32) -> bool {
+        (x as f32) != (y as f32)
+    }
+    #[rhai_fn(name = "!=")]
+    pub fn neq_fi(x: f32, y: INT) -> bool {
+        (x as f32) != (y as f32)
+    }
+    #[rhai_fn(name = ">")]
+    pub fn gt_if(x: INT, y: f32) -> bool {
+        (x as f32) > (y as f32)
+    }
+    #[rhai_fn(name = ">")]
+    pub fn gt_fi(x: f32, y: INT) -> bool {
+        (x as f32) > (y as f32)
+    }
+    #[rhai_fn(name = ">=")]
+    pub fn gte_if(x: INT, y: f32) -> bool {
+        (x as f32) >= (y as f32)
+    }
+    #[rhai_fn(name = ">=")]
+    pub fn gte_fi(x: f32, y: INT) -> bool {
+        (x as f32) >= (y as f32)
+    }
+    #[rhai_fn(name = "<")]
+    pub fn lt_if(x: INT, y: f32) -> bool {
+        (x as f32) < (y as f32)
+    }
+    #[rhai_fn(name = "<")]
+    pub fn lt_fi(x: f32, y: INT) -> bool {
+        (x as f32) < (y as f32)
+    }
+    #[rhai_fn(name = "<=")]
+    pub fn lte_if(x: INT, y: f32) -> bool {
+        (x as f32) <= (y as f32)
+    }
+    #[rhai_fn(name = "<=")]
+    pub fn lte_fi(x: f32, y: INT) -> bool {
+        (x as f32) <= (y as f32)
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+#[export_module]
+mod f64_functions {
+    use crate::INT;
+
+    #[rhai_fn(name = "==")]
+    pub fn eq_if(x: INT, y: f64) -> bool {
+        (x as f64) == (y as f64)
+    }
+    #[rhai_fn(name = "==")]
+    pub fn eq_fi(x: f64, y: INT) -> bool {
+        (x as f64) == (y as f64)
+    }
+    #[rhai_fn(name = "!=")]
+    pub fn neq_if(x: INT, y: f64) -> bool {
+        (x as f64) != (y as f64)
+    }
+    #[rhai_fn(name = "!=")]
+    pub fn neq_fi(x: f64, y: INT) -> bool {
+        (x as f64) != (y as f64)
+    }
+    #[rhai_fn(name = ">")]
+    pub fn gt_if(x: INT, y: f64) -> bool {
+        (x as f64) > (y as f64)
+    }
+    #[rhai_fn(name = ">")]
+    pub fn gt_fi(x: f64, y: INT) -> bool {
+        (x as f64) > (y as f64)
+    }
+    #[rhai_fn(name = ">=")]
+    pub fn gte_if(x: INT, y: f64) -> bool {
+        (x as f64) >= (y as f64)
+    }
+    #[rhai_fn(name = ">=")]
+    pub fn gte_fi(x: f64, y: INT) -> bool {
+        (x as f64) >= (y as f64)
+    }
+    #[rhai_fn(name = "<")]
+    pub fn lt_if(x: INT, y: f64) -> bool {
+        (x as f64) < (y as f64)
+    }
+    #[rhai_fn(name = "<")]
+    pub fn lt_fi(x: f64, y: INT) -> bool {
+        (x as f64) < (y as f64)
+    }
+    #[rhai_fn(name = "<=")]
+    pub fn lte_if(x: INT, y: f64) -> bool {
+        (x as f64) <= (y as f64)
+    }
+    #[rhai_fn(name = "<=")]
+    pub fn lte_fi(x: f64, y: INT) -> bool {
+        (x as f64) <= (y as f64)
+    }
+}
+
+#[cfg(feature = "decimal")]
+#[export_module]
+mod decimal_functions {
+    use crate::INT;
+    use rust_decimal::Decimal;
+
+    #[rhai_fn(name = "==")]
+    pub fn eq_if(x: INT, y: Decimal) -> bool {
+        Decimal::from(x) == y
+    }
+    #[rhai_fn(name = "==")]
+    pub fn eq_fi(x: Decimal, y: INT) -> bool {
+        x == Decimal::from(y)
+    }
+    #[rhai_fn(name = "!=")]
+    pub fn neq_if(x: INT, y: Decimal) -> bool {
+        Decimal::from(x) != y
+    }
+    #[rhai_fn(name = "!=")]
+    pub fn neq_fi(x: Decimal, y: INT) -> bool {
+        x != Decimal::from(y)
+    }
+    #[rhai_fn(name = ">")]
+    pub fn gt_if(x: INT, y: Decimal) -> bool {
+        Decimal::from(x) > y
+    }
+    #[rhai_fn(name = ">")]
+    pub fn gt_fi(x: Decimal, y: INT) -> bool {
+        x > Decimal::from(y)
+    }
+    #[rhai_fn(name = ">=")]
+    pub fn gte_if(x: INT, y: Decimal) -> bool {
+        Decimal::from(x) >= y
+    }
+    #[rhai_fn(name = ">=")]
+    pub fn gte_fi(x: Decimal, y: INT) -> bool {
+        x >= Decimal::from(y)
+    }
+    #[rhai_fn(name = "<")]
+    pub fn lt_if(x: INT, y: Decimal) -> bool {
+        Decimal::from(x) < y
+    }
+    #[rhai_fn(name = "<")]
+    pub fn lt_fi(x: Decimal, y: INT) -> bool {
+        x < Decimal::from(y)
+    }
+    #[rhai_fn(name = "<=")]
+    pub fn lte_if(x: INT, y: Decimal) -> bool {
+        Decimal::from(x) <= y
+    }
+    #[rhai_fn(name = "<=")]
+    pub fn lte_fi(x: Decimal, y: INT) -> bool {
+        x <= Decimal::from(y)
+    }
+}

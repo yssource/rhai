@@ -55,17 +55,17 @@ pub type Locked<T> = crate::stdlib::sync::RwLock<T>;
 
 /// Context of a native Rust function call.
 #[derive(Debug, Copy, Clone)]
-pub struct NativeCallContext<'e, 'n, 's, 'a, 'm, 'pm: 'm> {
+pub struct NativeCallContext<'e, 'n, 's, 'a, 'm> {
     engine: &'e Engine,
     fn_name: &'n str,
     source: Option<&'s str>,
     pub(crate) mods: Option<&'a Imports>,
-    pub(crate) lib: &'m [&'pm Module],
+    pub(crate) lib: &'m [&'m Module],
 }
 
-impl<'e, 'n, 's, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized>
+impl<'e, 'n, 's, 'a, 'm, M: AsRef<[&'m Module]> + ?Sized>
     From<(&'e Engine, &'n str, Option<&'s str>, &'a Imports, &'m M)>
-    for NativeCallContext<'e, 'n, 's, 'a, 'm, 'pm>
+    for NativeCallContext<'e, 'n, 's, 'a, 'm>
 {
     #[inline(always)]
     fn from(value: (&'e Engine, &'n str, Option<&'s str>, &'a Imports, &'m M)) -> Self {
@@ -79,8 +79,8 @@ impl<'e, 'n, 's, 'a, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized>
     }
 }
 
-impl<'e, 'n, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized> From<(&'e Engine, &'n str, &'m M)>
-    for NativeCallContext<'e, 'n, '_, '_, 'm, 'pm>
+impl<'e, 'n, 'm, M: AsRef<[&'m Module]> + ?Sized> From<(&'e Engine, &'n str, &'m M)>
+    for NativeCallContext<'e, 'n, '_, '_, 'm>
 {
     #[inline(always)]
     fn from(value: (&'e Engine, &'n str, &'m M)) -> Self {
@@ -94,10 +94,10 @@ impl<'e, 'n, 'm, 'pm: 'm, M: AsRef<[&'pm Module]> + ?Sized> From<(&'e Engine, &'
     }
 }
 
-impl<'e, 'n, 's, 'a, 'm, 'pm> NativeCallContext<'e, 'n, 's, 'a, 'm, 'pm> {
+impl<'e, 'n, 's, 'a, 'm> NativeCallContext<'e, 'n, 's, 'a, 'm> {
     /// Create a new [`NativeCallContext`].
     #[inline(always)]
-    pub fn new(engine: &'e Engine, fn_name: &'n str, lib: &'m impl AsRef<[&'pm Module]>) -> Self {
+    pub fn new(engine: &'e Engine, fn_name: &'n str, lib: &'m impl AsRef<[&'m Module]>) -> Self {
         Self {
             engine,
             fn_name,
@@ -116,7 +116,7 @@ impl<'e, 'n, 's, 'a, 'm, 'pm> NativeCallContext<'e, 'n, 's, 'a, 'm, 'pm> {
         fn_name: &'n str,
         source: &'s Option<&str>,
         imports: &'a mut Imports,
-        lib: &'m impl AsRef<[&'pm Module]>,
+        lib: &'m impl AsRef<[&'m Module]>,
     ) -> Self {
         Self {
             engine,

@@ -101,7 +101,7 @@ pub(crate) struct Module {
     mod_all: syn::ItemMod,
     fns: Vec<ExportedFn>,
     consts: Vec<ExportedConst>,
-    submodules: Vec<Module>,
+    sub_modules: Vec<Module>,
     params: ExportedModParams,
 }
 
@@ -117,7 +117,7 @@ impl Parse for Module {
         let mut mod_all: syn::ItemMod = input.parse()?;
         let fns: Vec<_>;
         let mut consts: Vec<_> = new_vec![];
-        let mut submodules: Vec<_> = Vec::new();
+        let mut sub_modules: Vec<_> = Vec::new();
         if let Some((_, ref mut content)) = mod_all.content {
             // Gather and parse functions.
             fns = content
@@ -126,16 +126,16 @@ impl Parse for Module {
                     syn::Item::Fn(f) => Some(f),
                     _ => None,
                 })
-                .try_fold(Vec::new(), |mut vec, itemfn| {
+                .try_fold(Vec::new(), |mut vec, item_fn| {
                     // #[cfg] attributes are not allowed on functions
-                    crate::attrs::deny_cfg_attr(&itemfn.attrs)?;
+                    crate::attrs::deny_cfg_attr(&item_fn.attrs)?;
 
                     let params: ExportedFnParams =
-                        match crate::attrs::inner_item_attributes(&mut itemfn.attrs, "rhai_fn") {
+                        match crate::attrs::inner_item_attributes(&mut item_fn.attrs, "rhai_fn") {
                             Ok(p) => p,
                             Err(e) => return Err(e),
                         };
-                    syn::parse2::<ExportedFn>(itemfn.to_token_stream())
+                    syn::parse2::<ExportedFn>(item_fn.to_token_stream())
                         .and_then(|mut f| {
                             f.set_params(params)?;
                             Ok(f)
@@ -163,29 +163,31 @@ impl Parse for Module {
                     _ => {}
                 }
             }
-            // Gather and parse submodule definitions.
+            // Gather and parse sub-module definitions.
             //
             // They are actually removed from the module's body, because they will need
             // re-generating later when generated code is added.
-            submodules.reserve(content.len() - fns.len() - consts.len());
+            sub_modules.reserve(content.len() - fns.len() - consts.len());
             let mut i = 0;
             while i < content.len() {
                 if let syn::Item::Mod(_) = &content[i] {
-                    let mut itemmod = match content.remove(i) {
+                    let mut item_mod = match content.remove(i) {
                         syn::Item::Mod(m) => m,
                         _ => unreachable!(),
                     };
-                    let params: ExportedModParams =
-                        match crate::attrs::inner_item_attributes(&mut itemmod.attrs, "rhai_mod") {
-                            Ok(p) => p,
-                            Err(e) => return Err(e),
-                        };
+                    let params: ExportedModParams = match crate::attrs::inner_item_attributes(
+                        &mut item_mod.attrs,
+                        "rhai_mod",
+                    ) {
+                        Ok(p) => p,
+                        Err(e) => return Err(e),
+                    };
                     let module =
-                        syn::parse2::<Module>(itemmod.to_token_stream()).and_then(|mut m| {
+                        syn::parse2::<Module>(item_mod.to_token_stream()).and_then(|mut m| {
                             m.set_params(params)?;
                             Ok(m)
                         })?;
-                    submodules.push(module);
+                    sub_modules.push(module);
                 } else {
                     i += 1;
                 }
@@ -197,7 +199,7 @@ impl Parse for Module {
             mod_all,
             fns,
             consts,
-            submodules,
+            sub_modules,
             params: ExportedModParams::default(),
         })
     }
@@ -251,7 +253,7 @@ impl Module {
             mut mod_all,
             mut fns,
             consts,
-            mut submodules,
+            mut sub_modules,
             params,
             ..
         } = self;
@@ -266,13 +268,13 @@ impl Module {
             let mod_gen = crate::rhai_module::generate_body(
                 &mut fns,
                 &consts,
-                &mut submodules,
+                &mut sub_modules,
                 &params.scope,
             );
 
-            // NB: submodules must have their new items for exporting generated in depth-first order
+            // NB: sub-modules must have their new items for exporting generated in depth-first order
             // to avoid issues caused by re-parsing them
-            let inner_modules: Vec<proc_macro2::TokenStream> = submodules.drain(..)
+            let inner_modules: Vec<proc_macro2::TokenStream> = sub_modules.drain(..)
                 .try_fold::<Vec<proc_macro2::TokenStream>, _,
                             Result<Vec<proc_macro2::TokenStream>, syn::Error>>(
                     Vec::new(), |mut acc, m| { acc.push(m.generate_inner()?); Ok(acc) })?;
@@ -309,8 +311,8 @@ impl Module {
         &self.fns
     }
 
-    pub fn submodules(&self) -> &[Module] {
-        &self.submodules
+    pub fn sub_modules(&self) -> &[Module] {
+        &self.sub_modules
     }
 
     pub fn content(&self) -> Option<&Vec<syn::Item>> {

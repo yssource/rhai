@@ -32,6 +32,9 @@ use crate::FLOAT;
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
 
+#[cfg(feature = "decimal")]
+use rust_decimal::Decimal;
+
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]
 use num_traits::float::Float;
@@ -798,6 +801,7 @@ impl Engine {
             self.eval_global_statements(scope, mods, &mut new_state, ast.statements(), lib, level);
 
         state.operations = new_state.operations;
+
         result
     }
 
@@ -1067,17 +1071,27 @@ impl Engine {
         if name == KEYWORD_EVAL && args_expr.len() == 1 {
             let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
 
+            let script_expr = &args_expr[0];
+
             if !self.has_override(Some(mods), Some(state), lib, hash_fn, hash_script, pub_only) {
+                let script_pos = script_expr.position();
+
                 // eval - only in function call style
                 let prev_len = scope.len();
                 let script =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+                    self.eval_expr(scope, mods, state, lib, this_ptr, script_expr, level)?;
                 let script = script.as_str().map_err(|typ| {
-                    self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
+                    self.make_type_mismatch_err::<ImmutableString>(typ, script_pos)
                 })?;
-                let pos = args_expr[0].position();
-                let result =
-                    self.eval_script_expr_in_place(scope, mods, state, lib, script, pos, level + 1);
+                let result = self.eval_script_expr_in_place(
+                    scope,
+                    mods,
+                    state,
+                    lib,
+                    script,
+                    script_pos,
+                    level + 1,
+                );
 
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
@@ -1085,7 +1099,18 @@ impl Engine {
                     state.always_search = true;
                 }
 
-                return result;
+                return result.map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                        KEYWORD_EVAL.to_string(),
+                        state
+                            .source
+                            .as_ref()
+                            .map_or_else(|| "", |s| s.as_str())
+                            .to_string(),
+                        err,
+                        pos,
+                    ))
+                });
             }
         }
 
@@ -1325,33 +1350,115 @@ pub fn run_builtin_binary_op(
     x: &Dynamic,
     y: &Dynamic,
 ) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
-    let args_type = x.type_id();
+    let first_type = x.type_id();
     let second_type = y.type_id();
 
-    if second_type != args_type {
-        if args_type == TypeId::of::<char>() && second_type == TypeId::of::<ImmutableString>() {
+    let type_id = (first_type, second_type);
+
+    #[cfg(not(feature = "no_float"))]
+    if let Some((x, y)) = if type_id == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>()) {
+        Some((x.clone().cast::<FLOAT>(), y.clone().cast::<FLOAT>()))
+    } else if type_id == (TypeId::of::<FLOAT>(), TypeId::of::<INT>()) {
+        Some((x.clone().cast::<FLOAT>(), y.clone().cast::<INT>() as FLOAT))
+    } else if type_id == (TypeId::of::<INT>(), TypeId::of::<FLOAT>()) {
+        Some((x.clone().cast::<INT>() as FLOAT, y.clone().cast::<FLOAT>()))
+    } else {
+        None
+    } {
+        match op {
+            "+" => return Ok(Some((x + y).into())),
+            "-" => return Ok(Some((x - y).into())),
+            "*" => return Ok(Some((x * y).into())),
+            "/" => return Ok(Some((x / y).into())),
+            "%" => return Ok(Some((x % y).into())),
+            "**" => return Ok(Some(x.powf(y).into())),
+            "==" => return Ok(Some((x == y).into())),
+            "!=" => return Ok(Some((x != y).into())),
+            ">" => return Ok(Some((x > y).into())),
+            ">=" => return Ok(Some((x >= y).into())),
+            "<" => return Ok(Some((x < y).into())),
+            "<=" => return Ok(Some((x <= y).into())),
+            _ => return Ok(None),
+        }
+    }
+
+    #[cfg(feature = "decimal")]
+    if let Some((x, y)) = if type_id == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>()) {
+        Some((
+            *x.read_lock::<Decimal>().unwrap(),
+            *y.read_lock::<Decimal>().unwrap(),
+        ))
+    } else if type_id == (TypeId::of::<Decimal>(), TypeId::of::<INT>()) {
+        Some((
+            *x.read_lock::<Decimal>().unwrap(),
+            y.clone().cast::<INT>().into(),
+        ))
+    } else if type_id == (TypeId::of::<INT>(), TypeId::of::<Decimal>()) {
+        Some((
+            x.clone().cast::<INT>().into(),
+            *y.read_lock::<Decimal>().unwrap(),
+        ))
+    } else {
+        None
+    } {
+        if cfg!(not(feature = "unchecked")) {
+            use crate::packages::arithmetic::decimal_functions::*;
+
+            match op {
+                "+" => return add(x, y).map(Some),
+                "-" => return subtract(x, y).map(Some),
+                "*" => return multiply(x, y).map(Some),
+                "/" => return divide(x, y).map(Some),
+                "%" => return modulo(x, y).map(Some),
+                _ => (),
+            }
+        } else {
+            match op {
+                "+" => return Ok(Some((x + y).into())),
+                "-" => return Ok(Some((x - y).into())),
+                "*" => return Ok(Some((x * y).into())),
+                "/" => return Ok(Some((x / y).into())),
+                "%" => return Ok(Some((x % y).into())),
+                _ => (),
+            }
+        }
+
+        match op {
+            "==" => return Ok(Some((x == y).into())),
+            "!=" => return Ok(Some((x != y).into())),
+            ">" => return Ok(Some((x > y).into())),
+            ">=" => return Ok(Some((x >= y).into())),
+            "<" => return Ok(Some((x < y).into())),
+            "<=" => return Ok(Some((x <= y).into())),
+            _ => return Ok(None),
+        }
+    }
+
+    if second_type != first_type {
+        if type_id == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
             let x = x.clone().cast::<char>();
             let y = &*y.read_lock::<ImmutableString>().unwrap();
 
             match op {
                 "+" => return Ok(Some(format!("{}{}", x, y).into())),
-                _ => (),
+                _ => return Ok(None),
             }
-        } else if args_type == TypeId::of::<ImmutableString>()
-            && second_type == TypeId::of::<char>()
-        {
+        }
+
+        if type_id == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
             let x = &*x.read_lock::<ImmutableString>().unwrap();
             let y = y.clone().cast::<char>();
 
             match op {
                 "+" => return Ok(Some((x + y).into())),
-                _ => (),
+                _ => return Ok(None),
             }
         }
+
         return Ok(None);
     }
 
-    if args_type == TypeId::of::<INT>() {
+    if first_type == TypeId::of::<INT>() {
         let x = x.clone().cast::<INT>();
         let y = y.clone().cast::<INT>();
 
@@ -1393,9 +1500,11 @@ pub fn run_builtin_binary_op(
             "&" => return Ok(Some((x & y).into())),
             "|" => return Ok(Some((x | y).into())),
             "^" => return Ok(Some((x ^ y).into())),
-            _ => (),
+            _ => return Ok(None),
         }
-    } else if args_type == TypeId::of::<bool>() {
+    }
+
+    if first_type == TypeId::of::<bool>() {
         let x = x.clone().cast::<bool>();
         let y = y.clone().cast::<bool>();
 
@@ -1405,9 +1514,11 @@ pub fn run_builtin_binary_op(
             "^" => return Ok(Some((x ^ y).into())),
             "==" => return Ok(Some((x == y).into())),
             "!=" => return Ok(Some((x != y).into())),
-            _ => (),
+            _ => return Ok(None),
         }
-    } else if args_type == TypeId::of::<ImmutableString>() {
+    }
+
+    if first_type == TypeId::of::<ImmutableString>() {
         let x = &*x.read_lock::<ImmutableString>().unwrap();
         let y = &*y.read_lock::<ImmutableString>().unwrap();
 
@@ -1419,9 +1530,11 @@ pub fn run_builtin_binary_op(
             ">=" => return Ok(Some((x >= y).into())),
             "<" => return Ok(Some((x < y).into())),
             "<=" => return Ok(Some((x <= y).into())),
-            _ => (),
+            _ => return Ok(None),
         }
-    } else if args_type == TypeId::of::<char>() {
+    }
+
+    if first_type == TypeId::of::<char>() {
         let x = x.clone().cast::<char>();
         let y = y.clone().cast::<char>();
 
@@ -1433,73 +1546,15 @@ pub fn run_builtin_binary_op(
             ">=" => return Ok(Some((x >= y).into())),
             "<" => return Ok(Some((x < y).into())),
             "<=" => return Ok(Some((x <= y).into())),
-            _ => (),
+            _ => return Ok(None),
         }
-    } else if args_type == TypeId::of::<()>() {
+    }
+
+    if first_type == TypeId::of::<()>() {
         match op {
             "==" => return Ok(Some(true.into())),
             "!=" | ">" | ">=" | "<" | "<=" => return Ok(Some(false.into())),
-            _ => (),
-        }
-    }
-
-    #[cfg(not(feature = "no_float"))]
-    if args_type == TypeId::of::<FLOAT>() {
-        let x = x.clone().cast::<FLOAT>();
-        let y = y.clone().cast::<FLOAT>();
-
-        match op {
-            "+" => return Ok(Some((x + y).into())),
-            "-" => return Ok(Some((x - y).into())),
-            "*" => return Ok(Some((x * y).into())),
-            "/" => return Ok(Some((x / y).into())),
-            "%" => return Ok(Some((x % y).into())),
-            "**" => return Ok(Some(x.powf(y).into())),
-            "==" => return Ok(Some((x == y).into())),
-            "!=" => return Ok(Some((x != y).into())),
-            ">" => return Ok(Some((x > y).into())),
-            ">=" => return Ok(Some((x >= y).into())),
-            "<" => return Ok(Some((x < y).into())),
-            "<=" => return Ok(Some((x <= y).into())),
-            _ => (),
-        }
-    }
-
-    #[cfg(feature = "decimal")]
-    if args_type == TypeId::of::<rust_decimal::Decimal>() {
-        let x = x.clone().cast::<rust_decimal::Decimal>();
-        let y = y.clone().cast::<rust_decimal::Decimal>();
-
-        if cfg!(not(feature = "unchecked")) {
-            use crate::packages::arithmetic::decimal_functions::*;
-
-            match op {
-                "+" => return add(x, y).map(Some),
-                "-" => return subtract(x, y).map(Some),
-                "*" => return multiply(x, y).map(Some),
-                "/" => return divide(x, y).map(Some),
-                "%" => return modulo(x, y).map(Some),
-                _ => (),
-            }
-        } else {
-            match op {
-                "+" => return Ok(Some((x + y).into())),
-                "-" => return Ok(Some((x - y).into())),
-                "*" => return Ok(Some((x * y).into())),
-                "/" => return Ok(Some((x / y).into())),
-                "%" => return Ok(Some((x % y).into())),
-                _ => (),
-            }
-        }
-
-        match op {
-            "==" => return Ok(Some((x == y).into())),
-            "!=" => return Ok(Some((x != y).into())),
-            ">" => return Ok(Some((x > y).into())),
-            ">=" => return Ok(Some((x >= y).into())),
-            "<" => return Ok(Some((x < y).into())),
-            "<=" => return Ok(Some((x <= y).into())),
-            _ => (),
+            _ => return Ok(None),
         }
     }
 
@@ -1512,24 +1567,80 @@ pub fn run_builtin_op_assignment(
     x: &mut Dynamic,
     y: &Dynamic,
 ) -> Result<Option<()>, Box<EvalAltResult>> {
-    let args_type = x.type_id();
+    let first_type = x.type_id();
     let second_type = y.type_id();
 
-    if second_type != args_type {
-        if args_type == TypeId::of::<ImmutableString>() && second_type == TypeId::of::<char>() {
+    let type_id = (first_type, second_type);
+
+    #[cfg(not(feature = "no_float"))]
+    if let Some((mut x, y)) = if type_id == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>()) {
+        let y = y.clone().cast::<FLOAT>();
+        Some((x.write_lock::<FLOAT>().unwrap(), y))
+    } else if type_id == (TypeId::of::<FLOAT>(), TypeId::of::<INT>()) {
+        let y = y.clone().cast::<INT>() as FLOAT;
+        Some((x.write_lock::<FLOAT>().unwrap(), y))
+    } else {
+        None
+    } {
+        match op {
+            "+=" => return Ok(Some(*x += y)),
+            "-=" => return Ok(Some(*x -= y)),
+            "*=" => return Ok(Some(*x *= y)),
+            "/=" => return Ok(Some(*x /= y)),
+            "%=" => return Ok(Some(*x %= y)),
+            "**=" => return Ok(Some(*x = x.powf(y))),
+            _ => return Ok(None),
+        }
+    }
+
+    #[cfg(feature = "decimal")]
+    if let Some((mut x, y)) = if type_id == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>()) {
+        let y = *y.read_lock::<Decimal>().unwrap();
+        Some((x.write_lock::<Decimal>().unwrap(), y))
+    } else if type_id == (TypeId::of::<Decimal>(), TypeId::of::<INT>()) {
+        let y = y.clone().cast::<INT>().into();
+        Some((x.write_lock::<Decimal>().unwrap(), y))
+    } else {
+        None
+    } {
+        if cfg!(not(feature = "unchecked")) {
+            use crate::packages::arithmetic::decimal_functions::*;
+
+            match op {
+                "+=" => return Ok(Some(*x = add(*x, y)?.as_decimal().unwrap())),
+                "-=" => return Ok(Some(*x = subtract(*x, y)?.as_decimal().unwrap())),
+                "*=" => return Ok(Some(*x = multiply(*x, y)?.as_decimal().unwrap())),
+                "/=" => return Ok(Some(*x = divide(*x, y)?.as_decimal().unwrap())),
+                "%=" => return Ok(Some(*x = modulo(*x, y)?.as_decimal().unwrap())),
+                _ => (),
+            }
+        } else {
+            match op {
+                "+=" => return Ok(Some(*x += y)),
+                "-=" => return Ok(Some(*x -= y)),
+                "*=" => return Ok(Some(*x *= y)),
+                "/=" => return Ok(Some(*x /= y)),
+                "%=" => return Ok(Some(*x %= y)),
+                _ => (),
+            }
+        }
+    }
+
+    if second_type != first_type {
+        if type_id == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
             let y = y.read_lock::<char>().unwrap().deref().clone();
             let mut x = x.write_lock::<ImmutableString>().unwrap();
 
             match op {
                 "+=" => return Ok(Some(*x += y)),
-                _ => (),
+                _ => return Ok(None),
             }
         }
 
         return Ok(None);
     }
 
-    if args_type == TypeId::of::<INT>() {
+    if first_type == TypeId::of::<INT>() {
         let y = y.clone().cast::<INT>();
         let mut x = x.write_lock::<INT>().unwrap();
 
@@ -1565,76 +1676,38 @@ pub fn run_builtin_op_assignment(
             "&=" => return Ok(Some(*x &= y)),
             "|=" => return Ok(Some(*x |= y)),
             "^=" => return Ok(Some(*x ^= y)),
-            _ => (),
+            _ => return Ok(None),
         }
-    } else if args_type == TypeId::of::<bool>() {
+    }
+
+    if first_type == TypeId::of::<bool>() {
         let y = y.clone().cast::<bool>();
         let mut x = x.write_lock::<bool>().unwrap();
 
         match op {
             "&=" => return Ok(Some(*x = *x && y)),
             "|=" => return Ok(Some(*x = *x || y)),
-            _ => (),
+            _ => return Ok(None),
         }
-    } else if args_type == TypeId::of::<char>() {
+    }
+
+    if first_type == TypeId::of::<char>() {
         let y = y.read_lock::<char>().unwrap().deref().clone();
         let mut x = x.write_lock::<Dynamic>().unwrap();
 
         match op {
             "+=" => return Ok(Some(*x = format!("{}{}", *x, y).into())),
-            _ => (),
+            _ => return Ok(None),
         }
-    } else if args_type == TypeId::of::<ImmutableString>() {
+    }
+
+    if first_type == TypeId::of::<ImmutableString>() {
         let y = y.read_lock::<ImmutableString>().unwrap().deref().clone();
         let mut x = x.write_lock::<ImmutableString>().unwrap();
 
         match op {
             "+=" => return Ok(Some(*x += y)),
-            _ => (),
-        }
-    }
-
-    #[cfg(not(feature = "no_float"))]
-    if args_type == TypeId::of::<FLOAT>() {
-        let y = y.clone().cast::<FLOAT>();
-        let mut x = x.write_lock::<FLOAT>().unwrap();
-
-        match op {
-            "+=" => return Ok(Some(*x += y)),
-            "-=" => return Ok(Some(*x -= y)),
-            "*=" => return Ok(Some(*x *= y)),
-            "/=" => return Ok(Some(*x /= y)),
-            "%=" => return Ok(Some(*x %= y)),
-            "**=" => return Ok(Some(*x = x.powf(y))),
-            _ => (),
-        }
-    }
-
-    #[cfg(feature = "decimal")]
-    if args_type == TypeId::of::<rust_decimal::Decimal>() {
-        let y = y.clone().cast::<rust_decimal::Decimal>();
-        let mut x = x.write_lock::<rust_decimal::Decimal>().unwrap();
-
-        if cfg!(not(feature = "unchecked")) {
-            use crate::packages::arithmetic::decimal_functions::*;
-
-            match op {
-                "+=" => return Ok(Some(*x = add(*x, y)?.as_decimal().unwrap())),
-                "-=" => return Ok(Some(*x = subtract(*x, y)?.as_decimal().unwrap())),
-                "*=" => return Ok(Some(*x = multiply(*x, y)?.as_decimal().unwrap())),
-                "/=" => return Ok(Some(*x = divide(*x, y)?.as_decimal().unwrap())),
-                "%=" => return Ok(Some(*x = modulo(*x, y)?.as_decimal().unwrap())),
-                _ => (),
-            }
-        } else {
-            match op {
-                "+=" => return Ok(Some(*x += y)),
-                "-=" => return Ok(Some(*x -= y)),
-                "*=" => return Ok(Some(*x *= y)),
-                "/=" => return Ok(Some(*x /= y)),
-                "%=" => return Ok(Some(*x %= y)),
-                _ => (),
-            }
+            _ => return Ok(None),
         }
     }
 

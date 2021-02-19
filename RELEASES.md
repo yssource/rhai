@@ -1,8 +1,36 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.13
+===============
+
+Bug fixes
+---------
+
+* Bug in `Position::is_beginning_of_line` is fixed.
+
+New features
+------------
+
+* Comparisons between `FLOAT`/[`Decimal`](https://crates.io/crates/rust_decimal) and `INT` are now built in.
+
+Enhancements
+------------
+
+* Built-in operators between `FLOAT`/[`Decimal`](https://crates.io/crates/rust_decimal) and `INT` are now implemented for more speed under those cases.
+* Error position in `eval` statements is now wrapped in an `EvalAltResult::ErrorInFunctionCall`.
+* `Position` now implements `Add` and `AddAssign`.
+* `Scope` now implements `IntoIterator`.
+
+
 Version 0.19.12
 ===============
+
+This version is an incremental release with a number of enhancements and bug fixes.
+
+Notice that there are a number of breaking changes, especially with regards to replacing the `~`
+exponential  operator with `**`, and the addition of the `decimal` feature that turns on
+[`Decimal`](https://crates.io/crates/rust_decimal) support.
 
 Bug fixes
 ---------
@@ -33,7 +61,7 @@ Enhancements
 
 * Functions resolution cache is used in more cases, making repeated function calls faster.
 * Added `atan(x, y)` and `hypot(x, y)` to `BasicMathPackage`.
-* Added standard arithmetic operators between `FLOAT` and `INT`.
+* Added standard arithmetic operators between `FLOAT`/[`Decimal`](https://crates.io/crates/rust_decimal) and `INT`.
 
 
 Version 0.19.11

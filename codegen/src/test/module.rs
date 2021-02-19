@@ -106,10 +106,10 @@ mod module_tests {
         let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
         assert!(item_mod.fns().is_empty());
         assert!(item_mod.consts().is_empty());
-        assert_eq!(item_mod.submodules().len(), 1);
-        assert_eq!(&item_mod.submodules()[0].consts()[0].0, "MYSTIC_NUMBER");
+        assert_eq!(item_mod.sub_modules().len(), 1);
+        assert_eq!(&item_mod.sub_modules()[0].consts()[0].0, "MYSTIC_NUMBER");
         assert_eq!(
-            item_mod.submodules()[0].consts()[0].2,
+            item_mod.sub_modules()[0].consts()[0].2,
             syn::parse2::<syn::Expr>(quote! { 42 }).unwrap()
         );
     }
@@ -130,11 +130,11 @@ mod module_tests {
         let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
         assert!(item_mod.fns().is_empty());
         assert!(item_mod.consts().is_empty());
-        assert_eq!(item_mod.submodules().len(), 1);
-        assert_eq!(item_mod.submodules()[0].fns().len(), 1);
-        assert!(item_mod.submodules()[0].fns()[0].skipped());
-        assert!(item_mod.submodules()[0].consts().is_empty());
-        assert!(item_mod.submodules()[0].submodules().is_empty());
+        assert_eq!(item_mod.sub_modules().len(), 1);
+        assert_eq!(item_mod.sub_modules()[0].fns().len(), 1);
+        assert!(item_mod.sub_modules()[0].fns()[0].skipped());
+        assert!(item_mod.sub_modules()[0].consts().is_empty());
+        assert!(item_mod.sub_modules()[0].sub_modules().is_empty());
     }
 
     #[test]
@@ -153,8 +153,8 @@ mod module_tests {
         let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
         assert!(item_mod.fns().is_empty());
         assert!(item_mod.consts().is_empty());
-        assert_eq!(item_mod.submodules().len(), 1);
-        assert!(item_mod.submodules()[0].skipped());
+        assert_eq!(item_mod.sub_modules().len(), 1);
+        assert!(item_mod.sub_modules()[0].skipped());
     }
 
     #[test]
@@ -958,7 +958,7 @@ mod generate_tests {
     }
 
     #[test]
-    fn one_skipped_submodule() {
+    fn one_skipped_sub_module() {
         let input_tokens: TokenStream = quote! {
             pub mod one_fn {
                 pub fn get_mystic_number() -> INT {

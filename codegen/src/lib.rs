@@ -293,12 +293,12 @@ pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro
 /// ```
 #[proc_macro]
 pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let (engine_expr, export_name, rust_modpath) = match crate::register::parse_register_macro(args)
-    {
-        Ok(triple) => triple,
-        Err(e) => return e.to_compile_error().into(),
-    };
-    let gen_mod_path = crate::register::generated_module_path(&rust_modpath);
+    let (engine_expr, export_name, rust_mod_path) =
+        match crate::register::parse_register_macro(args) {
+            Ok(triple) => triple,
+            Err(e) => return e.to_compile_error().into(),
+        };
+    let gen_mod_path = crate::register::generated_module_path(&rust_mod_path);
     let tokens = quote! {
         #engine_expr.register_result_fn(&(#export_name), #gen_mod_path::dynamic_result_fn);
     };
@@ -332,12 +332,12 @@ pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenS
 /// ```
 #[proc_macro]
 pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let (module_expr, export_name, rust_modpath) = match crate::register::parse_register_macro(args)
-    {
-        Ok(triple) => triple,
-        Err(e) => return e.to_compile_error().into(),
-    };
-    let gen_mod_path = crate::register::generated_module_path(&rust_modpath);
+    let (module_expr, export_name, rust_mod_path) =
+        match crate::register::parse_register_macro(args) {
+            Ok(triple) => triple,
+            Err(e) => return e.to_compile_error().into(),
+        };
+    let gen_mod_path = crate::register::generated_module_path(&rust_mod_path);
     let tokens = quote! {
         #module_expr.set_fn(#export_name, FnNamespace::Internal, FnAccess::Public,
                             Some(#gen_mod_path::token_input_names().as_ref()),
@@ -374,12 +374,12 @@ pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream
 /// ```
 #[proc_macro]
 pub fn set_exported_global_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let (module_expr, export_name, rust_modpath) = match crate::register::parse_register_macro(args)
-    {
-        Ok(triple) => triple,
-        Err(e) => return e.to_compile_error().into(),
-    };
-    let gen_mod_path = crate::register::generated_module_path(&rust_modpath);
+    let (module_expr, export_name, rust_mod_path) =
+        match crate::register::parse_register_macro(args) {
+            Ok(triple) => triple,
+            Err(e) => return e.to_compile_error().into(),
+        };
+    let gen_mod_path = crate::register::generated_module_path(&rust_mod_path);
     let tokens = quote! {
         #module_expr.set_fn(#export_name, FnNamespace::Global, FnAccess::Public,
                             Some(#gen_mod_path::token_input_names().as_ref()),

@@ -3167,48 +3167,20 @@ pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
         #[cfg(not(feature = "no_float"))]
         Union::Float(value, _) => Some(Expr::FloatConstant(value, pos)),
 
+        #[cfg(feature = "decimal")]
+        Union::Decimal(value, _) => Some(Expr::DynamicConstant(Box::new((*value).into()), pos)),
+
         Union::Unit(_, _) => Some(Expr::Unit(pos)),
         Union::Int(value, _) => Some(Expr::IntegerConstant(value, pos)),
         Union::Char(value, _) => Some(Expr::CharConstant(value, pos)),
         Union::Str(value, _) => Some(Expr::StringConstant(value, pos)),
         Union::Bool(value, _) => Some(Expr::BoolConstant(value, pos)),
+
         #[cfg(not(feature = "no_index"))]
-        Union::Array(array, _) => {
-            let items: Vec<_> = array
-                .into_iter()
-                .map(|x| map_dynamic_to_expr(x, pos))
-                .collect();
+        Union::Array(array, _) => Some(Expr::DynamicConstant(Box::new((*array).into()), pos)),
 
-            if items.iter().all(Option::is_some) {
-                Some(Expr::Array(
-                    Box::new(items.into_iter().map(Option::unwrap).collect()),
-                    pos,
-                ))
-            } else {
-                None
-            }
-        }
         #[cfg(not(feature = "no_object"))]
-        Union::Map(map, _) => {
-            let items: Vec<_> = map
-                .into_iter()
-                .map(|(name, value)| (Ident { name, pos }, map_dynamic_to_expr(value, pos)))
-                .collect();
-
-            if items.iter().all(|(_, expr)| expr.is_some()) {
-                Some(Expr::Map(
-                    Box::new(
-                        items
-                            .into_iter()
-                            .map(|(k, expr)| (k, expr.unwrap()))
-                            .collect(),
-                    ),
-                    pos,
-                ))
-            } else {
-                None
-            }
-        }
+        Union::Map(map, _) => Some(Expr::DynamicConstant(Box::new((*map).into()), pos)),
 
         _ => None,
     }

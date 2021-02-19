@@ -106,7 +106,7 @@ fn test_max_operations_eval() -> Result<(), Box<EvalAltResult>> {
             "#
             )
             .expect_err("should error"),
-        EvalAltResult::ErrorTooManyOperations(_)
+        EvalAltResult::ErrorInFunctionCall(_, _, err, _) if matches!(*err, EvalAltResult::ErrorTooManyOperations(_))
     ));
 
     Ok(())
