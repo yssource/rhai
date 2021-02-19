@@ -9,10 +9,15 @@ Bug fixes
 
 * Bug in `Position::is_beginning_of_line` is fixed.
 
-Enhancements
+New features
 ------------
 
 * Comparisons between `FLOAT`/[`Decimal`](https://crates.io/crates/rust_decimal) and `INT` are now built in.
+
+Enhancements
+------------
+
+* Built-in operators between `FLOAT`/[`Decimal`](https://crates.io/crates/rust_decimal) and `INT` are now implemented for more speed under those cases.
 * Error position in `eval` statements is now wrapped in an `EvalAltResult::ErrorInFunctionCall`.
 * `Position` now implements `Add` and `AddAssign`.
 * `Scope` now implements `IntoIterator`.
