@@ -41,7 +41,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     {
         reg_functions!(lib += numbers; i8, u8, i16, u16, i32, i64, u32, u64);
 
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
         reg_functions!(lib += num_128; i128, u128);
     }
 
@@ -65,7 +65,7 @@ gen_concat_functions!(numbers => i8, u8, i16, u16, i32, i64, u32, u64);
 
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 gen_concat_functions!(num_128 => i128, u128);
 
 #[cfg(not(feature = "no_float"))]

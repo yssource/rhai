@@ -8,10 +8,10 @@ use crate::{def_package, Dynamic, EvalAltResult, INT};
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 use crate::stdlib::time::{Duration, Instant};
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
 use instant::{Duration, Instant};
 
 def_package!(crate:BasicTimePackage:"Basic timing utilities.", lib, {
@@ -28,12 +28,10 @@ mod time_functions {
     #[rhai_fn(name = "elapsed", get = "elapsed", return_raw)]
     pub fn elapsed(timestamp: &mut Instant) -> Result<Dynamic, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_float"))]
-        {
-            if *timestamp > Instant::now() {
-                Err(make_arithmetic_err("Time-stamp is later than now"))
-            } else {
-                Ok((timestamp.elapsed().as_secs_f64() as FLOAT).into())
-            }
+        if *timestamp > Instant::now() {
+            Err(make_arithmetic_err("Time-stamp is later than now"))
+        } else {
+            Ok((timestamp.elapsed().as_secs_f64() as FLOAT).into())
         }
 
         #[cfg(feature = "no_float")]
@@ -56,14 +54,12 @@ mod time_functions {
     #[rhai_fn(return_raw, name = "-")]
     pub fn time_diff(ts1: Instant, ts2: Instant) -> Result<Dynamic, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_float"))]
-        {
-            Ok(if ts2 > ts1 {
-                -(ts2 - ts1).as_secs_f64() as FLOAT
-            } else {
-                (ts1 - ts2).as_secs_f64() as FLOAT
-            }
-            .into())
+        return Ok(if ts2 > ts1 {
+            -(ts2 - ts1).as_secs_f64() as FLOAT
+        } else {
+            (ts1 - ts2).as_secs_f64() as FLOAT
         }
+        .into());
 
         #[cfg(feature = "no_float")]
         if ts2 > ts1 {

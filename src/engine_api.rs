@@ -1028,7 +1028,7 @@ impl Engine {
     }
     /// Read the contents of a file into a string.
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline]
     fn read_file(path: crate::stdlib::path::PathBuf) -> Result<String, Box<EvalAltResult>> {
         use crate::stdlib::io::Read;
@@ -1074,7 +1074,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
     pub fn compile_file(
         &self,
@@ -1116,7 +1116,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
     pub fn compile_file_with_scope(
         &self,
@@ -1301,7 +1301,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
     pub fn eval_file<T: Variant + Clone>(
         &self,
@@ -1331,7 +1331,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
     pub fn eval_file_with_scope<T: Variant + Clone>(
         &self,
@@ -1543,7 +1543,7 @@ impl Engine {
     ///
     /// Not available under `no_std` or `WASM`.
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
     pub fn consume_file(
         &self,
@@ -1556,7 +1556,7 @@ impl Engine {
     ///
     /// Not available under `no_std` or `WASM`.
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
     pub fn consume_file_with_scope(
         &self,

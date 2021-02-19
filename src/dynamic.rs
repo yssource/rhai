@@ -25,12 +25,12 @@ use crate::Array;
 use crate::Map;
 
 #[cfg(not(feature = "no_std"))]
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 use crate::stdlib::time::Instant;
 
 use fmt::Debug;
 #[cfg(not(feature = "no_std"))]
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
 use instant::Instant;
 
 mod private {
@@ -807,7 +807,7 @@ impl Dynamic {
     /// [`Arc`][std::sync::Arc]`<`[`RwLock`][std::sync::RwLock]`<`[`Dynamic`]`>>`
     /// depending on the `sync` feature.
     ///
-    /// Not available under [`no_closure`].
+    /// Not available under `no_closure`.
     ///
     /// Shared [`Dynamic`] values are relatively cheap to clone as they simply increment the
     /// reference counts.
