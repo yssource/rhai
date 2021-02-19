@@ -106,6 +106,7 @@ pub(crate) fn print_type(ty: &syn::Type) -> String {
 pub(crate) struct ExportedFnParams {
     pub name: Vec<String>,
     pub return_raw: bool,
+    pub pure: bool,
     pub skip: bool,
     pub special: FnSpecialAccess,
     pub namespace: FnNamespaceAccess,
@@ -144,6 +145,7 @@ impl ExportedParams for ExportedFnParams {
         } = info;
         let mut name = Vec::new();
         let mut return_raw = false;
+        let mut pure = false;
         let mut skip = false;
         let mut namespace = FnNamespaceAccess::Unset;
         let mut special = FnSpecialAccess::None;
@@ -224,6 +226,8 @@ impl ExportedParams for ExportedFnParams {
                 ("index_get", Some(s)) | ("index_set", Some(s)) | ("return_raw", Some(s)) => {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
                 }
+                ("pure", None) => pure = true,
+                ("pure", Some(s)) => return Err(syn::Error::new(s.span(), "extraneous value")),
                 ("return_raw", None) => return_raw = true,
                 ("return_raw", Some(s)) => {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
@@ -255,6 +259,7 @@ impl ExportedParams for ExportedFnParams {
         Ok(ExportedFnParams {
             name,
             return_raw,
+            pure,
             skip,
             special,
             namespace,
@@ -634,19 +639,19 @@ impl ExportedFn {
             .map(|r| r.span())
             .unwrap_or_else(|| proc_macro2::Span::call_site());
         if self.params.return_raw {
-            quote_spanned! { return_span=>
+            quote_spanned! { return_span =>
                 pub #dynamic_signature {
                     #name(#(#arguments),*)
                 }
             }
         } else if self.return_dynamic {
-            quote_spanned! { return_span=>
+            quote_spanned! { return_span =>
                 pub #dynamic_signature {
                     Ok(#name(#(#arguments),*))
                 }
             }
         } else {
-            quote_spanned! { return_span=>
+            quote_spanned! { return_span =>
                 pub #dynamic_signature {
                     Ok(Dynamic::from(#name(#(#arguments),*)))
                 }
@@ -746,18 +751,33 @@ impl ExportedFn {
                         syn::Type::Reference(syn::TypeReference { ref elem, .. }) => elem.as_ref(),
                         p => p,
                     };
-                    let downcast_span = quote_spanned!(
-                        arg_type.span()=> &mut args[0usize].write_lock::<#arg_type>().unwrap());
+                    let downcast_span = quote_spanned!(arg_type.span() =>
+                        &mut args[0usize].write_lock::<#arg_type>().unwrap()
+                    );
                     unpack_statements.push(
                         syn::parse2::<syn::Stmt>(quote! {
                             let #var = #downcast_span;
                         })
                         .unwrap(),
                     );
+                    if !self.params().pure {
+                        let arg_lit_str =
+                            syn::LitStr::new(&pat.to_token_stream().to_string(), pat.span());
+                        unpack_statements.push(
+                        syn::parse2::<syn::Stmt>(quote! {
+                            if args[0usize].is_read_only() {
+                                return Err(Box::new(
+                                    EvalAltResult::ErrorAssignmentToConstant(#arg_lit_str.to_string(), Position::NONE)
+                                ));
+                            }
+                        })
+                        .unwrap(),
+                    );
+                    }
                     input_type_names.push(arg_name);
                     input_type_exprs.push(
-                        syn::parse2::<syn::Expr>(quote_spanned!(
-                            arg_type.span()=> TypeId::of::<#arg_type>()
+                        syn::parse2::<syn::Expr>(quote_spanned!(arg_type.span() =>
+                            TypeId::of::<#arg_type>()
                         ))
                         .unwrap(),
                     );
@@ -792,22 +812,25 @@ impl ExportedFn {
                             syn::Type::Path(ref p) if p.path == str_type_path => {
                                 is_string = true;
                                 is_ref = true;
-                                quote_spanned!(arg_type.span()=>
-                                               mem::take(args[#i]).take_immutable_string().unwrap())
+                                quote_spanned!(arg_type.span() =>
+                                    mem::take(args[#i]).take_immutable_string().unwrap()
+                                )
                             }
                             _ => panic!("internal error: why wasn't this found earlier!?"),
                         },
                         syn::Type::Path(ref p) if p.path == string_type_path => {
                             is_string = true;
                             is_ref = false;
-                            quote_spanned!(arg_type.span()=>
-                                           mem::take(args[#i]).take_string().unwrap())
+                            quote_spanned!(arg_type.span() =>
+                                mem::take(args[#i]).take_string().unwrap()
+                            )
                         }
                         _ => {
                             is_string = false;
                             is_ref = false;
-                            quote_spanned!(arg_type.span()=>
-                                           mem::take(args[#i]).cast::<#arg_type>())
+                            quote_spanned!(arg_type.span() =>
+                                mem::take(args[#i]).cast::<#arg_type>()
+                            )
                         }
                     };
 
@@ -820,15 +843,15 @@ impl ExportedFn {
                     input_type_names.push(arg_name);
                     if !is_string {
                         input_type_exprs.push(
-                            syn::parse2::<syn::Expr>(quote_spanned!(
-                                arg_type.span()=> TypeId::of::<#arg_type>()
+                            syn::parse2::<syn::Expr>(quote_spanned!(arg_type.span() =>
+                                TypeId::of::<#arg_type>()
                             ))
                             .unwrap(),
                         );
                     } else {
                         input_type_exprs.push(
-                            syn::parse2::<syn::Expr>(quote_spanned!(
-                                arg_type.span()=> TypeId::of::<ImmutableString>()
+                            syn::parse2::<syn::Expr>(quote_spanned!(arg_type.span() =>
+                                TypeId::of::<ImmutableString>()
                             ))
                             .unwrap(),
                         );
@@ -860,16 +883,16 @@ impl ExportedFn {
             .unwrap_or_else(|| proc_macro2::Span::call_site());
         let return_expr = if !self.params.return_raw {
             if self.return_dynamic {
-                quote_spanned! { return_span=>
+                quote_spanned! { return_span =>
                     Ok(#sig_name(#(#unpack_exprs),*))
                 }
             } else {
-                quote_spanned! { return_span=>
+                quote_spanned! { return_span =>
                     Ok(Dynamic::from(#sig_name(#(#unpack_exprs),*)))
                 }
             }
         } else {
-            quote_spanned! { return_span=>
+            quote_spanned! { return_span =>
                 #sig_name(#(#unpack_exprs),*)
             }
         };
@@ -878,9 +901,7 @@ impl ExportedFn {
         quote! {
             impl PluginFunction for #type_name {
                 fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
-                    debug_assert_eq!(args.len(), #arg_count,
-                                     "wrong arg count: {} != {}",
-                                     args.len(), #arg_count);
+                    debug_assert_eq!(args.len(), #arg_count, "wrong arg count: {} != {}", args.len(), #arg_count);
                     #(#unpack_statements)*
                     #return_expr
                 }

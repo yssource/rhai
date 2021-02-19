@@ -9,11 +9,11 @@ mod collection;
 pub use collection::ModuleResolversCollection;
 
 #[cfg(not(feature = "no_std"))]
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 mod file;
 
 #[cfg(not(feature = "no_std"))]
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 pub use file::FileModuleResolver;
 
 mod stat;

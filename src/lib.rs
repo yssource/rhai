@@ -41,7 +41,7 @@
 //!     engine.register_fn("compute", compute_something);
 //!
 //! #   #[cfg(not(feature = "no_std"))]
-//! #   #[cfg(not(target_arch = "wasm32"))]
+//! #   #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 //!     assert_eq!(
 //!         // Evaluate the script, expects a 'bool' return
 //!         engine.eval_file::<bool>("my_script.rhai".into())?,
@@ -61,6 +61,8 @@
 #[cfg(feature = "no_std")]
 extern crate alloc;
 
+// Internal modules
+
 mod ast;
 mod dynamic;
 mod engine;
@@ -79,8 +81,6 @@ mod parser;
 pub mod plugin;
 mod result;
 mod scope;
-#[cfg(feature = "serde")]
-mod serde_impl;
 mod stdlib;
 mod syntax;
 mod token;
@@ -168,13 +168,8 @@ pub use module::ModuleResolver;
 #[cfg(not(feature = "no_module"))]
 pub use module::resolvers as module_resolvers;
 
-/// _(SERDE)_ Serialization and deserialization support for [`serde`](https://crates.io/crates/serde).
-/// Exported under the `serde` feature.
 #[cfg(feature = "serde")]
-pub mod serde {
-    pub use super::serde_impl::de::from_dynamic;
-    pub use super::serde_impl::ser::to_dynamic;
-}
+pub mod serde;
 
 #[cfg(not(feature = "no_optimize"))]
 pub use optimize::OptimizationLevel;
@@ -214,3 +209,29 @@ type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 /// Exported under the `internals` feature only.
 #[cfg(feature = "internals")]
 pub type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
+
+// Compiler guards against mutually-exclusive feature flags
+
+#[cfg(feature = "no_float")]
+#[cfg(feature = "f32_float")]
+compile_error!("'f32_float' cannot be used with 'no_float'");
+
+#[cfg(feature = "no_std")]
+#[cfg(feature = "wasm-bindgen")]
+compile_error!("'wasm-bindgen' cannot be used with 'no-std'");
+
+#[cfg(feature = "no_std")]
+#[cfg(feature = "stdweb")]
+compile_error!("'stdweb' cannot be used with 'no-std'");
+
+#[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
+#[cfg(feature = "no_std")]
+compile_error!("'no_std' cannot be used for WASM target");
+
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(feature = "wasm-bindgen")]
+compile_error!("'wasm-bindgen' should not be used non-WASM target");
+
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(feature = "stdweb")]
+compile_error!("'stdweb' should not be used non-WASM target");

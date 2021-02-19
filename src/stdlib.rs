@@ -8,7 +8,7 @@ mod inner {
         pin, prelude, ptr, result, slice, str, task, time, u16, u32, u64, u8, usize,
     };
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     pub use core::{i128, u128};
 
     #[cfg(feature = "sync")]

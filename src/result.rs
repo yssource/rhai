@@ -120,7 +120,7 @@ impl EvalAltResult {
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
             Self::ErrorModuleNotFound(_, _) => "Module not found",
             Self::ErrorDataRace(_, _) => "Data race detected when accessing variable",
-            Self::ErrorAssignmentToConstant(_, _) => "Cannot assign to a constant",
+            Self::ErrorAssignmentToConstant(_, _) => "Cannot modify a constant",
             Self::ErrorMismatchOutputType(_, _, _) => "Output type is incorrect",
             Self::ErrorInExpr(_) => "Malformed 'in' expression",
             Self::ErrorDotExpr(_, _) => "Malformed dot expression",
@@ -196,7 +196,7 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorRuntime(d, _) if d.is::<()>() => f.write_str(desc)?,
             Self::ErrorRuntime(d, _) => write!(f, "{}: {}", desc, d)?,
 
-            Self::ErrorAssignmentToConstant(s, _) => write!(f, "Cannot assign to constant {}", s)?,
+            Self::ErrorAssignmentToConstant(s, _) => write!(f, "Cannot modify constant {}", s)?,
             Self::ErrorMismatchOutputType(s, r, _) => {
                 write!(f, "Output type is incorrect: {} (expecting {})", r, s)?
             }

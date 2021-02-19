@@ -14,7 +14,7 @@ use crate::Array;
 use crate::Map;
 
 /// Serializer for [`Dynamic`][crate::Dynamic] which is kept as a reference.
-pub struct DynamicSerializer {
+struct DynamicSerializer {
     /// Buffer to hold a temporary key.
     _key: Dynamic,
     /// Buffer to hold a temporary value.
@@ -639,7 +639,7 @@ impl SerializeStruct for DynamicSerializer {
 }
 
 #[cfg(not(any(feature = "no_object", feature = "no_index")))]
-pub struct TupleVariantSerializer {
+struct TupleVariantSerializer {
     variant: &'static str,
     array: Array,
 }
@@ -664,7 +664,7 @@ impl serde::ser::SerializeTupleVariant for TupleVariantSerializer {
 }
 
 #[cfg(not(feature = "no_object"))]
-pub struct StructVariantSerializer {
+struct StructVariantSerializer {
     variant: &'static str,
     map: Map,
 }

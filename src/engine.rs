@@ -807,7 +807,7 @@ pub fn is_anonymous_fn(fn_name: &str) -> bool {
 #[inline(always)]
 fn default_print(_s: &str) {
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     println!("{}", _s);
 }
 
@@ -815,7 +815,7 @@ fn default_print(_s: &str) {
 #[inline(always)]
 fn default_debug(_s: &str, _source: Option<&str>, _pos: Position) {
     #[cfg(not(feature = "no_std"))]
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     if let Some(source) = _source {
         println!("{} @ {:?} | {}", source, _pos, _s);
     } else {
@@ -863,7 +863,7 @@ impl Engine {
 
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_std"))]
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
             module_resolver: Box::new(crate::module::resolvers::FileModuleResolver::new()),
             #[cfg(not(feature = "no_module"))]
             #[cfg(any(feature = "no_std", target_arch = "wasm32",))]

@@ -587,6 +587,11 @@ mod generate_tests {
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
                         debug_assert_eq!(args.len(), 2usize,
                                     "wrong arg count: {} != {}", args.len(), 2usize);
+                        if args[0usize].is_read_only() {
+                            return Err(Box::new(
+                                EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
+                            ));
+                        }
                         let arg1 = mem::take(args[1usize]).cast::<usize>();
                         let arg0 = &mut args[0usize].write_lock::<usize>().unwrap();
                         Ok(Dynamic::from(increment(arg0, arg1)))

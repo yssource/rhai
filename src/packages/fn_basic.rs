@@ -12,7 +12,7 @@ def_package!(crate:BasicFnPackage:"Basic Fn functions.", lib, {
 
 #[export_module]
 mod fn_ptr_functions {
-    #[rhai_fn(name = "name", get = "name")]
+    #[rhai_fn(name = "name", get = "name", pure)]
     pub fn name(f: &mut FnPtr) -> ImmutableString {
         f.get_fn_name().clone()
     }
@@ -21,7 +21,7 @@ mod fn_ptr_functions {
     pub mod functions {
         use crate::{calc_script_fn_hash, stdlib::iter::empty, INT};
 
-        #[rhai_fn(name = "is_anonymous", get = "is_anonymous")]
+        #[rhai_fn(name = "is_anonymous", get = "is_anonymous", pure)]
         pub fn is_anonymous(f: &mut FnPtr) -> bool {
             f.is_anonymous()
         }

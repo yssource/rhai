@@ -12,6 +12,7 @@ Bug fixes
 New features
 ------------
 
+* `#[rhai_fn(pure)]` attribute to mark a plugin function with `&mut` parameter as _pure_ so constants can be passed to it. Without it, passing a constant value into the `&mut` parameter will now raise an error.
 * Comparisons between `FLOAT`/[`Decimal`](https://crates.io/crates/rust_decimal) and `INT` are now built in.
 
 Enhancements

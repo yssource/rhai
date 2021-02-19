@@ -17,7 +17,7 @@ use crate::Map;
 ///
 /// The reference is necessary because the deserialized type may hold references
 /// (especially `&str`) to the source [`Dynamic`][crate::Dynamic].
-pub struct DynamicDeserializer<'a> {
+struct DynamicDeserializer<'a> {
     value: &'a Dynamic,
 }
 

@@ -42,8 +42,6 @@ where
     Ok(StepRange::<T>(from, to, step))
 }
 
-#[cfg(not(feature = "only_i32"))]
-#[cfg(not(feature = "only_i64"))]
 macro_rules! reg_range {
     ($lib:expr, $x:expr, $( $y:ty ),*) => (
         $(
@@ -58,9 +56,7 @@ macro_rules! reg_range {
     )
 }
 
-#[cfg(not(feature = "only_i32"))]
-#[cfg(not(feature = "only_i64"))]
-macro_rules! reg_step {
+macro_rules! reg_stepped_range {
     ($lib:expr, $x:expr, $( $y:ty ),*) => (
         $(
             $lib.set_iterator::<StepRange<$y>>();
@@ -68,38 +64,35 @@ macro_rules! reg_step {
             $lib.update_fn_metadata(hash, [
                     concat!("from: ", stringify!($y)),
                     concat!("to: ", stringify!($y)),
-                    concat!("step: ", stringify!($y)), concat!("Iterator<Item=", stringify!($y), ">")
+                    concat!("step: ", stringify!($y)),
+                    concat!("Iterator<Item=", stringify!($y), ">")
             ]);
         )*
     )
 }
 
 def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
-    lib.set_iterator::<Range<INT>>();
-    let hash = lib.set_fn_2("range", get_range::<INT>);
-    lib.update_fn_metadata(hash, ["from: INT", "to: INT", "Iterator<Item=INT>"]);
+    reg_range!(lib, "range", INT);
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
-        reg_range!(lib, "range", i8, u8, i16, u16, i32, i64, u32, u64);
+        reg_range!(lib, "range", i8, u8, i16, u16, i32, u32, i64, u64);
 
         if cfg!(not(target_arch = "wasm32")) {
             reg_range!(lib, "range", i128, u128);
         }
     }
 
-    lib.set_iterator::<StepRange<INT>>();
-    let hash = lib.set_fn_3("range", get_step_range::<INT>);
-    lib.update_fn_metadata(hash, ["from: INT", "to: INT", "step: INT", "Iterator<Item=INT>"]);
+    reg_stepped_range!(lib, "range", INT);
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
-        reg_step!(lib, "range", i8, u8, i16, u16, i32, i64, u32, u64);
+        reg_stepped_range!(lib, "range", i8, u8, i16, u16, i32, u32, i64, u64);
 
         if cfg!(not(target_arch = "wasm32")) {
-            reg_step!(lib, "range", i128, u128);
+            reg_stepped_range!(lib, "range", i128, u128);
         }
     }
 });

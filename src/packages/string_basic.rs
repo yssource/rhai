@@ -28,7 +28,7 @@ macro_rules! gen_functions {
         pub mod $root { $(pub mod $arg_type {
             use super::super::*;
 
-            #[export_fn]
+            #[export_fn(pure)]
             pub fn to_string_func(x: &mut $arg_type) -> ImmutableString {
                 super::super::$fn_name(x)
             }
@@ -62,7 +62,7 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
         reg_print_functions!(lib += print_numbers; i8, u8, i16, u16, i32, u32, i64, u64);
         reg_debug_functions!(lib += debug_numbers; i8, u8, i16, u16, i32, u32, i64, u64);
 
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
         {
             reg_print_functions!(lib += print_num_128; i128, u128);
             reg_debug_functions!(lib += debug_num_128; i128, u128);
@@ -128,12 +128,12 @@ gen_functions!(debug_numbers => to_debug(i8, u8, i16, u16, i32, u32, i64, u64));
 
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 gen_functions!(print_num_128 => to_string(i128, u128));
 
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 gen_functions!(debug_num_128 => to_debug(i128, u128));
 
 #[cfg(not(feature = "no_float"))]
@@ -174,7 +174,7 @@ mod print_debug_functions {
     pub fn print_string(s: ImmutableString) -> ImmutableString {
         s
     }
-    #[rhai_fn(name = "debug")]
+    #[rhai_fn(name = "debug", pure)]
     pub fn debug_fn_ptr(f: &mut FnPtr) -> ImmutableString {
         to_string(f)
     }
@@ -183,14 +183,20 @@ mod print_debug_functions {
     pub mod array_functions {
         use super::*;
 
-        #[rhai_fn(name = "print", name = "to_string", name = "to_debug", name = "debug")]
-        pub fn format_array(ctx: NativeCallContext, arr: &mut Array) -> ImmutableString {
+        #[rhai_fn(
+            name = "print",
+            name = "to_string",
+            name = "to_debug",
+            name = "debug",
+            pure
+        )]
+        pub fn format_array(ctx: NativeCallContext, array: &mut Array) -> ImmutableString {
             let mut result = crate::stdlib::string::String::with_capacity(16);
             result.push_str("[");
 
-            let len = arr.len();
+            let len = array.len();
 
-            arr.iter_mut().enumerate().for_each(|(i, x)| {
+            array.iter_mut().enumerate().for_each(|(i, x)| {
                 result.push_str(&print_with_func(FUNC_TO_DEBUG, &ctx, x));
                 if i < len - 1 {
                     result.push_str(", ");
@@ -205,7 +211,13 @@ mod print_debug_functions {
     pub mod map_functions {
         use super::*;
 
-        #[rhai_fn(name = "print", name = "to_string", name = "to_debug", name = "debug")]
+        #[rhai_fn(
+            name = "print",
+            name = "to_string",
+            name = "to_debug",
+            name = "debug",
+            pure
+        )]
         pub fn format_map(ctx: NativeCallContext, map: &mut Map) -> ImmutableString {
             let mut result = crate::stdlib::string::String::with_capacity(16);
             result.push_str("#{");

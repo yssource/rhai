@@ -32,11 +32,12 @@ Standard features
 * Fairly efficient evaluation (1 million iterations in 0.3 sec on a single-core, 2.3 GHz Linux VM).
 * Tight integration with native Rust [functions](https://rhai.rs/book/rust/functions.html) and [types]([#custom-types-and-methods](https://rhai.rs/book/rust/custom.html)), including [getters/setters](https://rhai.rs/book/rust/getters-setters.html), [methods](https://rhai.rs/book/rust/custom.html) and [indexers](https://rhai.rs/book/rust/indexers.html).
 * Freely pass Rust variables/constants into a script via an external [`Scope`](https://rhai.rs/book/rust/scope.html) - all clonable Rust types are supported; no need to implement any special trait.
+* Built-in support for most common [data types](https://rhai.rs/book/language/values-and-types.html) including booleans, integers, floating-point numbers (including [`Decimal`](https://crates.io/crates/rust_decimal)), strings, Unicode characters, arrays and maps.
 * Easily [call a script-defined function](https://rhai.rs/book/engine/call-fn.html) from Rust.
 * Relatively little `unsafe` code (yes there are some for performance reasons).
 * Few dependencies (currently only [`smallvec`](https://crates.io/crates/smallvec) and [`ahash`](https://crates.io/crates/ahash)).
 * Re-entrant scripting engine can be made `Send + Sync` (via the `sync` feature).
-* Compile once to AST form for repeated evaluations.
+* Compile once to [AST](https://rhai.rs/book/engine/compile.html) form for repeated evaluations.
 * Scripts are [optimized](https://rhai.rs/book/engine/optimize.html) (useful for template-based machine-generated scripts).
 * Easy custom API development via [plugins](https://rhai.rs/book/plugins/index.html) system powered by procedural macros.
 * [Function overloading](https://rhai.rs/book/language/overload.html) and [operator overloading](https://rhai.rs/book/rust/operators.html).

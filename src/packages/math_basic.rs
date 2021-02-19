@@ -73,7 +73,7 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
     {
         reg_functions!(lib += numbers_to_int::to_int(i8, u8, i16, u16, i32, u32, i64, u64));
 
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
         reg_functions!(lib += num_128_to_int::to_int(i128, u128));
     }
 
@@ -92,7 +92,7 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
         {
             reg_functions!(lib += numbers_to_float::to_float(i8, u8, i16, u16, i32, u32, i64, u32));
 
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
             reg_functions!(lib += num_128_to_float::to_float(i128, u128));
         }
     }
@@ -452,7 +452,7 @@ gen_conversion_as_functions!(numbers_to_float => to_float (i8, u8, i16, u16, i32
 #[cfg(not(feature = "no_float"))]
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 gen_conversion_as_functions!(num_128_to_float => to_float (i128, u128) -> FLOAT);
 
 gen_conversion_as_functions!(basic_to_int => to_int (char) -> INT);
@@ -463,7 +463,7 @@ gen_conversion_as_functions!(numbers_to_int => to_int (i8, u8, i16, u16, i32, u3
 
 #[cfg(not(feature = "only_i32"))]
 #[cfg(not(feature = "only_i64"))]
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 gen_conversion_as_functions!(num_128_to_int => to_int (i128, u128) -> INT);
 
 #[cfg(feature = "decimal")]

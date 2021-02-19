@@ -33,7 +33,7 @@ pub fn parse_register_macro(
         ));
     }
     let export_name = match &items[1] {
-        syn::Expr::Lit(lit_str) => quote_spanned!(items[1].span()=>
+        syn::Expr::Lit(lit_str) => quote_spanned!(items[1].span() =>
                                                  #lit_str.to_string()),
         expr => quote! { #expr },
     };
