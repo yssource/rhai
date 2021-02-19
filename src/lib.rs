@@ -41,7 +41,7 @@
 //!     engine.register_fn("compute", compute_something);
 //!
 //! #   #[cfg(not(feature = "no_std"))]
-//! #   #[cfg(not(target_arch = "wasm32"))]
+//! #   #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 //!     assert_eq!(
 //!         // Evaluate the script, expects a 'bool' return
 //!         engine.eval_file::<bool>("my_script.rhai".into())?,
@@ -60,6 +60,8 @@
 
 #[cfg(feature = "no_std")]
 extern crate alloc;
+
+// Internal modules
 
 mod ast;
 mod dynamic;
@@ -207,3 +209,29 @@ type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 /// Exported under the `internals` feature only.
 #[cfg(feature = "internals")]
 pub type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
+
+// Compiler guards against mutually-exclusive feature flags
+
+#[cfg(feature = "no_float")]
+#[cfg(feature = "f32_float")]
+compile_error!("'f32_float' cannot be used with 'no_float'");
+
+#[cfg(feature = "no_std")]
+#[cfg(feature = "wasm-bindgen")]
+compile_error!("'wasm-bindgen' cannot be used with 'no-std'");
+
+#[cfg(feature = "no_std")]
+#[cfg(feature = "stdweb")]
+compile_error!("'stdweb' cannot be used with 'no-std'");
+
+#[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
+#[cfg(feature = "no_std")]
+compile_error!("'no_std' cannot be used for WASM target");
+
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(feature = "wasm-bindgen")]
+compile_error!("'wasm-bindgen' should not be used non-WASM target");
+
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+#[cfg(feature = "stdweb")]
+compile_error!("'stdweb' should not be used non-WASM target");
