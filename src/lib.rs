@@ -79,8 +79,6 @@ mod parser;
 pub mod plugin;
 mod result;
 mod scope;
-#[cfg(feature = "serde")]
-mod serde_impl;
 mod stdlib;
 mod syntax;
 mod token;
@@ -168,13 +166,8 @@ pub use module::ModuleResolver;
 #[cfg(not(feature = "no_module"))]
 pub use module::resolvers as module_resolvers;
 
-/// _(SERDE)_ Serialization and deserialization support for [`serde`](https://crates.io/crates/serde).
-/// Exported under the `serde` feature.
 #[cfg(feature = "serde")]
-pub mod serde {
-    pub use super::serde_impl::de::from_dynamic;
-    pub use super::serde_impl::ser::to_dynamic;
-}
+pub mod serde;
 
 #[cfg(not(feature = "no_optimize"))]
 pub use optimize::OptimizationLevel;
