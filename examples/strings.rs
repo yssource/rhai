@@ -33,12 +33,12 @@ fn main() -> Result<(), Box<EvalAltResult>> {
         .register_fn("trim", trim_string)
         .register_fn("len", count_string_bytes)
         .register_fn("index_of", find_substring)
-        .register_fn("display", |label: &str, x: INT| {
-            // Register string functions using closures
-            println!("{}: {}", label, x)
+        // Register string functions using closures
+        .register_fn("display", |label: &str, value: INT| {
+            println!("{}: {}", label, value)
         })
-        .register_fn("display", |label: ImmutableString, x: &str| {
-            println!(r#"{}: "{}""#, label, x) // Quote the input string
+        .register_fn("display", |label: ImmutableString, value: &str| {
+            println!(r#"{}: "{}""#, label, value) // Quote the input string
         });
 
     let mut scope = Scope::new();

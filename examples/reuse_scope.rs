@@ -6,9 +6,15 @@ fn main() -> Result<(), Box<EvalAltResult>> {
 
     engine.eval_with_scope::<()>(&mut scope, "let x = 4 + 5")?;
 
-    let result = engine.eval_with_scope::<INT>(&mut scope, "x")?;
+    println!("x = {}", scope.get_value::<INT>("x").unwrap());
 
-    println!("result: {}", result);
+    for _ in 0..10 {
+        let result = engine.eval_with_scope::<INT>(&mut scope, "x += 1; x")?;
+
+        println!("result: {}", result);
+    }
+
+    println!("x = {}", scope.get_value::<INT>("x").unwrap());
 
     Ok(())
 }

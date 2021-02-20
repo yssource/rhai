@@ -9,7 +9,6 @@ impl TestStruct {
     pub fn update(&mut self) {
         self.x += 1000;
     }
-
     pub fn new() -> Self {
         Self { x: 1 }
     }
@@ -25,17 +24,30 @@ fn main() -> Result<(), Box<EvalAltResult>> {
         .register_fn("new_ts", TestStruct::new)
         .register_fn("update", TestStruct::update);
 
-    println!(
-        "{:?}",
-        engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?
-    );
-    println!(
-        "{:?}",
-        engine.eval::<TestStruct>("let x = [new_ts()]; x[0].update(); x[0]")?
-    );
+    let result = engine.eval::<TestStruct>(
+        r"
+            let x = new_ts();
+            x.update();
+            x
+        ",
+    )?;
+
+    println!("{:?}", result);
+
+    let result = engine.eval::<TestStruct>(
+        r"
+            let x = [ new_ts() ];
+            x[0].update();
+            x[0]
+        ",
+    )?;
+
+    println!("{:?}", result);
 
     Ok(())
 }
 
 #[cfg(any(feature = "no_index", feature = "no_object"))]
-fn main() {}
+fn main() {
+    panic!("This example does not run under 'no_index' or 'no_object'.")
+}

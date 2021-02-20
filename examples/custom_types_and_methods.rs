@@ -24,7 +24,13 @@ fn main() -> Result<(), Box<EvalAltResult>> {
         .register_fn("new_ts", TestStruct::new)
         .register_fn("update", TestStruct::update);
 
-    let result = engine.eval::<TestStruct>("let x = new_ts(); x.update(); x")?;
+    let result = engine.eval::<TestStruct>(
+        r"
+            let x = new_ts();
+            x.update();
+            x
+        ",
+    )?;
 
     println!("result: {}", result.x); // prints 1001
 
@@ -32,4 +38,6 @@ fn main() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[cfg(feature = "no_object")]
-fn main() {}
+fn main() {
+    panic!("This example does not run under 'no_object'.");
+}
