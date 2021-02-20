@@ -364,6 +364,27 @@ impl Engine {
         pos: Position,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        #[inline(always)]
+        fn make_error(
+            name: String,
+            fn_def: &crate::ast::ScriptFnDef,
+            state: &State,
+            err: Box<EvalAltResult>,
+            pos: Position,
+        ) -> Result<Dynamic, Box<EvalAltResult>> {
+            Err(Box::new(EvalAltResult::ErrorInFunctionCall(
+                name,
+                fn_def
+                    .lib
+                    .as_ref()
+                    .and_then(|m| m.id())
+                    .unwrap_or_else(|| state.source.as_ref().map_or_else(|| "", |s| s.as_str()))
+                    .to_string(),
+                err,
+                pos,
+            )))
+        }
+
         self.inc_operations(state, pos)?;
 
         // Check for stack overflow
@@ -421,48 +442,23 @@ impl Engine {
             .or_else(|err| match *err {
                 // Convert return statement to return value
                 EvalAltResult::Return(x, _) => Ok(x),
+                // Error in sub function call
                 EvalAltResult::ErrorInFunctionCall(name, src, err, _) => {
-                    EvalAltResult::ErrorInFunctionCall(
-                        format!(
-                            "{}{} < {}",
-                            name,
-                            if src.is_empty() {
-                                "".to_string()
-                            } else {
-                                format!(" @ '{}'", src)
-                            },
-                            fn_def.name
-                        ),
-                        fn_def
-                            .lib
-                            .as_ref()
-                            .map(|m| m.id())
-                            .flatten()
-                            .or_else(|| state.source.as_ref().map(|s| s.as_str()))
-                            .unwrap_or("")
-                            .to_string(),
-                        err,
-                        pos,
-                    )
-                    .into()
+                    let fn_name = if src.is_empty() {
+                        format!("{} < {}", name, fn_def.name)
+                    } else {
+                        format!("{} @ '{}' < {}", name, src, fn_def.name)
+                    };
+
+                    make_error(fn_name, fn_def, state, err, pos)
                 }
                 // System errors are passed straight-through
-                err if err.is_system_exception() => Err(Box::new(err)),
+                mut err if err.is_system_exception() => Err(Box::new({
+                    err.set_position(pos);
+                    err
+                })),
                 // Other errors are wrapped in `ErrorInFunctionCall`
-                _ => EvalAltResult::ErrorInFunctionCall(
-                    fn_def.name.to_string(),
-                    fn_def
-                        .lib
-                        .as_ref()
-                        .map(|m| m.id())
-                        .flatten()
-                        .or_else(|| state.source.as_ref().map(|s| s.as_str()))
-                        .unwrap_or("")
-                        .to_string(),
-                    err,
-                    pos,
-                )
-                .into(),
+                _ => make_error(fn_def.name.to_string(), fn_def, state, err, pos),
             });
 
         // Remove all local variables
