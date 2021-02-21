@@ -1357,10 +1357,10 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Cast the [`Dynamic`] as a [`Decimal`] and return it.
+    /// _(DECIMAL)_ Cast the [`Dynamic`] as a [`Decimal`] and return it.
     /// Returns the name of the actual type if the cast fails.
     ///
-    /// Available only under `decimal`.
+    /// Exported under the `decimal` feature only.
     #[cfg(feature = "decimal")]
     #[inline(always)]
     pub fn as_decimal(self) -> Result<Decimal, &'static str> {

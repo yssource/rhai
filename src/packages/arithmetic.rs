@@ -437,7 +437,7 @@ mod f64_functions {
 
 #[cfg(feature = "decimal")]
 #[export_module]
-mod decimal_functions {
+pub mod decimal_functions {
     use rust_decimal::{prelude::Zero, Decimal};
 
     #[rhai_fn(skip, return_raw)]
