@@ -308,6 +308,7 @@ mod generate_tests {
                 pub fn token_return_type() -> &'static str {
                     Token().return_type()
                 }
+                #[allow(unused)]
                 pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(do_nothing()))
                 }
@@ -362,6 +363,7 @@ mod generate_tests {
                 pub fn token_return_type() -> &'static str {
                     Token().return_type()
                 }
+                #[allow(unused)]
                 pub fn dynamic_result_fn(x: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(do_something(x)))
                 }
@@ -416,6 +418,7 @@ mod generate_tests {
                 pub fn token_return_type() -> &'static str {
                     Token().return_type()
                 }
+                #[allow(unused)]
                 pub fn dynamic_result_fn(context: NativeCallContext, x: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(do_something(context, x)))
                 }
@@ -472,6 +475,7 @@ mod generate_tests {
                 pub fn token_return_type() -> &'static str {
                     Token().return_type()
                 }
+                #[allow(unused)]
                 pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(return_dynamic())
                 }
@@ -562,6 +566,7 @@ mod generate_tests {
                 pub fn token_return_type() -> &'static str {
                     Token().return_type()
                 }
+                #[allow(unused)]
                 pub fn dynamic_result_fn(x: usize, y: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(add_together(x, y)))
                 }
@@ -623,6 +628,7 @@ mod generate_tests {
                 pub fn token_return_type() -> &'static str {
                     Token().return_type()
                 }
+                #[allow(unused)]
                 pub fn dynamic_result_fn(x: &mut usize, y: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(increment(x, y)))
                 }
@@ -678,6 +684,7 @@ mod generate_tests {
                 pub fn token_return_type() -> &'static str {
                     Token().return_type()
                 }
+                #[allow(unused)]
                 pub fn dynamic_result_fn(message: &str) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(special_print(message)))
                 }

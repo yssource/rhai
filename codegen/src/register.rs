@@ -1,7 +1,7 @@
 use quote::{quote, quote_spanned};
 use syn::{parse::Parser, spanned::Spanned};
 
-pub(crate) fn generated_module_path(
+pub fn generated_module_path(
     fn_path: &syn::Path,
 ) -> syn::punctuated::Punctuated<syn::PathSegment, syn::Token![::]> {
     let mut g = fn_path.clone().segments;

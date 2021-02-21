@@ -9,9 +9,9 @@ use crate::function::{
 };
 use crate::module::Module;
 
-pub(crate) type ExportedConst = (String, Box<syn::Type>, syn::Expr);
+pub type ExportedConst = (String, Box<syn::Type>, syn::Expr);
 
-pub(crate) fn generate_body(
+pub fn generate_body(
     fns: &mut [ExportedFn],
     consts: &[ExportedConst],
     sub_modules: &mut [Module],
@@ -224,7 +224,7 @@ pub(crate) fn generate_body(
     }
 }
 
-pub(crate) fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::Error> {
+pub fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::Error> {
     fn make_key(name: impl ToString, item_fn: &ExportedFn) -> String {
         item_fn
             .arg_list()

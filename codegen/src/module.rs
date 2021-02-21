@@ -20,7 +20,7 @@ use crate::attrs::{AttrItem, ExportInfo, ExportScope, ExportedParams};
 use crate::function::ExportedFnParams;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
-pub(crate) struct ExportedModParams {
+pub struct ExportedModParams {
     pub name: String,
     skip: bool,
     pub scope: ExportScope,
@@ -97,7 +97,7 @@ impl ExportedParams for ExportedModParams {
 }
 
 #[derive(Debug)]
-pub(crate) struct Module {
+pub struct Module {
     mod_all: syn::ItemMod,
     fns: Vec<ExportedFn>,
     consts: Vec<ExportedConst>,

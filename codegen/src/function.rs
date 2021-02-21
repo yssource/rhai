@@ -1,10 +1,3 @@
-#![allow(unused)]
-
-#[cfg(no_std)]
-use core::mem;
-#[cfg(not(no_std))]
-use std::mem;
-
 #[cfg(no_std)]
 use alloc::format;
 #[cfg(not(no_std))]
@@ -14,9 +7,8 @@ use std::borrow::Cow;
 
 use quote::{quote, quote_spanned, ToTokens};
 use syn::{
-    parse::{Parse, ParseStream, Parser},
+    parse::{Parse, ParseStream},
     spanned::Spanned,
-    VisPublic, Visibility,
 };
 
 use crate::attrs::{ExportInfo, ExportScope, ExportedParams};
@@ -83,7 +75,7 @@ impl FnSpecialAccess {
     }
 }
 
-pub(crate) fn flatten_type_groups(ty: &syn::Type) -> &syn::Type {
+pub fn flatten_type_groups(ty: &syn::Type) -> &syn::Type {
     match ty {
         syn::Type::Group(syn::TypeGroup { ref elem, .. })
         | syn::Type::Paren(syn::TypeParen { ref elem, .. }) => flatten_type_groups(elem.as_ref()),
@@ -91,7 +83,7 @@ pub(crate) fn flatten_type_groups(ty: &syn::Type) -> &syn::Type {
     }
 }
 
-pub(crate) fn print_type(ty: &syn::Type) -> String {
+pub fn print_type(ty: &syn::Type) -> String {
     ty.to_token_stream()
         .to_string()
         .replace(" , ", ", ")
@@ -104,7 +96,7 @@ pub(crate) fn print_type(ty: &syn::Type) -> String {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct ExportedFnParams {
+pub struct ExportedFnParams {
     pub name: Vec<String>,
     pub return_raw: bool,
     pub pure: bool,
@@ -191,53 +183,20 @@ impl ExportedParams for ExportedFnParams {
                     ))
                 }
                 ("name", Some(s)) => name.push(s.value()),
-                ("set", Some(s)) => {
-                    special = match special {
-                        FnSpecialAccess::None => FnSpecialAccess::Property(Property::Set(
-                            syn::Ident::new(&s.value(), s.span()),
-                        )),
-                        _ => return Err(syn::Error::new(item_span.span(), "conflicting setter")),
-                    }
-                }
-                ("get", Some(s)) => {
-                    special = match special {
-                        FnSpecialAccess::None => FnSpecialAccess::Property(Property::Get(
-                            syn::Ident::new(&s.value(), s.span()),
-                        )),
-                        _ => return Err(syn::Error::new(item_span.span(), "conflicting getter")),
-                    }
-                }
-                ("index_get", None) => {
-                    special = match special {
-                        FnSpecialAccess::None => FnSpecialAccess::Index(Index::Get),
-                        _ => {
-                            return Err(syn::Error::new(item_span.span(), "conflicting index_get"))
-                        }
-                    }
+
+                ("index_get", Some(s))
+                | ("index_set", Some(s))
+                | ("return_raw", Some(s))
+                | ("pure", Some(s))
+                | ("skip", Some(s))
+                | ("global", Some(s))
+                | ("internal", Some(s)) => {
+                    return Err(syn::Error::new(s.span(), "extraneous value"))
                 }
 
-                ("index_set", None) => {
-                    special = match special {
-                        FnSpecialAccess::None => FnSpecialAccess::Index(Index::Set),
-                        _ => {
-                            return Err(syn::Error::new(item_span.span(), "conflicting index_set"))
-                        }
-                    }
-                }
-                ("index_get", Some(s)) | ("index_set", Some(s)) | ("return_raw", Some(s)) => {
-                    return Err(syn::Error::new(s.span(), "extraneous value"))
-                }
                 ("pure", None) => pure = true,
-                ("pure", Some(s)) => return Err(syn::Error::new(s.span(), "extraneous value")),
                 ("return_raw", None) => return_raw = true,
-                ("return_raw", Some(s)) => {
-                    return Err(syn::Error::new(s.span(), "extraneous value"))
-                }
                 ("skip", None) => skip = true,
-                ("skip", Some(s)) => return Err(syn::Error::new(s.span(), "extraneous value")),
-                ("global", Some(s)) | ("internal", Some(s)) => {
-                    return Err(syn::Error::new(s.span(), "extraneous value"))
-                }
                 ("global", None) => match namespace {
                     FnNamespaceAccess::Unset => namespace = FnNamespaceAccess::Global,
                     FnNamespaceAccess::Global => (),
@@ -248,6 +207,40 @@ impl ExportedParams for ExportedFnParams {
                     FnNamespaceAccess::Internal => (),
                     _ => return Err(syn::Error::new(key.span(), "conflicting namespace")),
                 },
+
+                ("get", Some(s)) => {
+                    special = match special {
+                        FnSpecialAccess::None => FnSpecialAccess::Property(Property::Get(
+                            syn::Ident::new(&s.value(), s.span()),
+                        )),
+                        _ => return Err(syn::Error::new(item_span.span(), "conflicting getter")),
+                    }
+                }
+                ("set", Some(s)) => {
+                    special = match special {
+                        FnSpecialAccess::None => FnSpecialAccess::Property(Property::Set(
+                            syn::Ident::new(&s.value(), s.span()),
+                        )),
+                        _ => return Err(syn::Error::new(item_span.span(), "conflicting setter")),
+                    }
+                }
+                ("index_get", None) => {
+                    special = match special {
+                        FnSpecialAccess::None => FnSpecialAccess::Index(Index::Get),
+                        _ => {
+                            return Err(syn::Error::new(item_span.span(), "conflicting index_get"))
+                        }
+                    }
+                }
+                ("index_set", None) => {
+                    special = match special {
+                        FnSpecialAccess::None => FnSpecialAccess::Index(Index::Set),
+                        _ => {
+                            return Err(syn::Error::new(item_span.span(), "conflicting index_set"))
+                        }
+                    }
+                }
+
                 (attr, _) => {
                     return Err(syn::Error::new(
                         key.span(),
@@ -271,7 +264,7 @@ impl ExportedParams for ExportedFnParams {
 }
 
 #[derive(Debug)]
-pub(crate) struct ExportedFn {
+pub struct ExportedFn {
     entire_span: proc_macro2::Span,
     signature: syn::Signature,
     visibility: syn::Visibility,
@@ -418,11 +411,11 @@ impl Parse for ExportedFn {
 }
 
 impl ExportedFn {
-    pub(crate) fn params(&self) -> &ExportedFnParams {
+    pub fn params(&self) -> &ExportedFnParams {
         &self.params
     }
 
-    pub(crate) fn update_scope(&mut self, parent_scope: &ExportScope) {
+    pub fn update_scope(&mut self, parent_scope: &ExportScope) {
         let keep = match (self.params.skip, parent_scope) {
             (true, _) => false,
             (_, ExportScope::PubOnly) => self.is_public(),
@@ -432,35 +425,35 @@ impl ExportedFn {
         self.params.skip = !keep;
     }
 
-    pub(crate) fn skipped(&self) -> bool {
+    pub fn skipped(&self) -> bool {
         self.params.skip
     }
 
-    pub(crate) fn pass_context(&self) -> bool {
+    pub fn pass_context(&self) -> bool {
         self.pass_context
     }
 
-    pub(crate) fn signature(&self) -> &syn::Signature {
+    pub fn signature(&self) -> &syn::Signature {
         &self.signature
     }
 
-    pub(crate) fn mutable_receiver(&self) -> bool {
+    pub fn mutable_receiver(&self) -> bool {
         self.mut_receiver
     }
 
-    pub(crate) fn is_public(&self) -> bool {
+    pub fn is_public(&self) -> bool {
         !matches!(self.visibility, syn::Visibility::Inherited)
     }
 
-    pub(crate) fn span(&self) -> &proc_macro2::Span {
+    pub fn span(&self) -> &proc_macro2::Span {
         &self.entire_span
     }
 
-    pub(crate) fn name(&self) -> &syn::Ident {
+    pub fn name(&self) -> &syn::Ident {
         &self.signature.ident
     }
 
-    pub(crate) fn exported_names(&self) -> Vec<syn::LitStr> {
+    pub fn exported_names(&self) -> Vec<syn::LitStr> {
         let mut literals: Vec<_> = self
             .params
             .name
@@ -482,24 +475,24 @@ impl ExportedFn {
         literals
     }
 
-    pub(crate) fn exported_name<'n>(&'n self) -> Cow<'n, str> {
+    pub fn exported_name<'n>(&'n self) -> Cow<'n, str> {
         self.params.name.last().map_or_else(
             || self.signature.ident.to_string().into(),
             |s| s.as_str().into(),
         )
     }
 
-    pub(crate) fn arg_list(&self) -> impl Iterator<Item = &syn::FnArg> {
+    pub fn arg_list(&self) -> impl Iterator<Item = &syn::FnArg> {
         let skip = if self.pass_context { 1 } else { 0 };
         self.signature.inputs.iter().skip(skip)
     }
 
-    pub(crate) fn arg_count(&self) -> usize {
+    pub fn arg_count(&self) -> usize {
         let skip = if self.pass_context { 1 } else { 0 };
         self.signature.inputs.len() - skip
     }
 
-    pub(crate) fn return_type(&self) -> Option<&syn::Type> {
+    pub fn return_type(&self) -> Option<&syn::Type> {
         if let syn::ReturnType::Type(_, ref ret_type) = self.signature.output {
             Some(flatten_type_groups(ret_type))
         } else {
@@ -604,6 +597,7 @@ impl ExportedFn {
                 #input_names_block
                 #input_types_block
                 #return_type_block
+                #[allow(unused)]
                 #dyn_result_fn_block
             }
         }
