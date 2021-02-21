@@ -20,7 +20,7 @@ use crate::attrs::{AttrItem, ExportInfo, ExportScope, ExportedParams};
 use crate::function::ExportedFnParams;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
-pub(crate) struct ExportedModParams {
+pub struct ExportedModParams {
     pub name: String,
     skip: bool,
     pub scope: ExportScope,
@@ -97,7 +97,7 @@ impl ExportedParams for ExportedModParams {
 }
 
 #[derive(Debug)]
-pub(crate) struct Module {
+pub struct Module {
     mod_all: syn::ItemMod,
     fns: Vec<ExportedFn>,
     consts: Vec<ExportedConst>,
@@ -257,6 +257,7 @@ impl Module {
             params,
             ..
         } = self;
+        let mod_vis = mod_all.vis;
         let mod_name = mod_all.ident.clone();
         let (_, orig_content) = mod_all.content.take().unwrap();
         let mod_attrs = mem::take(&mut mod_all.attrs);
@@ -282,7 +283,7 @@ impl Module {
             // Regenerate the module with the new content added.
             Ok(quote! {
                 #(#mod_attrs)*
-                pub mod #mod_name {
+                #mod_vis mod #mod_name {
                     #(#orig_content)*
                     #(#inner_modules)*
                     #mod_gen
@@ -292,7 +293,7 @@ impl Module {
             // Regenerate the original module as-is.
             Ok(quote! {
                 #(#mod_attrs)*
-                pub mod #mod_name {
+                #mod_vis mod #mod_name {
                     #(#orig_content)*
                 }
             })

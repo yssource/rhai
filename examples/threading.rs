@@ -1,5 +1,8 @@
 use rhai::{Engine, RegisterFn, INT};
 
+#[cfg(feature = "sync")]
+use std::sync::Mutex;
+
 fn main() {
     // Channel: Script -> Master
     let (tx_script, rx_master) = std::sync::mpsc::channel();
@@ -7,10 +10,7 @@ fn main() {
     let (tx_master, rx_script) = std::sync::mpsc::channel();
 
     #[cfg(feature = "sync")]
-    let (tx_script, rx_script) = (
-        std::sync::Mutex::new(tx_script),
-        std::sync::Mutex::new(rx_script),
-    );
+    let (tx_script, rx_script) = (Mutex::new(tx_script), Mutex::new(rx_script));
 
     // Spawn thread with Engine
     std::thread::spawn(move || {
@@ -22,7 +22,7 @@ fn main() {
 
         #[cfg(not(feature = "sync"))]
         engine
-            .register_fn("get", move || rx_script.recv().unwrap())
+            .register_fn("get", move || rx_script.recv().unwrap_or_default())
             .register_fn("put", move |v: INT| tx_script.send(v).unwrap());
 
         #[cfg(feature = "sync")]

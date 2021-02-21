@@ -1,6 +1,6 @@
 #[cfg(not(feature = "serde"))]
 fn main() {
-    println!(r#"This example requires the "serde" feature which is not enabled by default."#);
+    println!("This example requires the 'serde' feature to run.");
     println!("Try: cargo run --features serde --example serde");
 }
 

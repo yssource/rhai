@@ -185,10 +185,10 @@ pub const MAX_FUNCTION_EXPR_DEPTH: usize = 16;
 #[cfg(not(feature = "unchecked"))]
 #[cfg(not(debug_assertions))]
 #[cfg(not(feature = "no_function"))]
-pub const MAX_CALL_STACK_DEPTH: usize = 128;
+pub const MAX_CALL_STACK_DEPTH: usize = 64;
 #[cfg(not(feature = "unchecked"))]
 #[cfg(not(debug_assertions))]
-pub const MAX_EXPR_DEPTH: usize = 128;
+pub const MAX_EXPR_DEPTH: usize = 64;
 #[cfg(not(feature = "unchecked"))]
 #[cfg(not(feature = "no_function"))]
 #[cfg(not(debug_assertions))]

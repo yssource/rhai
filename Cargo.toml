@@ -111,4 +111,4 @@ instant= { version = "0.1" } # WASM implementation of std::time::Instant
 instant= { version = "0.1" } # WASM implementation of std::time::Instant
 
 [package.metadata.docs.rs]
-features = [ "metadata", "internals" ]
+features = [ "metadata", "internals", "decimal" ]

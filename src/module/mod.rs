@@ -1738,7 +1738,8 @@ impl Module {
         )
     }
 
-    /// Get an iterator over all script-defined functions in the [`Module`].
+    /// _(INTERNALS)_ Get an iterator over all script-defined functions in the [`Module`].
+    /// Exported under the `internals` feature only.
     ///
     /// Function metadata includes:
     /// 1) Namespace ([`FnNamespace::Global`] or [`FnNamespace::Internal`]).
@@ -1746,7 +1747,6 @@ impl Module {
     /// 3) Function name (as string slice).
     /// 4) Number of parameters.
     /// 5) _(INTERNALS)_ Shared reference to function definition [`ScriptFnDef`][crate::ast::ScriptFnDef].
-    ///    Exported under the `internals` feature only.
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "internals")]
     #[inline(always)]

@@ -101,7 +101,7 @@ pub fn parse_punctuated_items(
     })
 }
 
-pub(crate) fn outer_item_attributes<T: ExportedParams>(
+pub fn outer_item_attributes<T: ExportedParams>(
     args: proc_macro2::TokenStream,
     _attr_name: &str,
 ) -> syn::Result<T> {
@@ -116,7 +116,7 @@ pub(crate) fn outer_item_attributes<T: ExportedParams>(
     T::from_info(export_info)
 }
 
-pub(crate) fn inner_item_attributes<T: ExportedParams>(
+pub fn inner_item_attributes<T: ExportedParams>(
     attrs: &mut Vec<syn::Attribute>,
     attr_name: &str,
 ) -> syn::Result<T> {
@@ -132,7 +132,7 @@ pub(crate) fn inner_item_attributes<T: ExportedParams>(
     }
 }
 
-pub(crate) fn deny_cfg_attr(attrs: &Vec<syn::Attribute>) -> syn::Result<()> {
+pub fn deny_cfg_attr(attrs: &Vec<syn::Attribute>) -> syn::Result<()> {
     if let Some(cfg_attr) = attrs
         .iter()
         .find(|a| a.path.get_ident().map(|i| *i == "cfg").unwrap_or(false))

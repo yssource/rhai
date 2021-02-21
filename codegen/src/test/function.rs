@@ -272,7 +272,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(unused)]
+            #[automatically_derived]
             pub mod rhai_fn_do_nothing {
                 use super::*;
                 struct Token();
@@ -308,6 +308,7 @@ mod generate_tests {
                 pub fn token_return_type() -> &'static str {
                     Token().return_type()
                 }
+                #[allow(unused)]
                 pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(do_nothing()))
                 }
@@ -325,7 +326,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(unused)]
+            #[automatically_derived]
             pub mod rhai_fn_do_something {
                 use super::*;
                 struct Token();
@@ -362,6 +363,7 @@ mod generate_tests {
                 pub fn token_return_type() -> &'static str {
                     Token().return_type()
                 }
+                #[allow(unused)]
                 pub fn dynamic_result_fn(x: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(do_something(x)))
                 }
@@ -379,7 +381,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(unused)]
+            #[automatically_derived]
             pub mod rhai_fn_do_something {
                 use super::*;
                 struct Token();
@@ -416,6 +418,7 @@ mod generate_tests {
                 pub fn token_return_type() -> &'static str {
                     Token().return_type()
                 }
+                #[allow(unused)]
                 pub fn dynamic_result_fn(context: NativeCallContext, x: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(do_something(context, x)))
                 }
@@ -436,7 +439,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(unused)]
+            #[automatically_derived]
             pub mod rhai_fn_return_dynamic {
                 use super::*;
                 struct Token();
@@ -472,6 +475,7 @@ mod generate_tests {
                 pub fn token_return_type() -> &'static str {
                     Token().return_type()
                 }
+                #[allow(unused)]
                 pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(return_dynamic())
                 }
@@ -523,7 +527,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(unused)]
+            #[automatically_derived]
             pub mod rhai_fn_add_together {
                 use super::*;
                 struct Token();
@@ -562,6 +566,7 @@ mod generate_tests {
                 pub fn token_return_type() -> &'static str {
                     Token().return_type()
                 }
+                #[allow(unused)]
                 pub fn dynamic_result_fn(x: usize, y: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(add_together(x, y)))
                 }
@@ -579,7 +584,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(unused)]
+            #[automatically_derived]
             pub mod rhai_fn_increment {
                 use super::*;
                 struct Token();
@@ -623,6 +628,7 @@ mod generate_tests {
                 pub fn token_return_type() -> &'static str {
                     Token().return_type()
                 }
+                #[allow(unused)]
                 pub fn dynamic_result_fn(x: &mut usize, y: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(increment(x, y)))
                 }
@@ -641,7 +647,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(unused)]
+            #[automatically_derived]
             pub mod rhai_fn_special_print {
                 use super::*;
                 struct Token();
@@ -678,6 +684,7 @@ mod generate_tests {
                 pub fn token_return_type() -> &'static str {
                     Token().return_type()
                 }
+                #[allow(unused)]
                 pub fn dynamic_result_fn(message: &str) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(special_print(message)))
                 }
