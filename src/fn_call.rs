@@ -366,7 +366,7 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         #[inline(always)]
         fn make_error(
-            name: String,
+            name: crate::stdlib::string::String,
             fn_def: &crate::ast::ScriptFnDef,
             state: &State,
             err: Box<EvalAltResult>,
