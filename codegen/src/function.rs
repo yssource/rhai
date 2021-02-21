@@ -411,6 +411,8 @@ impl Parse for ExportedFn {
 }
 
 impl ExportedFn {
+    #![allow(unused)]
+
     pub fn params(&self) -> &ExportedFnParams {
         &self.params
     }
@@ -708,13 +710,6 @@ impl ExportedFn {
 
     pub fn generate_impl(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let sig_name = self.name().clone();
-        let name = self
-            .params
-            .name
-            .last()
-            .cloned()
-            .unwrap_or_else(|| self.name().to_string());
-
         let arg_count = self.arg_count();
         let is_method_call = self.mutable_receiver();
 
