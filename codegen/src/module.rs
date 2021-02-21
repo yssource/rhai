@@ -257,6 +257,7 @@ impl Module {
             params,
             ..
         } = self;
+        let mod_vis = mod_all.vis;
         let mod_name = mod_all.ident.clone();
         let (_, orig_content) = mod_all.content.take().unwrap();
         let mod_attrs = mem::take(&mut mod_all.attrs);
@@ -282,7 +283,7 @@ impl Module {
             // Regenerate the module with the new content added.
             Ok(quote! {
                 #(#mod_attrs)*
-                pub mod #mod_name {
+                #mod_vis mod #mod_name {
                     #(#orig_content)*
                     #(#inner_modules)*
                     #mod_gen
@@ -292,7 +293,7 @@ impl Module {
             // Regenerate the original module as-is.
             Ok(quote! {
                 #(#mod_attrs)*
-                pub mod #mod_name {
+                #mod_vis mod #mod_name {
                     #(#orig_content)*
                 }
             })

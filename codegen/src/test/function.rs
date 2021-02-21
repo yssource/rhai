@@ -272,7 +272,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(unused)]
+            #[automatically_derived]
             pub mod rhai_fn_do_nothing {
                 use super::*;
                 struct Token();
@@ -325,7 +325,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(unused)]
+            #[automatically_derived]
             pub mod rhai_fn_do_something {
                 use super::*;
                 struct Token();
@@ -379,7 +379,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(unused)]
+            #[automatically_derived]
             pub mod rhai_fn_do_something {
                 use super::*;
                 struct Token();
@@ -436,7 +436,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(unused)]
+            #[automatically_derived]
             pub mod rhai_fn_return_dynamic {
                 use super::*;
                 struct Token();
@@ -523,7 +523,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(unused)]
+            #[automatically_derived]
             pub mod rhai_fn_add_together {
                 use super::*;
                 struct Token();
@@ -579,7 +579,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(unused)]
+            #[automatically_derived]
             pub mod rhai_fn_increment {
                 use super::*;
                 struct Token();
@@ -641,7 +641,7 @@ mod generate_tests {
         };
 
         let expected_tokens = quote! {
-            #[allow(unused)]
+            #[automatically_derived]
             pub mod rhai_fn_special_print {
                 use super::*;
                 struct Token();

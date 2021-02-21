@@ -16,6 +16,7 @@ use quote::{quote, quote_spanned, ToTokens};
 use syn::{
     parse::{Parse, ParseStream, Parser},
     spanned::Spanned,
+    VisPublic, Visibility,
 };
 
 use crate::attrs::{ExportInfo, ExportScope, ExportedParams};
@@ -273,7 +274,7 @@ impl ExportedParams for ExportedFnParams {
 pub(crate) struct ExportedFn {
     entire_span: proc_macro2::Span,
     signature: syn::Signature,
-    is_public: bool,
+    visibility: syn::Visibility,
     pass_context: bool,
     return_dynamic: bool,
     mut_receiver: bool,
@@ -298,8 +299,7 @@ impl Parse for ExportedFn {
         // #[cfg] attributes are not allowed on functions due to what is generated for them
         crate::attrs::deny_cfg_attr(&fn_all.attrs)?;
 
-        // Determine if the function is public.
-        let is_public = matches!(fn_all.vis, syn::Visibility::Public(_));
+        let visibility = fn_all.vis;
 
         // Determine if the function requires a call context
         if let Some(first_arg) = fn_all.sig.inputs.first() {
@@ -408,7 +408,7 @@ impl Parse for ExportedFn {
         Ok(ExportedFn {
             entire_span,
             signature: fn_all.sig,
-            is_public,
+            visibility,
             pass_context,
             return_dynamic,
             mut_receiver,
@@ -425,7 +425,7 @@ impl ExportedFn {
     pub(crate) fn update_scope(&mut self, parent_scope: &ExportScope) {
         let keep = match (self.params.skip, parent_scope) {
             (true, _) => false,
-            (_, ExportScope::PubOnly) => self.is_public,
+            (_, ExportScope::PubOnly) => self.is_public(),
             (_, ExportScope::Prefix(s)) => self.name().to_string().starts_with(s),
             (_, ExportScope::All) => true,
         };
@@ -449,7 +449,7 @@ impl ExportedFn {
     }
 
     pub(crate) fn is_public(&self) -> bool {
-        self.is_public
+        !matches!(self.visibility, syn::Visibility::Inherited)
     }
 
     pub(crate) fn span(&self) -> &proc_macro2::Span {
@@ -593,9 +593,10 @@ impl ExportedFn {
         let input_types_block = self.generate_input_types("Token");
         let return_type_block = self.generate_return_type("Token");
         let dyn_result_fn_block = self.generate_dynamic_fn();
+        let vis = self.visibility;
         quote! {
-            #[allow(unused)]
-            pub mod #name {
+            #[automatically_derived]
+            #vis mod #name {
                 use super::*;
                 struct Token();
                 #impl_block
