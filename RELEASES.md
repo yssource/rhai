@@ -9,6 +9,13 @@ Bug fixes
 
 * Bug in `Position::is_beginning_of_line` is fixed.
 
+Breaking changes
+----------------
+
+* For plugin functions, constants passed to methods (i.e. `&mut` parameter) now raise an error unless the functions are marked with `#[rhai_fn(pure)]`.
+* Visibility (i.e. `pub` or not) for generated _plugin_ modules now follow the visibility of the underlying module.
+* Default stack-overflow and top-level expression nesting limits for release builds are lowered to 64 from 128.
+
 New features
 ------------
 
