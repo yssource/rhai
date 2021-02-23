@@ -347,7 +347,6 @@ fn parse_fn_call(
                 let qualifiers = modules.iter().map(|m| m.name.as_str());
                 calc_script_fn_hash(qualifiers, &id, 0)
             } else {
-                // Qualifiers (none) + function name + no parameters.
                 calc_script_fn_hash(empty(), &id, 0)
             };
 
@@ -399,7 +398,6 @@ fn parse_fn_call(
                     let qualifiers = modules.iter().map(|m| m.name.as_str());
                     calc_script_fn_hash(qualifiers, &id, args.len())
                 } else {
-                    // Qualifiers (none) + function name + number of arguments.
                     calc_script_fn_hash(empty(), &id, args.len())
                 };
 
@@ -1016,7 +1014,6 @@ fn parse_primary(
             });
 
             lib.insert(
-                // Qualifiers (none) + function name + number of arguments.
                 calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap(),
                 func,
             );
@@ -1246,7 +1243,6 @@ fn parse_primary(
     }
     .map(|x| match x.as_mut() {
         (_, Some((ref mut hash, ref mut namespace)), Ident { name, .. }) => {
-            // Qualifiers + variable name
             *hash =
                 calc_script_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0).unwrap();
 
@@ -2621,8 +2617,6 @@ fn parse_stmt(
                     };
 
                     let func = parse_fn(input, &mut new_state, lib, access, settings, _comments)?;
-
-                    // Qualifiers (none) + function name + number of arguments.
                     let hash = calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap();
 
                     if lib.contains_key(&hash) {

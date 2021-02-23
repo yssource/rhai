@@ -214,17 +214,20 @@ impl Engine {
 
                         // Try all permutations with `Dynamic` wildcards
                         _ => {
-                            // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
-                            let arg_types = args.iter().enumerate().map(|(i, a)| {
-                                let mask = 1usize << (num_args - i - 1);
-                                if bitmask & mask != 0 {
-                                    // Replace with `Dynamic`
-                                    TypeId::of::<Dynamic>()
-                                } else {
-                                    a.type_id()
-                                }
-                            });
-                            hash = calc_native_fn_hash(empty(), fn_name, arg_types).unwrap();
+                            hash = calc_native_fn_hash(
+                                empty(),
+                                fn_name,
+                                args.iter().enumerate().map(|(i, a)| {
+                                    let mask = 1usize << (num_args - i - 1);
+                                    if bitmask & mask != 0 {
+                                        // Replace with `Dynamic`
+                                        TypeId::of::<Dynamic>()
+                                    } else {
+                                        a.type_id()
+                                    }
+                                }),
+                            )
+                            .unwrap();
 
                             // Stop when all permutations are exhausted
                             if hash == hash_fn {
@@ -613,9 +616,8 @@ impl Engine {
             ensure_no_data_race(fn_name, args, is_ref)?;
         }
 
-        // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
-        let arg_types = args.iter().map(|a| a.type_id());
-        let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_types).unwrap();
+        let hash_fn =
+            calc_native_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id())).unwrap();
 
         match fn_name {
             // type_of

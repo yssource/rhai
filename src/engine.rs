@@ -1156,21 +1156,33 @@ impl Engine {
                                     }
 
                                     let args = &mut [lhs_ptr_inner, &mut new_val];
+                                    let hash_fn = calc_native_fn_hash(
+                                        empty(),
+                                        op,
+                                        args.iter().map(|a| a.type_id()),
+                                    )
+                                    .unwrap();
 
-                                    match self.exec_fn_call(
-                                        mods, state, lib, op, None, args, true, false, false,
-                                        op_pos, None, None, level,
+                                    match self.call_native_fn(
+                                        mods, state, lib, op, hash_fn, args, true, false, op_pos,
+                                        None,
                                     ) {
                                         Ok(_) => (),
                                         Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
                                         {
                                             // Expand to `var = var op rhs`
                                             let op = &op[..op.len() - 1]; // extract operator without =
+                                            let hash_fn = calc_native_fn_hash(
+                                                empty(),
+                                                op,
+                                                args.iter().map(|a| a.type_id()),
+                                            )
+                                            .unwrap();
 
                                             // Run function
-                                            let (value, _) = self.exec_fn_call(
-                                                mods, state, lib, op, None, args, true, false,
-                                                false, op_pos, None, None, level,
+                                            let (value, _) = self.call_native_fn(
+                                                mods, state, lib, op, hash_fn, args, true, false,
+                                                op_pos, None,
                                             )?;
 
                                             *args[0] = value.flatten();
@@ -1277,21 +1289,29 @@ impl Engine {
                             }
 
                             let args = &mut [lhs_ptr_inner, &mut new_val];
+                            let hash_fn =
+                                calc_native_fn_hash(empty(), op, args.iter().map(|a| a.type_id()))
+                                    .unwrap();
 
-                            match self.exec_fn_call(
-                                mods, state, lib, op, None, args, true, false, false, op_pos, None,
-                                None, level,
+                            match self.call_native_fn(
+                                mods, state, lib, op, hash_fn, args, true, false, op_pos, None,
                             ) {
                                 Ok(_) => (),
                                 Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
                                 {
                                     // Expand to `var = var op rhs`
                                     let op = &op[..op.len() - 1]; // extract operator without =
+                                    let hash_fn = calc_native_fn_hash(
+                                        empty(),
+                                        op,
+                                        args.iter().map(|a| a.type_id()),
+                                    )
+                                    .unwrap();
 
                                     // Run function
-                                    let (value, _) = self.exec_fn_call(
-                                        mods, state, lib, op, None, args, true, false, false,
-                                        op_pos, None, None, level,
+                                    let (value, _) = self.call_native_fn(
+                                        mods, state, lib, op, hash_fn, args, true, false, op_pos,
+                                        None,
                                     )?;
 
                                     *args[0] = value.flatten();
@@ -1757,12 +1777,9 @@ impl Engine {
 
                 for value in rhs_value.iter_mut() {
                     let args = &mut [&mut lhs_value.clone(), value];
-
-                    // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
                     let hash_fn =
                         calc_native_fn_hash(empty(), OP_EQUALS, args.iter().map(|a| a.type_id()))
                             .unwrap();
-
                     let pos = rhs.position();
 
                     if self
@@ -2090,10 +2107,11 @@ impl Engine {
                     }
 
                     let args = &mut [lhs_ptr_inner, &mut rhs_val];
+                    let hash_fn =
+                        calc_native_fn_hash(empty(), op, args.iter().map(|a| a.type_id())).unwrap();
 
-                    match self.exec_fn_call(
-                        mods, state, lib, op, None, args, true, false, false, *op_pos, None, None,
-                        level,
+                    match self.call_native_fn(
+                        mods, state, lib, op, hash_fn, args, true, false, *op_pos, None,
                     ) {
                         Ok(_) => (),
                         Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op.as_ref())) =>
@@ -2102,9 +2120,8 @@ impl Engine {
                             let op = &op[..op.len() - 1]; // extract operator without =
 
                             // Run function
-                            let (value, _) = self.exec_fn_call(
-                                mods, state, lib, op, None, args, false, false, false, *op_pos,
-                                None, None, level,
+                            let (value, _) = self.call_native_fn(
+                                mods, state, lib, op, hash_fn, args, false, false, *op_pos, None,
                             )?;
 
                             *args[0] = value.flatten();
