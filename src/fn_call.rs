@@ -186,9 +186,8 @@ impl Engine {
             .entry(hash_fn)
             .or_insert_with(|| {
                 let num_args = args.len();
-                let max_bitmask = 1usize << num_args;
                 let mut hash = hash_fn;
-                let mut bitmask = 1usize;
+                let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
 
                 loop {
                     //lib.get_fn(hash, pub_only).or_else(||
@@ -210,8 +209,8 @@ impl Engine {
                         // Specific version found
                         Some(f) => return Some(f),
 
-                        // No more permutations with `Dynamic` wildcards
-                        _ if bitmask >= max_bitmask => return None,
+                        // No parameters
+                        _ if num_args == 0 => return None,
 
                         // Try all permutations with `Dynamic` wildcards
                         _ => {
@@ -219,12 +218,19 @@ impl Engine {
                             let arg_types = args.iter().enumerate().map(|(i, a)| {
                                 let mask = 1usize << (num_args - i - 1);
                                 if bitmask & mask != 0 {
+                                    // Replace with `Dynamic`
                                     TypeId::of::<Dynamic>()
                                 } else {
                                     a.type_id()
                                 }
                             });
                             hash = calc_native_fn_hash(empty(), fn_name, arg_types).unwrap();
+
+                            // Stop when all permutations are exhausted
+                            if hash == hash_fn {
+                                return None;
+                            }
+
                             bitmask += 1;
                         }
                     }
