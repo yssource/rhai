@@ -13,15 +13,15 @@ fn test_to_string() -> Result<(), Box<EvalAltResult>> {
     scope.push("z", 42_i16);
 
     assert_eq!(
-        engine.eval_with_scope::<String>(&mut scope, "x.to_string()")?,
+        engine.eval_with_scope::<String>(&mut scope, "to_string(x)")?,
         "42"
     );
     assert_eq!(
-        engine.eval_with_scope::<String>(&mut scope, "y.to_string()")?,
+        engine.eval_with_scope::<String>(&mut scope, "to_string(x)")?,
         "42"
     );
     assert_eq!(
-        engine.eval_with_scope::<String>(&mut scope, "z.to_string()")?,
+        engine.eval_with_scope::<String>(&mut scope, "to_string(x)")?,
         "42"
     );
 
