@@ -372,6 +372,10 @@ mod string_functions {
             format!("{:?}{}", array, string)
         }
         #[rhai_fn(name = "split")]
+        pub fn chars(string: &str) -> Array {
+            string.chars().map(Into::<Dynamic>::into).collect()
+        }
+        #[rhai_fn(name = "split")]
         pub fn split_at(string: ImmutableString, start: INT) -> Array {
             if start <= 0 {
                 vec!["".into(), string.into()]
