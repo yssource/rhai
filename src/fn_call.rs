@@ -287,6 +287,11 @@ impl Engine {
 
         // See if it is built in.
         if args.len() == 2 {
+            match run_builtin_binary_op(fn_name, args[0], args[1])? {
+                Some(v) => return Ok((v, false)),
+                None => (),
+            }
+
             if is_ref {
                 let (first, second) = args.split_first_mut().unwrap();
 
@@ -294,11 +299,6 @@ impl Engine {
                     Some(_) => return Ok((Dynamic::UNIT, false)),
                     None => (),
                 }
-            }
-
-            match run_builtin_binary_op(fn_name, args[0], args[1])? {
-                Some(v) => return Ok((v, false)),
-                None => (),
             }
         }
 

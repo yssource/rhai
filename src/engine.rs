@@ -1088,7 +1088,7 @@ impl Engine {
         idx_values: &mut StaticVec<ChainArgument>,
         chain_type: ChainType,
         level: usize,
-        new_val: Option<(Dynamic, Position)>,
+        new_val: Option<((Dynamic, Position), (&str, Position))>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         if chain_type == ChainType::NonChaining {
             unreachable!("should not be ChainType::NonChaining");
@@ -1128,7 +1128,7 @@ impl Engine {
                         )
                         .map_err(|err| err.fill_position(*x_pos))
                     }
-                    // xxx[rhs] = new_val
+                    // xxx[rhs] op= new_val
                     _ if new_val.is_some() => {
                         let idx_val = idx_val.as_index_value();
                         let mut idx_val2 = idx_val.clone();
@@ -1139,8 +1139,46 @@ impl Engine {
                         ) {
                             // Indexed value is a reference - update directly
                             Ok(ref mut obj_ptr) => {
-                                let (new_val, new_val_pos) = new_val.unwrap();
-                                obj_ptr.set_value(new_val, new_val_pos)?;
+                                let ((mut new_val, new_val_pos), (op, op_pos)) = new_val.unwrap();
+
+                                if op.is_empty() {
+                                    obj_ptr.set_value(new_val, new_val_pos)?;
+                                } else {
+                                    let mut lock_guard;
+                                    let lhs_ptr_inner;
+
+                                    if cfg!(not(feature = "no_closure")) && obj_ptr.is_shared() {
+                                        lock_guard =
+                                            obj_ptr.as_mut().write_lock::<Dynamic>().unwrap();
+                                        lhs_ptr_inner = lock_guard.deref_mut();
+                                    } else {
+                                        lhs_ptr_inner = obj_ptr.as_mut();
+                                    }
+
+                                    let args = &mut [lhs_ptr_inner, &mut new_val];
+
+                                    match self.exec_fn_call(
+                                        mods, state, lib, op, None, args, true, false, false,
+                                        op_pos, None, None, level,
+                                    ) {
+                                        Ok(_) => (),
+                                        Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
+                                        {
+                                            // Expand to `var = var op rhs`
+                                            let op = &op[..op.len() - 1]; // extract operator without =
+
+                                            // Run function
+                                            let (value, _) = self.exec_fn_call(
+                                                mods, state, lib, op, None, args, true, false,
+                                                false, op_pos, None, None, level,
+                                            )?;
+
+                                            *args[0] = value.flatten();
+                                        }
+                                        err => return err,
+                                    }
+                                }
+
                                 None
                             }
                             Err(err) => match *err {
@@ -1155,11 +1193,13 @@ impl Engine {
                         #[cfg(not(feature = "no_index"))]
                         if let Some(mut new_val) = _call_setter {
                             let val_type_name = target_val.type_name();
-                            let args = &mut [target_val, &mut idx_val2, &mut new_val.0];
+                            let ((_, val_pos), _) = new_val;
+
+                            let args = &mut [target_val, &mut idx_val2, &mut (new_val.0).0];
 
                             self.exec_fn_call(
                                 mods, state, lib, FN_IDX_SET, None, args, is_ref, true, false,
-                                new_val.1, None, None, level,
+                                val_pos, None, None, level,
                             )
                             .map_err(|err| match *err {
                                 EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
@@ -1213,7 +1253,7 @@ impl Engine {
                     Expr::FnCall(_, _) => {
                         unreachable!("function call in dot chain should not be namespace-qualified")
                     }
-                    // {xxx:map}.id = ???
+                    // {xxx:map}.id op= ???
                     Expr::Property(x) if target_val.is::<Map>() && new_val.is_some() => {
                         let Ident { name, pos } = &x.2;
                         let index = name.clone().into();
@@ -1221,10 +1261,46 @@ impl Engine {
                             mods, state, lib, target_val, index, *pos, true, is_ref, false, level,
                         )?;
 
-                        let (new_val, new_val_pos) = new_val.unwrap();
-                        val.set_value(new_val, new_val_pos)?;
+                        let ((mut new_val, new_val_pos), (op, op_pos)) = new_val.unwrap();
 
-                        Ok((Default::default(), true))
+                        if op.is_empty() {
+                            val.set_value(new_val, new_val_pos)?;
+                        } else {
+                            let mut lock_guard;
+                            let lhs_ptr_inner;
+
+                            if cfg!(not(feature = "no_closure")) && val.is_shared() {
+                                lock_guard = val.as_mut().write_lock::<Dynamic>().unwrap();
+                                lhs_ptr_inner = lock_guard.deref_mut();
+                            } else {
+                                lhs_ptr_inner = val.as_mut();
+                            }
+
+                            let args = &mut [lhs_ptr_inner, &mut new_val];
+
+                            match self.exec_fn_call(
+                                mods, state, lib, op, None, args, true, false, false, op_pos, None,
+                                None, level,
+                            ) {
+                                Ok(_) => (),
+                                Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
+                                {
+                                    // Expand to `var = var op rhs`
+                                    let op = &op[..op.len() - 1]; // extract operator without =
+
+                                    // Run function
+                                    let (value, _) = self.exec_fn_call(
+                                        mods, state, lib, op, None, args, true, false, false,
+                                        op_pos, None, None, level,
+                                    )?;
+
+                                    *args[0] = value.flatten();
+                                }
+                                err => return err,
+                            }
+                        }
+
+                        Ok((Dynamic::UNIT, true))
                     }
                     // {xxx:map}.id
                     Expr::Property(x) if target_val.is::<Map>() => {
@@ -1240,7 +1316,7 @@ impl Engine {
                     Expr::Property(x) if new_val.is_some() => {
                         let (_, setter, Ident { pos, .. }) = x.as_ref();
                         let mut new_val = new_val;
-                        let mut args = [target_val, &mut new_val.as_mut().unwrap().0];
+                        let mut args = [target_val, &mut (new_val.as_mut().unwrap().0).0];
                         self.exec_fn_call(
                             mods, state, lib, setter, None, &mut args, is_ref, true, false, *pos,
                             None, None, level,
@@ -1401,7 +1477,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         level: usize,
-        new_val: Option<(Dynamic, Position)>,
+        new_val: Option<((Dynamic, Position), (&str, Position))>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, op_pos) = match expr {
             Expr::Index(x, pos) => (x.as_ref(), ChainType::Index, *pos),
@@ -2035,6 +2111,7 @@ impl Engine {
                         }
                         err => return err.map(|(v, _)| v),
                     }
+
                     Ok(Dynamic::UNIT)
                 }
             }
@@ -2042,28 +2119,8 @@ impl Engine {
             // lhs op= rhs
             Stmt::Assignment(x, op_pos) => {
                 let (lhs_expr, op, rhs_expr) = x.as_ref();
-                let mut rhs_val =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?;
-
-                let _new_val = if op.is_empty() {
-                    // Normal assignment
-                    Some((rhs_val, rhs_expr.position()))
-                } else {
-                    // Op-assignment - always map to `lhs = lhs op rhs`
-                    let op = &op[..op.len() - 1]; // extract operator without =
-                    let args = &mut [
-                        &mut self.eval_expr(scope, mods, state, lib, this_ptr, lhs_expr, level)?,
-                        &mut rhs_val,
-                    ];
-
-                    Some(
-                        self.exec_fn_call(
-                            mods, state, lib, op, None, args, false, false, false, *op_pos, None,
-                            None, level,
-                        )
-                        .map(|(v, _)| (v, rhs_expr.position()))?,
-                    )
-                };
+                let rhs_val = self.eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?;
+                let _new_val = Some(((rhs_val, rhs_expr.position()), (op.as_ref(), *op_pos)));
 
                 // Must be either `var[index] op= val` or `var.prop op= val`
                 match lhs_expr {
