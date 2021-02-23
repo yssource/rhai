@@ -3,7 +3,7 @@
 
 use crate::engine::{OP_EQUALS, TYPICAL_ARRAY_SIZE};
 use crate::plugin::*;
-use crate::stdlib::{any::TypeId, boxed::Box, cmp::max, cmp::Ordering, string::ToString};
+use crate::stdlib::{any::TypeId, boxed::Box, cmp::max, cmp::Ordering, mem, string::ToString};
 use crate::{
     def_package, Array, Dynamic, EvalAltResult, FnPtr, ImmutableString, NativeCallContext,
     Position, INT,
@@ -190,6 +190,18 @@ mod array_functions {
         };
 
         array[start..].iter().cloned().collect()
+    }
+    #[rhai_fn(name = "split")]
+    pub fn split_at(array: &mut Array, start: INT) -> Array {
+        if start <= 0 {
+            mem::take(array)
+        } else if start as usize >= array.len() {
+            Default::default()
+        } else {
+            let mut result: Array = Default::default();
+            result.extend(array.drain(start as usize..));
+            result
+        }
     }
     #[rhai_fn(return_raw)]
     pub fn map(

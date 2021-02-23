@@ -30,6 +30,7 @@ Enhancements
 * `Position` now implements `Add` and `AddAssign`.
 * `Scope` now implements `IntoIterator`.
 * Strings now have the `split_rev` method and variations of `split` with maximum number of segments.
+* Arrays now have the `split` method.
 
 
 Version 0.19.12
