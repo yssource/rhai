@@ -2,7 +2,6 @@
 
 use crate::ast::{Expr, FnCallExpr, Ident, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
-use crate::fn_call::run_builtin_op_assignment;
 use crate::fn_native::{
     CallableFunction, IteratorFn, OnDebugCallback, OnPrintCallback, OnProgressCallback,
     OnVarCallback,
@@ -18,7 +17,7 @@ use crate::stdlib::{
     collections::{HashMap, HashSet},
     fmt, format,
     hash::{Hash, Hasher},
-    iter::{empty, once, FromIterator},
+    iter::{empty, FromIterator},
     num::{NonZeroU64, NonZeroU8, NonZeroUsize},
     ops::DerefMut,
     string::{String, ToString},
@@ -2004,62 +2003,27 @@ impl Engine {
                     }
                     Ok(Dynamic::UNIT)
                 } else {
-                    // Op-assignment - in order of precedence:
-                    // 1) Native registered overriding function
-                    // 2) Built-in implementation
-                    // 3) Map to `var = var op rhs`
+                    let mut lock_guard;
+                    let lhs_ptr_inner;
 
-                    // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
-                    let arg_types = once(lhs_ptr.as_mut().type_id()).chain(once(rhs_val.type_id()));
-                    let hash_fn = calc_native_fn_hash(empty(), op, arg_types).unwrap();
+                    if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
+                        lock_guard = lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap();
+                        lhs_ptr_inner = lock_guard.deref_mut();
+                    } else {
+                        lhs_ptr_inner = lhs_ptr.as_mut();
+                    }
 
-                    match self
-                        .global_namespace
-                        .get_fn(hash_fn, false)
-                        .map(|f| (f, None))
-                        .or_else(|| {
-                            self.global_modules
-                                .iter()
-                                .find_map(|m| m.get_fn(hash_fn, false).map(|f| (f, m.id_raw())))
-                        })
-                        .or_else(|| mods.get_fn(hash_fn))
-                    {
-                        // op= function registered as method
-                        Some((func, source)) if func.is_method() => {
-                            let mut lock_guard;
-                            let lhs_ptr_inner;
+                    let args = &mut [lhs_ptr_inner, &mut rhs_val];
 
-                            if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
-                                lock_guard = lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap();
-                                lhs_ptr_inner = lock_guard.deref_mut();
-                            } else {
-                                lhs_ptr_inner = lhs_ptr.as_mut();
-                            }
-
-                            let args = &mut [lhs_ptr_inner, &mut rhs_val];
-
-                            // Overriding exact implementation
-                            let source =
-                                source.or_else(|| state.source.as_ref()).map(|s| s.as_str());
-                            if func.is_plugin_fn() {
-                                func.get_plugin_fn()
-                                    .call((self, op.as_ref(), source, &*mods, lib).into(), args)?;
-                            } else {
-                                func.get_native_fn()(
-                                    (self, op.as_ref(), source, &*mods, lib).into(),
-                                    args,
-                                )?;
-                            }
-                        }
-                        // Built-in op-assignment function
-                        _ if run_builtin_op_assignment(op, lhs_ptr.as_mut(), &rhs_val)?
-                            .is_some() => {}
-                        // Not built-in: expand to `var = var op rhs`
-                        _ => {
+                    match self.exec_fn_call(
+                        mods, state, lib, op, None, args, true, false, false, *op_pos, None, None,
+                        level,
+                    ) {
+                        Ok(_) => (),
+                        Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op.as_ref())) =>
+                        {
+                            // Expand to `var = var op rhs`
                             let op = &op[..op.len() - 1]; // extract operator without =
-
-                            // Clone the LHS value
-                            let args = &mut [&mut lhs_ptr.as_mut().clone(), &mut rhs_val];
 
                             // Run function
                             let (value, _) = self.exec_fn_call(
@@ -2067,14 +2031,9 @@ impl Engine {
                                 None, None, level,
                             )?;
 
-                            let value = value.flatten();
-
-                            if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
-                                *lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap() = value;
-                            } else {
-                                *lhs_ptr.as_mut() = value;
-                            }
+                            *args[0] = value.flatten();
                         }
+                        err => return err.map(|(v, _)| v),
                     }
                     Ok(Dynamic::UNIT)
                 }
