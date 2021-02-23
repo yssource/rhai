@@ -29,6 +29,7 @@ Enhancements
 * Error position in `eval` statements is now wrapped in an `EvalAltResult::ErrorInFunctionCall`.
 * `Position` now implements `Add` and `AddAssign`.
 * `Scope` now implements `IntoIterator`.
+* Strings now have the `split_rev` method and variations of `split` with maximum number of segments.
 
 
 Version 0.19.12

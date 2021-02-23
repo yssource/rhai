@@ -627,7 +627,7 @@ pub struct Limits {
 
 /// Context of a script evaluation process.
 #[derive(Debug)]
-pub struct EvalContext<'e, 'x, 'px: 'x, 'a, 's, 'm, 't, 'pt: 't> {
+pub struct EvalContext<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> {
     pub(crate) engine: &'e Engine,
     pub(crate) scope: &'x mut Scope<'px>,
     pub(crate) mods: &'a mut Imports,
