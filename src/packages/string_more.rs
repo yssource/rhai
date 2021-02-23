@@ -360,7 +360,8 @@ mod string_functions {
 
     #[cfg(not(feature = "no_index"))]
     pub mod arrays {
-        use crate::Array;
+        use crate::stdlib::vec;
+        use crate::{Array, ImmutableString};
 
         #[rhai_fn(name = "+")]
         pub fn append(string: &str, array: Array) -> String {
@@ -370,12 +371,72 @@ mod string_functions {
         pub fn prepend(array: &mut Array, string: &str) -> String {
             format!("{:?}{}", array, string)
         }
+        #[rhai_fn(name = "split")]
+        pub fn chars(string: &str) -> Array {
+            string.chars().map(Into::<Dynamic>::into).collect()
+        }
+        #[rhai_fn(name = "split")]
+        pub fn split_at(string: ImmutableString, start: INT) -> Array {
+            if start <= 0 {
+                vec!["".into(), string.into()]
+            } else {
+                let prefix: String = string.chars().take(start as usize).collect();
+                let prefix_len = prefix.len();
+                vec![prefix.into(), string[prefix_len..].into()]
+            }
+        }
         pub fn split(string: &str, delimiter: &str) -> Array {
             string.split(delimiter).map(Into::<Dynamic>::into).collect()
         }
         #[rhai_fn(name = "split")]
+        pub fn splitn(string: &str, delimiter: &str, segments: INT) -> Array {
+            let pieces: usize = if segments < 1 { 1 } else { segments as usize };
+            string
+                .splitn(pieces, delimiter)
+                .map(Into::<Dynamic>::into)
+                .collect()
+        }
+        #[rhai_fn(name = "split")]
         pub fn split_char(string: &str, delimiter: char) -> Array {
             string.split(delimiter).map(Into::<Dynamic>::into).collect()
+        }
+        #[rhai_fn(name = "split")]
+        pub fn splitn_char(string: &str, delimiter: char, segments: INT) -> Array {
+            let pieces: usize = if segments < 1 { 1 } else { segments as usize };
+            string
+                .splitn(pieces, delimiter)
+                .map(Into::<Dynamic>::into)
+                .collect()
+        }
+        #[rhai_fn(name = "split_rev")]
+        pub fn rsplit(string: &str, delimiter: &str) -> Array {
+            string
+                .rsplit(delimiter)
+                .map(Into::<Dynamic>::into)
+                .collect()
+        }
+        #[rhai_fn(name = "split_rev")]
+        pub fn rsplitn(string: &str, delimiter: &str, segments: INT) -> Array {
+            let pieces: usize = if segments < 1 { 1 } else { segments as usize };
+            string
+                .rsplitn(pieces, delimiter)
+                .map(Into::<Dynamic>::into)
+                .collect()
+        }
+        #[rhai_fn(name = "split_rev")]
+        pub fn rsplit_char(string: &str, delimiter: char) -> Array {
+            string
+                .rsplit(delimiter)
+                .map(Into::<Dynamic>::into)
+                .collect()
+        }
+        #[rhai_fn(name = "split_rev")]
+        pub fn rsplitn_char(string: &str, delimiter: char, segments: INT) -> Array {
+            let pieces: usize = if segments < 1 { 1 } else { segments as usize };
+            string
+                .rsplitn(pieces, delimiter)
+                .map(Into::<Dynamic>::into)
+                .collect()
         }
     }
 

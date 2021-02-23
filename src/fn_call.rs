@@ -185,26 +185,50 @@ impl Engine {
             .fn_resolution_cache_mut()
             .entry(hash_fn)
             .or_insert_with(|| {
-                // Search for the native function
-                // First search registered functions (can override packages)
-                // Then search packages
-                // Finally search modules
+                let num_args = args.len();
+                let max_bitmask = 1usize << num_args;
+                let mut hash = hash_fn;
+                let mut bitmask = 1usize;
 
-                //lib.get_fn(hash_fn, pub_only)
-                self.global_namespace
-                    .get_fn(hash_fn, pub_only)
-                    .cloned()
-                    .map(|f| (f, None))
-                    .or_else(|| {
-                        self.global_modules.iter().find_map(|m| {
-                            m.get_fn(hash_fn, false)
-                                .map(|f| (f.clone(), m.id_raw().cloned()))
+                loop {
+                    //lib.get_fn(hash, pub_only).or_else(||
+                    match self
+                        .global_namespace
+                        .get_fn(hash, pub_only)
+                        .cloned()
+                        .map(|f| (f, None))
+                        .or_else(|| {
+                            self.global_modules.iter().find_map(|m| {
+                                m.get_fn(hash, false)
+                                    .map(|f| (f.clone(), m.id_raw().cloned()))
+                            })
                         })
-                    })
-                    .or_else(|| {
-                        mods.get_fn(hash_fn)
-                            .map(|(f, source)| (f.clone(), source.cloned()))
-                    })
+                        .or_else(|| {
+                            mods.get_fn(hash)
+                                .map(|(f, source)| (f.clone(), source.cloned()))
+                        }) {
+                        // Specific version found
+                        Some(f) => return Some(f),
+
+                        // No more permutations with `Dynamic` wildcards
+                        _ if bitmask >= max_bitmask => return None,
+
+                        // Try all permutations with `Dynamic` wildcards
+                        _ => {
+                            // Qualifiers (none) + function name + number of arguments + argument `TypeId`'s.
+                            let arg_types = args.iter().enumerate().map(|(i, a)| {
+                                let mask = 1usize << (num_args - i - 1);
+                                if bitmask & mask != 0 {
+                                    TypeId::of::<Dynamic>()
+                                } else {
+                                    a.type_id()
+                                }
+                            });
+                            hash = calc_native_fn_hash(empty(), fn_name, arg_types).unwrap();
+                            bitmask += 1;
+                        }
+                    }
+                }
             });
 
         if let Some((func, src)) = func {
@@ -257,6 +281,15 @@ impl Engine {
 
         // See if it is built in.
         if args.len() == 2 {
+            if is_ref {
+                let (first, second) = args.split_first_mut().unwrap();
+
+                match run_builtin_op_assignment(fn_name, first, second[0])? {
+                    Some(_) => return Ok((Dynamic::UNIT, false)),
+                    None => (),
+                }
+            }
+
             match run_builtin_binary_op(fn_name, args[0], args[1])? {
                 Some(v) => return Ok((v, false)),
                 None => (),
@@ -642,7 +675,7 @@ impl Engine {
                                         .map(|f| (f.clone(), m.id_raw().cloned()))
                                 })
                             })
-                        //.or_else(|| mods.iter().find_map(|(_, m)| m.get_qualified_fn(hash_script).map(|f| (f, m.id_raw().clone()))))
+                        // .or_else(|| mods.iter().find_map(|(_, m)| m.get_qualified_fn(hash_script).map(|f| (f.clone(), m.id_raw().cloned()))))
                     })
                     .as_ref()
                     .map(|(f, s)| (Some(f.clone()), s.clone()))

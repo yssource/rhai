@@ -3,85 +3,10 @@
 
 use crate::engine::{OP_EQUALS, TYPICAL_ARRAY_SIZE};
 use crate::plugin::*;
-use crate::stdlib::{any::TypeId, boxed::Box, cmp::max, cmp::Ordering, string::ToString};
-use crate::{
-    def_package, Array, Dynamic, EvalAltResult, FnPtr, ImmutableString, NativeCallContext,
-    Position, INT,
-};
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
-pub type Unit = ();
-
-macro_rules! gen_array_functions {
-    ($root:ident => $($arg_type:ident),+ ) => {
-        pub mod $root { $( pub mod $arg_type {
-            use super::super::*;
-
-            #[export_module]
-            pub mod functions {
-                #[rhai_fn(name = "push", name = "+=")]
-                pub fn push(array: &mut Array, item: $arg_type) {
-                    array.push(Dynamic::from(item));
-                }
-
-                pub fn insert(array: &mut Array, position: INT, item: $arg_type) {
-                    if position <= 0 {
-                        array.insert(0, Dynamic::from(item));
-                    } else if (position as usize) >= array.len() {
-                        push(array, item);
-                    } else {
-                        array.insert(position as usize, Dynamic::from(item));
-                    }
-                }
-
-                #[rhai_fn(return_raw)]
-                pub fn pad(_ctx: NativeCallContext, array: &mut Array, len: INT, item: $arg_type) -> Result<Dynamic, Box<EvalAltResult>> {
-                    // Check if array will be over max size limit
-                    #[cfg(not(feature = "unchecked"))]
-                    if _ctx.engine().max_array_size() > 0 && len > 0 && (len as usize) > _ctx.engine().max_array_size() {
-                        return EvalAltResult::ErrorDataTooLarge(
-                            "Size of array".to_string(), Position::NONE
-                        ).into();
-                    }
-
-                    if len > 0 && len as usize > array.len() {
-                        array.resize(len as usize, Dynamic::from(item));
-                    }
-
-                    Ok(Dynamic::UNIT)
-                }
-            }
-        })* }
-    }
-}
-
-macro_rules! reg_functions {
-    ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => { $(
-        combine_with_exported_module!($mod_name, "array_functions", $root::$arg_type::functions);
-    )* }
-}
+use crate::stdlib::{any::TypeId, boxed::Box, cmp::max, cmp::Ordering, mem, string::ToString};
+use crate::{def_package, Array, Dynamic, EvalAltResult, FnPtr, NativeCallContext, Position, INT};
 
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
-    reg_functions!(lib += basic; INT, bool, char, ImmutableString, FnPtr, Array, Unit);
-
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
-        reg_functions!(lib += numbers; i8, u8, i16, u16, i32, i64, u32, u64);
-
-        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-        reg_functions!(lib += num_128; i128, u128);
-    }
-
-    #[cfg(not(feature = "no_float"))]
-    reg_functions!(lib += float; f32, f64);
-
-    #[cfg(not(feature = "no_object"))]
-    reg_functions!(lib += map; Map);
-
-    // Merge in the module at the end to override `+=` for arrays
     combine_with_exported_module!(lib, "array", array_functions);
 
     // Register array iterator
@@ -94,6 +19,10 @@ mod array_functions {
     pub fn len(array: &mut Array) -> INT {
         array.len() as INT
     }
+    #[rhai_fn(name = "push", name = "+=")]
+    pub fn push(array: &mut Array, item: Dynamic) {
+        array.push(item);
+    }
     #[rhai_fn(name = "append", name = "+=")]
     pub fn append(array: &mut Array, y: Array) {
         array.extend(y);
@@ -102,6 +31,38 @@ mod array_functions {
     pub fn concat(mut array: Array, y: Array) -> Array {
         array.extend(y);
         array
+    }
+    pub fn insert(array: &mut Array, position: INT, item: Dynamic) {
+        if position <= 0 {
+            array.insert(0, item);
+        } else if (position as usize) >= array.len() {
+            push(array, item);
+        } else {
+            array.insert(position as usize, item);
+        }
+    }
+    #[rhai_fn(return_raw)]
+    pub fn pad(
+        _ctx: NativeCallContext,
+        array: &mut Array,
+        len: INT,
+        item: Dynamic,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        // Check if array will be over max size limit
+        #[cfg(not(feature = "unchecked"))]
+        if _ctx.engine().max_array_size() > 0
+            && len > 0
+            && (len as usize) > _ctx.engine().max_array_size()
+        {
+            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), Position::NONE)
+                .into();
+        }
+
+        if len > 0 && len as usize > array.len() {
+            array.resize(len as usize, item);
+        }
+
+        Ok(Dynamic::UNIT)
     }
     pub fn pop(array: &mut Array) -> Dynamic {
         array.pop().unwrap_or_else(|| ().into())
@@ -190,6 +151,18 @@ mod array_functions {
         };
 
         array[start..].iter().cloned().collect()
+    }
+    #[rhai_fn(name = "split")]
+    pub fn split_at(array: &mut Array, start: INT) -> Array {
+        if start <= 0 {
+            mem::take(array)
+        } else if start as usize >= array.len() {
+            Default::default()
+        } else {
+            let mut result: Array = Default::default();
+            result.extend(array.drain(start as usize..));
+            result
+        }
     }
     #[rhai_fn(return_raw)]
     pub fn map(
@@ -697,20 +670,3 @@ mod array_functions {
         equals(ctx, array, array2).map(|r| (!r.as_bool().unwrap()).into())
     }
 }
-
-gen_array_functions!(basic => INT, bool, char, ImmutableString, FnPtr, Array, Unit);
-
-#[cfg(not(feature = "only_i32"))]
-#[cfg(not(feature = "only_i64"))]
-gen_array_functions!(numbers => i8, u8, i16, u16, i32, i64, u32, u64);
-
-#[cfg(not(feature = "only_i32"))]
-#[cfg(not(feature = "only_i64"))]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-gen_array_functions!(num_128 => i128, u128);
-
-#[cfg(not(feature = "no_float"))]
-gen_array_functions!(float => f32, f64);
-
-#[cfg(not(feature = "no_object"))]
-gen_array_functions!(map => Map);
