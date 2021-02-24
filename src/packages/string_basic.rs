@@ -45,14 +45,10 @@ mod print_debug_functions {
         "".to_string().into()
     }
     #[rhai_fn(name = "print", name = "to_string")]
-    pub fn print_unit(_x: ()) -> ImmutableString {
-        "".to_string().into()
-    }
-    #[rhai_fn(name = "print", name = "to_string")]
     pub fn print_string(s: ImmutableString) -> ImmutableString {
         s
     }
-    #[rhai_fn(name = "debug", pure)]
+    #[rhai_fn(name = "debug", name = "to_debug", pure)]
     pub fn debug_fn_ptr(f: &mut FnPtr) -> ImmutableString {
         f.to_string().into()
     }
@@ -100,15 +96,14 @@ mod print_debug_functions {
         #[rhai_fn(
             name = "print",
             name = "to_string",
-            name = "to_debug",
             name = "debug",
+            name = "to_debug",
             pure
         )]
         pub fn format_array(ctx: NativeCallContext, array: &mut Array) -> ImmutableString {
-            let mut result = crate::stdlib::string::String::with_capacity(16);
-            result.push_str("[");
-
             let len = array.len();
+            let mut result = crate::stdlib::string::String::with_capacity(len * 5 + 2);
+            result.push_str("[");
 
             array.iter_mut().enumerate().for_each(|(i, x)| {
                 result.push_str(&print_with_func(FUNC_TO_DEBUG, &ctx, x));
@@ -128,15 +123,14 @@ mod print_debug_functions {
         #[rhai_fn(
             name = "print",
             name = "to_string",
-            name = "to_debug",
             name = "debug",
+            name = "to_debug",
             pure
         )]
         pub fn format_map(ctx: NativeCallContext, map: &mut Map) -> ImmutableString {
-            let mut result = crate::stdlib::string::String::with_capacity(16);
-            result.push_str("#{");
-
             let len = map.len();
+            let mut result = crate::stdlib::string::String::with_capacity(len * 5 + 3);
+            result.push_str("#{");
 
             map.iter_mut().enumerate().for_each(|(i, (k, v))| {
                 result.push_str(&format!(
