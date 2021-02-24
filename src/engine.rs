@@ -193,6 +193,8 @@ pub const MAX_EXPR_DEPTH: usize = 64;
 #[cfg(not(debug_assertions))]
 pub const MAX_FUNCTION_EXPR_DEPTH: usize = 32;
 
+pub const MAX_DYNAMIC_PARAMETERS: usize = 16;
+
 pub const KEYWORD_PRINT: &str = "print";
 pub const KEYWORD_DEBUG: &str = "debug";
 pub const KEYWORD_TYPE_OF: &str = "type_of";
@@ -1679,9 +1681,7 @@ impl Engine {
                     let pos = rhs.position();
 
                     if self
-                        .call_native_fn(
-                            mods, state, lib, OP_EQUALS, hash_fn, args, false, false, pos,
-                        )?
+                        .call_native_fn(mods, state, lib, OP_EQUALS, hash_fn, args, false, pos)?
                         .0
                         .as_bool()
                         .unwrap_or(false)
@@ -1961,7 +1961,7 @@ impl Engine {
             let hash_fn =
                 calc_native_fn_hash(empty(), op, args.iter().map(|a| a.type_id())).unwrap();
 
-            match self.call_native_fn(mods, state, lib, op, hash_fn, args, true, false, op_pos) {
+            match self.call_native_fn(mods, state, lib, op, hash_fn, args, true, op_pos) {
                 Ok(_) => (),
                 Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
                 {
@@ -1971,8 +1971,8 @@ impl Engine {
                         calc_native_fn_hash(empty(), op, args.iter().map(|a| a.type_id())).unwrap();
 
                     // Run function
-                    let (value, _) = self
-                        .call_native_fn(mods, state, lib, op, hash_fn, args, true, false, op_pos)?;
+                    let (value, _) =
+                        self.call_native_fn(mods, state, lib, op, hash_fn, args, true, op_pos)?;
 
                     *args[0] = value.flatten();
                 }

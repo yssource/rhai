@@ -4,6 +4,7 @@ use crate::ast::{Expr, Stmt};
 use crate::engine::{
     search_imports, Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
     KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    MAX_DYNAMIC_PARAMETERS,
 };
 use crate::fn_native::FnCallArgs;
 use crate::module::NamespaceRef;
@@ -172,7 +173,6 @@ impl Engine {
         hash_fn: NonZeroU64,
         args: &mut FnCallArgs,
         is_ref: bool,
-        pub_only: bool,
         pos: Position,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state, pos)?;
@@ -185,14 +185,15 @@ impl Engine {
             .entry(hash_fn)
             .or_insert_with(|| {
                 let num_args = args.len();
+                let max_bitmask = 1usize << args.len().min(MAX_DYNAMIC_PARAMETERS);
                 let mut hash = hash_fn;
                 let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
 
                 loop {
-                    //lib.get_fn(hash, pub_only).or_else(||
+                    //lib.get_fn(hash, false).or_else(||
                     match self
                         .global_namespace
-                        .get_fn(hash, pub_only)
+                        .get_fn(hash, false)
                         .cloned()
                         .map(|f| (f, None))
                         .or_else(|| {
@@ -208,8 +209,8 @@ impl Engine {
                         // Specific version found
                         Some(f) => return Some(f),
 
-                        // No parameters
-                        _ if num_args == 0 => return None,
+                        // Stop when all permutations are exhausted
+                        _ if bitmask >= max_bitmask => return None,
 
                         // Try all permutations with `Dynamic` wildcards
                         _ => {
@@ -227,11 +228,6 @@ impl Engine {
                                 }),
                             )
                             .unwrap();
-
-                            // Stop when all permutations are exhausted
-                            if hash == hash_fn {
-                                return None;
-                            }
 
                             bitmask += 1;
                         }
@@ -764,16 +760,12 @@ impl Engine {
                     Ok((result, false))
                 } else {
                     // Native function call
-                    self.call_native_fn(
-                        mods, state, lib, fn_name, hash_fn, args, is_ref, pub_only, pos,
-                    )
+                    self.call_native_fn(mods, state, lib, fn_name, hash_fn, args, is_ref, pos)
                 }
             }
 
             // Native function call
-            _ => self.call_native_fn(
-                mods, state, lib, fn_name, hash_fn, args, is_ref, pub_only, pos,
-            ),
+            _ => self.call_native_fn(mods, state, lib, fn_name, hash_fn, args, is_ref, pos),
         }
     }
 
