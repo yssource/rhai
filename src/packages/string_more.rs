@@ -4,50 +4,9 @@ use crate::plugin::*;
 use crate::stdlib::{
     any::TypeId, boxed::Box, format, mem, string::String, string::ToString, vec::Vec,
 };
-use crate::{def_package, Dynamic, FnPtr, ImmutableString, StaticVec, INT};
-
-macro_rules! gen_concat_functions {
-    ($root:ident => $($arg_type:ident),+ ) => {
-        pub mod $root { $( pub mod $arg_type {
-            use super::super::*;
-
-            #[export_module]
-            pub mod functions {
-                #[rhai_fn(name = "+")]
-                pub fn append_func(string: &str, arg: $arg_type) -> String {
-                    format!("{}{}", string, arg)
-                }
-
-                #[rhai_fn(name = "+", pure)]
-                pub fn prepend_func(arg: &mut $arg_type, string: &str) -> String {
-                    format!("{}{}", arg, string)
-                }
-            }
-        } )* }
-    }
-}
-
-macro_rules! reg_functions {
-    ($mod_name:ident += $root:ident ; $($arg_type:ident),+) => { $(
-        combine_with_exported_module!($mod_name, "strings_concat", $root::$arg_type::functions);
-    )* }
-}
+use crate::{def_package, Dynamic, ImmutableString, StaticVec, INT};
 
 def_package!(crate:MoreStringPackage:"Additional string utilities, including string building.", lib, {
-    reg_functions!(lib += basic; INT, bool,  FnPtr);
-
-    #[cfg(not(feature = "only_i32"))]
-    #[cfg(not(feature = "only_i64"))]
-    {
-        reg_functions!(lib += numbers; i8, u8, i16, u16, i32, i64, u32, u64);
-
-        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-        reg_functions!(lib += num_128; i128, u128);
-    }
-
-    #[cfg(not(feature = "no_float"))]
-    reg_functions!(lib += float; f32, f64);
-
     combine_with_exported_module!(lib, "string", string_functions);
 
     // Register string iterator
@@ -57,23 +16,18 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     );
 });
 
-gen_concat_functions!(basic => INT, bool, char, FnPtr);
-
-#[cfg(not(feature = "only_i32"))]
-#[cfg(not(feature = "only_i64"))]
-gen_concat_functions!(numbers => i8, u8, i16, u16, i32, i64, u32, u64);
-
-#[cfg(not(feature = "only_i32"))]
-#[cfg(not(feature = "only_i64"))]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-gen_concat_functions!(num_128 => i128, u128);
-
-#[cfg(not(feature = "no_float"))]
-gen_concat_functions!(float => f32, f64);
-
 #[export_module]
 mod string_functions {
     use crate::ImmutableString;
+
+    #[rhai_fn(name = "+")]
+    pub fn add_append(string: &str, item: Dynamic) -> ImmutableString {
+        format!("{}{}", string, item).into()
+    }
+    #[rhai_fn(name = "+", pure)]
+    pub fn add_prepend(item: &mut Dynamic, string: &str) -> ImmutableString {
+        format!("{}{}", item, string).into()
+    }
 
     #[rhai_fn(name = "+")]
     pub fn add_append_unit(string: ImmutableString, _x: ()) -> ImmutableString {
@@ -88,7 +42,6 @@ mod string_functions {
     pub fn len(string: &str) -> INT {
         string.chars().count() as INT
     }
-
     pub fn clear(string: &mut ImmutableString) {
         string.make_mut().clear();
     }
@@ -363,14 +316,6 @@ mod string_functions {
         use crate::stdlib::vec;
         use crate::{Array, ImmutableString};
 
-        #[rhai_fn(name = "+")]
-        pub fn append(string: &str, array: Array) -> String {
-            format!("{}{:?}", string, array)
-        }
-        #[rhai_fn(name = "+", pure)]
-        pub fn prepend(array: &mut Array, string: &str) -> String {
-            format!("{:?}{}", array, string)
-        }
         #[rhai_fn(name = "split")]
         pub fn chars(string: &str) -> Array {
             string.chars().map(Into::<Dynamic>::into).collect()
@@ -437,20 +382,6 @@ mod string_functions {
                 .rsplitn(pieces, delimiter)
                 .map(Into::<Dynamic>::into)
                 .collect()
-        }
-    }
-
-    #[cfg(not(feature = "no_object"))]
-    pub mod maps {
-        use crate::Map;
-
-        #[rhai_fn(name = "+")]
-        pub fn append(string: &str, map: Map) -> String {
-            format!("{}#{:?}", string, map)
-        }
-        #[rhai_fn(name = "+", pure)]
-        pub fn prepend(map: &mut Map, string: &str) -> String {
-            format!("#{:?}{}", map, string)
         }
     }
 }
