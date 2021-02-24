@@ -1138,59 +1138,11 @@ impl Engine {
                             mods, state, lib, target_val, idx_val, pos, true, is_ref, false, level,
                         ) {
                             // Indexed value is a reference - update directly
-                            Ok(ref mut obj_ptr) => {
-                                let ((mut new_val, new_val_pos), (op, op_pos)) = new_val.unwrap();
-
-                                if op.is_empty() {
-                                    obj_ptr.set_value(new_val, new_val_pos)?;
-                                } else {
-                                    let mut lock_guard;
-                                    let lhs_ptr_inner;
-
-                                    if cfg!(not(feature = "no_closure")) && obj_ptr.is_shared() {
-                                        lock_guard =
-                                            obj_ptr.as_mut().write_lock::<Dynamic>().unwrap();
-                                        lhs_ptr_inner = lock_guard.deref_mut();
-                                    } else {
-                                        lhs_ptr_inner = obj_ptr.as_mut();
-                                    }
-
-                                    let args = &mut [lhs_ptr_inner, &mut new_val];
-                                    let hash_fn = calc_native_fn_hash(
-                                        empty(),
-                                        op,
-                                        args.iter().map(|a| a.type_id()),
-                                    )
-                                    .unwrap();
-
-                                    match self.call_native_fn(
-                                        mods, state, lib, op, hash_fn, args, true, false, op_pos,
-                                        None,
-                                    ) {
-                                        Ok(_) => (),
-                                        Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
-                                        {
-                                            // Expand to `var = var op rhs`
-                                            let op = &op[..op.len() - 1]; // extract operator without =
-                                            let hash_fn = calc_native_fn_hash(
-                                                empty(),
-                                                op,
-                                                args.iter().map(|a| a.type_id()),
-                                            )
-                                            .unwrap();
-
-                                            // Run function
-                                            let (value, _) = self.call_native_fn(
-                                                mods, state, lib, op, hash_fn, args, true, false,
-                                                op_pos, None,
-                                            )?;
-
-                                            *args[0] = value.flatten();
-                                        }
-                                        err => return err,
-                                    }
-                                }
-
+                            Ok(obj_ptr) => {
+                                let ((new_val, new_pos), (op, op_pos)) = new_val.unwrap();
+                                self.eval_op_assignment(
+                                    mods, state, lib, op, op_pos, obj_ptr, new_val, new_pos,
+                                )?;
                                 None
                             }
                             Err(err) => match *err {
@@ -1269,57 +1221,13 @@ impl Engine {
                     Expr::Property(x) if target_val.is::<Map>() && new_val.is_some() => {
                         let Ident { name, pos } = &x.2;
                         let index = name.clone().into();
-                        let mut val = self.get_indexed_mut(
+                        let val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, true, is_ref, false, level,
                         )?;
-
-                        let ((mut new_val, new_val_pos), (op, op_pos)) = new_val.unwrap();
-
-                        if op.is_empty() {
-                            val.set_value(new_val, new_val_pos)?;
-                        } else {
-                            let mut lock_guard;
-                            let lhs_ptr_inner;
-
-                            if cfg!(not(feature = "no_closure")) && val.is_shared() {
-                                lock_guard = val.as_mut().write_lock::<Dynamic>().unwrap();
-                                lhs_ptr_inner = lock_guard.deref_mut();
-                            } else {
-                                lhs_ptr_inner = val.as_mut();
-                            }
-
-                            let args = &mut [lhs_ptr_inner, &mut new_val];
-                            let hash_fn =
-                                calc_native_fn_hash(empty(), op, args.iter().map(|a| a.type_id()))
-                                    .unwrap();
-
-                            match self.call_native_fn(
-                                mods, state, lib, op, hash_fn, args, true, false, op_pos, None,
-                            ) {
-                                Ok(_) => (),
-                                Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
-                                {
-                                    // Expand to `var = var op rhs`
-                                    let op = &op[..op.len() - 1]; // extract operator without =
-                                    let hash_fn = calc_native_fn_hash(
-                                        empty(),
-                                        op,
-                                        args.iter().map(|a| a.type_id()),
-                                    )
-                                    .unwrap();
-
-                                    // Run function
-                                    let (value, _) = self.call_native_fn(
-                                        mods, state, lib, op, hash_fn, args, true, false, op_pos,
-                                        None,
-                                    )?;
-
-                                    *args[0] = value.flatten();
-                                }
-                                err => return err,
-                            }
-                        }
-
+                        let ((new_val, new_pos), (op, op_pos)) = new_val.unwrap();
+                        self.eval_op_assignment(
+                            mods, state, lib, op, op_pos, val, new_val, new_pos,
+                        )?;
                         Ok((Dynamic::UNIT, true))
                     }
                     // {xxx:map}.id
@@ -2037,6 +1945,63 @@ impl Engine {
         result
     }
 
+    pub(crate) fn eval_op_assignment(
+        &self,
+        mods: &mut Imports,
+        state: &mut State,
+        lib: &[&Module],
+        op: &str,
+        op_pos: Position,
+        mut target: Target,
+        mut new_value: Dynamic,
+        new_value_pos: Position,
+    ) -> Result<(), Box<EvalAltResult>> {
+        if target.as_ref().is_read_only() {
+            unreachable!("LHS should not be read-only");
+        }
+
+        if op.is_empty() {
+            // Normal assignment
+            target.set_value(new_value, new_value_pos)?;
+            Ok(())
+        } else {
+            let mut lock_guard;
+            let lhs_ptr_inner;
+
+            if cfg!(not(feature = "no_closure")) && target.is_shared() {
+                lock_guard = target.as_mut().write_lock::<Dynamic>().unwrap();
+                lhs_ptr_inner = lock_guard.deref_mut();
+            } else {
+                lhs_ptr_inner = target.as_mut();
+            }
+
+            let args = &mut [lhs_ptr_inner, &mut new_value];
+            let hash_fn =
+                calc_native_fn_hash(empty(), op, args.iter().map(|a| a.type_id())).unwrap();
+
+            match self.call_native_fn(
+                mods, state, lib, op, hash_fn, args, true, false, op_pos, None,
+            ) {
+                Ok(_) => (),
+                Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
+                {
+                    // Expand to `var = var op rhs`
+                    let op = &op[..op.len() - 1]; // extract operator without =
+
+                    // Run function
+                    let (value, _) = self.call_native_fn(
+                        mods, state, lib, op, hash_fn, args, false, false, op_pos, None,
+                    )?;
+
+                    *args[0] = value.flatten();
+                }
+                err => return err.map(|_| ()),
+            }
+
+            Ok(())
+        }
+    }
+
     /// Evaluate a statement.
     ///
     /// # Safety
@@ -2065,10 +2030,10 @@ impl Engine {
             // var op= rhs
             Stmt::Assignment(x, op_pos) if x.0.get_variable_access(false).is_some() => {
                 let (lhs_expr, op, rhs_expr) = x.as_ref();
-                let mut rhs_val = self
+                let rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
                     .flatten();
-                let (mut lhs_ptr, pos) =
+                let (lhs_ptr, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, lhs_expr)?;
 
                 if !lhs_ptr.is_ref() {
@@ -2087,48 +2052,17 @@ impl Engine {
                         lhs_expr.get_variable_access(false).unwrap().to_string(),
                         pos,
                     )))
-                } else if op.is_empty() {
-                    // Normal assignment
-                    if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
-                        *lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap() = rhs_val;
-                    } else {
-                        *lhs_ptr.as_mut() = rhs_val;
-                    }
-                    Ok(Dynamic::UNIT)
                 } else {
-                    let mut lock_guard;
-                    let lhs_ptr_inner;
-
-                    if cfg!(not(feature = "no_closure")) && lhs_ptr.is_shared() {
-                        lock_guard = lhs_ptr.as_mut().write_lock::<Dynamic>().unwrap();
-                        lhs_ptr_inner = lock_guard.deref_mut();
-                    } else {
-                        lhs_ptr_inner = lhs_ptr.as_mut();
-                    }
-
-                    let args = &mut [lhs_ptr_inner, &mut rhs_val];
-                    let hash_fn =
-                        calc_native_fn_hash(empty(), op, args.iter().map(|a| a.type_id())).unwrap();
-
-                    match self.call_native_fn(
-                        mods, state, lib, op, hash_fn, args, true, false, *op_pos, None,
-                    ) {
-                        Ok(_) => (),
-                        Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op.as_ref())) =>
-                        {
-                            // Expand to `var = var op rhs`
-                            let op = &op[..op.len() - 1]; // extract operator without =
-
-                            // Run function
-                            let (value, _) = self.call_native_fn(
-                                mods, state, lib, op, hash_fn, args, false, false, *op_pos, None,
-                            )?;
-
-                            *args[0] = value.flatten();
-                        }
-                        err => return err.map(|(v, _)| v),
-                    }
-
+                    self.eval_op_assignment(
+                        mods,
+                        state,
+                        lib,
+                        op,
+                        *op_pos,
+                        lhs_ptr,
+                        rhs_val,
+                        rhs_expr.position(),
+                    )?;
                     Ok(Dynamic::UNIT)
                 }
             }
