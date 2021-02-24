@@ -295,7 +295,7 @@ impl Engine {
                 None => (),
             }
 
-            if is_ref {
+            if is_ref && fn_name.ends_with('=') {
                 let (first, second) = args.split_first_mut().unwrap();
 
                 match run_builtin_op_assignment(fn_name, first, second[0])? {
