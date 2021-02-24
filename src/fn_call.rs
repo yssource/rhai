@@ -174,7 +174,6 @@ impl Engine {
         is_ref: bool,
         pub_only: bool,
         pos: Position,
-        def_val: Option<&Dynamic>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state, pos)?;
 
@@ -311,11 +310,6 @@ impl Engine {
                     _ => (),
                 }
             }
-        }
-
-        // Return default value (if any)
-        if let Some(val) = def_val {
-            return Ok((val.clone(), false));
         }
 
         // Getter function not found?
@@ -616,7 +610,6 @@ impl Engine {
         pub_only: bool,
         pos: Position,
         _capture_scope: Option<Scope>,
-        def_val: Option<&Dynamic>,
         _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         // Check for data race.
@@ -772,14 +765,14 @@ impl Engine {
                 } else {
                     // Native function call
                     self.call_native_fn(
-                        mods, state, lib, fn_name, hash_fn, args, is_ref, pub_only, pos, def_val,
+                        mods, state, lib, fn_name, hash_fn, args, is_ref, pub_only, pos,
                     )
                 }
             }
 
             // Native function call
             _ => self.call_native_fn(
-                mods, state, lib, fn_name, hash_fn, args, is_ref, pub_only, pos, def_val,
+                mods, state, lib, fn_name, hash_fn, args, is_ref, pub_only, pos,
             ),
         }
     }
@@ -861,7 +854,6 @@ impl Engine {
         hash_script: Option<NonZeroU64>,
         target: &mut crate::engine::Target,
         mut call_args: StaticVec<Dynamic>,
-        def_val: Option<&Dynamic>,
         pub_only: bool,
         pos: Position,
         level: usize,
@@ -890,8 +882,7 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                mods, state, lib, fn_name, hash, args, false, false, pub_only, pos, None, def_val,
-                level,
+                mods, state, lib, fn_name, hash, args, false, false, pub_only, pos, None, level,
             )
         } else if fn_name == KEYWORD_FN_PTR_CALL
             && call_args.len() > 0
@@ -914,8 +905,7 @@ impl Engine {
 
             // Map it to name(args) in function-call style
             self.exec_fn_call(
-                mods, state, lib, fn_name, hash, args, is_ref, true, pub_only, pos, None, def_val,
-                level,
+                mods, state, lib, fn_name, hash, args, is_ref, true, pub_only, pos, None, level,
             )
         } else if fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
             // Curry call
@@ -980,8 +970,7 @@ impl Engine {
             let args = arg_values.as_mut();
 
             self.exec_fn_call(
-                mods, state, lib, fn_name, hash, args, is_ref, true, pub_only, pos, None, def_val,
-                level,
+                mods, state, lib, fn_name, hash, args, is_ref, true, pub_only, pos, None, level,
             )
         }?;
 
@@ -1003,7 +992,6 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         fn_name: &str,
         args_expr: impl AsRef<[Expr]>,
-        def_val: Option<&Dynamic>,
         mut hash_script: Option<NonZeroU64>,
         pub_only: bool,
         pos: Position,
@@ -1228,7 +1216,6 @@ impl Engine {
             pub_only,
             pos,
             capture,
-            def_val,
             level,
         )
         .map(|(v, _)| v)
@@ -1245,7 +1232,6 @@ impl Engine {
         namespace: Option<&NamespaceRef>,
         fn_name: &str,
         args_expr: impl AsRef<[Expr]>,
-        def_val: Option<&Dynamic>,
         hash_script: NonZeroU64,
         pos: Position,
         level: usize,
@@ -1367,7 +1353,6 @@ impl Engine {
                 args.as_mut(),
             ),
             Some(f) => unreachable!("unknown function type: {:?}", f),
-            None if def_val.is_some() => Ok(def_val.unwrap().clone()),
             None => EvalAltResult::ErrorFunctionNotFound(
                 format!(
                     "{}{} ({})",
@@ -1500,7 +1485,11 @@ pub fn run_builtin_binary_op(
             }
         }
 
-        return Ok(None);
+        return Ok(match op {
+            "!=" => Some(Dynamic::TRUE),
+            "==" | ">" | ">=" | "<" | "<=" => Some(Dynamic::FALSE),
+            _ => None,
+        });
     }
 
     if first_type == TypeId::of::<INT>() {
@@ -1603,7 +1592,11 @@ pub fn run_builtin_binary_op(
         }
     }
 
-    Ok(None)
+    Ok(match op {
+        "!=" => Some(Dynamic::TRUE),
+        "==" | ">" | ">=" | "<" | "<=" => Some(Dynamic::FALSE),
+        _ => None,
+    })
 }
 
 /// Build in common operator assignment implementations to avoid the cost of calling a registered function.

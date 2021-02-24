@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, INT};
+use rhai::{Engine, EvalAltResult, Scope, INT};
 
 #[test]
 fn test_ops() -> Result<(), Box<EvalAltResult>> {
@@ -6,6 +6,29 @@ fn test_ops() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(engine.eval::<INT>("60 + 5")?, 65);
     assert_eq!(engine.eval::<INT>("(1 + 2) * (6 - 4) / 2")?, 3);
+
+    Ok(())
+}
+
+#[test]
+fn test_ops_numbers() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    let mut scope = Scope::new();
+
+    scope.push("x", 42_u16);
+
+    assert!(matches!(
+        *engine.eval_with_scope::<bool>(&mut scope, "x == 42").expect_err("should error"),
+        EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with("== (u16,")
+    ));
+    #[cfg(not(feature = "no_float"))]
+    assert!(matches!(
+        *engine.eval_with_scope::<bool>(&mut scope, "x == 42.0").expect_err("should error"),
+        EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with("== (u16,")
+    ));
+
+    assert!(!engine.eval_with_scope::<bool>(&mut scope, r#"x == "hello""#)?);
 
     Ok(())
 }

@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::def_package;
+use crate::fn_call::run_builtin_binary_op;
 use crate::plugin::*;
 
 #[cfg(feature = "decimal")]
@@ -17,30 +18,12 @@ macro_rules! gen_cmp_functions {
 
             #[export_module]
             pub mod functions {
-                #[rhai_fn(name = "<")]
-                pub fn lt(x: $arg_type, y: $arg_type) -> bool {
-                    x < y
-                }
-                #[rhai_fn(name = "<=")]
-                pub fn lte(x: $arg_type, y: $arg_type) -> bool {
-                    x <= y
-                }
-                #[rhai_fn(name = ">")]
-                pub fn gt(x: $arg_type, y: $arg_type) -> bool {
-                    x > y
-                }
-                #[rhai_fn(name = ">=")]
-                pub fn gte(x: $arg_type, y: $arg_type) -> bool {
-                    x >= y
-                }
-                #[rhai_fn(name = "==")]
-                pub fn eq(x: $arg_type, y: $arg_type) -> bool {
-                    x == y
-                }
-                #[rhai_fn(name = "!=")]
-                pub fn ne(x: $arg_type, y: $arg_type) -> bool {
-                    x != y
-                }
+                #[rhai_fn(name = "<")] pub fn lt(x: $arg_type, y: $arg_type) -> bool { x < y }
+                #[rhai_fn(name = "<=")] pub fn lte(x: $arg_type, y: $arg_type) -> bool { x <= y }
+                #[rhai_fn(name = ">")] pub fn gt(x: $arg_type, y: $arg_type) -> bool { x > y }
+                #[rhai_fn(name = ">=")] pub fn gte(x: $arg_type, y: $arg_type) -> bool { x >= y }
+                #[rhai_fn(name = "==")] pub fn eq(x: $arg_type, y: $arg_type) -> bool { x == y }
+                #[rhai_fn(name = "!=")] pub fn ne(x: $arg_type, y: $arg_type) -> bool { x != y }
             }
         })* }
     };
@@ -57,6 +40,8 @@ macro_rules! reg_functions {
 }
 
 def_package!(crate:LogicPackage:"Logical operators.", lib, {
+    combine_with_exported_module!(lib, "logic", logic_functions);
+
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
@@ -111,6 +96,60 @@ gen_cmp_functions!(float => f64);
 
 #[cfg(feature = "decimal")]
 gen_cmp_functions!(decimal => Decimal);
+
+#[export_module]
+mod logic_functions {
+    fn is_numeric(type_id: TypeId) -> bool {
+        let result = type_id == TypeId::of::<u8>()
+            || type_id == TypeId::of::<u16>()
+            || type_id == TypeId::of::<u32>()
+            || type_id == TypeId::of::<u64>()
+            || type_id == TypeId::of::<i8>()
+            || type_id == TypeId::of::<i16>()
+            || type_id == TypeId::of::<i32>()
+            || type_id == TypeId::of::<i64>();
+
+        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+        let result = result || type_id == TypeId::of::<u128>() || type_id == TypeId::of::<i128>();
+
+        #[cfg(not(feature = "no_float"))]
+        let result = result || type_id == TypeId::of::<f32>() || type_id == TypeId::of::<f64>();
+
+        #[cfg(feature = "decimal")]
+        let result = result || type_id_x == TypeId::of::<rust_decimal::Decimal>();
+
+        result
+    }
+
+    #[rhai_fn(
+        name = "==",
+        name = "!=",
+        name = ">",
+        name = ">=",
+        name = "<",
+        name = "<=",
+        return_raw
+    )]
+    pub fn cmp(
+        ctx: NativeCallContext,
+        x: Dynamic,
+        y: Dynamic,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let type_x = x.type_id();
+        let type_y = y.type_id();
+
+        if type_x != type_y && is_numeric(type_x) && is_numeric(type_y) {
+            // Disallow comparisons between different number types
+        } else if let Some(x) = run_builtin_binary_op(ctx.fn_name(), &x, &y)? {
+            return Ok(x);
+        }
+
+        Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
+            format!("{} ({}, {})", ctx.fn_name(), x.type_name(), y.type_name()),
+            Position::NONE,
+        )))
+    }
+}
 
 #[cfg(not(feature = "no_float"))]
 #[export_module]

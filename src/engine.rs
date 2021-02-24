@@ -1163,7 +1163,7 @@ impl Engine {
 
                             self.exec_fn_call(
                                 mods, state, lib, FN_IDX_SET, None, args, is_ref, true, false,
-                                val_pos, None, None, level,
+                                val_pos, None, level,
                             )
                             .map_err(|err| match *err {
                                 EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
@@ -1199,14 +1199,11 @@ impl Engine {
                         let FnCallExpr {
                             name,
                             hash_script: hash,
-                            def_value,
                             ..
                         } = x.as_ref();
-                        let def_value = def_value.as_ref();
                         let args = idx_val.as_fn_call_args();
                         self.make_method_call(
-                            mods, state, lib, name, *hash, target, args, def_value, false, *pos,
-                            level,
+                            mods, state, lib, name, *hash, target, args, false, *pos, level,
                         )
                     }
                     // xxx.fn_name(...) = ???
@@ -1247,7 +1244,7 @@ impl Engine {
                         let mut args = [target_val, &mut (new_val.as_mut().unwrap().0).0];
                         self.exec_fn_call(
                             mods, state, lib, setter, None, &mut args, is_ref, true, false, *pos,
-                            None, None, level,
+                            None, level,
                         )
                         .map(|(v, _)| (v, true))
                     }
@@ -1257,7 +1254,7 @@ impl Engine {
                         let mut args = [target_val];
                         self.exec_fn_call(
                             mods, state, lib, getter, None, &mut args, is_ref, true, false, *pos,
-                            None, None, level,
+                            None, level,
                         )
                         .map(|(v, _)| (v, false))
                     }
@@ -1277,14 +1274,11 @@ impl Engine {
                                 let FnCallExpr {
                                     name,
                                     hash_script: hash,
-                                    def_value,
                                     ..
                                 } = x.as_ref();
-                                let def_value = def_value.as_ref();
                                 let args = idx_val.as_fn_call_args();
                                 let (val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hash, target, args, def_value, false,
-                                    *pos, level,
+                                    mods, state, lib, name, *hash, target, args, false, *pos, level,
                                 )?;
                                 val.into()
                             }
@@ -1312,7 +1306,7 @@ impl Engine {
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self.exec_fn_call(
                                     mods, state, lib, getter, None, args, is_ref, true, false,
-                                    *pos, None, None, level,
+                                    *pos, None, level,
                                 )?;
 
                                 let val = &mut val;
@@ -1338,7 +1332,7 @@ impl Engine {
                                     arg_values[1] = val;
                                     self.exec_fn_call(
                                         mods, state, lib, setter, None, arg_values, is_ref, true,
-                                        false, *pos, None, None, level,
+                                        false, *pos, None, level,
                                     )
                                     .or_else(
                                         |err| match *err {
@@ -1359,14 +1353,11 @@ impl Engine {
                                 let FnCallExpr {
                                     name,
                                     hash_script: hash,
-                                    def_value,
                                     ..
                                 } = f.as_ref();
-                                let def_value = def_value.as_ref();
                                 let args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hash, target, args, def_value, false,
-                                    *pos, level,
+                                    mods, state, lib, name, *hash, target, args, false, *pos, level,
                                 )?;
                                 let val = &mut val;
                                 let target = &mut val.into();
@@ -1637,7 +1628,7 @@ impl Engine {
                 let args = &mut [target, &mut idx];
                 self.exec_fn_call(
                     _mods, state, _lib, FN_IDX_GET, None, args, _is_ref, true, false, idx_pos,
-                    None, None, _level,
+                    None, _level,
                 )
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
@@ -1680,9 +1671,6 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(mut rhs_value, _)) => {
                 // Call the `==` operator to compare each value
-                let def_value = Some(false.into());
-                let def_value = def_value.as_ref();
-
                 for value in rhs_value.iter_mut() {
                     let args = &mut [&mut lhs_value.clone(), value];
                     let hash_fn =
@@ -1693,7 +1681,6 @@ impl Engine {
                     if self
                         .call_native_fn(
                             mods, state, lib, OP_EQUALS, hash_fn, args, false, false, pos,
-                            def_value,
                         )?
                         .0
                         .as_bool()
@@ -1799,13 +1786,11 @@ impl Engine {
                     capture: cap_scope,
                     hash_script: hash,
                     args,
-                    def_value,
                     ..
                 } = x.as_ref();
-                let def_value = def_value.as_ref();
                 self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args, def_value, *hash, false, *pos,
-                    *cap_scope, level,
+                    scope, mods, state, lib, this_ptr, name, args, *hash, false, *pos, *cap_scope,
+                    level,
                 )
             }
 
@@ -1816,15 +1801,12 @@ impl Engine {
                     namespace,
                     hash_script,
                     args,
-                    def_value,
                     ..
                 } = x.as_ref();
                 let namespace = namespace.as_ref();
                 let hash = hash_script.unwrap();
-                let def_value = def_value.as_ref();
                 self.make_qualified_function_call(
-                    scope, mods, state, lib, this_ptr, namespace, name, args, def_value, hash,
-                    *pos, level,
+                    scope, mods, state, lib, this_ptr, namespace, name, args, hash, *pos, level,
                 )
             }
 
@@ -1979,9 +1961,7 @@ impl Engine {
             let hash_fn =
                 calc_native_fn_hash(empty(), op, args.iter().map(|a| a.type_id())).unwrap();
 
-            match self.call_native_fn(
-                mods, state, lib, op, hash_fn, args, true, false, op_pos, None,
-            ) {
+            match self.call_native_fn(mods, state, lib, op, hash_fn, args, true, false, op_pos) {
                 Ok(_) => (),
                 Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
                 {
@@ -1990,7 +1970,7 @@ impl Engine {
 
                     // Run function
                     let (value, _) = self.call_native_fn(
-                        mods, state, lib, op, hash_fn, args, false, false, op_pos, None,
+                        mods, state, lib, op, hash_fn, args, false, false, op_pos,
                     )?;
 
                     *args[0] = value.flatten();

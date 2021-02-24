@@ -1347,7 +1347,6 @@ fn parse_unary(
                 Box::new(FnCallExpr {
                     name: op.into(),
                     args,
-                    def_value: Some(false.into()), // NOT operator, when operating on invalid operand, defaults to false
                     ..Default::default()
                 }),
                 pos,
@@ -1792,7 +1791,6 @@ fn parse_binary_op(
         #[cfg(not(feature = "unchecked"))]
         settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-        let cmp_def = Some(false.into());
         let op = op_token.syntax();
 
         let op_base = FnCallExpr {
@@ -1819,28 +1817,16 @@ fn parse_binary_op(
             | Token::XOr => Expr::FnCall(Box::new(FnCallExpr { args, ..op_base }), pos),
 
             // '!=' defaults to true when passed invalid operands
-            Token::NotEqualsTo => Expr::FnCall(
-                Box::new(FnCallExpr {
-                    args,
-                    def_value: Some(true.into()),
-                    ..op_base
-                }),
-                pos,
-            ),
+            Token::NotEqualsTo => Expr::FnCall(Box::new(FnCallExpr { args, ..op_base }), pos),
 
             // Comparison operators default to false when passed invalid operands
             Token::EqualsTo
             | Token::LessThan
             | Token::LessThanEqualsTo
             | Token::GreaterThan
-            | Token::GreaterThanEqualsTo => Expr::FnCall(
-                Box::new(FnCallExpr {
-                    args,
-                    def_value: cmp_def,
-                    ..op_base
-                }),
-                pos,
-            ),
+            | Token::GreaterThanEqualsTo => {
+                Expr::FnCall(Box::new(FnCallExpr { args, ..op_base }), pos)
+            }
 
             Token::Or => {
                 let rhs = args.pop().unwrap();

@@ -151,7 +151,6 @@ fn call_fn_with_constant_arguments(
             false,
             true,
             Position::NONE,
-            None,
         )
         .ok()
         .map(|(v, _)| v)
@@ -717,8 +716,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                                                 // Handle `type_of()`
                                                 Some(arg_for_type_of.to_string().into())
                                             } else {
-                                                // Otherwise use the default value, if any
-                                                x.def_value.clone()
+                                                None
                                             }
                                         })
                                         .and_then(|result| map_dynamic_to_expr(result, *pos))

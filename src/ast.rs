@@ -1112,8 +1112,6 @@ pub struct FnCallExpr {
     pub hash_script: Option<NonZeroU64>,
     /// Does this function call capture the parent scope?
     pub capture: bool,
-    /// Default value when the function is not found, mostly used to provide a default for comparison functions.
-    pub def_value: Option<Dynamic>,
     /// Namespace of the function, if any. Boxed because it occurs rarely.
     pub namespace: Option<NamespaceRef>,
     /// Function name.
