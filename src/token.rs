@@ -1659,25 +1659,25 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
 
 #[cfg(feature = "unicode-xid-ident")]
 #[inline(always)]
-fn is_id_first_alphabetic(x: char) -> bool {
+pub fn is_id_first_alphabetic(x: char) -> bool {
     unicode_xid::UnicodeXID::is_xid_start(x)
 }
 
 #[cfg(feature = "unicode-xid-ident")]
 #[inline(always)]
-fn is_id_continue(x: char) -> bool {
+pub fn is_id_continue(x: char) -> bool {
     unicode_xid::UnicodeXID::is_xid_continue(x)
 }
 
 #[cfg(not(feature = "unicode-xid-ident"))]
 #[inline(always)]
-fn is_id_first_alphabetic(x: char) -> bool {
+pub fn is_id_first_alphabetic(x: char) -> bool {
     x.is_ascii_alphabetic()
 }
 
 #[cfg(not(feature = "unicode-xid-ident"))]
 #[inline(always)]
-fn is_id_continue(x: char) -> bool {
+pub fn is_id_continue(x: char) -> bool {
     x.is_ascii_alphanumeric() || x == '_'
 }
 
