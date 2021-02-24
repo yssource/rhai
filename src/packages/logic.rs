@@ -116,7 +116,7 @@ mod logic_functions {
         let result = result || type_id == TypeId::of::<f32>() || type_id == TypeId::of::<f64>();
 
         #[cfg(feature = "decimal")]
-        let result = result || type_id_x == TypeId::of::<rust_decimal::Decimal>();
+        let result = result || type_id == TypeId::of::<rust_decimal::Decimal>();
 
         result
     }
