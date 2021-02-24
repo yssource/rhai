@@ -1657,24 +1657,36 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     first_alphabetic
 }
 
+/// Is a text string an assignment operator?
+pub fn is_assignment_operator(op: &str) -> bool {
+    match op {
+        "+=" | "-=" | "*=" | "/=" | "<<=" | ">>=" | "&=" | "|=" | "^=" | "%=" | "**=" => true,
+        _ => false,
+    }
+}
+
+/// Is a character valid to start an identifier?
 #[cfg(feature = "unicode-xid-ident")]
 #[inline(always)]
 pub fn is_id_first_alphabetic(x: char) -> bool {
     unicode_xid::UnicodeXID::is_xid_start(x)
 }
 
+/// Is a character valid for an identifier?
 #[cfg(feature = "unicode-xid-ident")]
 #[inline(always)]
 pub fn is_id_continue(x: char) -> bool {
     unicode_xid::UnicodeXID::is_xid_continue(x)
 }
 
+/// Is a character valid to start an identifier?
 #[cfg(not(feature = "unicode-xid-ident"))]
 #[inline(always)]
 pub fn is_id_first_alphabetic(x: char) -> bool {
     x.is_ascii_alphabetic()
 }
 
+/// Is a character valid for an identifier?
 #[cfg(not(feature = "unicode-xid-ident"))]
 #[inline(always)]
 pub fn is_id_continue(x: char) -> bool {

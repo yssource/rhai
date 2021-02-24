@@ -21,6 +21,7 @@ use crate::stdlib::{
     string::ToString,
     vec::Vec,
 };
+use crate::token::is_assignment_operator;
 use crate::utils::combine_hashes;
 use crate::{
     calc_native_fn_hash, calc_script_fn_hash, Dynamic, Engine, EvalAltResult, FnPtr,
@@ -285,25 +286,20 @@ impl Engine {
 
         // See if it is built in.
         if args.len() == 2 && !args[0].is_variant() && !args[1].is_variant() {
-            match run_builtin_binary_op(fn_name, args[0], args[1])? {
-                Some(v) => return Ok((v, false)),
-                None => (),
-            }
+            if is_assignment_operator(fn_name) {
+                if is_ref {
+                    // Op-assignment
+                    let (first, second) = args.split_first_mut().unwrap();
 
-            // Op-assignment?
-            if is_ref {
-                match fn_name {
-                    _ if fn_name.len() <= 1 => (),
-                    "==" | "!=" | ">=" | "<=" => (),
-                    _ if fn_name.ends_with('=') => {
-                        let (first, second) = args.split_first_mut().unwrap();
-
-                        match run_builtin_op_assignment(fn_name, first, second[0])? {
-                            Some(_) => return Ok((Dynamic::UNIT, false)),
-                            None => (),
-                        }
+                    match run_builtin_op_assignment(fn_name, first, second[0])? {
+                        Some(_) => return Ok((Dynamic::UNIT, false)),
+                        None => (),
                     }
-                    _ => (),
+                }
+            } else {
+                match run_builtin_binary_op(fn_name, args[0], args[1])? {
+                    Some(v) => return Ok((v, false)),
+                    None => (),
                 }
             }
         }
