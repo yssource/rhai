@@ -1967,11 +1967,12 @@ impl Engine {
                 {
                     // Expand to `var = var op rhs`
                     let op = &op[..op.len() - 1]; // extract operator without =
+                    let hash_fn =
+                        calc_native_fn_hash(empty(), op, args.iter().map(|a| a.type_id())).unwrap();
 
                     // Run function
-                    let (value, _) = self.call_native_fn(
-                        mods, state, lib, op, hash_fn, args, false, false, op_pos,
-                    )?;
+                    let (value, _) = self
+                        .call_native_fn(mods, state, lib, op, hash_fn, args, true, false, op_pos)?;
 
                     *args[0] = value.flatten();
                 }
