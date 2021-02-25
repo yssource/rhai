@@ -1416,19 +1416,19 @@ pub fn run_builtin_binary_op(
     }
 
     #[cfg(feature = "decimal")]
-    if let Some((x, y)) = if type_id == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>()) {
+    if let Some((x, y)) = if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>()) {
         // Decimal op Decimal
         Some((
             *x.read_lock::<Decimal>().unwrap(),
             *y.read_lock::<Decimal>().unwrap(),
         ))
-    } else if type_id == (TypeId::of::<Decimal>(), TypeId::of::<INT>()) {
+    } else if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<INT>()) {
         // Decimal op INT
         Some((
             *x.read_lock::<Decimal>().unwrap(),
             y.clone().cast::<INT>().into(),
         ))
-    } else if type_id == (TypeId::of::<INT>(), TypeId::of::<Decimal>()) {
+    } else if types_pair == (TypeId::of::<INT>(), TypeId::of::<Decimal>()) {
         // INT op Decimal
         Some((
             x.clone().cast::<INT>().into(),
@@ -1639,11 +1639,11 @@ pub fn run_builtin_op_assignment(
     }
 
     #[cfg(feature = "decimal")]
-    if let Some((mut x, y)) = if type_id == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>()) {
+    if let Some((mut x, y)) = if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>()) {
         // Decimal op= Decimal
         let y = *y.read_lock::<Decimal>().unwrap();
         Some((x.write_lock::<Decimal>().unwrap(), y))
-    } else if type_id == (TypeId::of::<Decimal>(), TypeId::of::<INT>()) {
+    } else if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<INT>()) {
         // Decimal op= INT
         let y = y.clone().cast::<INT>().into();
         Some((x.write_lock::<Decimal>().unwrap(), y))
