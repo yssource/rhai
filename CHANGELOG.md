@@ -14,7 +14,7 @@ Breaking changes
 
 * For plugin functions, constants passed to methods (i.e. `&mut` parameter) now raise an error unless the functions are marked with `#[rhai_fn(pure)]`.
 * Visibility (i.e. `pub` or not) for generated _plugin_ modules now follow the visibility of the underlying module.
-* Comparison operators between the sames types now throw errors when they're not defined instead of returning the default. Only comparing between _different_ types will return the default.
+* Comparison operators between the sames types or different _numeric_ types now throw errors when they're not defined instead of returning the default. Only comparing between _different_ types will return the default.
 * Default stack-overflow and top-level expression nesting limits for release builds are lowered to 64 from 128.
 
 New features
