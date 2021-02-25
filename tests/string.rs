@@ -133,6 +133,19 @@ fn test_string_substring() -> Result<(), Box<EvalAltResult>> {
     );
 
     assert_eq!(
+        engine.eval::<String>(
+            r#"let x = "\u2764\u2764\u2764 hello! \u2764\u2764\u2764"; x -= 'l'; x"#
+        )?,
+        "❤❤❤ heo! ❤❤❤"
+    );
+
+    assert_eq!(
+        engine.eval::<String>(
+            r#"let x = "\u2764\u2764\u2764 hello! \u2764\u2764\u2764"; x -= "\u2764\u2764"; x"#
+        )?,
+        "❤ hello! ❤"
+    );
+    assert_eq!(
         engine.eval::<INT>(
             r#"let x = "\u2764\u2764\u2764 hello! \u2764\u2764\u2764"; x.index_of('\u2764')"#
         )?,

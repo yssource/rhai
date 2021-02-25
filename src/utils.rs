@@ -12,7 +12,7 @@ use crate::stdlib::{
     hash::{BuildHasher, Hash, Hasher},
     iter::{empty, FromIterator},
     num::NonZeroU64,
-    ops::{Add, AddAssign, Deref, DerefMut},
+    ops::{Add, AddAssign, Deref, DerefMut, Sub, SubAssign},
     str::FromStr,
     string::{String, ToString},
     vec::Vec,
@@ -468,6 +468,13 @@ impl Add<String> for &ImmutableString {
     }
 }
 
+impl AddAssign<String> for ImmutableString {
+    #[inline(always)]
+    fn add_assign(&mut self, rhs: String) {
+        self.make_mut().push_str(&rhs);
+    }
+}
+
 impl Add<char> for ImmutableString {
     type Output = Self;
 
@@ -493,6 +500,124 @@ impl AddAssign<char> for ImmutableString {
     #[inline(always)]
     fn add_assign(&mut self, rhs: char) {
         self.make_mut().push(rhs);
+    }
+}
+
+impl Sub for ImmutableString {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: Self) -> Self::Output {
+        if rhs.is_empty() {
+            self
+        } else if self.is_empty() {
+            rhs
+        } else {
+            self.replace(rhs.as_str(), "").into()
+        }
+    }
+}
+
+impl Sub for &ImmutableString {
+    type Output = ImmutableString;
+
+    #[inline]
+    fn sub(self, rhs: Self) -> Self::Output {
+        if rhs.is_empty() {
+            self.clone()
+        } else if self.is_empty() {
+            rhs.clone()
+        } else {
+            self.replace(rhs.as_str(), "").into()
+        }
+    }
+}
+
+impl SubAssign<&ImmutableString> for ImmutableString {
+    #[inline]
+    fn sub_assign(&mut self, rhs: &ImmutableString) {
+        if !rhs.is_empty() {
+            if self.is_empty() {
+                self.0 = rhs.0.clone();
+            } else {
+                self.0 = self.replace(rhs.as_str(), "").into();
+            }
+        }
+    }
+}
+
+impl SubAssign<ImmutableString> for ImmutableString {
+    #[inline]
+    fn sub_assign(&mut self, rhs: ImmutableString) {
+        if !rhs.is_empty() {
+            if self.is_empty() {
+                self.0 = rhs.0;
+            } else {
+                self.0 = self.replace(rhs.as_str(), "").into();
+            }
+        }
+    }
+}
+
+impl Sub<String> for ImmutableString {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: String) -> Self::Output {
+        if rhs.is_empty() {
+            self
+        } else if self.is_empty() {
+            rhs.into()
+        } else {
+            self.replace(&rhs, "").into()
+        }
+    }
+}
+
+impl Sub<String> for &ImmutableString {
+    type Output = ImmutableString;
+
+    #[inline]
+    fn sub(self, rhs: String) -> Self::Output {
+        if rhs.is_empty() {
+            self.clone()
+        } else if self.is_empty() {
+            rhs.into()
+        } else {
+            self.replace(&rhs, "").into()
+        }
+    }
+}
+
+impl SubAssign<String> for ImmutableString {
+    #[inline(always)]
+    fn sub_assign(&mut self, rhs: String) {
+        self.0 = self.replace(&rhs, "").into();
+    }
+}
+
+impl Sub<char> for ImmutableString {
+    type Output = Self;
+
+    #[inline(always)]
+    fn sub(self, rhs: char) -> Self::Output {
+        self.replace(rhs, "").into()
+    }
+}
+
+impl Sub<char> for &ImmutableString {
+    type Output = ImmutableString;
+
+    #[inline(always)]
+    fn sub(self, rhs: char) -> Self::Output {
+        self.replace(rhs, "").into()
+    }
+}
+
+impl SubAssign<char> for ImmutableString {
+    #[inline(always)]
+    fn sub_assign(&mut self, rhs: char) {
+        self.0 = self.replace(rhs, "").into();
     }
 }
 

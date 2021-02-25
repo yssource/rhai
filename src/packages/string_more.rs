@@ -20,7 +20,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
 mod string_functions {
     use crate::ImmutableString;
 
-    #[rhai_fn(name = "+")]
+    #[rhai_fn(name = "+", name = "append")]
     pub fn add_append(string: &str, item: Dynamic) -> ImmutableString {
         format!("{}{}", string, item).into()
     }
@@ -41,6 +41,13 @@ mod string_functions {
     #[rhai_fn(name = "len", get = "len")]
     pub fn len(string: &str) -> INT {
         string.chars().count() as INT
+    }
+    pub fn remove(string: &mut ImmutableString, sub_string: ImmutableString) {
+        *string -= sub_string;
+    }
+    #[rhai_fn(name = "remove")]
+    pub fn remove_char(string: &mut ImmutableString, character: char) {
+        *string -= character;
     }
     pub fn clear(string: &mut ImmutableString) {
         string.make_mut().clear();
@@ -64,15 +71,15 @@ mod string_functions {
     }
 
     #[rhai_fn(name = "contains")]
-    pub fn contains_char(string: &str, ch: char) -> bool {
-        string.contains(ch)
+    pub fn contains_char(string: &str, character: char) -> bool {
+        string.contains(character)
     }
     pub fn contains(string: &str, find_string: &str) -> bool {
         string.contains(find_string)
     }
 
     #[rhai_fn(name = "index_of")]
-    pub fn index_of_char_starting_from(string: &str, ch: char, start: INT) -> INT {
+    pub fn index_of_char_starting_from(string: &str, character: char, start: INT) -> INT {
         let start = if start < 0 {
             0
         } else if start as usize >= string.chars().count() {
@@ -86,14 +93,14 @@ mod string_functions {
         };
 
         string[start..]
-            .find(ch)
+            .find(character)
             .map(|index| string[0..start + index].chars().count() as INT)
             .unwrap_or(-1 as INT)
     }
     #[rhai_fn(name = "index_of")]
-    pub fn index_of_char(string: &str, ch: char) -> INT {
+    pub fn index_of_char(string: &str, character: char) -> INT {
         string
-            .find(ch)
+            .find(character)
             .map(|index| string[0..index].chars().count() as INT)
             .unwrap_or(-1 as INT)
     }
@@ -196,26 +203,33 @@ mod string_functions {
     pub fn replace_string_with_char(
         string: &mut ImmutableString,
         find_string: &str,
-        substitute_char: char,
+        substitute_character: char,
     ) {
         *string = string
-            .replace(find_string, &substitute_char.to_string())
+            .replace(find_string, &substitute_character.to_string())
             .into();
     }
     #[rhai_fn(name = "replace")]
     pub fn replace_char_with_string(
         string: &mut ImmutableString,
-        find_char: char,
+        find_character: char,
         substitute_string: &str,
     ) {
         *string = string
-            .replace(&find_char.to_string(), substitute_string)
+            .replace(&find_character.to_string(), substitute_string)
             .into();
     }
     #[rhai_fn(name = "replace")]
-    pub fn replace_char(string: &mut ImmutableString, find_char: char, substitute_char: char) {
+    pub fn replace_char(
+        string: &mut ImmutableString,
+        find_character: char,
+        substitute_character: char,
+    ) {
         *string = string
-            .replace(&find_char.to_string(), &substitute_char.to_string())
+            .replace(
+                &find_character.to_string(),
+                &substitute_character.to_string(),
+            )
             .into();
     }
 
@@ -224,7 +238,7 @@ mod string_functions {
         _ctx: NativeCallContext,
         string: &mut ImmutableString,
         len: INT,
-        ch: char,
+        character: char,
     ) -> Result<Dynamic, Box<crate::EvalAltResult>> {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
@@ -243,7 +257,7 @@ mod string_functions {
                 let p = string.make_mut();
 
                 for _ in 0..(len as usize - orig_len) {
-                    p.push(ch);
+                    p.push(character);
                 }
 
                 #[cfg(not(feature = "unchecked"))]

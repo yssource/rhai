@@ -6,10 +6,10 @@ fn test_decrement() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(engine.eval::<INT>("let x = 10; x -= 7; x")?, 3);
 
-    assert!(matches!(
-        *engine.eval::<String>(r#"let s = "test"; s -= "ing"; s"#).expect_err("expects error"),
-        EvalAltResult::ErrorFunctionNotFound(err, _) if err == "- (&str | ImmutableString | String, &str | ImmutableString | String)"
-    ));
+    assert_eq!(
+        engine.eval::<String>(r#"let s = "test"; s -= 's'; s"#)?,
+        "tet"
+    );
 
     Ok(())
 }

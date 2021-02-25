@@ -17,7 +17,6 @@ use crate::stdlib::{
     iter::{empty, once},
     mem,
     num::NonZeroU64,
-    ops::Deref,
     string::ToString,
     vec::Vec,
 };
@@ -1470,28 +1469,60 @@ pub fn run_builtin_binary_op(
         }
     }
 
+    // char op string
+    if types_pair == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
+        let x = x.clone().cast::<char>();
+        let y = &*y.read_lock::<ImmutableString>().unwrap();
+
+        match op {
+            "+" => return Ok(Some(format!("{}{}", x, y).into())),
+            "==" | "!=" | ">" | ">=" | "<" | "<=" => {
+                let s1 = [x, '\0'];
+                let mut y = y.chars();
+                let s2 = [y.next().unwrap_or('\0'), y.next().unwrap_or('\0')];
+
+                match op {
+                    "==" => return Ok(Some((s1 == s2).into())),
+                    "!=" => return Ok(Some((s1 != s2).into())),
+                    ">" => return Ok(Some((s1 > s2).into())),
+                    ">=" => return Ok(Some((s1 >= s2).into())),
+                    "<" => return Ok(Some((s1 < s2).into())),
+                    "<=" => return Ok(Some((s1 <= s2).into())),
+                    _ => unreachable!(),
+                }
+            }
+            _ => return Ok(None),
+        }
+    }
+    // string op char
+    if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
+        let x = &*x.read_lock::<ImmutableString>().unwrap();
+        let y = y.clone().cast::<char>();
+
+        match op {
+            "+" => return Ok(Some((x + y).into())),
+            "-" => return Ok(Some((x - y).into())),
+            "==" | "!=" | ">" | ">=" | "<" | "<=" => {
+                let mut x = x.chars();
+                let s1 = [x.next().unwrap_or('\0'), x.next().unwrap_or('\0')];
+                let s2 = [y, '\0'];
+
+                match op {
+                    "==" => return Ok(Some((s1 == s2).into())),
+                    "!=" => return Ok(Some((s1 != s2).into())),
+                    ">" => return Ok(Some((s1 > s2).into())),
+                    ">=" => return Ok(Some((s1 >= s2).into())),
+                    "<" => return Ok(Some((s1 < s2).into())),
+                    "<=" => return Ok(Some((s1 <= s2).into())),
+                    _ => unreachable!(),
+                }
+            }
+            _ => return Ok(None),
+        }
+    }
+
+    // Default comparison operators for different types
     if type2 != type1 {
-        // char op string
-        if types_pair == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
-            let x = x.clone().cast::<char>();
-            let y = &*y.read_lock::<ImmutableString>().unwrap();
-
-            match op {
-                "+" => return Ok(Some(format!("{}{}", x, y).into())),
-                _ => return Ok(None),
-            }
-        }
-        // string op char
-        if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
-            let x = &*x.read_lock::<ImmutableString>().unwrap();
-            let y = y.clone().cast::<char>();
-
-            match op {
-                "+" => return Ok(Some((x + y).into())),
-                _ => return Ok(None),
-            }
-        }
-        // Default comparison operators for different types
         return Ok(match op {
             "!=" => Some(Dynamic::TRUE),
             "==" | ">" | ">=" | "<" | "<=" => Some(Dynamic::FALSE),
@@ -1567,6 +1598,7 @@ pub fn run_builtin_binary_op(
 
         match op {
             "+" => return Ok(Some((x + y).into())),
+            "-" => return Ok(Some((x - y).into())),
             "==" => return Ok(Some((x == y).into())),
             "!=" => return Ok(Some((x != y).into())),
             ">" => return Ok(Some((x > y).into())),
@@ -1673,17 +1705,34 @@ pub fn run_builtin_op_assignment(
         }
     }
 
-    if type2 != type1 {
-        if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
-            let y = y.read_lock::<char>().unwrap().deref().clone();
-            let mut x = x.write_lock::<ImmutableString>().unwrap();
+    // string op= char
+    if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
+        let y = y.clone().cast::<char>();
+        let mut x = x.write_lock::<ImmutableString>().unwrap();
 
-            match op {
-                "+=" => return Ok(Some(*x += y)),
-                _ => return Ok(None),
-            }
+        match op {
+            "+=" => return Ok(Some(*x += y)),
+            "-=" => return Ok(Some(*x -= y)),
+            _ => return Ok(None),
         }
+    }
+    // char op= string
+    if types_pair == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
+        let y = y.read_lock::<ImmutableString>().unwrap();
+        let mut ch = x.read_lock::<char>().unwrap().to_string();
+        let mut x = x.write_lock::<Dynamic>().unwrap();
 
+        match op {
+            "+=" => {
+                ch.push_str(y.as_str());
+                return Ok(Some(*x = ch.into()));
+            }
+            _ => return Ok(None),
+        }
+    }
+
+    // No built-in op-assignments for different types.
+    if type2 != type1 {
         return Ok(None);
     }
 
@@ -1741,7 +1790,7 @@ pub fn run_builtin_op_assignment(
     }
 
     if type1 == TypeId::of::<char>() {
-        let y = y.read_lock::<char>().unwrap().deref().clone();
+        let y = y.clone().cast::<char>();
         let mut x = x.write_lock::<Dynamic>().unwrap();
 
         match op {
@@ -1751,11 +1800,12 @@ pub fn run_builtin_op_assignment(
     }
 
     if type1 == TypeId::of::<ImmutableString>() {
-        let y = y.read_lock::<ImmutableString>().unwrap().deref().clone();
+        let y = &*y.read_lock::<ImmutableString>().unwrap();
         let mut x = x.write_lock::<ImmutableString>().unwrap();
 
         match op {
             "+=" => return Ok(Some(*x += y)),
+            "-=" => return Ok(Some(*x -= y)),
             _ => return Ok(None),
         }
     }

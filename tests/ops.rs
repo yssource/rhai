@@ -34,7 +34,19 @@ fn test_ops_numbers() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
-fn test_op_precedence() -> Result<(), Box<EvalAltResult>> {
+fn test_ops_strings() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert!(engine.eval::<bool>(r#""hello" > 'c'"#)?);
+    assert!(engine.eval::<bool>(r#""" < 'c'"#)?);
+    assert!(engine.eval::<bool>(r#"'x' > "hello""#)?);
+    assert!(engine.eval::<bool>(r#""hello" > "foo""#)?);
+
+    Ok(())
+}
+
+#[test]
+fn test_ops_precedence() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(
