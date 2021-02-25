@@ -2573,9 +2573,12 @@ impl Engine {
         Ok(())
     }
 
-    /// Map a type_name into a pretty-print name
+    /// Pretty-print a type name.
+    ///
+    /// If a type is registered via [`register_type_with_name`][Engine::register_type_with_name],
+    /// the type name provided for the registration will be used.
     #[inline(always)]
-    pub(crate) fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
+    pub fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
             .get(name)
             .map(String::as_str)
