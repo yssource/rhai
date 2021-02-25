@@ -12,7 +12,7 @@ fn test_mismatched_op() {
 
 #[test]
 #[cfg(not(feature = "no_object"))]
-fn test_mismatched_op_custom_type() {
+fn test_mismatched_op_custom_type() -> Result<(), Box<EvalAltResult>> {
     #[derive(Debug, Clone)]
     struct TestStruct {
         x: INT,
@@ -30,9 +30,18 @@ fn test_mismatched_op_custom_type() {
         .register_type_with_name::<TestStruct>("TestStruct")
         .register_fn("new_ts", TestStruct::new);
 
+    assert!(matches!(*engine.eval::<bool>(r"
+            let x = new_ts();
+            let y = new_ts();
+            x == y
+        ").expect_err("should error"),
+        EvalAltResult::ErrorFunctionNotFound(f, _) if f == "== (TestStruct, TestStruct)"));
+
+    assert!(!engine.eval::<bool>("new_ts() == 42")?);
+
     assert!(matches!(
         *engine.eval::<INT>("60 + new_ts()").expect_err("should error"),
-        EvalAltResult::ErrorFunctionNotFound(err, _) if err == format!("+ ({}, TestStruct)", std::any::type_name::<INT>())
+        EvalAltResult::ErrorFunctionNotFound(f, _) if f == format!("+ ({}, TestStruct)", std::any::type_name::<INT>())
     ));
 
     assert!(matches!(
@@ -40,4 +49,6 @@ fn test_mismatched_op_custom_type() {
         EvalAltResult::ErrorMismatchOutputType(need, actual, _)
             if need == "TestStruct" && actual == std::any::type_name::<INT>()
     ));
+
+    Ok(())
 }

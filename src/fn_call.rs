@@ -21,7 +21,6 @@ use crate::stdlib::{
     string::ToString,
     vec::Vec,
 };
-use crate::token::is_assignment_operator;
 use crate::utils::combine_hashes;
 use crate::{
     calc_native_fn_hash, calc_script_fn_hash, Dynamic, Engine, EvalAltResult, FnPtr,
@@ -174,6 +173,7 @@ impl Engine {
         hash_fn: NonZeroU64,
         args: &mut FnCallArgs,
         is_ref: bool,
+        is_op_assignment: bool,
         pos: Position,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state, pos)?;
@@ -286,15 +286,16 @@ impl Engine {
 
         // See if it is built in.
         if args.len() == 2 && !args[0].is_variant() && !args[1].is_variant() {
-            if is_assignment_operator(fn_name) {
-                if is_ref {
-                    // Op-assignment
-                    let (first, second) = args.split_first_mut().unwrap();
+            // Op-assignment?
+            if is_op_assignment {
+                if !is_ref {
+                    unreachable!("op-assignments must have ref argument");
+                }
+                let (first, second) = args.split_first_mut().unwrap();
 
-                    match run_builtin_op_assignment(fn_name, first, second[0])? {
-                        Some(_) => return Ok((Dynamic::UNIT, false)),
-                        None => (),
-                    }
+                match run_builtin_op_assignment(fn_name, first, second[0])? {
+                    Some(_) => return Ok((Dynamic::UNIT, false)),
+                    None => (),
                 }
             } else {
                 match run_builtin_binary_op(fn_name, args[0], args[1])? {
@@ -756,12 +757,14 @@ impl Engine {
                     Ok((result, false))
                 } else {
                     // Native function call
-                    self.call_native_fn(mods, state, lib, fn_name, hash_fn, args, is_ref, pos)
+                    self.call_native_fn(
+                        mods, state, lib, fn_name, hash_fn, args, is_ref, false, pos,
+                    )
                 }
             }
 
             // Native function call
-            _ => self.call_native_fn(mods, state, lib, fn_name, hash_fn, args, is_ref, pos),
+            _ => self.call_native_fn(mods, state, lib, fn_name, hash_fn, args, is_ref, false, pos),
         }
     }
 
@@ -1368,17 +1371,29 @@ pub fn run_builtin_binary_op(
     x: &Dynamic,
     y: &Dynamic,
 ) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
-    let first_type = x.type_id();
-    let second_type = y.type_id();
+    let type1 = x.type_id();
+    let type2 = y.type_id();
 
-    let type_id = (first_type, second_type);
+    if x.is_variant() || y.is_variant() {
+        // One of the operands is a custom type, so it is never built-in
+        return Ok(match op {
+            "!=" if type1 != type2 => Some(Dynamic::TRUE),
+            "==" | ">" | ">=" | "<" | "<=" if type1 != type2 => Some(Dynamic::FALSE),
+            _ => None,
+        });
+    }
+
+    let types_pair = (type1, type2);
 
     #[cfg(not(feature = "no_float"))]
-    if let Some((x, y)) = if type_id == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>()) {
+    if let Some((x, y)) = if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>()) {
+        // FLOAT op FLOAT
         Some((x.clone().cast::<FLOAT>(), y.clone().cast::<FLOAT>()))
-    } else if type_id == (TypeId::of::<FLOAT>(), TypeId::of::<INT>()) {
+    } else if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<INT>()) {
+        // FLOAT op INT
         Some((x.clone().cast::<FLOAT>(), y.clone().cast::<INT>() as FLOAT))
-    } else if type_id == (TypeId::of::<INT>(), TypeId::of::<FLOAT>()) {
+    } else if types_pair == (TypeId::of::<INT>(), TypeId::of::<FLOAT>()) {
+        // INT op FLOAT
         Some((x.clone().cast::<INT>() as FLOAT, y.clone().cast::<FLOAT>()))
     } else {
         None
@@ -1402,16 +1417,19 @@ pub fn run_builtin_binary_op(
 
     #[cfg(feature = "decimal")]
     if let Some((x, y)) = if type_id == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>()) {
+        // Decimal op Decimal
         Some((
             *x.read_lock::<Decimal>().unwrap(),
             *y.read_lock::<Decimal>().unwrap(),
         ))
     } else if type_id == (TypeId::of::<Decimal>(), TypeId::of::<INT>()) {
+        // Decimal op INT
         Some((
             *x.read_lock::<Decimal>().unwrap(),
             y.clone().cast::<INT>().into(),
         ))
     } else if type_id == (TypeId::of::<INT>(), TypeId::of::<Decimal>()) {
+        // INT op Decimal
         Some((
             x.clone().cast::<INT>().into(),
             *y.read_lock::<Decimal>().unwrap(),
@@ -1452,8 +1470,9 @@ pub fn run_builtin_binary_op(
         }
     }
 
-    if second_type != first_type {
-        if type_id == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
+    if type2 != type1 {
+        // char op string
+        if types_pair == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
             let x = x.clone().cast::<char>();
             let y = &*y.read_lock::<ImmutableString>().unwrap();
 
@@ -1462,8 +1481,8 @@ pub fn run_builtin_binary_op(
                 _ => return Ok(None),
             }
         }
-
-        if type_id == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
+        // string op char
+        if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
             let x = &*x.read_lock::<ImmutableString>().unwrap();
             let y = y.clone().cast::<char>();
 
@@ -1472,7 +1491,7 @@ pub fn run_builtin_binary_op(
                 _ => return Ok(None),
             }
         }
-
+        // Default comparison operators for different types
         return Ok(match op {
             "!=" => Some(Dynamic::TRUE),
             "==" | ">" | ">=" | "<" | "<=" => Some(Dynamic::FALSE),
@@ -1480,7 +1499,9 @@ pub fn run_builtin_binary_op(
         });
     }
 
-    if first_type == TypeId::of::<INT>() {
+    // Beyond here, type1 == type2
+
+    if type1 == TypeId::of::<INT>() {
         let x = x.clone().cast::<INT>();
         let y = y.clone().cast::<INT>();
 
@@ -1526,7 +1547,7 @@ pub fn run_builtin_binary_op(
         }
     }
 
-    if first_type == TypeId::of::<bool>() {
+    if type1 == TypeId::of::<bool>() {
         let x = x.clone().cast::<bool>();
         let y = y.clone().cast::<bool>();
 
@@ -1540,7 +1561,7 @@ pub fn run_builtin_binary_op(
         }
     }
 
-    if first_type == TypeId::of::<ImmutableString>() {
+    if type1 == TypeId::of::<ImmutableString>() {
         let x = &*x.read_lock::<ImmutableString>().unwrap();
         let y = &*y.read_lock::<ImmutableString>().unwrap();
 
@@ -1556,7 +1577,7 @@ pub fn run_builtin_binary_op(
         }
     }
 
-    if first_type == TypeId::of::<char>() {
+    if type1 == TypeId::of::<char>() {
         let x = x.clone().cast::<char>();
         let y = y.clone().cast::<char>();
 
@@ -1572,7 +1593,7 @@ pub fn run_builtin_binary_op(
         }
     }
 
-    if first_type == TypeId::of::<()>() {
+    if type1 == TypeId::of::<()>() {
         match op {
             "==" => return Ok(Some(true.into())),
             "!=" | ">" | ">=" | "<" | "<=" => return Ok(Some(false.into())),
@@ -1580,11 +1601,7 @@ pub fn run_builtin_binary_op(
         }
     }
 
-    Ok(match op {
-        "!=" => Some(Dynamic::TRUE),
-        "==" | ">" | ">=" | "<" | "<=" => Some(Dynamic::FALSE),
-        _ => None,
-    })
+    Ok(None)
 }
 
 /// Build in common operator assignment implementations to avoid the cost of calling a registered function.
@@ -1593,16 +1610,18 @@ pub fn run_builtin_op_assignment(
     x: &mut Dynamic,
     y: &Dynamic,
 ) -> Result<Option<()>, Box<EvalAltResult>> {
-    let first_type = x.type_id();
-    let second_type = y.type_id();
+    let type1 = x.type_id();
+    let type2 = y.type_id();
 
-    let type_id = (first_type, second_type);
+    let types_pair = (type1, type2);
 
     #[cfg(not(feature = "no_float"))]
-    if let Some((mut x, y)) = if type_id == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>()) {
+    if let Some((mut x, y)) = if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>()) {
+        // FLOAT op= FLOAT
         let y = y.clone().cast::<FLOAT>();
         Some((x.write_lock::<FLOAT>().unwrap(), y))
-    } else if type_id == (TypeId::of::<FLOAT>(), TypeId::of::<INT>()) {
+    } else if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<INT>()) {
+        // FLOAT op= INT
         let y = y.clone().cast::<INT>() as FLOAT;
         Some((x.write_lock::<FLOAT>().unwrap(), y))
     } else {
@@ -1621,9 +1640,11 @@ pub fn run_builtin_op_assignment(
 
     #[cfg(feature = "decimal")]
     if let Some((mut x, y)) = if type_id == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>()) {
+        // Decimal op= Decimal
         let y = *y.read_lock::<Decimal>().unwrap();
         Some((x.write_lock::<Decimal>().unwrap(), y))
     } else if type_id == (TypeId::of::<Decimal>(), TypeId::of::<INT>()) {
+        // Decimal op= INT
         let y = y.clone().cast::<INT>().into();
         Some((x.write_lock::<Decimal>().unwrap(), y))
     } else {
@@ -1652,8 +1673,8 @@ pub fn run_builtin_op_assignment(
         }
     }
 
-    if second_type != first_type {
-        if type_id == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
+    if type2 != type1 {
+        if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
             let y = y.read_lock::<char>().unwrap().deref().clone();
             let mut x = x.write_lock::<ImmutableString>().unwrap();
 
@@ -1666,7 +1687,9 @@ pub fn run_builtin_op_assignment(
         return Ok(None);
     }
 
-    if first_type == TypeId::of::<INT>() {
+    // Beyond here, type1 == type2
+
+    if type1 == TypeId::of::<INT>() {
         let y = y.clone().cast::<INT>();
         let mut x = x.write_lock::<INT>().unwrap();
 
@@ -1706,7 +1729,7 @@ pub fn run_builtin_op_assignment(
         }
     }
 
-    if first_type == TypeId::of::<bool>() {
+    if type1 == TypeId::of::<bool>() {
         let y = y.clone().cast::<bool>();
         let mut x = x.write_lock::<bool>().unwrap();
 
@@ -1717,7 +1740,7 @@ pub fn run_builtin_op_assignment(
         }
     }
 
-    if first_type == TypeId::of::<char>() {
+    if type1 == TypeId::of::<char>() {
         let y = y.read_lock::<char>().unwrap().deref().clone();
         let mut x = x.write_lock::<Dynamic>().unwrap();
 
@@ -1727,7 +1750,7 @@ pub fn run_builtin_op_assignment(
         }
     }
 
-    if first_type == TypeId::of::<ImmutableString>() {
+    if type1 == TypeId::of::<ImmutableString>() {
         let y = y.read_lock::<ImmutableString>().unwrap().deref().clone();
         let mut x = x.write_lock::<ImmutableString>().unwrap();
 
