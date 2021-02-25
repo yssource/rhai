@@ -145,7 +145,12 @@ mod logic_functions {
         }
 
         Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
-            format!("{} ({}, {})", ctx.fn_name(), x.type_name(), y.type_name()),
+            format!(
+                "{} ({}, {})",
+                ctx.fn_name(),
+                ctx.engine().map_type_name(x.type_name()),
+                ctx.engine().map_type_name(y.type_name())
+            ),
             Position::NONE,
         )))
     }

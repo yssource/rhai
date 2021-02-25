@@ -1657,14 +1657,6 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     first_alphabetic
 }
 
-/// Is a text string an assignment operator?
-pub fn is_assignment_operator(op: &str) -> bool {
-    match op {
-        "+=" | "-=" | "*=" | "/=" | "<<=" | ">>=" | "&=" | "|=" | "^=" | "%=" | "**=" => true,
-        _ => false,
-    }
-}
-
 /// Is a character valid to start an identifier?
 #[cfg(feature = "unicode-xid-ident")]
 #[inline(always)]
