@@ -537,7 +537,7 @@ impl ExportedFn {
             // 2a. Property getters must take only the subject as an argument.
             FnSpecialAccess::Property(Property::Get(_)) if self.arg_count() != 1 => {
                 return Err(syn::Error::new(
-                    self.signature.span(),
+                    self.signature.inputs.span(),
                     "property getter requires exactly 1 parameter",
                 ))
             }
