@@ -98,8 +98,8 @@ pub fn print_type(ty: &syn::Type) -> String {
 #[derive(Debug, Default)]
 pub struct ExportedFnParams {
     pub name: Vec<String>,
-    pub return_raw: bool,
-    pub pure: bool,
+    pub return_raw: Option<proc_macro2::Span>,
+    pub pure: Option<proc_macro2::Span>,
     pub skip: bool,
     pub special: FnSpecialAccess,
     pub namespace: FnNamespaceAccess,
@@ -137,8 +137,8 @@ impl ExportedParams for ExportedFnParams {
             items: attrs,
         } = info;
         let mut name = Vec::new();
-        let mut return_raw = false;
-        let mut pure = false;
+        let mut return_raw = None;
+        let mut pure = None;
         let mut skip = false;
         let mut namespace = FnNamespaceAccess::Unset;
         let mut special = FnSpecialAccess::None;
@@ -194,8 +194,8 @@ impl ExportedParams for ExportedFnParams {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
                 }
 
-                ("pure", None) => pure = true,
-                ("return_raw", None) => return_raw = true,
+                ("pure", None) => pure = Some(item_span),
+                ("return_raw", None) => return_raw = Some(item_span),
                 ("skip", None) => skip = true,
                 ("global", None) => match namespace {
                     FnNamespaceAccess::Unset => namespace = FnNamespaceAccess::Global,
@@ -507,18 +507,18 @@ impl ExportedFn {
         //
         // 1a. Do not allow non-returning raw functions.
         //
-        if params.return_raw && self.return_type().is_none() {
+        if params.return_raw.is_some() && self.return_type().is_none() {
             return Err(syn::Error::new(
-                self.signature.span(),
+                params.return_raw.unwrap(),
                 "functions marked with 'return_raw' must return Result<Dynamic, Box<EvalAltResult>>",
             ));
         }
 
         // 1b. Do not allow non-method pure functions.
         //
-        if params.pure && !self.mutable_receiver() {
+        if params.pure.is_some() && !self.mutable_receiver() {
             return Err(syn::Error::new(
-                self.signature.span(),
+                params.pure.unwrap(),
                 "functions marked with 'pure' must have a &mut first parameter",
             ));
         }
@@ -643,7 +643,7 @@ impl ExportedFn {
             .return_type()
             .map(|r| r.span())
             .unwrap_or_else(|| proc_macro2::Span::call_site());
-        if self.params.return_raw {
+        if self.params.return_raw.is_some() {
             quote_spanned! { return_span =>
                 pub #dynamic_signature {
                     #name(#(#arguments),*)
@@ -758,7 +758,7 @@ impl ExportedFn {
                         })
                         .unwrap(),
                     );
-                    if !self.params().pure {
+                    if !self.params().pure.is_some() {
                         let arg_lit_str =
                             syn::LitStr::new(&pat.to_token_stream().to_string(), pat.span());
                         unpack_statements.push(
@@ -879,7 +879,7 @@ impl ExportedFn {
             .return_type()
             .map(|r| r.span())
             .unwrap_or_else(|| proc_macro2::Span::call_site());
-        let return_expr = if !self.params.return_raw {
+        let return_expr = if !self.params.return_raw.is_some() {
             if self.return_dynamic {
                 quote_spanned! { return_span =>
                     Ok(#sig_name(#(#unpack_exprs),*))
