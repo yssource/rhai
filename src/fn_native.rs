@@ -186,7 +186,6 @@ impl<'e, 'n, 's, 'a, 'm> NativeCallContext<'e, 'n, 's, 'a, 'm> {
         is_method: bool,
         public_only: bool,
         args: &mut [&mut Dynamic],
-        def_value: Option<&Dynamic>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         self.engine()
             .exec_fn_call(
@@ -201,7 +200,6 @@ impl<'e, 'n, 's, 'a, 'm> NativeCallContext<'e, 'n, 's, 'a, 'm> {
                 public_only,
                 Position::NONE,
                 None,
-                def_value,
                 0,
             )
             .map(|(r, _)| r)
@@ -339,7 +337,7 @@ impl FnPtr {
             args.insert(0, obj);
         }
 
-        ctx.call_fn_dynamic_raw(self.fn_name(), is_method, true, args.as_mut(), None)
+        ctx.call_fn_dynamic_raw(self.fn_name(), is_method, true, args.as_mut())
     }
 }
 

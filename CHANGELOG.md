@@ -14,14 +14,15 @@ Breaking changes
 
 * For plugin functions, constants passed to methods (i.e. `&mut` parameter) now raise an error unless the functions are marked with `#[rhai_fn(pure)]`.
 * Visibility (i.e. `pub` or not) for generated _plugin_ modules now follow the visibility of the underlying module.
+* Comparison operators between the sames types or different _numeric_ types now throw errors when they're not defined instead of returning the default. Only comparing between _different_ types will return the default.
 * Default stack-overflow and top-level expression nesting limits for release builds are lowered to 64 from 128.
+* `Engine::call_fn_dynamic` takes an additional parameter to optionally evaluate the given `AST` before calling the function.
 
 New features
 ------------
 
 * Functions are now allowed to have `Dynamic` arguments.
 * `#[rhai_fn(pure)]` attribute to mark a plugin function with `&mut` parameter as _pure_ so constants can be passed to it. Without it, passing a constant value into the `&mut` parameter will now raise an error.
-* Comparisons between `FLOAT`/[`Decimal`](https://crates.io/crates/rust_decimal) and `INT` are now built in.
 
 Enhancements
 ------------
@@ -30,8 +31,12 @@ Enhancements
 * Error position in `eval` statements is now wrapped in an `EvalAltResult::ErrorInFunctionCall`.
 * `Position` now implements `Add` and `AddAssign`.
 * `Scope` now implements `IntoIterator`.
+* Strings now have the `-`/`-=` operators and the `remove` method to delete a sub-string/character.
 * Strings now have the `split_rev` method and variations of `split` with maximum number of segments.
 * Arrays now have the `split` method.
+* Comparisons between `FLOAT`/[`Decimal`](https://crates.io/crates/rust_decimal) and `INT` are now built in.
+* Comparisons between string and `char` are now built in.
+* `Engine::call_fn_dynamic` can now optionally evaluate the given `AST` before calling the function.
 
 
 Version 0.19.12

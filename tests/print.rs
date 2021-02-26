@@ -1,5 +1,32 @@
-use rhai::{Engine, EvalAltResult, RegisterFn, INT};
+use rhai::{Engine, EvalAltResult, RegisterFn, Scope, INT};
 use std::sync::{Arc, RwLock};
+
+#[cfg(not(feature = "only_i32"))]
+#[cfg(not(feature = "only_i64"))]
+#[test]
+fn test_to_string() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    let mut scope = Scope::new();
+    scope.push("x", 42_u8);
+    scope.push("y", 42_i32);
+    scope.push("z", 42_i16);
+
+    assert_eq!(
+        engine.eval_with_scope::<String>(&mut scope, "to_string(x)")?,
+        "42"
+    );
+    assert_eq!(
+        engine.eval_with_scope::<String>(&mut scope, "to_string(x)")?,
+        "42"
+    );
+    assert_eq!(
+        engine.eval_with_scope::<String>(&mut scope, "to_string(x)")?,
+        "42"
+    );
+
+    Ok(())
+}
 
 #[test]
 fn test_print_debug() -> Result<(), Box<EvalAltResult>> {

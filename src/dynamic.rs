@@ -475,7 +475,45 @@ impl fmt::Display for Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(_, _) => f.write_str("<timestamp>"),
 
-            Union::Variant(value, _) => f.write_str((*value).type_name()),
+            Union::Variant(value, _) => {
+                let _type_id = (***value).type_id();
+
+                #[cfg(not(feature = "only_i32"))]
+                #[cfg(not(feature = "only_i64"))]
+                if _type_id == TypeId::of::<u8>() {
+                    return write!(f, "{}", (**value).as_any().downcast_ref::<u8>().unwrap());
+                } else if _type_id == TypeId::of::<u16>() {
+                    return write!(f, "{}", (**value).as_any().downcast_ref::<u16>().unwrap());
+                } else if _type_id == TypeId::of::<u32>() {
+                    return write!(f, "{}", (**value).as_any().downcast_ref::<u32>().unwrap());
+                } else if _type_id == TypeId::of::<u64>() {
+                    return write!(f, "{}", (**value).as_any().downcast_ref::<u64>().unwrap());
+                } else if _type_id == TypeId::of::<i8>() {
+                    return write!(f, "{}", (**value).as_any().downcast_ref::<i8>().unwrap());
+                } else if _type_id == TypeId::of::<i16>() {
+                    return write!(f, "{}", (**value).as_any().downcast_ref::<i16>().unwrap());
+                } else if _type_id == TypeId::of::<i32>() {
+                    return write!(f, "{}", (**value).as_any().downcast_ref::<i32>().unwrap());
+                } else if _type_id == TypeId::of::<i64>() {
+                    return write!(f, "{}", (**value).as_any().downcast_ref::<i64>().unwrap());
+                }
+
+                #[cfg(not(feature = "no_float"))]
+                if _type_id == TypeId::of::<f32>() {
+                    return write!(f, "{}", (**value).as_any().downcast_ref::<f32>().unwrap());
+                } else if _type_id == TypeId::of::<f64>() {
+                    return write!(f, "{}", (**value).as_any().downcast_ref::<f64>().unwrap());
+                }
+
+                #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+                if _type_id == TypeId::of::<u128>() {
+                    return write!(f, "{}", (**value).as_any().downcast_ref::<u128>().unwrap());
+                } else if _type_id == TypeId::of::<i128>() {
+                    return write!(f, "{}", (**value).as_any().downcast_ref::<i128>().unwrap());
+                }
+
+                f.write_str((***value).type_name())
+            }
 
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
@@ -516,7 +554,53 @@ impl fmt::Debug for Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(_, _) => write!(f, "<timestamp>"),
 
-            Union::Variant(value, _) => write!(f, "{}", (*value).type_name()),
+            Union::Variant(value, _) => {
+                let _type_id = (***value).type_id();
+
+                #[cfg(not(feature = "only_i32"))]
+                #[cfg(not(feature = "only_i64"))]
+                if _type_id == TypeId::of::<u8>() {
+                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<u8>().unwrap());
+                } else if _type_id == TypeId::of::<u16>() {
+                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<u16>().unwrap());
+                } else if _type_id == TypeId::of::<u32>() {
+                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<u32>().unwrap());
+                } else if _type_id == TypeId::of::<u64>() {
+                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<u64>().unwrap());
+                } else if _type_id == TypeId::of::<i8>() {
+                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<i8>().unwrap());
+                } else if _type_id == TypeId::of::<i16>() {
+                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<i16>().unwrap());
+                } else if _type_id == TypeId::of::<i32>() {
+                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<i32>().unwrap());
+                } else if _type_id == TypeId::of::<i64>() {
+                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<i64>().unwrap());
+                }
+
+                #[cfg(not(feature = "no_float"))]
+                if _type_id == TypeId::of::<f32>() {
+                    return write!(f, "{}", (**value).as_any().downcast_ref::<f32>().unwrap());
+                } else if _type_id == TypeId::of::<f64>() {
+                    return write!(f, "{}", (**value).as_any().downcast_ref::<f64>().unwrap());
+                }
+
+                #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+                if _type_id == TypeId::of::<u128>() {
+                    return write!(
+                        f,
+                        "{:?}",
+                        (**value).as_any().downcast_ref::<u128>().unwrap()
+                    );
+                } else if _type_id == TypeId::of::<i128>() {
+                    return write!(
+                        f,
+                        "{:?}",
+                        (**value).as_any().downcast_ref::<i128>().unwrap()
+                    );
+                }
+
+                write!(f, "{}", (*value).type_name())
+            }
 
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]

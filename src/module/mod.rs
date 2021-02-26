@@ -1855,7 +1855,6 @@ impl Module {
 
             // Index all variables
             module.variables.iter().for_each(|(var_name, value)| {
-                // Qualifiers + variable name
                 let hash_var =
                     crate::calc_script_fn_hash(qualifiers.iter().map(|&v| v), var_name, 0).unwrap();
                 variables.insert(hash_var, value.clone());
@@ -1888,7 +1887,6 @@ impl Module {
                             functions.insert(hash, func.clone());
                         }
 
-                        // Qualifiers + function name + number of arguments.
                         let hash_qualified_script =
                             crate::calc_script_fn_hash(qualifiers.iter().cloned(), name, *params)
                                 .unwrap();

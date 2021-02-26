@@ -58,12 +58,10 @@ mod map_functions {
             return Ok(true.into());
         }
 
-        let def_value = Some(false.into());
-
         for (m1, v1) in map.iter_mut() {
             if let Some(v2) = map2.get_mut(m1) {
                 let equals = ctx
-                    .call_fn_dynamic_raw(OP_EQUALS, true, false, &mut [v1, v2], def_value.as_ref())
+                    .call_fn_dynamic_raw(OP_EQUALS, true, false, &mut [v1, v2])
                     .map(|v| v.as_bool().unwrap_or(false))?;
 
                 if !equals {

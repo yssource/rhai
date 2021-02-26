@@ -647,11 +647,9 @@ mod array_functions {
             return Ok(true.into());
         }
 
-        let def_value = Some(false.into());
-
         for (a1, a2) in array.iter_mut().zip(array2.iter_mut()) {
             let equals = ctx
-                .call_fn_dynamic_raw(OP_EQUALS, true, false, &mut [a1, a2], def_value.as_ref())
+                .call_fn_dynamic_raw(OP_EQUALS, true, false, &mut [a1, a2])
                 .map(|v| v.as_bool().unwrap_or(false))?;
 
             if !equals {
