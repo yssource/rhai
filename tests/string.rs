@@ -53,8 +53,8 @@ fn test_string() -> Result<(), Box<EvalAltResult>> {
 fn test_string_dynamic() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
     let mut scope = Scope::new();
-    scope.push("x", Dynamic::from("foo"));
-    scope.push("y", String::from("foo"));
+    scope.push("x", "foo");
+    scope.push("y", "foo");
     scope.push("z", "foo");
 
     assert!(engine.eval_with_scope::<bool>(&mut scope, r#"x == "foo""#)?);

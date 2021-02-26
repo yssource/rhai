@@ -66,7 +66,7 @@ fn test_side_effects_command() -> Result<(), Box<EvalAltResult>> {
 
 #[test]
 fn test_side_effects_print() -> Result<(), Box<EvalAltResult>> {
-    let result = Arc::new(RwLock::new(String::from("")));
+    let result = Arc::new(RwLock::new(String::new()));
 
     let mut engine = Engine::new();
 
