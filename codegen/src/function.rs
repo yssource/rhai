@@ -503,15 +503,23 @@ impl ExportedFn {
     }
 
     pub fn set_params(&mut self, mut params: ExportedFnParams) -> syn::Result<()> {
-        // Several issues are checked here to avoid issues with diagnostics caused by raising them
-        // later.
+        // Several issues are checked here to avoid issues with diagnostics caused by raising them later.
         //
-        // 1. Do not allow non-returning raw functions.
+        // 1a. Do not allow non-returning raw functions.
         //
         if params.return_raw && self.return_type().is_none() {
             return Err(syn::Error::new(
                 self.signature.span(),
                 "functions marked with 'return_raw' must return Result<Dynamic, Box<EvalAltResult>>",
+            ));
+        }
+
+        // 1b. Do not allow non-method pure functions.
+        //
+        if params.pure && !self.mutable_receiver() {
+            return Err(syn::Error::new(
+                self.signature.span(),
+                "functions marked with 'pure' must have a &mut first parameter",
             ));
         }
 
