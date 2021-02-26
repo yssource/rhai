@@ -1613,6 +1613,13 @@ impl Engine {
     /// Call a script function defined in an [`AST`] with multiple arguments.
     /// Arguments are passed as a tuple.
     ///
+    /// ## Warning
+    ///
+    /// The [`AST`] is _not_ evaluated before calling the function.  The function is called as-is.
+    ///
+    /// If the [`AST`] needs to be evaluated before calling the function (usually to load external modules),
+    /// use [`call_fn_dynamic`][Engine::call_fn_dynamic].
+    ///
     /// # Example
     ///
     /// ```
@@ -1633,11 +1640,11 @@ impl Engine {
     /// scope.push("foo", 42_i64);
     ///
     /// // Call the script-defined function
-    /// let result: i64 = engine.call_fn(&mut scope, &ast, "add", ( String::from("abc"), 123_i64 ) )?;
+    /// let result: i64 = engine.call_fn(&mut scope, &ast, "add", ( "abc", 123_i64 ) )?;
     /// assert_eq!(result, 168);
     ///
-    /// let result: i64 = engine.call_fn(&mut scope, &ast, "add1", ( String::from("abc"), ) )?;
-    /// //                                                         ^^^^^^^^^^^^^^^^^^^^^^^^ tuple of one
+    /// let result: i64 = engine.call_fn(&mut scope, &ast, "add1", ( "abc", ) )?;
+    /// //                                                         ^^^^^^^^^^ tuple of one
     /// assert_eq!(result, 46);
     ///
     /// let result: i64 = engine.call_fn(&mut scope, &ast, "bar", () )?;
@@ -1659,8 +1666,7 @@ impl Engine {
         args.parse(&mut arg_values);
         let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
-        let result =
-            self.call_fn_dynamic_raw(scope, &[ast.lib()], name, &mut None, args.as_mut())?;
+        let result = self.call_fn_dynamic_raw(scope, ast, false, name, &mut None, args.as_mut())?;
 
         let typ = self.map_type_name(result.type_name());
 
@@ -1675,6 +1681,9 @@ impl Engine {
     }
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments
     /// and optionally a value for binding to the `this` pointer.
+    ///
+    /// There is also an option to evaluate the [`AST`] (e.g. to configuration the environment)
+    /// before calling the function.
     ///
     /// # WARNING
     ///
@@ -1704,19 +1713,19 @@ impl Engine {
     /// scope.push("foo", 42_i64);
     ///
     /// // Call the script-defined function
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add", None, [ String::from("abc").into(), 123_i64.into() ])?;
-    /// //                                                           ^^^^ no 'this' pointer
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, false, "add", None, [ "abc".into(), 123_i64.into() ])?;
+    /// //                                                                  ^^^^ no 'this' pointer
     /// assert_eq!(result.cast::<i64>(), 168);
     ///
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "add1", None, [ String::from("abc").into() ])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, false, "add1", None, [ "abc".into() ])?;
     /// assert_eq!(result.cast::<i64>(), 46);
     ///
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "bar", None, [])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, false, "bar", None, [])?;
     /// assert_eq!(result.cast::<i64>(), 21);
     ///
     /// let mut value: Dynamic = 1_i64.into();
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, "action", Some(&mut value), [ 41_i64.into() ])?;
-    /// //                                                              ^^^^^^^^^^^^^^^^ binding the 'this' pointer
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, false, "action", Some(&mut value), [ 41_i64.into() ])?;
+    /// //                                                                     ^^^^^^^^^^^^^^^^ binding the 'this' pointer
     /// assert_eq!(value.as_int().unwrap(), 42);
     /// # }
     /// # Ok(())
@@ -1727,14 +1736,15 @@ impl Engine {
     pub fn call_fn_dynamic(
         &self,
         scope: &mut Scope,
-        lib: impl AsRef<crate::Module>,
+        ast: &AST,
+        eval_ast: bool,
         name: &str,
         mut this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
-        self.call_fn_dynamic_raw(scope, &[lib.as_ref()], name, &mut this_ptr, args.as_mut())
+        self.call_fn_dynamic_raw(scope, ast, eval_ast, name, &mut this_ptr, args.as_mut())
     }
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments.
     ///
@@ -1749,18 +1759,24 @@ impl Engine {
     pub(crate) fn call_fn_dynamic_raw(
         &self,
         scope: &mut Scope,
-        lib: &[&crate::Module],
+        ast: &AST,
+        eval_ast: bool,
         name: &str,
         this_ptr: &mut Option<&mut Dynamic>,
         args: &mut FnCallArgs,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let fn_def = lib
-            .iter()
-            .find_map(|&m| m.get_script_fn(name, args.len(), true))
-            .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::NONE))?;
+        let state = &mut Default::default();
+        let mods = &mut (&self.global_sub_modules).into();
+        let lib = &[ast.lib()];
 
-        let mut state = Default::default();
-        let mut mods = (&self.global_sub_modules).into();
+        if eval_ast {
+            self.eval_global_statements(scope, mods, state, ast.statements(), lib, 0)?;
+        }
+
+        let fn_def = ast
+            .lib()
+            .get_script_fn(name, args.len(), true)
+            .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::NONE))?;
 
         // Check for data race.
         if cfg!(not(feature = "no_closure")) {
@@ -1769,8 +1785,8 @@ impl Engine {
 
         self.call_script_fn(
             scope,
-            &mut mods,
-            &mut state,
+            mods,
+            state,
             lib,
             this_ptr,
             fn_def,
@@ -1933,7 +1949,7 @@ impl Engine {
     /// # use std::sync::Arc;
     /// use rhai::Engine;
     ///
-    /// let result = Arc::new(RwLock::new(String::from("")));
+    /// let result = Arc::new(RwLock::new(String::new()));
     ///
     /// let mut engine = Engine::new();
     ///
@@ -1962,7 +1978,7 @@ impl Engine {
     /// # use std::sync::Arc;
     /// use rhai::Engine;
     ///
-    /// let result = Arc::new(RwLock::new(String::from("")));
+    /// let result = Arc::new(RwLock::new(String::new()));
     ///
     /// let mut engine = Engine::new();
     ///

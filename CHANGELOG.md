@@ -16,6 +16,7 @@ Breaking changes
 * Visibility (i.e. `pub` or not) for generated _plugin_ modules now follow the visibility of the underlying module.
 * Comparison operators between the sames types or different _numeric_ types now throw errors when they're not defined instead of returning the default. Only comparing between _different_ types will return the default.
 * Default stack-overflow and top-level expression nesting limits for release builds are lowered to 64 from 128.
+* `Engine::call_fn_dynamic` takes an additional parameter to optionally evaluate the given `AST` before calling the function.
 
 New features
 ------------
@@ -35,6 +36,7 @@ Enhancements
 * Arrays now have the `split` method.
 * Comparisons between `FLOAT`/[`Decimal`](https://crates.io/crates/rust_decimal) and `INT` are now built in.
 * Comparisons between string and `char` are now built in.
+* `Engine::call_fn_dynamic` can now optionally evaluate the given `AST` before calling the function.
 
 
 Version 0.19.12
