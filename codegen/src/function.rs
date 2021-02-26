@@ -200,12 +200,22 @@ impl ExportedParams for ExportedFnParams {
                 ("global", None) => match namespace {
                     FnNamespaceAccess::Unset => namespace = FnNamespaceAccess::Global,
                     FnNamespaceAccess::Global => (),
-                    _ => return Err(syn::Error::new(key.span(), "conflicting namespace")),
+                    FnNamespaceAccess::Internal => {
+                        return Err(syn::Error::new(
+                            key.span(),
+                            "namespace is already set to 'internal'",
+                        ))
+                    }
                 },
                 ("internal", None) => match namespace {
                     FnNamespaceAccess::Unset => namespace = FnNamespaceAccess::Internal,
                     FnNamespaceAccess::Internal => (),
-                    _ => return Err(syn::Error::new(key.span(), "conflicting namespace")),
+                    FnNamespaceAccess::Global => {
+                        return Err(syn::Error::new(
+                            key.span(),
+                            "namespace is already set to 'global'",
+                        ))
+                    }
                 },
 
                 ("get", Some(s)) => {
@@ -478,10 +488,10 @@ impl ExportedFn {
     }
 
     pub fn exported_name<'n>(&'n self) -> Cow<'n, str> {
-        self.params.name.last().map_or_else(
-            || self.signature.ident.to_string().into(),
-            |s| s.as_str().into(),
-        )
+        self.params
+            .name
+            .last()
+            .map_or_else(|| self.signature.ident.to_string().into(), |s| s.into())
     }
 
     pub fn arg_list(&self) -> impl Iterator<Item = &syn::FnArg> {
@@ -519,7 +529,7 @@ impl ExportedFn {
         if params.pure.is_some() && !self.mutable_receiver() {
             return Err(syn::Error::new(
                 params.pure.unwrap(),
-                "functions marked with 'pure' must have a &mut first parameter",
+                "'pure' is not necessary on functions without a &mut first parameter",
             ));
         }
 
@@ -541,21 +551,21 @@ impl ExportedFn {
             // 3a. Property setters must take the subject and a new value as arguments.
             FnSpecialAccess::Property(Property::Set(_)) if self.arg_count() != 2 => {
                 return Err(syn::Error::new(
-                    self.signature.span(),
+                    self.signature.inputs.span(),
                     "property setter requires exactly 2 parameters",
                 ))
             }
             // 3b. Property setters must return nothing.
             FnSpecialAccess::Property(Property::Set(_)) if self.return_type().is_some() => {
                 return Err(syn::Error::new(
-                    self.signature.span(),
+                    self.signature.output.span(),
                     "property setter cannot return any value",
                 ))
             }
             // 4a. Index getters must take the subject and the accessed "index" as arguments.
             FnSpecialAccess::Index(Index::Get) if self.arg_count() != 2 => {
                 return Err(syn::Error::new(
-                    self.signature.span(),
+                    self.signature.inputs.span(),
                     "index getter requires exactly 2 parameters",
                 ))
             }
@@ -569,15 +579,15 @@ impl ExportedFn {
             // 5a. Index setters must take the subject, "index", and new value as arguments.
             FnSpecialAccess::Index(Index::Set) if self.arg_count() != 3 => {
                 return Err(syn::Error::new(
-                    self.signature.span(),
+                    self.signature.inputs.span(),
                     "index setter requires exactly 3 parameters",
                 ))
             }
             // 5b. Index setters must return nothing.
             FnSpecialAccess::Index(Index::Set) if self.return_type().is_some() => {
                 return Err(syn::Error::new(
-                    self.signature.span(),
-                    "index setter cannot return a value",
+                    self.signature.output.span(),
+                    "index setter cannot return any value",
                 ))
             }
             _ => {}
@@ -667,7 +677,7 @@ impl ExportedFn {
     pub fn generate_callable(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
         let callable_fn_name: syn::Ident = syn::Ident::new(
-            format!("{}_callable", on_type_name.to_lowercase()).as_str(),
+            &format!("{}_callable", on_type_name.to_lowercase()),
             self.name().span(),
         );
         quote! {
@@ -680,7 +690,7 @@ impl ExportedFn {
     pub fn generate_input_names(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
         let input_names_fn_name: syn::Ident = syn::Ident::new(
-            format!("{}_input_names", on_type_name.to_lowercase()).as_str(),
+            &format!("{}_input_names", on_type_name.to_lowercase()),
             self.name().span(),
         );
         quote! {
@@ -693,7 +703,7 @@ impl ExportedFn {
     pub fn generate_input_types(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
         let input_types_fn_name: syn::Ident = syn::Ident::new(
-            format!("{}_input_types", on_type_name.to_lowercase()).as_str(),
+            &format!("{}_input_types", on_type_name.to_lowercase()),
             self.name().span(),
         );
         quote! {
@@ -706,7 +716,7 @@ impl ExportedFn {
     pub fn generate_return_type(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
         let return_type_fn_name: syn::Ident = syn::Ident::new(
-            format!("{}_return_type", on_type_name.to_lowercase()).as_str(),
+            &format!("{}_return_type", on_type_name.to_lowercase()),
             self.name().span(),
         );
         quote! {

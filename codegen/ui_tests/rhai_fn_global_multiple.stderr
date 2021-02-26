@@ -1,4 +1,4 @@
-error: conflicting namespace
+error: namespace is already set to 'global'
   --> $DIR/rhai_fn_global_multiple.rs:12:23
    |
 12 |     #[rhai_fn(global, internal)]
