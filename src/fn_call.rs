@@ -254,7 +254,7 @@ impl Engine {
             // Restore the original reference
             backup.restore_first_arg(args);
 
-            let result = result?;
+            let result = result.map_err(|err| err.fill_position(pos))?;
 
             // See if the function match print/debug (which requires special processing)
             return Ok(match fn_name {
@@ -292,12 +292,16 @@ impl Engine {
                 }
                 let (first, second) = args.split_first_mut().unwrap();
 
-                match run_builtin_op_assignment(fn_name, first, second[0])? {
+                match run_builtin_op_assignment(fn_name, first, second[0])
+                    .map_err(|err| err.fill_position(pos))?
+                {
                     Some(_) => return Ok((Dynamic::UNIT, false)),
                     None => (),
                 }
             } else {
-                match run_builtin_binary_op(fn_name, args[0], args[1])? {
+                match run_builtin_binary_op(fn_name, args[0], args[1])
+                    .map_err(|err| err.fill_position(pos))?
+                {
                     Some(v) => return Ok((v, false)),
                     None => (),
                 }
@@ -1334,15 +1338,24 @@ impl Engine {
 
                 result
             }
-            Some(f) if f.is_plugin_fn() => f.get_plugin_fn().clone().call(
-                (self, fn_name, module.id(), &*mods, lib).into(),
-                args.as_mut(),
-            ),
+
+            Some(f) if f.is_plugin_fn() => f
+                .get_plugin_fn()
+                .clone()
+                .call(
+                    (self, fn_name, module.id(), &*mods, lib).into(),
+                    args.as_mut(),
+                )
+                .map_err(|err| err.fill_position(pos)),
+
             Some(f) if f.is_native() => f.get_native_fn()(
                 (self, fn_name, module.id(), &*mods, lib).into(),
                 args.as_mut(),
-            ),
+            )
+            .map_err(|err| err.fill_position(pos)),
+
             Some(f) => unreachable!("unknown function type: {:?}", f),
+
             None => EvalAltResult::ErrorFunctionNotFound(
                 format!(
                     "{}{} ({})",

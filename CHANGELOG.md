@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.14
+===============
+
+Bug fixes
+---------
+
+* Errors in native Rust functions now contain the correct function call positions.
+
+
 Version 0.19.13
 ===============
 
