@@ -1,10 +1,10 @@
 Rhai Release Notes
 ==================
 
-This version introduces functions with `Dynamic` parameters acting as wildcards.
-
 Version 0.19.13
 ===============
+
+This version introduces functions with `Dynamic` parameters acting as wildcards.
 
 Bug fixes
 ---------
