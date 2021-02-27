@@ -156,6 +156,28 @@ pub fn ensure_no_data_race(
 }
 
 impl Engine {
+    /// Generate the signature for a function call.
+    fn gen_call_signature(
+        &self,
+        namespace: Option<&NamespaceRef>,
+        fn_name: &str,
+        args: &[&mut Dynamic],
+    ) -> String {
+        format!(
+            "{}{} ({})",
+            namespace.map_or(String::new(), |ns| ns.to_string()),
+            fn_name,
+            args.iter()
+                .map(|a| if a.is::<ImmutableString>() {
+                    "&str | ImmutableString | String"
+                } else {
+                    self.map_type_name((*a).type_name())
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+
     /// Call a native Rust function registered with the [`Engine`].
     ///
     /// # WARNING
@@ -367,18 +389,7 @@ impl Engine {
 
         // Raise error
         EvalAltResult::ErrorFunctionNotFound(
-            format!(
-                "{} ({})",
-                fn_name,
-                args.iter()
-                    .map(|name| if name.is::<ImmutableString>() {
-                        "&str | ImmutableString | String"
-                    } else {
-                        self.map_type_name((*name).type_name())
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
+            self.gen_call_signature(None, fn_name, args.as_ref()),
             pos,
         )
         .into()
@@ -1232,7 +1243,7 @@ impl Engine {
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let args_expr = args_expr.as_ref();
 
-        let namespace = namespace.as_ref().unwrap();
+        let namespace = namespace.unwrap();
         let mut arg_values: StaticVec<_>;
         let mut first_arg_value = None;
         let mut args: StaticVec<_>;
@@ -1357,19 +1368,7 @@ impl Engine {
             Some(f) => unreachable!("unknown function type: {:?}", f),
 
             None => EvalAltResult::ErrorFunctionNotFound(
-                format!(
-                    "{}{} ({})",
-                    namespace,
-                    fn_name,
-                    args.iter()
-                        .map(|a| if a.is::<ImmutableString>() {
-                            "&str | ImmutableString | String"
-                        } else {
-                            self.map_type_name((*a).type_name())
-                        })
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
+                self.gen_call_signature(Some(namespace), fn_name, args.as_ref()),
                 pos,
             )
             .into(),
