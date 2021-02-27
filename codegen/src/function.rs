@@ -98,8 +98,8 @@ pub fn print_type(ty: &syn::Type) -> String {
 #[derive(Debug, Default)]
 pub struct ExportedFnParams {
     pub name: Vec<String>,
-    pub return_raw: bool,
-    pub pure: bool,
+    pub return_raw: Option<proc_macro2::Span>,
+    pub pure: Option<proc_macro2::Span>,
     pub skip: bool,
     pub special: FnSpecialAccess,
     pub namespace: FnNamespaceAccess,
@@ -137,8 +137,8 @@ impl ExportedParams for ExportedFnParams {
             items: attrs,
         } = info;
         let mut name = Vec::new();
-        let mut return_raw = false;
-        let mut pure = false;
+        let mut return_raw = None;
+        let mut pure = None;
         let mut skip = false;
         let mut namespace = FnNamespaceAccess::Unset;
         let mut special = FnSpecialAccess::None;
@@ -194,18 +194,28 @@ impl ExportedParams for ExportedFnParams {
                     return Err(syn::Error::new(s.span(), "extraneous value"))
                 }
 
-                ("pure", None) => pure = true,
-                ("return_raw", None) => return_raw = true,
+                ("pure", None) => pure = Some(item_span),
+                ("return_raw", None) => return_raw = Some(item_span),
                 ("skip", None) => skip = true,
                 ("global", None) => match namespace {
                     FnNamespaceAccess::Unset => namespace = FnNamespaceAccess::Global,
                     FnNamespaceAccess::Global => (),
-                    _ => return Err(syn::Error::new(key.span(), "conflicting namespace")),
+                    FnNamespaceAccess::Internal => {
+                        return Err(syn::Error::new(
+                            key.span(),
+                            "namespace is already set to 'internal'",
+                        ))
+                    }
                 },
                 ("internal", None) => match namespace {
                     FnNamespaceAccess::Unset => namespace = FnNamespaceAccess::Internal,
                     FnNamespaceAccess::Internal => (),
-                    _ => return Err(syn::Error::new(key.span(), "conflicting namespace")),
+                    FnNamespaceAccess::Global => {
+                        return Err(syn::Error::new(
+                            key.span(),
+                            "namespace is already set to 'global'",
+                        ))
+                    }
                 },
 
                 ("get", Some(s)) => {
@@ -478,10 +488,10 @@ impl ExportedFn {
     }
 
     pub fn exported_name<'n>(&'n self) -> Cow<'n, str> {
-        self.params.name.last().map_or_else(
-            || self.signature.ident.to_string().into(),
-            |s| s.as_str().into(),
-        )
+        self.params
+            .name
+            .last()
+            .map_or_else(|| self.signature.ident.to_string().into(), |s| s.into())
     }
 
     pub fn arg_list(&self) -> impl Iterator<Item = &syn::FnArg> {
@@ -503,15 +513,23 @@ impl ExportedFn {
     }
 
     pub fn set_params(&mut self, mut params: ExportedFnParams) -> syn::Result<()> {
-        // Several issues are checked here to avoid issues with diagnostics caused by raising them
-        // later.
+        // Several issues are checked here to avoid issues with diagnostics caused by raising them later.
         //
-        // 1. Do not allow non-returning raw functions.
+        // 1a. Do not allow non-returning raw functions.
         //
-        if params.return_raw && self.return_type().is_none() {
+        if params.return_raw.is_some() && self.return_type().is_none() {
             return Err(syn::Error::new(
-                self.signature.span(),
+                params.return_raw.unwrap(),
                 "functions marked with 'return_raw' must return Result<Dynamic, Box<EvalAltResult>>",
+            ));
+        }
+
+        // 1b. Do not allow non-method pure functions.
+        //
+        if params.pure.is_some() && !self.mutable_receiver() {
+            return Err(syn::Error::new(
+                params.pure.unwrap(),
+                "'pure' is not necessary on functions without a &mut first parameter",
             ));
         }
 
@@ -519,7 +537,7 @@ impl ExportedFn {
             // 2a. Property getters must take only the subject as an argument.
             FnSpecialAccess::Property(Property::Get(_)) if self.arg_count() != 1 => {
                 return Err(syn::Error::new(
-                    self.signature.span(),
+                    self.signature.inputs.span(),
                     "property getter requires exactly 1 parameter",
                 ))
             }
@@ -533,21 +551,21 @@ impl ExportedFn {
             // 3a. Property setters must take the subject and a new value as arguments.
             FnSpecialAccess::Property(Property::Set(_)) if self.arg_count() != 2 => {
                 return Err(syn::Error::new(
-                    self.signature.span(),
+                    self.signature.inputs.span(),
                     "property setter requires exactly 2 parameters",
                 ))
             }
             // 3b. Property setters must return nothing.
             FnSpecialAccess::Property(Property::Set(_)) if self.return_type().is_some() => {
                 return Err(syn::Error::new(
-                    self.signature.span(),
+                    self.signature.output.span(),
                     "property setter cannot return any value",
                 ))
             }
             // 4a. Index getters must take the subject and the accessed "index" as arguments.
             FnSpecialAccess::Index(Index::Get) if self.arg_count() != 2 => {
                 return Err(syn::Error::new(
-                    self.signature.span(),
+                    self.signature.inputs.span(),
                     "index getter requires exactly 2 parameters",
                 ))
             }
@@ -561,15 +579,15 @@ impl ExportedFn {
             // 5a. Index setters must take the subject, "index", and new value as arguments.
             FnSpecialAccess::Index(Index::Set) if self.arg_count() != 3 => {
                 return Err(syn::Error::new(
-                    self.signature.span(),
+                    self.signature.inputs.span(),
                     "index setter requires exactly 3 parameters",
                 ))
             }
             // 5b. Index setters must return nothing.
             FnSpecialAccess::Index(Index::Set) if self.return_type().is_some() => {
                 return Err(syn::Error::new(
-                    self.signature.span(),
-                    "index setter cannot return a value",
+                    self.signature.output.span(),
+                    "index setter cannot return any value",
                 ))
             }
             _ => {}
@@ -635,7 +653,7 @@ impl ExportedFn {
             .return_type()
             .map(|r| r.span())
             .unwrap_or_else(|| proc_macro2::Span::call_site());
-        if self.params.return_raw {
+        if self.params.return_raw.is_some() {
             quote_spanned! { return_span =>
                 pub #dynamic_signature {
                     #name(#(#arguments),*)
@@ -659,7 +677,7 @@ impl ExportedFn {
     pub fn generate_callable(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
         let callable_fn_name: syn::Ident = syn::Ident::new(
-            format!("{}_callable", on_type_name.to_lowercase()).as_str(),
+            &format!("{}_callable", on_type_name.to_lowercase()),
             self.name().span(),
         );
         quote! {
@@ -672,7 +690,7 @@ impl ExportedFn {
     pub fn generate_input_names(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
         let input_names_fn_name: syn::Ident = syn::Ident::new(
-            format!("{}_input_names", on_type_name.to_lowercase()).as_str(),
+            &format!("{}_input_names", on_type_name.to_lowercase()),
             self.name().span(),
         );
         quote! {
@@ -685,7 +703,7 @@ impl ExportedFn {
     pub fn generate_input_types(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
         let input_types_fn_name: syn::Ident = syn::Ident::new(
-            format!("{}_input_types", on_type_name.to_lowercase()).as_str(),
+            &format!("{}_input_types", on_type_name.to_lowercase()),
             self.name().span(),
         );
         quote! {
@@ -698,7 +716,7 @@ impl ExportedFn {
     pub fn generate_return_type(&self, on_type_name: &str) -> proc_macro2::TokenStream {
         let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
         let return_type_fn_name: syn::Ident = syn::Ident::new(
-            format!("{}_return_type", on_type_name.to_lowercase()).as_str(),
+            &format!("{}_return_type", on_type_name.to_lowercase()),
             self.name().span(),
         );
         quote! {
@@ -750,7 +768,7 @@ impl ExportedFn {
                         })
                         .unwrap(),
                     );
-                    if !self.params().pure {
+                    if !self.params().pure.is_some() {
                         let arg_lit_str =
                             syn::LitStr::new(&pat.to_token_stream().to_string(), pat.span());
                         unpack_statements.push(
@@ -871,7 +889,7 @@ impl ExportedFn {
             .return_type()
             .map(|r| r.span())
             .unwrap_or_else(|| proc_macro2::Span::call_site());
-        let return_expr = if !self.params.return_raw {
+        let return_expr = if !self.params.return_raw.is_some() {
             if self.return_dynamic {
                 quote_spanned! { return_span =>
                     Ok(#sig_name(#(#unpack_exprs),*))

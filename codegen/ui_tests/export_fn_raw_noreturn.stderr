@@ -1,8 +1,8 @@
 error: functions marked with 'return_raw' must return Result<Dynamic, Box<EvalAltResult>>
-  --> $DIR/export_fn_raw_noreturn.rs:10:5
-   |
-10 | pub fn test_fn(input: &mut Point) {
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ --> $DIR/export_fn_raw_noreturn.rs:9:13
+  |
+9 | #[export_fn(return_raw)]
+  |             ^^^^^^^^^^
 
 error[E0425]: cannot find function `test_fn` in this scope
   --> $DIR/export_fn_raw_noreturn.rs:19:5

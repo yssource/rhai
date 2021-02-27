@@ -217,7 +217,7 @@ impl Module {
 
     pub fn exported_name(&self) -> Cow<str> {
         if !self.params.name.is_empty() {
-            self.params.name.as_str().into()
+            (&self.params.name).into()
         } else {
             self.module_name().to_string().into()
         }
