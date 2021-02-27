@@ -9,6 +9,16 @@ Bug fixes
 
 * Errors in native Rust functions now contain the correct function call positions.
 
+Breaking changes
+----------------
+
+* Zero step in the `range` function now raises an error instead of creating an infinite stream.
+
+Enhancements
+------------
+
+* `range` function now supports negative step and decreasing streams (i.e. to < from).
+
 
 Version 0.19.13
 ===============
