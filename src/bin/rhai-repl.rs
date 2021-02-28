@@ -13,8 +13,7 @@ use std::{
 /// Pretty-print error.
 fn print_error(input: &str, mut err: EvalAltResult) {
     let lines: Vec<_> = input.trim().split('\n').collect();
-    let pos = err.position();
-    err.clear_position();
+    let pos = err.take_position();
 
     let line_no = if lines.len() > 1 {
         if pos.is_none() {

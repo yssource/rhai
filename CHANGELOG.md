@@ -8,16 +8,20 @@ Bug fixes
 ---------
 
 * Errors in native Rust functions now contain the correct function call positions.
+* Fixed error types in `EvalAltResult::ErrorMismatchDataType` which were swapped.
 
 Breaking changes
 ----------------
 
 * Zero step in the `range` function now raises an error instead of creating an infinite stream.
+* Error variable captured by `catch` is now an _object map_ containing error fields.
+* `EvalAltResult::clear_position` is renamed `EvalAltResult::take_position` and returns the position taken.
 
 Enhancements
 ------------
 
 * `range` function now supports negative step and decreasing streams (i.e. to < from).
+* More information is provided to the error variable captured by the `catch` statement in an _object map_.
 
 
 Version 0.19.13

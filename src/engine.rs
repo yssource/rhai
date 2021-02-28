@@ -422,8 +422,8 @@ impl<'a> Target<'a> {
                 // Replace the character at the specified index position
                 let new_ch = new_val.as_char().map_err(|err| {
                     Box::new(EvalAltResult::ErrorMismatchDataType(
-                        err.to_string(),
                         "char".to_string(),
+                        err.to_string(),
                         pos,
                     ))
                 })?;
@@ -2245,11 +2245,47 @@ impl Engine {
                     Err(err) if err.is_pseudo_error() => Err(err),
                     Err(err) if !err.is_catchable() => Err(err),
                     Err(mut err) => {
-                        let value = match *err {
+                        let err_value = match *err {
                             EvalAltResult::ErrorRuntime(ref x, _) => x.clone(),
+
+                            #[cfg(feature = "no_object")]
                             _ => {
-                                err.set_position(Position::NONE);
+                                err.take_position();
                                 err.to_string().into()
+                            }
+                            #[cfg(not(feature = "no_object"))]
+                            _ => {
+                                use crate::INT;
+
+                                let mut err_map: Map = Default::default();
+                                let err_pos = err.take_position();
+
+                                err_map.insert("message".into(), err.to_string().into());
+
+                                if let Some(ref source) = state.source {
+                                    err_map.insert("source".into(), source.clone().into());
+                                }
+
+                                if err_pos.is_none() {
+                                    // No position info
+                                } else {
+                                    err_map.insert(
+                                        "line".into(),
+                                        (err_pos.line().unwrap() as INT).into(),
+                                    );
+                                    err_map.insert(
+                                        "position".into(),
+                                        if err_pos.is_beginning_of_line() {
+                                            0
+                                        } else {
+                                            err_pos.position().unwrap() as INT
+                                        }
+                                        .into(),
+                                    );
+                                }
+
+                                err.dump_fields(&mut err_map);
+                                err_map.into()
                             }
                         };
 
@@ -2257,7 +2293,7 @@ impl Engine {
                         state.scope_level += 1;
 
                         if let Some(Ident { name, .. }) = err_var {
-                            scope.push(unsafe_cast_var_name_to_lifetime(&name), value);
+                            scope.push(unsafe_cast_var_name_to_lifetime(&name), err_value);
                         }
 
                         let result =
@@ -2589,8 +2625,8 @@ impl Engine {
     #[inline(always)]
     pub(crate) fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
         EvalAltResult::ErrorMismatchDataType(
-            typ.into(),
             self.map_type_name(type_name::<T>()).into(),
+            typ.into(),
             pos,
         )
         .into()

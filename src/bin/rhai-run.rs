@@ -23,8 +23,7 @@ fn eprint_error(input: &str, mut err: EvalAltResult) {
     let lines: Vec<_> = input.split('\n').collect();
 
     // Print error
-    let pos = err.position();
-    err.clear_position();
+    let pos = err.take_position();
 
     if pos.is_none() {
         // No position
