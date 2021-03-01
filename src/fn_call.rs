@@ -192,9 +192,9 @@ impl Engine {
     #[inline]
     fn resolve_function<'s>(
         &self,
+        mods: &Imports,
         state: &'s mut State,
         lib: &[&Module],
-        mods: &Imports,
         fn_name: &str,
         mut hash: NonZeroU64,
         args: &mut FnCallArgs,
@@ -203,8 +203,8 @@ impl Engine {
         fn find_function(
             engine: &Engine,
             hash: NonZeroU64,
-            lib: &[&Module],
             mods: &Imports,
+            lib: &[&Module],
         ) -> Option<(CallableFunction, Option<ImmutableString>)> {
             lib.iter()
                 .find_map(|m| {
@@ -249,7 +249,7 @@ impl Engine {
                 let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
 
                 loop {
-                    match find_function(self, hash, lib, mods) {
+                    match find_function(self, hash, mods, lib) {
                         // Specific version found
                         Some(f) => return Some(f),
 
@@ -304,7 +304,7 @@ impl Engine {
         let source = state.source.clone();
 
         // Check if function access already in the cache
-        let func = self.resolve_function(state, lib, mods, fn_name, hash_fn, args, true);
+        let func = self.resolve_function(mods, state, lib, fn_name, hash_fn, args, true);
 
         if let Some((func, src)) = func {
             assert!(func.is_native());
@@ -578,16 +578,18 @@ impl Engine {
     pub(crate) fn has_override_by_name_and_arguments(
         &self,
         mods: Option<&Imports>,
-        state: Option<&mut State>,
         lib: &[&Module],
         fn_name: &str,
         arg_types: &[TypeId],
     ) -> bool {
         let arg_types = arg_types.as_ref();
-        let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_types.iter().cloned());
-        let hash_script = calc_script_fn_hash(empty(), fn_name, arg_types.len());
 
-        self.has_override(mods, state, lib, hash_fn, hash_script)
+        self.has_override(
+            mods,
+            lib,
+            calc_native_fn_hash(empty(), fn_name, arg_types.iter().cloned()),
+            calc_script_fn_hash(empty(), fn_name, arg_types.len()),
+        )
     }
 
     // Has a system function an override?
@@ -595,29 +597,12 @@ impl Engine {
     pub(crate) fn has_override(
         &self,
         mods: Option<&Imports>,
-        mut state: Option<&mut State>,
         lib: &[&Module],
         hash_fn: Option<NonZeroU64>,
         hash_script: Option<NonZeroU64>,
     ) -> bool {
-        // Check if it is already in the cache
-        if let Some(state) = state.as_mut() {
-            if let Some(hash) = hash_script {
-                match state.fn_resolution_cache().map_or(None, |c| c.get(&hash)) {
-                    Some(v) => return v.is_some(),
-                    None => (),
-                }
-            }
-            if let Some(hash) = hash_fn {
-                match state.fn_resolution_cache().map_or(None, |c| c.get(&hash)) {
-                    Some(v) => return v.is_some(),
-                    None => (),
-                }
-            }
-        }
-
         // First check script-defined functions
-        let r = hash_script.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, false)))
+        hash_script.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, false)))
             //|| hash_fn.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, false)))
             // Then check registered functions
             || hash_script.map_or(false, |hash| self.global_namespace.contains_fn(hash, false))
@@ -630,21 +615,7 @@ impl Engine {
             || hash_fn.map_or(false, |hash| mods.map_or(false, |m| m.contains_fn(hash)))
             // Then check sub-modules
             || hash_script.map_or(false, |hash| self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash)))
-            || hash_fn.map_or(false, |hash| self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash)));
-
-        // If there is no override, put that information into the cache
-        if !r {
-            if let Some(state) = state.as_mut() {
-                if let Some(hash) = hash_script {
-                    state.fn_resolution_cache_mut().insert(hash, None);
-                }
-                if let Some(hash) = hash_fn {
-                    state.fn_resolution_cache_mut().insert(hash, None);
-                }
-            }
-        }
-
-        r
+            || hash_fn.map_or(false, |hash| self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash)))
     }
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
@@ -678,49 +649,27 @@ impl Engine {
 
         match fn_name {
             // type_of
-            KEYWORD_TYPE_OF
-                if args.len() == 1
-                    && !self.has_override(
-                        Some(mods),
-                        Some(state),
-                        lib,
-                        Some(hash_fn),
-                        hash_script,
-                    ) =>
-            {
-                Ok((
-                    self.map_type_name(args[0].type_name()).to_string().into(),
-                    false,
-                ))
-            }
+            KEYWORD_TYPE_OF if args.len() == 1 => Ok((
+                self.map_type_name(args[0].type_name()).to_string().into(),
+                false,
+            )),
 
             // Fn/eval - reaching this point it must be a method-style call, mostly like redirected
             //           by a function pointer so it isn't caught at parse time.
-            KEYWORD_FN_PTR | KEYWORD_EVAL
-                if args.len() == 1
-                    && !self.has_override(
-                        Some(mods),
-                        Some(state),
-                        lib,
-                        Some(hash_fn),
-                        hash_script,
-                    ) =>
-            {
-                EvalAltResult::ErrorRuntime(
-                    format!(
-                        "'{}' should not be called in method style. Try {}(...);",
-                        fn_name, fn_name
-                    )
-                    .into(),
-                    pos,
+            KEYWORD_FN_PTR | KEYWORD_EVAL if args.len() == 1 => EvalAltResult::ErrorRuntime(
+                format!(
+                    "'{}' should not be called in method style. Try {}(...);",
+                    fn_name, fn_name
                 )
-                .into()
-            }
+                .into(),
+                pos,
+            )
+            .into(),
 
             #[cfg(not(feature = "no_function"))]
             _ if hash_script.is_some() => {
                 let (func, source) = self
-                    .resolve_function(state, lib, mods, fn_name, hash_script.unwrap(), args, false)
+                    .resolve_function(mods, state, lib, fn_name, hash_script.unwrap(), args, false)
                     .as_ref()
                     .map(|(f, s)| (Some(f.clone()), s.clone()))
                     .unwrap_or((None, None));
@@ -1037,10 +986,7 @@ impl Engine {
         let mut curry = StaticVec::new();
         let mut name = fn_name;
 
-        if name == KEYWORD_FN_PTR_CALL
-            && args_expr.len() >= 1
-            && !self.has_override(Some(mods), Some(state), lib, None, hash_script)
-        {
+        if name == KEYWORD_FN_PTR_CALL && args_expr.len() >= 1 {
             let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
             if !fn_ptr.is::<FnPtr>() {
@@ -1067,20 +1013,16 @@ impl Engine {
 
         // Handle Fn()
         if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
-            let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
-
-            if !self.has_override(Some(mods), Some(state), lib, hash_fn, hash_script) {
-                // Fn - only in function call style
-                return self
-                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
-                    .take_immutable_string()
-                    .map_err(|typ| {
-                        self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
-                    })
-                    .and_then(|s| FnPtr::try_from(s))
-                    .map(Into::<Dynamic>::into)
-                    .map_err(|err| err.fill_position(args_expr[0].position()));
-            }
+            // Fn - only in function call style
+            return self
+                .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
+                .take_immutable_string()
+                .map_err(|typ| {
+                    self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
+                })
+                .and_then(|s| FnPtr::try_from(s))
+                .map(Into::<Dynamic>::into)
+                .map_err(|err| err.fill_position(args_expr[0].position()));
         }
 
         // Handle curry()
@@ -1119,63 +1061,53 @@ impl Engine {
 
         // Handle is_def_var()
         if name == KEYWORD_IS_DEF_VAR && args_expr.len() == 1 {
-            let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
-
-            if !self.has_override(Some(mods), Some(state), lib, hash_fn, hash_script) {
-                let var_name =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-                let var_name = var_name.as_str().map_err(|err| {
-                    self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
-                })?;
-                return Ok(scope.contains(var_name).into());
-            }
+            let var_name =
+                self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+            let var_name = var_name.as_str().map_err(|err| {
+                self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
+            })?;
+            return Ok(scope.contains(var_name).into());
         }
 
         // Handle eval()
         if name == KEYWORD_EVAL && args_expr.len() == 1 {
-            let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
-
             let script_expr = &args_expr[0];
+            let script_pos = script_expr.position();
 
-            if !self.has_override(Some(mods), Some(state), lib, hash_fn, hash_script) {
-                let script_pos = script_expr.position();
+            // eval - only in function call style
+            let prev_len = scope.len();
+            let script = self.eval_expr(scope, mods, state, lib, this_ptr, script_expr, level)?;
+            let script = script
+                .as_str()
+                .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, script_pos))?;
+            let result = self.eval_script_expr_in_place(
+                scope,
+                mods,
+                state,
+                lib,
+                script,
+                script_pos,
+                level + 1,
+            );
 
-                // eval - only in function call style
-                let prev_len = scope.len();
-                let script =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, script_expr, level)?;
-                let script = script.as_str().map_err(|typ| {
-                    self.make_type_mismatch_err::<ImmutableString>(typ, script_pos)
-                })?;
-                let result = self.eval_script_expr_in_place(
-                    scope,
-                    mods,
-                    state,
-                    lib,
-                    script,
-                    script_pos,
-                    level + 1,
-                );
-
-                // IMPORTANT! If the eval defines new variables in the current scope,
-                //            all variable offsets from this point on will be mis-aligned.
-                if scope.len() != prev_len {
-                    state.always_search = true;
-                }
-
-                return result.map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
-                        KEYWORD_EVAL.to_string(),
-                        state
-                            .source
-                            .as_ref()
-                            .map_or_else(|| "", |s| s.as_str())
-                            .to_string(),
-                        err,
-                        pos,
-                    ))
-                });
+            // IMPORTANT! If the eval defines new variables in the current scope,
+            //            all variable offsets from this point on will be mis-aligned.
+            if scope.len() != prev_len {
+                state.always_search = true;
             }
+
+            return result.map_err(|err| {
+                Box::new(EvalAltResult::ErrorInFunctionCall(
+                    KEYWORD_EVAL.to_string(),
+                    state
+                        .source
+                        .as_ref()
+                        .map_or_else(|| "", |s| s.as_str())
+                        .to_string(),
+                    err,
+                    pos,
+                ))
+            });
         }
 
         // Normal function call - except for Fn, curry, call and eval (handled above)

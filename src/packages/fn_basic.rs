@@ -33,7 +33,7 @@ mod fn_ptr_functions {
                 let hash_script = calc_script_fn_hash(empty(), fn_name, num_params as usize);
 
                 ctx.engine()
-                    .has_override(ctx.mods, None, ctx.lib, None, hash_script)
+                    .has_override(ctx.mods, ctx.lib, None, hash_script)
             }
         }
     }

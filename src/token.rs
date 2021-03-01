@@ -759,7 +759,6 @@ impl Token {
     #[cfg(not(feature = "no_function"))]
     pub(crate) fn into_function_name_for_override(self) -> Result<String, Self> {
         match self {
-            Self::Reserved(s) if can_override_keyword(&s) => Ok(s),
             Self::Custom(s) | Self::Identifier(s) if is_valid_identifier(s.chars()) => Ok(s),
             _ => Err(self),
         }
@@ -1626,16 +1625,6 @@ pub fn is_keyword_function(name: &str) -> bool {
     match name {
         KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
         | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY => true,
-        _ => false,
-    }
-}
-
-/// Can this keyword be overridden as a function?
-#[cfg(not(feature = "no_function"))]
-#[inline(always)]
-pub fn can_override_keyword(name: &str) -> bool {
-    match name {
-        KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR => true,
         _ => false,
     }
 }
