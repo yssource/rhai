@@ -1726,9 +1726,16 @@ impl Engine {
                 .map(|(val, _)| val.take_or_clone()),
 
             // Statement block
-            Expr::Stmt(x, _) => {
-                self.eval_stmt_block(scope, mods, state, lib, this_ptr, x.as_ref(), true, level)
-            }
+            Expr::Stmt(x, _) => self.eval_stmt_block(
+                scope,
+                mods,
+                state,
+                lib,
+                this_ptr,
+                x.as_ref().as_ref(),
+                true,
+                level,
+            ),
 
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
@@ -1857,14 +1864,14 @@ impl Engine {
     }
 
     /// Evaluate a statements block.
-    pub(crate) fn eval_stmt_block<'a>(
+    pub(crate) fn eval_stmt_block(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        statements: impl IntoIterator<Item = &'a Stmt>,
+        statements: &[Stmt],
         restore: bool,
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -1877,7 +1884,7 @@ impl Engine {
             state.scope_level += 1;
         }
 
-        let result = statements.into_iter().try_fold(Dynamic::UNIT, |_, stmt| {
+        let result = statements.iter().try_fold(Dynamic::UNIT, |_, stmt| {
             #[cfg(not(feature = "no_module"))]
             match stmt {
                 Stmt::Import(_, _, _) => {

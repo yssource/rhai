@@ -764,29 +764,25 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_module"))]
-    pub fn register_static_module(
-        &mut self,
-        name: impl AsRef<str>,
-        module: Shared<Module>,
-    ) -> &mut Self {
+    pub fn register_static_module(&mut self, name: &str, module: Shared<Module>) -> &mut Self {
         fn register_static_module_raw(
             root: &mut crate::stdlib::collections::HashMap<crate::ImmutableString, Shared<Module>>,
-            name: impl AsRef<str>,
+            name: &str,
             module: Shared<Module>,
         ) {
             let separator = crate::token::Token::DoubleColon.syntax();
 
-            if !name.as_ref().contains(separator.as_ref()) {
+            if !name.contains(separator.as_ref()) {
                 if !module.is_indexed() {
                     // Index the module (making a clone copy if necessary) if it is not indexed
                     let mut module = crate::fn_native::shared_take_or_clone(module);
                     module.build_index();
-                    root.insert(name.as_ref().trim().into(), module.into());
+                    root.insert(name.trim().into(), module.into());
                 } else {
-                    root.insert(name.as_ref().trim().into(), module);
+                    root.insert(name.trim().into(), module);
                 }
             } else {
-                let mut iter = name.as_ref().splitn(2, separator.as_ref());
+                let mut iter = name.splitn(2, separator.as_ref());
                 let sub_module = iter.next().unwrap().trim();
                 let remainder = iter.next().unwrap().trim();
 
@@ -817,11 +813,7 @@ impl Engine {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[deprecated = "use `register_static_module` instead"]
-    pub fn register_module(
-        &mut self,
-        name: impl AsRef<str>,
-        module: impl Into<Shared<Module>>,
-    ) -> &mut Self {
+    pub fn register_module(&mut self, name: &str, module: impl Into<Shared<Module>>) -> &mut Self {
         self.register_static_module(name, module.into())
     }
     /// Compile a string into an [`AST`], which can be used later for evaluation.

@@ -640,13 +640,9 @@ impl Module {
     /// The _last entry_ in the list should be the _return type_ of the function.
     /// In other words, the number of entries should be one larger than the number of parameters.
     #[inline(always)]
-    pub fn update_fn_metadata<'a>(
-        &mut self,
-        hash_fn: NonZeroU64,
-        arg_names: impl AsRef<[&'a str]>,
-    ) -> &mut Self {
+    pub fn update_fn_metadata(&mut self, hash_fn: NonZeroU64, arg_names: &[&str]) -> &mut Self {
         if let Some(f) = self.functions.get_mut(&hash_fn) {
-            f.param_names = arg_names.as_ref().iter().map(|&n| n.into()).collect();
+            f.param_names = arg_names.iter().map(|&n| n.into()).collect();
         }
         self
     }

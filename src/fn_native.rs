@@ -97,13 +97,13 @@ impl<'e, 'n, 'm, M: AsRef<[&'m Module]> + ?Sized> From<(&'e Engine, &'n str, &'m
 impl<'e, 'n, 's, 'a, 'm> NativeCallContext<'e, 'n, 's, 'a, 'm> {
     /// Create a new [`NativeCallContext`].
     #[inline(always)]
-    pub fn new(engine: &'e Engine, fn_name: &'n str, lib: &'m impl AsRef<[&'m Module]>) -> Self {
+    pub fn new(engine: &'e Engine, fn_name: &'n str, lib: &'m [&'m Module]) -> Self {
         Self {
             engine,
             fn_name,
             source: None,
             mods: None,
-            lib: lib.as_ref(),
+            lib,
         }
     }
     /// _(INTERNALS)_ Create a new [`NativeCallContext`].
@@ -116,14 +116,14 @@ impl<'e, 'n, 's, 'a, 'm> NativeCallContext<'e, 'n, 's, 'a, 'm> {
         fn_name: &'n str,
         source: &'s Option<&str>,
         imports: &'a mut Imports,
-        lib: &'m impl AsRef<[&'m Module]>,
+        lib: &'m [&'m Module],
     ) -> Self {
         Self {
             engine,
             fn_name,
             source: source.clone(),
             mods: Some(imports),
-            lib: lib.as_ref(),
+            lib,
         }
     }
     /// The current [`Engine`].

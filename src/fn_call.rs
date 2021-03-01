@@ -545,7 +545,7 @@ impl Engine {
         state: Option<&mut State>,
         lib: &[&Module],
         fn_name: &str,
-        arg_types: impl AsRef<[TypeId]>,
+        arg_types: &[TypeId],
     ) -> bool {
         let arg_types = arg_types.as_ref();
         let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_types.iter().cloned());
@@ -812,12 +812,12 @@ impl Engine {
     /// Evaluate a list of statements with no `this` pointer.
     /// This is commonly used to evaluate a list of statements in an [`AST`] or a script function body.
     #[inline]
-    pub(crate) fn eval_global_statements<'a>(
+    pub(crate) fn eval_global_statements(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        statements: impl IntoIterator<Item = &'a Stmt>,
+        statements: &[Stmt],
         lib: &[&Module],
         level: usize,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
@@ -1022,7 +1022,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         fn_name: &str,
-        args_expr: impl AsRef<[Expr]>,
+        args_expr: &[Expr],
         mut hash_script: Option<NonZeroU64>,
         pos: Position,
         capture_scope: bool,
@@ -1260,7 +1260,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         namespace: Option<&NamespaceRef>,
         fn_name: &str,
-        args_expr: impl AsRef<[Expr]>,
+        args_expr: &[Expr],
         hash_script: NonZeroU64,
         pos: Position,
         level: usize,

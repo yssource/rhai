@@ -18,6 +18,7 @@ Breaking changes
 * `EvalAltResult::clear_position` is renamed `EvalAltResult::take_position` and returns the position taken.
 * `private` functions in an `AST` can now be called with `call_fn` etc.
 * `NativeCallContext::call_fn_dynamic_raw` no longer has the `pub_only` parameter.
+* `Module::update_fn_metadata` input parameter is changed.
 
 Enhancements
 ------------

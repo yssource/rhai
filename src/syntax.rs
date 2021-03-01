@@ -111,7 +111,7 @@ impl Engine {
     /// current [`Scope`][crate::Scope] will be _popped_.  Do not randomly remove variables.
     pub fn register_custom_syntax<S: AsRef<str> + Into<ImmutableString>>(
         &mut self,
-        keywords: impl AsRef<[S]>,
+        keywords: &[S],
         new_vars: isize,
         func: impl Fn(&mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
             + SendSync

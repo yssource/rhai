@@ -71,7 +71,7 @@ macro_rules! reg_range {
         $(
             $lib.set_iterator::<Range<$y>>();
             let hash = $lib.set_fn_2($x, get_range::<$y>);
-            $lib.update_fn_metadata(hash, [
+            $lib.update_fn_metadata(hash, &[
                     concat!("from: ", stringify!($y)),
                     concat!("to: ", stringify!($y)),
                     concat!("Iterator<Item=", stringify!($y), ">")
@@ -85,7 +85,7 @@ macro_rules! reg_stepped_range {
         $(
             $lib.set_iterator::<StepRange<$y>>();
             let hash = $lib.set_fn_3($x, get_step_range::<$y>);
-            $lib.update_fn_metadata(hash, [
+            $lib.update_fn_metadata(hash, &[
                     concat!("from: ", stringify!($y)),
                     concat!("to: ", stringify!($y)),
                     concat!("step: ", stringify!($y)),
