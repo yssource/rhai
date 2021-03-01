@@ -1503,7 +1503,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, Box<EvalAltResult>> {
-        let mods = &mut (&self.global_sub_modules).into();
+        let mods = &mut Default::default();
 
         let result = self.eval_ast_with_scope_raw(scope, mods, ast, 0)?;
 
@@ -1598,7 +1598,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
-        let mods = &mut (&self.global_sub_modules).into();
+        let mods = &mut Default::default();
         let mut state: State = Default::default();
         state.source = ast.clone_source();
         #[cfg(not(feature = "no_module"))]
@@ -1766,7 +1766,7 @@ impl Engine {
         args: &mut FnCallArgs,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let state = &mut Default::default();
-        let mods = &mut (&self.global_sub_modules).into();
+        let mods = &mut Default::default();
         let lib = &[ast.lib()];
 
         if eval_ast {

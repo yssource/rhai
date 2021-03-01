@@ -79,7 +79,7 @@ impl<'a> State<'a> {
             variables: vec![],
             propagate_constants: true,
             engine,
-            mods: (&engine.global_sub_modules).into(),
+            mods: Default::default(),
             lib,
             optimization_level: level,
         }

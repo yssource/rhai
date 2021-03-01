@@ -17,7 +17,7 @@ use crate::stdlib::{
     collections::{HashMap, HashSet},
     fmt, format,
     hash::{Hash, Hasher},
-    iter::{empty, FromIterator},
+    iter::empty,
     num::{NonZeroU64, NonZeroU8, NonZeroUsize},
     ops::DerefMut,
     string::{String, ToString},
@@ -148,24 +148,6 @@ impl Imports {
             .iter()
             .rev()
             .find_map(|(_, m)| m.get_qualified_iter(id))
-    }
-}
-
-impl<'a, T: IntoIterator<Item = (&'a ImmutableString, &'a Shared<Module>)>> From<T> for Imports {
-    #[inline(always)]
-    fn from(value: T) -> Self {
-        Self(
-            value
-                .into_iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
-        )
-    }
-}
-impl FromIterator<(ImmutableString, Shared<Module>)> for Imports {
-    #[inline(always)]
-    fn from_iter<T: IntoIterator<Item = (ImmutableString, Shared<Module>)>>(iter: T) -> Self {
-        Self(iter.into_iter().collect())
     }
 }
 
@@ -824,32 +806,6 @@ fn default_debug(_s: &str, _source: Option<&str>, _pos: Position) {
     }
 }
 
-/// Search for a module within an imports stack.
-/// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
-pub fn search_imports(
-    mods: &Imports,
-    state: &mut State,
-    namespace: &NamespaceRef,
-) -> Result<Shared<Module>, Box<EvalAltResult>> {
-    let Ident { name: root, pos } = &namespace[0];
-
-    // Qualified - check if the root module is directly indexed
-    let index = if state.always_search {
-        None
-    } else {
-        namespace.index()
-    };
-
-    Ok(if let Some(index) = index {
-        let offset = mods.len() - index.get();
-        mods.get(offset).expect("invalid index in Imports")
-    } else {
-        mods.find(root)
-            .map(|n| mods.get(n).expect("invalid index in Imports"))
-            .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *pos))?
-    })
-}
-
 impl Engine {
     /// Create a new [`Engine`]
     #[inline]
@@ -970,6 +926,34 @@ impl Engine {
         }
     }
 
+    /// Search for a module within an imports stack.
+    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
+    pub fn search_imports(
+        &self,
+        mods: &Imports,
+        state: &mut State,
+        namespace: &NamespaceRef,
+    ) -> Result<Shared<Module>, Box<EvalAltResult>> {
+        let Ident { name: root, pos } = &namespace[0];
+
+        // Qualified - check if the root module is directly indexed
+        let index = if state.always_search {
+            None
+        } else {
+            namespace.index()
+        };
+
+        Ok(if let Some(index) = index {
+            let offset = mods.len() - index.get();
+            mods.get(offset).expect("invalid index in Imports")
+        } else {
+            mods.find(root)
+                .map(|n| mods.get(n).expect("invalid index in Imports"))
+                .or_else(|| self.global_sub_modules.get(root).cloned())
+                .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *pos))?
+        })
+    }
+
     /// Search for a variable within the scope or within imports,
     /// depending on whether the variable name is namespace-qualified.
     pub(crate) fn search_namespace<'s>(
@@ -985,7 +969,7 @@ impl Engine {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
                 (_, Some((hash_var, modules)), Ident { name, pos }) => {
-                    let module = search_imports(mods, state, modules)?;
+                    let module = self.search_imports(mods, state, modules)?;
                     let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
                         match *err {
                             EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
@@ -2175,6 +2159,13 @@ impl Engine {
                 let iter_obj = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let iter_type = iter_obj.type_id();
 
+                // lib should only contain scripts, so technically they cannot have iterators
+
+                // Search order:
+                // 1) Global namespace - functions registered via Engine::register_XXX
+                // 2) Global modules - packages
+                // 3) Imported modules - functions marked with global namespace
+                // 4) Global sub-modules - functions marked with global namespace
                 let func = self
                     .global_namespace
                     .get_iter(iter_type)
@@ -2183,7 +2174,12 @@ impl Engine {
                             .iter()
                             .find_map(|m| m.get_iter(iter_type))
                     })
-                    .or_else(|| mods.get_iter(iter_type));
+                    .or_else(|| mods.get_iter(iter_type))
+                    .or_else(|| {
+                        self.global_sub_modules
+                            .values()
+                            .find_map(|m| m.get_qualified_iter(iter_type))
+                    });
 
                 if let Some(func) = func {
                     // Add the loop variable

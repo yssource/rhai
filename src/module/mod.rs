@@ -1783,7 +1783,7 @@ impl Module {
         ast: &crate::AST,
         engine: &crate::Engine,
     ) -> Result<Self, Box<EvalAltResult>> {
-        let mut mods: crate::engine::Imports = (&engine.global_sub_modules).into();
+        let mut mods: crate::engine::Imports = Default::default();
         let orig_mods_len = mods.len();
 
         // Run the script

@@ -2,8 +2,8 @@
 
 use crate::ast::{Expr, Stmt};
 use crate::engine::{
-    search_imports, Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
-    KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
+    KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
     MAX_DYNAMIC_PARAMETERS,
 };
 use crate::fn_native::FnCallArgs;
@@ -212,7 +212,14 @@ impl Engine {
                 let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
 
                 loop {
-                    //lib.get_fn(hash, false).or_else(||
+                    // lib should only contain scripts, so technically speaking we don't have to check it
+                    // lib.iter().find_map(|m| m.get_fn(hash, false).map(|f| (f.clone(), m.id_raw().cloned()))).or_else(|| {
+
+                    // Search order:
+                    // 1) Global namespace - functions registered via Engine::register_XXX
+                    // 2) Global modules - packages
+                    // 3) Imported modules - functions marked with global namespace
+                    // 4) Global sub-modules - functions marked with global namespace
                     match self
                         .global_namespace
                         .get_fn(hash, false)
@@ -227,6 +234,12 @@ impl Engine {
                         .or_else(|| {
                             mods.get_fn(hash)
                                 .map(|(f, source)| (f.clone(), source.cloned()))
+                        })
+                        .or_else(|| {
+                            self.global_sub_modules.values().find_map(|m| {
+                                m.get_qualified_fn(hash)
+                                    .map(|f| (f.clone(), m.id_raw().cloned()))
+                            })
                         }) {
                         // Specific version found
                         Some(f) => return Some(f),
@@ -1297,7 +1310,7 @@ impl Engine {
             }
         }
 
-        let module = search_imports(mods, state, namespace)?;
+        let module = self.search_imports(mods, state, namespace)?;
 
         // First search in script-defined functions (can override built-in)
         let func = match module.get_qualified_fn(hash_script) {
