@@ -644,119 +644,156 @@ impl Engine {
             ensure_no_data_race(fn_name, args, is_ref)?;
         }
 
-        let hash_fn =
-            calc_native_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id())).unwrap();
-
+        // These may be redirected from method style calls.
         match fn_name {
-            // type_of
-            KEYWORD_TYPE_OF if args.len() == 1 => Ok((
-                self.map_type_name(args[0].type_name()).to_string().into(),
-                false,
-            )),
+            // Handle type_of()
+            KEYWORD_TYPE_OF if args.len() == 1 => {
+                return Ok((
+                    self.map_type_name(args[0].type_name()).to_string().into(),
+                    false,
+                ));
+            }
 
-            // Fn/eval - reaching this point it must be a method-style call, mostly like redirected
-            //           by a function pointer so it isn't caught at parse time.
-            KEYWORD_FN_PTR | KEYWORD_EVAL if args.len() == 1 => EvalAltResult::ErrorRuntime(
-                format!(
-                    "'{}' should not be called in method style. Try {}(...);",
-                    fn_name, fn_name
-                )
-                .into(),
-                pos,
-            )
-            .into(),
-
+            // Handle is_def_fn()
             #[cfg(not(feature = "no_function"))]
-            _ if hash_script.is_some() => {
-                let (func, source) = self
-                    .resolve_function(mods, state, lib, fn_name, hash_script.unwrap(), args, false)
-                    .as_ref()
-                    .map(|(f, s)| (Some(f.clone()), s.clone()))
-                    .unwrap_or((None, None));
+            crate::engine::KEYWORD_IS_DEF_FN
+                if args.len() == 2 && args[0].is::<FnPtr>() && args[1].is::<INT>() =>
+            {
+                let fn_name = args[0].as_str().unwrap();
+                let num_params = args[1].as_int().unwrap();
 
-                if let Some(func) = func {
-                    // Script function call
-                    assert!(func.is_script());
-
-                    let func = func.get_fn_def();
-
-                    let scope: &mut Scope = &mut Default::default();
-
-                    // Move captured variables into scope
-                    #[cfg(not(feature = "no_closure"))]
-                    if let Some(captured) = _capture_scope {
-                        if !func.externals.is_empty() {
-                            captured
-                                .into_iter()
-                                .filter(|(name, _, _)| func.externals.iter().any(|ex| ex == name))
-                                .for_each(|(name, value, _)| {
-                                    // Consume the scope values.
-                                    scope.push_dynamic(name, value);
-                                });
-                        }
-                    }
-
-                    let result = if _is_method {
-                        // Method call of script function - map first argument to `this`
-                        let (first, rest) = args.split_first_mut().unwrap();
-
-                        let orig_source = mem::take(&mut state.source);
-                        state.source = source;
-
-                        let level = _level + 1;
-
-                        let result = self.call_script_fn(
-                            scope,
-                            mods,
-                            state,
-                            lib,
-                            &mut Some(*first),
-                            func,
-                            rest,
-                            pos,
-                            level,
-                        );
-
-                        // Restore the original source
-                        state.source = orig_source;
-
-                        result?
+                return Ok((
+                    if num_params < 0 {
+                        Dynamic::FALSE
                     } else {
-                        // Normal call of script function
-                        // The first argument is a reference?
-                        let mut backup: ArgBackup = Default::default();
-                        backup.change_first_arg_to_copy(is_ref, args);
+                        let hash_script =
+                            calc_script_fn_hash(empty(), fn_name, num_params as usize);
+                        self.has_override(Some(mods), lib, None, hash_script).into()
+                    },
+                    false,
+                ));
+            }
 
-                        let orig_source = mem::take(&mut state.source);
-                        state.source = source;
-
-                        let level = _level + 1;
-
-                        let result = self.call_script_fn(
-                            scope, mods, state, lib, &mut None, func, args, pos, level,
-                        );
-
-                        // Restore the original source
-                        state.source = orig_source;
-
-                        // Restore the original reference
-                        backup.restore_first_arg(args);
-
-                        result?
-                    };
-
-                    Ok((result, false))
-                } else {
-                    // Native function call
-                    self.call_native_fn(
-                        mods, state, lib, fn_name, hash_fn, args, is_ref, false, pos,
+            // Handle is_shared()
+            #[cfg(not(feature = "no_closure"))]
+            crate::engine::KEYWORD_IS_SHARED if args.len() == 1 => {
+                return Err(Box::new(EvalAltResult::ErrorRuntime(
+                    format!(
+                        "'{}' should not be called this way. Try {}(...);",
+                        fn_name, fn_name
                     )
+                    .into(),
+                    pos,
+                )))
+            }
+
+            KEYWORD_FN_PTR | KEYWORD_EVAL | KEYWORD_IS_DEF_VAR if args.len() == 1 => {
+                return Err(Box::new(EvalAltResult::ErrorRuntime(
+                    format!(
+                        "'{}' should not be called this way. Try {}(...);",
+                        fn_name, fn_name
+                    )
+                    .into(),
+                    pos,
+                )))
+            }
+
+            KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY if !args.is_empty() => {
+                return Err(Box::new(EvalAltResult::ErrorRuntime(
+                    format!(
+                        "'{}' should not be called this way. Try {}(...);",
+                        fn_name, fn_name
+                    )
+                    .into(),
+                    pos,
+                )))
+            }
+
+            _ => (),
+        }
+
+        #[cfg(not(feature = "no_function"))]
+        if let Some((func, source)) = hash_script.and_then(|hash| {
+            self.resolve_function(mods, state, lib, fn_name, hash, args, false)
+                .as_ref()
+                .map(|(f, s)| (f.clone(), s.clone()))
+        }) {
+            // Script function call
+            assert!(func.is_script());
+
+            let func = func.get_fn_def();
+
+            let scope: &mut Scope = &mut Default::default();
+
+            // Move captured variables into scope
+            #[cfg(not(feature = "no_closure"))]
+            if let Some(captured) = _capture_scope {
+                if !func.externals.is_empty() {
+                    captured
+                        .into_iter()
+                        .filter(|(name, _, _)| func.externals.iter().any(|ex| ex == name))
+                        .for_each(|(name, value, _)| {
+                            // Consume the scope values.
+                            scope.push_dynamic(name, value);
+                        });
                 }
             }
 
-            // Native function call
-            _ => self.call_native_fn(mods, state, lib, fn_name, hash_fn, args, is_ref, false, pos),
+            let result = if _is_method {
+                // Method call of script function - map first argument to `this`
+                let (first, rest) = args.split_first_mut().unwrap();
+
+                let orig_source = mem::take(&mut state.source);
+                state.source = source;
+
+                let level = _level + 1;
+
+                let result = self.call_script_fn(
+                    scope,
+                    mods,
+                    state,
+                    lib,
+                    &mut Some(*first),
+                    func,
+                    rest,
+                    pos,
+                    level,
+                );
+
+                // Restore the original source
+                state.source = orig_source;
+
+                result?
+            } else {
+                // Normal call of script function
+                // The first argument is a reference?
+                let mut backup: ArgBackup = Default::default();
+                backup.change_first_arg_to_copy(is_ref, args);
+
+                let orig_source = mem::take(&mut state.source);
+                state.source = source;
+
+                let level = _level + 1;
+
+                let result =
+                    self.call_script_fn(scope, mods, state, lib, &mut None, func, args, pos, level);
+
+                // Restore the original source
+                state.source = orig_source;
+
+                // Restore the original reference
+                backup.restore_first_arg(args);
+
+                result?
+            };
+
+            return Ok((result, false));
         }
+
+        // Native function call
+        let hash_fn =
+            calc_native_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id())).unwrap();
+        self.call_native_fn(mods, state, lib, fn_name, hash_fn, args, is_ref, false, pos)
     }
 
     /// Evaluate a list of statements with no `this` pointer.
@@ -845,114 +882,116 @@ impl Engine {
         let obj = target.as_mut();
         let mut fn_name = fn_name;
 
-        let (result, updated) = if fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
-            // FnPtr call
-            let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
-            // Redirect function name
-            let fn_name = fn_ptr.fn_name();
-            let args_len = call_args.len() + fn_ptr.curry().len();
-            // Recalculate hash
-            let hash = hash_script.and_then(|_| calc_script_fn_hash(empty(), fn_name, args_len));
-            // Arguments are passed as-is, adding the curried arguments
-            let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
-            let mut arg_values = curry
-                .iter_mut()
-                .chain(call_args.iter_mut())
-                .collect::<StaticVec<_>>();
-            let args = arg_values.as_mut();
+        let (result, updated) = match fn_name {
+            KEYWORD_FN_PTR_CALL if obj.is::<FnPtr>() => {
+                // FnPtr call
+                let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
+                // Redirect function name
+                let fn_name = fn_ptr.fn_name();
+                let args_len = call_args.len() + fn_ptr.curry().len();
+                // Recalculate hash
+                let hash =
+                    hash_script.and_then(|_| calc_script_fn_hash(empty(), fn_name, args_len));
+                // Arguments are passed as-is, adding the curried arguments
+                let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
+                let mut arg_values = curry
+                    .iter_mut()
+                    .chain(call_args.iter_mut())
+                    .collect::<StaticVec<_>>();
+                let args = arg_values.as_mut();
 
-            // Map it to name(args) in function-call style
-            self.exec_fn_call(
-                mods, state, lib, fn_name, hash, args, false, false, pos, None, level,
-            )
-        } else if fn_name == KEYWORD_FN_PTR_CALL
-            && call_args.len() > 0
-            && call_args[0].is::<FnPtr>()
-        {
-            // FnPtr call on object
-            let fn_ptr = call_args.remove(0).cast::<FnPtr>();
-            // Redirect function name
-            let fn_name = fn_ptr.fn_name();
-            let args_len = call_args.len() + fn_ptr.curry().len();
-            // Recalculate hash
-            let hash = hash_script.and_then(|_| calc_script_fn_hash(empty(), fn_name, args_len));
-            // Replace the first argument with the object pointer, adding the curried arguments
-            let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
-            let mut arg_values = once(obj)
-                .chain(curry.iter_mut())
-                .chain(call_args.iter_mut())
-                .collect::<StaticVec<_>>();
-            let args = arg_values.as_mut();
-
-            // Map it to name(args) in function-call style
-            self.exec_fn_call(
-                mods, state, lib, fn_name, hash, args, is_ref, true, pos, None, level,
-            )
-        } else if fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
-            // Curry call
-            let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
-            Ok((
-                FnPtr::new_unchecked(
-                    fn_ptr.get_fn_name().clone(),
-                    fn_ptr
-                        .curry()
-                        .iter()
-                        .cloned()
-                        .chain(call_args.into_iter())
-                        .collect(),
+                // Map it to name(args) in function-call style
+                self.exec_fn_call(
+                    mods, state, lib, fn_name, hash, args, false, false, pos, None, level,
                 )
-                .into(),
-                false,
-            ))
-        } else if {
-            #[cfg(not(feature = "no_closure"))]
-            {
-                fn_name == crate::engine::KEYWORD_IS_SHARED && call_args.is_empty()
             }
-            #[cfg(feature = "no_closure")]
-            false
-        } {
-            // is_shared call
-            Ok((target.is_shared().into(), false))
-        } else {
-            let _redirected;
-            let mut hash = hash_script;
+            KEYWORD_FN_PTR_CALL if call_args.len() > 0 && call_args[0].is::<FnPtr>() => {
+                // FnPtr call on object
+                let fn_ptr = call_args.remove(0).cast::<FnPtr>();
+                // Redirect function name
+                let fn_name = fn_ptr.fn_name();
+                let args_len = call_args.len() + fn_ptr.curry().len();
+                // Recalculate hash
+                let hash =
+                    hash_script.and_then(|_| calc_script_fn_hash(empty(), fn_name, args_len));
+                // Replace the first argument with the object pointer, adding the curried arguments
+                let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
+                let mut arg_values = once(obj)
+                    .chain(curry.iter_mut())
+                    .chain(call_args.iter_mut())
+                    .collect::<StaticVec<_>>();
+                let args = arg_values.as_mut();
 
-            // Check if it is a map method call in OOP style
-            #[cfg(not(feature = "no_object"))]
-            if let Some(map) = obj.read_lock::<Map>() {
-                if let Some(val) = map.get(fn_name) {
-                    if let Some(fn_ptr) = val.read_lock::<FnPtr>() {
-                        // Remap the function name
-                        _redirected = fn_ptr.get_fn_name().clone();
-                        fn_name = &_redirected;
-                        // Add curried arguments
+                // Map it to name(args) in function-call style
+                self.exec_fn_call(
+                    mods, state, lib, fn_name, hash, args, is_ref, true, pos, None, level,
+                )
+            }
+            KEYWORD_FN_PTR_CURRY if obj.is::<FnPtr>() => {
+                // Curry call
+                let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
+                Ok((
+                    FnPtr::new_unchecked(
+                        fn_ptr.get_fn_name().clone(),
                         fn_ptr
                             .curry()
                             .iter()
                             .cloned()
-                            .enumerate()
-                            .for_each(|(i, v)| call_args.insert(i, v));
-                        // Recalculate the hash based on the new function name and new arguments
-                        hash = hash_script
-                            .and_then(|_| calc_script_fn_hash(empty(), fn_name, call_args.len()));
-                    }
-                }
-            };
-
-            if hash_script.is_none() {
-                hash = None;
+                            .chain(call_args.into_iter())
+                            .collect(),
+                    )
+                    .into(),
+                    false,
+                ))
             }
 
-            // Attached object pointer in front of the arguments
-            let mut arg_values = once(obj)
-                .chain(call_args.iter_mut())
-                .collect::<StaticVec<_>>();
-            let args = arg_values.as_mut();
+            // Handle is_shared()
+            #[cfg(not(feature = "no_closure"))]
+            crate::engine::KEYWORD_IS_SHARED if call_args.is_empty() => {
+                return Ok((target.is_shared().into(), false));
+            }
 
-            self.exec_fn_call(
-                mods, state, lib, fn_name, hash, args, is_ref, true, pos, None, level,
-            )
+            _ => {
+                let _redirected;
+                let mut hash = hash_script;
+
+                // Check if it is a map method call in OOP style
+                #[cfg(not(feature = "no_object"))]
+                if let Some(map) = obj.read_lock::<Map>() {
+                    if let Some(val) = map.get(fn_name) {
+                        if let Some(fn_ptr) = val.read_lock::<FnPtr>() {
+                            // Remap the function name
+                            _redirected = fn_ptr.get_fn_name().clone();
+                            fn_name = &_redirected;
+                            // Add curried arguments
+                            fn_ptr
+                                .curry()
+                                .iter()
+                                .cloned()
+                                .enumerate()
+                                .for_each(|(i, v)| call_args.insert(i, v));
+                            // Recalculate the hash based on the new function name and new arguments
+                            hash = hash_script.and_then(|_| {
+                                calc_script_fn_hash(empty(), fn_name, call_args.len())
+                            });
+                        }
+                    }
+                };
+
+                if hash_script.is_none() {
+                    hash = None;
+                }
+
+                // Attached object pointer in front of the arguments
+                let mut arg_values = once(obj)
+                    .chain(call_args.iter_mut())
+                    .collect::<StaticVec<_>>();
+                let args = arg_values.as_mut();
+
+                self.exec_fn_call(
+                    mods, state, lib, fn_name, hash, args, is_ref, true, pos, None, level,
+                )
+            }
         }?;
 
         // Propagate the changed value back to the source if necessary
@@ -986,128 +1025,158 @@ impl Engine {
         let mut curry = StaticVec::new();
         let mut name = fn_name;
 
-        if name == KEYWORD_FN_PTR_CALL && args_expr.len() >= 1 {
-            let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+        match name {
+            // Handle call()
+            KEYWORD_FN_PTR_CALL if args_expr.len() >= 1 => {
+                let fn_ptr =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
-            if !fn_ptr.is::<FnPtr>() {
-                return Err(self.make_type_mismatch_err::<FnPtr>(
-                    self.map_type_name(fn_ptr.type_name()),
-                    args_expr[0].position(),
-                ));
+                if !fn_ptr.is::<FnPtr>() {
+                    return Err(self.make_type_mismatch_err::<FnPtr>(
+                        self.map_type_name(fn_ptr.type_name()),
+                        args_expr[0].position(),
+                    ));
+                }
+
+                let fn_ptr = fn_ptr.cast::<FnPtr>();
+                curry.extend(fn_ptr.curry().iter().cloned());
+
+                // Redirect function name
+                redirected = fn_ptr.take_data().0;
+                name = &redirected;
+
+                // Skip the first argument
+                args_expr = &args_expr.as_ref()[1..];
+
+                // Recalculate hash
+                let args_len = args_expr.len() + curry.len();
+                hash_script = calc_script_fn_hash(empty(), name, args_len);
             }
 
-            let fn_ptr = fn_ptr.cast::<FnPtr>();
-            curry.extend(fn_ptr.curry().iter().cloned());
-
-            // Redirect function name
-            redirected = fn_ptr.take_data().0;
-            name = &redirected;
-
-            // Skip the first argument
-            args_expr = &args_expr.as_ref()[1..];
-
-            // Recalculate hash
-            let args_len = args_expr.len() + curry.len();
-            hash_script = calc_script_fn_hash(empty(), name, args_len);
-        }
-
-        // Handle Fn()
-        if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
-            // Fn - only in function call style
-            return self
-                .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
-                .take_immutable_string()
-                .map_err(|typ| {
-                    self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
-                })
-                .and_then(|s| FnPtr::try_from(s))
-                .map(Into::<Dynamic>::into)
-                .map_err(|err| err.fill_position(args_expr[0].position()));
-        }
-
-        // Handle curry()
-        if name == KEYWORD_FN_PTR_CURRY && args_expr.len() > 1 {
-            let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-
-            if !fn_ptr.is::<FnPtr>() {
-                return Err(self.make_type_mismatch_err::<FnPtr>(
-                    self.map_type_name(fn_ptr.type_name()),
-                    args_expr[0].position(),
-                ));
+            // Handle Fn()
+            KEYWORD_FN_PTR if args_expr.len() == 1 => {
+                // Fn - only in function call style
+                return self
+                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
+                    .take_immutable_string()
+                    .map_err(|typ| {
+                        self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
+                    })
+                    .and_then(|s| FnPtr::try_from(s))
+                    .map(Into::<Dynamic>::into)
+                    .map_err(|err| err.fill_position(args_expr[0].position()));
             }
 
-            let (name, mut fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
+            // Handle curry()
+            KEYWORD_FN_PTR_CURRY if args_expr.len() > 1 => {
+                let fn_ptr =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
-            // Append the new curried arguments to the existing list.
+                if !fn_ptr.is::<FnPtr>() {
+                    return Err(self.make_type_mismatch_err::<FnPtr>(
+                        self.map_type_name(fn_ptr.type_name()),
+                        args_expr[0].position(),
+                    ));
+                }
 
-            args_expr
-                .iter()
-                .skip(1)
-                .try_for_each(|expr| -> Result<(), Box<EvalAltResult>> {
-                    fn_curry.push(self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?);
-                    Ok(())
+                let (name, mut fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
+
+                // Append the new curried arguments to the existing list.
+
+                args_expr.iter().skip(1).try_for_each(
+                    |expr| -> Result<(), Box<EvalAltResult>> {
+                        fn_curry
+                            .push(self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?);
+                        Ok(())
+                    },
+                )?;
+
+                return Ok(FnPtr::new_unchecked(name, fn_curry).into());
+            }
+
+            // Handle is_shared()
+            #[cfg(not(feature = "no_closure"))]
+            crate::engine::KEYWORD_IS_SHARED if args_expr.len() == 1 => {
+                let value =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+                return Ok(value.is_shared().into());
+            }
+
+            // Handle is_def_fn()
+            #[cfg(not(feature = "no_function"))]
+            crate::engine::KEYWORD_IS_DEF_FN if args_expr.len() == 2 => {
+                let fn_name =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+                let fn_name = fn_name.as_str().map_err(|err| {
+                    self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
+                })?;
+                let num_params =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[1], level)?;
+                let num_params = num_params.as_int().map_err(|err| {
+                    self.make_type_mismatch_err::<INT>(err, args_expr[0].position())
                 })?;
 
-            return Ok(FnPtr::new_unchecked(name, fn_curry).into());
-        }
-
-        // Handle is_shared()
-        #[cfg(not(feature = "no_closure"))]
-        if name == crate::engine::KEYWORD_IS_SHARED && args_expr.len() == 1 {
-            let value = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-
-            return Ok(value.is_shared().into());
-        }
-
-        // Handle is_def_var()
-        if name == KEYWORD_IS_DEF_VAR && args_expr.len() == 1 {
-            let var_name =
-                self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-            let var_name = var_name.as_str().map_err(|err| {
-                self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
-            })?;
-            return Ok(scope.contains(var_name).into());
-        }
-
-        // Handle eval()
-        if name == KEYWORD_EVAL && args_expr.len() == 1 {
-            let script_expr = &args_expr[0];
-            let script_pos = script_expr.position();
-
-            // eval - only in function call style
-            let prev_len = scope.len();
-            let script = self.eval_expr(scope, mods, state, lib, this_ptr, script_expr, level)?;
-            let script = script
-                .as_str()
-                .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, script_pos))?;
-            let result = self.eval_script_expr_in_place(
-                scope,
-                mods,
-                state,
-                lib,
-                script,
-                script_pos,
-                level + 1,
-            );
-
-            // IMPORTANT! If the eval defines new variables in the current scope,
-            //            all variable offsets from this point on will be mis-aligned.
-            if scope.len() != prev_len {
-                state.always_search = true;
+                if num_params < 0 {
+                    return Ok(Dynamic::FALSE);
+                } else {
+                    let hash_script = calc_script_fn_hash(empty(), fn_name, num_params as usize);
+                    return Ok(self.has_override(Some(mods), lib, None, hash_script).into());
+                }
             }
 
-            return result.map_err(|err| {
-                Box::new(EvalAltResult::ErrorInFunctionCall(
-                    KEYWORD_EVAL.to_string(),
-                    state
-                        .source
-                        .as_ref()
-                        .map_or_else(|| "", |s| s.as_str())
-                        .to_string(),
-                    err,
-                    pos,
-                ))
-            });
+            // Handle is_def_var()
+            KEYWORD_IS_DEF_VAR if args_expr.len() == 1 => {
+                let var_name =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+                let var_name = var_name.as_str().map_err(|err| {
+                    self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
+                })?;
+                return Ok(scope.contains(var_name).into());
+            }
+
+            // Handle eval()
+            KEYWORD_EVAL if args_expr.len() == 1 => {
+                let script_expr = &args_expr[0];
+                let script_pos = script_expr.position();
+
+                // eval - only in function call style
+                let prev_len = scope.len();
+                let script =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, script_expr, level)?;
+                let script = script.as_str().map_err(|typ| {
+                    self.make_type_mismatch_err::<ImmutableString>(typ, script_pos)
+                })?;
+                let result = self.eval_script_expr_in_place(
+                    scope,
+                    mods,
+                    state,
+                    lib,
+                    script,
+                    script_pos,
+                    level + 1,
+                );
+
+                // IMPORTANT! If the eval defines new variables in the current scope,
+                //            all variable offsets from this point on will be mis-aligned.
+                if scope.len() != prev_len {
+                    state.always_search = true;
+                }
+
+                return result.map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                        KEYWORD_EVAL.to_string(),
+                        state
+                            .source
+                            .as_ref()
+                            .map_or_else(|| "", |s| s.as_str())
+                            .to_string(),
+                        err,
+                        pos,
+                    ))
+                });
+            }
+
+            _ => (),
         }
 
         // Normal function call - except for Fn, curry, call and eval (handled above)
