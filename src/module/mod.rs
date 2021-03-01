@@ -1809,19 +1809,17 @@ impl Module {
 
         // Non-private functions defined become module functions
         #[cfg(not(feature = "no_function"))]
-        {
-            ast.lib()
-                .functions
-                .values()
-                .filter(|FuncInfo { access, func, .. }| !access.is_private() && func.is_script())
-                .for_each(|FuncInfo { func, .. }| {
-                    // Encapsulate AST environment
-                    let mut func = func.get_fn_def().clone();
-                    func.lib = Some(ast.shared_lib());
-                    func.mods = func_mods.clone();
-                    module.set_script_fn(func);
-                });
-        }
+        ast.lib()
+            .functions
+            .values()
+            .filter(|FuncInfo { access, func, .. }| !access.is_private() && func.is_script())
+            .for_each(|FuncInfo { func, .. }| {
+                // Encapsulate AST environment
+                let mut func = func.get_fn_def().clone();
+                func.lib = Some(ast.shared_lib());
+                func.mods = func_mods.clone();
+                module.set_script_fn(func);
+            });
 
         module.set_id(ast.clone_source());
         module.build_index();

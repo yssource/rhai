@@ -1,6 +1,5 @@
 //! Implement function-calling mechanism for [`Engine`].
 
-use crate::ast::{Expr, Stmt};
 use crate::engine::{
     Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
@@ -21,6 +20,10 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::utils::combine_hashes;
+use crate::{
+    ast::{Expr, Stmt},
+    fn_native::CallableFunction,
+};
 use crate::{
     calc_native_fn_hash, calc_script_fn_hash, Dynamic, Engine, EvalAltResult, FnPtr,
     ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec, INT,
@@ -178,6 +181,105 @@ impl Engine {
         )
     }
 
+    /// Resolve a function call.
+    ///
+    /// Search order:
+    /// 1) AST - script functions in the AST
+    /// 2) Global namespace - functions registered via Engine::register_XXX
+    /// 3) Global modules - packages
+    /// 4) Imported modules - functions marked with global namespace
+    /// 5) Global sub-modules - functions marked with global namespace
+    #[inline]
+    fn resolve_function<'s>(
+        &self,
+        state: &'s mut State,
+        lib: &[&Module],
+        mods: &Imports,
+        fn_name: &str,
+        mut hash: NonZeroU64,
+        args: &mut FnCallArgs,
+        allow_dynamic: bool,
+    ) -> &'s Option<(CallableFunction, Option<ImmutableString>)> {
+        fn find_function(
+            engine: &Engine,
+            hash: NonZeroU64,
+            lib: &[&Module],
+            mods: &Imports,
+        ) -> Option<(CallableFunction, Option<ImmutableString>)> {
+            lib.iter()
+                .find_map(|m| {
+                    m.get_fn(hash, false)
+                        .map(|f| (f.clone(), m.id_raw().cloned()))
+                })
+                .or_else(|| {
+                    engine
+                        .global_namespace
+                        .get_fn(hash, false)
+                        .cloned()
+                        .map(|f| (f, None))
+                })
+                .or_else(|| {
+                    engine.global_modules.iter().find_map(|m| {
+                        m.get_fn(hash, false)
+                            .map(|f| (f.clone(), m.id_raw().cloned()))
+                    })
+                })
+                .or_else(|| {
+                    mods.get_fn(hash)
+                        .map(|(f, source)| (f.clone(), source.cloned()))
+                })
+                .or_else(|| {
+                    engine.global_sub_modules.values().find_map(|m| {
+                        m.get_qualified_fn(hash)
+                            .map(|f| (f.clone(), m.id_raw().cloned()))
+                    })
+                })
+        }
+
+        &*state
+            .fn_resolution_cache_mut()
+            .entry(hash)
+            .or_insert_with(|| {
+                let num_args = args.len();
+                let max_bitmask = if !allow_dynamic {
+                    0
+                } else {
+                    1usize << args.len().min(MAX_DYNAMIC_PARAMETERS)
+                };
+                let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
+
+                loop {
+                    match find_function(self, hash, lib, mods) {
+                        // Specific version found
+                        Some(f) => return Some(f),
+
+                        // Stop when all permutations are exhausted
+                        None if bitmask >= max_bitmask => return None,
+
+                        // Try all permutations with `Dynamic` wildcards
+                        None => {
+                            hash = calc_native_fn_hash(
+                                empty(),
+                                fn_name,
+                                args.iter().enumerate().map(|(i, a)| {
+                                    let mask = 1usize << (num_args - i - 1);
+                                    if bitmask & mask != 0 {
+                                        // Replace with `Dynamic`
+                                        TypeId::of::<Dynamic>()
+                                    } else {
+                                        a.type_id()
+                                    }
+                                }),
+                            )
+                            .unwrap();
+
+                            bitmask += 1;
+                        }
+                    }
+                }
+            })
+    }
+
     /// Call a native Rust function registered with the [`Engine`].
     ///
     /// # WARNING
@@ -202,73 +304,7 @@ impl Engine {
         let source = state.source.clone();
 
         // Check if function access already in the cache
-        let func = &*state
-            .fn_resolution_cache_mut()
-            .entry(hash_fn)
-            .or_insert_with(|| {
-                let num_args = args.len();
-                let max_bitmask = 1usize << args.len().min(MAX_DYNAMIC_PARAMETERS);
-                let mut hash = hash_fn;
-                let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
-
-                loop {
-                    // lib should only contain scripts, so technically speaking we don't have to check it
-                    // lib.iter().find_map(|m| m.get_fn(hash, false).map(|f| (f.clone(), m.id_raw().cloned()))).or_else(|| {
-
-                    // Search order:
-                    // 1) Global namespace - functions registered via Engine::register_XXX
-                    // 2) Global modules - packages
-                    // 3) Imported modules - functions marked with global namespace
-                    // 4) Global sub-modules - functions marked with global namespace
-                    match self
-                        .global_namespace
-                        .get_fn(hash, false)
-                        .cloned()
-                        .map(|f| (f, None))
-                        .or_else(|| {
-                            self.global_modules.iter().find_map(|m| {
-                                m.get_fn(hash, false)
-                                    .map(|f| (f.clone(), m.id_raw().cloned()))
-                            })
-                        })
-                        .or_else(|| {
-                            mods.get_fn(hash)
-                                .map(|(f, source)| (f.clone(), source.cloned()))
-                        })
-                        .or_else(|| {
-                            self.global_sub_modules.values().find_map(|m| {
-                                m.get_qualified_fn(hash)
-                                    .map(|f| (f.clone(), m.id_raw().cloned()))
-                            })
-                        }) {
-                        // Specific version found
-                        Some(f) => return Some(f),
-
-                        // Stop when all permutations are exhausted
-                        _ if bitmask >= max_bitmask => return None,
-
-                        // Try all permutations with `Dynamic` wildcards
-                        _ => {
-                            hash = calc_native_fn_hash(
-                                empty(),
-                                fn_name,
-                                args.iter().enumerate().map(|(i, a)| {
-                                    let mask = 1usize << (num_args - i - 1);
-                                    if bitmask & mask != 0 {
-                                        // Replace with `Dynamic`
-                                        TypeId::of::<Dynamic>()
-                                    } else {
-                                        a.type_id()
-                                    }
-                                }),
-                            )
-                            .unwrap();
-
-                            bitmask += 1;
-                        }
-                    }
-                }
-            });
+        let func = self.resolve_function(state, lib, mods, fn_name, hash_fn, args, true);
 
         if let Some((func, src)) = func {
             assert!(func.is_native());
@@ -683,43 +719,8 @@ impl Engine {
 
             #[cfg(not(feature = "no_function"))]
             _ if hash_script.is_some() => {
-                let hash_script = hash_script.unwrap();
-
-                // Check if script function access already in the cache
-                let (func, source) = state
-                    .fn_resolution_cache_mut()
-                    .entry(hash_script)
-                    .or_insert_with(|| {
-                        // Search order:
-                        // 1) AST - script functions in the AST
-                        // 2) Global modules - packages
-                        // 3) Imported modules - functions marked with global namespace
-                        // 4) Global sub-modules - functions marked with global namespace
-                        lib.iter()
-                            .find_map(|&m| {
-                                m.get_fn(hash_script, false)
-                                    .map(|f| (f.clone(), m.id_raw().cloned()))
-                            })
-                            //.or_else(|| self.global_namespace.get_fn(hash_script, false).cloned().map(|f| (f, None)))
-                            .or_else(|| {
-                                self.global_modules.iter().find_map(|m| {
-                                    m.get_fn(hash_script, false)
-                                        .map(|f| (f.clone(), m.id_raw().cloned()))
-                                })
-                            })
-                            .or_else(|| {
-                                mods.iter().find_map(|(_, m)| {
-                                    m.get_qualified_fn(hash_script)
-                                        .map(|f| (f.clone(), m.id_raw().cloned()))
-                                })
-                            })
-                            .or_else(|| {
-                                self.global_sub_modules.values().find_map(|m| {
-                                    m.get_qualified_fn(hash_script)
-                                        .map(|f| (f.clone(), m.id_raw().cloned()))
-                                })
-                            })
-                    })
+                let (func, source) = self
+                    .resolve_function(state, lib, mods, fn_name, hash_script.unwrap(), args, false)
                     .as_ref()
                     .map(|(f, s)| (Some(f.clone()), s.clone()))
                     .unwrap_or((None, None));
