@@ -1,4 +1,4 @@
-use rhai::{Dynamic, Engine, EvalAltResult, ImmutableString, RegisterFn, Scope, INT};
+use rhai::{Engine, EvalAltResult, ImmutableString, RegisterFn, Scope, INT};
 
 #[test]
 fn test_string() -> Result<(), Box<EvalAltResult>> {

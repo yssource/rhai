@@ -649,7 +649,7 @@ mod array_functions {
 
         for (a1, a2) in array.iter_mut().zip(array2.iter_mut()) {
             let equals = ctx
-                .call_fn_dynamic_raw(OP_EQUALS, true, false, &mut [a1, a2])
+                .call_fn_dynamic_raw(OP_EQUALS, true, &mut [a1, a2])
                 .map(|v| v.as_bool().unwrap_or(false))?;
 
             if !equals {

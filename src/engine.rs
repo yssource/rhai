@@ -1148,8 +1148,8 @@ impl Engine {
                             let args = &mut [target_val, &mut idx_val2, &mut (new_val.0).0];
 
                             self.exec_fn_call(
-                                mods, state, lib, FN_IDX_SET, None, args, is_ref, true, false,
-                                val_pos, None, level,
+                                mods, state, lib, FN_IDX_SET, None, args, is_ref, true, val_pos,
+                                None, level,
                             )
                             .map_err(|err| match *err {
                                 EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
@@ -1189,7 +1189,7 @@ impl Engine {
                         } = x.as_ref();
                         let args = idx_val.as_fn_call_args();
                         self.make_method_call(
-                            mods, state, lib, name, *hash, target, args, false, *pos, level,
+                            mods, state, lib, name, *hash, target, args, *pos, level,
                         )
                     }
                     // xxx.fn_name(...) = ???
@@ -1229,8 +1229,8 @@ impl Engine {
                         let mut new_val = new_val;
                         let mut args = [target_val, &mut (new_val.as_mut().unwrap().0).0];
                         self.exec_fn_call(
-                            mods, state, lib, setter, None, &mut args, is_ref, true, false, *pos,
-                            None, level,
+                            mods, state, lib, setter, None, &mut args, is_ref, true, *pos, None,
+                            level,
                         )
                         .map(|(v, _)| (v, true))
                     }
@@ -1239,8 +1239,8 @@ impl Engine {
                         let (getter, _, Ident { pos, .. }) = x.as_ref();
                         let mut args = [target_val];
                         self.exec_fn_call(
-                            mods, state, lib, getter, None, &mut args, is_ref, true, false, *pos,
-                            None, level,
+                            mods, state, lib, getter, None, &mut args, is_ref, true, *pos, None,
+                            level,
                         )
                         .map(|(v, _)| (v, false))
                     }
@@ -1264,7 +1264,7 @@ impl Engine {
                                 } = x.as_ref();
                                 let args = idx_val.as_fn_call_args();
                                 let (val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hash, target, args, false, *pos, level,
+                                    mods, state, lib, name, *hash, target, args, *pos, level,
                                 )?;
                                 val.into()
                             }
@@ -1291,8 +1291,8 @@ impl Engine {
                                 let arg_values = &mut [target_val, &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self.exec_fn_call(
-                                    mods, state, lib, getter, None, args, is_ref, true, false,
-                                    *pos, None, level,
+                                    mods, state, lib, getter, None, args, is_ref, true, *pos, None,
+                                    level,
                                 )?;
 
                                 let val = &mut val;
@@ -1318,7 +1318,7 @@ impl Engine {
                                     arg_values[1] = val;
                                     self.exec_fn_call(
                                         mods, state, lib, setter, None, arg_values, is_ref, true,
-                                        false, *pos, None, level,
+                                        *pos, None, level,
                                     )
                                     .or_else(
                                         |err| match *err {
@@ -1343,7 +1343,7 @@ impl Engine {
                                 } = f.as_ref();
                                 let args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hash, target, args, false, *pos, level,
+                                    mods, state, lib, name, *hash, target, args, *pos, level,
                                 )?;
                                 let val = &mut val;
                                 let target = &mut val.into();
@@ -1613,8 +1613,8 @@ impl Engine {
                 let mut idx = idx;
                 let args = &mut [target, &mut idx];
                 self.exec_fn_call(
-                    _mods, state, _lib, FN_IDX_GET, None, args, _is_ref, true, false, idx_pos,
-                    None, _level,
+                    _mods, state, _lib, FN_IDX_GET, None, args, _is_ref, true, idx_pos, None,
+                    _level,
                 )
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
@@ -1775,8 +1775,7 @@ impl Engine {
                     ..
                 } = x.as_ref();
                 self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args, *hash, false, *pos, *cap_scope,
-                    level,
+                    scope, mods, state, lib, this_ptr, name, args, *hash, *pos, *cap_scope, level,
                 )
             }
 

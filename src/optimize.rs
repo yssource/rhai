@@ -673,7 +673,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
-            if !state.engine.has_override_by_name_and_arguments(Some(&state.mods), None, state.lib, x.name.as_ref(), arg_types.as_ref(), false) {
+            if !state.engine.has_override_by_name_and_arguments(Some(&state.mods), None, state.lib, x.name.as_ref(), arg_types.as_ref()) {
                 if let Some(result) = run_builtin_binary_op(x.name.as_ref(), &arg_values[0], &arg_values[1])
                                         .ok().flatten()
                                         .and_then(|result| map_dynamic_to_expr(result, *pos))
