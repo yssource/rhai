@@ -2,6 +2,7 @@ use crate::dynamic::Variant;
 use crate::stdlib::{
     boxed::Box,
     ops::{Add, Range},
+    string::ToString,
 };
 use crate::{def_package, EvalAltResult, Position, INT};
 

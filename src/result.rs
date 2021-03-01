@@ -348,7 +348,11 @@ impl EvalAltResult {
     pub(crate) fn dump_fields(&self, map: &mut crate::Map) {
         map.insert(
             "error".into(),
-            format!("{:?}", self).split('(').next().unwrap().into(),
+            crate::stdlib::format!("{:?}", self)
+                .split('(')
+                .next()
+                .unwrap()
+                .into(),
         );
 
         match self {

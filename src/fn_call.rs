@@ -17,7 +17,7 @@ use crate::stdlib::{
     iter::{empty, once},
     mem,
     num::NonZeroU64,
-    string::ToString,
+    string::{String, ToString},
     vec::Vec,
 };
 use crate::utils::combine_hashes;
