@@ -1,11 +1,11 @@
 //! Implement function-calling mechanism for [`Engine`].
 
-use crate::builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 use crate::engine::{
     Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
     MAX_DYNAMIC_PARAMETERS,
 };
+use crate::fn_builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 use crate::fn_native::{FnAny, FnCallArgs};
 use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
@@ -243,8 +243,7 @@ impl Engine {
 
                         // Stop when all permutations are exhausted
                         None if bitmask >= max_bitmask => {
-                            return if num_args != 2 || args[0].is_variant() || args[1].is_variant()
-                            {
+                            return if num_args != 2 {
                                 None
                             } else if !is_op_assignment {
                                 if let Some(f) =

@@ -64,12 +64,12 @@ extern crate alloc;
 // Internal modules
 
 mod ast;
-mod builtin;
 mod dynamic;
 mod engine;
 mod engine_api;
 mod engine_settings;
 mod fn_args;
+mod fn_builtin;
 mod fn_call;
 mod fn_func;
 mod fn_native;

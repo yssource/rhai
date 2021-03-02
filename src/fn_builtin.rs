@@ -14,6 +14,29 @@ use rust_decimal::Decimal;
 #[cfg(not(feature = "no_float"))]
 use num_traits::float::Float;
 
+/// Is the type a numeric type?
+fn is_numeric(type_id: TypeId) -> bool {
+    let result = type_id == TypeId::of::<u8>()
+        || type_id == TypeId::of::<u16>()
+        || type_id == TypeId::of::<u32>()
+        || type_id == TypeId::of::<u64>()
+        || type_id == TypeId::of::<i8>()
+        || type_id == TypeId::of::<i16>()
+        || type_id == TypeId::of::<i32>()
+        || type_id == TypeId::of::<i64>();
+
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+    let result = result || type_id == TypeId::of::<u128>() || type_id == TypeId::of::<i128>();
+
+    #[cfg(not(feature = "no_float"))]
+    let result = result || type_id == TypeId::of::<f32>() || type_id == TypeId::of::<f64>();
+
+    #[cfg(feature = "decimal")]
+    let result = result || type_id == TypeId::of::<rust_decimal::Decimal>();
+
+    result
+}
+
 /// Build in common binary operator implementations to avoid the cost of calling a registered function.
 pub fn get_builtin_binary_op_fn(
     op: &str,
@@ -23,13 +46,24 @@ pub fn get_builtin_binary_op_fn(
     let type1 = x.type_id();
     let type2 = y.type_id();
 
+    // One of the operands is a custom type, so it is never built-in
     if x.is_variant() || y.is_variant() {
-        // One of the operands is a custom type, so it is never built-in
-        return match op {
-            "!=" if type1 != type2 => Some(|_, _| Ok(Dynamic::TRUE)),
-            "==" | ">" | ">=" | "<" | "<=" if type1 != type2 => Some(|_, _| Ok(Dynamic::FALSE)),
-            _ => None,
-        };
+        if is_numeric(type1) && is_numeric(type2) {
+            // Disallow comparisons between different numeric types
+            return None;
+        }
+
+        // If the types are not the same, default to not compare
+        if type1 != type2 {
+            return match op {
+                "!=" => Some(|_, _| Ok(Dynamic::TRUE)),
+                "==" | ">" | ">=" | "<" | "<=" => Some(|_, _| Ok(Dynamic::FALSE)),
+                _ => None,
+            };
+        }
+
+        // Disallow comparisons between the same type
+        return None;
     }
 
     let types_pair = (type1, type2);

@@ -1,9 +1,9 @@
 //! Module implementing the [`AST`] optimizer.
 
 use crate::ast::{Expr, ScriptFnDef, Stmt};
-use crate::builtin::get_builtin_binary_op_fn;
 use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
+use crate::fn_builtin::get_builtin_binary_op_fn;
 use crate::parser::map_dynamic_to_expr;
 use crate::stdlib::{
     boxed::Box,

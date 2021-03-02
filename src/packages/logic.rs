@@ -1,6 +1,5 @@
 #![allow(non_snake_case)]
 
-use crate::builtin::get_builtin_binary_op_fn;
 use crate::def_package;
 use crate::plugin::*;
 
@@ -40,8 +39,6 @@ macro_rules! reg_functions {
 }
 
 def_package!(crate:LogicPackage:"Logical operators.", lib, {
-    combine_with_exported_module!(lib, "logic", logic_functions);
-
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]
     {
@@ -96,66 +93,6 @@ gen_cmp_functions!(float => f64);
 
 #[cfg(feature = "decimal")]
 gen_cmp_functions!(decimal => Decimal);
-
-#[export_module]
-mod logic_functions {
-    fn is_numeric(type_id: TypeId) -> bool {
-        let result = type_id == TypeId::of::<u8>()
-            || type_id == TypeId::of::<u16>()
-            || type_id == TypeId::of::<u32>()
-            || type_id == TypeId::of::<u64>()
-            || type_id == TypeId::of::<i8>()
-            || type_id == TypeId::of::<i16>()
-            || type_id == TypeId::of::<i32>()
-            || type_id == TypeId::of::<i64>();
-
-        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-        let result = result || type_id == TypeId::of::<u128>() || type_id == TypeId::of::<i128>();
-
-        #[cfg(not(feature = "no_float"))]
-        let result = result || type_id == TypeId::of::<f32>() || type_id == TypeId::of::<f64>();
-
-        #[cfg(feature = "decimal")]
-        let result = result || type_id == TypeId::of::<rust_decimal::Decimal>();
-
-        result
-    }
-
-    #[rhai_fn(
-        name = "==",
-        name = "!=",
-        name = ">",
-        name = ">=",
-        name = "<",
-        name = "<=",
-        return_raw,
-        pure
-    )]
-    pub fn cmp(
-        ctx: NativeCallContext,
-        x: &mut Dynamic,
-        mut y: Dynamic,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let type_x = x.type_id();
-        let type_y = y.type_id();
-
-        if type_x != type_y && is_numeric(type_x) && is_numeric(type_y) {
-            // Disallow comparisons between different number types
-        } else if let Some(f) = get_builtin_binary_op_fn(ctx.fn_name(), x, &y) {
-            return f(ctx, &mut [x, &mut y]);
-        }
-
-        Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
-            format!(
-                "{} ({}, {})",
-                ctx.fn_name(),
-                ctx.engine().map_type_name(x.type_name()),
-                ctx.engine().map_type_name(y.type_name())
-            ),
-            Position::NONE,
-        )))
-    }
-}
 
 #[cfg(not(feature = "no_float"))]
 #[export_module]

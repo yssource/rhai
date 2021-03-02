@@ -71,6 +71,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                    { Self { field: 1 } }
+    ///
     ///     fn update(&mut self, offset: i64)   { self.field += offset; }
     /// }
     ///
@@ -170,6 +171,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                { Self { field: 1 } }
+    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> i64  { self.field }
     /// }
@@ -216,8 +218,9 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { field: 1 } }
+    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self) -> RhaiResult {
+    ///     fn get_field(&mut self) -> Result<Dynamic, Box<EvalAltResult>> {
     ///         Ok(self.field.into())
     ///     }
     /// }
@@ -258,6 +261,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                        { Self { field: 1 } }
+    ///
     ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
     /// }
     ///
@@ -305,6 +309,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { field: 1 } }
+    ///
     ///     fn set_field(&mut self, new_val: i64) -> Result<(), Box<EvalAltResult>> {
     ///         self.field = new_val;
     ///         Ok(())
@@ -356,8 +361,10 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                        { Self { field: 1 } }
+    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> i64          { self.field }
+    ///
     ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
     /// }
     ///
@@ -407,6 +414,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> i64 { self.fields[index as usize] }
     /// }
@@ -473,8 +481,9 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self, index: i64) -> RhaiResult {
+    ///     fn get_field(&mut self, index: i64) -> Result<Dynamic, Box<EvalAltResult>> {
     ///         Ok(self.fields[index as usize].into())
     ///     }
     /// }
@@ -535,6 +544,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///
     ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
     /// }
     ///
@@ -601,6 +611,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///
     ///     fn set_field(&mut self, index: i64, value: i64) -> Result<(), Box<EvalAltResult>> {
     ///         self.fields[index as usize] = value;
     ///         Ok(())
@@ -672,8 +683,10 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                                { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> i64      { self.fields[index as usize] }
+    ///
     ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
     /// }
     ///

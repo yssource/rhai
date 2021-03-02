@@ -52,7 +52,7 @@ pub trait RegisterResultFn<FN, ARGS> {
     /// use rhai::{Engine, Dynamic, RegisterResultFn, EvalAltResult};
     ///
     /// // Normal function
-    /// fn div(x: i64, y: i64) -> RhaiResult {
+    /// fn div(x: i64, y: i64) -> Result<Dynamic, Box<EvalAltResult>> {
     ///     if y == 0 {
     ///         // '.into()' automatically converts to 'Box<EvalAltResult::ErrorRuntime>'
     ///         Err("division by zero!".into())
