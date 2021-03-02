@@ -29,6 +29,7 @@ Enhancements
 * More information is provided to the error variable captured by the `catch` statement in an _object map_.
 * Previously, `private` functions in an `AST` cannot be called with `call_fn` etc. This is inconvenient when trying to call a function inside a script which also serves as a loadable module exporting part (but not all) of the functions. Now, all functions (`private` or not) can be called in an `AST`. The `private` keyword is relegated to preventing a function from being exported.
 
+
 Version 0.19.13
 ===============
 

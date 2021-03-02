@@ -1,11 +1,12 @@
 //! Implement function-calling mechanism for [`Engine`].
 
+use crate::builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 use crate::engine::{
     Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
     MAX_DYNAMIC_PARAMETERS,
 };
-use crate::fn_native::FnCallArgs;
+use crate::fn_native::{FnAny, FnCallArgs};
 use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
 use crate::stdlib::{
@@ -29,18 +30,8 @@ use crate::{
     ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec, INT,
 };
 
-#[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
-
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
-
-#[cfg(feature = "decimal")]
-use rust_decimal::Decimal;
-
-#[cfg(feature = "no_std")]
-#[cfg(not(feature = "no_float"))]
-use num_traits::float::Float;
 
 /// Extract the property name from a getter function name.
 #[cfg(not(feature = "no_object"))]
@@ -199,6 +190,7 @@ impl Engine {
         mut hash: NonZeroU64,
         args: &mut FnCallArgs,
         allow_dynamic: bool,
+        is_op_assignment: bool,
     ) -> &'s Option<(CallableFunction, Option<ImmutableString>)> {
         fn find_function(
             engine: &Engine,
@@ -254,7 +246,36 @@ impl Engine {
                         Some(f) => return Some(f),
 
                         // Stop when all permutations are exhausted
-                        None if bitmask >= max_bitmask => return None,
+                        None if bitmask >= max_bitmask => {
+                            return if num_args != 2 || args[0].is_variant() || args[1].is_variant()
+                            {
+                                None
+                            } else if !is_op_assignment {
+                                if let Some(f) =
+                                    get_builtin_binary_op_fn(fn_name, &args[0], &args[1])
+                                {
+                                    Some((
+                                        CallableFunction::from_method(Box::new(f) as Box<FnAny>),
+                                        None,
+                                    ))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                let (first, second) = args.split_first().unwrap();
+
+                                if let Some(f) =
+                                    get_builtin_op_assignment_fn(fn_name, *first, second[0])
+                                {
+                                    Some((
+                                        CallableFunction::from_method(Box::new(f) as Box<FnAny>),
+                                        None,
+                                    ))
+                                } else {
+                                    None
+                                }
+                            }
+                        }
 
                         // Try all permutations with `Dynamic` wildcards
                         None => {
@@ -304,7 +325,16 @@ impl Engine {
         let source = state.source.clone();
 
         // Check if function access already in the cache
-        let func = self.resolve_function(mods, state, lib, fn_name, hash_fn, args, true);
+        let func = self.resolve_function(
+            mods,
+            state,
+            lib,
+            fn_name,
+            hash_fn,
+            args,
+            true,
+            is_op_assignment,
+        );
 
         if let Some((func, src)) = func {
             assert!(func.is_native());
@@ -352,31 +382,6 @@ impl Engine {
                 }
                 _ => (result, func.is_method()),
             });
-        }
-
-        // See if it is built in.
-        if args.len() == 2 && !args[0].is_variant() && !args[1].is_variant() {
-            // Op-assignment?
-            if is_op_assignment {
-                if !is_ref {
-                    unreachable!("op-assignments must have ref argument");
-                }
-                let (first, second) = args.split_first_mut().unwrap();
-
-                match run_builtin_op_assignment(fn_name, first, second[0])
-                    .map_err(|err| err.fill_position(pos))?
-                {
-                    Some(_) => return Ok((Dynamic::UNIT, false)),
-                    None => (),
-                }
-            } else {
-                match run_builtin_binary_op(fn_name, args[0], args[1])
-                    .map_err(|err| err.fill_position(pos))?
-                {
-                    Some(v) => return Ok((v, false)),
-                    None => (),
-                }
-            }
         }
 
         // Getter function not found?
@@ -714,7 +719,7 @@ impl Engine {
 
         #[cfg(not(feature = "no_function"))]
         if let Some((func, source)) = hash_script.and_then(|hash| {
-            self.resolve_function(mods, state, lib, fn_name, hash, args, false)
+            self.resolve_function(mods, state, lib, fn_name, hash, args, false, false)
                 .as_ref()
                 .map(|(f, s)| (f.clone(), s.clone()))
         }) {
@@ -1400,453 +1405,4 @@ impl Engine {
             .into(),
         }
     }
-}
-
-/// Build in common binary operator implementations to avoid the cost of calling a registered function.
-pub fn run_builtin_binary_op(
-    op: &str,
-    x: &Dynamic,
-    y: &Dynamic,
-) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
-    let type1 = x.type_id();
-    let type2 = y.type_id();
-
-    if x.is_variant() || y.is_variant() {
-        // One of the operands is a custom type, so it is never built-in
-        return Ok(match op {
-            "!=" if type1 != type2 => Some(Dynamic::TRUE),
-            "==" | ">" | ">=" | "<" | "<=" if type1 != type2 => Some(Dynamic::FALSE),
-            _ => None,
-        });
-    }
-
-    let types_pair = (type1, type2);
-
-    #[cfg(not(feature = "no_float"))]
-    if let Some((x, y)) = if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>()) {
-        // FLOAT op FLOAT
-        Some((x.clone().cast::<FLOAT>(), y.clone().cast::<FLOAT>()))
-    } else if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<INT>()) {
-        // FLOAT op INT
-        Some((x.clone().cast::<FLOAT>(), y.clone().cast::<INT>() as FLOAT))
-    } else if types_pair == (TypeId::of::<INT>(), TypeId::of::<FLOAT>()) {
-        // INT op FLOAT
-        Some((x.clone().cast::<INT>() as FLOAT, y.clone().cast::<FLOAT>()))
-    } else {
-        None
-    } {
-        match op {
-            "+" => return Ok(Some((x + y).into())),
-            "-" => return Ok(Some((x - y).into())),
-            "*" => return Ok(Some((x * y).into())),
-            "/" => return Ok(Some((x / y).into())),
-            "%" => return Ok(Some((x % y).into())),
-            "**" => return Ok(Some(x.powf(y).into())),
-            "==" => return Ok(Some((x == y).into())),
-            "!=" => return Ok(Some((x != y).into())),
-            ">" => return Ok(Some((x > y).into())),
-            ">=" => return Ok(Some((x >= y).into())),
-            "<" => return Ok(Some((x < y).into())),
-            "<=" => return Ok(Some((x <= y).into())),
-            _ => return Ok(None),
-        }
-    }
-
-    #[cfg(feature = "decimal")]
-    if let Some((x, y)) = if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>()) {
-        // Decimal op Decimal
-        Some((
-            *x.read_lock::<Decimal>().unwrap(),
-            *y.read_lock::<Decimal>().unwrap(),
-        ))
-    } else if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<INT>()) {
-        // Decimal op INT
-        Some((
-            *x.read_lock::<Decimal>().unwrap(),
-            y.clone().cast::<INT>().into(),
-        ))
-    } else if types_pair == (TypeId::of::<INT>(), TypeId::of::<Decimal>()) {
-        // INT op Decimal
-        Some((
-            x.clone().cast::<INT>().into(),
-            *y.read_lock::<Decimal>().unwrap(),
-        ))
-    } else {
-        None
-    } {
-        if cfg!(not(feature = "unchecked")) {
-            use crate::packages::arithmetic::decimal_functions::*;
-
-            match op {
-                "+" => return add(x, y).map(Some),
-                "-" => return subtract(x, y).map(Some),
-                "*" => return multiply(x, y).map(Some),
-                "/" => return divide(x, y).map(Some),
-                "%" => return modulo(x, y).map(Some),
-                _ => (),
-            }
-        } else {
-            match op {
-                "+" => return Ok(Some((x + y).into())),
-                "-" => return Ok(Some((x - y).into())),
-                "*" => return Ok(Some((x * y).into())),
-                "/" => return Ok(Some((x / y).into())),
-                "%" => return Ok(Some((x % y).into())),
-                _ => (),
-            }
-        }
-
-        match op {
-            "==" => return Ok(Some((x == y).into())),
-            "!=" => return Ok(Some((x != y).into())),
-            ">" => return Ok(Some((x > y).into())),
-            ">=" => return Ok(Some((x >= y).into())),
-            "<" => return Ok(Some((x < y).into())),
-            "<=" => return Ok(Some((x <= y).into())),
-            _ => return Ok(None),
-        }
-    }
-
-    // char op string
-    if types_pair == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
-        let x = x.clone().cast::<char>();
-        let y = &*y.read_lock::<ImmutableString>().unwrap();
-
-        match op {
-            "+" => return Ok(Some(format!("{}{}", x, y).into())),
-            "==" | "!=" | ">" | ">=" | "<" | "<=" => {
-                let s1 = [x, '\0'];
-                let mut y = y.chars();
-                let s2 = [y.next().unwrap_or('\0'), y.next().unwrap_or('\0')];
-
-                match op {
-                    "==" => return Ok(Some((s1 == s2).into())),
-                    "!=" => return Ok(Some((s1 != s2).into())),
-                    ">" => return Ok(Some((s1 > s2).into())),
-                    ">=" => return Ok(Some((s1 >= s2).into())),
-                    "<" => return Ok(Some((s1 < s2).into())),
-                    "<=" => return Ok(Some((s1 <= s2).into())),
-                    _ => unreachable!(),
-                }
-            }
-            _ => return Ok(None),
-        }
-    }
-    // string op char
-    if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
-        let x = &*x.read_lock::<ImmutableString>().unwrap();
-        let y = y.clone().cast::<char>();
-
-        match op {
-            "+" => return Ok(Some((x + y).into())),
-            "-" => return Ok(Some((x - y).into())),
-            "==" | "!=" | ">" | ">=" | "<" | "<=" => {
-                let mut x = x.chars();
-                let s1 = [x.next().unwrap_or('\0'), x.next().unwrap_or('\0')];
-                let s2 = [y, '\0'];
-
-                match op {
-                    "==" => return Ok(Some((s1 == s2).into())),
-                    "!=" => return Ok(Some((s1 != s2).into())),
-                    ">" => return Ok(Some((s1 > s2).into())),
-                    ">=" => return Ok(Some((s1 >= s2).into())),
-                    "<" => return Ok(Some((s1 < s2).into())),
-                    "<=" => return Ok(Some((s1 <= s2).into())),
-                    _ => unreachable!(),
-                }
-            }
-            _ => return Ok(None),
-        }
-    }
-
-    // Default comparison operators for different types
-    if type2 != type1 {
-        return Ok(match op {
-            "!=" => Some(Dynamic::TRUE),
-            "==" | ">" | ">=" | "<" | "<=" => Some(Dynamic::FALSE),
-            _ => None,
-        });
-    }
-
-    // Beyond here, type1 == type2
-
-    if type1 == TypeId::of::<INT>() {
-        let x = x.clone().cast::<INT>();
-        let y = y.clone().cast::<INT>();
-
-        if cfg!(not(feature = "unchecked")) {
-            use crate::packages::arithmetic::arith_basic::INT::functions::*;
-
-            match op {
-                "+" => return add(x, y).map(Some),
-                "-" => return subtract(x, y).map(Some),
-                "*" => return multiply(x, y).map(Some),
-                "/" => return divide(x, y).map(Some),
-                "%" => return modulo(x, y).map(Some),
-                "**" => return power(x, y).map(Some),
-                ">>" => return shift_right(x, y).map(Some),
-                "<<" => return shift_left(x, y).map(Some),
-                _ => (),
-            }
-        } else {
-            match op {
-                "+" => return Ok(Some((x + y).into())),
-                "-" => return Ok(Some((x - y).into())),
-                "*" => return Ok(Some((x * y).into())),
-                "/" => return Ok(Some((x / y).into())),
-                "%" => return Ok(Some((x % y).into())),
-                "**" => return Ok(Some(x.pow(y as u32).into())),
-                ">>" => return Ok(Some((x >> y).into())),
-                "<<" => return Ok(Some((x << y).into())),
-                _ => (),
-            }
-        }
-
-        match op {
-            "==" => return Ok(Some((x == y).into())),
-            "!=" => return Ok(Some((x != y).into())),
-            ">" => return Ok(Some((x > y).into())),
-            ">=" => return Ok(Some((x >= y).into())),
-            "<" => return Ok(Some((x < y).into())),
-            "<=" => return Ok(Some((x <= y).into())),
-            "&" => return Ok(Some((x & y).into())),
-            "|" => return Ok(Some((x | y).into())),
-            "^" => return Ok(Some((x ^ y).into())),
-            _ => return Ok(None),
-        }
-    }
-
-    if type1 == TypeId::of::<bool>() {
-        let x = x.clone().cast::<bool>();
-        let y = y.clone().cast::<bool>();
-
-        match op {
-            "&" => return Ok(Some((x && y).into())),
-            "|" => return Ok(Some((x || y).into())),
-            "^" => return Ok(Some((x ^ y).into())),
-            "==" => return Ok(Some((x == y).into())),
-            "!=" => return Ok(Some((x != y).into())),
-            _ => return Ok(None),
-        }
-    }
-
-    if type1 == TypeId::of::<ImmutableString>() {
-        let x = &*x.read_lock::<ImmutableString>().unwrap();
-        let y = &*y.read_lock::<ImmutableString>().unwrap();
-
-        match op {
-            "+" => return Ok(Some((x + y).into())),
-            "-" => return Ok(Some((x - y).into())),
-            "==" => return Ok(Some((x == y).into())),
-            "!=" => return Ok(Some((x != y).into())),
-            ">" => return Ok(Some((x > y).into())),
-            ">=" => return Ok(Some((x >= y).into())),
-            "<" => return Ok(Some((x < y).into())),
-            "<=" => return Ok(Some((x <= y).into())),
-            _ => return Ok(None),
-        }
-    }
-
-    if type1 == TypeId::of::<char>() {
-        let x = x.clone().cast::<char>();
-        let y = y.clone().cast::<char>();
-
-        match op {
-            "+" => return Ok(Some(format!("{}{}", x, y).into())),
-            "==" => return Ok(Some((x == y).into())),
-            "!=" => return Ok(Some((x != y).into())),
-            ">" => return Ok(Some((x > y).into())),
-            ">=" => return Ok(Some((x >= y).into())),
-            "<" => return Ok(Some((x < y).into())),
-            "<=" => return Ok(Some((x <= y).into())),
-            _ => return Ok(None),
-        }
-    }
-
-    if type1 == TypeId::of::<()>() {
-        match op {
-            "==" => return Ok(Some(true.into())),
-            "!=" | ">" | ">=" | "<" | "<=" => return Ok(Some(false.into())),
-            _ => return Ok(None),
-        }
-    }
-
-    Ok(None)
-}
-
-/// Build in common operator assignment implementations to avoid the cost of calling a registered function.
-pub fn run_builtin_op_assignment(
-    op: &str,
-    x: &mut Dynamic,
-    y: &Dynamic,
-) -> Result<Option<()>, Box<EvalAltResult>> {
-    let type1 = x.type_id();
-    let type2 = y.type_id();
-
-    let types_pair = (type1, type2);
-
-    #[cfg(not(feature = "no_float"))]
-    if let Some((mut x, y)) = if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>()) {
-        // FLOAT op= FLOAT
-        let y = y.clone().cast::<FLOAT>();
-        Some((x.write_lock::<FLOAT>().unwrap(), y))
-    } else if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<INT>()) {
-        // FLOAT op= INT
-        let y = y.clone().cast::<INT>() as FLOAT;
-        Some((x.write_lock::<FLOAT>().unwrap(), y))
-    } else {
-        None
-    } {
-        match op {
-            "+=" => return Ok(Some(*x += y)),
-            "-=" => return Ok(Some(*x -= y)),
-            "*=" => return Ok(Some(*x *= y)),
-            "/=" => return Ok(Some(*x /= y)),
-            "%=" => return Ok(Some(*x %= y)),
-            "**=" => return Ok(Some(*x = x.powf(y))),
-            _ => return Ok(None),
-        }
-    }
-
-    #[cfg(feature = "decimal")]
-    if let Some((mut x, y)) = if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>()) {
-        // Decimal op= Decimal
-        let y = *y.read_lock::<Decimal>().unwrap();
-        Some((x.write_lock::<Decimal>().unwrap(), y))
-    } else if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<INT>()) {
-        // Decimal op= INT
-        let y = y.clone().cast::<INT>().into();
-        Some((x.write_lock::<Decimal>().unwrap(), y))
-    } else {
-        None
-    } {
-        if cfg!(not(feature = "unchecked")) {
-            use crate::packages::arithmetic::decimal_functions::*;
-
-            match op {
-                "+=" => return Ok(Some(*x = add(*x, y)?.as_decimal().unwrap())),
-                "-=" => return Ok(Some(*x = subtract(*x, y)?.as_decimal().unwrap())),
-                "*=" => return Ok(Some(*x = multiply(*x, y)?.as_decimal().unwrap())),
-                "/=" => return Ok(Some(*x = divide(*x, y)?.as_decimal().unwrap())),
-                "%=" => return Ok(Some(*x = modulo(*x, y)?.as_decimal().unwrap())),
-                _ => (),
-            }
-        } else {
-            match op {
-                "+=" => return Ok(Some(*x += y)),
-                "-=" => return Ok(Some(*x -= y)),
-                "*=" => return Ok(Some(*x *= y)),
-                "/=" => return Ok(Some(*x /= y)),
-                "%=" => return Ok(Some(*x %= y)),
-                _ => (),
-            }
-        }
-    }
-
-    // string op= char
-    if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
-        let y = y.clone().cast::<char>();
-        let mut x = x.write_lock::<ImmutableString>().unwrap();
-
-        match op {
-            "+=" => return Ok(Some(*x += y)),
-            "-=" => return Ok(Some(*x -= y)),
-            _ => return Ok(None),
-        }
-    }
-    // char op= string
-    if types_pair == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
-        let y = y.read_lock::<ImmutableString>().unwrap();
-        let mut ch = x.read_lock::<char>().unwrap().to_string();
-        let mut x = x.write_lock::<Dynamic>().unwrap();
-
-        match op {
-            "+=" => {
-                ch.push_str(y.as_str());
-                return Ok(Some(*x = ch.into()));
-            }
-            _ => return Ok(None),
-        }
-    }
-
-    // No built-in op-assignments for different types.
-    if type2 != type1 {
-        return Ok(None);
-    }
-
-    // Beyond here, type1 == type2
-
-    if type1 == TypeId::of::<INT>() {
-        let y = y.clone().cast::<INT>();
-        let mut x = x.write_lock::<INT>().unwrap();
-
-        if cfg!(not(feature = "unchecked")) {
-            use crate::packages::arithmetic::arith_basic::INT::functions::*;
-
-            match op {
-                "+=" => return Ok(Some(*x = add(*x, y)?.as_int().unwrap())),
-                "-=" => return Ok(Some(*x = subtract(*x, y)?.as_int().unwrap())),
-                "*=" => return Ok(Some(*x = multiply(*x, y)?.as_int().unwrap())),
-                "/=" => return Ok(Some(*x = divide(*x, y)?.as_int().unwrap())),
-                "%=" => return Ok(Some(*x = modulo(*x, y)?.as_int().unwrap())),
-                "**=" => return Ok(Some(*x = power(*x, y)?.as_int().unwrap())),
-                ">>=" => return Ok(Some(*x = shift_right(*x, y)?.as_int().unwrap())),
-                "<<=" => return Ok(Some(*x = shift_left(*x, y)?.as_int().unwrap())),
-                _ => (),
-            }
-        } else {
-            match op {
-                "+=" => return Ok(Some(*x += y)),
-                "-=" => return Ok(Some(*x -= y)),
-                "*=" => return Ok(Some(*x *= y)),
-                "/=" => return Ok(Some(*x /= y)),
-                "%=" => return Ok(Some(*x %= y)),
-                "**=" => return Ok(Some(*x = x.pow(y as u32))),
-                ">>=" => return Ok(Some(*x = *x >> y)),
-                "<<=" => return Ok(Some(*x = *x << y)),
-                _ => (),
-            }
-        }
-
-        match op {
-            "&=" => return Ok(Some(*x &= y)),
-            "|=" => return Ok(Some(*x |= y)),
-            "^=" => return Ok(Some(*x ^= y)),
-            _ => return Ok(None),
-        }
-    }
-
-    if type1 == TypeId::of::<bool>() {
-        let y = y.clone().cast::<bool>();
-        let mut x = x.write_lock::<bool>().unwrap();
-
-        match op {
-            "&=" => return Ok(Some(*x = *x && y)),
-            "|=" => return Ok(Some(*x = *x || y)),
-            _ => return Ok(None),
-        }
-    }
-
-    if type1 == TypeId::of::<char>() {
-        let y = y.clone().cast::<char>();
-        let mut x = x.write_lock::<Dynamic>().unwrap();
-
-        match op {
-            "+=" => return Ok(Some(*x = format!("{}{}", *x, y).into())),
-            _ => return Ok(None),
-        }
-    }
-
-    if type1 == TypeId::of::<ImmutableString>() {
-        let y = &*y.read_lock::<ImmutableString>().unwrap();
-        let mut x = x.write_lock::<ImmutableString>().unwrap();
-
-        match op {
-            "+=" => return Ok(Some(*x += y)),
-            "-=" => return Ok(Some(*x -= y)),
-            _ => return Ok(None),
-        }
-    }
-
-    Ok(None)
 }

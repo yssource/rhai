@@ -1,9 +1,9 @@
 //! Module implementing the [`AST`] optimizer.
 
 use crate::ast::{Expr, ScriptFnDef, Stmt};
+use crate::builtin::get_builtin_binary_op_fn;
 use crate::dynamic::AccessMode;
 use crate::engine::{Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
-use crate::fn_call::run_builtin_binary_op;
 use crate::parser::map_dynamic_to_expr;
 use crate::stdlib::{
     boxed::Box,
@@ -669,13 +669,17 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
                 && !is_valid_identifier(x.name.chars()) // cannot be scripted
         => {
-            let arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap()).collect();
+            let mut arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap()).collect();
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
             if !state.engine.has_override_by_name_and_arguments(Some(&state.mods), state.lib, x.name.as_ref(), arg_types.as_ref()) {
-                if let Some(result) = run_builtin_binary_op(x.name.as_ref(), &arg_values[0], &arg_values[1])
-                                        .ok().flatten()
+                if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
+                                        .and_then(|f| {
+                                            let ctx = (state.engine, x.name.as_ref(), state.lib).into();
+                                            let (first, second) = arg_values.split_first_mut().unwrap();
+                                            (f)(ctx, &mut [ first, &mut second[0] ]).ok()
+                                        })
                                         .and_then(|result| map_dynamic_to_expr(result, *pos))
                 {
                     state.set_dirty();

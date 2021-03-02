@@ -64,6 +64,7 @@ extern crate alloc;
 // Internal modules
 
 mod ast;
+mod builtin;
 mod dynamic;
 mod engine;
 mod engine_api;

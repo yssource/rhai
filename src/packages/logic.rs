@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
+use crate::builtin::get_builtin_binary_op_fn;
 use crate::def_package;
-use crate::fn_call::run_builtin_binary_op;
 use crate::plugin::*;
 
 #[cfg(feature = "decimal")]
@@ -128,20 +128,21 @@ mod logic_functions {
         name = ">=",
         name = "<",
         name = "<=",
-        return_raw
+        return_raw,
+        pure
     )]
     pub fn cmp(
         ctx: NativeCallContext,
-        x: Dynamic,
-        y: Dynamic,
+        x: &mut Dynamic,
+        mut y: Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let type_x = x.type_id();
         let type_y = y.type_id();
 
         if type_x != type_y && is_numeric(type_x) && is_numeric(type_y) {
             // Disallow comparisons between different number types
-        } else if let Some(x) = run_builtin_binary_op(ctx.fn_name(), &x, &y)? {
-            return Ok(x);
+        } else if let Some(f) = get_builtin_binary_op_fn(ctx.fn_name(), x, &y) {
+            return f(ctx, &mut [x, &mut y]);
         }
 
         Err(Box::new(EvalAltResult::ErrorFunctionNotFound(
