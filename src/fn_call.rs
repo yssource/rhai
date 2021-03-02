@@ -584,6 +584,7 @@ impl Engine {
     pub(crate) fn has_override_by_name_and_arguments(
         &self,
         mods: Option<&Imports>,
+        state: &mut State,
         lib: &[&Module],
         fn_name: &str,
         arg_types: &[TypeId],
@@ -592,6 +593,7 @@ impl Engine {
 
         self.has_override(
             mods,
+            state,
             lib,
             calc_native_fn_hash(empty(), fn_name, arg_types.iter().cloned()),
             calc_script_fn_hash(empty(), fn_name, arg_types.len()),
@@ -603,12 +605,21 @@ impl Engine {
     pub(crate) fn has_override(
         &self,
         mods: Option<&Imports>,
+        state: &mut State,
         lib: &[&Module],
         hash_fn: Option<NonZeroU64>,
         hash_script: Option<NonZeroU64>,
     ) -> bool {
+        let cache = state.fn_resolution_cache_mut();
+
+        if hash_script.map_or(false, |hash| cache.contains_key(&hash))
+            || hash_fn.map_or(false, |hash| cache.contains_key(&hash))
+        {
+            return true;
+        }
+
         // First check script-defined functions
-        hash_script.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, false)))
+        if hash_script.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, false)))
             //|| hash_fn.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, false)))
             // Then check registered functions
             || hash_script.map_or(false, |hash| self.global_namespace.contains_fn(hash, false))
@@ -622,6 +633,17 @@ impl Engine {
             // Then check sub-modules
             || hash_script.map_or(false, |hash| self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash)))
             || hash_fn.map_or(false, |hash| self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash)))
+        {
+            true
+        } else {
+            if let Some(hash_fn) = hash_fn {
+                cache.insert(hash_fn, None);
+            }
+            if let Some(hash_script) = hash_script {
+                cache.insert(hash_script, None);
+            }
+            false
+        }
     }
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
@@ -674,7 +696,8 @@ impl Engine {
                     } else {
                         let hash_script =
                             calc_script_fn_hash(empty(), fn_name, num_params as usize);
-                        self.has_override(Some(mods), lib, None, hash_script).into()
+                        self.has_override(Some(mods), state, lib, None, hash_script)
+                            .into()
                     },
                     false,
                 ));
@@ -1127,12 +1150,13 @@ impl Engine {
                     self.make_type_mismatch_err::<INT>(err, args_expr[0].position())
                 })?;
 
-                if num_params < 0 {
-                    return Ok(Dynamic::FALSE);
+                return Ok(if num_params < 0 {
+                    Dynamic::FALSE
                 } else {
                     let hash_script = calc_script_fn_hash(empty(), fn_name, num_params as usize);
-                    return Ok(self.has_override(Some(mods), lib, None, hash_script).into());
-                }
+                    self.has_override(Some(mods), state, lib, None, hash_script)
+                        .into()
+                });
             }
 
             // Handle is_def_var()

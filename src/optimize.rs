@@ -3,7 +3,7 @@
 use crate::ast::{Expr, ScriptFnDef, Stmt};
 use crate::builtin::get_builtin_binary_op_fn;
 use crate::dynamic::AccessMode;
-use crate::engine::{Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
+use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::parser::map_dynamic_to_expr;
 use crate::stdlib::{
     boxed::Box,
@@ -62,8 +62,6 @@ struct State<'a> {
     propagate_constants: bool,
     /// An [`Engine`] instance for eager function evaluation.
     engine: &'a Engine,
-    /// Collection of sub-modules.
-    mods: Imports,
     /// [Module] containing script-defined functions.
     lib: &'a [&'a Module],
     /// Optimization level.
@@ -79,7 +77,6 @@ impl<'a> State<'a> {
             variables: vec![],
             propagate_constants: true,
             engine,
-            mods: Default::default(),
             lib,
             optimization_level: level,
         }
@@ -673,7 +670,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
-            if !state.engine.has_override_by_name_and_arguments(Some(&state.mods), state.lib, x.name.as_ref(), arg_types.as_ref()) {
+            if !state.engine.has_override_by_name_and_arguments(Some(&Default::default()), &mut Default::default(), state.lib, x.name.as_ref(), arg_types.as_ref()) {
                 if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
                                         .and_then(|f| {
                                             let ctx = (state.engine, x.name.as_ref(), state.lib).into();
