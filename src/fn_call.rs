@@ -75,12 +75,7 @@ impl<'a> ArgBackup<'a> {
     ///
     /// If `restore_first_arg` is called before the end of the scope, the shorter lifetime will not leak.
     #[inline(always)]
-    fn change_first_arg_to_copy(&mut self, normalize: bool, args: &mut FnCallArgs<'a>) {
-        // Only do it for method calls with arguments.
-        if !normalize || args.is_empty() {
-            return;
-        }
-
+    fn change_first_arg_to_copy(&mut self, args: &mut FnCallArgs<'a>) {
         // Clone the original value.
         self.value_copy = args[0].clone();
 
@@ -105,7 +100,7 @@ impl<'a> ArgBackup<'a> {
     /// If `change_first_arg_to_copy` has been called, this function **MUST** be called _BEFORE_ exiting
     /// the current scope.  Otherwise it is undefined behavior as the shorter lifetime will leak.
     #[inline(always)]
-    fn restore_first_arg(&mut self, args: &mut FnCallArgs<'a>) {
+    fn restore_first_arg(mut self, args: &mut FnCallArgs<'a>) {
         if let Some(this_pointer) = self.orig_mut.take() {
             args[0] = this_pointer;
         }
@@ -340,8 +335,11 @@ impl Engine {
             assert!(func.is_native());
 
             // Calling pure function but the first argument is a reference?
-            let mut backup: ArgBackup = Default::default();
-            backup.change_first_arg_to_copy(is_ref && func.is_pure(), args);
+            let mut backup: Option<ArgBackup> = None;
+            if is_ref && func.is_pure() && !args.is_empty() {
+                backup = Some(Default::default());
+                backup.as_mut().unwrap().change_first_arg_to_copy(args);
+            }
 
             // Run external function
             let source = src.as_ref().or_else(|| source.as_ref()).map(|s| s.as_str());
@@ -353,7 +351,9 @@ impl Engine {
             };
 
             // Restore the original reference
-            backup.restore_first_arg(args);
+            if let Some(backup) = backup {
+                backup.restore_first_arg(args);
+            }
 
             let result = result.map_err(|err| err.fill_position(pos))?;
 
@@ -772,8 +772,11 @@ impl Engine {
             } else {
                 // Normal call of script function
                 // The first argument is a reference?
-                let mut backup: ArgBackup = Default::default();
-                backup.change_first_arg_to_copy(is_ref, args);
+                let mut backup: Option<ArgBackup> = None;
+                if is_ref && !args.is_empty() {
+                    backup = Some(Default::default());
+                    backup.as_mut().unwrap().change_first_arg_to_copy(args);
+                }
 
                 let orig_source = mem::take(&mut state.source);
                 state.source = source;
@@ -787,7 +790,9 @@ impl Engine {
                 state.source = orig_source;
 
                 // Restore the original reference
-                backup.restore_first_arg(args);
+                if let Some(backup) = backup {
+                    backup.restore_first_arg(args);
+                }
 
                 result?
             };
