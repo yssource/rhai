@@ -19,22 +19,9 @@ mod fn_ptr_functions {
 
     #[cfg(not(feature = "no_function"))]
     pub mod functions {
-        use crate::{calc_script_fn_hash, stdlib::iter::empty, INT};
-
         #[rhai_fn(name = "is_anonymous", get = "is_anonymous", pure)]
         pub fn is_anonymous(f: &mut FnPtr) -> bool {
             f.is_anonymous()
-        }
-
-        pub fn is_def_fn(ctx: NativeCallContext, fn_name: &str, num_params: INT) -> bool {
-            if num_params < 0 {
-                false
-            } else {
-                let hash_script = calc_script_fn_hash(empty(), fn_name, num_params as usize);
-
-                ctx.engine()
-                    .has_override(ctx.mods, ctx.lib, None, hash_script)
-            }
         }
     }
 
