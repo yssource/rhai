@@ -88,6 +88,8 @@ mod token;
 mod r#unsafe;
 mod utils;
 
+pub type RhaiResult = Result<Dynamic, Box<EvalAltResult>>;
+
 /// The system integer type. It is defined as [`i64`].
 ///
 /// If the `only_i32` feature is enabled, this will be [`i32`] instead.

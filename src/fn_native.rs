@@ -15,7 +15,7 @@ use crate::stdlib::{
 use crate::token::is_valid_identifier;
 use crate::{
     calc_script_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ImmutableString, Module,
-    Position,
+    Position, RhaiResult,
 };
 
 #[cfg(not(feature = "sync"))]
@@ -185,7 +185,7 @@ impl<'e, 'n, 's, 'a, 'm> NativeCallContext<'e, 'n, 's, 'a, 'm> {
         fn_name: &str,
         is_method: bool,
         args: &mut [&mut Dynamic],
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         self.engine()
             .exec_fn_call(
                 &mut self.mods.cloned().unwrap_or_default(),
@@ -317,7 +317,7 @@ impl FnPtr {
         ctx: NativeCallContext,
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let arg_values = arg_values.as_mut();
 
         let mut args_data = self
@@ -381,11 +381,10 @@ impl TryFrom<&str> for FnPtr {
 
 /// A general function trail object.
 #[cfg(not(feature = "sync"))]
-pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
+pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult;
 /// A general function trail object.
 #[cfg(feature = "sync")]
-pub type FnAny =
-    dyn Fn(NativeCallContext, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
+pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult + Send + Sync;
 
 /// A standard function that gets an iterator from a type.
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;

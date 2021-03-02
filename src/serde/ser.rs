@@ -79,7 +79,7 @@ impl DynamicSerializer {
 /// # Ok(())
 /// # }
 /// ```
-pub fn to_dynamic<T: Serialize>(value: T) -> Result<Dynamic, Box<EvalAltResult>> {
+pub fn to_dynamic<T: Serialize>(value: T) -> RhaiResult {
     let mut s = DynamicSerializer::new(Default::default());
     value.serialize(&mut s)
 }
@@ -690,7 +690,7 @@ impl serde::ser::SerializeStructVariant for StructVariantSerializer {
 }
 
 #[cfg(not(feature = "no_object"))]
-fn make_variant(variant: &'static str, value: Dynamic) -> Result<Dynamic, Box<EvalAltResult>> {
+fn make_variant(variant: &'static str, value: Dynamic) -> RhaiResult {
     let mut map = Map::with_capacity(1);
     map.insert(variant.into(), value);
     Ok(map.into())

@@ -1,8 +1,8 @@
 //! Built-in implementations for common operators.
 
 use crate::fn_native::{FnCallArgs, NativeCallContext};
-use crate::stdlib::{any::TypeId, boxed::Box, format, string::ToString};
-use crate::{Dynamic, EvalAltResult, ImmutableString, INT};
+use crate::stdlib::{any::TypeId, format, string::ToString};
+use crate::{Dynamic, ImmutableString, RhaiResult, INT};
 
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
@@ -19,7 +19,7 @@ pub fn get_builtin_binary_op_fn(
     op: &str,
     x: &Dynamic,
     y: &Dynamic,
-) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>> {
+) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult> {
     let type1 = x.type_id();
     let type2 = y.type_id();
 
@@ -792,7 +792,7 @@ pub fn get_builtin_op_assignment_fn(
     op: &str,
     x: &Dynamic,
     y: &Dynamic,
-) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>> {
+) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult> {
     let type1 = x.type_id();
     let type2 = y.type_id();
 

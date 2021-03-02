@@ -25,8 +25,8 @@ use crate::stdlib::{
 use crate::syntax::CustomSyntax;
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
-    calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position, Scope,
-    Shared, StaticVec,
+    calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position,
+    RhaiResult, Scope, Shared, StaticVec,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -1385,7 +1385,7 @@ impl Engine {
         expr: &Expr,
         level: usize,
         new_val: Option<((Dynamic, Position), (&str, Position))>,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, op_pos) = match expr {
             Expr::Index(x, pos) => (x.as_ref(), ChainType::Index, *pos),
             Expr::Dot(x, pos) => (x.as_ref(), ChainType::Dot, *pos),
@@ -1649,7 +1649,7 @@ impl Engine {
         lhs: &Expr,
         rhs: &Expr,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         self.inc_operations(state, rhs.position())?;
 
         let lhs_value = self.eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?;
@@ -1707,7 +1707,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         self.inc_operations(state, expr.position())?;
 
         let result = match expr {
@@ -1876,7 +1876,7 @@ impl Engine {
         statements: &[Stmt],
         restore: bool,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let mut _has_imports = false;
         let prev_always_search = state.always_search;
         let prev_scope_len = scope.len();
@@ -1992,7 +1992,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         stmt: &Stmt,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         self.inc_operations(state, stmt.position())?;
 
         let result = match stmt {
@@ -2467,21 +2467,13 @@ impl Engine {
     /// [`Position`] in [`EvalAltResult`] may be None and should be set afterwards.
     #[cfg(feature = "unchecked")]
     #[inline(always)]
-    fn check_data_size(
-        &self,
-        result: Result<Dynamic, Box<EvalAltResult>>,
-        _pos: Position,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    fn check_data_size(&self, result: RhaiResult, _pos: Position) -> RhaiResult {
         result
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
     #[cfg(not(feature = "unchecked"))]
-    fn check_data_size(
-        &self,
-        result: Result<Dynamic, Box<EvalAltResult>>,
-        pos: Position,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    fn check_data_size(&self, result: RhaiResult, pos: Position) -> RhaiResult {
         // Simply return all errors
         if result.is_err() {
             return result;

@@ -724,7 +724,7 @@ Breaking changes
 ----------------
 
 * `Engine::compile_XXX` functions now return `ParseError` instead of `Box<ParseError>`.
-* The `RegisterDynamicFn` trait is merged into the `RegisterResultFn` trait which now always returns `Result<Dynamic, Box<EvalAltResult>>`.
+* The `RegisterDynamicFn` trait is merged into the `RegisterResultFn` trait which now always returns `RhaiResult`.
 * Default maximum limit on levels of nested function calls is fine-tuned and set to a different value.
 * Some operator functions are now built in (see _Speed enhancements_ below), so they are available even under `Engine::new_raw`.
 * Strings are now immutable. The type `rhai::ImmutableString` is used instead of `std::string::String`. This is to avoid excessive cloning of strings.  All native-Rust functions taking string parameters should switch to `rhai::ImmutableString` (which is either `Rc<String>` or `Arc<String>` depending on whether the `sync` feature is used).

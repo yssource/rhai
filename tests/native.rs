@@ -1,12 +1,9 @@
-use rhai::{Dynamic, Engine, EvalAltResult, NativeCallContext, INT};
+use rhai::{Dynamic, Engine, EvalAltResult, NativeCallContext, RhaiResult, INT};
 use std::any::TypeId;
 
 #[test]
 fn test_native_context() -> Result<(), Box<EvalAltResult>> {
-    fn add_double(
-        context: NativeCallContext,
-        args: &mut [&mut Dynamic],
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    fn add_double(context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
         let x = args[0].as_int().unwrap();
         let y = args[1].as_int().unwrap();
         Ok(format!("{}_{}", context.fn_name(), x + 2 * y).into())

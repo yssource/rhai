@@ -24,6 +24,7 @@ use crate::utils::combine_hashes;
 use crate::{
     ast::{Expr, Stmt},
     fn_native::CallableFunction,
+    RhaiResult,
 };
 use crate::{
     calc_native_fn_hash, calc_script_fn_hash, Dynamic, Engine, EvalAltResult, FnPtr,
@@ -468,7 +469,7 @@ impl Engine {
         args: &mut FnCallArgs,
         pos: Position,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         #[inline(always)]
         fn make_error(
             name: crate::stdlib::string::String,
@@ -476,7 +477,7 @@ impl Engine {
             state: &State,
             err: Box<EvalAltResult>,
             pos: Position,
-        ) -> Result<Dynamic, Box<EvalAltResult>> {
+        ) -> RhaiResult {
             Err(Box::new(EvalAltResult::ErrorInFunctionCall(
                 name,
                 fn_def
@@ -817,7 +818,7 @@ impl Engine {
         statements: &[Stmt],
         lib: &[&Module],
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         self.eval_stmt_block(scope, mods, state, lib, &mut None, statements, false, level)
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -838,7 +839,7 @@ impl Engine {
         script: &str,
         pos: Position,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         self.inc_operations(state, pos)?;
 
         let script = script.trim();
@@ -1026,7 +1027,7 @@ impl Engine {
         pos: Position,
         capture_scope: bool,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let args_expr = args_expr.as_ref();
 
         // Handle call() - Redirect function call
@@ -1276,7 +1277,7 @@ impl Engine {
         hash_script: NonZeroU64,
         pos: Position,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let args_expr = args_expr.as_ref();
 
         let namespace = namespace.unwrap();

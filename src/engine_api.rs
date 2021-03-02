@@ -13,7 +13,7 @@ use crate::stdlib::{
 };
 use crate::{
     scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Module, NativeCallContext,
-    ParseError, Position, Shared, AST,
+    ParseError, Position, RhaiResult, Shared, AST,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -217,7 +217,7 @@ impl Engine {
     /// impl TestStruct {
     ///     fn new() -> Self { Self { field: 1 } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///     fn get_field(&mut self) -> RhaiResult {
     ///         Ok(self.field.into())
     ///     }
     /// }
@@ -241,7 +241,7 @@ impl Engine {
     pub fn register_get_result<T: Variant + Clone>(
         &mut self,
         name: &str,
-        get_fn: impl Fn(&mut T) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+        get_fn: impl Fn(&mut T) -> RhaiResult + SendSync + 'static,
     ) -> &mut Self {
         use crate::{engine::make_getter, RegisterResultFn};
         self.register_result_fn(&make_getter(name), get_fn)
@@ -474,7 +474,7 @@ impl Engine {
     /// impl TestStruct {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self, index: i64) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///     fn get_field(&mut self, index: i64) -> RhaiResult {
     ///         Ok(self.fields[index as usize].into())
     ///     }
     /// }
@@ -499,7 +499,7 @@ impl Engine {
     #[inline(always)]
     pub fn register_indexer_get_result<T: Variant + Clone, X: Variant + Clone>(
         &mut self,
-        get_fn: impl Fn(&mut T, X) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+        get_fn: impl Fn(&mut T, X) -> RhaiResult + SendSync + 'static,
     ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
@@ -1518,7 +1518,7 @@ impl Engine {
         mods: &mut Imports,
         ast: &'a AST,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let mut state: State = Default::default();
         state.source = ast.clone_source();
         #[cfg(not(feature = "no_module"))]
@@ -1733,7 +1733,7 @@ impl Engine {
         name: &str,
         mut this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
         self.call_fn_dynamic_raw(scope, ast, eval_ast, name, &mut this_ptr, args.as_mut())
@@ -1756,7 +1756,7 @@ impl Engine {
         name: &str,
         this_ptr: &mut Option<&mut Dynamic>,
         args: &mut FnCallArgs,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let state = &mut Default::default();
         let mods = &mut Default::default();
         let lib = &[ast.lib()];
