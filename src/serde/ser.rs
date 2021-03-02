@@ -1,7 +1,7 @@
 //! Implement serialization support of [`Dynamic`][crate::Dynamic] for [`serde`].
 
 use crate::stdlib::{boxed::Box, fmt, string::ToString};
-use crate::{Dynamic, EvalAltResult, Position};
+use crate::{Dynamic, EvalAltResult, Position, RhaiResult};
 use serde::ser::{
     Error, SerializeMap, SerializeSeq, SerializeStruct, SerializeTuple, SerializeTupleStruct,
 };
