@@ -19,22 +19,9 @@ mod fn_ptr_functions {
 
     #[cfg(not(feature = "no_function"))]
     pub mod functions {
-        use crate::{calc_script_fn_hash, stdlib::iter::empty, INT};
-
         #[rhai_fn(name = "is_anonymous", get = "is_anonymous", pure)]
         pub fn is_anonymous(f: &mut FnPtr) -> bool {
             f.is_anonymous()
-        }
-
-        pub fn is_def_fn(ctx: NativeCallContext, fn_name: &str, num_params: INT) -> bool {
-            if num_params < 0 {
-                false
-            } else {
-                let hash_script = calc_script_fn_hash(empty(), fn_name, num_params as usize);
-
-                ctx.engine()
-                    .has_override(ctx.mods, None, ctx.lib, None, hash_script, true)
-            }
         }
     }
 
@@ -123,15 +110,13 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> Array {
 
     let mut list: Array = Default::default();
 
-    ctx.lib
-        .iter()
+    ctx.iter_namespaces()
         .flat_map(|m| m.iter_script_fn())
         .for_each(|(_, _, _, _, f)| list.push(make_metadata(&dict, None, f).into()));
 
-    if let Some(mods) = ctx.mods {
-        mods.iter_raw()
-            .for_each(|(ns, m)| scan_module(&mut list, &dict, ns.clone(), m.as_ref()));
-    }
+    #[cfg(not(feature = "no_module"))]
+    ctx.iter_imports_raw()
+        .for_each(|(ns, m)| scan_module(&mut list, &dict, ns.clone(), m.as_ref()));
 
     list
 }

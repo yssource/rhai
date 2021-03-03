@@ -7,7 +7,7 @@ use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
 use crate::r#unsafe::unsafe_cast_box;
 use crate::stdlib::{any::TypeId, boxed::Box, mem, string::String};
 use crate::{
-    Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, ImmutableString, NativeCallContext,
+    Dynamic, Engine, FnAccess, FnNamespace, ImmutableString, NativeCallContext, RhaiResult,
 };
 
 /// Trait to register custom functions with the [`Engine`].
@@ -42,7 +42,7 @@ pub trait RegisterFn<FN, ARGS, RET> {
     fn register_fn(&mut self, name: &str, f: FN) -> &mut Self;
 }
 
-/// Trait to register fallible custom functions returning [`Result`]`<`[`Dynamic`]`, `[`Box`]`<`[`EvalAltResult`]`>>` with the [`Engine`].
+/// Trait to register fallible custom functions returning [`Result`]`<`[`Dynamic`]`, `[`Box`]`<`[`EvalAltResult`][crate::EvalAltResult]`>>` with the [`Engine`].
 pub trait RegisterResultFn<FN, ARGS> {
     /// Register a custom fallible function with the [`Engine`].
     ///
@@ -131,7 +131,7 @@ macro_rules! make_func {
 			$($let)*
 			$($par = ($convert)(_drain.next().unwrap()); )*
 
-            // Call the function with each parameter value
+            // Call the function with each argument value
 			let r = $fn($($arg),*);
 
             // Map the result
@@ -142,15 +142,13 @@ macro_rules! make_func {
 
 /// To Dynamic mapping function.
 #[inline(always)]
-pub fn map_dynamic(data: impl Variant + Clone) -> Result<Dynamic, Box<EvalAltResult>> {
+pub fn map_dynamic(data: impl Variant + Clone) -> RhaiResult {
     Ok(data.into_dynamic())
 }
 
 /// To Dynamic mapping function.
 #[inline(always)]
-pub fn map_result(
-    data: Result<Dynamic, Box<EvalAltResult>>,
-) -> Result<Dynamic, Box<EvalAltResult>> {
+pub fn map_result(data: RhaiResult) -> RhaiResult {
     data
 }
 
@@ -197,7 +195,7 @@ macro_rules! def_register {
 
         impl<
             $($par: Variant + Clone,)*
-            FN: Fn($($param),*) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+            FN: Fn($($param),*) -> RhaiResult + SendSync + 'static,
         > RegisterResultFn<FN, ($($mark,)*)> for Engine
         {
             #[inline]

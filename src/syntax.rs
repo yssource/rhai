@@ -6,8 +6,7 @@ use crate::fn_native::SendSync;
 use crate::stdlib::{boxed::Box, format, string::ToString};
 use crate::token::{is_valid_identifier, Token};
 use crate::{
-    Dynamic, Engine, EvalAltResult, ImmutableString, LexError, ParseError, Position, Shared,
-    StaticVec,
+    Engine, ImmutableString, LexError, ParseError, Position, RhaiResult, Shared, StaticVec,
 };
 
 pub const MARKER_EXPR: &str = "$expr$";
@@ -16,12 +15,10 @@ pub const MARKER_IDENT: &str = "$ident$";
 
 /// A general expression evaluation trait object.
 #[cfg(not(feature = "sync"))]
-pub type FnCustomSyntaxEval =
-    dyn Fn(&mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>;
+pub type FnCustomSyntaxEval = dyn Fn(&mut EvalContext, &[Expression]) -> RhaiResult;
 /// A general expression evaluation trait object.
 #[cfg(feature = "sync")]
-pub type FnCustomSyntaxEval =
-    dyn Fn(&mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
+pub type FnCustomSyntaxEval = dyn Fn(&mut EvalContext, &[Expression]) -> RhaiResult + Send + Sync;
 
 /// A general expression parsing trait object.
 #[cfg(not(feature = "sync"))]
@@ -61,17 +58,14 @@ impl Expression<'_> {
     }
 }
 
-impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_> {
+impl EvalContext<'_, '_, '_, '_, '_, '_, '_> {
     /// Evaluate an [expression tree][Expression].
     ///
     /// # WARNING - Low Level API
     ///
     /// This function is very low level.  It evaluates an expression from an [`AST`][crate::AST].
     #[inline(always)]
-    pub fn eval_expression_tree(
-        &mut self,
-        expr: &Expression,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    pub fn eval_expression_tree(&mut self, expr: &Expression) -> RhaiResult {
         self.engine.eval_expr(
             self.scope,
             self.mods,
@@ -111,11 +105,9 @@ impl Engine {
     /// current [`Scope`][crate::Scope] will be _popped_.  Do not randomly remove variables.
     pub fn register_custom_syntax<S: AsRef<str> + Into<ImmutableString>>(
         &mut self,
-        keywords: impl AsRef<[S]>,
+        keywords: &[S],
         new_vars: isize,
-        func: impl Fn(&mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
-            + SendSync
-            + 'static,
+        func: impl Fn(&mut EvalContext, &[Expression]) -> RhaiResult + SendSync + 'static,
     ) -> Result<&mut Self, ParseError> {
         let keywords = keywords.as_ref();
 
@@ -234,9 +226,7 @@ impl Engine {
             + SendSync
             + 'static,
         new_vars: isize,
-        func: impl Fn(&mut EvalContext, &[Expression]) -> Result<Dynamic, Box<EvalAltResult>>
-            + SendSync
-            + 'static,
+        func: impl Fn(&mut EvalContext, &[Expression]) -> RhaiResult + SendSync + 'static,
     ) -> &mut Self {
         let syntax = CustomSyntax {
             parse: Box::new(parse),

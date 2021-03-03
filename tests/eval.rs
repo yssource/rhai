@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, LexError, ParseErrorType, RegisterFn, Scope, INT};
+use rhai::{Engine, EvalAltResult, LexError, ParseErrorType, Scope, INT};
 
 #[test]
 fn test_eval() -> Result<(), Box<EvalAltResult>> {
@@ -76,32 +76,6 @@ fn test_eval_function() -> Result<(), Box<EvalAltResult>> {
 
     assert!(scope.contains("script"));
     assert_eq!(scope.len(), 3);
-
-    Ok(())
-}
-
-#[test]
-#[cfg(not(feature = "no_function"))]
-fn test_eval_override() -> Result<(), Box<EvalAltResult>> {
-    let engine = Engine::new();
-
-    assert_eq!(
-        engine.eval::<String>(
-            r#"
-                fn eval(x) { x }    // reflect the script back
-
-                eval("40 + 2")
-            "#
-        )?,
-        "40 + 2"
-    );
-
-    let mut engine = Engine::new();
-
-    // Reflect the script back
-    engine.register_fn("eval", |script: &str| script.to_string());
-
-    assert_eq!(engine.eval::<String>(r#"eval("40 + 2")"#)?, "40 + 2");
 
     Ok(())
 }

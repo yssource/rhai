@@ -38,25 +38,6 @@ pub enum FnAccess {
     Private,
 }
 
-impl FnAccess {
-    /// Is this access mode [private][FnAccess::Private]?
-    #[inline(always)]
-    pub fn is_private(self) -> bool {
-        match self {
-            Self::Private => true,
-            Self::Public => false,
-        }
-    }
-    /// Is this access mode [public][FnAccess::Public]?
-    #[inline(always)]
-    pub fn is_public(self) -> bool {
-        match self {
-            Self::Private => false,
-            Self::Public => true,
-        }
-    }
-}
-
 /// _(INTERNALS)_ A type containing information on a scripted function.
 /// Exported under the `internals` feature only.
 ///
@@ -91,10 +72,9 @@ impl fmt::Display for ScriptFnDef {
         write!(
             f,
             "{}{}({})",
-            if self.access.is_private() {
-                "private "
-            } else {
-                ""
+            match self.access {
+                FnAccess::Public => "",
+                FnAccess::Private => "private",
             },
             self.name,
             self.params
@@ -134,10 +114,9 @@ impl fmt::Display for ScriptFnMetadata<'_> {
         write!(
             f,
             "{}{}({})",
-            if self.access.is_private() {
-                "private "
-            } else {
-                ""
+            match self.access {
+                FnAccess::Public => "",
+                FnAccess::Private => "private",
             },
             self.name,
             self.params.iter().cloned().collect::<Vec<_>>().join(", ")

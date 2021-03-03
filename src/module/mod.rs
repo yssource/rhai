@@ -47,25 +47,6 @@ impl Default for FnNamespace {
     }
 }
 
-impl FnNamespace {
-    /// Is this namespace [global][FnNamespace::Global]?
-    #[inline(always)]
-    pub fn is_global(self) -> bool {
-        match self {
-            Self::Global => true,
-            Self::Internal => false,
-        }
-    }
-    /// Is this namespace [internal][FnNamespace::Internal]?
-    #[inline(always)]
-    pub fn is_internal(self) -> bool {
-        match self {
-            Self::Global => false,
-            Self::Internal => true,
-        }
-    }
-}
-
 /// Data structure containing a single registered function.
 #[derive(Debug, Clone)]
 pub struct FuncInfo {
@@ -372,12 +353,15 @@ impl Module {
         self.indexed
     }
 
-    /// Generate signatures for all the functions in the [`Module`].
+    /// Generate signatures for all the non-private functions in the [`Module`].
     #[inline(always)]
     pub fn gen_fn_signatures(&self) -> impl Iterator<Item = String> + '_ {
         self.functions
             .values()
-            .filter(|FuncInfo { access, .. }| !access.is_private())
+            .filter(|FuncInfo { access, .. }| match access {
+                FnAccess::Public => true,
+                FnAccess::Private => false,
+            })
             .map(FuncInfo::gen_signature)
     }
 
@@ -619,7 +603,10 @@ impl Module {
         if public_only {
             self.functions
                 .get(&hash_fn)
-                .map_or(false, |FuncInfo { access, .. }| access.is_public())
+                .map_or(false, |FuncInfo { access, .. }| match access {
+                    FnAccess::Public => true,
+                    FnAccess::Private => false,
+                })
         } else {
             self.functions.contains_key(&hash_fn)
         }
@@ -640,13 +627,9 @@ impl Module {
     /// The _last entry_ in the list should be the _return type_ of the function.
     /// In other words, the number of entries should be one larger than the number of parameters.
     #[inline(always)]
-    pub fn update_fn_metadata<'a>(
-        &mut self,
-        hash_fn: NonZeroU64,
-        arg_names: impl AsRef<[&'a str]>,
-    ) -> &mut Self {
+    pub fn update_fn_metadata(&mut self, hash_fn: NonZeroU64, arg_names: &[&str]) -> &mut Self {
         if let Some(f) = self.functions.get_mut(&hash_fn) {
-            f.param_names = arg_names.as_ref().iter().map(|&n| n.into()).collect();
+            f.param_names = arg_names.iter().map(|&n| n.into()).collect();
         }
         self
     }
@@ -739,6 +722,8 @@ impl Module {
     ///
     /// This function is very low level.
     ///
+    /// # Arguments
+    ///
     /// A list of [`TypeId`]'s is taken as the argument types.
     ///
     /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`][Dynamic],
@@ -747,12 +732,12 @@ impl Module {
     /// The function is assumed to be a _method_, meaning that the first argument should not be consumed.
     /// All other arguments can be consumed.
     ///
-    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    /// To access a primary argument value (i.e. cloning is cheap), use: `args[n].as_xxx().unwrap()`
     ///
-    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
+    /// To access an argument value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
     /// Notice that this will _consume_ the argument, replacing it with `()`.
     ///
-    /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
+    /// To access the first mutable argument, use `args.get_mut(0).unwrap()`
     ///
     /// # Function Metadata
     ///
@@ -1783,7 +1768,7 @@ impl Module {
         ast: &crate::AST,
         engine: &crate::Engine,
     ) -> Result<Self, Box<EvalAltResult>> {
-        let mut mods: crate::engine::Imports = (&engine.global_sub_modules).into();
+        let mut mods: crate::engine::Imports = Default::default();
         let orig_mods_len = mods.len();
 
         // Run the script
@@ -1813,24 +1798,51 @@ impl Module {
 
         // Non-private functions defined become module functions
         #[cfg(not(feature = "no_function"))]
-        {
-            ast.lib()
-                .functions
-                .values()
-                .filter(|FuncInfo { access, func, .. }| !access.is_private() && func.is_script())
-                .for_each(|FuncInfo { func, .. }| {
-                    // Encapsulate AST environment
-                    let mut func = func.get_fn_def().clone();
-                    func.lib = Some(ast.shared_lib());
-                    func.mods = func_mods.clone();
-                    module.set_script_fn(func);
-                });
-        }
+        ast.lib()
+            .functions
+            .values()
+            .filter(|FuncInfo { access, .. }| match access {
+                FnAccess::Public => true,
+                FnAccess::Private => false,
+            })
+            .filter(|FuncInfo { func, .. }| func.is_script())
+            .for_each(|FuncInfo { func, .. }| {
+                // Encapsulate AST environment
+                let mut func = func.get_fn_def().clone();
+                func.lib = Some(ast.shared_lib());
+                func.mods = func_mods.clone();
+                module.set_script_fn(func);
+            });
 
         module.set_id(ast.clone_source());
         module.build_index();
 
         Ok(module)
+    }
+
+    /// Are there functions (or type iterators) marked for the specified namespace?
+    pub fn has_namespace(&self, namespace: FnNamespace, recursive: bool) -> bool {
+        // Type iterators are default global
+        if !self.type_iterators.is_empty() {
+            return true;
+        }
+        // Any function marked global?
+        if self.functions.values().any(|f| f.namespace == namespace) {
+            return true;
+        }
+
+        // Scan sub-modules
+        if recursive {
+            if self
+                .modules
+                .values()
+                .any(|m| m.has_namespace(namespace, recursive))
+            {
+                return true;
+            }
+        }
+
+        false
     }
 
     /// Scan through all the sub-modules in the [`Module`] and build a hash index of all
@@ -1866,55 +1878,55 @@ impl Module {
             });
 
             // Index all Rust functions
-            module
-                .functions
-                .iter()
-                .filter(|(_, FuncInfo { access, .. })| access.is_public())
-                .for_each(
-                    |(
-                        &hash,
-                        FuncInfo {
-                            name,
-                            namespace,
-                            params,
-                            param_types,
-                            func,
-                            ..
-                        },
-                    )| {
-                        // Flatten all functions with global namespace
-                        if namespace.is_global() {
+            module.functions.iter().for_each(
+                |(
+                    &hash,
+                    FuncInfo {
+                        name,
+                        namespace,
+                        access,
+                        params,
+                        param_types,
+                        func,
+                        ..
+                    },
+                )| {
+                    match namespace {
+                        FnNamespace::Global => {
+                            // Flatten all functions with global namespace
                             functions.insert(hash, func.clone());
                         }
+                        FnNamespace::Internal => (),
+                    }
+                    match access {
+                        FnAccess::Public => (),
+                        FnAccess::Private => return, // Do not index private functions
+                    }
 
-                        let hash_qualified_script =
-                            crate::calc_script_fn_hash(qualifiers.iter().cloned(), name, *params)
-                                .unwrap();
-
-                        if !func.is_script() {
-                            assert_eq!(*params, param_types.len());
-
-                            // Namespace-qualified Rust functions are indexed in two steps:
-                            // 1) Calculate a hash in a similar manner to script-defined functions,
-                            //    i.e. qualifiers + function name + number of arguments.
-                            // 2) Calculate a second hash with no qualifiers, empty function name,
-                            //    and the actual list of argument [`TypeId`]'.s
-                            let hash_fn_args = crate::calc_native_fn_hash(
-                                empty(),
-                                "",
-                                param_types.iter().cloned(),
-                            )
+                    let hash_qualified_script =
+                        crate::calc_script_fn_hash(qualifiers.iter().cloned(), name, *params)
                             .unwrap();
-                            // 3) The two hashes are combined.
-                            let hash_qualified_fn =
-                                combine_hashes(hash_qualified_script, hash_fn_args);
 
-                            functions.insert(hash_qualified_fn, func.clone());
-                        } else if cfg!(not(feature = "no_function")) {
-                            functions.insert(hash_qualified_script, func.clone());
-                        }
-                    },
-                );
+                    if !func.is_script() {
+                        assert_eq!(*params, param_types.len());
+
+                        // Namespace-qualified Rust functions are indexed in two steps:
+                        // 1) Calculate a hash in a similar manner to script-defined functions,
+                        //    i.e. qualifiers + function name + number of arguments.
+                        // 2) Calculate a second hash with no qualifiers, empty function name,
+                        //    and the actual list of argument [`TypeId`]'.s
+                        let hash_fn_args =
+                            crate::calc_native_fn_hash(empty(), "", param_types.iter().cloned())
+                                .unwrap();
+                        // 3) The two hashes are combined.
+                        let hash_qualified_fn = combine_hashes(hash_qualified_script, hash_fn_args);
+
+                        functions.insert(hash_qualified_fn, func.clone());
+                    } else if cfg!(not(feature = "no_function")) {
+                        functions.insert(hash_qualified_script, func.clone());
+                    }
+                },
+            );
         }
 
         if !self.indexed {

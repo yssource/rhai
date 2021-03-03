@@ -2,8 +2,9 @@ use crate::dynamic::Variant;
 use crate::stdlib::{
     boxed::Box,
     ops::{Add, Range},
+    string::ToString,
 };
-use crate::{def_package, EvalAltResult, INT};
+use crate::{def_package, EvalAltResult, Position, INT};
 
 fn get_range<T: Variant + Clone>(from: T, to: T) -> Result<Range<T>, Box<EvalAltResult>> {
     Ok(from..to)
@@ -16,6 +17,23 @@ where
     for<'a> &'a T: Add<&'a T, Output = T>,
     T: Variant + Clone + PartialOrd;
 
+impl<T> StepRange<T>
+where
+    for<'a> &'a T: Add<&'a T, Output = T>,
+    T: Variant + Clone + PartialOrd,
+{
+    pub fn new(from: T, to: T, step: T) -> Result<Self, Box<EvalAltResult>> {
+        if &from + &step == from {
+            Err(Box::new(EvalAltResult::ErrorArithmetic(
+                "invalid step value".to_string(),
+                Position::NONE,
+            )))
+        } else {
+            Ok(Self(from, to, step))
+        }
+    }
+}
+
 impl<T> Iterator for StepRange<T>
 where
     for<'a> &'a T: Add<&'a T, Output = T>,
@@ -24,12 +42,18 @@ where
     type Item = T;
 
     fn next(&mut self) -> Option<T> {
-        if self.0 < self.1 {
+        if self.0 == self.1 {
+            None
+        } else if self.0 < self.1 {
             let v = self.0.clone();
-            self.0 = self.0.add(&self.2);
+            let n = self.0.add(&self.2);
+            self.0 = if n >= self.1 { self.1.clone() } else { n };
             Some(v)
         } else {
-            None
+            let v = self.0.clone();
+            let n = self.0.add(&self.2);
+            self.0 = if n <= self.1 { self.1.clone() } else { n };
+            Some(v)
         }
     }
 }
@@ -39,7 +63,7 @@ where
     for<'a> &'a T: Add<&'a T, Output = T>,
     T: Variant + Clone + PartialOrd,
 {
-    Ok(StepRange::<T>(from, to, step))
+    StepRange::<T>::new(from, to, step)
 }
 
 macro_rules! reg_range {
@@ -47,7 +71,7 @@ macro_rules! reg_range {
         $(
             $lib.set_iterator::<Range<$y>>();
             let hash = $lib.set_fn_2($x, get_range::<$y>);
-            $lib.update_fn_metadata(hash, [
+            $lib.update_fn_metadata(hash, &[
                     concat!("from: ", stringify!($y)),
                     concat!("to: ", stringify!($y)),
                     concat!("Iterator<Item=", stringify!($y), ">")
@@ -61,7 +85,7 @@ macro_rules! reg_stepped_range {
         $(
             $lib.set_iterator::<StepRange<$y>>();
             let hash = $lib.set_fn_3($x, get_step_range::<$y>);
-            $lib.update_fn_metadata(hash, [
+            $lib.update_fn_metadata(hash, &[
                     concat!("from: ", stringify!($y)),
                     concat!("to: ", stringify!($y)),
                     concat!("step: ", stringify!($y)),

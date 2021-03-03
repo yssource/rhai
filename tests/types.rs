@@ -46,6 +46,9 @@ fn test_type_of() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(engine.eval::<String>(r#"type_of("hello")"#)?, "string");
 
+    #[cfg(not(feature = "no_object"))]
+    assert_eq!(engine.eval::<String>(r#""hello".type_of()"#)?, "string");
+
     #[cfg(not(feature = "only_i32"))]
     assert_eq!(engine.eval::<String>("let x = 123; type_of(x)")?, "i64");
 

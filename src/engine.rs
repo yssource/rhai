@@ -17,7 +17,7 @@ use crate::stdlib::{
     collections::{HashMap, HashSet},
     fmt, format,
     hash::{Hash, Hasher},
-    iter::{empty, FromIterator},
+    iter::empty,
     num::{NonZeroU64, NonZeroU8, NonZeroUsize},
     ops::DerefMut,
     string::{String, ToString},
@@ -25,8 +25,8 @@ use crate::stdlib::{
 use crate::syntax::CustomSyntax;
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
-    calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position, Scope,
-    Shared, StaticVec,
+    calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position,
+    RhaiResult, Scope, Shared, StaticVec,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -107,6 +107,11 @@ impl Imports {
     pub(crate) fn iter_raw(&self) -> impl Iterator<Item = (&ImmutableString, &Shared<Module>)> {
         self.0.iter().rev().map(|(n, m)| (n, m))
     }
+    /// Get an iterator to this stack of imported [modules][Module] in forward order.
+    #[inline(always)]
+    pub(crate) fn scan_raw(&self) -> impl Iterator<Item = (&ImmutableString, &Shared<Module>)> {
+        self.0.iter().map(|(n, m)| (n, m))
+    }
     /// Get a consuming iterator to this stack of imported [modules][Module] in reverse order.
     #[inline(always)]
     pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
@@ -151,24 +156,6 @@ impl Imports {
     }
 }
 
-impl<'a, T: IntoIterator<Item = (&'a ImmutableString, &'a Shared<Module>)>> From<T> for Imports {
-    #[inline(always)]
-    fn from(value: T) -> Self {
-        Self(
-            value
-                .into_iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
-        )
-    }
-}
-impl FromIterator<(ImmutableString, Shared<Module>)> for Imports {
-    #[inline(always)]
-    fn from_iter<T: IntoIterator<Item = (ImmutableString, Shared<Module>)>>(iter: T) -> Self {
-        Self(iter.into_iter().collect())
-    }
-}
-
 #[cfg(not(feature = "unchecked"))]
 #[cfg(debug_assertions)]
 #[cfg(not(feature = "no_function"))]
@@ -205,6 +192,8 @@ pub const KEYWORD_FN_PTR_CURRY: &str = "curry";
 #[cfg(not(feature = "no_closure"))]
 pub const KEYWORD_IS_SHARED: &str = "is_shared";
 pub const KEYWORD_IS_DEF_VAR: &str = "is_def_var";
+#[cfg(not(feature = "no_function"))]
+pub const KEYWORD_IS_DEF_FN: &str = "is_def_fn";
 pub const KEYWORD_THIS: &str = "this";
 #[cfg(not(feature = "no_object"))]
 pub const FN_GET: &str = "get$";
@@ -422,8 +411,8 @@ impl<'a> Target<'a> {
                 // Replace the character at the specified index position
                 let new_ch = new_val.as_char().map_err(|err| {
                     Box::new(EvalAltResult::ErrorMismatchDataType(
-                        err.to_string(),
                         "char".to_string(),
+                        err.to_string(),
                         pos,
                     ))
                 })?;
@@ -536,18 +525,6 @@ impl State {
     pub fn is_global(&self) -> bool {
         self.scope_level == 0
     }
-    /// Get the current functions resolution cache.
-    pub fn fn_resolution_cache(
-        &self,
-    ) -> Option<
-        &HashMap<
-            NonZeroU64,
-            Option<(CallableFunction, Option<ImmutableString>)>,
-            StraightHasherBuilder,
-        >,
-    > {
-        self.fn_resolution_caches.last()
-    }
     /// Get a mutable reference to the current functions resolution cache.
     pub fn fn_resolution_cache_mut(
         &mut self,
@@ -628,17 +605,17 @@ pub struct Limits {
 
 /// Context of a script evaluation process.
 #[derive(Debug)]
-pub struct EvalContext<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> {
-    pub(crate) engine: &'e Engine,
+pub struct EvalContext<'a, 'x, 'px, 'm, 's, 't, 'pt> {
+    pub(crate) engine: &'a Engine,
     pub(crate) scope: &'x mut Scope<'px>,
-    pub(crate) mods: &'a mut Imports,
+    pub(crate) mods: &'m mut Imports,
     pub(crate) state: &'s mut State,
-    pub(crate) lib: &'m [&'m Module],
+    pub(crate) lib: &'a [&'a Module],
     pub(crate) this_ptr: &'t mut Option<&'pt mut Dynamic>,
     pub(crate) level: usize,
 }
 
-impl<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> {
+impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
     /// The current [`Engine`].
     #[inline(always)]
     pub fn engine(&self) -> &Engine {
@@ -721,9 +698,6 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 't, 
 /// # }
 /// ```
 pub struct Engine {
-    /// A unique ID identifying this scripting [`Engine`].
-    pub id: String,
-
     /// A module containing all functions directly loaded into the Engine.
     pub(crate) global_namespace: Module,
     /// A collection of all modules loaded into the global namespace of the Engine.
@@ -768,11 +742,7 @@ pub struct Engine {
 impl fmt::Debug for Engine {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if !self.id.is_empty() {
-            write!(f, "Engine({})", self.id)
-        } else {
-            f.write_str("Engine")
-        }
+        f.write_str("Engine")
     }
 }
 
@@ -824,40 +794,12 @@ fn default_debug(_s: &str, _source: Option<&str>, _pos: Position) {
     }
 }
 
-/// Search for a module within an imports stack.
-/// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
-pub fn search_imports(
-    mods: &Imports,
-    state: &mut State,
-    namespace: &NamespaceRef,
-) -> Result<Shared<Module>, Box<EvalAltResult>> {
-    let Ident { name: root, pos } = &namespace[0];
-
-    // Qualified - check if the root module is directly indexed
-    let index = if state.always_search {
-        None
-    } else {
-        namespace.index()
-    };
-
-    Ok(if let Some(index) = index {
-        let offset = mods.len() - index.get();
-        mods.get(offset).expect("invalid index in Imports")
-    } else {
-        mods.find(root)
-            .map(|n| mods.get(n).expect("invalid index in Imports"))
-            .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *pos))?
-    })
-}
-
 impl Engine {
     /// Create a new [`Engine`]
     #[inline]
     pub fn new() -> Self {
         // Create the new scripting Engine
         let mut engine = Self {
-            id: Default::default(),
-
             global_namespace: Default::default(),
             global_modules: Default::default(),
             global_sub_modules: Default::default(),
@@ -923,8 +865,6 @@ impl Engine {
     #[inline]
     pub fn new_raw() -> Self {
         Self {
-            id: Default::default(),
-
             global_namespace: Default::default(),
             global_modules: Default::default(),
             global_sub_modules: Default::default(),
@@ -970,6 +910,32 @@ impl Engine {
         }
     }
 
+    /// Search for a module within an imports stack.
+    pub(crate) fn search_imports(
+        &self,
+        mods: &Imports,
+        state: &mut State,
+        namespace: &NamespaceRef,
+    ) -> Option<Shared<Module>> {
+        let root = &namespace[0].name;
+
+        // Qualified - check if the root module is directly indexed
+        let index = if state.always_search {
+            None
+        } else {
+            namespace.index()
+        };
+
+        if let Some(index) = index {
+            let offset = mods.len() - index.get();
+            Some(mods.get(offset).expect("invalid index in Imports"))
+        } else {
+            mods.find(root)
+                .map(|n| mods.get(n).expect("invalid index in Imports"))
+                .or_else(|| self.global_sub_modules.get(root).cloned())
+        }
+    }
+
     /// Search for a variable within the scope or within imports,
     /// depending on whether the variable name is namespace-qualified.
     pub(crate) fn search_namespace<'s>(
@@ -985,7 +951,12 @@ impl Engine {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
                 (_, Some((hash_var, modules)), Ident { name, pos }) => {
-                    let module = search_imports(mods, state, modules)?;
+                    let module = self.search_imports(mods, state, modules).ok_or_else(|| {
+                        EvalAltResult::ErrorModuleNotFound(
+                            modules[0].name.to_string(),
+                            modules[0].pos,
+                        )
+                    })?;
                     let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
                         match *err {
                             EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
@@ -1077,7 +1048,7 @@ impl Engine {
     }
 
     /// Chain-evaluate a dot/index chain.
-    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and must be set afterwards.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_dot_index_chain_helper(
         &self,
@@ -1164,8 +1135,8 @@ impl Engine {
                             let args = &mut [target_val, &mut idx_val2, &mut (new_val.0).0];
 
                             self.exec_fn_call(
-                                mods, state, lib, FN_IDX_SET, None, args, is_ref, true, false,
-                                val_pos, None, level,
+                                mods, state, lib, FN_IDX_SET, None, args, is_ref, true, val_pos,
+                                None, level,
                             )
                             .map_err(|err| match *err {
                                 EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
@@ -1205,7 +1176,7 @@ impl Engine {
                         } = x.as_ref();
                         let args = idx_val.as_fn_call_args();
                         self.make_method_call(
-                            mods, state, lib, name, *hash, target, args, false, *pos, level,
+                            mods, state, lib, name, *hash, target, args, *pos, level,
                         )
                     }
                     // xxx.fn_name(...) = ???
@@ -1245,8 +1216,8 @@ impl Engine {
                         let mut new_val = new_val;
                         let mut args = [target_val, &mut (new_val.as_mut().unwrap().0).0];
                         self.exec_fn_call(
-                            mods, state, lib, setter, None, &mut args, is_ref, true, false, *pos,
-                            None, level,
+                            mods, state, lib, setter, None, &mut args, is_ref, true, *pos, None,
+                            level,
                         )
                         .map(|(v, _)| (v, true))
                     }
@@ -1255,8 +1226,8 @@ impl Engine {
                         let (getter, _, Ident { pos, .. }) = x.as_ref();
                         let mut args = [target_val];
                         self.exec_fn_call(
-                            mods, state, lib, getter, None, &mut args, is_ref, true, false, *pos,
-                            None, level,
+                            mods, state, lib, getter, None, &mut args, is_ref, true, *pos, None,
+                            level,
                         )
                         .map(|(v, _)| (v, false))
                     }
@@ -1280,7 +1251,7 @@ impl Engine {
                                 } = x.as_ref();
                                 let args = idx_val.as_fn_call_args();
                                 let (val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hash, target, args, false, *pos, level,
+                                    mods, state, lib, name, *hash, target, args, *pos, level,
                                 )?;
                                 val.into()
                             }
@@ -1307,8 +1278,8 @@ impl Engine {
                                 let arg_values = &mut [target_val, &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self.exec_fn_call(
-                                    mods, state, lib, getter, None, args, is_ref, true, false,
-                                    *pos, None, level,
+                                    mods, state, lib, getter, None, args, is_ref, true, *pos, None,
+                                    level,
                                 )?;
 
                                 let val = &mut val;
@@ -1334,7 +1305,7 @@ impl Engine {
                                     arg_values[1] = val;
                                     self.exec_fn_call(
                                         mods, state, lib, setter, None, arg_values, is_ref, true,
-                                        false, *pos, None, level,
+                                        *pos, None, level,
                                     )
                                     .or_else(
                                         |err| match *err {
@@ -1359,7 +1330,7 @@ impl Engine {
                                 } = f.as_ref();
                                 let args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hash, target, args, false, *pos, level,
+                                    mods, state, lib, name, *hash, target, args, *pos, level,
                                 )?;
                                 let val = &mut val;
                                 let target = &mut val.into();
@@ -1399,7 +1370,7 @@ impl Engine {
         expr: &Expr,
         level: usize,
         new_val: Option<((Dynamic, Position), (&str, Position))>,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, op_pos) = match expr {
             Expr::Index(x, pos) => (x.as_ref(), ChainType::Index, *pos),
             Expr::Dot(x, pos) => (x.as_ref(), ChainType::Dot, *pos),
@@ -1629,8 +1600,8 @@ impl Engine {
                 let mut idx = idx;
                 let args = &mut [target, &mut idx];
                 self.exec_fn_call(
-                    _mods, state, _lib, FN_IDX_GET, None, args, _is_ref, true, false, idx_pos,
-                    None, _level,
+                    _mods, state, _lib, FN_IDX_GET, None, args, _is_ref, true, idx_pos, None,
+                    _level,
                 )
                 .map(|(v, _)| v.into())
                 .map_err(|err| match *err {
@@ -1663,7 +1634,7 @@ impl Engine {
         lhs: &Expr,
         rhs: &Expr,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         self.inc_operations(state, rhs.position())?;
 
         let lhs_value = self.eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?;
@@ -1721,7 +1692,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         self.inc_operations(state, expr.position())?;
 
         let result = match expr {
@@ -1742,9 +1713,16 @@ impl Engine {
                 .map(|(val, _)| val.take_or_clone()),
 
             // Statement block
-            Expr::Stmt(x, _) => {
-                self.eval_stmt_block(scope, mods, state, lib, this_ptr, x.as_ref(), true, level)
-            }
+            Expr::Stmt(x, _) => self.eval_stmt_block(
+                scope,
+                mods,
+                state,
+                lib,
+                this_ptr,
+                x.as_ref().as_ref(),
+                true,
+                level,
+            ),
 
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
@@ -1791,8 +1769,7 @@ impl Engine {
                     ..
                 } = x.as_ref();
                 self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args, *hash, false, *pos, *cap_scope,
-                    level,
+                    scope, mods, state, lib, this_ptr, name, args, *hash, *pos, *cap_scope, level,
                 )
             }
 
@@ -1874,47 +1851,59 @@ impl Engine {
     }
 
     /// Evaluate a statements block.
-    pub(crate) fn eval_stmt_block<'a>(
+    pub(crate) fn eval_stmt_block(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        statements: impl IntoIterator<Item = &'a Stmt>,
-        restore: bool,
+        statements: &[Stmt],
+        restore_prev_state: bool,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut _has_imports = false;
+    ) -> RhaiResult {
+        let mut _restore_fn_resolution_cache = false;
         let prev_always_search = state.always_search;
         let prev_scope_len = scope.len();
         let prev_mods_len = mods.len();
 
-        if restore {
+        if restore_prev_state {
             state.scope_level += 1;
         }
 
-        let result = statements.into_iter().try_fold(Dynamic::UNIT, |_, stmt| {
+        let result = statements.iter().try_fold(Dynamic::UNIT, |_, stmt| {
+            let _mods_len = mods.len();
+
+            let r = self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)?;
+
             #[cfg(not(feature = "no_module"))]
-            match stmt {
-                Stmt::Import(_, _, _) => {
-                    // When imports list is modified, clear the functions lookup cache
-                    if _has_imports {
+            if matches!(stmt, Stmt::Import(_, _, _)) {
+                // Get the extra modules - see if any functions are marked global.
+                // Without global functions, the extra modules never affect function resolution.
+                if mods
+                    .scan_raw()
+                    .skip(_mods_len)
+                    .any(|(_, m)| m.has_namespace(crate::FnNamespace::Global, true))
+                {
+                    if _restore_fn_resolution_cache {
+                        // When new module is imported with global functions and there is already
+                        // a new cache, clear it - notice that this is expensive as all function
+                        // resolutions must start again
                         state.clear_fn_resolution_cache();
-                    } else if restore {
+                    } else if restore_prev_state {
+                        // When new module is imported with global functions, push a new cache
                         state.push_fn_resolution_cache();
-                        _has_imports = true;
+                        _restore_fn_resolution_cache = true;
                     }
                 }
-                _ => (),
             }
 
-            self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
+            Ok(r)
         });
 
-        if restore {
+        if restore_prev_state {
             scope.rewind(prev_scope_len);
-            if _has_imports {
+            if _restore_fn_resolution_cache {
                 // If imports list is modified, pop the functions lookup cache
                 state.pop_fn_resolution_cache();
             }
@@ -2000,7 +1989,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         stmt: &Stmt,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         self.inc_operations(state, stmt.position())?;
 
         let result = match stmt {
@@ -2175,6 +2164,13 @@ impl Engine {
                 let iter_obj = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let iter_type = iter_obj.type_id();
 
+                // lib should only contain scripts, so technically they cannot have iterators
+
+                // Search order:
+                // 1) Global namespace - functions registered via Engine::register_XXX
+                // 2) Global modules - packages
+                // 3) Imported modules - functions marked with global namespace
+                // 4) Global sub-modules - functions marked with global namespace
                 let func = self
                     .global_namespace
                     .get_iter(iter_type)
@@ -2183,7 +2179,12 @@ impl Engine {
                             .iter()
                             .find_map(|m| m.get_iter(iter_type))
                     })
-                    .or_else(|| mods.get_iter(iter_type));
+                    .or_else(|| mods.get_iter(iter_type))
+                    .or_else(|| {
+                        self.global_sub_modules
+                            .values()
+                            .find_map(|m| m.get_qualified_iter(iter_type))
+                    });
 
                 if let Some(func) = func {
                     // Add the loop variable
@@ -2245,11 +2246,47 @@ impl Engine {
                     Err(err) if err.is_pseudo_error() => Err(err),
                     Err(err) if !err.is_catchable() => Err(err),
                     Err(mut err) => {
-                        let value = match *err {
+                        let err_value = match *err {
                             EvalAltResult::ErrorRuntime(ref x, _) => x.clone(),
+
+                            #[cfg(feature = "no_object")]
                             _ => {
-                                err.set_position(Position::NONE);
+                                err.take_position();
                                 err.to_string().into()
+                            }
+                            #[cfg(not(feature = "no_object"))]
+                            _ => {
+                                use crate::INT;
+
+                                let mut err_map: Map = Default::default();
+                                let err_pos = err.take_position();
+
+                                err_map.insert("message".into(), err.to_string().into());
+
+                                if let Some(ref source) = state.source {
+                                    err_map.insert("source".into(), source.clone().into());
+                                }
+
+                                if err_pos.is_none() {
+                                    // No position info
+                                } else {
+                                    err_map.insert(
+                                        "line".into(),
+                                        (err_pos.line().unwrap() as INT).into(),
+                                    );
+                                    err_map.insert(
+                                        "position".into(),
+                                        if err_pos.is_beginning_of_line() {
+                                            0
+                                        } else {
+                                            err_pos.position().unwrap() as INT
+                                        }
+                                        .into(),
+                                    );
+                                }
+
+                                err.dump_fields(&mut err_map);
+                                err_map.into()
                             }
                         };
 
@@ -2257,7 +2294,7 @@ impl Engine {
                         state.scope_level += 1;
 
                         if let Some(Ident { name, .. }) = err_var {
-                            scope.push(unsafe_cast_var_name_to_lifetime(&name), value);
+                            scope.push(unsafe_cast_var_name_to_lifetime(&name), err_value);
                         }
 
                         let result =
@@ -2427,21 +2464,13 @@ impl Engine {
     /// [`Position`] in [`EvalAltResult`] may be None and should be set afterwards.
     #[cfg(feature = "unchecked")]
     #[inline(always)]
-    fn check_data_size(
-        &self,
-        result: Result<Dynamic, Box<EvalAltResult>>,
-        _pos: Position,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    fn check_data_size(&self, result: RhaiResult, _pos: Position) -> RhaiResult {
         result
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
     #[cfg(not(feature = "unchecked"))]
-    fn check_data_size(
-        &self,
-        result: Result<Dynamic, Box<EvalAltResult>>,
-        pos: Position,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    fn check_data_size(&self, result: RhaiResult, pos: Position) -> RhaiResult {
         // Simply return all errors
         if result.is_err() {
             return result;
@@ -2589,8 +2618,8 @@ impl Engine {
     #[inline(always)]
     pub(crate) fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
         EvalAltResult::ErrorMismatchDataType(
-            typ.into(),
             self.map_type_name(type_name::<T>()).into(),
+            typ.into(),
             pos,
         )
         .into()

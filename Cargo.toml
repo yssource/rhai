@@ -6,11 +6,11 @@ members = [
 
 [package]
 name = "rhai"
-version = "0.19.13"
+version = "0.19.14"
 edition = "2018"
 authors = ["Jonathan Turner", "Lukáš Hozda", "Stephen Chung", "jhwgh1968"]
 description = "Embedded scripting for Rust"
-homepage = "https://rhai.rs/book"
+homepage = "https://rhai.rs"
 repository = "https://github.com/rhaiscript"
 readme = "README.md"
 license = "MIT OR Apache-2.0"

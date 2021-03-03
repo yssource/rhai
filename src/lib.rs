@@ -69,6 +69,7 @@ mod engine;
 mod engine_api;
 mod engine_settings;
 mod fn_args;
+mod fn_builtin;
 mod fn_call;
 mod fn_func;
 mod fn_native;
@@ -86,6 +87,8 @@ mod syntax;
 mod token;
 mod r#unsafe;
 mod utils;
+
+type RhaiResult = Result<Dynamic, stdlib::boxed::Box<EvalAltResult>>;
 
 /// The system integer type. It is defined as [`i64`].
 ///

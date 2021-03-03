@@ -102,6 +102,14 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
         "#
     )?);
 
+    assert!(engine.eval::<bool>(
+        r#"
+            let a = 41;
+            let foo = |x| { a += x };
+            is_shared(a)
+        "#
+    )?);
+
     engine.register_fn("plus_one", |x: INT| x + 1);
 
     assert_eq!(

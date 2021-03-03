@@ -1447,9 +1447,9 @@ impl Dynamic {
     /// Exported under the `decimal` feature only.
     #[cfg(feature = "decimal")]
     #[inline(always)]
-    pub fn as_decimal(self) -> Result<Decimal, &'static str> {
-        match self.0 {
-            Union::Decimal(n, _) => Ok(*n),
+    pub fn as_decimal(&self) -> Result<Decimal, &'static str> {
+        match &self.0 {
+            Union::Decimal(n, _) => Ok(**n),
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _) => self.read_lock().map(|v| *v).ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
@@ -1503,7 +1503,6 @@ impl Dynamic {
     pub fn take_immutable_string(self) -> Result<ImmutableString, &'static str> {
         match self.0 {
             Union::Str(s, _) => Ok(s),
-            Union::FnPtr(f, _) => Ok(f.take_data().0),
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(cell, _) => {
                 #[cfg(not(feature = "sync"))]
@@ -1513,7 +1512,6 @@ impl Dynamic {
 
                 match &data.0 {
                     Union::Str(s, _) => Ok(s.clone()),
-                    Union::FnPtr(f, _) => Ok(f.get_fn_name().clone()),
                     _ => Err((*data).type_name()),
                 }
             }

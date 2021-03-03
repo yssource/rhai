@@ -1,10 +1,41 @@
 Rhai Release Notes
 ==================
 
-This version introduces functions with `Dynamic` parameters acting as wildcards.
+Version 0.19.14
+===============
+
+Bug fixes
+---------
+
+* Errors in native Rust functions now contain the correct function call positions.
+* Fixed error types in `EvalAltResult::ErrorMismatchDataType` which were swapped.
+
+Breaking changes
+----------------
+
+* Zero step in the `range` function now raises an error instead of creating an infinite stream.
+* Error variable captured by `catch` is now an _object map_ containing error fields.
+* `EvalAltResult::clear_position` is renamed `EvalAltResult::take_position` and returns the position taken.
+* `private` functions in an `AST` can now be called with `call_fn` etc.
+* `NativeCallContext::call_fn_dynamic_raw` no longer has the `pub_only` parameter.
+* `Module::update_fn_metadata` input parameter is changed.
+* Function keywords (e.g. `type_of`, `eval`, `Fn`) can no longer be overloaded. It is more trouble than worth. To disable these keywords, use `Engine::disable_symbol`.
+* `is_def_var` and `is_def_fn` are now reserved keywords.
+* `Engine::id` field is removed.
+
+Enhancements
+------------
+
+* Function calls are more optimized and should now run faster.
+* `range` function now supports negative step and decreasing streams (i.e. to < from).
+* More information is provided to the error variable captured by the `catch` statement in an _object map_.
+* Previously, `private` functions in an `AST` cannot be called with `call_fn` etc. This is inconvenient when trying to call a function inside a script which also serves as a loadable module exporting part (but not all) of the functions. Now, all functions (`private` or not) can be called in an `AST`. The `private` keyword is relegated to preventing a function from being exported.
+
 
 Version 0.19.13
 ===============
+
+This version introduces functions with `Dynamic` parameters acting as wildcards.
 
 Bug fixes
 ---------
@@ -694,7 +725,7 @@ Breaking changes
 ----------------
 
 * `Engine::compile_XXX` functions now return `ParseError` instead of `Box<ParseError>`.
-* The `RegisterDynamicFn` trait is merged into the `RegisterResultFn` trait which now always returns `Result<Dynamic, Box<EvalAltResult>>`.
+* The `RegisterDynamicFn` trait is merged into the `RegisterResultFn` trait which now always returns `RhaiResult`.
 * Default maximum limit on levels of nested function calls is fine-tuned and set to a different value.
 * Some operator functions are now built in (see _Speed enhancements_ below), so they are available even under `Engine::new_raw`.
 * Strings are now immutable. The type `rhai::ImmutableString` is used instead of `std::string::String`. This is to avoid excessive cloning of strings.  All native-Rust functions taking string parameters should switch to `rhai::ImmutableString` (which is either `Rc<String>` or `Arc<String>` depending on whether the `sync` feature is used).

@@ -2,7 +2,7 @@
 
 use crate::engine::{
     KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY,
-    KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
+    KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 use crate::stdlib::{
     borrow::Cow,
@@ -21,13 +21,16 @@ use crate::ast::FloatWrapper;
 #[cfg(feature = "decimal")]
 use rust_decimal::Decimal;
 
+#[cfg(not(feature = "no_function"))]
+use crate::engine::KEYWORD_IS_DEF_FN;
+
 type LERR = LexError;
 
 /// Separator character for numbers.
 const NUM_SEP: char = '_';
 
 /// A stream of tokens.
-pub type TokenStream<'a, 't> = Peekable<TokenIterator<'a, 't>>;
+pub type TokenStream<'a> = Peekable<TokenIterator<'a>>;
 
 /// A location (line number + character position) in the input script.
 ///
@@ -579,7 +582,12 @@ impl Token {
             | "async" | "await" | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
-            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_THIS => Reserved(syntax.into()),
+            | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_THIS | KEYWORD_IS_DEF_VAR => {
+                Reserved(syntax.into())
+            }
+
+            #[cfg(not(feature = "no_function"))]
+            KEYWORD_IS_DEF_FN => Reserved(syntax.into()),
 
             _ => return None,
         })
@@ -759,7 +767,6 @@ impl Token {
     #[cfg(not(feature = "no_function"))]
     pub(crate) fn into_function_name_for_override(self) -> Result<String, Self> {
         match self {
-            Self::Reserved(s) if can_override_keyword(&s) => Ok(s),
             Self::Custom(s) | Self::Identifier(s) if is_valid_identifier(s.chars()) => Ok(s),
             _ => Err(self),
         }
@@ -1625,17 +1632,11 @@ fn get_identifier(
 pub fn is_keyword_function(name: &str) -> bool {
     match name {
         KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
-        | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY => true,
-        _ => false,
-    }
-}
+        | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_DEF_VAR => true,
 
-/// Can this keyword be overridden as a function?
-#[cfg(not(feature = "no_function"))]
-#[inline(always)]
-pub fn can_override_keyword(name: &str) -> bool {
-    match name {
-        KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR => true,
+        #[cfg(not(feature = "no_function"))]
+        KEYWORD_IS_DEF_FN => true,
+
         _ => false,
     }
 }
@@ -1740,9 +1741,9 @@ impl InputStream for MultiInputsStream<'_> {
 }
 
 /// An iterator on a [`Token`] stream.
-pub struct TokenIterator<'a, 'e> {
+pub struct TokenIterator<'a> {
     /// Reference to the scripting `Engine`.
-    engine: &'e Engine,
+    engine: &'a Engine,
     /// Current state.
     state: TokenizeState,
     /// Current position.
@@ -1753,7 +1754,7 @@ pub struct TokenIterator<'a, 'e> {
     map: Option<fn(Token) -> Token>,
 }
 
-impl<'a> Iterator for TokenIterator<'a, '_> {
+impl<'a> Iterator for TokenIterator<'a> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1836,30 +1837,31 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
 }
 
 impl Engine {
-    /// Tokenize an input text stream.
+    /// _(INTERNALS)_ Tokenize an input text stream.
+    /// Exported under the `internals` feature only.
+    #[cfg(feature = "internals")]
     #[inline(always)]
-    pub fn lex<'a, 'e>(
-        &'e self,
-        input: impl IntoIterator<Item = &'a &'a str>,
-    ) -> TokenIterator<'a, 'e> {
+    pub fn lex<'a>(&'a self, input: impl IntoIterator<Item = &'a &'a str>) -> TokenIterator<'a> {
         self.lex_raw(input, None)
     }
-    /// Tokenize an input text stream with a mapping function.
+    /// _(INTERNALS)_ Tokenize an input text stream with a mapping function.
+    /// Exported under the `internals` feature only.
+    #[cfg(feature = "internals")]
     #[inline(always)]
-    pub fn lex_with_map<'a, 'e>(
-        &'e self,
+    pub fn lex_with_map<'a>(
+        &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
         map: fn(Token) -> Token,
-    ) -> TokenIterator<'a, 'e> {
+    ) -> TokenIterator<'a> {
         self.lex_raw(input, Some(map))
     }
     /// Tokenize an input text stream with an optional mapping function.
     #[inline]
-    fn lex_raw<'a, 'e>(
-        &'e self,
+    pub(crate) fn lex_raw<'a>(
+        &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
         map: Option<fn(Token) -> Token>,
-    ) -> TokenIterator<'a, 'e> {
+    ) -> TokenIterator<'a> {
         TokenIterator {
             engine: self,
             state: TokenizeState {

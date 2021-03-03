@@ -13,7 +13,7 @@ use crate::stdlib::{
 };
 use crate::{
     scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Module, NativeCallContext,
-    ParseError, Position, Shared, AST,
+    ParseError, Position, RhaiResult, Shared, AST,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -33,9 +33,9 @@ impl Engine {
     /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`][Dynamic],
     /// The arguments are guaranteed to be of the correct types matching the [`TypeId`][std::any::TypeId]'s.
     ///
-    /// To access a primary parameter value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    /// To access a primary argument value (i.e. cloning is cheap), use: `args[n].as_xxx().unwrap()`
     ///
-    /// To access a parameter value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
+    /// To access an argument value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
     /// Notice that this will _consume_ the argument, replacing it with `()`.
     ///
     /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
@@ -71,6 +71,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                    { Self { field: 1 } }
+    ///
     ///     fn update(&mut self, offset: i64)   { self.field += offset; }
     /// }
     ///
@@ -170,6 +171,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                { Self { field: 1 } }
+    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> i64  { self.field }
     /// }
@@ -216,6 +218,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { field: 1 } }
+    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> Result<Dynamic, Box<EvalAltResult>> {
     ///         Ok(self.field.into())
@@ -241,7 +244,7 @@ impl Engine {
     pub fn register_get_result<T: Variant + Clone>(
         &mut self,
         name: &str,
-        get_fn: impl Fn(&mut T) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+        get_fn: impl Fn(&mut T) -> RhaiResult + SendSync + 'static,
     ) -> &mut Self {
         use crate::{engine::make_getter, RegisterResultFn};
         self.register_result_fn(&make_getter(name), get_fn)
@@ -258,6 +261,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                        { Self { field: 1 } }
+    ///
     ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
     /// }
     ///
@@ -305,6 +309,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { field: 1 } }
+    ///
     ///     fn set_field(&mut self, new_val: i64) -> Result<(), Box<EvalAltResult>> {
     ///         self.field = new_val;
     ///         Ok(())
@@ -356,8 +361,10 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                        { Self { field: 1 } }
+    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> i64          { self.field }
+    ///
     ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
     /// }
     ///
@@ -407,6 +414,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> i64 { self.fields[index as usize] }
     /// }
@@ -473,6 +481,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> Result<Dynamic, Box<EvalAltResult>> {
     ///         Ok(self.fields[index as usize].into())
@@ -499,7 +508,7 @@ impl Engine {
     #[inline(always)]
     pub fn register_indexer_get_result<T: Variant + Clone, X: Variant + Clone>(
         &mut self,
-        get_fn: impl Fn(&mut T, X) -> Result<Dynamic, Box<EvalAltResult>> + SendSync + 'static,
+        get_fn: impl Fn(&mut T, X) -> RhaiResult + SendSync + 'static,
     ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
@@ -535,6 +544,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///
     ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
     /// }
     ///
@@ -601,6 +611,7 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///
     ///     fn set_field(&mut self, index: i64, value: i64) -> Result<(), Box<EvalAltResult>> {
     ///         self.fields[index as usize] = value;
     ///         Ok(())
@@ -672,8 +683,10 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self                                { Self { fields: vec![1, 2, 3, 4, 5] } }
+    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> i64      { self.fields[index as usize] }
+    ///
     ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
     /// }
     ///
@@ -764,29 +777,25 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_module"))]
-    pub fn register_static_module(
-        &mut self,
-        name: impl AsRef<str>,
-        module: Shared<Module>,
-    ) -> &mut Self {
+    pub fn register_static_module(&mut self, name: &str, module: Shared<Module>) -> &mut Self {
         fn register_static_module_raw(
             root: &mut crate::stdlib::collections::HashMap<crate::ImmutableString, Shared<Module>>,
-            name: impl AsRef<str>,
+            name: &str,
             module: Shared<Module>,
         ) {
             let separator = crate::token::Token::DoubleColon.syntax();
 
-            if !name.as_ref().contains(separator.as_ref()) {
+            if !name.contains(separator.as_ref()) {
                 if !module.is_indexed() {
                     // Index the module (making a clone copy if necessary) if it is not indexed
                     let mut module = crate::fn_native::shared_take_or_clone(module);
                     module.build_index();
-                    root.insert(name.as_ref().trim().into(), module.into());
+                    root.insert(name.trim().into(), module.into());
                 } else {
-                    root.insert(name.as_ref().trim().into(), module);
+                    root.insert(name.trim().into(), module);
                 }
             } else {
-                let mut iter = name.as_ref().splitn(2, separator.as_ref());
+                let mut iter = name.splitn(2, separator.as_ref());
                 let sub_module = iter.next().unwrap().trim();
                 let remainder = iter.next().unwrap().trim();
 
@@ -817,11 +826,7 @@ impl Engine {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[deprecated = "use `register_static_module` instead"]
-    pub fn register_module(
-        &mut self,
-        name: impl AsRef<str>,
-        module: impl Into<Shared<Module>>,
-    ) -> &mut Self {
+    pub fn register_module(&mut self, name: &str, module: impl Into<Shared<Module>>) -> &mut Self {
         self.register_static_module(name, module.into())
     }
     /// Compile a string into an [`AST`], which can be used later for evaluation.
@@ -1023,7 +1028,7 @@ impl Engine {
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let stream = self.lex(scripts);
+        let stream = self.lex_raw(scripts, None);
         self.parse(&mut stream.peekable(), scope, optimization_level)
     }
     /// Read the contents of a file into a string.
@@ -1185,9 +1190,9 @@ impl Engine {
             .into());
         };
 
-        let stream = self.lex_with_map(
+        let stream = self.lex_raw(
             &scripts,
-            if has_null {
+            Some(if has_null {
                 |token| match token {
                     // If `null` is present, make sure `null` is treated as a variable
                     Token::Reserved(s) if s == "null" => Token::Identifier(s),
@@ -1195,7 +1200,7 @@ impl Engine {
                 }
             } else {
                 |t| t
-            },
+            }),
         );
 
         let ast =
@@ -1278,7 +1283,7 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
-        let stream = self.lex(&scripts);
+        let stream = self.lex_raw(&scripts, None);
 
         let mut peekable = stream.peekable();
         self.parse_global_expr(&mut peekable, scope, self.optimization_level)
@@ -1439,7 +1444,7 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = self.lex(&scripts);
+        let stream = self.lex_raw(&scripts, None);
 
         // No need to optimize a lone expression
         let ast = self.parse_global_expr(&mut stream.peekable(), scope, OptimizationLevel::None)?;
@@ -1503,7 +1508,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, Box<EvalAltResult>> {
-        let mods = &mut (&self.global_sub_modules).into();
+        let mods = &mut Default::default();
 
         let result = self.eval_ast_with_scope_raw(scope, mods, ast, 0)?;
 
@@ -1526,7 +1531,7 @@ impl Engine {
         mods: &mut Imports,
         ast: &'a AST,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let mut state: State = Default::default();
         state.source = ast.clone_source();
         #[cfg(not(feature = "no_module"))]
@@ -1580,7 +1585,7 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = self.lex(&scripts);
+        let stream = self.lex_raw(&scripts, None);
         let ast = self.parse(&mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }
@@ -1598,7 +1603,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
-        let mods = &mut (&self.global_sub_modules).into();
+        let mods = &mut Default::default();
         let mut state: State = Default::default();
         state.source = ast.clone_source();
         #[cfg(not(feature = "no_module"))]
@@ -1741,7 +1746,7 @@ impl Engine {
         name: &str,
         mut this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
         self.call_fn_dynamic_raw(scope, ast, eval_ast, name, &mut this_ptr, args.as_mut())
@@ -1764,9 +1769,9 @@ impl Engine {
         name: &str,
         this_ptr: &mut Option<&mut Dynamic>,
         args: &mut FnCallArgs,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let state = &mut Default::default();
-        let mods = &mut (&self.global_sub_modules).into();
+        let mods = &mut Default::default();
         let lib = &[ast.lib()];
 
         if eval_ast {
@@ -1775,7 +1780,7 @@ impl Engine {
 
         let fn_def = ast
             .lib()
-            .get_script_fn(name, args.len(), true)
+            .get_script_fn(name, args.len(), false)
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::NONE))?;
 
         // Check for data race.

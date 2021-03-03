@@ -15,7 +15,7 @@ use crate::stdlib::{
 use crate::token::is_valid_identifier;
 use crate::{
     calc_script_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ImmutableString, Module,
-    Position,
+    Position, RhaiResult,
 };
 
 #[cfg(not(feature = "sync"))]
@@ -55,20 +55,19 @@ pub type Locked<T> = crate::stdlib::sync::RwLock<T>;
 
 /// Context of a native Rust function call.
 #[derive(Debug, Copy, Clone)]
-pub struct NativeCallContext<'e, 'n, 's, 'a, 'm> {
-    engine: &'e Engine,
-    fn_name: &'n str,
-    source: Option<&'s str>,
-    pub(crate) mods: Option<&'a Imports>,
-    pub(crate) lib: &'m [&'m Module],
+pub struct NativeCallContext<'a> {
+    engine: &'a Engine,
+    fn_name: &'a str,
+    source: Option<&'a str>,
+    mods: Option<&'a Imports>,
+    lib: &'a [&'a Module],
 }
 
-impl<'e, 'n, 's, 'a, 'm, M: AsRef<[&'m Module]> + ?Sized>
-    From<(&'e Engine, &'n str, Option<&'s str>, &'a Imports, &'m M)>
-    for NativeCallContext<'e, 'n, 's, 'a, 'm>
+impl<'a, M: AsRef<[&'a Module]> + ?Sized>
+    From<(&'a Engine, &'a str, Option<&'a str>, &'a Imports, &'a M)> for NativeCallContext<'a>
 {
     #[inline(always)]
-    fn from(value: (&'e Engine, &'n str, Option<&'s str>, &'a Imports, &'m M)) -> Self {
+    fn from(value: (&'a Engine, &'a str, Option<&'a str>, &'a Imports, &'a M)) -> Self {
         Self {
             engine: value.0,
             fn_name: value.1,
@@ -79,11 +78,11 @@ impl<'e, 'n, 's, 'a, 'm, M: AsRef<[&'m Module]> + ?Sized>
     }
 }
 
-impl<'e, 'n, 'm, M: AsRef<[&'m Module]> + ?Sized> From<(&'e Engine, &'n str, &'m M)>
-    for NativeCallContext<'e, 'n, '_, '_, 'm>
+impl<'a, M: AsRef<[&'a Module]> + ?Sized> From<(&'a Engine, &'a str, &'a M)>
+    for NativeCallContext<'a>
 {
     #[inline(always)]
-    fn from(value: (&'e Engine, &'n str, &'m M)) -> Self {
+    fn from(value: (&'a Engine, &'a str, &'a M)) -> Self {
         Self {
             engine: value.0,
             fn_name: value.1,
@@ -94,16 +93,16 @@ impl<'e, 'n, 'm, M: AsRef<[&'m Module]> + ?Sized> From<(&'e Engine, &'n str, &'m
     }
 }
 
-impl<'e, 'n, 's, 'a, 'm> NativeCallContext<'e, 'n, 's, 'a, 'm> {
+impl<'a> NativeCallContext<'a> {
     /// Create a new [`NativeCallContext`].
     #[inline(always)]
-    pub fn new(engine: &'e Engine, fn_name: &'n str, lib: &'m impl AsRef<[&'m Module]>) -> Self {
+    pub fn new(engine: &'a Engine, fn_name: &'a str, lib: &'a [&Module]) -> Self {
         Self {
             engine,
             fn_name,
             source: None,
             mods: None,
-            lib: lib.as_ref(),
+            lib,
         }
     }
     /// _(INTERNALS)_ Create a new [`NativeCallContext`].
@@ -112,18 +111,18 @@ impl<'e, 'n, 's, 'a, 'm> NativeCallContext<'e, 'n, 's, 'a, 'm> {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub fn new_with_all_fields(
-        engine: &'e Engine,
-        fn_name: &'n str,
-        source: &'s Option<&str>,
-        imports: &'a mut Imports,
-        lib: &'m impl AsRef<[&'m Module]>,
+        engine: &'a Engine,
+        fn_name: &'a str,
+        source: &'a Option<&str>,
+        imports: &'a Imports,
+        lib: &'a [&Module],
     ) -> Self {
         Self {
             engine,
             fn_name,
             source: source.clone(),
             mods: Some(imports),
-            lib: lib.as_ref(),
+            lib,
         }
     }
     /// The current [`Engine`].
@@ -146,6 +145,14 @@ impl<'e, 'n, 's, 'a, 'm> NativeCallContext<'e, 'n, 's, 'a, 'm> {
     #[inline(always)]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.mods.iter().flat_map(|&m| m.iter())
+    }
+    /// Get an iterator over the current set of modules imported via `import` statements.
+    #[cfg(not(feature = "no_module"))]
+    #[inline(always)]
+    pub(crate) fn iter_imports_raw(
+        &self,
+    ) -> impl Iterator<Item = (&ImmutableString, &Shared<Module>)> {
+        self.mods.iter().flat_map(|&m| m.iter_raw())
     }
     /// _(INTERNALS)_ The current set of modules imported via `import` statements.
     /// Available under the `internals` feature only.
@@ -184,9 +191,8 @@ impl<'e, 'n, 's, 'a, 'm> NativeCallContext<'e, 'n, 's, 'a, 'm> {
         &self,
         fn_name: &str,
         is_method: bool,
-        public_only: bool,
         args: &mut [&mut Dynamic],
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         self.engine()
             .exec_fn_call(
                 &mut self.mods.cloned().unwrap_or_default(),
@@ -197,7 +203,6 @@ impl<'e, 'n, 's, 'a, 'm> NativeCallContext<'e, 'n, 's, 'a, 'm> {
                 args,
                 is_method,
                 is_method,
-                public_only,
                 Position::NONE,
                 None,
                 0,
@@ -319,7 +324,7 @@ impl FnPtr {
         ctx: NativeCallContext,
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let arg_values = arg_values.as_mut();
 
         let mut args_data = self
@@ -337,7 +342,7 @@ impl FnPtr {
             args.insert(0, obj);
         }
 
-        ctx.call_fn_dynamic_raw(self.fn_name(), is_method, true, args.as_mut())
+        ctx.call_fn_dynamic_raw(self.fn_name(), is_method, args.as_mut())
     }
 }
 
@@ -383,11 +388,10 @@ impl TryFrom<&str> for FnPtr {
 
 /// A general function trail object.
 #[cfg(not(feature = "sync"))]
-pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>>;
+pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult;
 /// A general function trail object.
 #[cfg(feature = "sync")]
-pub type FnAny =
-    dyn Fn(NativeCallContext, &mut FnCallArgs) -> Result<Dynamic, Box<EvalAltResult>> + Send + Sync;
+pub type FnAny = dyn Fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult + Send + Sync;
 
 /// A standard function that gets an iterator from a type.
 pub type IteratorFn = fn(Dynamic) -> Box<dyn Iterator<Item = Dynamic>>;

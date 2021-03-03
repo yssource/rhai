@@ -1,12 +1,12 @@
 //! Implement function-calling mechanism for [`Engine`].
 
-use crate::ast::{Expr, Stmt};
 use crate::engine::{
-    search_imports, Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
-    KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
+    KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
     MAX_DYNAMIC_PARAMETERS,
 };
-use crate::fn_native::FnCallArgs;
+use crate::fn_builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
+use crate::fn_native::{FnAny, FnCallArgs};
 use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
 use crate::stdlib::{
@@ -17,27 +17,22 @@ use crate::stdlib::{
     iter::{empty, once},
     mem,
     num::NonZeroU64,
-    string::ToString,
+    string::{String, ToString},
     vec::Vec,
 };
 use crate::utils::combine_hashes;
+use crate::{
+    ast::{Expr, Stmt},
+    fn_native::CallableFunction,
+    RhaiResult,
+};
 use crate::{
     calc_native_fn_hash, calc_script_fn_hash, Dynamic, Engine, EvalAltResult, FnPtr,
     ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec, INT,
 };
 
-#[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
-
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
-
-#[cfg(feature = "decimal")]
-use rust_decimal::Decimal;
-
-#[cfg(feature = "no_std")]
-#[cfg(not(feature = "no_float"))]
-use num_traits::float::Float;
 
 /// Extract the property name from a getter function name.
 #[cfg(not(feature = "no_object"))]
@@ -81,12 +76,7 @@ impl<'a> ArgBackup<'a> {
     ///
     /// If `restore_first_arg` is called before the end of the scope, the shorter lifetime will not leak.
     #[inline(always)]
-    fn change_first_arg_to_copy(&mut self, normalize: bool, args: &mut FnCallArgs<'a>) {
-        // Only do it for method calls with arguments.
-        if !normalize || args.is_empty() {
-            return;
-        }
-
+    fn change_first_arg_to_copy(&mut self, args: &mut FnCallArgs<'a>) {
         // Clone the original value.
         self.value_copy = args[0].clone();
 
@@ -111,7 +101,7 @@ impl<'a> ArgBackup<'a> {
     /// If `change_first_arg_to_copy` has been called, this function **MUST** be called _BEFORE_ exiting
     /// the current scope.  Otherwise it is undefined behavior as the shorter lifetime will leak.
     #[inline(always)]
-    fn restore_first_arg(&mut self, args: &mut FnCallArgs<'a>) {
+    fn restore_first_arg(mut self, args: &mut FnCallArgs<'a>) {
         if let Some(this_pointer) = self.orig_mut.take() {
             args[0] = this_pointer;
         }
@@ -156,6 +146,156 @@ pub fn ensure_no_data_race(
 }
 
 impl Engine {
+    /// Generate the signature for a function call.
+    fn gen_call_signature(
+        &self,
+        namespace: Option<&NamespaceRef>,
+        fn_name: &str,
+        args: &[&mut Dynamic],
+    ) -> String {
+        format!(
+            "{}{} ({})",
+            namespace.map_or(String::new(), |ns| ns.to_string()),
+            fn_name,
+            args.iter()
+                .map(|a| if a.is::<ImmutableString>() {
+                    "&str | ImmutableString | String"
+                } else {
+                    self.map_type_name((*a).type_name())
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+
+    /// Resolve a function call.
+    ///
+    /// Search order:
+    /// 1) AST - script functions in the AST
+    /// 2) Global namespace - functions registered via Engine::register_XXX
+    /// 3) Global modules - packages
+    /// 4) Imported modules - functions marked with global namespace
+    /// 5) Global sub-modules - functions marked with global namespace
+    #[inline]
+    fn resolve_function<'s>(
+        &self,
+        mods: &Imports,
+        state: &'s mut State,
+        lib: &[&Module],
+        fn_name: &str,
+        mut hash: NonZeroU64,
+        args: &mut FnCallArgs,
+        allow_dynamic: bool,
+        is_op_assignment: bool,
+    ) -> &'s Option<(CallableFunction, Option<ImmutableString>)> {
+        fn find_function(
+            engine: &Engine,
+            hash: NonZeroU64,
+            mods: &Imports,
+            lib: &[&Module],
+        ) -> Option<(CallableFunction, Option<ImmutableString>)> {
+            lib.iter()
+                .find_map(|m| {
+                    m.get_fn(hash, false)
+                        .map(|f| (f.clone(), m.id_raw().cloned()))
+                })
+                .or_else(|| {
+                    engine
+                        .global_namespace
+                        .get_fn(hash, false)
+                        .cloned()
+                        .map(|f| (f, None))
+                })
+                .or_else(|| {
+                    engine.global_modules.iter().find_map(|m| {
+                        m.get_fn(hash, false)
+                            .map(|f| (f.clone(), m.id_raw().cloned()))
+                    })
+                })
+                .or_else(|| {
+                    mods.get_fn(hash)
+                        .map(|(f, source)| (f.clone(), source.cloned()))
+                })
+                .or_else(|| {
+                    engine.global_sub_modules.values().find_map(|m| {
+                        m.get_qualified_fn(hash)
+                            .map(|f| (f.clone(), m.id_raw().cloned()))
+                    })
+                })
+        }
+
+        &*state
+            .fn_resolution_cache_mut()
+            .entry(hash)
+            .or_insert_with(|| {
+                let num_args = args.len();
+                let max_bitmask = if !allow_dynamic {
+                    0
+                } else {
+                    1usize << args.len().min(MAX_DYNAMIC_PARAMETERS)
+                };
+                let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
+
+                loop {
+                    match find_function(self, hash, mods, lib) {
+                        // Specific version found
+                        Some(f) => return Some(f),
+
+                        // Stop when all permutations are exhausted
+                        None if bitmask >= max_bitmask => {
+                            return if num_args != 2 {
+                                None
+                            } else if !is_op_assignment {
+                                if let Some(f) =
+                                    get_builtin_binary_op_fn(fn_name, &args[0], &args[1])
+                                {
+                                    Some((
+                                        CallableFunction::from_method(Box::new(f) as Box<FnAny>),
+                                        None,
+                                    ))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                let (first, second) = args.split_first().unwrap();
+
+                                if let Some(f) =
+                                    get_builtin_op_assignment_fn(fn_name, *first, second[0])
+                                {
+                                    Some((
+                                        CallableFunction::from_method(Box::new(f) as Box<FnAny>),
+                                        None,
+                                    ))
+                                } else {
+                                    None
+                                }
+                            }
+                        }
+
+                        // Try all permutations with `Dynamic` wildcards
+                        None => {
+                            hash = calc_native_fn_hash(
+                                empty(),
+                                fn_name,
+                                args.iter().enumerate().map(|(i, a)| {
+                                    let mask = 1usize << (num_args - i - 1);
+                                    if bitmask & mask != 0 {
+                                        // Replace with `Dynamic`
+                                        TypeId::of::<Dynamic>()
+                                    } else {
+                                        a.type_id()
+                                    }
+                                }),
+                            )
+                            .unwrap();
+
+                            bitmask += 1;
+                        }
+                    }
+                }
+            })
+    }
+
     /// Call a native Rust function registered with the [`Engine`].
     ///
     /// # WARNING
@@ -180,67 +320,26 @@ impl Engine {
         let source = state.source.clone();
 
         // Check if function access already in the cache
-        let func = &*state
-            .fn_resolution_cache_mut()
-            .entry(hash_fn)
-            .or_insert_with(|| {
-                let num_args = args.len();
-                let max_bitmask = 1usize << args.len().min(MAX_DYNAMIC_PARAMETERS);
-                let mut hash = hash_fn;
-                let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
-
-                loop {
-                    //lib.get_fn(hash, false).or_else(||
-                    match self
-                        .global_namespace
-                        .get_fn(hash, false)
-                        .cloned()
-                        .map(|f| (f, None))
-                        .or_else(|| {
-                            self.global_modules.iter().find_map(|m| {
-                                m.get_fn(hash, false)
-                                    .map(|f| (f.clone(), m.id_raw().cloned()))
-                            })
-                        })
-                        .or_else(|| {
-                            mods.get_fn(hash)
-                                .map(|(f, source)| (f.clone(), source.cloned()))
-                        }) {
-                        // Specific version found
-                        Some(f) => return Some(f),
-
-                        // Stop when all permutations are exhausted
-                        _ if bitmask >= max_bitmask => return None,
-
-                        // Try all permutations with `Dynamic` wildcards
-                        _ => {
-                            hash = calc_native_fn_hash(
-                                empty(),
-                                fn_name,
-                                args.iter().enumerate().map(|(i, a)| {
-                                    let mask = 1usize << (num_args - i - 1);
-                                    if bitmask & mask != 0 {
-                                        // Replace with `Dynamic`
-                                        TypeId::of::<Dynamic>()
-                                    } else {
-                                        a.type_id()
-                                    }
-                                }),
-                            )
-                            .unwrap();
-
-                            bitmask += 1;
-                        }
-                    }
-                }
-            });
+        let func = self.resolve_function(
+            mods,
+            state,
+            lib,
+            fn_name,
+            hash_fn,
+            args,
+            true,
+            is_op_assignment,
+        );
 
         if let Some((func, src)) = func {
             assert!(func.is_native());
 
             // Calling pure function but the first argument is a reference?
-            let mut backup: ArgBackup = Default::default();
-            backup.change_first_arg_to_copy(is_ref && func.is_pure(), args);
+            let mut backup: Option<ArgBackup> = None;
+            if is_ref && func.is_pure() && !args.is_empty() {
+                backup = Some(Default::default());
+                backup.as_mut().unwrap().change_first_arg_to_copy(args);
+            }
 
             // Run external function
             let source = src.as_ref().or_else(|| source.as_ref()).map(|s| s.as_str());
@@ -252,9 +351,11 @@ impl Engine {
             };
 
             // Restore the original reference
-            backup.restore_first_arg(args);
+            if let Some(backup) = backup {
+                backup.restore_first_arg(args);
+            }
 
-            let result = result?;
+            let result = result.map_err(|err| err.fill_position(pos))?;
 
             // See if the function match print/debug (which requires special processing)
             return Ok(match fn_name {
@@ -281,27 +382,6 @@ impl Engine {
                 }
                 _ => (result, func.is_method()),
             });
-        }
-
-        // See if it is built in.
-        if args.len() == 2 && !args[0].is_variant() && !args[1].is_variant() {
-            // Op-assignment?
-            if is_op_assignment {
-                if !is_ref {
-                    unreachable!("op-assignments must have ref argument");
-                }
-                let (first, second) = args.split_first_mut().unwrap();
-
-                match run_builtin_op_assignment(fn_name, first, second[0])? {
-                    Some(_) => return Ok((Dynamic::UNIT, false)),
-                    None => (),
-                }
-            } else {
-                match run_builtin_binary_op(fn_name, args[0], args[1])? {
-                    Some(v) => return Ok((v, false)),
-                    None => (),
-                }
-            }
         }
 
         // Getter function not found?
@@ -363,18 +443,7 @@ impl Engine {
 
         // Raise error
         EvalAltResult::ErrorFunctionNotFound(
-            format!(
-                "{} ({})",
-                fn_name,
-                args.iter()
-                    .map(|name| if name.is::<ImmutableString>() {
-                        "&str | ImmutableString | String"
-                    } else {
-                        self.map_type_name((*name).type_name())
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
+            self.gen_call_signature(None, fn_name, args.as_ref()),
             pos,
         )
         .into()
@@ -399,7 +468,7 @@ impl Engine {
         args: &mut FnCallArgs,
         pos: Position,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         #[inline(always)]
         fn make_error(
             name: crate::stdlib::string::String,
@@ -407,7 +476,7 @@ impl Engine {
             state: &State,
             err: Box<EvalAltResult>,
             pos: Position,
-        ) -> Result<Dynamic, Box<EvalAltResult>> {
+        ) -> RhaiResult {
             Err(Box::new(EvalAltResult::ErrorInFunctionCall(
                 name,
                 fn_def
@@ -514,17 +583,20 @@ impl Engine {
     pub(crate) fn has_override_by_name_and_arguments(
         &self,
         mods: Option<&Imports>,
-        state: Option<&mut State>,
+        state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        arg_types: impl AsRef<[TypeId]>,
-        pub_only: bool,
+        arg_types: &[TypeId],
     ) -> bool {
         let arg_types = arg_types.as_ref();
-        let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_types.iter().cloned());
-        let hash_script = calc_script_fn_hash(empty(), fn_name, arg_types.len());
 
-        self.has_override(mods, state, lib, hash_fn, hash_script, pub_only)
+        self.has_override(
+            mods,
+            state,
+            lib,
+            calc_native_fn_hash(empty(), fn_name, arg_types.iter().cloned()),
+            calc_script_fn_hash(empty(), fn_name, arg_types.len()),
+        )
     }
 
     // Has a system function an override?
@@ -532,54 +604,45 @@ impl Engine {
     pub(crate) fn has_override(
         &self,
         mods: Option<&Imports>,
-        mut state: Option<&mut State>,
+        state: &mut State,
         lib: &[&Module],
         hash_fn: Option<NonZeroU64>,
         hash_script: Option<NonZeroU64>,
-        pub_only: bool,
     ) -> bool {
-        // Check if it is already in the cache
-        if let Some(state) = state.as_mut() {
-            if let Some(hash) = hash_script {
-                match state.fn_resolution_cache().map_or(None, |c| c.get(&hash)) {
-                    Some(v) => return v.is_some(),
-                    None => (),
-                }
-            }
-            if let Some(hash) = hash_fn {
-                match state.fn_resolution_cache().map_or(None, |c| c.get(&hash)) {
-                    Some(v) => return v.is_some(),
-                    None => (),
-                }
-            }
+        let cache = state.fn_resolution_cache_mut();
+
+        if hash_script.map_or(false, |hash| cache.contains_key(&hash))
+            || hash_fn.map_or(false, |hash| cache.contains_key(&hash))
+        {
+            return true;
         }
 
         // First check script-defined functions
-        let r = hash_script.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, pub_only)))
-            //|| hash_fn.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, pub_only)))
+        if hash_script.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, false)))
+            //|| hash_fn.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, false)))
             // Then check registered functions
-            //|| hash_script.map_or(false, |hash| self.global_namespace.contains_fn(hash, pub_only))
+            || hash_script.map_or(false, |hash| self.global_namespace.contains_fn(hash, false))
             || hash_fn.map_or(false, |hash| self.global_namespace.contains_fn(hash, false))
             // Then check packages
             || hash_script.map_or(false, |hash| self.global_modules.iter().any(|m| m.contains_fn(hash, false)))
             || hash_fn.map_or(false, |hash| self.global_modules.iter().any(|m| m.contains_fn(hash, false)))
             // Then check imported modules
             || hash_script.map_or(false, |hash| mods.map_or(false, |m| m.contains_fn(hash)))
-            || hash_fn.map_or(false, |hash| mods.map_or(false, |m| m.contains_fn(hash)));
-
-        // If there is no override, put that information into the cache
-        if !r {
-            if let Some(state) = state.as_mut() {
-                if let Some(hash) = hash_script {
-                    state.fn_resolution_cache_mut().insert(hash, None);
-                }
-                if let Some(hash) = hash_fn {
-                    state.fn_resolution_cache_mut().insert(hash, None);
-                }
+            || hash_fn.map_or(false, |hash| mods.map_or(false, |m| m.contains_fn(hash)))
+            // Then check sub-modules
+            || hash_script.map_or(false, |hash| self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash)))
+            || hash_fn.map_or(false, |hash| self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash)))
+        {
+            true
+        } else {
+            if let Some(hash_fn) = hash_fn {
+                cache.insert(hash_fn, None);
             }
+            if let Some(hash_script) = hash_script {
+                cache.insert(hash_script, None);
+            }
+            false
         }
-
-        r
     }
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
@@ -599,7 +662,6 @@ impl Engine {
         args: &mut FnCallArgs,
         is_ref: bool,
         _is_method: bool,
-        pub_only: bool,
         pos: Position,
         _capture_scope: Option<Scope>,
         _level: usize,
@@ -609,176 +671,176 @@ impl Engine {
             ensure_no_data_race(fn_name, args, is_ref)?;
         }
 
-        let hash_fn =
-            calc_native_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id())).unwrap();
-
+        // These may be redirected from method style calls.
         match fn_name {
-            // type_of
-            KEYWORD_TYPE_OF
-                if args.len() == 1
-                    && !self.has_override(
-                        Some(mods),
-                        Some(state),
-                        lib,
-                        Some(hash_fn),
-                        hash_script,
-                        pub_only,
-                    ) =>
-            {
-                Ok((
+            // Handle type_of()
+            KEYWORD_TYPE_OF if args.len() == 1 => {
+                return Ok((
                     self.map_type_name(args[0].type_name()).to_string().into(),
                     false,
-                ))
+                ));
             }
 
-            // Fn/eval - reaching this point it must be a method-style call, mostly like redirected
-            //           by a function pointer so it isn't caught at parse time.
-            KEYWORD_FN_PTR | KEYWORD_EVAL
-                if args.len() == 1
-                    && !self.has_override(
-                        Some(mods),
-                        Some(state),
-                        lib,
-                        Some(hash_fn),
-                        hash_script,
-                        pub_only,
-                    ) =>
+            // Handle is_def_fn()
+            #[cfg(not(feature = "no_function"))]
+            crate::engine::KEYWORD_IS_DEF_FN
+                if args.len() == 2 && args[0].is::<FnPtr>() && args[1].is::<INT>() =>
             {
-                EvalAltResult::ErrorRuntime(
+                let fn_name = args[0].as_str().unwrap();
+                let num_params = args[1].as_int().unwrap();
+
+                return Ok((
+                    if num_params < 0 {
+                        Dynamic::FALSE
+                    } else {
+                        let hash_script =
+                            calc_script_fn_hash(empty(), fn_name, num_params as usize);
+                        self.has_override(Some(mods), state, lib, None, hash_script)
+                            .into()
+                    },
+                    false,
+                ));
+            }
+
+            // Handle is_shared()
+            #[cfg(not(feature = "no_closure"))]
+            crate::engine::KEYWORD_IS_SHARED if args.len() == 1 => {
+                return Err(Box::new(EvalAltResult::ErrorRuntime(
                     format!(
-                        "'{}' should not be called in method style. Try {}(...);",
+                        "'{}' should not be called this way. Try {}(...);",
                         fn_name, fn_name
                     )
                     .into(),
                     pos,
-                )
-                .into()
+                )))
             }
 
-            #[cfg(not(feature = "no_function"))]
-            _ if hash_script.is_some() => {
-                let hash_script = hash_script.unwrap();
-
-                // Check if script function access already in the cache
-                let (func, source) = state
-                    .fn_resolution_cache_mut()
-                    .entry(hash_script)
-                    .or_insert_with(|| {
-                        lib.iter()
-                            .find_map(|&m| {
-                                m.get_fn(hash_script, pub_only)
-                                    .map(|f| (f.clone(), m.id_raw().cloned()))
-                            })
-                            //.or_else(|| self.global_namespace.get_fn(hash_script, pub_only))
-                            .or_else(|| {
-                                self.global_modules.iter().find_map(|m| {
-                                    m.get_fn(hash_script, false)
-                                        .map(|f| (f.clone(), m.id_raw().cloned()))
-                                })
-                            })
-                        // .or_else(|| mods.iter().find_map(|(_, m)| m.get_qualified_fn(hash_script).map(|f| (f.clone(), m.id_raw().cloned()))))
-                    })
-                    .as_ref()
-                    .map(|(f, s)| (Some(f.clone()), s.clone()))
-                    .unwrap_or((None, None));
-
-                if let Some(func) = func {
-                    // Script function call
-                    assert!(func.is_script());
-
-                    let func = func.get_fn_def();
-
-                    let scope: &mut Scope = &mut Default::default();
-
-                    // Move captured variables into scope
-                    #[cfg(not(feature = "no_closure"))]
-                    if let Some(captured) = _capture_scope {
-                        if !func.externals.is_empty() {
-                            captured
-                                .into_iter()
-                                .filter(|(name, _, _)| func.externals.iter().any(|ex| ex == name))
-                                .for_each(|(name, value, _)| {
-                                    // Consume the scope values.
-                                    scope.push_dynamic(name, value);
-                                });
-                        }
-                    }
-
-                    let result = if _is_method {
-                        // Method call of script function - map first argument to `this`
-                        let (first, rest) = args.split_first_mut().unwrap();
-
-                        let orig_source = mem::take(&mut state.source);
-                        state.source = source;
-
-                        let level = _level + 1;
-
-                        let result = self.call_script_fn(
-                            scope,
-                            mods,
-                            state,
-                            lib,
-                            &mut Some(*first),
-                            func,
-                            rest,
-                            pos,
-                            level,
-                        );
-
-                        // Restore the original source
-                        state.source = orig_source;
-
-                        result?
-                    } else {
-                        // Normal call of script function
-                        // The first argument is a reference?
-                        let mut backup: ArgBackup = Default::default();
-                        backup.change_first_arg_to_copy(is_ref, args);
-
-                        let orig_source = mem::take(&mut state.source);
-                        state.source = source;
-
-                        let level = _level + 1;
-
-                        let result = self.call_script_fn(
-                            scope, mods, state, lib, &mut None, func, args, pos, level,
-                        );
-
-                        // Restore the original source
-                        state.source = orig_source;
-
-                        // Restore the original reference
-                        backup.restore_first_arg(args);
-
-                        result?
-                    };
-
-                    Ok((result, false))
-                } else {
-                    // Native function call
-                    self.call_native_fn(
-                        mods, state, lib, fn_name, hash_fn, args, is_ref, false, pos,
+            KEYWORD_FN_PTR | KEYWORD_EVAL | KEYWORD_IS_DEF_VAR if args.len() == 1 => {
+                return Err(Box::new(EvalAltResult::ErrorRuntime(
+                    format!(
+                        "'{}' should not be called this way. Try {}(...);",
+                        fn_name, fn_name
                     )
+                    .into(),
+                    pos,
+                )))
+            }
+
+            KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY if !args.is_empty() => {
+                return Err(Box::new(EvalAltResult::ErrorRuntime(
+                    format!(
+                        "'{}' should not be called this way. Try {}(...);",
+                        fn_name, fn_name
+                    )
+                    .into(),
+                    pos,
+                )))
+            }
+
+            _ => (),
+        }
+
+        #[cfg(not(feature = "no_function"))]
+        if let Some((func, source)) = hash_script.and_then(|hash| {
+            self.resolve_function(mods, state, lib, fn_name, hash, args, false, false)
+                .as_ref()
+                .map(|(f, s)| (f.clone(), s.clone()))
+        }) {
+            // Script function call
+            assert!(func.is_script());
+
+            let func = func.get_fn_def();
+
+            let scope: &mut Scope = &mut Default::default();
+
+            // Move captured variables into scope
+            #[cfg(not(feature = "no_closure"))]
+            if let Some(captured) = _capture_scope {
+                if !func.externals.is_empty() {
+                    captured
+                        .into_iter()
+                        .filter(|(name, _, _)| func.externals.iter().any(|ex| ex == name))
+                        .for_each(|(name, value, _)| {
+                            // Consume the scope values.
+                            scope.push_dynamic(name, value);
+                        });
                 }
             }
 
-            // Native function call
-            _ => self.call_native_fn(mods, state, lib, fn_name, hash_fn, args, is_ref, false, pos),
+            let result = if _is_method {
+                // Method call of script function - map first argument to `this`
+                let (first, rest) = args.split_first_mut().unwrap();
+
+                let orig_source = mem::take(&mut state.source);
+                state.source = source;
+
+                let level = _level + 1;
+
+                let result = self.call_script_fn(
+                    scope,
+                    mods,
+                    state,
+                    lib,
+                    &mut Some(*first),
+                    func,
+                    rest,
+                    pos,
+                    level,
+                );
+
+                // Restore the original source
+                state.source = orig_source;
+
+                result?
+            } else {
+                // Normal call of script function
+                // The first argument is a reference?
+                let mut backup: Option<ArgBackup> = None;
+                if is_ref && !args.is_empty() {
+                    backup = Some(Default::default());
+                    backup.as_mut().unwrap().change_first_arg_to_copy(args);
+                }
+
+                let orig_source = mem::take(&mut state.source);
+                state.source = source;
+
+                let level = _level + 1;
+
+                let result =
+                    self.call_script_fn(scope, mods, state, lib, &mut None, func, args, pos, level);
+
+                // Restore the original source
+                state.source = orig_source;
+
+                // Restore the original reference
+                if let Some(backup) = backup {
+                    backup.restore_first_arg(args);
+                }
+
+                result?
+            };
+
+            return Ok((result, false));
         }
+
+        // Native function call
+        let hash_fn =
+            calc_native_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id())).unwrap();
+        self.call_native_fn(mods, state, lib, fn_name, hash_fn, args, is_ref, false, pos)
     }
 
     /// Evaluate a list of statements with no `this` pointer.
     /// This is commonly used to evaluate a list of statements in an [`AST`] or a script function body.
     #[inline]
-    pub(crate) fn eval_global_statements<'a>(
+    pub(crate) fn eval_global_statements(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
         state: &mut State,
-        statements: impl IntoIterator<Item = &'a Stmt>,
+        statements: &[Stmt],
         lib: &[&Module],
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         self.eval_stmt_block(scope, mods, state, lib, &mut None, statements, false, level)
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
@@ -799,7 +861,7 @@ impl Engine {
         script: &str,
         pos: Position,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         self.inc_operations(state, pos)?;
 
         let script = script.trim();
@@ -844,7 +906,6 @@ impl Engine {
         hash_script: Option<NonZeroU64>,
         target: &mut crate::engine::Target,
         mut call_args: StaticVec<Dynamic>,
-        pub_only: bool,
         pos: Position,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
@@ -854,114 +915,116 @@ impl Engine {
         let obj = target.as_mut();
         let mut fn_name = fn_name;
 
-        let (result, updated) = if fn_name == KEYWORD_FN_PTR_CALL && obj.is::<FnPtr>() {
-            // FnPtr call
-            let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
-            // Redirect function name
-            let fn_name = fn_ptr.fn_name();
-            let args_len = call_args.len() + fn_ptr.curry().len();
-            // Recalculate hash
-            let hash = hash_script.and_then(|_| calc_script_fn_hash(empty(), fn_name, args_len));
-            // Arguments are passed as-is, adding the curried arguments
-            let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
-            let mut arg_values = curry
-                .iter_mut()
-                .chain(call_args.iter_mut())
-                .collect::<StaticVec<_>>();
-            let args = arg_values.as_mut();
+        let (result, updated) = match fn_name {
+            KEYWORD_FN_PTR_CALL if obj.is::<FnPtr>() => {
+                // FnPtr call
+                let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
+                // Redirect function name
+                let fn_name = fn_ptr.fn_name();
+                let args_len = call_args.len() + fn_ptr.curry().len();
+                // Recalculate hash
+                let hash =
+                    hash_script.and_then(|_| calc_script_fn_hash(empty(), fn_name, args_len));
+                // Arguments are passed as-is, adding the curried arguments
+                let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
+                let mut arg_values = curry
+                    .iter_mut()
+                    .chain(call_args.iter_mut())
+                    .collect::<StaticVec<_>>();
+                let args = arg_values.as_mut();
 
-            // Map it to name(args) in function-call style
-            self.exec_fn_call(
-                mods, state, lib, fn_name, hash, args, false, false, pub_only, pos, None, level,
-            )
-        } else if fn_name == KEYWORD_FN_PTR_CALL
-            && call_args.len() > 0
-            && call_args[0].is::<FnPtr>()
-        {
-            // FnPtr call on object
-            let fn_ptr = call_args.remove(0).cast::<FnPtr>();
-            // Redirect function name
-            let fn_name = fn_ptr.fn_name();
-            let args_len = call_args.len() + fn_ptr.curry().len();
-            // Recalculate hash
-            let hash = hash_script.and_then(|_| calc_script_fn_hash(empty(), fn_name, args_len));
-            // Replace the first argument with the object pointer, adding the curried arguments
-            let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
-            let mut arg_values = once(obj)
-                .chain(curry.iter_mut())
-                .chain(call_args.iter_mut())
-                .collect::<StaticVec<_>>();
-            let args = arg_values.as_mut();
-
-            // Map it to name(args) in function-call style
-            self.exec_fn_call(
-                mods, state, lib, fn_name, hash, args, is_ref, true, pub_only, pos, None, level,
-            )
-        } else if fn_name == KEYWORD_FN_PTR_CURRY && obj.is::<FnPtr>() {
-            // Curry call
-            let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
-            Ok((
-                FnPtr::new_unchecked(
-                    fn_ptr.get_fn_name().clone(),
-                    fn_ptr
-                        .curry()
-                        .iter()
-                        .cloned()
-                        .chain(call_args.into_iter())
-                        .collect(),
+                // Map it to name(args) in function-call style
+                self.exec_fn_call(
+                    mods, state, lib, fn_name, hash, args, false, false, pos, None, level,
                 )
-                .into(),
-                false,
-            ))
-        } else if {
-            #[cfg(not(feature = "no_closure"))]
-            {
-                fn_name == crate::engine::KEYWORD_IS_SHARED && call_args.is_empty()
             }
-            #[cfg(feature = "no_closure")]
-            false
-        } {
-            // is_shared call
-            Ok((target.is_shared().into(), false))
-        } else {
-            let _redirected;
-            let mut hash = hash_script;
+            KEYWORD_FN_PTR_CALL if call_args.len() > 0 && call_args[0].is::<FnPtr>() => {
+                // FnPtr call on object
+                let fn_ptr = call_args.remove(0).cast::<FnPtr>();
+                // Redirect function name
+                let fn_name = fn_ptr.fn_name();
+                let args_len = call_args.len() + fn_ptr.curry().len();
+                // Recalculate hash
+                let hash =
+                    hash_script.and_then(|_| calc_script_fn_hash(empty(), fn_name, args_len));
+                // Replace the first argument with the object pointer, adding the curried arguments
+                let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
+                let mut arg_values = once(obj)
+                    .chain(curry.iter_mut())
+                    .chain(call_args.iter_mut())
+                    .collect::<StaticVec<_>>();
+                let args = arg_values.as_mut();
 
-            // Check if it is a map method call in OOP style
-            #[cfg(not(feature = "no_object"))]
-            if let Some(map) = obj.read_lock::<Map>() {
-                if let Some(val) = map.get(fn_name) {
-                    if let Some(fn_ptr) = val.read_lock::<FnPtr>() {
-                        // Remap the function name
-                        _redirected = fn_ptr.get_fn_name().clone();
-                        fn_name = &_redirected;
-                        // Add curried arguments
+                // Map it to name(args) in function-call style
+                self.exec_fn_call(
+                    mods, state, lib, fn_name, hash, args, is_ref, true, pos, None, level,
+                )
+            }
+            KEYWORD_FN_PTR_CURRY if obj.is::<FnPtr>() => {
+                // Curry call
+                let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
+                Ok((
+                    FnPtr::new_unchecked(
+                        fn_ptr.get_fn_name().clone(),
                         fn_ptr
                             .curry()
                             .iter()
                             .cloned()
-                            .enumerate()
-                            .for_each(|(i, v)| call_args.insert(i, v));
-                        // Recalculate the hash based on the new function name and new arguments
-                        hash = hash_script
-                            .and_then(|_| calc_script_fn_hash(empty(), fn_name, call_args.len()));
-                    }
-                }
-            };
-
-            if hash_script.is_none() {
-                hash = None;
+                            .chain(call_args.into_iter())
+                            .collect(),
+                    )
+                    .into(),
+                    false,
+                ))
             }
 
-            // Attached object pointer in front of the arguments
-            let mut arg_values = once(obj)
-                .chain(call_args.iter_mut())
-                .collect::<StaticVec<_>>();
-            let args = arg_values.as_mut();
+            // Handle is_shared()
+            #[cfg(not(feature = "no_closure"))]
+            crate::engine::KEYWORD_IS_SHARED if call_args.is_empty() => {
+                return Ok((target.is_shared().into(), false));
+            }
 
-            self.exec_fn_call(
-                mods, state, lib, fn_name, hash, args, is_ref, true, pub_only, pos, None, level,
-            )
+            _ => {
+                let _redirected;
+                let mut hash = hash_script;
+
+                // Check if it is a map method call in OOP style
+                #[cfg(not(feature = "no_object"))]
+                if let Some(map) = obj.read_lock::<Map>() {
+                    if let Some(val) = map.get(fn_name) {
+                        if let Some(fn_ptr) = val.read_lock::<FnPtr>() {
+                            // Remap the function name
+                            _redirected = fn_ptr.get_fn_name().clone();
+                            fn_name = &_redirected;
+                            // Add curried arguments
+                            fn_ptr
+                                .curry()
+                                .iter()
+                                .cloned()
+                                .enumerate()
+                                .for_each(|(i, v)| call_args.insert(i, v));
+                            // Recalculate the hash based on the new function name and new arguments
+                            hash = hash_script.and_then(|_| {
+                                calc_script_fn_hash(empty(), fn_name, call_args.len())
+                            });
+                        }
+                    }
+                };
+
+                if hash_script.is_none() {
+                    hash = None;
+                }
+
+                // Attached object pointer in front of the arguments
+                let mut arg_values = once(obj)
+                    .chain(call_args.iter_mut())
+                    .collect::<StaticVec<_>>();
+                let args = arg_values.as_mut();
+
+                self.exec_fn_call(
+                    mods, state, lib, fn_name, hash, args, is_ref, true, pos, None, level,
+                )
+            }
         }?;
 
         // Propagate the changed value back to the source if necessary
@@ -981,13 +1044,12 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         fn_name: &str,
-        args_expr: impl AsRef<[Expr]>,
+        args_expr: &[Expr],
         mut hash_script: Option<NonZeroU64>,
-        pub_only: bool,
         pos: Position,
         capture_scope: bool,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let args_expr = args_expr.as_ref();
 
         // Handle call() - Redirect function call
@@ -996,39 +1058,36 @@ impl Engine {
         let mut curry = StaticVec::new();
         let mut name = fn_name;
 
-        if name == KEYWORD_FN_PTR_CALL
-            && args_expr.len() >= 1
-            && !self.has_override(Some(mods), Some(state), lib, None, hash_script, pub_only)
-        {
-            let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+        match name {
+            // Handle call()
+            KEYWORD_FN_PTR_CALL if args_expr.len() >= 1 => {
+                let fn_ptr =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
-            if !fn_ptr.is::<FnPtr>() {
-                return Err(self.make_type_mismatch_err::<FnPtr>(
-                    self.map_type_name(fn_ptr.type_name()),
-                    args_expr[0].position(),
-                ));
+                if !fn_ptr.is::<FnPtr>() {
+                    return Err(self.make_type_mismatch_err::<FnPtr>(
+                        self.map_type_name(fn_ptr.type_name()),
+                        args_expr[0].position(),
+                    ));
+                }
+
+                let fn_ptr = fn_ptr.cast::<FnPtr>();
+                curry.extend(fn_ptr.curry().iter().cloned());
+
+                // Redirect function name
+                redirected = fn_ptr.take_data().0;
+                name = &redirected;
+
+                // Skip the first argument
+                args_expr = &args_expr.as_ref()[1..];
+
+                // Recalculate hash
+                let args_len = args_expr.len() + curry.len();
+                hash_script = calc_script_fn_hash(empty(), name, args_len);
             }
 
-            let fn_ptr = fn_ptr.cast::<FnPtr>();
-            curry.extend(fn_ptr.curry().iter().cloned());
-
-            // Redirect function name
-            redirected = fn_ptr.take_data().0;
-            name = &redirected;
-
-            // Skip the first argument
-            args_expr = &args_expr.as_ref()[1..];
-
-            // Recalculate hash
-            let args_len = args_expr.len() + curry.len();
-            hash_script = calc_script_fn_hash(empty(), name, args_len);
-        }
-
-        // Handle Fn()
-        if name == KEYWORD_FN_PTR && args_expr.len() == 1 {
-            let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
-
-            if !self.has_override(Some(mods), Some(state), lib, hash_fn, hash_script, pub_only) {
+            // Handle Fn()
+            KEYWORD_FN_PTR if args_expr.len() == 1 => {
                 // Fn - only in function call style
                 return self
                     .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
@@ -1040,47 +1099,67 @@ impl Engine {
                     .map(Into::<Dynamic>::into)
                     .map_err(|err| err.fill_position(args_expr[0].position()));
             }
-        }
 
-        // Handle curry()
-        if name == KEYWORD_FN_PTR_CURRY && args_expr.len() > 1 {
-            let fn_ptr = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+            // Handle curry()
+            KEYWORD_FN_PTR_CURRY if args_expr.len() > 1 => {
+                let fn_ptr =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
 
-            if !fn_ptr.is::<FnPtr>() {
-                return Err(self.make_type_mismatch_err::<FnPtr>(
-                    self.map_type_name(fn_ptr.type_name()),
-                    args_expr[0].position(),
-                ));
+                if !fn_ptr.is::<FnPtr>() {
+                    return Err(self.make_type_mismatch_err::<FnPtr>(
+                        self.map_type_name(fn_ptr.type_name()),
+                        args_expr[0].position(),
+                    ));
+                }
+
+                let (name, mut fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
+
+                // Append the new curried arguments to the existing list.
+
+                args_expr.iter().skip(1).try_for_each(
+                    |expr| -> Result<(), Box<EvalAltResult>> {
+                        fn_curry
+                            .push(self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?);
+                        Ok(())
+                    },
+                )?;
+
+                return Ok(FnPtr::new_unchecked(name, fn_curry).into());
             }
 
-            let (name, mut fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
+            // Handle is_shared()
+            #[cfg(not(feature = "no_closure"))]
+            crate::engine::KEYWORD_IS_SHARED if args_expr.len() == 1 => {
+                let value =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+                return Ok(value.is_shared().into());
+            }
 
-            // Append the new curried arguments to the existing list.
-
-            args_expr
-                .iter()
-                .skip(1)
-                .try_for_each(|expr| -> Result<(), Box<EvalAltResult>> {
-                    fn_curry.push(self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?);
-                    Ok(())
+            // Handle is_def_fn()
+            #[cfg(not(feature = "no_function"))]
+            crate::engine::KEYWORD_IS_DEF_FN if args_expr.len() == 2 => {
+                let fn_name =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+                let fn_name = fn_name.as_str().map_err(|err| {
+                    self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
+                })?;
+                let num_params =
+                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[1], level)?;
+                let num_params = num_params.as_int().map_err(|err| {
+                    self.make_type_mismatch_err::<INT>(err, args_expr[0].position())
                 })?;
 
-            return Ok(FnPtr::new_unchecked(name, fn_curry).into());
-        }
+                return Ok(if num_params < 0 {
+                    Dynamic::FALSE
+                } else {
+                    let hash_script = calc_script_fn_hash(empty(), fn_name, num_params as usize);
+                    self.has_override(Some(mods), state, lib, None, hash_script)
+                        .into()
+                });
+            }
 
-        // Handle is_shared()
-        #[cfg(not(feature = "no_closure"))]
-        if name == crate::engine::KEYWORD_IS_SHARED && args_expr.len() == 1 {
-            let value = self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-
-            return Ok(value.is_shared().into());
-        }
-
-        // Handle is_def_var()
-        if name == KEYWORD_IS_DEF_VAR && args_expr.len() == 1 {
-            let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
-
-            if !self.has_override(Some(mods), Some(state), lib, hash_fn, hash_script, pub_only) {
+            // Handle is_def_var()
+            KEYWORD_IS_DEF_VAR if args_expr.len() == 1 => {
                 let var_name =
                     self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
                 let var_name = var_name.as_str().map_err(|err| {
@@ -1088,15 +1167,10 @@ impl Engine {
                 })?;
                 return Ok(scope.contains(var_name).into());
             }
-        }
 
-        // Handle eval()
-        if name == KEYWORD_EVAL && args_expr.len() == 1 {
-            let hash_fn = calc_native_fn_hash(empty(), name, once(TypeId::of::<ImmutableString>()));
-
-            let script_expr = &args_expr[0];
-
-            if !self.has_override(Some(mods), Some(state), lib, hash_fn, hash_script, pub_only) {
+            // Handle eval()
+            KEYWORD_EVAL if args_expr.len() == 1 => {
+                let script_expr = &args_expr[0];
                 let script_pos = script_expr.position();
 
                 // eval - only in function call style
@@ -1135,6 +1209,8 @@ impl Engine {
                     ))
                 });
             }
+
+            _ => (),
         }
 
         // Normal function call - except for Fn, curry, call and eval (handled above)
@@ -1203,7 +1279,6 @@ impl Engine {
             args,
             is_ref,
             false,
-            pub_only,
             pos,
             capture,
             level,
@@ -1221,14 +1296,14 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         namespace: Option<&NamespaceRef>,
         fn_name: &str,
-        args_expr: impl AsRef<[Expr]>,
+        args_expr: &[Expr],
         hash_script: NonZeroU64,
         pos: Position,
         level: usize,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> RhaiResult {
         let args_expr = args_expr.as_ref();
 
-        let namespace = namespace.as_ref().unwrap();
+        let namespace = namespace.unwrap();
         let mut arg_values: StaticVec<_>;
         let mut first_arg_value = None;
         let mut args: StaticVec<_>;
@@ -1282,7 +1357,9 @@ impl Engine {
             }
         }
 
-        let module = search_imports(mods, state, namespace)?;
+        let module = self.search_imports(mods, state, namespace).ok_or_else(|| {
+            EvalAltResult::ErrorModuleNotFound(namespace[0].name.to_string(), namespace[0].pos)
+        })?;
 
         // First search in script-defined functions (can override built-in)
         let func = match module.get_qualified_fn(hash_script) {
@@ -1334,481 +1411,29 @@ impl Engine {
 
                 result
             }
-            Some(f) if f.is_plugin_fn() => f.get_plugin_fn().clone().call(
-                (self, fn_name, module.id(), &*mods, lib).into(),
-                args.as_mut(),
-            ),
+
+            Some(f) if f.is_plugin_fn() => f
+                .get_plugin_fn()
+                .clone()
+                .call(
+                    (self, fn_name, module.id(), &*mods, lib).into(),
+                    args.as_mut(),
+                )
+                .map_err(|err| err.fill_position(pos)),
+
             Some(f) if f.is_native() => f.get_native_fn()(
                 (self, fn_name, module.id(), &*mods, lib).into(),
                 args.as_mut(),
-            ),
+            )
+            .map_err(|err| err.fill_position(pos)),
+
             Some(f) => unreachable!("unknown function type: {:?}", f),
+
             None => EvalAltResult::ErrorFunctionNotFound(
-                format!(
-                    "{}{} ({})",
-                    namespace,
-                    fn_name,
-                    args.iter()
-                        .map(|a| if a.is::<ImmutableString>() {
-                            "&str | ImmutableString | String"
-                        } else {
-                            self.map_type_name((*a).type_name())
-                        })
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
+                self.gen_call_signature(Some(namespace), fn_name, args.as_ref()),
                 pos,
             )
             .into(),
         }
     }
-}
-
-/// Build in common binary operator implementations to avoid the cost of calling a registered function.
-pub fn run_builtin_binary_op(
-    op: &str,
-    x: &Dynamic,
-    y: &Dynamic,
-) -> Result<Option<Dynamic>, Box<EvalAltResult>> {
-    let type1 = x.type_id();
-    let type2 = y.type_id();
-
-    if x.is_variant() || y.is_variant() {
-        // One of the operands is a custom type, so it is never built-in
-        return Ok(match op {
-            "!=" if type1 != type2 => Some(Dynamic::TRUE),
-            "==" | ">" | ">=" | "<" | "<=" if type1 != type2 => Some(Dynamic::FALSE),
-            _ => None,
-        });
-    }
-
-    let types_pair = (type1, type2);
-
-    #[cfg(not(feature = "no_float"))]
-    if let Some((x, y)) = if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>()) {
-        // FLOAT op FLOAT
-        Some((x.clone().cast::<FLOAT>(), y.clone().cast::<FLOAT>()))
-    } else if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<INT>()) {
-        // FLOAT op INT
-        Some((x.clone().cast::<FLOAT>(), y.clone().cast::<INT>() as FLOAT))
-    } else if types_pair == (TypeId::of::<INT>(), TypeId::of::<FLOAT>()) {
-        // INT op FLOAT
-        Some((x.clone().cast::<INT>() as FLOAT, y.clone().cast::<FLOAT>()))
-    } else {
-        None
-    } {
-        match op {
-            "+" => return Ok(Some((x + y).into())),
-            "-" => return Ok(Some((x - y).into())),
-            "*" => return Ok(Some((x * y).into())),
-            "/" => return Ok(Some((x / y).into())),
-            "%" => return Ok(Some((x % y).into())),
-            "**" => return Ok(Some(x.powf(y).into())),
-            "==" => return Ok(Some((x == y).into())),
-            "!=" => return Ok(Some((x != y).into())),
-            ">" => return Ok(Some((x > y).into())),
-            ">=" => return Ok(Some((x >= y).into())),
-            "<" => return Ok(Some((x < y).into())),
-            "<=" => return Ok(Some((x <= y).into())),
-            _ => return Ok(None),
-        }
-    }
-
-    #[cfg(feature = "decimal")]
-    if let Some((x, y)) = if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>()) {
-        // Decimal op Decimal
-        Some((
-            *x.read_lock::<Decimal>().unwrap(),
-            *y.read_lock::<Decimal>().unwrap(),
-        ))
-    } else if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<INT>()) {
-        // Decimal op INT
-        Some((
-            *x.read_lock::<Decimal>().unwrap(),
-            y.clone().cast::<INT>().into(),
-        ))
-    } else if types_pair == (TypeId::of::<INT>(), TypeId::of::<Decimal>()) {
-        // INT op Decimal
-        Some((
-            x.clone().cast::<INT>().into(),
-            *y.read_lock::<Decimal>().unwrap(),
-        ))
-    } else {
-        None
-    } {
-        if cfg!(not(feature = "unchecked")) {
-            use crate::packages::arithmetic::decimal_functions::*;
-
-            match op {
-                "+" => return add(x, y).map(Some),
-                "-" => return subtract(x, y).map(Some),
-                "*" => return multiply(x, y).map(Some),
-                "/" => return divide(x, y).map(Some),
-                "%" => return modulo(x, y).map(Some),
-                _ => (),
-            }
-        } else {
-            match op {
-                "+" => return Ok(Some((x + y).into())),
-                "-" => return Ok(Some((x - y).into())),
-                "*" => return Ok(Some((x * y).into())),
-                "/" => return Ok(Some((x / y).into())),
-                "%" => return Ok(Some((x % y).into())),
-                _ => (),
-            }
-        }
-
-        match op {
-            "==" => return Ok(Some((x == y).into())),
-            "!=" => return Ok(Some((x != y).into())),
-            ">" => return Ok(Some((x > y).into())),
-            ">=" => return Ok(Some((x >= y).into())),
-            "<" => return Ok(Some((x < y).into())),
-            "<=" => return Ok(Some((x <= y).into())),
-            _ => return Ok(None),
-        }
-    }
-
-    // char op string
-    if types_pair == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
-        let x = x.clone().cast::<char>();
-        let y = &*y.read_lock::<ImmutableString>().unwrap();
-
-        match op {
-            "+" => return Ok(Some(format!("{}{}", x, y).into())),
-            "==" | "!=" | ">" | ">=" | "<" | "<=" => {
-                let s1 = [x, '\0'];
-                let mut y = y.chars();
-                let s2 = [y.next().unwrap_or('\0'), y.next().unwrap_or('\0')];
-
-                match op {
-                    "==" => return Ok(Some((s1 == s2).into())),
-                    "!=" => return Ok(Some((s1 != s2).into())),
-                    ">" => return Ok(Some((s1 > s2).into())),
-                    ">=" => return Ok(Some((s1 >= s2).into())),
-                    "<" => return Ok(Some((s1 < s2).into())),
-                    "<=" => return Ok(Some((s1 <= s2).into())),
-                    _ => unreachable!(),
-                }
-            }
-            _ => return Ok(None),
-        }
-    }
-    // string op char
-    if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
-        let x = &*x.read_lock::<ImmutableString>().unwrap();
-        let y = y.clone().cast::<char>();
-
-        match op {
-            "+" => return Ok(Some((x + y).into())),
-            "-" => return Ok(Some((x - y).into())),
-            "==" | "!=" | ">" | ">=" | "<" | "<=" => {
-                let mut x = x.chars();
-                let s1 = [x.next().unwrap_or('\0'), x.next().unwrap_or('\0')];
-                let s2 = [y, '\0'];
-
-                match op {
-                    "==" => return Ok(Some((s1 == s2).into())),
-                    "!=" => return Ok(Some((s1 != s2).into())),
-                    ">" => return Ok(Some((s1 > s2).into())),
-                    ">=" => return Ok(Some((s1 >= s2).into())),
-                    "<" => return Ok(Some((s1 < s2).into())),
-                    "<=" => return Ok(Some((s1 <= s2).into())),
-                    _ => unreachable!(),
-                }
-            }
-            _ => return Ok(None),
-        }
-    }
-
-    // Default comparison operators for different types
-    if type2 != type1 {
-        return Ok(match op {
-            "!=" => Some(Dynamic::TRUE),
-            "==" | ">" | ">=" | "<" | "<=" => Some(Dynamic::FALSE),
-            _ => None,
-        });
-    }
-
-    // Beyond here, type1 == type2
-
-    if type1 == TypeId::of::<INT>() {
-        let x = x.clone().cast::<INT>();
-        let y = y.clone().cast::<INT>();
-
-        if cfg!(not(feature = "unchecked")) {
-            use crate::packages::arithmetic::arith_basic::INT::functions::*;
-
-            match op {
-                "+" => return add(x, y).map(Some),
-                "-" => return subtract(x, y).map(Some),
-                "*" => return multiply(x, y).map(Some),
-                "/" => return divide(x, y).map(Some),
-                "%" => return modulo(x, y).map(Some),
-                "**" => return power(x, y).map(Some),
-                ">>" => return shift_right(x, y).map(Some),
-                "<<" => return shift_left(x, y).map(Some),
-                _ => (),
-            }
-        } else {
-            match op {
-                "+" => return Ok(Some((x + y).into())),
-                "-" => return Ok(Some((x - y).into())),
-                "*" => return Ok(Some((x * y).into())),
-                "/" => return Ok(Some((x / y).into())),
-                "%" => return Ok(Some((x % y).into())),
-                "**" => return Ok(Some(x.pow(y as u32).into())),
-                ">>" => return Ok(Some((x >> y).into())),
-                "<<" => return Ok(Some((x << y).into())),
-                _ => (),
-            }
-        }
-
-        match op {
-            "==" => return Ok(Some((x == y).into())),
-            "!=" => return Ok(Some((x != y).into())),
-            ">" => return Ok(Some((x > y).into())),
-            ">=" => return Ok(Some((x >= y).into())),
-            "<" => return Ok(Some((x < y).into())),
-            "<=" => return Ok(Some((x <= y).into())),
-            "&" => return Ok(Some((x & y).into())),
-            "|" => return Ok(Some((x | y).into())),
-            "^" => return Ok(Some((x ^ y).into())),
-            _ => return Ok(None),
-        }
-    }
-
-    if type1 == TypeId::of::<bool>() {
-        let x = x.clone().cast::<bool>();
-        let y = y.clone().cast::<bool>();
-
-        match op {
-            "&" => return Ok(Some((x && y).into())),
-            "|" => return Ok(Some((x || y).into())),
-            "^" => return Ok(Some((x ^ y).into())),
-            "==" => return Ok(Some((x == y).into())),
-            "!=" => return Ok(Some((x != y).into())),
-            _ => return Ok(None),
-        }
-    }
-
-    if type1 == TypeId::of::<ImmutableString>() {
-        let x = &*x.read_lock::<ImmutableString>().unwrap();
-        let y = &*y.read_lock::<ImmutableString>().unwrap();
-
-        match op {
-            "+" => return Ok(Some((x + y).into())),
-            "-" => return Ok(Some((x - y).into())),
-            "==" => return Ok(Some((x == y).into())),
-            "!=" => return Ok(Some((x != y).into())),
-            ">" => return Ok(Some((x > y).into())),
-            ">=" => return Ok(Some((x >= y).into())),
-            "<" => return Ok(Some((x < y).into())),
-            "<=" => return Ok(Some((x <= y).into())),
-            _ => return Ok(None),
-        }
-    }
-
-    if type1 == TypeId::of::<char>() {
-        let x = x.clone().cast::<char>();
-        let y = y.clone().cast::<char>();
-
-        match op {
-            "+" => return Ok(Some(format!("{}{}", x, y).into())),
-            "==" => return Ok(Some((x == y).into())),
-            "!=" => return Ok(Some((x != y).into())),
-            ">" => return Ok(Some((x > y).into())),
-            ">=" => return Ok(Some((x >= y).into())),
-            "<" => return Ok(Some((x < y).into())),
-            "<=" => return Ok(Some((x <= y).into())),
-            _ => return Ok(None),
-        }
-    }
-
-    if type1 == TypeId::of::<()>() {
-        match op {
-            "==" => return Ok(Some(true.into())),
-            "!=" | ">" | ">=" | "<" | "<=" => return Ok(Some(false.into())),
-            _ => return Ok(None),
-        }
-    }
-
-    Ok(None)
-}
-
-/// Build in common operator assignment implementations to avoid the cost of calling a registered function.
-pub fn run_builtin_op_assignment(
-    op: &str,
-    x: &mut Dynamic,
-    y: &Dynamic,
-) -> Result<Option<()>, Box<EvalAltResult>> {
-    let type1 = x.type_id();
-    let type2 = y.type_id();
-
-    let types_pair = (type1, type2);
-
-    #[cfg(not(feature = "no_float"))]
-    if let Some((mut x, y)) = if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>()) {
-        // FLOAT op= FLOAT
-        let y = y.clone().cast::<FLOAT>();
-        Some((x.write_lock::<FLOAT>().unwrap(), y))
-    } else if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<INT>()) {
-        // FLOAT op= INT
-        let y = y.clone().cast::<INT>() as FLOAT;
-        Some((x.write_lock::<FLOAT>().unwrap(), y))
-    } else {
-        None
-    } {
-        match op {
-            "+=" => return Ok(Some(*x += y)),
-            "-=" => return Ok(Some(*x -= y)),
-            "*=" => return Ok(Some(*x *= y)),
-            "/=" => return Ok(Some(*x /= y)),
-            "%=" => return Ok(Some(*x %= y)),
-            "**=" => return Ok(Some(*x = x.powf(y))),
-            _ => return Ok(None),
-        }
-    }
-
-    #[cfg(feature = "decimal")]
-    if let Some((mut x, y)) = if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>()) {
-        // Decimal op= Decimal
-        let y = *y.read_lock::<Decimal>().unwrap();
-        Some((x.write_lock::<Decimal>().unwrap(), y))
-    } else if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<INT>()) {
-        // Decimal op= INT
-        let y = y.clone().cast::<INT>().into();
-        Some((x.write_lock::<Decimal>().unwrap(), y))
-    } else {
-        None
-    } {
-        if cfg!(not(feature = "unchecked")) {
-            use crate::packages::arithmetic::decimal_functions::*;
-
-            match op {
-                "+=" => return Ok(Some(*x = add(*x, y)?.as_decimal().unwrap())),
-                "-=" => return Ok(Some(*x = subtract(*x, y)?.as_decimal().unwrap())),
-                "*=" => return Ok(Some(*x = multiply(*x, y)?.as_decimal().unwrap())),
-                "/=" => return Ok(Some(*x = divide(*x, y)?.as_decimal().unwrap())),
-                "%=" => return Ok(Some(*x = modulo(*x, y)?.as_decimal().unwrap())),
-                _ => (),
-            }
-        } else {
-            match op {
-                "+=" => return Ok(Some(*x += y)),
-                "-=" => return Ok(Some(*x -= y)),
-                "*=" => return Ok(Some(*x *= y)),
-                "/=" => return Ok(Some(*x /= y)),
-                "%=" => return Ok(Some(*x %= y)),
-                _ => (),
-            }
-        }
-    }
-
-    // string op= char
-    if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
-        let y = y.clone().cast::<char>();
-        let mut x = x.write_lock::<ImmutableString>().unwrap();
-
-        match op {
-            "+=" => return Ok(Some(*x += y)),
-            "-=" => return Ok(Some(*x -= y)),
-            _ => return Ok(None),
-        }
-    }
-    // char op= string
-    if types_pair == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
-        let y = y.read_lock::<ImmutableString>().unwrap();
-        let mut ch = x.read_lock::<char>().unwrap().to_string();
-        let mut x = x.write_lock::<Dynamic>().unwrap();
-
-        match op {
-            "+=" => {
-                ch.push_str(y.as_str());
-                return Ok(Some(*x = ch.into()));
-            }
-            _ => return Ok(None),
-        }
-    }
-
-    // No built-in op-assignments for different types.
-    if type2 != type1 {
-        return Ok(None);
-    }
-
-    // Beyond here, type1 == type2
-
-    if type1 == TypeId::of::<INT>() {
-        let y = y.clone().cast::<INT>();
-        let mut x = x.write_lock::<INT>().unwrap();
-
-        if cfg!(not(feature = "unchecked")) {
-            use crate::packages::arithmetic::arith_basic::INT::functions::*;
-
-            match op {
-                "+=" => return Ok(Some(*x = add(*x, y)?.as_int().unwrap())),
-                "-=" => return Ok(Some(*x = subtract(*x, y)?.as_int().unwrap())),
-                "*=" => return Ok(Some(*x = multiply(*x, y)?.as_int().unwrap())),
-                "/=" => return Ok(Some(*x = divide(*x, y)?.as_int().unwrap())),
-                "%=" => return Ok(Some(*x = modulo(*x, y)?.as_int().unwrap())),
-                "**=" => return Ok(Some(*x = power(*x, y)?.as_int().unwrap())),
-                ">>=" => return Ok(Some(*x = shift_right(*x, y)?.as_int().unwrap())),
-                "<<=" => return Ok(Some(*x = shift_left(*x, y)?.as_int().unwrap())),
-                _ => (),
-            }
-        } else {
-            match op {
-                "+=" => return Ok(Some(*x += y)),
-                "-=" => return Ok(Some(*x -= y)),
-                "*=" => return Ok(Some(*x *= y)),
-                "/=" => return Ok(Some(*x /= y)),
-                "%=" => return Ok(Some(*x %= y)),
-                "**=" => return Ok(Some(*x = x.pow(y as u32))),
-                ">>=" => return Ok(Some(*x = *x >> y)),
-                "<<=" => return Ok(Some(*x = *x << y)),
-                _ => (),
-            }
-        }
-
-        match op {
-            "&=" => return Ok(Some(*x &= y)),
-            "|=" => return Ok(Some(*x |= y)),
-            "^=" => return Ok(Some(*x ^= y)),
-            _ => return Ok(None),
-        }
-    }
-
-    if type1 == TypeId::of::<bool>() {
-        let y = y.clone().cast::<bool>();
-        let mut x = x.write_lock::<bool>().unwrap();
-
-        match op {
-            "&=" => return Ok(Some(*x = *x && y)),
-            "|=" => return Ok(Some(*x = *x || y)),
-            _ => return Ok(None),
-        }
-    }
-
-    if type1 == TypeId::of::<char>() {
-        let y = y.clone().cast::<char>();
-        let mut x = x.write_lock::<Dynamic>().unwrap();
-
-        match op {
-            "+=" => return Ok(Some(*x = format!("{}{}", *x, y).into())),
-            _ => return Ok(None),
-        }
-    }
-
-    if type1 == TypeId::of::<ImmutableString>() {
-        let y = &*y.read_lock::<ImmutableString>().unwrap();
-        let mut x = x.write_lock::<ImmutableString>().unwrap();
-
-        match op {
-            "+=" => return Ok(Some(*x += y)),
-            "-=" => return Ok(Some(*x -= y)),
-            _ => return Ok(None),
-        }
-    }
-
-    Ok(None)
 }

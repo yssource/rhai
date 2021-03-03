@@ -274,7 +274,7 @@ impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
 impl EvalAltResult {
     /// Is this a pseudo error?  A pseudo error is one that does not occur naturally.
     ///
-    /// [`LoopBreak`][EvalAltResult::LoopBreak] or [`Return`][EvalAltResult::Return] are pseudo errors.
+    /// [`LoopBreak`][EvalAltResult::LoopBreak] and [`Return`][EvalAltResult::Return] are pseudo errors.
     pub fn is_pseudo_error(&self) -> bool {
         match self {
             Self::LoopBreak(_, _) | Self::Return(_, _) => true,
@@ -344,6 +344,73 @@ impl EvalAltResult {
         }
     }
     /// Get the [position][Position] of this error.
+    #[cfg(not(feature = "no_object"))]
+    pub(crate) fn dump_fields(&self, map: &mut crate::Map) {
+        map.insert(
+            "error".into(),
+            crate::stdlib::format!("{:?}", self)
+                .split('(')
+                .next()
+                .unwrap()
+                .into(),
+        );
+
+        match self {
+            Self::LoopBreak(_, _) | Self::Return(_, _) => (),
+
+            Self::ErrorSystem(_, _)
+            | Self::ErrorParsing(_, _)
+            | Self::ErrorUnboundThis(_)
+            | Self::ErrorFor(_)
+            | Self::ErrorInExpr(_)
+            | Self::ErrorArithmetic(_, _)
+            | Self::ErrorTooManyOperations(_)
+            | Self::ErrorTooManyModules(_)
+            | Self::ErrorStackOverflow(_)
+            | Self::ErrorRuntime(_, _) => (),
+
+            Self::ErrorFunctionNotFound(f, _) => {
+                map.insert("function".into(), f.into());
+            }
+            Self::ErrorInFunctionCall(f, s, _, _) => {
+                map.insert("function".into(), f.into());
+                map.insert("source".into(), s.into());
+            }
+            Self::ErrorInModule(m, _, _) => {
+                map.insert("module".into(), m.into());
+            }
+            Self::ErrorMismatchDataType(r, a, _) | Self::ErrorMismatchOutputType(r, a, _) => {
+                map.insert("requested".into(), r.into());
+                map.insert("actual".into(), a.into());
+            }
+            Self::ErrorArrayBounds(n, i, _) | Self::ErrorStringBounds(n, i, _) => {
+                map.insert("length".into(), (*n as INT).into());
+                map.insert("index".into(), (*i as INT).into());
+            }
+            Self::ErrorIndexingType(t, _) => {
+                map.insert("type".into(), t.into());
+            }
+            Self::ErrorVariableNotFound(v, _)
+            | Self::ErrorDataRace(v, _)
+            | Self::ErrorAssignmentToConstant(v, _) => {
+                map.insert("variable".into(), v.into());
+            }
+            Self::ErrorModuleNotFound(m, _) => {
+                map.insert("module".into(), m.into());
+            }
+            Self::ErrorDotExpr(p, _) => {
+                map.insert("property".into(), p.into());
+            }
+
+            Self::ErrorDataTooLarge(t, _) => {
+                map.insert("type".into(), t.into());
+            }
+            Self::ErrorTerminated(t, _) => {
+                map.insert("token".into(), t.clone());
+            }
+        };
+    }
+    /// Get the [position][Position] of this error.
     pub fn position(&self) -> Position {
         match self {
             Self::ErrorSystem(_, _) => Position::NONE,
@@ -376,10 +443,13 @@ impl EvalAltResult {
             | Self::Return(_, pos) => *pos,
         }
     }
-    /// Clear the [position][Position] information of this error.
-    pub fn clear_position(&mut self) -> &mut Self {
+    /// Remove the [position][Position] information from this error and return it.
+    ///
+    /// The [position][Position] of this error is set to [`NONE`][Position::NONE] afterwards.
+    pub fn take_position(&mut self) -> Position {
+        let pos = self.position();
         self.set_position(Position::NONE);
-        self
+        pos
     }
     /// Override the [position][Position] of this error.
     pub fn set_position(&mut self, new_position: Position) {
