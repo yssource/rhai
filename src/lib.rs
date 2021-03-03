@@ -88,7 +88,7 @@ mod token;
 mod r#unsafe;
 mod utils;
 
-pub type RhaiResult = Result<Dynamic, Box<EvalAltResult>>;
+pub type RhaiResult = Result<Dynamic, stdlib::boxed::Box<EvalAltResult>>;
 
 /// The system integer type. It is defined as [`i64`].
 ///

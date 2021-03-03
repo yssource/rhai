@@ -946,27 +946,32 @@ pub fn get_builtin_op_assignment_fn(
             match op {
                 "+=" => {
                     return Some(|_, args| {
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() += get_y(args)).into())
+                        let y = get_y(args);
+                        Ok((*args[0].write_lock::<Decimal>().unwrap() += y).into())
                     })
                 }
                 "-=" => {
                     return Some(|_, args| {
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() -= get_y(args)).into())
+                        let y = get_y(args);
+                        Ok((*args[0].write_lock::<Decimal>().unwrap() -= y).into())
                     })
                 }
                 "*=" => {
                     return Some(|_, args| {
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() *= get_y(args)).into())
+                        let y = get_y(args);
+                        Ok((*args[0].write_lock::<Decimal>().unwrap() *= y).into())
                     })
                 }
                 "/=" => {
                     return Some(|_, args| {
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() /= get_y(args)).into())
+                        let y = get_y(args);
+                        Ok((*args[0].write_lock::<Decimal>().unwrap() /= y).into())
                     })
                 }
                 "%=" => {
                     return Some(|_, args| {
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() %= get_y(args)).into())
+                        let y = get_y(args);
+                        Ok((*args[0].write_lock::<Decimal>().unwrap() %= y).into())
                     })
                 }
                 _ => return None,

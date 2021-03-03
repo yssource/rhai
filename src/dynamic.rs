@@ -1447,9 +1447,9 @@ impl Dynamic {
     /// Exported under the `decimal` feature only.
     #[cfg(feature = "decimal")]
     #[inline(always)]
-    pub fn as_decimal(self) -> Result<Decimal, &'static str> {
-        match self.0 {
-            Union::Decimal(n, _) => Ok(*n),
+    pub fn as_decimal(&self) -> Result<Decimal, &'static str> {
+        match &self.0 {
+            Union::Decimal(n, _) => Ok(**n),
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _) => self.read_lock().map(|v| *v).ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
