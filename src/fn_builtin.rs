@@ -328,7 +328,7 @@ pub fn get_builtin_binary_op_fn(
             "+" => {
                 return Some(|_, args| {
                     let x = args[0].as_char().unwrap();
-                    let y = &*args[1].as_locked_immutable_string().unwrap();
+                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
                     Ok(format!("{}{}", x, y).into())
                 })
             }
@@ -336,7 +336,7 @@ pub fn get_builtin_binary_op_fn(
                 #[inline(always)]
                 fn get_s1s2(args: &FnCallArgs) -> ([char; 2], [char; 2]) {
                     let x = args[0].as_char().unwrap();
-                    let y = &*args[1].as_locked_immutable_string().unwrap();
+                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
                     let s1 = [x, '\0'];
                     let mut y = y.chars();
                     let s2 = [y.next().unwrap_or('\0'), y.next().unwrap_or('\0')];
@@ -391,14 +391,14 @@ pub fn get_builtin_binary_op_fn(
         match op {
             "+" => {
                 return Some(|_, args| {
-                    let x = &*args[0].as_locked_immutable_string().unwrap();
+                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
                     let y = args[1].as_char().unwrap();
                     Ok((x + y).into())
                 })
             }
             "-" => {
                 return Some(|_, args| {
-                    let x = &*args[0].as_locked_immutable_string().unwrap();
+                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
                     let y = args[1].as_char().unwrap();
                     Ok((x - y).into())
                 })
@@ -406,7 +406,7 @@ pub fn get_builtin_binary_op_fn(
             "==" | "!=" | ">" | ">=" | "<" | "<=" => {
                 #[inline(always)]
                 fn get_s1s2(args: &FnCallArgs) -> ([char; 2], [char; 2]) {
-                    let x = &*args[0].as_locked_immutable_string().unwrap();
+                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
                     let y = args[1].as_char().unwrap();
                     let mut x = x.chars();
                     let s1 = [x.next().unwrap_or('\0'), x.next().unwrap_or('\0')];
@@ -691,57 +691,57 @@ pub fn get_builtin_binary_op_fn(
         match op {
             "+" => {
                 return Some(|_, args| {
-                    let x = &*args[0].as_locked_immutable_string().unwrap();
-                    let y = &*args[1].as_locked_immutable_string().unwrap();
+                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
+                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
                     Ok((x + y).into())
                 })
             }
             "-" => {
                 return Some(|_, args| {
-                    let x = &*args[0].as_locked_immutable_string().unwrap();
-                    let y = &*args[1].as_locked_immutable_string().unwrap();
+                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
+                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
                     Ok((x - y).into())
                 })
             }
             "==" => {
                 return Some(|_, args| {
-                    let x = &*args[0].as_locked_immutable_string().unwrap();
-                    let y = &*args[1].as_locked_immutable_string().unwrap();
+                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
+                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
                     Ok((x == y).into())
                 })
             }
             "!=" => {
                 return Some(|_, args| {
-                    let x = &*args[0].as_locked_immutable_string().unwrap();
-                    let y = &*args[1].as_locked_immutable_string().unwrap();
+                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
+                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
                     Ok((x != y).into())
                 })
             }
             ">" => {
                 return Some(|_, args| {
-                    let x = &*args[0].as_locked_immutable_string().unwrap();
-                    let y = &*args[1].as_locked_immutable_string().unwrap();
+                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
+                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
                     Ok((x > y).into())
                 })
             }
             ">=" => {
                 return Some(|_, args| {
-                    let x = &*args[0].as_locked_immutable_string().unwrap();
-                    let y = &*args[1].as_locked_immutable_string().unwrap();
+                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
+                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
                     Ok((x >= y).into())
                 })
             }
             "<" => {
                 return Some(|_, args| {
-                    let x = &*args[0].as_locked_immutable_string().unwrap();
-                    let y = &*args[1].as_locked_immutable_string().unwrap();
+                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
+                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
                     Ok((x < y).into())
                 })
             }
             "<=" => {
                 return Some(|_, args| {
-                    let x = &*args[0].as_locked_immutable_string().unwrap();
-                    let y = &*args[1].as_locked_immutable_string().unwrap();
+                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
+                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
                     Ok((x <= y).into())
                 })
             }
@@ -1003,7 +1003,7 @@ pub fn get_builtin_op_assignment_fn(
             "+=" => {
                 return Some(|_, args| {
                     let mut ch = args[0].as_char().unwrap().to_string();
-                    ch.push_str(args[1].as_locked_immutable_string().unwrap().as_str());
+                    ch.push_str(args[1].read_lock::<ImmutableString>().unwrap().as_str());
 
                     let mut x = args[0].write_lock::<Dynamic>().unwrap();
                     Ok((*x = ch.into()).into())
@@ -1199,7 +1199,7 @@ pub fn get_builtin_op_assignment_fn(
                 return Some(|_, args| {
                     let (first, second) = args.split_first_mut().unwrap();
                     let mut x = first.write_lock::<ImmutableString>().unwrap();
-                    let y = &*second[0].as_locked_immutable_string().unwrap();
+                    let y = &*second[0].read_lock::<ImmutableString>().unwrap();
                     Ok((*x += y).into())
                 })
             }
@@ -1207,7 +1207,7 @@ pub fn get_builtin_op_assignment_fn(
                 return Some(|_, args| {
                     let (first, second) = args.split_first_mut().unwrap();
                     let mut x = first.write_lock::<ImmutableString>().unwrap();
-                    let y = &*second[0].as_locked_immutable_string().unwrap();
+                    let y = &*second[0].read_lock::<ImmutableString>().unwrap();
                     Ok((*x -= y).into())
                 })
             }

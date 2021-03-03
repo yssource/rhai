@@ -33,7 +33,7 @@ impl Engine {
     /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`][Dynamic],
     /// The arguments are guaranteed to be of the correct types matching the [`TypeId`][std::any::TypeId]'s.
     ///
-    /// To access a primary argument value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    /// To access a primary argument value (i.e. cloning is cheap), use: `args[n].as_xxx().unwrap()`
     ///
     /// To access an argument value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
     /// Notice that this will _consume_ the argument, replacing it with `()`.

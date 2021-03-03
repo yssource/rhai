@@ -732,7 +732,7 @@ impl Module {
     /// The function is assumed to be a _method_, meaning that the first argument should not be consumed.
     /// All other arguments can be consumed.
     ///
-    /// To access a primary argument value (i.e. cloning is cheap), use: `args[n].clone().cast::<T>()`
+    /// To access a primary argument value (i.e. cloning is cheap), use: `args[n].as_xxx().unwrap()`
     ///
     /// To access an argument value and avoid cloning, use `std::mem::take(args[n]).cast::<T>()`.
     /// Notice that this will _consume_ the argument, replacing it with `()`.
