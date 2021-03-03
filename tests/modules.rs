@@ -24,7 +24,10 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
     sub_module2.set_var("answer", 41 as INT);
 
     let hash_inc = sub_module2.set_fn_1_mut("inc", FnNamespace::Internal, |x: &mut INT| Ok(*x + 1));
+    assert!(!sub_module2.has_namespace(FnNamespace::Global, true));
+
     sub_module2.set_fn_1_mut("super_inc", FnNamespace::Global, |x: &mut INT| Ok(*x + 1));
+    assert!(sub_module2.has_namespace(FnNamespace::Global, true));
 
     #[cfg(not(feature = "no_object"))]
     sub_module2.set_getter_fn("doubled", |x: &mut INT| Ok(*x * 2));
@@ -32,6 +35,9 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
     sub_module.set_sub_module("universe", sub_module2);
     module.set_sub_module("life", sub_module);
     module.set_var("MYSTIC_NUMBER", Dynamic::from(42 as INT));
+
+    assert!(module.has_namespace(FnNamespace::Global, true));
+    assert!(!module.has_namespace(FnNamespace::Global, false));
 
     assert!(module.contains_sub_module("life"));
     let m = module.get_sub_module("life").unwrap();

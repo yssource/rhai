@@ -131,7 +131,7 @@ macro_rules! make_func {
 			$($let)*
 			$($par = ($convert)(_drain.next().unwrap()); )*
 
-            // Call the function with each parameter value
+            // Call the function with each argument value
 			let r = $fn($($arg),*);
 
             // Map the result

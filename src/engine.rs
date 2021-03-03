@@ -107,6 +107,11 @@ impl Imports {
     pub(crate) fn iter_raw(&self) -> impl Iterator<Item = (&ImmutableString, &Shared<Module>)> {
         self.0.iter().rev().map(|(n, m)| (n, m))
     }
+    /// Get an iterator to this stack of imported [modules][Module] in forward order.
+    #[inline(always)]
+    pub(crate) fn scan_raw(&self) -> impl Iterator<Item = (&ImmutableString, &Shared<Module>)> {
+        self.0.iter().map(|(n, m)| (n, m))
+    }
     /// Get a consuming iterator to this stack of imported [modules][Module] in reverse order.
     #[inline(always)]
     pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
@@ -1874,39 +1879,51 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         statements: &[Stmt],
-        restore: bool,
+        restore_prev_state: bool,
         level: usize,
     ) -> RhaiResult {
-        let mut _has_imports = false;
+        let mut _restore_fn_resolution_cache = false;
         let prev_always_search = state.always_search;
         let prev_scope_len = scope.len();
         let prev_mods_len = mods.len();
 
-        if restore {
+        if restore_prev_state {
             state.scope_level += 1;
         }
 
         let result = statements.iter().try_fold(Dynamic::UNIT, |_, stmt| {
+            let _mods_len = mods.len();
+
+            let r = self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)?;
+
             #[cfg(not(feature = "no_module"))]
-            match stmt {
-                Stmt::Import(_, _, _) => {
-                    // When imports list is modified, clear the functions lookup cache
-                    if _has_imports {
+            if matches!(stmt, Stmt::Import(_, _, _)) {
+                // Get the extra modules - see if any functions are marked global.
+                // Without global functions, the extra modules never affect function resolution.
+                if mods
+                    .scan_raw()
+                    .skip(_mods_len)
+                    .any(|(_, m)| m.has_namespace(crate::FnNamespace::Global, true))
+                {
+                    if _restore_fn_resolution_cache {
+                        // When new module is imported with global functions and there is already
+                        // a new cache, clear it - notice that this is expensive as all function
+                        // resolutions must start again
                         state.clear_fn_resolution_cache();
-                    } else if restore {
+                    } else if restore_prev_state {
+                        // When new module is imported with global functions, push a new cache
                         state.push_fn_resolution_cache();
-                        _has_imports = true;
+                        _restore_fn_resolution_cache = true;
                     }
                 }
-                _ => (),
             }
 
-            self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
+            Ok(r)
         });
 
-        if restore {
+        if restore_prev_state {
             scope.rewind(prev_scope_len);
-            if _has_imports {
+            if _restore_fn_resolution_cache {
                 // If imports list is modified, pop the functions lookup cache
                 state.pop_fn_resolution_cache();
             }
