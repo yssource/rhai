@@ -68,262 +68,146 @@ pub fn get_builtin_binary_op_fn(
 
     let types_pair = (type1, type2);
 
-    #[cfg(not(feature = "no_float"))]
-    if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>())
-        || types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<INT>())
-        || types_pair == (TypeId::of::<INT>(), TypeId::of::<FLOAT>())
-    {
-        #[inline(always)]
-        fn get_xy(args: &FnCallArgs) -> (FLOAT, FLOAT) {
-            let type1 = args[0].type_id();
-            let type2 = args[1].type_id();
-
-            let types_pair = (type1, type2);
-
-            if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>()) {
-                // FLOAT op FLOAT
-                (args[0].as_float().unwrap(), args[1].as_float().unwrap())
-            } else if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<INT>()) {
-                // FLOAT op INT
-                (
-                    args[0].as_float().unwrap(),
-                    args[1].as_int().unwrap() as FLOAT,
-                )
-            } else if types_pair == (TypeId::of::<INT>(), TypeId::of::<FLOAT>()) {
-                // INT op FLOAT
-                (
-                    args[0].as_int().unwrap() as FLOAT,
-                    args[1].as_float().unwrap(),
-                )
-            } else {
-                unreachable!()
-            }
-        }
-
-        match op {
-            "+" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x + y).into())
-                })
-            }
-            "-" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x - y).into())
-                })
-            }
-            "*" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x * y).into())
-                })
-            }
-            "/" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x / y).into())
-                })
-            }
-            "%" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x % y).into())
-                })
-            }
-            "**" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok(x.powf(y).into())
-                })
-            }
-            "==" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x == y).into())
-                })
-            }
-            "!=" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x != y).into())
-                })
-            }
-            ">" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x > y).into())
-                })
-            }
-            ">=" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x >= y).into())
-                })
-            }
-            "<" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x < y).into())
-                })
-            }
-            "<=" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x <= y).into())
-                })
-            }
-            _ => return None,
+    macro_rules! impl_op {
+        ($func:ident ( $op:tt )) => {
+            return Some(|_, args| {
+                let (x, y) = $func(args);
+                Ok((x $op y).into())
+            })
+        };
+        ($xx:ident $op:tt $yy:ident -> $base:ty) => {
+            return Some(|_, args| {
+                let x = args[0].$xx().unwrap() as $base;
+                let y = args[1].$yy().unwrap() as $base;
+                Ok((x $op y).into())
+            })
+        };
+        ($xx:ident . $func:ident ( $yy:ident as $yyy:ty) -> $base:ty) => {
+            return Some(|_, args| {
+                let x = args[0].$xx().unwrap() as $base;
+                let y = args[1].$yy().unwrap() as $base;
+                Ok(x.$func(y as $yyy).into())
+            })
+        };
+        ($func:ident ( $xx:ident, $yy:ident ) -> $base:ty) => {
+            return Some(|_, args| {
+                let x = args[0].$xx().unwrap() as $base;
+                let y = args[1].$yy().unwrap() as $base;
+                $func(x, y)
+            })
+        };
+        ($xx:ident $op:tt $yy:ident -> from $base:ty) => {
+            return Some(|_, args| {
+                let x = <$base>::from(args[0].$xx().unwrap());
+                let y = <$base>::from(args[1].$yy().unwrap());
+                Ok((x $op y).into())
+            })
+        };
+        ($xx:ident . $func:ident ( $yy:ident ) -> from $base:ty) => {
+            return Some(|_, args| {
+                let x = <$base>::from(args[0].$xx().unwrap());
+                let y = <$base>::from(args[1].$yy().unwrap());
+                Ok(x.$func(y).into())
+            })
+        };
+        ($func:ident ( $xx:ident, $yy:ident ) -> from $base:ty) => {
+            return Some(|_, args| {
+                let x = <$base>::from(args[0].$xx().unwrap());
+                let y = <$base>::from(args[1].$yy().unwrap());
+                $func(x, y)
+            })
+        };
+        (& $x:ident $op:tt & $y:ident) => {
+            return Some(|_, args| {
+                let x = &*args[0].read_lock::<$x>().unwrap();
+                let y = &*args[1].read_lock::<$y>().unwrap();
+                Ok((x $op y).into())
+            })
         }
     }
 
-    #[cfg(feature = "decimal")]
-    if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>())
-        || types_pair == (TypeId::of::<Decimal>(), TypeId::of::<INT>())
-        || types_pair == (TypeId::of::<INT>(), TypeId::of::<Decimal>())
-    {
-        #[inline(always)]
-        fn get_xy(args: &FnCallArgs) -> (Decimal, Decimal) {
-            let type1 = args[0].type_id();
-            let type2 = args[1].type_id();
-
-            let types_pair = (type1, type2);
-
-            if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>()) {
-                // Decimal op Decimal
-                (args[0].as_decimal().unwrap(), args[1].as_decimal().unwrap())
-            } else if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<INT>()) {
-                // Decimal op INT
-                (
-                    args[0].as_decimal().unwrap(),
-                    Decimal::from(args[1].as_int().unwrap()),
-                )
-            } else if types_pair == (TypeId::of::<INT>(), TypeId::of::<Decimal>()) {
-                // INT op Decimal
-                (
-                    Decimal::from(args[0].as_int().unwrap()),
-                    args[1].as_decimal().unwrap(),
-                )
-            } else {
-                unreachable!()
+    macro_rules! impl_float {
+        ($x:ty, $xx:ident, $y:ty, $yy:ident) => {
+            #[cfg(not(feature = "no_float"))]
+            if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
+                match op {
+                    "+" => impl_op!($xx + $yy -> FLOAT),
+                    "-" => impl_op!($xx - $yy -> FLOAT),
+                    "*" => impl_op!($xx * $yy -> FLOAT),
+                    "/" => impl_op!($xx / $yy -> FLOAT),
+                    "%" => impl_op!($xx % $yy -> FLOAT),
+                    "**" => impl_op!($xx.powf($yy as FLOAT) -> FLOAT),
+                    "==" => impl_op!($xx == $yy -> FLOAT),
+                    "!=" => impl_op!($xx != $yy -> FLOAT),
+                    ">" => impl_op!($xx > $yy -> FLOAT),
+                    ">=" => impl_op!($xx >= $yy -> FLOAT),
+                    "<" => impl_op!($xx < $yy -> FLOAT),
+                    "<=" => impl_op!($xx <= $yy -> FLOAT),
+                    _ => return None,
+                }
             }
-        }
-
-        if cfg!(not(feature = "unchecked")) {
-            use crate::packages::arithmetic::decimal_functions::*;
-
-            match op {
-                "+" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        add(x, y)
-                    })
-                }
-                "-" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        subtract(x, y)
-                    })
-                }
-                "*" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        multiply(x, y)
-                    })
-                }
-                "/" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        divide(x, y)
-                    })
-                }
-                "%" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        modulo(x, y)
-                    })
-                }
-                _ => (),
-            }
-        } else {
-            match op {
-                "+" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        Ok((x + y).into())
-                    })
-                }
-                "-" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        Ok((x - y).into())
-                    })
-                }
-                "*" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        Ok((x * y).into())
-                    })
-                }
-                "/" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        Ok((x / y).into())
-                    })
-                }
-                "%" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        Ok((x % y).into())
-                    })
-                }
-                _ => (),
-            }
-        }
-
-        match op {
-            "==" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x == y).into())
-                })
-            }
-            "!=" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x != y).into())
-                })
-            }
-            ">" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x > y).into())
-                })
-            }
-            ">=" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x >= y).into())
-                })
-            }
-            "<" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x < y).into())
-                })
-            }
-            "<=" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x <= y).into())
-                })
-            }
-            _ => return None,
-        }
+        };
     }
+
+    impl_float!(FLOAT, as_float, FLOAT, as_float);
+    impl_float!(FLOAT, as_float, INT, as_int);
+    impl_float!(INT, as_int, FLOAT, as_float);
+
+    macro_rules! impl_decimal {
+        ($x:ty, $xx:ident, $y:ty, $yy:ident) => {
+            #[cfg(feature = "decimal")]
+            if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
+                if cfg!(not(feature = "unchecked")) {
+                    use crate::packages::arithmetic::decimal_functions::*;
+
+                    match op {
+                        "+" => impl_op!(add($xx, $yy) -> from Decimal),
+                        "-" => impl_op!(subtract($xx, $yy) -> from Decimal),
+                        "*" => impl_op!(multiply($xx, $yy) -> from Decimal),
+                        "/" => impl_op!(divide($xx, $yy) -> from Decimal),
+                        "%" => impl_op!(modulo($xx, $yy) -> from Decimal),
+                        _ => ()
+                    }
+                } else {
+                    match op {
+                        "+" => impl_op!($xx + $yy -> from Decimal),
+                        "-" => impl_op!($xx - $yy -> from Decimal),
+                        "*" => impl_op!($xx * $yy -> from Decimal),
+                        "/" => impl_op!($xx / $yy -> from Decimal),
+                        "%" => impl_op!($xx % $yy -> from Decimal),
+                        _ => ()
+                    }
+                }
+
+                match op {
+                    "==" => impl_op!($xx == $yy -> from Decimal),
+                    "!=" => impl_op!($xx != $yy -> from Decimal),
+                    ">" => impl_op!($xx > $yy -> from Decimal),
+                    ">=" => impl_op!($xx >= $yy -> from Decimal),
+                    "<" => impl_op!($xx < $yy -> from Decimal),
+                    "<=" => impl_op!($xx <= $yy -> from Decimal),
+                    _ => return None
+                }
+            }
+        };
+    }
+
+    impl_decimal!(Decimal, as_decimal, Decimal, as_decimal);
+    impl_decimal!(Decimal, as_decimal, INT, as_int);
+    impl_decimal!(INT, as_int, Decimal, as_decimal);
 
     // char op string
     if types_pair == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
+        #[inline(always)]
+        fn get_s1s2(args: &FnCallArgs) -> ([char; 2], [char; 2]) {
+            let x = args[0].as_char().unwrap();
+            let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+            let s1 = [x, '\0'];
+            let mut y = y.chars();
+            let s2 = [y.next().unwrap_or('\0'), y.next().unwrap_or('\0')];
+            (s1, s2)
+        }
+
         match op {
             "+" => {
                 return Some(|_, args| {
@@ -332,62 +216,27 @@ pub fn get_builtin_binary_op_fn(
                     Ok(format!("{}{}", x, y).into())
                 })
             }
-            "==" | "!=" | ">" | ">=" | "<" | "<=" => {
-                #[inline(always)]
-                fn get_s1s2(args: &FnCallArgs) -> ([char; 2], [char; 2]) {
-                    let x = args[0].as_char().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
-                    let s1 = [x, '\0'];
-                    let mut y = y.chars();
-                    let s2 = [y.next().unwrap_or('\0'), y.next().unwrap_or('\0')];
-                    (s1, s2)
-                }
-
-                match op {
-                    "==" => {
-                        return Some(|_, args| {
-                            let (s1, s2) = get_s1s2(args);
-                            Ok((s1 == s2).into())
-                        })
-                    }
-                    "!=" => {
-                        return Some(|_, args| {
-                            let (s1, s2) = get_s1s2(args);
-                            Ok((s1 != s2).into())
-                        })
-                    }
-                    ">" => {
-                        return Some(|_, args| {
-                            let (s1, s2) = get_s1s2(args);
-                            Ok((s1 > s2).into())
-                        })
-                    }
-                    ">=" => {
-                        return Some(|_, args| {
-                            let (s1, s2) = get_s1s2(args);
-                            Ok((s1 >= s2).into())
-                        })
-                    }
-                    "<" => {
-                        return Some(|_, args| {
-                            let (s1, s2) = get_s1s2(args);
-                            Ok((s1 < s2).into())
-                        })
-                    }
-                    "<=" => {
-                        return Some(|_, args| {
-                            let (s1, s2) = get_s1s2(args);
-                            Ok((s1 <= s2).into())
-                        })
-                    }
-                    _ => unreachable!(),
-                }
-            }
+            "==" => impl_op!(get_s1s2(==)),
+            "!=" => impl_op!(get_s1s2(!=)),
+            ">" => impl_op!(get_s1s2(>)),
+            ">=" => impl_op!(get_s1s2(>=)),
+            "<" => impl_op!(get_s1s2(<)),
+            "<=" => impl_op!(get_s1s2(<=)),
             _ => return None,
         }
     }
     // string op char
     if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
+        #[inline(always)]
+        fn get_s1s2(args: &FnCallArgs) -> ([char; 2], [char; 2]) {
+            let x = &*args[0].read_lock::<ImmutableString>().unwrap();
+            let y = args[1].as_char().unwrap();
+            let mut x = x.chars();
+            let s1 = [x.next().unwrap_or('\0'), x.next().unwrap_or('\0')];
+            let s2 = [y, '\0'];
+            (s1, s2)
+        }
+
         match op {
             "+" => {
                 return Some(|_, args| {
@@ -403,57 +252,12 @@ pub fn get_builtin_binary_op_fn(
                     Ok((x - y).into())
                 })
             }
-            "==" | "!=" | ">" | ">=" | "<" | "<=" => {
-                #[inline(always)]
-                fn get_s1s2(args: &FnCallArgs) -> ([char; 2], [char; 2]) {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = args[1].as_char().unwrap();
-                    let mut x = x.chars();
-                    let s1 = [x.next().unwrap_or('\0'), x.next().unwrap_or('\0')];
-                    let s2 = [y, '\0'];
-                    (s1, s2)
-                }
-
-                match op {
-                    "==" => {
-                        return Some(|_, args| {
-                            let (s1, s2) = get_s1s2(args);
-                            Ok((s1 == s2).into())
-                        })
-                    }
-                    "!=" => {
-                        return Some(|_, args| {
-                            let (s1, s2) = get_s1s2(args);
-                            Ok((s1 != s2).into())
-                        })
-                    }
-                    ">" => {
-                        return Some(|_, args| {
-                            let (s1, s2) = get_s1s2(args);
-                            Ok((s1 > s2).into())
-                        })
-                    }
-                    ">=" => {
-                        return Some(|_, args| {
-                            let (s1, s2) = get_s1s2(args);
-                            Ok((s1 >= s2).into())
-                        })
-                    }
-                    "<" => {
-                        return Some(|_, args| {
-                            let (s1, s2) = get_s1s2(args);
-                            Ok((s1 < s2).into())
-                        })
-                    }
-                    "<=" => {
-                        return Some(|_, args| {
-                            let (s1, s2) = get_s1s2(args);
-                            Ok((s1 <= s2).into())
-                        })
-                    }
-                    _ => unreachable!(),
-                }
-            }
+            "==" => impl_op!(get_s1s2(==)),
+            "!=" => impl_op!(get_s1s2(!=)),
+            ">" => impl_op!(get_s1s2(>)),
+            ">=" => impl_op!(get_s1s2(>=)),
+            "<" => impl_op!(get_s1s2(<)),
+            "<=" => impl_op!(get_s1s2(<=)),
             _ => return None,
         }
     }
@@ -470,336 +274,85 @@ pub fn get_builtin_binary_op_fn(
     // Beyond here, type1 == type2
 
     if type1 == TypeId::of::<INT>() {
-        #[inline(always)]
-        fn get_xy(args: &FnCallArgs) -> (INT, INT) {
-            let x = args[0].as_int().unwrap();
-            let y = args[1].as_int().unwrap();
-            (x, y)
-        }
-
         if cfg!(not(feature = "unchecked")) {
             use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
             match op {
-                "+" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        add(x, y)
-                    })
-                }
-                "-" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        subtract(x, y)
-                    })
-                }
-                "*" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        multiply(x, y)
-                    })
-                }
-                "/" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        divide(x, y)
-                    })
-                }
-                "%" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        modulo(x, y)
-                    })
-                }
-                "**" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        power(x, y)
-                    })
-                }
-                ">>" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        shift_right(x, y)
-                    })
-                }
-                "<<" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        shift_left(x, y)
-                    })
-                }
+                "+" => impl_op!(add(as_int, as_int) -> INT),
+                "-" => impl_op!(subtract(as_int, as_int) -> INT),
+                "*" => impl_op!(multiply(as_int, as_int) -> INT),
+                "/" => impl_op!(divide(as_int, as_int) -> INT),
+                "%" => impl_op!(modulo(as_int, as_int) -> INT),
+                "**" => impl_op!(power(as_int, as_int) -> INT),
+                ">>" => impl_op!(shift_right(as_int, as_int) -> INT),
+                "<<" => impl_op!(shift_left(as_int, as_int) -> INT),
                 _ => (),
             }
         } else {
             match op {
-                "+" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        Ok((x + y).into())
-                    })
-                }
-                "-" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        Ok((x - y).into())
-                    })
-                }
-                "*" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        Ok((x * y).into())
-                    })
-                }
-                "/" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        Ok((x / y).into())
-                    })
-                }
-                "%" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        Ok((x % y).into())
-                    })
-                }
-                "**" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        Ok(x.pow(y as u32).into())
-                    })
-                }
-                ">>" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        Ok((x >> y).into())
-                    })
-                }
-                "<<" => {
-                    return Some(|_, args| {
-                        let (x, y) = get_xy(args);
-                        Ok((x << y).into())
-                    })
-                }
+                "+" => impl_op!(as_int + as_int -> INT),
+                "-" => impl_op!(as_int - as_int -> INT),
+                "*" => impl_op!(as_int * as_int -> INT),
+                "/" => impl_op!(as_int / as_int -> INT),
+                "%" => impl_op!(as_int % as_int -> INT),
+                "**" => impl_op!(as_int.pow(as_int as u32) -> INT),
+                ">>" => impl_op!(as_int >> as_int -> INT),
+                "<<" => impl_op!(as_int << as_int -> INT),
                 _ => (),
             }
         }
 
         match op {
-            "==" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x == y).into())
-                })
-            }
-            "!=" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x != y).into())
-                })
-            }
-            ">" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x > y).into())
-                })
-            }
-            ">=" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x >= y).into())
-                })
-            }
-            "<" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x < y).into())
-                })
-            }
-            "<=" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x <= y).into())
-                })
-            }
-            "&" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x & y).into())
-                })
-            }
-            "|" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x | y).into())
-                })
-            }
-            "^" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x ^ y).into())
-                })
-            }
+            "==" => impl_op!(as_int == as_int -> INT),
+            "!=" => impl_op!(as_int != as_int -> INT),
+            ">" => impl_op!(as_int > as_int -> INT),
+            ">=" => impl_op!(as_int >= as_int -> INT),
+            "<" => impl_op!(as_int < as_int ->  INT),
+            "<=" => impl_op!(as_int <= as_int -> INT),
+            "&" => impl_op!(as_int & as_int -> INT),
+            "|" => impl_op!(as_int | as_int -> INT),
+            "^" => impl_op!(as_int ^ as_int -> INT),
             _ => return None,
         }
     }
 
     if type1 == TypeId::of::<bool>() {
-        #[inline(always)]
-        fn get_xy(args: &FnCallArgs) -> (bool, bool) {
-            let x = args[0].clone().cast::<bool>();
-            let y = args[1].clone().cast::<bool>();
-            (x, y)
-        }
-
         match op {
-            "&" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x && y).into())
-                })
-            }
-            "|" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x || y).into())
-                })
-            }
-            "^" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x ^ y).into())
-                })
-            }
-            "==" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x == y).into())
-                })
-            }
-            "!=" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x != y).into())
-                })
-            }
+            "==" => impl_op!(as_bool == as_bool -> bool),
+            "!=" => impl_op!(as_bool != as_bool -> bool),
+            ">" => impl_op!(as_bool > as_bool -> bool),
+            ">=" => impl_op!(as_bool >= as_bool -> bool),
+            "<" => impl_op!(as_bool < as_bool ->  bool),
+            "<=" => impl_op!(as_bool <= as_bool -> bool),
+            "&" => impl_op!(as_bool & as_bool -> bool),
+            "|" => impl_op!(as_bool | as_bool -> bool),
+            "^" => impl_op!(as_bool ^ as_bool -> bool),
             _ => return None,
         }
     }
 
     if type1 == TypeId::of::<ImmutableString>() {
         match op {
-            "+" => {
-                return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
-                    Ok((x + y).into())
-                })
-            }
-            "-" => {
-                return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
-                    Ok((x - y).into())
-                })
-            }
-            "==" => {
-                return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
-                    Ok((x == y).into())
-                })
-            }
-            "!=" => {
-                return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
-                    Ok((x != y).into())
-                })
-            }
-            ">" => {
-                return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
-                    Ok((x > y).into())
-                })
-            }
-            ">=" => {
-                return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
-                    Ok((x >= y).into())
-                })
-            }
-            "<" => {
-                return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
-                    Ok((x < y).into())
-                })
-            }
-            "<=" => {
-                return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
-                    Ok((x <= y).into())
-                })
-            }
+            "+" => impl_op!(&ImmutableString + &ImmutableString),
+            "-" => impl_op!(&ImmutableString - &ImmutableString),
+            "==" => impl_op!(&ImmutableString == &ImmutableString),
+            "!=" => impl_op!(&ImmutableString != &ImmutableString),
+            ">" => impl_op!(&ImmutableString > &ImmutableString),
+            ">=" => impl_op!(&ImmutableString >= &ImmutableString),
+            "<" => impl_op!(&ImmutableString < &ImmutableString),
+            "<=" => impl_op!(&ImmutableString <= &ImmutableString),
             _ => return None,
         }
     }
 
     if type1 == TypeId::of::<char>() {
-        #[inline(always)]
-        fn get_xy(args: &FnCallArgs) -> (char, char) {
-            let x = args[0].as_char().unwrap();
-            let y = args[1].as_char().unwrap();
-            (x, y)
-        }
-
         match op {
-            "+" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok(format!("{}{}", x, y).into())
-                })
-            }
-            "==" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x == y).into())
-                })
-            }
-            "!=" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x != y).into())
-                })
-            }
-            ">" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x > y).into())
-                })
-            }
-            ">=" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x >= y).into())
-                })
-            }
-            "<" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x < y).into())
-                })
-            }
-            "<=" => {
-                return Some(|_, args| {
-                    let (x, y) = get_xy(args);
-                    Ok((x <= y).into())
-                })
-            }
+            "==" => impl_op!(as_char == as_char -> char),
+            "!=" => impl_op!(as_char != as_char -> char),
+            ">" => impl_op!(as_char > as_char -> char),
+            ">=" => impl_op!(as_char >= as_char -> char),
+            "<" => impl_op!(as_char < as_char -> char),
+            "<=" => impl_op!(as_char <= as_char -> char),
             _ => return None,
         }
     }
@@ -826,174 +379,119 @@ pub fn get_builtin_op_assignment_fn(
 
     let types_pair = (type1, type2);
 
-    #[cfg(not(feature = "no_float"))]
-    if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>())
-        || types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<INT>())
-    {
-        #[inline(always)]
-        fn get_y(args: &FnCallArgs) -> FLOAT {
-            let type2 = args[1].type_id();
+    macro_rules! impl_op {
+        ($x:ident = x $op:tt $yy:ident) => {
+            return Some(|_, args| {
+                let x = args[0].$yy().unwrap();
+                let y = args[1].$yy().unwrap() as $x;
+                Ok((*args[0].write_lock::<$x>().unwrap() = x $op y).into())
+            })
+        };
+        ($x:ident $op:tt $yy:ident) => {
+            return Some(|_, args| {
+                let y = args[1].$yy().unwrap() as $x;
+                Ok((*args[0].write_lock::<$x>().unwrap() $op y).into())
+            })
+        };
+        ($x:ident $op:tt $yy:ident as $yyy:ty) => {
+            return Some(|_, args| {
+                let y = args[1].$yy().unwrap() as $yyy;
+                Ok((*args[0].write_lock::<$x>().unwrap() $op y).into())
+            })
+        };
+        ($xx:ident . $func:ident ( $yy:ident as $yyy:ty ) -> $x:ty) => {
+            return Some(|_, args| {
+                let x = args[0].$xx().unwrap();
+                let y = args[1].$yy().unwrap() as $x;
+                Ok((*args[0].write_lock::<$x>().unwrap() = x.$func(y as $yyy)).into())
+            })
+        };
+        ($func:ident ( $xx:ident, $yy:ident ) -> $x:ty) => {
+            return Some(|_, args| {
+                let x = args[0].$xx().unwrap();
+                let y = args[1].$yy().unwrap() as $x;
+                Ok((*args[0].write_lock().unwrap() = $func(x, y)?).into())
+            })
+        };
+        (from $x:ident $op:tt $yy:ident) => {
+            return Some(|_, args| {
+                let y = <$x>::from(args[1].$yy().unwrap());
+                Ok((*args[0].write_lock::<$x>().unwrap() $op y).into())
+            })
+        };
+        ($xx:ident . $func:ident ( $yy:ident ) -> from $x:ty) => {
+            return Some(|_, args| {
+                let x = args[0].$xx().unwrap();
+                let y = <$x>::from(args[1].$yy().unwrap());
+                Ok((*args[0].write_lock::<$x>().unwrap() = x.$func(y)).into())
+            })
+        };
+        ($func:ident ( $xx:ident, $yy:ident ) -> from $x:ty) => {
+            return Some(|_, args| {
+                let x = args[0].$xx().unwrap();
+                let y = <$x>::from(args[1].$yy().unwrap());
+                Ok((*args[0].write_lock().unwrap() = $func(x, y)?).into())
+            })
+        };
+    }
 
-            if type2 == TypeId::of::<FLOAT>() {
-                // FLOAT op= FLOAT
-                args[1].as_float().unwrap()
-            } else if type2 == TypeId::of::<INT>() {
-                // FLOAT op= INT
-                args[1].as_int().unwrap() as FLOAT
-            } else {
-                unreachable!();
+    macro_rules! impl_float {
+        ($x:ident, $xx:ident, $y:ty, $yy:ident) => {
+            #[cfg(not(feature = "no_float"))]
+            if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
+                match op {
+                    "+=" => impl_op!($x += $yy),
+                    "-=" => impl_op!($x -= $yy),
+                    "*=" => impl_op!($x *= $yy),
+                    "/=" => impl_op!($x /= $yy),
+                    "%=" => impl_op!($x %= $yy),
+                    "**=" => impl_op!($xx.powf($yy as $x) -> $x),
+                    _ => return None,
+                }
             }
-        }
-
-        match op {
-            "+=" => {
-                return Some(|_, args| {
-                    Ok((*args[0].write_lock::<FLOAT>().unwrap() += get_y(args)).into())
-                })
-            }
-            "-=" => {
-                return Some(|_, args| {
-                    Ok((*args[0].write_lock::<FLOAT>().unwrap() -= get_y(args)).into())
-                })
-            }
-            "*=" => {
-                return Some(|_, args| {
-                    Ok((*args[0].write_lock::<FLOAT>().unwrap() *= get_y(args)).into())
-                })
-            }
-            "/=" => {
-                return Some(|_, args| {
-                    Ok((*args[0].write_lock::<FLOAT>().unwrap() /= get_y(args)).into())
-                })
-            }
-            "%=" => {
-                return Some(|_, args| {
-                    Ok((*args[0].write_lock::<FLOAT>().unwrap() %= get_y(args)).into())
-                })
-            }
-            "**=" => {
-                return Some(|_, args| {
-                    let y = get_y(args);
-                    let mut x = args[0].write_lock::<FLOAT>().unwrap();
-                    Ok((*x = x.powf(y)).into())
-                })
-            }
-            _ => return None,
         }
     }
 
-    #[cfg(feature = "decimal")]
-    if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>())
-        || types_pair == (TypeId::of::<Decimal>(), TypeId::of::<INT>())
-    {
-        if cfg!(not(feature = "unchecked")) {
-            use crate::packages::arithmetic::decimal_functions::*;
+    impl_float!(FLOAT, as_float, FLOAT, as_float);
+    impl_float!(FLOAT, as_float, INT, as_int);
 
-            match op {
-                "+=" => {
-                    return Some(|_, args| {
-                        let x = args[1].as_decimal().unwrap();
-                        let y = args[1].as_decimal().unwrap();
-                        Ok((*args[0].write_lock().unwrap() = add(x, y)?).into())
-                    })
-                }
-                "-=" => {
-                    return Some(|_, args| {
-                        let x = args[1].as_decimal().unwrap();
-                        let y = args[1].as_decimal().unwrap();
-                        Ok((*args[0].write_lock().unwrap() = subtract(x, y)?).into())
-                    })
-                }
-                "*=" => {
-                    return Some(|_, args| {
-                        let x = args[1].as_decimal().unwrap();
-                        let y = args[1].as_decimal().unwrap();
-                        Ok((*args[0].write_lock().unwrap() = multiply(x, y)?).into())
-                    })
-                }
-                "/=" => {
-                    return Some(|_, args| {
-                        let x = args[1].as_decimal().unwrap();
-                        let y = args[1].as_decimal().unwrap();
-                        Ok((*args[0].write_lock().unwrap() = divide(x, y)?).into())
-                    })
-                }
-                "%=" => {
-                    return Some(|_, args| {
-                        let x = args[1].as_decimal().unwrap();
-                        let y = args[1].as_decimal().unwrap();
-                        Ok((*args[0].write_lock().unwrap() = modulo(x, y)?).into())
-                    })
-                }
-                _ => (),
-            }
-        } else {
-            #[inline(always)]
-            fn get_y(args: &FnCallArgs) -> Decimal {
-                let type2 = args[1].type_id();
+    macro_rules! impl_decimal {
+        ($x:ident, $xx:ident, $y:ty, $yy:ident) => {
+            #[cfg(feature = "decimal")]
+            if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
+                if cfg!(not(feature = "unchecked")) {
+                    use crate::packages::arithmetic::decimal_functions::*;
 
-                if type2 == TypeId::of::<Decimal>() {
-                    // Decimal op= Decimal
-                    args[1].as_decimal().unwrap()
-                } else if type2 == TypeId::of::<INT>() {
-                    // Decimal op= INT
-                    Decimal::from(args[1].as_int().unwrap())
+                    match op {
+                        "+=" => impl_op!(add($xx, $yy) -> from $x),
+                        "-=" => impl_op!(subtract($xx, $yy) -> from $x),
+                        "*=" => impl_op!(multiply($xx, $yy) -> from $x),
+                        "/=" => impl_op!(divide($xx, $yy) -> from $x),
+                        "%=" => impl_op!(modulo($xx, $yy) -> from $x),
+                        _ => return None,
+                    }
                 } else {
-                    unreachable!();
+                    match op {
+                        "+=" => impl_op!(from $x += $yy),
+                        "-=" => impl_op!(from $x -= $yy),
+                        "*=" => impl_op!(from $x *= $yy),
+                        "/=" => impl_op!(from $x /= $yy),
+                        "%=" => impl_op!(from $x %= $yy),
+                        _ => return None,
+                    }
                 }
             }
-
-            match op {
-                "+=" => {
-                    return Some(|_, args| {
-                        let y = get_y(args);
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() += y).into())
-                    })
-                }
-                "-=" => {
-                    return Some(|_, args| {
-                        let y = get_y(args);
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() -= y).into())
-                    })
-                }
-                "*=" => {
-                    return Some(|_, args| {
-                        let y = get_y(args);
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() *= y).into())
-                    })
-                }
-                "/=" => {
-                    return Some(|_, args| {
-                        let y = get_y(args);
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() /= y).into())
-                    })
-                }
-                "%=" => {
-                    return Some(|_, args| {
-                        let y = get_y(args);
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() %= y).into())
-                    })
-                }
-                _ => return None,
-            }
-        }
+        };
     }
+
+    impl_decimal!(Decimal, as_decimal, Decimal, as_decimal);
+    impl_decimal!(Decimal, as_decimal, INT, as_int);
 
     // string op= char
     if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
         match op {
-            "+=" => {
-                return Some(|_, args| {
-                    let y = args[1].as_char().unwrap();
-                    Ok((*args[0].write_lock::<ImmutableString>().unwrap() += y).into())
-                })
-            }
-            "-=" => {
-                return Some(|_, args| {
-                    let y = args[1].as_char().unwrap();
-                    Ok((*args[0].write_lock::<ImmutableString>().unwrap() -= y).into())
-                })
-            }
+            "+=" => impl_op!(ImmutableString += as_char as char),
+            "-=" => impl_op!(ImmutableString -= as_char as char),
             _ => return None,
         }
     }
@@ -1024,158 +522,42 @@ pub fn get_builtin_op_assignment_fn(
             use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
             match op {
-                "+=" => {
-                    return Some(|_, args| {
-                        let x = args[0].as_int().unwrap();
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock().unwrap() = add(x, y)?).into())
-                    })
-                }
-                "-=" => {
-                    return Some(|_, args| {
-                        let x = args[0].as_int().unwrap();
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock().unwrap() = subtract(x, y)?).into())
-                    })
-                }
-                "*=" => {
-                    return Some(|_, args| {
-                        let x = args[0].as_int().unwrap();
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock().unwrap() = multiply(x, y)?).into())
-                    })
-                }
-                "/=" => {
-                    return Some(|_, args| {
-                        let x = args[0].as_int().unwrap();
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock().unwrap() = divide(x, y)?).into())
-                    })
-                }
-                "%=" => {
-                    return Some(|_, args| {
-                        let x = args[0].as_int().unwrap();
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock().unwrap() = modulo(x, y)?).into())
-                    })
-                }
-                "**=" => {
-                    return Some(|_, args| {
-                        let x = args[0].as_int().unwrap();
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock().unwrap() = power(x, y)?).into())
-                    })
-                }
-                ">>=" => {
-                    return Some(|_, args| {
-                        let x = args[0].as_int().unwrap();
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock().unwrap() = shift_right(x, y)?).into())
-                    })
-                }
-                "<<=" => {
-                    return Some(|_, args| {
-                        let x = args[0].as_int().unwrap();
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock().unwrap() = shift_left(x, y)?).into())
-                    })
-                }
+                "+=" => impl_op!(add(as_int, as_int) -> INT),
+                "-=" => impl_op!(subtract(as_int, as_int) -> INT),
+                "*=" => impl_op!(multiply(as_int, as_int) -> INT),
+                "/=" => impl_op!(divide(as_int, as_int) -> INT),
+                "%=" => impl_op!(modulo(as_int, as_int) -> INT),
+                "**=" => impl_op!(power(as_int, as_int) -> INT),
+                ">>=" => impl_op!(shift_right(as_int, as_int) -> INT),
+                "<<=" => impl_op!(shift_left(as_int, as_int) -> INT),
                 _ => (),
             }
         } else {
             match op {
-                "+=" => {
-                    return Some(|_, args| {
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock::<INT>().unwrap() += y).into())
-                    })
-                }
-                "-=" => {
-                    return Some(|_, args| {
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock::<INT>().unwrap() -= y).into())
-                    })
-                }
-                "*=" => {
-                    return Some(|_, args| {
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock::<INT>().unwrap() *= y).into())
-                    })
-                }
-                "/=" => {
-                    return Some(|_, args| {
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock::<INT>().unwrap() /= y).into())
-                    })
-                }
-                "%=" => {
-                    return Some(|_, args| {
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock::<INT>().unwrap() %= y).into())
-                    })
-                }
-                "**=" => {
-                    return Some(|_, args| {
-                        let y = args[1].as_int().unwrap();
-                        let mut x = args[0].write_lock::<INT>().unwrap();
-                        Ok((*x = x.pow(y as u32)).into())
-                    })
-                }
-                ">>=" => {
-                    return Some(|_, args| {
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock::<INT>().unwrap() >>= y).into())
-                    })
-                }
-                "<<=" => {
-                    return Some(|_, args| {
-                        let y = args[1].as_int().unwrap();
-                        Ok((*args[0].write_lock::<INT>().unwrap() <<= y).into())
-                    })
-                }
+                "+=" => impl_op!(INT += as_int),
+                "-=" => impl_op!(INT -= as_int),
+                "*=" => impl_op!(INT *= as_int),
+                "/=" => impl_op!(INT /= as_int),
+                "%=" => impl_op!(INT %= as_int),
+                "**=" => impl_op!(as_int.pow(as_int as u32) -> INT),
+                ">>=" => impl_op!(INT >>= as_int),
+                "<<=" => impl_op!(INT <<= as_int),
                 _ => (),
             }
         }
 
         match op {
-            "&=" => {
-                return Some(|_, args| {
-                    let y = args[1].as_int().unwrap();
-                    Ok((*args[0].write_lock::<INT>().unwrap() &= y).into())
-                })
-            }
-            "|=" => {
-                return Some(|_, args| {
-                    let y = args[1].as_int().unwrap();
-                    Ok((*args[0].write_lock::<INT>().unwrap() |= y).into())
-                })
-            }
-            "^=" => {
-                return Some(|_, args| {
-                    let y = args[1].as_int().unwrap();
-                    Ok((*args[0].write_lock::<INT>().unwrap() ^= y).into())
-                })
-            }
-            _ => return None,
+            "&=" => impl_op!(INT &= as_int),
+            "|=" => impl_op!(INT |= as_int),
+            "^=" => impl_op!(INT ^= as_int),
+            _ => (),
         }
     }
 
     if type1 == TypeId::of::<bool>() {
         match op {
-            "&=" => {
-                return Some(|_, args| {
-                    let y = args[1].clone().cast::<bool>();
-                    let mut x = args[0].write_lock::<bool>().unwrap();
-                    Ok((*x = *x && y).into())
-                })
-            }
-            "|=" => {
-                return Some(|_, args| {
-                    let y = args[1].clone().cast::<bool>();
-                    let mut x = args[0].write_lock::<bool>().unwrap();
-                    Ok((*x = *x || y).into())
-                })
-            }
+            "&=" => impl_op!(bool = x && as_bool),
+            "|=" => impl_op!(bool = x || as_bool),
             _ => return None,
         }
     }
