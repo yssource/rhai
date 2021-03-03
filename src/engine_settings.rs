@@ -203,7 +203,7 @@ impl Engine {
     /// # Examples
     ///
     /// The following will raise an error during parsing because the `if` keyword is disabled
-    /// and is recognized as a variable name!
+    /// and is recognized as a reserved symbol!
     ///
     /// ```rust,should_panic
     /// # fn main() -> Result<(), rhai::ParseError> {
@@ -214,7 +214,7 @@ impl Engine {
     /// engine.disable_symbol("if");    // disable the 'if' keyword
     ///
     /// engine.compile("let x = if true { 42 } else { 0 };")?;
-    /// //                      ^ 'if' is rejected as a reserved keyword
+    /// //                      ^ 'if' is rejected as a reserved symbol
     /// # Ok(())
     /// # }
     /// ```

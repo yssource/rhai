@@ -1028,7 +1028,7 @@ impl Engine {
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let stream = self.lex(scripts);
+        let stream = self.lex_raw(scripts, None);
         self.parse(&mut stream.peekable(), scope, optimization_level)
     }
     /// Read the contents of a file into a string.
@@ -1190,9 +1190,9 @@ impl Engine {
             .into());
         };
 
-        let stream = self.lex_with_map(
+        let stream = self.lex_raw(
             &scripts,
-            if has_null {
+            Some(if has_null {
                 |token| match token {
                     // If `null` is present, make sure `null` is treated as a variable
                     Token::Reserved(s) if s == "null" => Token::Identifier(s),
@@ -1200,7 +1200,7 @@ impl Engine {
                 }
             } else {
                 |t| t
-            },
+            }),
         );
 
         let ast =
@@ -1283,7 +1283,7 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
-        let stream = self.lex(&scripts);
+        let stream = self.lex_raw(&scripts, None);
 
         let mut peekable = stream.peekable();
         self.parse_global_expr(&mut peekable, scope, self.optimization_level)
@@ -1444,7 +1444,7 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = self.lex(&scripts);
+        let stream = self.lex_raw(&scripts, None);
 
         // No need to optimize a lone expression
         let ast = self.parse_global_expr(&mut stream.peekable(), scope, OptimizationLevel::None)?;
@@ -1585,7 +1585,7 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = self.lex(&scripts);
+        let stream = self.lex_raw(&scripts, None);
         let ast = self.parse(&mut stream.peekable(), scope, self.optimization_level)?;
         self.consume_ast_with_scope(scope, &ast)
     }

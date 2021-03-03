@@ -1357,7 +1357,9 @@ impl Engine {
             }
         }
 
-        let module = self.search_imports(mods, state, namespace)?;
+        let module = self.search_imports(mods, state, namespace).ok_or_else(|| {
+            EvalAltResult::ErrorModuleNotFound(namespace[0].name.to_string(), namespace[0].pos)
+        })?;
 
         // First search in script-defined functions (can override built-in)
         let func = match module.get_qualified_fn(hash_script) {

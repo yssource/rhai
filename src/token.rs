@@ -30,7 +30,7 @@ type LERR = LexError;
 const NUM_SEP: char = '_';
 
 /// A stream of tokens.
-pub type TokenStream<'a, 't> = Peekable<TokenIterator<'a, 't>>;
+pub type TokenStream<'a> = Peekable<TokenIterator<'a>>;
 
 /// A location (line number + character position) in the input script.
 ///
@@ -1741,9 +1741,9 @@ impl InputStream for MultiInputsStream<'_> {
 }
 
 /// An iterator on a [`Token`] stream.
-pub struct TokenIterator<'a, 'e> {
+pub struct TokenIterator<'a> {
     /// Reference to the scripting `Engine`.
-    engine: &'e Engine,
+    engine: &'a Engine,
     /// Current state.
     state: TokenizeState,
     /// Current position.
@@ -1754,7 +1754,7 @@ pub struct TokenIterator<'a, 'e> {
     map: Option<fn(Token) -> Token>,
 }
 
-impl<'a> Iterator for TokenIterator<'a, '_> {
+impl<'a> Iterator for TokenIterator<'a> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1837,30 +1837,31 @@ impl<'a> Iterator for TokenIterator<'a, '_> {
 }
 
 impl Engine {
-    /// Tokenize an input text stream.
+    /// _(INTERNALS)_ Tokenize an input text stream.
+    /// Exported under the `internals` feature only.
+    #[cfg(feature = "internals")]
     #[inline(always)]
-    pub fn lex<'a, 'e>(
-        &'e self,
-        input: impl IntoIterator<Item = &'a &'a str>,
-    ) -> TokenIterator<'a, 'e> {
+    pub fn lex<'a>(&'a self, input: impl IntoIterator<Item = &'a &'a str>) -> TokenIterator<'a> {
         self.lex_raw(input, None)
     }
-    /// Tokenize an input text stream with a mapping function.
+    /// _(INTERNALS)_ Tokenize an input text stream with a mapping function.
+    /// Exported under the `internals` feature only.
+    #[cfg(feature = "internals")]
     #[inline(always)]
-    pub fn lex_with_map<'a, 'e>(
-        &'e self,
+    pub fn lex_with_map<'a>(
+        &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
         map: fn(Token) -> Token,
-    ) -> TokenIterator<'a, 'e> {
+    ) -> TokenIterator<'a> {
         self.lex_raw(input, Some(map))
     }
     /// Tokenize an input text stream with an optional mapping function.
     #[inline]
-    fn lex_raw<'a, 'e>(
-        &'e self,
+    pub(crate) fn lex_raw<'a>(
+        &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
         map: Option<fn(Token) -> Token>,
-    ) -> TokenIterator<'a, 'e> {
+    ) -> TokenIterator<'a> {
         TokenIterator {
             engine: self,
             state: TokenizeState {

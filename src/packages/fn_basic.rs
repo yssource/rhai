@@ -110,15 +110,13 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> Array {
 
     let mut list: Array = Default::default();
 
-    ctx.lib
-        .iter()
+    ctx.iter_namespaces()
         .flat_map(|m| m.iter_script_fn())
         .for_each(|(_, _, _, _, f)| list.push(make_metadata(&dict, None, f).into()));
 
-    if let Some(mods) = ctx.mods {
-        mods.iter_raw()
-            .for_each(|(ns, m)| scan_module(&mut list, &dict, ns.clone(), m.as_ref()));
-    }
+    #[cfg(not(feature = "no_module"))]
+    ctx.iter_imports_raw()
+        .for_each(|(ns, m)| scan_module(&mut list, &dict, ns.clone(), m.as_ref()));
 
     list
 }

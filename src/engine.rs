@@ -525,18 +525,6 @@ impl State {
     pub fn is_global(&self) -> bool {
         self.scope_level == 0
     }
-    /// Get the current functions resolution cache.
-    pub fn fn_resolution_cache(
-        &self,
-    ) -> Option<
-        &HashMap<
-            NonZeroU64,
-            Option<(CallableFunction, Option<ImmutableString>)>,
-            StraightHasherBuilder,
-        >,
-    > {
-        self.fn_resolution_caches.last()
-    }
     /// Get a mutable reference to the current functions resolution cache.
     pub fn fn_resolution_cache_mut(
         &mut self,
@@ -617,17 +605,17 @@ pub struct Limits {
 
 /// Context of a script evaluation process.
 #[derive(Debug)]
-pub struct EvalContext<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> {
-    pub(crate) engine: &'e Engine,
+pub struct EvalContext<'a, 'x, 'px, 'm, 's, 't, 'pt> {
+    pub(crate) engine: &'a Engine,
     pub(crate) scope: &'x mut Scope<'px>,
-    pub(crate) mods: &'a mut Imports,
+    pub(crate) mods: &'m mut Imports,
     pub(crate) state: &'s mut State,
-    pub(crate) lib: &'m [&'m Module],
+    pub(crate) lib: &'a [&'a Module],
     pub(crate) this_ptr: &'t mut Option<&'pt mut Dynamic>,
     pub(crate) level: usize,
 }
 
-impl<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> {
+impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
     /// The current [`Engine`].
     #[inline(always)]
     pub fn engine(&self) -> &Engine {
@@ -710,9 +698,6 @@ impl<'e, 'x, 'px, 'a, 's, 'm, 't, 'pt> EvalContext<'e, 'x, 'px, 'a, 's, 'm, 't, 
 /// # }
 /// ```
 pub struct Engine {
-    /// A unique ID identifying this scripting [`Engine`].
-    pub id: String,
-
     /// A module containing all functions directly loaded into the Engine.
     pub(crate) global_namespace: Module,
     /// A collection of all modules loaded into the global namespace of the Engine.
@@ -757,11 +742,7 @@ pub struct Engine {
 impl fmt::Debug for Engine {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if !self.id.is_empty() {
-            write!(f, "Engine({})", self.id)
-        } else {
-            f.write_str("Engine")
-        }
+        f.write_str("Engine")
     }
 }
 
@@ -819,8 +800,6 @@ impl Engine {
     pub fn new() -> Self {
         // Create the new scripting Engine
         let mut engine = Self {
-            id: Default::default(),
-
             global_namespace: Default::default(),
             global_modules: Default::default(),
             global_sub_modules: Default::default(),
@@ -886,8 +865,6 @@ impl Engine {
     #[inline]
     pub fn new_raw() -> Self {
         Self {
-            id: Default::default(),
-
             global_namespace: Default::default(),
             global_modules: Default::default(),
             global_sub_modules: Default::default(),
@@ -934,14 +911,13 @@ impl Engine {
     }
 
     /// Search for a module within an imports stack.
-    /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and must be set afterwards.
-    pub fn search_imports(
+    pub(crate) fn search_imports(
         &self,
         mods: &Imports,
         state: &mut State,
         namespace: &NamespaceRef,
-    ) -> Result<Shared<Module>, Box<EvalAltResult>> {
-        let Ident { name: root, pos } = &namespace[0];
+    ) -> Option<Shared<Module>> {
+        let root = &namespace[0].name;
 
         // Qualified - check if the root module is directly indexed
         let index = if state.always_search {
@@ -950,15 +926,14 @@ impl Engine {
             namespace.index()
         };
 
-        Ok(if let Some(index) = index {
+        if let Some(index) = index {
             let offset = mods.len() - index.get();
-            mods.get(offset).expect("invalid index in Imports")
+            Some(mods.get(offset).expect("invalid index in Imports"))
         } else {
             mods.find(root)
                 .map(|n| mods.get(n).expect("invalid index in Imports"))
                 .or_else(|| self.global_sub_modules.get(root).cloned())
-                .ok_or_else(|| EvalAltResult::ErrorModuleNotFound(root.to_string(), *pos))?
-        })
+        }
     }
 
     /// Search for a variable within the scope or within imports,
@@ -976,7 +951,12 @@ impl Engine {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
                 (_, Some((hash_var, modules)), Ident { name, pos }) => {
-                    let module = self.search_imports(mods, state, modules)?;
+                    let module = self.search_imports(mods, state, modules).ok_or_else(|| {
+                        EvalAltResult::ErrorModuleNotFound(
+                            modules[0].name.to_string(),
+                            modules[0].pos,
+                        )
+                    })?;
                     let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
                         match *err {
                             EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
@@ -1068,7 +1048,7 @@ impl Engine {
     }
 
     /// Chain-evaluate a dot/index chain.
-    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and must be set afterwards.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn eval_dot_index_chain_helper(
         &self,

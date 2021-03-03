@@ -21,6 +21,7 @@ Breaking changes
 * `Module::update_fn_metadata` input parameter is changed.
 * Function keywords (e.g. `type_of`, `eval`, `Fn`) can no longer be overloaded. It is more trouble than worth. To disable these keywords, use `Engine::disable_symbol`.
 * `is_def_var` and `is_def_fn` are now reserved keywords.
+* `Engine::id` field is removed.
 
 Enhancements
 ------------
