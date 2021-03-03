@@ -934,7 +934,7 @@ impl Engine {
     }
 
     /// Search for a module within an imports stack.
-    /// [`Position`] in [`EvalAltResult`] is [`None`][Position::None] and must be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and must be set afterwards.
     pub fn search_imports(
         &self,
         mods: &Imports,

@@ -42,7 +42,7 @@ pub trait RegisterFn<FN, ARGS, RET> {
     fn register_fn(&mut self, name: &str, f: FN) -> &mut Self;
 }
 
-/// Trait to register fallible custom functions returning [`Result`]`<`[`Dynamic`]`, `[`Box`]`<`[`EvalAltResult`]`>>` with the [`Engine`].
+/// Trait to register fallible custom functions returning [`Result`]`<`[`Dynamic`]`, `[`Box`]`<`[`EvalAltResult`][crate::EvalAltResult]`>>` with the [`Engine`].
 pub trait RegisterResultFn<FN, ARGS> {
     /// Register a custom fallible function with the [`Engine`].
     ///

@@ -18,7 +18,7 @@ mod test {
 
             #[rhai_fn(get = "foo", return_raw)]
             #[inline(always)]
-            pub fn foo(array: &mut Array) -> RhaiResult {
+            pub fn foo(array: &mut Array) -> Result<Dynamic, Box<EvalAltResult>> {
                 Ok(array[0].clone())
             }
         }

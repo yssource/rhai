@@ -2,9 +2,10 @@
 
 pub use crate::fn_native::{CallableFunction, FnCallArgs};
 pub use crate::stdlib::{any::TypeId, boxed::Box, format, mem, string::ToString, vec as new_vec};
+use crate::RhaiResult;
 pub use crate::{
     Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, ImmutableString, Module,
-    NativeCallContext, Position, RegisterFn, RegisterResultFn, RhaiResult,
+    NativeCallContext, Position, RegisterFn, RegisterResultFn,
 };
 
 #[cfg(not(features = "no_module"))]
