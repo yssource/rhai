@@ -1489,6 +1489,15 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
+    /// Cast the [`Dynamic`] as an [`ImmutableString`] and return it.
+    /// Returns the name of the actual type if the cast fails.
+    #[inline]
+    pub(crate) fn as_locked_immutable_string<'a>(
+        &'a self,
+    ) -> Result<impl Deref<Target = ImmutableString> + 'a, &'static str> {
+        self.read_lock::<ImmutableString>()
+            .ok_or_else(|| self.type_name())
+    }
     /// Convert the [`Dynamic`] into a [`String`] and return it.
     /// If there are other references to the same string, a cloned copy is returned.
     /// Returns the name of the actual type if the cast fails.
@@ -1503,7 +1512,6 @@ impl Dynamic {
     pub fn take_immutable_string(self) -> Result<ImmutableString, &'static str> {
         match self.0 {
             Union::Str(s, _) => Ok(s),
-            Union::FnPtr(f, _) => Ok(f.take_data().0),
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(cell, _) => {
                 #[cfg(not(feature = "sync"))]
@@ -1513,7 +1521,6 @@ impl Dynamic {
 
                 match &data.0 {
                     Union::Str(s, _) => Ok(s.clone()),
-                    Union::FnPtr(f, _) => Ok(f.get_fn_name().clone()),
                     _ => Err((*data).type_name()),
                 }
             }

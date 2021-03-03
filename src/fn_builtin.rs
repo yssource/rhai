@@ -82,21 +82,18 @@ pub fn get_builtin_binary_op_fn(
 
             if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>()) {
                 // FLOAT op FLOAT
-                (
-                    args[0].clone().cast::<FLOAT>(),
-                    args[1].clone().cast::<FLOAT>(),
-                )
+                (args[0].as_float().unwrap(), args[1].as_float().unwrap())
             } else if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<INT>()) {
                 // FLOAT op INT
                 (
-                    args[0].clone().cast::<FLOAT>(),
-                    args[1].clone().cast::<INT>() as FLOAT,
+                    args[0].as_float().unwrap(),
+                    args[1].as_int().unwrap() as FLOAT,
                 )
             } else if types_pair == (TypeId::of::<INT>(), TypeId::of::<FLOAT>()) {
                 // INT op FLOAT
                 (
-                    args[0].clone().cast::<INT>() as FLOAT,
-                    args[1].clone().cast::<FLOAT>(),
+                    args[0].as_int().unwrap() as FLOAT,
+                    args[1].as_float().unwrap(),
                 )
             } else {
                 unreachable!()
@@ -194,21 +191,18 @@ pub fn get_builtin_binary_op_fn(
 
             if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>()) {
                 // Decimal op Decimal
-                (
-                    args[0].clone().cast::<Decimal>(),
-                    args[1].clone().cast::<Decimal>(),
-                )
+                (args[0].as_decimal().unwrap(), args[1].as_decimal().unwrap())
             } else if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<INT>()) {
                 // Decimal op INT
                 (
-                    args[0].clone().cast::<Decimal>(),
-                    Decimal::from(args[1].clone().cast::<INT>()),
+                    args[0].as_decimal().unwrap(),
+                    Decimal::from(args[1].as_int().unwrap()),
                 )
             } else if types_pair == (TypeId::of::<INT>(), TypeId::of::<Decimal>()) {
                 // INT op Decimal
                 (
-                    Decimal::from(args[0].clone().cast::<INT>()),
-                    args[1].clone().cast::<Decimal>(),
+                    Decimal::from(args[0].as_int().unwrap()),
+                    args[1].as_decimal().unwrap(),
                 )
             } else {
                 unreachable!()
@@ -333,16 +327,16 @@ pub fn get_builtin_binary_op_fn(
         match op {
             "+" => {
                 return Some(|_, args| {
-                    let x = args[0].clone().cast::<char>();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    let x = args[0].as_char().unwrap();
+                    let y = &*args[1].as_locked_immutable_string().unwrap();
                     Ok(format!("{}{}", x, y).into())
                 })
             }
             "==" | "!=" | ">" | ">=" | "<" | "<=" => {
                 #[inline(always)]
                 fn get_s1s2(args: &FnCallArgs) -> ([char; 2], [char; 2]) {
-                    let x = args[0].clone().cast::<char>();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    let x = args[0].as_char().unwrap();
+                    let y = &*args[1].as_locked_immutable_string().unwrap();
                     let s1 = [x, '\0'];
                     let mut y = y.chars();
                     let s2 = [y.next().unwrap_or('\0'), y.next().unwrap_or('\0')];
@@ -397,23 +391,23 @@ pub fn get_builtin_binary_op_fn(
         match op {
             "+" => {
                 return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = args[1].clone().cast::<char>();
+                    let x = &*args[0].as_locked_immutable_string().unwrap();
+                    let y = args[1].as_char().unwrap();
                     Ok((x + y).into())
                 })
             }
             "-" => {
                 return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = args[1].clone().cast::<char>();
+                    let x = &*args[0].as_locked_immutable_string().unwrap();
+                    let y = args[1].as_char().unwrap();
                     Ok((x - y).into())
                 })
             }
             "==" | "!=" | ">" | ">=" | "<" | "<=" => {
                 #[inline(always)]
                 fn get_s1s2(args: &FnCallArgs) -> ([char; 2], [char; 2]) {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = args[1].clone().cast::<char>();
+                    let x = &*args[0].as_locked_immutable_string().unwrap();
+                    let y = args[1].as_char().unwrap();
                     let mut x = x.chars();
                     let s1 = [x.next().unwrap_or('\0'), x.next().unwrap_or('\0')];
                     let s2 = [y, '\0'];
@@ -478,8 +472,8 @@ pub fn get_builtin_binary_op_fn(
     if type1 == TypeId::of::<INT>() {
         #[inline(always)]
         fn get_xy(args: &FnCallArgs) -> (INT, INT) {
-            let x = args[0].clone().cast::<INT>();
-            let y = args[1].clone().cast::<INT>();
+            let x = args[0].as_int().unwrap();
+            let y = args[1].as_int().unwrap();
             (x, y)
         }
 
@@ -697,57 +691,57 @@ pub fn get_builtin_binary_op_fn(
         match op {
             "+" => {
                 return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    let x = &*args[0].as_locked_immutable_string().unwrap();
+                    let y = &*args[1].as_locked_immutable_string().unwrap();
                     Ok((x + y).into())
                 })
             }
             "-" => {
                 return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    let x = &*args[0].as_locked_immutable_string().unwrap();
+                    let y = &*args[1].as_locked_immutable_string().unwrap();
                     Ok((x - y).into())
                 })
             }
             "==" => {
                 return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    let x = &*args[0].as_locked_immutable_string().unwrap();
+                    let y = &*args[1].as_locked_immutable_string().unwrap();
                     Ok((x == y).into())
                 })
             }
             "!=" => {
                 return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    let x = &*args[0].as_locked_immutable_string().unwrap();
+                    let y = &*args[1].as_locked_immutable_string().unwrap();
                     Ok((x != y).into())
                 })
             }
             ">" => {
                 return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    let x = &*args[0].as_locked_immutable_string().unwrap();
+                    let y = &*args[1].as_locked_immutable_string().unwrap();
                     Ok((x > y).into())
                 })
             }
             ">=" => {
                 return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    let x = &*args[0].as_locked_immutable_string().unwrap();
+                    let y = &*args[1].as_locked_immutable_string().unwrap();
                     Ok((x >= y).into())
                 })
             }
             "<" => {
                 return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    let x = &*args[0].as_locked_immutable_string().unwrap();
+                    let y = &*args[1].as_locked_immutable_string().unwrap();
                     Ok((x < y).into())
                 })
             }
             "<=" => {
                 return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    let x = &*args[0].as_locked_immutable_string().unwrap();
+                    let y = &*args[1].as_locked_immutable_string().unwrap();
                     Ok((x <= y).into())
                 })
             }
@@ -758,8 +752,8 @@ pub fn get_builtin_binary_op_fn(
     if type1 == TypeId::of::<char>() {
         #[inline(always)]
         fn get_xy(args: &FnCallArgs) -> (char, char) {
-            let x = args[0].clone().cast::<char>();
-            let y = args[1].clone().cast::<char>();
+            let x = args[0].as_char().unwrap();
+            let y = args[1].as_char().unwrap();
             (x, y)
         }
 
@@ -836,15 +830,16 @@ pub fn get_builtin_op_assignment_fn(
     if types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<FLOAT>())
         || types_pair == (TypeId::of::<FLOAT>(), TypeId::of::<INT>())
     {
+        #[inline(always)]
         fn get_y(args: &FnCallArgs) -> FLOAT {
             let type2 = args[1].type_id();
 
             if type2 == TypeId::of::<FLOAT>() {
                 // FLOAT op= FLOAT
-                args[1].clone().cast::<FLOAT>()
+                args[1].as_float().unwrap()
             } else if type2 == TypeId::of::<INT>() {
                 // FLOAT op= INT
-                args[1].clone().cast::<INT>() as FLOAT
+                args[1].as_int().unwrap() as FLOAT
             } else {
                 unreachable!();
             }
@@ -853,32 +848,27 @@ pub fn get_builtin_op_assignment_fn(
         match op {
             "+=" => {
                 return Some(|_, args| {
-                    let y = get_y(args);
-                    Ok((*args[0].write_lock::<FLOAT>().unwrap() += y).into())
+                    Ok((*args[0].write_lock::<FLOAT>().unwrap() += get_y(args)).into())
                 })
             }
             "-=" => {
                 return Some(|_, args| {
-                    let y = get_y(args);
-                    Ok((*args[0].write_lock::<FLOAT>().unwrap() -= y).into())
+                    Ok((*args[0].write_lock::<FLOAT>().unwrap() -= get_y(args)).into())
                 })
             }
             "*=" => {
                 return Some(|_, args| {
-                    let y = get_y(args);
-                    Ok((*args[0].write_lock::<FLOAT>().unwrap() *= y).into())
+                    Ok((*args[0].write_lock::<FLOAT>().unwrap() *= get_y(args)).into())
                 })
             }
             "/=" => {
                 return Some(|_, args| {
-                    let y = get_y(args);
-                    Ok((*args[0].write_lock::<FLOAT>().unwrap() /= y).into())
+                    Ok((*args[0].write_lock::<FLOAT>().unwrap() /= get_y(args)).into())
                 })
             }
             "%=" => {
                 return Some(|_, args| {
-                    let y = get_y(args);
-                    Ok((*args[0].write_lock::<FLOAT>().unwrap() %= y).into())
+                    Ok((*args[0].write_lock::<FLOAT>().unwrap() %= get_y(args)).into())
                 })
             }
             "**=" => {
@@ -896,91 +886,87 @@ pub fn get_builtin_op_assignment_fn(
     if types_pair == (TypeId::of::<Decimal>(), TypeId::of::<Decimal>())
         || types_pair == (TypeId::of::<Decimal>(), TypeId::of::<INT>())
     {
-        fn get_y(args: &FnCallArgs) -> Decimal {
-            let type2 = args[1].type_id();
-
-            if type2 == TypeId::of::<Decimal>() {
-                // Decimal op= Decimal
-                args[1].clone().cast::<Decimal>()
-            } else if type2 == TypeId::of::<INT>() {
-                // Decimal op= INT
-                Decimal::from(args[1].clone().cast::<INT>())
-            } else {
-                unreachable!();
-            }
-        }
-
         if cfg!(not(feature = "unchecked")) {
             use crate::packages::arithmetic::decimal_functions::*;
 
             match op {
                 "+=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<Decimal>();
-                        let mut x = args[0].write_lock::<Decimal>().unwrap();
-                        Ok((*x = add(*x, y)?.as_int().unwrap().into()).into())
+                        let x = args[1].as_decimal().unwrap();
+                        let y = args[1].as_decimal().unwrap();
+                        Ok((*args[0].write_lock().unwrap() = add(x, y)?).into())
                     })
                 }
                 "-=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<Decimal>();
-                        let mut x = args[0].write_lock::<Decimal>().unwrap();
-                        Ok((*x = subtract(*x, y)?.as_int().unwrap().into()).into())
+                        let x = args[1].as_decimal().unwrap();
+                        let y = args[1].as_decimal().unwrap();
+                        Ok((*args[0].write_lock().unwrap() = subtract(x, y)?).into())
                     })
                 }
                 "*=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<Decimal>();
-                        let mut x = args[0].write_lock::<Decimal>().unwrap();
-                        Ok((*x = multiply(*x, y)?.as_int().unwrap().into()).into())
+                        let x = args[1].as_decimal().unwrap();
+                        let y = args[1].as_decimal().unwrap();
+                        Ok((*args[0].write_lock().unwrap() = multiply(x, y)?).into())
                     })
                 }
                 "/=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<Decimal>();
-                        let mut x = args[0].write_lock::<Decimal>().unwrap();
-                        Ok((*x = divide(*x, y)?.as_int().unwrap().into()).into())
+                        let x = args[1].as_decimal().unwrap();
+                        let y = args[1].as_decimal().unwrap();
+                        Ok((*args[0].write_lock().unwrap() = divide(x, y)?).into())
                     })
                 }
                 "%=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<Decimal>();
-                        let mut x = args[0].write_lock::<Decimal>().unwrap();
-                        Ok((*x = modulo(*x, y)?.as_int().unwrap().into()).into())
+                        let x = args[1].as_decimal().unwrap();
+                        let y = args[1].as_decimal().unwrap();
+                        Ok((*args[0].write_lock().unwrap() = modulo(x, y)?).into())
                     })
                 }
                 _ => (),
             }
         } else {
+            #[inline(always)]
+            fn get_y(args: &FnCallArgs) -> Decimal {
+                let type2 = args[1].type_id();
+
+                if type2 == TypeId::of::<Decimal>() {
+                    // Decimal op= Decimal
+                    args[1].as_decimal().unwrap()
+                } else if type2 == TypeId::of::<INT>() {
+                    // Decimal op= INT
+                    Decimal::from(args[1].as_int().unwrap())
+                } else {
+                    unreachable!();
+                }
+            }
+
             match op {
                 "+=" => {
                     return Some(|_, args| {
-                        let y = get_y(args);
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() += y).into())
+                        Ok((*args[0].write_lock::<Decimal>().unwrap() += get_y(args)).into())
                     })
                 }
                 "-=" => {
                     return Some(|_, args| {
-                        let y = get_y(args);
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() -= y).into())
+                        Ok((*args[0].write_lock::<Decimal>().unwrap() -= get_y(args)).into())
                     })
                 }
                 "*=" => {
                     return Some(|_, args| {
-                        let y = get_y(args);
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() *= y).into())
+                        Ok((*args[0].write_lock::<Decimal>().unwrap() *= get_y(args)).into())
                     })
                 }
                 "/=" => {
                     return Some(|_, args| {
-                        let y = get_y(args);
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() /= y).into())
+                        Ok((*args[0].write_lock::<Decimal>().unwrap() /= get_y(args)).into())
                     })
                 }
                 "%=" => {
                     return Some(|_, args| {
-                        let y = get_y(args);
-                        Ok((*args[0].write_lock::<Decimal>().unwrap() %= y).into())
+                        Ok((*args[0].write_lock::<Decimal>().unwrap() %= get_y(args)).into())
                     })
                 }
                 _ => return None,
@@ -993,13 +979,13 @@ pub fn get_builtin_op_assignment_fn(
         match op {
             "+=" => {
                 return Some(|_, args| {
-                    let y = args[1].clone().cast::<char>();
+                    let y = args[1].as_char().unwrap();
                     Ok((*args[0].write_lock::<ImmutableString>().unwrap() += y).into())
                 })
             }
             "-=" => {
                 return Some(|_, args| {
-                    let y = args[1].clone().cast::<char>();
+                    let y = args[1].as_char().unwrap();
                     Ok((*args[0].write_lock::<ImmutableString>().unwrap() -= y).into())
                 })
             }
@@ -1011,8 +997,8 @@ pub fn get_builtin_op_assignment_fn(
         match op {
             "+=" => {
                 return Some(|_, args| {
-                    let mut ch = args[0].read_lock::<char>().unwrap().to_string();
-                    ch.push_str(args[1].read_lock::<ImmutableString>().unwrap().as_str());
+                    let mut ch = args[0].as_char().unwrap().to_string();
+                    ch.push_str(args[1].as_locked_immutable_string().unwrap().as_str());
 
                     let mut x = args[0].write_lock::<Dynamic>().unwrap();
                     Ok((*x = ch.into()).into())
@@ -1035,58 +1021,58 @@ pub fn get_builtin_op_assignment_fn(
             match op {
                 "+=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
-                        let mut x = args[0].write_lock::<INT>().unwrap();
-                        Ok((*x = add(*x, y)?.as_int().unwrap().into()).into())
+                        let x = args[0].as_int().unwrap();
+                        let y = args[1].as_int().unwrap();
+                        Ok((*args[0].write_lock().unwrap() = add(x, y)?).into())
                     })
                 }
                 "-=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
-                        let mut x = args[0].write_lock::<INT>().unwrap();
-                        Ok((*x = subtract(*x, y)?.as_int().unwrap().into()).into())
+                        let x = args[0].as_int().unwrap();
+                        let y = args[1].as_int().unwrap();
+                        Ok((*args[0].write_lock().unwrap() = subtract(x, y)?).into())
                     })
                 }
                 "*=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
-                        let mut x = args[0].write_lock::<INT>().unwrap();
-                        Ok((*x = multiply(*x, y)?.as_int().unwrap().into()).into())
+                        let x = args[0].as_int().unwrap();
+                        let y = args[1].as_int().unwrap();
+                        Ok((*args[0].write_lock().unwrap() = multiply(x, y)?).into())
                     })
                 }
                 "/=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
-                        let mut x = args[0].write_lock::<INT>().unwrap();
-                        Ok((*x = divide(*x, y)?.as_int().unwrap().into()).into())
+                        let x = args[0].as_int().unwrap();
+                        let y = args[1].as_int().unwrap();
+                        Ok((*args[0].write_lock().unwrap() = divide(x, y)?).into())
                     })
                 }
                 "%=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
-                        let mut x = args[0].write_lock::<INT>().unwrap();
-                        Ok((*x = modulo(*x, y)?.as_int().unwrap().into()).into())
+                        let x = args[0].as_int().unwrap();
+                        let y = args[1].as_int().unwrap();
+                        Ok((*args[0].write_lock().unwrap() = modulo(x, y)?).into())
                     })
                 }
                 "**=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
-                        let mut x = args[0].write_lock::<INT>().unwrap();
-                        Ok((*x = power(*x, y)?.as_int().unwrap().into()).into())
+                        let x = args[0].as_int().unwrap();
+                        let y = args[1].as_int().unwrap();
+                        Ok((*args[0].write_lock().unwrap() = power(x, y)?).into())
                     })
                 }
                 ">>=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
-                        let mut x = args[0].write_lock::<INT>().unwrap();
-                        Ok((*x = shift_right(*x, y)?.as_int().unwrap().into()).into())
+                        let x = args[0].as_int().unwrap();
+                        let y = args[1].as_int().unwrap();
+                        Ok((*args[0].write_lock().unwrap() = shift_right(x, y)?).into())
                     })
                 }
                 "<<=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
-                        let mut x = args[0].write_lock::<INT>().unwrap();
-                        Ok((*x = shift_left(*x, y)?.as_int().unwrap().into()).into())
+                        let x = args[0].as_int().unwrap();
+                        let y = args[1].as_int().unwrap();
+                        Ok((*args[0].write_lock().unwrap() = shift_left(x, y)?).into())
                     })
                 }
                 _ => (),
@@ -1095,50 +1081,50 @@ pub fn get_builtin_op_assignment_fn(
             match op {
                 "+=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
+                        let y = args[1].as_int().unwrap();
                         Ok((*args[0].write_lock::<INT>().unwrap() += y).into())
                     })
                 }
                 "-=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
+                        let y = args[1].as_int().unwrap();
                         Ok((*args[0].write_lock::<INT>().unwrap() -= y).into())
                     })
                 }
                 "*=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
+                        let y = args[1].as_int().unwrap();
                         Ok((*args[0].write_lock::<INT>().unwrap() *= y).into())
                     })
                 }
                 "/=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
+                        let y = args[1].as_int().unwrap();
                         Ok((*args[0].write_lock::<INT>().unwrap() /= y).into())
                     })
                 }
                 "%=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
+                        let y = args[1].as_int().unwrap();
                         Ok((*args[0].write_lock::<INT>().unwrap() %= y).into())
                     })
                 }
                 "**=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
+                        let y = args[1].as_int().unwrap();
                         let mut x = args[0].write_lock::<INT>().unwrap();
                         Ok((*x = x.pow(y as u32)).into())
                     })
                 }
                 ">>=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
+                        let y = args[1].as_int().unwrap();
                         Ok((*args[0].write_lock::<INT>().unwrap() >>= y).into())
                     })
                 }
                 "<<=" => {
                     return Some(|_, args| {
-                        let y = args[1].clone().cast::<INT>();
+                        let y = args[1].as_int().unwrap();
                         Ok((*args[0].write_lock::<INT>().unwrap() <<= y).into())
                     })
                 }
@@ -1149,19 +1135,19 @@ pub fn get_builtin_op_assignment_fn(
         match op {
             "&=" => {
                 return Some(|_, args| {
-                    let y = args[1].clone().cast::<INT>();
+                    let y = args[1].as_int().unwrap();
                     Ok((*args[0].write_lock::<INT>().unwrap() &= y).into())
                 })
             }
             "|=" => {
                 return Some(|_, args| {
-                    let y = args[1].clone().cast::<INT>();
+                    let y = args[1].as_int().unwrap();
                     Ok((*args[0].write_lock::<INT>().unwrap() |= y).into())
                 })
             }
             "^=" => {
                 return Some(|_, args| {
-                    let y = args[1].clone().cast::<INT>();
+                    let y = args[1].as_int().unwrap();
                     Ok((*args[0].write_lock::<INT>().unwrap() ^= y).into())
                 })
             }
@@ -1193,7 +1179,7 @@ pub fn get_builtin_op_assignment_fn(
         match op {
             "+=" => {
                 return Some(|_, args| {
-                    let y = args[1].clone().cast::<char>();
+                    let y = args[1].as_char().unwrap();
                     let mut x = args[0].write_lock::<Dynamic>().unwrap();
                     Ok((*x = format!("{}{}", *x, y).into()).into())
                 })
@@ -1208,7 +1194,7 @@ pub fn get_builtin_op_assignment_fn(
                 return Some(|_, args| {
                     let (first, second) = args.split_first_mut().unwrap();
                     let mut x = first.write_lock::<ImmutableString>().unwrap();
-                    let y = &*second[0].read_lock::<ImmutableString>().unwrap();
+                    let y = &*second[0].as_locked_immutable_string().unwrap();
                     Ok((*x += y).into())
                 })
             }
@@ -1216,7 +1202,7 @@ pub fn get_builtin_op_assignment_fn(
                 return Some(|_, args| {
                     let (first, second) = args.split_first_mut().unwrap();
                     let mut x = first.write_lock::<ImmutableString>().unwrap();
-                    let y = &*second[0].read_lock::<ImmutableString>().unwrap();
+                    let y = &*second[0].as_locked_immutable_string().unwrap();
                     Ok((*x -= y).into())
                 })
             }
