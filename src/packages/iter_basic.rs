@@ -1,7 +1,7 @@
 use crate::dynamic::Variant;
 use crate::stdlib::{
     boxed::Box,
-    ops::{Add, Range},
+    ops::{Add, Range, Sub},
     string::ToString,
 };
 use crate::{def_package, EvalAltResult, Position, INT};
@@ -19,13 +19,13 @@ where
 
 impl<T> StepRange<T>
 where
-    for<'a> &'a T: Add<&'a T, Output = T>,
+    for<'a> &'a T: Add<&'a T, Output = T> + Sub<&'a T, Output = T>,
     T: Variant + Clone + PartialOrd,
 {
     pub fn new(from: T, to: T, step: T) -> Result<Self, Box<EvalAltResult>> {
         if &from + &step == from {
             Err(Box::new(EvalAltResult::ErrorArithmetic(
-                "invalid step value".to_string(),
+                "step value cannot be zero".to_string(),
                 Position::NONE,
             )))
         } else {
@@ -36,7 +36,7 @@ where
 
 impl<T> Iterator for StepRange<T>
 where
-    for<'a> &'a T: Add<&'a T, Output = T>,
+    for<'a> &'a T: Add<&'a T, Output = T> + Sub<&'a T, Output = T>,
     T: Variant + Clone + PartialOrd,
 {
     type Item = T;
@@ -45,22 +45,40 @@ where
         if self.0 == self.1 {
             None
         } else if self.0 < self.1 {
+            let diff1 = &self.1 - &self.0;
+
             let v = self.0.clone();
             let n = self.0.add(&self.2);
-            self.0 = if n >= self.1 { self.1.clone() } else { n };
-            Some(v)
+
+            let diff2 = &self.1 - &n;
+
+            if diff2 >= diff1 {
+                None
+            } else {
+                self.0 = if n >= self.1 { self.1.clone() } else { n };
+                Some(v)
+            }
         } else {
+            let diff1 = &self.0 - &self.1;
+
             let v = self.0.clone();
             let n = self.0.add(&self.2);
-            self.0 = if n <= self.1 { self.1.clone() } else { n };
-            Some(v)
+
+            let diff2 = &n - &self.1;
+
+            if diff2 >= diff1 {
+                None
+            } else {
+                self.0 = if n <= self.1 { self.1.clone() } else { n };
+                Some(v)
+            }
         }
     }
 }
 
 fn get_step_range<T>(from: T, to: T, step: T) -> Result<StepRange<T>, Box<EvalAltResult>>
 where
-    for<'a> &'a T: Add<&'a T, Output = T>,
+    for<'a> &'a T: Add<&'a T, Output = T> + Sub<&'a T, Output = T>,
     T: Variant + Clone + PartialOrd,
 {
     StepRange::<T>::new(from, to, step)
