@@ -18,11 +18,6 @@ use crate::{
     Position, RhaiResult,
 };
 
-#[cfg(not(feature = "sync"))]
-use crate::stdlib::rc::Rc;
-#[cfg(feature = "sync")]
-use crate::stdlib::sync::Arc;
-
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
 #[cfg(feature = "sync")]
 pub trait SendSync: Send + Sync {}
@@ -39,19 +34,19 @@ impl<T> SendSync for T {}
 
 /// Immutable reference-counted container.
 #[cfg(not(feature = "sync"))]
-pub type Shared<T> = Rc<T>;
+pub use crate::stdlib::rc::Rc as Shared;
 /// Immutable reference-counted container.
 #[cfg(feature = "sync")]
-pub type Shared<T> = Arc<T>;
+pub use crate::stdlib::sync::Arc as Shared;
 
 /// Synchronized shared object.
 #[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "sync"))]
-pub type Locked<T> = crate::stdlib::cell::RefCell<T>;
+pub use crate::stdlib::cell::RefCell as Locked;
 /// Synchronized shared object.
 #[cfg(not(feature = "no_closure"))]
 #[cfg(feature = "sync")]
-pub type Locked<T> = crate::stdlib::sync::RwLock<T>;
+pub use crate::stdlib::sync::RwLock as Locked;
 
 /// Context of a native Rust function call.
 #[derive(Debug, Copy, Clone)]
@@ -215,10 +210,7 @@ impl<'a> NativeCallContext<'a> {
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
 #[inline(always)]
 pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
-    #[cfg(not(feature = "sync"))]
-    return Rc::make_mut(value);
-    #[cfg(feature = "sync")]
-    return Arc::make_mut(value);
+    Shared::make_mut(value)
 }
 
 /// Consume a [`Shared`] resource if is unique (i.e. not shared), or clone it otherwise.
@@ -230,10 +222,7 @@ pub fn shared_take_or_clone<T: Clone>(value: Shared<T>) -> T {
 /// Consume a [`Shared`] resource if is unique (i.e. not shared).
 #[inline(always)]
 pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
-    #[cfg(not(feature = "sync"))]
-    return Rc::try_unwrap(value);
-    #[cfg(feature = "sync")]
-    return Arc::try_unwrap(value);
+    Shared::try_unwrap(value)
 }
 
 /// Consume a [`Shared`] resource, assuming that it is unique (i.e. not shared).

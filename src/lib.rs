@@ -125,7 +125,7 @@ pub type FLOAT = f32;
 pub use ast::{FnAccess, ScriptFnMetadata, AST};
 pub use dynamic::Dynamic;
 pub use engine::{Engine, EvalContext};
-pub use fn_native::{FnPtr, NativeCallContext, Shared};
+pub use fn_native::{FnPtr, NativeCallContext};
 pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::{FnNamespace, Module};
 pub use parse_error::{LexError, ParseError, ParseErrorType};
@@ -134,6 +134,9 @@ pub use scope::Scope;
 pub use syntax::Expression;
 pub use token::Position;
 pub use utils::ImmutableString;
+
+/// Alias to [`Rc`][std::rc::Rc] or [`Arc`][std::sync::Arc] depending on the `sync` feature flag.
+pub use fn_native::Shared;
 
 #[cfg(not(feature = "no_closure"))]
 use fn_native::Locked;
