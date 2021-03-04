@@ -944,6 +944,7 @@ impl Dynamic {
     pub fn try_cast<T: Variant>(self) -> Option<T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
+        #[cfg(not(feature = "no_closure"))]
         if let Union::Shared(_, _) = self.0 {
             return self.flatten().try_cast::<T>();
         }
