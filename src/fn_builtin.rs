@@ -15,6 +15,7 @@ use rust_decimal::Decimal;
 use num_traits::float::Float;
 
 /// Is the type a numeric type?
+#[inline(always)]
 fn is_numeric(type_id: TypeId) -> bool {
     let result = type_id == TypeId::of::<u8>()
         || type_id == TypeId::of::<u16>()
@@ -75,55 +76,48 @@ pub fn get_builtin_binary_op_fn(
                 Ok((x $op y).into())
             })
         };
-        ($xx:ident $op:tt $yy:ident -> $base:ty) => {
+        ($base:ty => $xx:ident $op:tt $yy:ident) => {
             return Some(|_, args| {
                 let x = args[0].$xx().unwrap() as $base;
                 let y = args[1].$yy().unwrap() as $base;
                 Ok((x $op y).into())
             })
         };
-        ($xx:ident . $func:ident ( $yy:ident as $yyy:ty) -> $base:ty) => {
+        ($base:ty => $xx:ident . $func:ident ( $yy:ident as $yyy:ty)) => {
             return Some(|_, args| {
                 let x = args[0].$xx().unwrap() as $base;
                 let y = args[1].$yy().unwrap() as $base;
                 Ok(x.$func(y as $yyy).into())
             })
         };
-        ($func:ident ( $xx:ident, $yy:ident ) -> $base:ty) => {
+        ($base:ty => $func:ident ( $xx:ident, $yy:ident )) => {
             return Some(|_, args| {
                 let x = args[0].$xx().unwrap() as $base;
                 let y = args[1].$yy().unwrap() as $base;
                 $func(x, y)
             })
         };
-        ($xx:ident $op:tt $yy:ident -> from $base:ty) => {
+        (from $base:ty => $xx:ident $op:tt $yy:ident) => {
             return Some(|_, args| {
                 let x = <$base>::from(args[0].$xx().unwrap());
                 let y = <$base>::from(args[1].$yy().unwrap());
                 Ok((x $op y).into())
             })
         };
-        ($xx:ident . $func:ident ( $yy:ident ) -> from $base:ty) => {
+        (from $base:ty => $xx:ident . $func:ident ( $yy:ident )) => {
             return Some(|_, args| {
                 let x = <$base>::from(args[0].$xx().unwrap());
                 let y = <$base>::from(args[1].$yy().unwrap());
                 Ok(x.$func(y).into())
             })
         };
-        ($func:ident ( $xx:ident, $yy:ident ) -> from $base:ty) => {
+        (from $base:ty => $func:ident ( $xx:ident, $yy:ident )) => {
             return Some(|_, args| {
                 let x = <$base>::from(args[0].$xx().unwrap());
                 let y = <$base>::from(args[1].$yy().unwrap());
                 $func(x, y)
             })
         };
-        (& $x:ident $op:tt & $y:ident) => {
-            return Some(|_, args| {
-                let x = &*args[0].read_lock::<$x>().unwrap();
-                let y = &*args[1].read_lock::<$y>().unwrap();
-                Ok((x $op y).into())
-            })
-        }
     }
 
     macro_rules! impl_float {
@@ -131,18 +125,18 @@ pub fn get_builtin_binary_op_fn(
             #[cfg(not(feature = "no_float"))]
             if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
                 match op {
-                    "+" => impl_op!($xx + $yy -> FLOAT),
-                    "-" => impl_op!($xx - $yy -> FLOAT),
-                    "*" => impl_op!($xx * $yy -> FLOAT),
-                    "/" => impl_op!($xx / $yy -> FLOAT),
-                    "%" => impl_op!($xx % $yy -> FLOAT),
-                    "**" => impl_op!($xx.powf($yy as FLOAT) -> FLOAT),
-                    "==" => impl_op!($xx == $yy -> FLOAT),
-                    "!=" => impl_op!($xx != $yy -> FLOAT),
-                    ">" => impl_op!($xx > $yy -> FLOAT),
-                    ">=" => impl_op!($xx >= $yy -> FLOAT),
-                    "<" => impl_op!($xx < $yy -> FLOAT),
-                    "<=" => impl_op!($xx <= $yy -> FLOAT),
+                    "+" => impl_op!(FLOAT => $xx + $yy),
+                    "-" => impl_op!(FLOAT => $xx - $yy),
+                    "*" => impl_op!(FLOAT => $xx * $yy),
+                    "/" => impl_op!(FLOAT => $xx / $yy),
+                    "%" => impl_op!(FLOAT => $xx % $yy),
+                    "**" => impl_op!(FLOAT => $xx.powf($yy as FLOAT)),
+                    "==" => impl_op!(FLOAT => $xx == $yy),
+                    "!=" => impl_op!(FLOAT => $xx != $yy),
+                    ">" => impl_op!(FLOAT => $xx > $yy),
+                    ">=" => impl_op!(FLOAT => $xx >= $yy),
+                    "<" => impl_op!(FLOAT => $xx < $yy),
+                    "<=" => impl_op!(FLOAT => $xx <= $yy),
                     _ => return None,
                 }
             }
@@ -161,31 +155,31 @@ pub fn get_builtin_binary_op_fn(
                     use crate::packages::arithmetic::decimal_functions::*;
 
                     match op {
-                        "+" => impl_op!(add($xx, $yy) -> from Decimal),
-                        "-" => impl_op!(subtract($xx, $yy) -> from Decimal),
-                        "*" => impl_op!(multiply($xx, $yy) -> from Decimal),
-                        "/" => impl_op!(divide($xx, $yy) -> from Decimal),
-                        "%" => impl_op!(modulo($xx, $yy) -> from Decimal),
+                        "+" => impl_op!(from Decimal => add($xx, $yy)),
+                        "-" => impl_op!(from Decimal => subtract($xx, $yy)),
+                        "*" => impl_op!(from Decimal => multiply($xx, $yy)),
+                        "/" => impl_op!(from Decimal => divide($xx, $yy)),
+                        "%" => impl_op!(from Decimal => modulo($xx, $yy)),
                         _ => ()
                     }
                 } else {
                     match op {
-                        "+" => impl_op!($xx + $yy -> from Decimal),
-                        "-" => impl_op!($xx - $yy -> from Decimal),
-                        "*" => impl_op!($xx * $yy -> from Decimal),
-                        "/" => impl_op!($xx / $yy -> from Decimal),
-                        "%" => impl_op!($xx % $yy -> from Decimal),
+                        "+" => impl_op!(from Decimal => $xx + $yy),
+                        "-" => impl_op!(from Decimal => $xx - $yy),
+                        "*" => impl_op!(from Decimal => $xx * $yy),
+                        "/" => impl_op!(from Decimal => $xx / $yy),
+                        "%" => impl_op!(from Decimal => $xx % $yy),
                         _ => ()
                     }
                 }
 
                 match op {
-                    "==" => impl_op!($xx == $yy -> from Decimal),
-                    "!=" => impl_op!($xx != $yy -> from Decimal),
-                    ">" => impl_op!($xx > $yy -> from Decimal),
-                    ">=" => impl_op!($xx >= $yy -> from Decimal),
-                    "<" => impl_op!($xx < $yy -> from Decimal),
-                    "<=" => impl_op!($xx <= $yy -> from Decimal),
+                    "==" => impl_op!(from Decimal => $xx == $yy),
+                    "!=" => impl_op!(from Decimal => $xx != $yy),
+                    ">" => impl_op!(from Decimal => $xx > $yy),
+                    ">=" => impl_op!(from Decimal => $xx >= $yy),
+                    "<" => impl_op!(from Decimal => $xx < $yy),
+                    "<=" => impl_op!(from Decimal => $xx <= $yy),
                     _ => return None
                 }
             }
@@ -278,81 +272,100 @@ pub fn get_builtin_binary_op_fn(
             use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
             match op {
-                "+" => impl_op!(add(as_int, as_int) -> INT),
-                "-" => impl_op!(subtract(as_int, as_int) -> INT),
-                "*" => impl_op!(multiply(as_int, as_int) -> INT),
-                "/" => impl_op!(divide(as_int, as_int) -> INT),
-                "%" => impl_op!(modulo(as_int, as_int) -> INT),
-                "**" => impl_op!(power(as_int, as_int) -> INT),
-                ">>" => impl_op!(shift_right(as_int, as_int) -> INT),
-                "<<" => impl_op!(shift_left(as_int, as_int) -> INT),
+                "+" => impl_op!(INT => add(as_int, as_int)),
+                "-" => impl_op!(INT => subtract(as_int, as_int)),
+                "*" => impl_op!(INT => multiply(as_int, as_int)),
+                "/" => impl_op!(INT => divide(as_int, as_int)),
+                "%" => impl_op!(INT => modulo(as_int, as_int)),
+                "**" => impl_op!(INT => power(as_int, as_int)),
+                ">>" => impl_op!(INT => shift_right(as_int, as_int)),
+                "<<" => impl_op!(INT => shift_left(as_int, as_int)),
                 _ => (),
             }
         } else {
             match op {
-                "+" => impl_op!(as_int + as_int -> INT),
-                "-" => impl_op!(as_int - as_int -> INT),
-                "*" => impl_op!(as_int * as_int -> INT),
-                "/" => impl_op!(as_int / as_int -> INT),
-                "%" => impl_op!(as_int % as_int -> INT),
-                "**" => impl_op!(as_int.pow(as_int as u32) -> INT),
-                ">>" => impl_op!(as_int >> as_int -> INT),
-                "<<" => impl_op!(as_int << as_int -> INT),
+                "+" => impl_op!(INT => as_int + as_int),
+                "-" => impl_op!(INT => as_int - as_int),
+                "*" => impl_op!(INT => as_int * as_int),
+                "/" => impl_op!(INT => as_int / as_int),
+                "%" => impl_op!(INT => as_int % as_int),
+                "**" => impl_op!(INT => as_int.pow(as_int as u32)),
+                ">>" => impl_op!(INT => as_int >> as_int),
+                "<<" => impl_op!(INT => as_int << as_int),
                 _ => (),
             }
         }
 
         match op {
-            "==" => impl_op!(as_int == as_int -> INT),
-            "!=" => impl_op!(as_int != as_int -> INT),
-            ">" => impl_op!(as_int > as_int -> INT),
-            ">=" => impl_op!(as_int >= as_int -> INT),
-            "<" => impl_op!(as_int < as_int ->  INT),
-            "<=" => impl_op!(as_int <= as_int -> INT),
-            "&" => impl_op!(as_int & as_int -> INT),
-            "|" => impl_op!(as_int | as_int -> INT),
-            "^" => impl_op!(as_int ^ as_int -> INT),
+            "==" => impl_op!(INT => as_int == as_int),
+            "!=" => impl_op!(INT => as_int != as_int),
+            ">" => impl_op!(INT => as_int > as_int),
+            ">=" => impl_op!(INT => as_int >= as_int),
+            "<" => impl_op!(INT => as_int < as_int),
+            "<=" => impl_op!(INT => as_int <= as_int),
+            "&" => impl_op!(INT => as_int & as_int),
+            "|" => impl_op!(INT => as_int | as_int),
+            "^" => impl_op!(INT => as_int ^ as_int),
             _ => return None,
         }
     }
 
     if type1 == TypeId::of::<bool>() {
         match op {
-            "==" => impl_op!(as_bool == as_bool -> bool),
-            "!=" => impl_op!(as_bool != as_bool -> bool),
-            ">" => impl_op!(as_bool > as_bool -> bool),
-            ">=" => impl_op!(as_bool >= as_bool -> bool),
-            "<" => impl_op!(as_bool < as_bool ->  bool),
-            "<=" => impl_op!(as_bool <= as_bool -> bool),
-            "&" => impl_op!(as_bool & as_bool -> bool),
-            "|" => impl_op!(as_bool | as_bool -> bool),
-            "^" => impl_op!(as_bool ^ as_bool -> bool),
+            "==" => impl_op!(bool => as_bool == as_bool),
+            "!=" => impl_op!(bool => as_bool != as_bool),
+            ">" => impl_op!(bool => as_bool > as_bool),
+            ">=" => impl_op!(bool => as_bool >= as_bool),
+            "<" => impl_op!(bool => as_bool < as_bool),
+            "<=" => impl_op!(bool => as_bool <= as_bool),
+            "&" => impl_op!(bool => as_bool & as_bool),
+            "|" => impl_op!(bool => as_bool | as_bool),
+            "^" => impl_op!(bool => as_bool ^ as_bool),
             _ => return None,
         }
     }
 
     if type1 == TypeId::of::<ImmutableString>() {
         match op {
-            "+" => impl_op!(&ImmutableString + &ImmutableString),
-            "-" => impl_op!(&ImmutableString - &ImmutableString),
-            "==" => impl_op!(&ImmutableString == &ImmutableString),
-            "!=" => impl_op!(&ImmutableString != &ImmutableString),
-            ">" => impl_op!(&ImmutableString > &ImmutableString),
-            ">=" => impl_op!(&ImmutableString >= &ImmutableString),
-            "<" => impl_op!(&ImmutableString < &ImmutableString),
-            "<=" => impl_op!(&ImmutableString <= &ImmutableString),
+            "+" => {
+                return Some(|_, args| {
+                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
+                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    Ok((x + y).into())
+                })
+            }
+            "-" => {
+                return Some(|_, args| {
+                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
+                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    Ok((x - y).into())
+                })
+            }
+            "==" => impl_op!(&str => as_str == as_str),
+            "!=" => impl_op!(&str => as_str != as_str),
+            ">" => impl_op!(&str => as_str > as_str),
+            ">=" => impl_op!(&str => as_str >= as_str),
+            "<" => impl_op!(&str => as_str < as_str),
+            "<=" => impl_op!(&str => as_str <= as_str),
             _ => return None,
         }
     }
 
     if type1 == TypeId::of::<char>() {
         match op {
-            "==" => impl_op!(as_char == as_char -> char),
-            "!=" => impl_op!(as_char != as_char -> char),
-            ">" => impl_op!(as_char > as_char -> char),
-            ">=" => impl_op!(as_char >= as_char -> char),
-            "<" => impl_op!(as_char < as_char -> char),
-            "<=" => impl_op!(as_char <= as_char -> char),
+            "+" => {
+                return Some(|_, args| {
+                    let x = args[0].as_char().unwrap();
+                    let y = args[1].as_char().unwrap();
+                    Ok(format!("{}{}", x, y).into())
+                })
+            }
+            "==" => impl_op!(char => as_char == as_char),
+            "!=" => impl_op!(char => as_char != as_char),
+            ">" => impl_op!(char => as_char > as_char),
+            ">=" => impl_op!(char => as_char >= as_char),
+            "<" => impl_op!(char => as_char < as_char),
+            "<=" => impl_op!(char => as_char <= as_char),
             _ => return None,
         }
     }
@@ -380,7 +393,7 @@ pub fn get_builtin_op_assignment_fn(
     let types_pair = (type1, type2);
 
     macro_rules! impl_op {
-        ($x:ident = x $op:tt $yy:ident) => {
+        ($x:ty = x $op:tt $yy:ident) => {
             return Some(|_, args| {
                 let x = args[0].$yy().unwrap();
                 let y = args[1].$yy().unwrap() as $x;
@@ -399,14 +412,14 @@ pub fn get_builtin_op_assignment_fn(
                 Ok((*args[0].write_lock::<$x>().unwrap() $op y).into())
             })
         };
-        ($xx:ident . $func:ident ( $yy:ident as $yyy:ty ) -> $x:ty) => {
+        ($x:ty => $xx:ident . $func:ident ( $yy:ident as $yyy:ty )) => {
             return Some(|_, args| {
                 let x = args[0].$xx().unwrap();
                 let y = args[1].$yy().unwrap() as $x;
                 Ok((*args[0].write_lock::<$x>().unwrap() = x.$func(y as $yyy)).into())
             })
         };
-        ($func:ident ( $xx:ident, $yy:ident ) -> $x:ty) => {
+        ($x:ty => $func:ident ( $xx:ident, $yy:ident )) => {
             return Some(|_, args| {
                 let x = args[0].$xx().unwrap();
                 let y = args[1].$yy().unwrap() as $x;
@@ -419,14 +432,14 @@ pub fn get_builtin_op_assignment_fn(
                 Ok((*args[0].write_lock::<$x>().unwrap() $op y).into())
             })
         };
-        ($xx:ident . $func:ident ( $yy:ident ) -> from $x:ty) => {
+        (from $x:ty => $xx:ident . $func:ident ( $yy:ident )) => {
             return Some(|_, args| {
                 let x = args[0].$xx().unwrap();
                 let y = <$x>::from(args[1].$yy().unwrap());
                 Ok((*args[0].write_lock::<$x>().unwrap() = x.$func(y)).into())
             })
         };
-        ($func:ident ( $xx:ident, $yy:ident ) -> from $x:ty) => {
+        (from $x:ty => $func:ident ( $xx:ident, $yy:ident )) => {
             return Some(|_, args| {
                 let x = args[0].$xx().unwrap();
                 let y = <$x>::from(args[1].$yy().unwrap());
@@ -445,7 +458,7 @@ pub fn get_builtin_op_assignment_fn(
                     "*=" => impl_op!($x *= $yy),
                     "/=" => impl_op!($x /= $yy),
                     "%=" => impl_op!($x %= $yy),
-                    "**=" => impl_op!($xx.powf($yy as $x) -> $x),
+                    "**=" => impl_op!($x => $xx.powf($yy as $x)),
                     _ => return None,
                 }
             }
@@ -463,11 +476,11 @@ pub fn get_builtin_op_assignment_fn(
                     use crate::packages::arithmetic::decimal_functions::*;
 
                     match op {
-                        "+=" => impl_op!(add($xx, $yy) -> from $x),
-                        "-=" => impl_op!(subtract($xx, $yy) -> from $x),
-                        "*=" => impl_op!(multiply($xx, $yy) -> from $x),
-                        "/=" => impl_op!(divide($xx, $yy) -> from $x),
-                        "%=" => impl_op!(modulo($xx, $yy) -> from $x),
+                        "+=" => impl_op!(from $x => add($xx, $yy)),
+                        "-=" => impl_op!(from $x => subtract($xx, $yy)),
+                        "*=" => impl_op!(from $x => multiply($xx, $yy)),
+                        "/=" => impl_op!(from $x => divide($xx, $yy)),
+                        "%=" => impl_op!(from $x => modulo($xx, $yy)),
                         _ => return None,
                     }
                 } else {
@@ -522,14 +535,14 @@ pub fn get_builtin_op_assignment_fn(
             use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
             match op {
-                "+=" => impl_op!(add(as_int, as_int) -> INT),
-                "-=" => impl_op!(subtract(as_int, as_int) -> INT),
-                "*=" => impl_op!(multiply(as_int, as_int) -> INT),
-                "/=" => impl_op!(divide(as_int, as_int) -> INT),
-                "%=" => impl_op!(modulo(as_int, as_int) -> INT),
-                "**=" => impl_op!(power(as_int, as_int) -> INT),
-                ">>=" => impl_op!(shift_right(as_int, as_int) -> INT),
-                "<<=" => impl_op!(shift_left(as_int, as_int) -> INT),
+                "+=" => impl_op!(INT => add(as_int, as_int)),
+                "-=" => impl_op!(INT => subtract(as_int, as_int)),
+                "*=" => impl_op!(INT => multiply(as_int, as_int)),
+                "/=" => impl_op!(INT => divide(as_int, as_int)),
+                "%=" => impl_op!(INT => modulo(as_int, as_int)),
+                "**=" => impl_op!(INT => power(as_int, as_int)),
+                ">>=" => impl_op!(INT => shift_right(as_int, as_int)),
+                "<<=" => impl_op!(INT => shift_left(as_int, as_int)),
                 _ => (),
             }
         } else {
@@ -539,7 +552,7 @@ pub fn get_builtin_op_assignment_fn(
                 "*=" => impl_op!(INT *= as_int),
                 "/=" => impl_op!(INT /= as_int),
                 "%=" => impl_op!(INT %= as_int),
-                "**=" => impl_op!(as_int.pow(as_int as u32) -> INT),
+                "**=" => impl_op!(INT => as_int.pow(as_int as u32)),
                 ">>=" => impl_op!(INT >>= as_int),
                 "<<=" => impl_op!(INT <<= as_int),
                 _ => (),
