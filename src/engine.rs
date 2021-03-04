@@ -1414,8 +1414,8 @@ impl Engine {
             _ if new_val.is_some() => unreachable!("cannot assign to an expression"),
             // {expr}.??? or {expr}[???]
             expr => {
-                let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-                let obj_ptr = &mut val.into();
+                let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+                let obj_ptr = &mut value.into();
                 self.eval_dot_index_chain_helper(
                     mods, state, lib, this_ptr, obj_ptr, rhs, idx_values, chain_type, level,
                     new_val,
@@ -1452,6 +1452,7 @@ impl Engine {
                     .iter()
                     .map(|arg_expr| {
                         self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
+                            .map(Dynamic::flatten)
                     })
                     .collect::<Result<StaticVec<_>, _>>()?;
 
@@ -1482,6 +1483,7 @@ impl Engine {
                             .iter()
                             .map(|arg_expr| {
                                 self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
+                                    .map(Dynamic::flatten)
                             })
                             .collect::<Result<StaticVec<Dynamic>, _>>()?
                             .into()
@@ -1491,6 +1493,7 @@ impl Engine {
                     }
                     _ => self
                         .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?
+                        .flatten()
                         .into(),
                 };
 
@@ -1509,6 +1512,7 @@ impl Engine {
 
             _ => idx_values.push(
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .flatten()
                     .into(),
             ),
         }
@@ -1638,7 +1642,9 @@ impl Engine {
         self.inc_operations(state, rhs.position())?;
 
         let lhs_value = self.eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?;
-        let rhs_value = self.eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?;
+        let rhs_value = self
+            .eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?
+            .flatten();
 
         match rhs_value {
             #[cfg(not(feature = "no_index"))]
@@ -1741,7 +1747,10 @@ impl Engine {
                 let mut arr =
                     Array::with_capacity(crate::stdlib::cmp::max(TYPICAL_ARRAY_SIZE, x.len()));
                 for item in x.as_ref() {
-                    arr.push(self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?);
+                    arr.push(
+                        self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?
+                            .flatten(),
+                    );
                 }
                 Ok(Dynamic(Union::Array(Box::new(arr), AccessMode::ReadWrite)))
             }
@@ -1753,7 +1762,8 @@ impl Engine {
                 for (Ident { name: key, .. }, expr) in x.as_ref() {
                     map.insert(
                         key.clone(),
-                        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
+                        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                            .flatten(),
                     );
                 }
                 Ok(Dynamic(Union::Map(Box::new(map), AccessMode::ReadWrite)))
@@ -1997,7 +2007,9 @@ impl Engine {
             Stmt::Noop(_) => Ok(Dynamic::UNIT),
 
             // Expression as statement
-            Stmt::Expr(expr) => self.eval_expr(scope, mods, state, lib, this_ptr, expr, level),
+            Stmt::Expr(expr) => Ok(self
+                .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                .flatten()),
 
             // var op= rhs
             Stmt::Assignment(x, op_pos) if x.0.get_variable_access(false).is_some() => {
@@ -2042,7 +2054,9 @@ impl Engine {
             // lhs op= rhs
             Stmt::Assignment(x, op_pos) => {
                 let (lhs_expr, op, rhs_expr) = x.as_ref();
-                let rhs_val = self.eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?;
+                let rhs_val = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
+                    .flatten();
                 let _new_val = Some(((rhs_val, rhs_expr.position()), (op.as_ref(), *op_pos)));
 
                 // Must be either `var[index] op= val` or `var.prop op= val`
@@ -2161,7 +2175,9 @@ impl Engine {
             // For loop
             Stmt::For(expr, x, _) => {
                 let (name, stmt) = x.as_ref();
-                let iter_obj = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+                let iter_obj = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .flatten();
                 let iter_type = iter_obj.type_id();
 
                 // lib should only contain scripts, so technically they cannot have iterators
@@ -2319,11 +2335,12 @@ impl Engine {
             }
 
             // Return value
-            Stmt::Return((ReturnType::Return, pos), Some(expr), _) => EvalAltResult::Return(
-                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?,
-                *pos,
-            )
-            .into(),
+            Stmt::Return((ReturnType::Return, pos), Some(expr), _) => {
+                let value = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .flatten();
+                EvalAltResult::Return(value, *pos).into()
+            }
 
             // Empty return
             Stmt::Return((ReturnType::Return, pos), None, _) => {
@@ -2332,8 +2349,10 @@ impl Engine {
 
             // Throw value
             Stmt::Return((ReturnType::Exception, pos), Some(expr), _) => {
-                let val = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
-                EvalAltResult::ErrorRuntime(val, *pos).into()
+                let value = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .flatten();
+                EvalAltResult::ErrorRuntime(value, *pos).into()
             }
 
             // Empty throw
@@ -2349,7 +2368,7 @@ impl Engine {
                     _ => unreachable!("should be Stmt::Let or Stmt::Const, but gets {:?}", stmt),
                 };
 
-                let val = if let Some(expr) = expr {
+                let value = if let Some(expr) = expr {
                     self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                         .flatten()
                 } else {
@@ -2369,7 +2388,7 @@ impl Engine {
                 } else {
                     (unsafe_cast_var_name_to_lifetime(&var_def.name).into(), None)
                 };
-                scope.push_dynamic_value(var_name, entry_type, val);
+                scope.push_dynamic_value(var_name, entry_type, value);
 
                 #[cfg(not(feature = "no_module"))]
                 if let Some(alias) = _alias {

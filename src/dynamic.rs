@@ -944,16 +944,9 @@ impl Dynamic {
     pub fn try_cast<T: Variant>(self) -> Option<T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
-        match self.0 {
-            #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "sync"))]
-            Union::Shared(cell, _) => return cell.borrow().clone().try_cast(),
-
-            #[cfg(not(feature = "no_closure"))]
-            #[cfg(feature = "sync")]
-            Union::Shared(cell, _) => return cell.read().unwrap().clone().try_cast(),
-
-            _ => (),
+        #[cfg(not(feature = "no_closure"))]
+        if let Union::Shared(_, _) = self.0 {
+            return self.flatten().try_cast::<T>();
         }
 
         if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
@@ -1321,8 +1314,10 @@ impl Dynamic {
 
         match &self.0 {
             Union::Variant(value, _) => value.as_ref().as_ref().as_any().downcast_ref::<T>(),
+
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _) => None,
+
             _ => None,
         }
     }
@@ -1411,8 +1406,10 @@ impl Dynamic {
 
         match &mut self.0 {
             Union::Variant(value, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
+
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _) => None,
+
             _ => None,
         }
     }
