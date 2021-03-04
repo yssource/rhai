@@ -49,7 +49,7 @@ pub fn unsafe_cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<Box<T>, B
 ///
 /// Force-casting a local variable's lifetime to the current [`Scope`][crate::Scope]'s larger lifetime saves
 /// on allocations and string cloning, thus avoids us having to maintain a chain of [`Scope`][crate::Scope]'s.
-#[inline]
+#[inline(always)]
 pub fn unsafe_cast_var_name_to_lifetime<'s>(name: &str) -> &'s str {
     // WARNING - force-cast the variable name into the scope's lifetime to avoid cloning it
     //           this is safe because all local variables are cleared at the end of the block

@@ -176,7 +176,7 @@ impl Engine {
     /// 3) Global modules - packages
     /// 4) Imported modules - functions marked with global namespace
     /// 5) Global sub-modules - functions marked with global namespace
-    #[inline]
+    #[inline(always)]
     fn resolve_function<'s>(
         &self,
         mods: &Imports,
@@ -831,7 +831,7 @@ impl Engine {
 
     /// Evaluate a list of statements with no `this` pointer.
     /// This is commonly used to evaluate a list of statements in an [`AST`] or a script function body.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn eval_global_statements(
         &self,
         scope: &mut Scope,

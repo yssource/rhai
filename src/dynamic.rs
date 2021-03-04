@@ -420,7 +420,7 @@ impl Hash for Dynamic {
 }
 
 /// Map the name of a standard type into a friendly form.
-#[inline]
+#[inline(always)]
 pub(crate) fn map_std_type_name(name: &str) -> &str {
     if name == type_name::<String>() {
         "string"
@@ -1496,7 +1496,7 @@ impl Dynamic {
     }
     /// Convert the [`Dynamic`] into an [`ImmutableString`] and return it.
     /// Returns the name of the actual type if the cast fails.
-    #[inline]
+    #[inline(always)]
     pub fn take_immutable_string(self) -> Result<ImmutableString, &'static str> {
         match self.0 {
             Union::Str(s, _) => Ok(s),

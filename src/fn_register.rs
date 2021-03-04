@@ -183,7 +183,7 @@ macro_rules! def_register {
             RET: Variant + Clone
         > RegisterFn<FN, ($($mark,)*), RET> for Engine
         {
-            #[inline]
+            #[inline(always)]
             fn register_fn(&mut self, name: &str, f: FN) -> &mut Self {
                 self.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public, None,
                     &[$(map_type_id::<$par>()),*],
@@ -198,7 +198,7 @@ macro_rules! def_register {
             FN: Fn($($param),*) -> RhaiResult + SendSync + 'static,
         > RegisterResultFn<FN, ($($mark,)*)> for Engine
         {
-            #[inline]
+            #[inline(always)]
             fn register_result_fn(&mut self, name: &str, f: FN) -> &mut Self {
                 self.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public, None,
                     &[$(map_type_id::<$par>()),*],

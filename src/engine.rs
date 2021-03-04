@@ -862,7 +862,7 @@ impl Engine {
     /// Create a new [`Engine`] with minimal built-in functions.
     ///
     /// Use [`register_global_module`][Engine::register_global_module] to add packages of functions.
-    #[inline]
+    #[inline(always)]
     pub fn new_raw() -> Self {
         Self {
             global_namespace: Default::default(),

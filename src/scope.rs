@@ -237,7 +237,7 @@ impl<'a> Scope<'a> {
         self.push_dynamic_value(name, AccessMode::ReadOnly, value)
     }
     /// Add (push) a new entry with a [`Dynamic`] value to the [`Scope`].
-    #[inline]
+    #[inline(always)]
     pub(crate) fn push_dynamic_value(
         &mut self,
         name: impl Into<Cow<'a, str>>,
@@ -420,7 +420,7 @@ impl<'a> Scope<'a> {
     }
     /// Clone the [`Scope`], keeping only the last instances of each variable name.
     /// Shadowed variables are omitted in the copy.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn clone_visible(&self) -> Self {
         let mut entries: Self = Default::default();
 

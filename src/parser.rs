@@ -105,7 +105,7 @@ impl<'e> ParseState<'e> {
     /// i.e. the top element of the [`ParseState`] is offset 1.
     ///
     /// Return `None` when the variable name is not found in the `stack`.
-    #[inline]
+    #[inline(always)]
     fn access_var(&mut self, name: &str, _pos: Position) -> Option<NonZeroUsize> {
         let mut barrier = false;
 
@@ -230,7 +230,7 @@ impl Expr {
     /// Convert a [`Variable`][Expr::Variable] into a [`Property`][Expr::Property].
     /// All other variants are untouched.
     #[cfg(not(feature = "no_object"))]
-    #[inline]
+    #[inline(always)]
     fn into_property(self, state: &mut ParseState) -> Self {
         match self {
             Self::Variable(x) if x.1.is_none() => {
