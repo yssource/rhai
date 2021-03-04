@@ -35,7 +35,7 @@ Standard features
 * Built-in support for most common [data types](https://rhai.rs/book/language/values-and-types.html) including booleans, integers, floating-point numbers (including [`Decimal`](https://crates.io/crates/rust_decimal)), strings, Unicode characters, arrays and maps.
 * Easily [call a script-defined function](https://rhai.rs/book/engine/call-fn.html) from Rust.
 * Relatively little `unsafe` code (yes there are some for performance reasons).
-* Few dependencies (currently only [`smallvec`](https://crates.io/crates/smallvec) and [`ahash`](https://crates.io/crates/ahash)).
+* Few dependencies (currently only [`smallvec`](https://crates.io/crates/smallvec), [`num-traits`](https://crates.io/crates/num-traits) and [`ahash`](https://crates.io/crates/ahash)).
 * Re-entrant scripting engine can be made `Send + Sync` (via the `sync` feature).
 * Compile once to [AST](https://rhai.rs/book/engine/compile.html) form for repeated evaluations.
 * Scripts are [optimized](https://rhai.rs/book/engine/optimize.html) (useful for template-based machine-generated scripts).

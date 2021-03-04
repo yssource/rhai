@@ -2,7 +2,7 @@ use rhai::{Engine, EvalAltResult, Module, INT};
 
 #[cfg(not(feature = "no_index"))]
 #[test]
-fn test_for_array() -> Result<(), Box<EvalAltResult>> {
+fn test_for() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     let script = r"
@@ -26,6 +26,81 @@ fn test_for_array() -> Result<(), Box<EvalAltResult>> {
     ";
 
     assert_eq!(engine.eval::<INT>(script)?, 35);
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let sum = 0;
+                for x in range(1, 10, 2) { sum += x; }
+                sum
+            "
+        )?,
+        25
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let sum = 0;
+                for x in range(10, 1, 2) { sum += x; }
+                sum
+            "
+        )?,
+        0
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let sum = 0;
+                for x in range(1, 10, -2) { sum += x; }
+                sum
+            "
+        )?,
+        0
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r"
+                let sum = 0;
+                for x in range(10, 1, -2) { sum += x; }
+                sum
+            "
+        )?,
+        30
+    );
+
+    Ok(())
+}
+
+#[cfg(not(feature = "unchecked"))]
+#[test]
+fn test_for_overflow() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    #[cfg(not(feature = "only_i32"))]
+    let script = r"
+        let sum = 0;
+
+        for x in range(9223372036854775807, 0, 9223372036854775807) {
+            sum += 1;
+        }
+
+        sum
+    ";
+    #[cfg(feature = "only_i32")]
+    let script = r"
+        let sum = 0;
+
+        for x in range(2147483647 , 0, 2147483647 ) {
+            sum += 1;
+        }
+
+        sum
+    ";
+
+    assert_eq!(engine.eval::<INT>(script)?, 0);
 
     Ok(())
 }

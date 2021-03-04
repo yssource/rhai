@@ -3,9 +3,6 @@
 use crate::def_package;
 use crate::plugin::*;
 
-#[cfg(feature = "decimal")]
-use rust_decimal::Decimal;
-
 #[cfg(any(
     not(feature = "no_float"),
     all(not(feature = "only_i32"), not(feature = "only_i64"))
