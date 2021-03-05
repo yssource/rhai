@@ -1893,7 +1893,7 @@ impl Engine {
                 if mods
                     .scan_raw()
                     .skip(_mods_len)
-                    .any(|(_, m)| m.has_namespace(crate::FnNamespace::Global, true))
+                    .any(|(_, m)| m.contains_indexed_global_functions())
                 {
                     if _restore_fn_resolution_cache {
                         // When new module is imported with global functions and there is already

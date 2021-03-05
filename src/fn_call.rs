@@ -188,42 +188,6 @@ impl Engine {
         allow_dynamic: bool,
         is_op_assignment: bool,
     ) -> &'s Option<(CallableFunction, Option<ImmutableString>)> {
-        fn find_function(
-            engine: &Engine,
-            hash: NonZeroU64,
-            mods: &Imports,
-            lib: &[&Module],
-        ) -> Option<(CallableFunction, Option<ImmutableString>)> {
-            lib.iter()
-                .find_map(|m| {
-                    m.get_fn(hash, false)
-                        .map(|f| (f.clone(), m.id_raw().cloned()))
-                })
-                .or_else(|| {
-                    engine
-                        .global_namespace
-                        .get_fn(hash, false)
-                        .cloned()
-                        .map(|f| (f, None))
-                })
-                .or_else(|| {
-                    engine.global_modules.iter().find_map(|m| {
-                        m.get_fn(hash, false)
-                            .map(|f| (f.clone(), m.id_raw().cloned()))
-                    })
-                })
-                .or_else(|| {
-                    mods.get_fn(hash)
-                        .map(|(f, source)| (f.clone(), source.cloned()))
-                })
-                .or_else(|| {
-                    engine.global_sub_modules.values().find_map(|m| {
-                        m.get_qualified_fn(hash)
-                            .map(|f| (f.clone(), m.id_raw().cloned()))
-                    })
-                })
-        }
-
         &*state
             .fn_resolution_cache_mut()
             .entry(hash)
@@ -237,7 +201,36 @@ impl Engine {
                 let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
 
                 loop {
-                    match find_function(self, hash, mods, lib) {
+                    let func = lib
+                        .iter()
+                        .find_map(|m| {
+                            m.get_fn(hash, false)
+                                .map(|f| (f.clone(), m.id_raw().cloned()))
+                        })
+                        .or_else(|| {
+                            self.global_namespace
+                                .get_fn(hash, false)
+                                .cloned()
+                                .map(|f| (f, None))
+                        })
+                        .or_else(|| {
+                            self.global_modules.iter().find_map(|m| {
+                                m.get_fn(hash, false)
+                                    .map(|f| (f.clone(), m.id_raw().cloned()))
+                            })
+                        })
+                        .or_else(|| {
+                            mods.get_fn(hash)
+                                .map(|(f, source)| (f.clone(), source.cloned()))
+                        })
+                        .or_else(|| {
+                            self.global_sub_modules.values().find_map(|m| {
+                                m.get_qualified_fn(hash)
+                                    .map(|f| (f.clone(), m.id_raw().cloned()))
+                            })
+                        });
+
+                    match func {
                         // Specific version found
                         Some(f) => return Some(f),
 
@@ -520,18 +513,16 @@ impl Engine {
         );
 
         // Merge in encapsulated environment, if any
-        let mut lib_merged: StaticVec<_>;
-        let mut unified = false;
+        let lib_merged;
 
-        let unified_lib = if let Some(ref env_lib) = fn_def.lib {
-            unified = true;
+        let (unified_lib, unified) = if let Some(ref env_lib) = fn_def.lib {
             state.push_fn_resolution_cache();
-            lib_merged = Default::default();
-            lib_merged.push(env_lib.as_ref());
-            lib_merged.extend(lib.iter().cloned());
-            lib_merged.as_ref()
+            lib_merged = once(env_lib.as_ref())
+                .chain(lib.iter().cloned())
+                .collect::<StaticVec<_>>();
+            (lib_merged.as_ref(), true)
         } else {
-            lib
+            (lib, false)
         };
 
         #[cfg(not(feature = "no_module"))]
