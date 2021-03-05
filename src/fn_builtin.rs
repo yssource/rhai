@@ -70,6 +70,13 @@ pub fn get_builtin_binary_op_fn(
     let types_pair = (type1, type2);
 
     macro_rules! impl_op {
+        ($xx:ident $op:tt $yy:ident) => {
+            return Some(|_, args| {
+                let x = &*args[0].read_lock::<$xx>().unwrap();
+                let y = &*args[1].read_lock::<$yy>().unwrap();
+                Ok((x $op y).into())
+            })
+        };
         ($func:ident ( $op:tt )) => {
             return Some(|_, args| {
                 let (x, y) = $func(args);
@@ -116,13 +123,6 @@ pub fn get_builtin_binary_op_fn(
                 let x = <$base>::from(args[0].$xx().unwrap());
                 let y = <$base>::from(args[1].$yy().unwrap());
                 $func(x, y)
-            })
-        };
-        ($base:ty => $op:tt) => {
-            return Some(|_, args| {
-                let x = &*args[0].read_lock::<$base>().unwrap();
-                let y = &*args[1].read_lock::<$base>().unwrap();
-                Ok((x $op y).into())
             })
         };
     }
@@ -334,14 +334,14 @@ pub fn get_builtin_binary_op_fn(
 
     if type1 == TypeId::of::<ImmutableString>() {
         match op {
-            "+" => impl_op!(ImmutableString => +),
-            "-" => impl_op!(ImmutableString => -),
-            "==" => impl_op!(ImmutableString => ==),
-            "!=" => impl_op!(ImmutableString => !=),
-            ">" => impl_op!(ImmutableString => >),
-            ">=" => impl_op!(ImmutableString => >=),
-            "<" => impl_op!(ImmutableString => <),
-            "<=" => impl_op!(ImmutableString => <=),
+            "+" => impl_op!(ImmutableString + ImmutableString),
+            "-" => impl_op!(ImmutableString - ImmutableString),
+            "==" => impl_op!(ImmutableString == ImmutableString),
+            "!=" => impl_op!(ImmutableString != ImmutableString),
+            ">" => impl_op!(ImmutableString > ImmutableString),
+            ">=" => impl_op!(ImmutableString >= ImmutableString),
+            "<" => impl_op!(ImmutableString < ImmutableString),
+            "<=" => impl_op!(ImmutableString <= ImmutableString),
             _ => return None,
         }
     }
