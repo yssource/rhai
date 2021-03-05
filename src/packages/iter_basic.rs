@@ -5,9 +5,6 @@ use crate::{def_package, EvalAltResult, INT};
 #[cfg(not(feature = "unchecked"))]
 use crate::stdlib::string::ToString;
 
-#[cfg(feature = "decimal")]
-use rust_decimal::Decimal;
-
 #[cfg(not(feature = "unchecked"))]
 use num_traits::{CheckedAdd as Add, CheckedSub as Sub};
 
@@ -193,6 +190,11 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
 
     #[cfg(feature = "decimal")]
     {
+        use rust_decimal::{
+            prelude::{One, Zero},
+            Decimal,
+        };
+
         #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
         struct StepDecimalRange(Decimal, Decimal, Decimal);
 
