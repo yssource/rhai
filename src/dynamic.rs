@@ -414,7 +414,7 @@ impl Hash for Dynamic {
             #[cfg(feature = "sync")]
             Union::Shared(cell, _) => (*cell.read().unwrap()).hash(state),
 
-            _ => unimplemented!(),
+            _ => unimplemented!("{} cannot be hashed", self.type_name()),
         }
     }
 }
@@ -759,6 +759,32 @@ impl Dynamic {
             Union::Shared(ref cell, _) => cell.read().unwrap().access_mode().is_read_only(),
 
             _ => self.access_mode().is_read_only(),
+        }
+    }
+    /// Can this [`Dynamic`] be hashed?
+    pub(crate) fn is_hashable(&self) -> bool {
+        match &self.0 {
+            Union::Unit(_, _)
+            | Union::Bool(_, _)
+            | Union::Str(_, _)
+            | Union::Char(_, _)
+            | Union::Int(_, _) => true,
+
+            #[cfg(not(feature = "no_float"))]
+            Union::Float(_, _) => true,
+            #[cfg(not(feature = "no_index"))]
+            Union::Array(_, _) => true,
+            #[cfg(not(feature = "no_object"))]
+            Union::Map(_, _) => true,
+
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(not(feature = "sync"))]
+            Union::Shared(cell, _) => cell.borrow().is_hashable(),
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(feature = "sync")]
+            Union::Shared(cell, _) => cell.read().unwrap().is_hashable(),
+
+            _ => false,
         }
     }
     /// Create a [`Dynamic`] from any type.  A [`Dynamic`] value is simply returned as is.
