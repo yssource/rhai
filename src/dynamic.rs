@@ -43,7 +43,10 @@ mod private {
     impl<T: Any + Clone + SendSync> Sealed for T {}
 }
 
-/// Trait to represent any type.
+/// _(INTERNALS)_ Trait to represent any type.
+/// Exported under the `internals` feature only.
+///
+/// This trait is sealed and cannot be implemented.
 ///
 /// Currently, [`Variant`] is not [`Send`] nor [`Sync`], so it can practically be any type.
 /// Turn on the `sync` feature to restrict it to only types that implement [`Send`] `+` [`Sync`].
@@ -68,7 +71,10 @@ pub trait Variant: Any + private::Sealed {
     fn clone_into_dynamic(&self) -> Dynamic;
 }
 
-/// Trait to represent any type.
+/// _(INTERNALS)_ Trait to represent any type.
+/// Exported under the `internals` feature only.
+///
+/// This trait is sealed and cannot be implemented.
 #[cfg(feature = "sync")]
 pub trait Variant: Any + Send + Sync + private::Sealed {
     /// Convert this [`Variant`] trait object to [`&dyn Any`][Any].
@@ -326,11 +332,14 @@ impl Dynamic {
             Union::Variant(value, _) => (***value).type_id(),
 
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "sync"))]
-            Union::Shared(cell, _) => (*cell.borrow()).type_id(),
-            #[cfg(not(feature = "no_closure"))]
-            #[cfg(feature = "sync")]
-            Union::Shared(cell, _) => (*cell.read().unwrap()).type_id(),
+            Union::Shared(cell, _) => {
+                #[cfg(not(feature = "sync"))]
+                let value = cell.borrow();
+                #[cfg(feature = "sync")]
+                let value = cell.read().unwrap();
+
+                (*value).type_id()
+            }
         }
     }
     /// Get the name of the type of the value held by this [`Dynamic`].
@@ -397,11 +406,14 @@ impl Hash for Dynamic {
             }
 
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "sync"))]
-            Union::Shared(cell, _) => (*cell.borrow()).hash(state),
-            #[cfg(not(feature = "no_closure"))]
-            #[cfg(feature = "sync")]
-            Union::Shared(cell, _) => (*cell.read().unwrap()).hash(state),
+            Union::Shared(cell, _) => {
+                #[cfg(not(feature = "sync"))]
+                let value = cell.borrow();
+                #[cfg(feature = "sync")]
+                let value = cell.read().unwrap();
+
+                (*value).hash(state)
+            }
 
             _ => unimplemented!("{} cannot be hashed", self.type_name()),
         }
@@ -742,11 +754,11 @@ impl Dynamic {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell, _) => {
                 #[cfg(not(feature = "sync"))]
-                let access = cell.borrow().access_mode();
+                let value = cell.borrow();
                 #[cfg(feature = "sync")]
-                let access = cell.read().unwrap().access_mode();
+                let value = cell.read().unwrap();
 
-                match access {
+                match value.access_mode() {
                     AccessMode::ReadWrite => false,
                     AccessMode::ReadOnly => true,
                 }
@@ -775,11 +787,14 @@ impl Dynamic {
             Union::Map(_, _) => true,
 
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "sync"))]
-            Union::Shared(cell, _) => cell.borrow().is_hashable(),
-            #[cfg(not(feature = "no_closure"))]
-            #[cfg(feature = "sync")]
-            Union::Shared(cell, _) => cell.read().unwrap().is_hashable(),
+            Union::Shared(cell, _) => {
+                #[cfg(not(feature = "sync"))]
+                let value = cell.borrow();
+                #[cfg(feature = "sync")]
+                let value = cell.read().unwrap();
+
+                value.is_hashable()
+            }
 
             _ => false,
         }
@@ -1126,10 +1141,11 @@ impl Dynamic {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(cell, _) => {
                 #[cfg(not(feature = "sync"))]
-                return cell.borrow().clone();
-
+                let value = cell.borrow();
                 #[cfg(feature = "sync")]
-                return cell.read().unwrap().clone();
+                let value = cell.read().unwrap();
+
+                value.clone()
             }
             _ => self.clone(),
         }
@@ -1147,9 +1163,11 @@ impl Dynamic {
             Union::Shared(cell, _) => crate::fn_native::shared_try_take(cell).map_or_else(
                 |cell| {
                     #[cfg(not(feature = "sync"))]
-                    return cell.borrow().clone();
+                    let value = cell.borrow();
                     #[cfg(feature = "sync")]
-                    return cell.read().unwrap().clone();
+                    let value = cell.read().unwrap();
+
+                    value.clone()
                 },
                 |value| {
                     #[cfg(not(feature = "sync"))]
@@ -1197,16 +1215,16 @@ impl Dynamic {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell, _) => {
                 #[cfg(not(feature = "sync"))]
-                let data = cell.borrow();
+                let value = cell.borrow();
                 #[cfg(feature = "sync")]
-                let data = cell.read().unwrap();
+                let value = cell.read().unwrap();
 
-                let type_id = (*data).type_id();
+                let type_id = (*value).type_id();
 
                 if type_id != TypeId::of::<T>() && TypeId::of::<Dynamic>() != TypeId::of::<T>() {
                     None
                 } else {
-                    Some(DynamicReadLock(DynamicReadLockInner::Guard(data)))
+                    Some(DynamicReadLock(DynamicReadLockInner::Guard(value)))
                 }
             }
             _ => self
@@ -1229,16 +1247,16 @@ impl Dynamic {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell, _) => {
                 #[cfg(not(feature = "sync"))]
-                let data = cell.borrow_mut();
+                let value = cell.borrow_mut();
                 #[cfg(feature = "sync")]
-                let data = cell.write().unwrap();
+                let value = cell.write().unwrap();
 
-                let type_id = (*data).type_id();
+                let type_id = (*value).type_id();
 
                 if type_id != TypeId::of::<T>() && TypeId::of::<Dynamic>() != TypeId::of::<T>() {
                     None
                 } else {
-                    Some(DynamicWriteLock(DynamicWriteLockInner::Guard(data)))
+                    Some(DynamicWriteLock(DynamicWriteLockInner::Guard(value)))
                 }
             }
             _ => self
@@ -1537,13 +1555,13 @@ impl Dynamic {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(cell, _) => {
                 #[cfg(not(feature = "sync"))]
-                let data = cell.borrow();
+                let value = cell.borrow();
                 #[cfg(feature = "sync")]
-                let data = cell.read().unwrap();
+                let value = cell.read().unwrap();
 
-                match &data.0 {
+                match &value.0 {
                     Union::Str(s, _) => Ok(s.clone()),
-                    _ => Err((*data).type_name()),
+                    _ => Err((*value).type_name()),
                 }
             }
             _ => Err(self.type_name()),
