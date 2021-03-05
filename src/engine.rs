@@ -862,7 +862,7 @@ impl Engine {
     /// Create a new [`Engine`] with minimal built-in functions.
     ///
     /// Use [`register_global_module`][Engine::register_global_module] to add packages of functions.
-    #[inline]
+    #[inline(always)]
     pub fn new_raw() -> Self {
         Self {
             global_namespace: Default::default(),
@@ -2111,18 +2111,29 @@ impl Engine {
             Stmt::Switch(match_expr, x, _) => {
                 let (table, def_stmt) = x.as_ref();
 
-                let hasher = &mut get_hasher();
-                self.eval_expr(scope, mods, state, lib, this_ptr, match_expr, level)?
-                    .hash(hasher);
-                let hash = hasher.finish();
+                let value = self.eval_expr(scope, mods, state, lib, this_ptr, match_expr, level)?;
 
-                if let Some(stmt) = table.get(&hash) {
-                    self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
-                } else if let Some(def_stmt) = def_stmt {
-                    self.eval_stmt(scope, mods, state, lib, this_ptr, def_stmt, level)
+                if value.is_hashable() {
+                    let hasher = &mut get_hasher();
+                    value.hash(hasher);
+                    let hash = hasher.finish();
+
+                    table
+                        .get(&hash)
+                        .map(|stmt| self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level))
                 } else {
-                    Ok(Dynamic::UNIT)
+                    // Non-hashable values never match any specific clause
+                    None
                 }
+                .unwrap_or_else(|| {
+                    // Default match clause
+                    def_stmt.as_ref().map_or_else(
+                        || Ok(Dynamic::UNIT),
+                        |def_stmt| {
+                            self.eval_stmt(scope, mods, state, lib, this_ptr, def_stmt, level)
+                        },
+                    )
+                })
             }
 
             // While loop

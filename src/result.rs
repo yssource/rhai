@@ -153,13 +153,13 @@ impl fmt::Display for EvalAltResult {
 
             #[cfg(not(feature = "no_function"))]
             Self::ErrorInFunctionCall(s, src, err, _) if crate::engine::is_anonymous_fn(s) => {
-                write!(f, "{}, in call to closure", err)?;
+                write!(f, "{} in call to closure", err)?;
                 if !src.is_empty() {
                     write!(f, " @ '{}'", src)?;
                 }
             }
             Self::ErrorInFunctionCall(s, src, err, _) => {
-                write!(f, "{}, in call to function {}", err, s)?;
+                write!(f, "{} in call to function {}", err, s)?;
                 if !src.is_empty() {
                     write!(f, " @ '{}'", src)?;
                 }

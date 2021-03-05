@@ -598,7 +598,7 @@ impl Module {
     /// let hash = module.set_fn_0("calc", || Ok(42_i64));
     /// assert!(module.contains_fn(hash, true));
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn contains_fn(&self, hash_fn: NonZeroU64, public_only: bool) -> bool {
         if public_only {
             self.functions

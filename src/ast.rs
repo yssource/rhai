@@ -1109,7 +1109,7 @@ pub struct FloatWrapper(FLOAT);
 #[cfg(not(feature = "no_float"))]
 impl Hash for FloatWrapper {
     fn hash<H: crate::stdlib::hash::Hasher>(&self, state: &mut H) {
-        self.0.to_le_bytes().hash(state);
+        self.0.to_ne_bytes().hash(state);
     }
 }
 

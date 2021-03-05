@@ -34,11 +34,13 @@ impl Hasher for StraightHasher {
     }
     #[inline(always)]
     fn write(&mut self, bytes: &[u8]) {
+        assert_eq!(bytes.len(), 8, "StraightHasher can only hash u64 values");
+
         let mut key = [0_u8; 8];
-        key.copy_from_slice(&bytes[..8]); // Panics if fewer than 8 bytes
+        key.copy_from_slice(bytes);
 
         // HACK - If it so happens to hash directly to zero (OMG!) then change it to 42...
-        self.0 = NonZeroU64::new(u64::from_le_bytes(key))
+        self.0 = NonZeroU64::new(u64::from_ne_bytes(key))
             .unwrap_or_else(|| NonZeroU64::new(42).unwrap());
     }
 }
@@ -58,9 +60,8 @@ impl BuildHasher for StraightHasherBuilder {
 
 /// Create an instance of the default hasher.
 #[inline(always)]
-pub fn get_hasher() -> impl Hasher {
-    let s: ahash::AHasher = Default::default();
-    s
+pub fn get_hasher() -> ahash::AHasher {
+    Default::default()
 }
 
 /// _(INTERNALS)_ Calculate a [`NonZeroU64`] hash key from a namespace-qualified function name and

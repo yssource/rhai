@@ -10,6 +10,8 @@ Bug fixes
 * Errors in native Rust functions now contain the correct function call positions.
 * Fixed error types in `EvalAltResult::ErrorMismatchDataType` which were swapped.
 * Some expressions involving shared variables now work properly, for example `x in shared_value`, `return shared_value`, `obj.field = shared_value` etc. Previously, the resultant value is still shared which is counter-intuitive.
+* Potential overflow panics in `range(from, to, step)` is fixed.
+* `switch` statements no longer panic on custom types.
 
 Breaking changes
 ----------------
@@ -23,6 +25,7 @@ Breaking changes
 * Function keywords (e.g. `type_of`, `eval`, `Fn`) can no longer be overloaded. It is more trouble than worth. To disable these keywords, use `Engine::disable_symbol`.
 * `is_def_var` and `is_def_fn` are now reserved keywords.
 * `Engine::id` field is removed.
+* `num-traits` is now a required dependency.
 
 Enhancements
 ------------

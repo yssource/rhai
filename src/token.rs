@@ -1029,7 +1029,7 @@ fn scan_block_comment(
 /// # Volatile API
 ///
 /// This function is volatile and may change.
-#[inline]
+#[inline(always)]
 pub fn get_next_token(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
@@ -1856,7 +1856,7 @@ impl Engine {
         self.lex_raw(input, Some(map))
     }
     /// Tokenize an input text stream with an optional mapping function.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn lex_raw<'a>(
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,

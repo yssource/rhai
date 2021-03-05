@@ -1034,7 +1034,6 @@ impl Engine {
     /// Read the contents of a file into a string.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-    #[inline]
     fn read_file(path: crate::stdlib::path::PathBuf) -> Result<String, Box<EvalAltResult>> {
         use crate::stdlib::io::Read;
 
@@ -1276,7 +1275,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn compile_expression_with_scope(
         &self,
         scope: &Scope,
@@ -1385,7 +1384,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn eval_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1437,7 +1436,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn eval_expression_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1502,7 +1501,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn eval_ast_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1578,7 +1577,7 @@ impl Engine {
     }
     /// Evaluate a string with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    #[inline]
+    #[inline(always)]
     pub fn consume_with_scope(
         &self,
         scope: &mut Scope,
@@ -1659,7 +1658,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_function"))]
-    #[inline]
+    #[inline(always)]
     pub fn call_fn<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1760,7 +1759,7 @@ impl Engine {
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
     #[cfg(not(feature = "no_function"))]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn call_fn_dynamic_raw(
         &self,
         scope: &mut Scope,
@@ -1814,7 +1813,7 @@ impl Engine {
     /// (i.e. with [`Scope::push_constant`]).
     /// Then, the [`AST`] is cloned and the copy re-optimized before running.
     #[cfg(not(feature = "no_optimize"))]
-    #[inline]
+    #[inline(always)]
     pub fn optimize_ast(
         &self,
         scope: &Scope,
