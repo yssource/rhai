@@ -134,17 +134,6 @@ pub enum AccessMode {
     ReadOnly,
 }
 
-impl AccessMode {
-    /// Is the access type `ReadOnly`?
-    #[inline(always)]
-    pub fn is_read_only(self) -> bool {
-        match self {
-            Self::ReadWrite => false,
-            Self::ReadOnly => true,
-        }
-    }
-}
-
 /// Dynamic type containing any value.
 pub struct Dynamic(pub(crate) Union);
 
@@ -748,17 +737,25 @@ impl Dynamic {
     pub fn is_read_only(&self) -> bool {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_, access) if access.is_read_only() => true,
+            Union::Shared(_, AccessMode::ReadOnly) => true,
 
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "sync"))]
-            Union::Shared(ref cell, _) => cell.borrow().access_mode().is_read_only(),
+            Union::Shared(ref cell, _) => {
+                #[cfg(not(feature = "sync"))]
+                let access = cell.borrow().access_mode();
+                #[cfg(feature = "sync")]
+                let access = cell.read().unwrap().access_mode();
 
-            #[cfg(not(feature = "no_closure"))]
-            #[cfg(feature = "sync")]
-            Union::Shared(ref cell, _) => cell.read().unwrap().access_mode().is_read_only(),
+                match access {
+                    AccessMode::ReadWrite => false,
+                    AccessMode::ReadOnly => true,
+                }
+            }
 
-            _ => self.access_mode().is_read_only(),
+            _ => match self.access_mode() {
+                AccessMode::ReadWrite => false,
+                AccessMode::ReadOnly => true,
+            },
         }
     }
     /// Can this [`Dynamic`] be hashed?
@@ -1437,6 +1434,17 @@ impl Dynamic {
             Union::Shared(_, _) => None,
 
             _ => None,
+        }
+    }
+    /// Cast the [`Dynamic`] as a unit `()` and return it.
+    /// Returns the name of the actual type if the cast fails.
+    #[inline(always)]
+    pub fn as_unit(&self) -> Result<(), &'static str> {
+        match self.0 {
+            Union::Unit(value, _) => Ok(value),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(_, _) => self.read_lock().map(|v| *v).ok_or_else(|| self.type_name()),
+            _ => Err(self.type_name()),
         }
     }
     /// Cast the [`Dynamic`] as the system integer type [`INT`] and return it.

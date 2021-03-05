@@ -113,17 +113,16 @@ impl<'a> State<'a> {
             return None;
         }
 
-        for (n, access, expr) in self.variables.iter().rev() {
+        self.variables.iter().rev().find_map(|(n, access, expr)| {
             if n == name {
-                return if access.is_read_only() {
-                    Some(expr)
-                } else {
-                    None
-                };
+                match access {
+                    AccessMode::ReadWrite => None,
+                    AccessMode::ReadOnly => Some(expr),
+                }
+            } else {
+                None
             }
-        }
-
-        None
+        })
     }
 }
 
