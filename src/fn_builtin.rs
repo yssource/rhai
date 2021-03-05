@@ -118,6 +118,13 @@ pub fn get_builtin_binary_op_fn(
                 $func(x, y)
             })
         };
+        ($base:ty => $op:tt) => {
+            return Some(|_, args| {
+                let x = &*args[0].read_lock::<$base>().unwrap();
+                let y = &*args[1].read_lock::<$base>().unwrap();
+                Ok((x $op y).into())
+            })
+        };
     }
 
     macro_rules! impl_float {
@@ -327,26 +334,14 @@ pub fn get_builtin_binary_op_fn(
 
     if type1 == TypeId::of::<ImmutableString>() {
         match op {
-            "+" => {
-                return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
-                    Ok((x + y).into())
-                })
-            }
-            "-" => {
-                return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
-                    Ok((x - y).into())
-                })
-            }
-            "==" => impl_op!(&str => as_str == as_str),
-            "!=" => impl_op!(&str => as_str != as_str),
-            ">" => impl_op!(&str => as_str > as_str),
-            ">=" => impl_op!(&str => as_str >= as_str),
-            "<" => impl_op!(&str => as_str < as_str),
-            "<=" => impl_op!(&str => as_str <= as_str),
+            "+" => impl_op!(ImmutableString => +),
+            "-" => impl_op!(ImmutableString => -),
+            "==" => impl_op!(ImmutableString => ==),
+            "!=" => impl_op!(ImmutableString => !=),
+            ">" => impl_op!(ImmutableString => >),
+            ">=" => impl_op!(ImmutableString => >=),
+            "<" => impl_op!(ImmutableString => <),
+            "<=" => impl_op!(ImmutableString => <=),
             _ => return None,
         }
     }
