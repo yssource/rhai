@@ -1526,15 +1526,18 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Cast the [`Dynamic`] as a [`String`] and return the string slice.
+    /// Cast the [`Dynamic`] as an [`ImmutableString`] and return it.
     /// Returns the name of the actual type if the cast fails.
     ///
-    /// Fails if `self` is _shared_.
+    /// # Panics
+    ///
+    /// Panics if the value is shared.
     #[inline(always)]
-    pub fn as_str(&self) -> Result<&str, &'static str> {
+    pub(crate) fn as_str(&self) -> Result<&str, &'static str> {
         match &self.0 {
             Union::Str(s, _) => Ok(s),
-            Union::FnPtr(f, _) => Ok(f.fn_name()),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(_, _) => panic!("as_str() cannot be called on shared values"),
             _ => Err(self.type_name()),
         }
     }

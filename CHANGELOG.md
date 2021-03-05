@@ -16,6 +16,7 @@ Bug fixes
 Breaking changes
 ----------------
 
+* `Dynamic::as_str` is removed because it does not properly handle shared values.
 * Zero step in the `range` function now raises an error instead of creating an infinite stream.
 * Error variable captured by `catch` is now an _object map_ containing error fields.
 * `EvalAltResult::clear_position` is renamed `EvalAltResult::take_position` and returns the position taken.
