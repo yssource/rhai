@@ -2,7 +2,7 @@
 
 use rhai::{
     serde::{from_dynamic, to_dynamic},
-    Dynamic, Engine, EvalAltResult, INT,
+    Dynamic, Engine, EvalAltResult, ImmutableString, INT,
 };
 use serde::{Deserialize, Serialize};
 
