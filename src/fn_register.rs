@@ -161,15 +161,15 @@ pub fn map_result(data: RhaiResult) -> RhaiResult {
 
 /// Remap `&str` | `String` to `ImmutableString`.
 #[inline(always)]
-fn map_type_id<T: 'static>() -> TypeId {
-    let id = TypeId::of::<T>();
+fn map_type_id<R: 'static, T: 'static>() -> TypeId {
+    let ref_id = TypeId::of::<R>();
 
-    if id == TypeId::of::<&str>() {
+    if ref_id == TypeId::of::<&str>() {
         TypeId::of::<ImmutableString>()
-    } else if id == TypeId::of::<String>() {
+    } else if ref_id == TypeId::of::<String>() {
         TypeId::of::<ImmutableString>()
     } else {
-        id
+        TypeId::of::<T>()
     }
 }
 
@@ -193,7 +193,7 @@ macro_rules! def_register {
             #[inline(always)]
             fn register_fn(&mut self, name: &str, f: FN) -> &mut Self {
                 self.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public, None,
-                    &[$(map_type_id::<$par>()),*],
+                    &[$(map_type_id::<$param, $par>()),*],
                     CallableFunction::$abi(make_func!(f : map_dynamic ; $($par => $let => $clone => $arg),*))
                 );
                 self
@@ -208,7 +208,7 @@ macro_rules! def_register {
             #[inline(always)]
             fn register_result_fn(&mut self, name: &str, f: FN) -> &mut Self {
                 self.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public, None,
-                    &[$(map_type_id::<$par>()),*],
+                    &[$(map_type_id::<$param, $par>()),*],
                     CallableFunction::$abi(make_func!(f : map_result ; $($par => $let => $clone => $arg),*))
                 );
                 self
