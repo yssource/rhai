@@ -405,8 +405,8 @@ impl<'a> Target<'a> {
             Self::LockGuard((r, _)) => **r = new_val,
             Self::Value(_) => panic!("cannot update a value"),
             #[cfg(not(feature = "no_index"))]
-            Self::StringChar(string, index, _) if string.is::<ImmutableString>() => {
-                let mut s = string.write_lock::<ImmutableString>().unwrap();
+            Self::StringChar(s, index, _) if s.is::<ImmutableString>() => {
+                let mut s = s.write_lock::<ImmutableString>().unwrap();
 
                 // Replace the character at the specified index position
                 let new_ch = new_val.as_char().map_err(|err| {
@@ -426,7 +426,10 @@ impl<'a> Target<'a> {
                 }
             }
             #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, _) => unreachable!(),
+            Self::StringChar(s, _, _) => unreachable!(
+                "Target::StringChar should contain only a string, not {}",
+                s.type_name()
+            ),
         }
 
         Ok(())

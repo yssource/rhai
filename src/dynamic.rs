@@ -1195,18 +1195,24 @@ impl Dynamic {
         match self.0 {
             Union::Shared(_, _) => match crate::stdlib::mem::take(self).0 {
                 Union::Shared(cell, _) => {
-                    let value = crate::fn_native::shared_take_or_clone(cell);
+                    *self = crate::fn_native::shared_try_take(cell).map_or_else(
+                        |cell| {
+                            #[cfg(not(feature = "sync"))]
+                            let value = cell.borrow();
+                            #[cfg(feature = "sync")]
+                            let value = cell.read().unwrap();
 
-                    #[cfg(not(feature = "sync"))]
-                    {
-                        *self = value.into_inner();
-                    }
-                    #[cfg(feature = "sync")]
-                    {
-                        *self = value.into_inner().unwrap();
-                    }
+                            value.clone()
+                        },
+                        |value| {
+                            #[cfg(not(feature = "sync"))]
+                            return value.into_inner();
+                            #[cfg(feature = "sync")]
+                            return value.into_inner().unwrap();
+                        },
+                    )
                 }
-                _ => unreachable!(),
+                _ => unreachable!("self should be Shared"),
             },
             _ => (),
         }

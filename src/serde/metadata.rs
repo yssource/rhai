@@ -147,7 +147,7 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
             doc_comments: if info.func.is_script() {
                 #[cfg(feature = "no_function")]
                 {
-                    unreachable!()
+                    unreachable!("scripted functions should not exist under no_function")
                 }
                 #[cfg(not(feature = "no_function"))]
                 {
