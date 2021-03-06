@@ -7,11 +7,12 @@ Version 0.19.14
 Bug fixes
 ---------
 
+* Panic when passing a shared string into a registered function as `&str` argument is fixed.
+* Panic when calling `switch` statements on custom types is fixed.
+* Potential overflow panics in `range(from, to, step)` is fixed.
+* Some expressions involving shared variables now work properly, for example `x in shared_value`, `return shared_value`, `obj.field = shared_value` etc. Previously, the resultant value is still shared which is counter-intuitive.
 * Errors in native Rust functions now contain the correct function call positions.
 * Fixed error types in `EvalAltResult::ErrorMismatchDataType` which were swapped.
-* Some expressions involving shared variables now work properly, for example `x in shared_value`, `return shared_value`, `obj.field = shared_value` etc. Previously, the resultant value is still shared which is counter-intuitive.
-* Potential overflow panics in `range(from, to, step)` is fixed.
-* `switch` statements no longer panic on custom types.
 
 Breaking changes
 ----------------

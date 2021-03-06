@@ -100,13 +100,20 @@ pub fn by_ref<T: Variant + Clone>(data: &mut Dynamic) -> DynamicWriteLock<T> {
 #[inline(always)]
 pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
     if TypeId::of::<T>() == TypeId::of::<&str>() {
-        // If T is &str, data must be ImmutableString, so map directly to it
-        let ref_str = data.as_str().unwrap();
-        let ref_T = unsafe { mem::transmute::<_, &T>(&ref_str) };
-        ref_T.clone()
+        // If T is `&str`, data must be `ImmutableString`, so map directly to it
+
+        // Beware - `Dynamic::as_str_ref` panics if `data` is shared,
+        //          but this should not happen for argument which is passed by value
+        assert!(!data.is_shared());
+
+        let ref_str = data
+            .as_str_ref()
+            .expect("argument passed by value should not be shared");
+        let ref_t = unsafe { mem::transmute::<_, &T>(&ref_str) };
+        ref_t.clone()
     } else if TypeId::of::<T>() == TypeId::of::<String>() {
-        // If T is String, data must be ImmutableString, so map directly to it
-        *unsafe_cast_box(Box::new(data.clone().take_string().unwrap())).unwrap()
+        // If T is `String`, data must be `ImmutableString`, so map directly to it
+        *unsafe_cast_box(Box::new(mem::take(data).take_string().unwrap())).unwrap()
     } else {
         // We consume the argument and then replace it with () - the argument is not supposed to be used again.
         // This way, we avoid having to clone the argument again, because it is already a clone when passed here.

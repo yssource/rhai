@@ -334,6 +334,12 @@ impl Engine {
                 backup.as_mut().unwrap().change_first_arg_to_copy(args);
             }
 
+            // Flatten arguments passed by value
+            args.iter_mut()
+                .skip(if is_ref { 1 } else { 0 })
+                .filter(|v| v.is_shared())
+                .for_each(|v| **v = mem::take(*v).flatten());
+
             // Run external function
             let source = src.as_ref().or_else(|| source.as_ref()).map(|s| s.as_str());
             let result = if func.is_plugin_fn() {
@@ -1129,16 +1135,18 @@ impl Engine {
             // Handle is_def_fn()
             #[cfg(not(feature = "no_function"))]
             crate::engine::KEYWORD_IS_DEF_FN if args_expr.len() == 2 => {
-                let fn_name =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-                let fn_name = fn_name.take_immutable_string().map_err(|err| {
-                    self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
-                })?;
-                let num_params =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[1], level)?;
-                let num_params = num_params.as_int().map_err(|err| {
-                    self.make_type_mismatch_err::<INT>(err, args_expr[0].position())
-                })?;
+                let fn_name = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
+                    .take_immutable_string()
+                    .map_err(|err| {
+                        self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
+                    })?;
+                let num_params = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[1], level)?
+                    .as_int()
+                    .map_err(|err| {
+                        self.make_type_mismatch_err::<INT>(err, args_expr[0].position())
+                    })?;
 
                 return Ok(if num_params < 0 {
                     Dynamic::FALSE
@@ -1151,11 +1159,12 @@ impl Engine {
 
             // Handle is_def_var()
             KEYWORD_IS_DEF_VAR if args_expr.len() == 1 => {
-                let var_name =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-                let var_name = var_name.take_immutable_string().map_err(|err| {
-                    self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
-                })?;
+                let var_name = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
+                    .take_immutable_string()
+                    .map_err(|err| {
+                        self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
+                    })?;
                 return Ok(scope.contains(&var_name).into());
             }
 
@@ -1166,11 +1175,12 @@ impl Engine {
 
                 // eval - only in function call style
                 let prev_len = scope.len();
-                let script =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, script_expr, level)?;
-                let script = script.take_immutable_string().map_err(|typ| {
-                    self.make_type_mismatch_err::<ImmutableString>(typ, script_pos)
-                })?;
+                let script = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, script_expr, level)?
+                    .take_immutable_string()
+                    .map_err(|typ| {
+                        self.make_type_mismatch_err::<ImmutableString>(typ, script_pos)
+                    })?;
                 let result = self.eval_script_expr_in_place(
                     scope,
                     mods,

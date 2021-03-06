@@ -284,11 +284,13 @@ impl Dynamic {
     /// Always [`false`] under the `no_closure` feature.
     #[inline(always)]
     pub fn is_shared(&self) -> bool {
+        #[cfg(not(feature = "no_closure"))]
         match self.0 {
-            #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _) => true,
             _ => false,
         }
+        #[cfg(feature = "no_closure")]
+        false
     }
     /// Is the value held by this [`Dynamic`] a particular type?
     ///
@@ -1533,7 +1535,7 @@ impl Dynamic {
     ///
     /// Panics if the value is shared.
     #[inline(always)]
-    pub(crate) fn as_str(&self) -> Result<&str, &'static str> {
+    pub(crate) fn as_str_ref(&self) -> Result<&str, &'static str> {
         match &self.0 {
             Union::Str(s, _) => Ok(s),
             #[cfg(not(feature = "no_closure"))]
