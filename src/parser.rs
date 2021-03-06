@@ -2122,9 +2122,10 @@ fn parse_while_loop(
     let (guard, token_pos) = match input.next().unwrap() {
         (Token::While, pos) => {
             ensure_not_statement_expr(input, "a boolean")?;
-            (parse_expr(input, state, lib, settings.level_up())?, pos)
+            let expr = parse_expr(input, state, lib, settings.level_up())?;
+            (Some(expr), pos)
         }
-        (Token::Loop, pos) => (Expr::BoolConstant(true, pos), pos),
+        (Token::Loop, pos) => (None, pos),
         (t, _) => unreachable!("expecting Token::While or Token::Loop, but gets {:?}", t),
     };
     settings.pos = token_pos;

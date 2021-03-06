@@ -2138,24 +2138,25 @@ impl Engine {
 
             // While loop
             Stmt::While(expr, body, _) => loop {
-                match self
-                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .as_bool()
-                {
-                    Ok(true) => {
-                        match self.eval_stmt(scope, mods, state, lib, this_ptr, body, level) {
-                            Ok(_) => (),
-                            Err(err) => match *err {
-                                EvalAltResult::LoopBreak(false, _) => (),
-                                EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
-                                _ => return Err(err),
-                            },
-                        }
+                let condition = if let Some(expr) = expr {
+                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                        .as_bool()
+                        .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?
+                } else {
+                    true
+                };
+
+                if condition {
+                    match self.eval_stmt(scope, mods, state, lib, this_ptr, body, level) {
+                        Ok(_) => (),
+                        Err(err) => match *err {
+                            EvalAltResult::LoopBreak(false, _) => (),
+                            EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
+                            _ => return Err(err),
+                        },
                     }
-                    Ok(false) => return Ok(Dynamic::UNIT),
-                    Err(err) => {
-                        return Err(self.make_type_mismatch_err::<bool>(err, expr.position()))
-                    }
+                } else {
+                    return Ok(Dynamic::UNIT);
                 }
             },
 
@@ -2170,15 +2171,17 @@ impl Engine {
                     },
                 }
 
-                match self
+                if self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?
                 {
-                    Ok(true) if !*is_while => return Ok(Dynamic::UNIT),
-                    Ok(false) if *is_while => return Ok(Dynamic::UNIT),
-                    Ok(_) => (),
-                    Err(err) => {
-                        return Err(self.make_type_mismatch_err::<bool>(err, expr.position()))
+                    if !*is_while {
+                        return Ok(Dynamic::UNIT);
+                    }
+                } else {
+                    if *is_while {
+                        return Ok(Dynamic::UNIT);
                     }
                 }
             },

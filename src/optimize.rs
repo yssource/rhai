@@ -393,25 +393,32 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         }
 
         // while false { block } -> Noop
-        Stmt::While(Expr::BoolConstant(false, pos), _, _) => {
+        Stmt::While(Some(Expr::BoolConstant(false, pos)), _, _) => {
             state.set_dirty();
             *stmt = Stmt::Noop(*pos)
         }
         // while expr { block }
         Stmt::While(condition, block, _) => {
             optimize_stmt(block, state, false);
-            optimize_expr(condition, state);
+
+            if let Some(condition) = condition {
+                optimize_expr(condition, state);
+            }
 
             match **block {
                 // while expr { break; } -> { expr; }
                 Stmt::Break(pos) => {
                     // Only a single break statement - turn into running the guard expression once
                     state.set_dirty();
-                    let mut statements = vec![Stmt::Expr(mem::take(condition))];
-                    if preserve_result {
-                        statements.push(Stmt::Noop(pos))
-                    }
-                    *stmt = Stmt::Block(statements, pos);
+                    if let Some(condition) = condition {
+                        let mut statements = vec![Stmt::Expr(mem::take(condition))];
+                        if preserve_result {
+                            statements.push(Stmt::Noop(pos))
+                        }
+                        *stmt = Stmt::Block(statements, pos);
+                    } else {
+                        *stmt = Stmt::Noop(pos);
+                    };
                 }
                 _ => (),
             }

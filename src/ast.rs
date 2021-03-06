@@ -823,7 +823,7 @@ pub enum Stmt {
         Position,
     ),
     /// `while` expr `{` stmt `}`
-    While(Expr, Box<Stmt>, Position),
+    While(Option<Expr>, Box<Stmt>, Position),
     /// `do` `{` stmt `}` `while`|`until` expr
     Do(Box<Stmt>, Expr, bool, Position),
     /// `for` id `in` expr `{` stmt `}`
@@ -981,9 +981,10 @@ impl Stmt {
                     && x.0.values().all(Stmt::is_pure)
                     && x.1.as_ref().map(Stmt::is_pure).unwrap_or(true)
             }
-            Self::While(condition, block, _) | Self::Do(block, condition, _, _) => {
+            Self::While(Some(condition), block, _) | Self::Do(block, condition, _, _) => {
                 condition.is_pure() && block.is_pure()
             }
+            Self::While(None, block, _) => block.is_pure(),
             Self::For(iterable, x, _) => iterable.is_pure() && x.1.is_pure(),
             Self::Let(_, _, _, _) | Self::Const(_, _, _, _) | Self::Assignment(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
@@ -1021,10 +1022,11 @@ impl Stmt {
                     s.walk(path, on_node);
                 }
             }
-            Self::While(e, s, _) | Self::Do(s, e, _, _) => {
+            Self::While(Some(e), s, _) | Self::Do(s, e, _, _) => {
                 e.walk(path, on_node);
                 s.walk(path, on_node);
             }
+            Self::While(None, s, _) => s.walk(path, on_node),
             Self::For(e, x, _) => {
                 e.walk(path, on_node);
                 x.1.walk(path, on_node);
