@@ -188,42 +188,6 @@ impl Engine {
         allow_dynamic: bool,
         is_op_assignment: bool,
     ) -> &'s Option<(CallableFunction, Option<ImmutableString>)> {
-        fn find_function(
-            engine: &Engine,
-            hash: NonZeroU64,
-            mods: &Imports,
-            lib: &[&Module],
-        ) -> Option<(CallableFunction, Option<ImmutableString>)> {
-            lib.iter()
-                .find_map(|m| {
-                    m.get_fn(hash, false)
-                        .map(|f| (f.clone(), m.id_raw().cloned()))
-                })
-                .or_else(|| {
-                    engine
-                        .global_namespace
-                        .get_fn(hash, false)
-                        .cloned()
-                        .map(|f| (f, None))
-                })
-                .or_else(|| {
-                    engine.global_modules.iter().find_map(|m| {
-                        m.get_fn(hash, false)
-                            .map(|f| (f.clone(), m.id_raw().cloned()))
-                    })
-                })
-                .or_else(|| {
-                    mods.get_fn(hash)
-                        .map(|(f, source)| (f.clone(), source.cloned()))
-                })
-                .or_else(|| {
-                    engine.global_sub_modules.values().find_map(|m| {
-                        m.get_qualified_fn(hash)
-                            .map(|f| (f.clone(), m.id_raw().cloned()))
-                    })
-                })
-        }
-
         &*state
             .fn_resolution_cache_mut()
             .entry(hash)
@@ -237,7 +201,36 @@ impl Engine {
                 let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
 
                 loop {
-                    match find_function(self, hash, mods, lib) {
+                    let func = lib
+                        .iter()
+                        .find_map(|m| {
+                            m.get_fn(hash, false)
+                                .map(|f| (f.clone(), m.id_raw().cloned()))
+                        })
+                        .or_else(|| {
+                            self.global_namespace
+                                .get_fn(hash, false)
+                                .cloned()
+                                .map(|f| (f, None))
+                        })
+                        .or_else(|| {
+                            self.global_modules.iter().find_map(|m| {
+                                m.get_fn(hash, false)
+                                    .map(|f| (f.clone(), m.id_raw().cloned()))
+                            })
+                        })
+                        .or_else(|| {
+                            mods.get_fn(hash)
+                                .map(|(f, source)| (f.clone(), source.cloned()))
+                        })
+                        .or_else(|| {
+                            self.global_sub_modules.values().find_map(|m| {
+                                m.get_qualified_fn(hash)
+                                    .map(|f| (f.clone(), m.id_raw().cloned()))
+                            })
+                        });
+
+                    match func {
                         // Specific version found
                         Some(f) => return Some(f),
 
@@ -360,17 +353,17 @@ impl Engine {
             // See if the function match print/debug (which requires special processing)
             return Ok(match fn_name {
                 KEYWORD_PRINT => {
-                    let text = result.as_str().map_err(|typ| {
+                    let text = result.take_immutable_string().map_err(|typ| {
                         EvalAltResult::ErrorMismatchOutputType(
                             self.map_type_name(type_name::<ImmutableString>()).into(),
                             typ.into(),
                             pos,
                         )
                     })?;
-                    ((self.print)(text).into(), false)
+                    ((self.print)(&text).into(), false)
                 }
                 KEYWORD_DEBUG => {
-                    let text = result.as_str().map_err(|typ| {
+                    let text = result.take_immutable_string().map_err(|typ| {
                         EvalAltResult::ErrorMismatchOutputType(
                             self.map_type_name(type_name::<ImmutableString>()).into(),
                             typ.into(),
@@ -378,7 +371,7 @@ impl Engine {
                         )
                     })?;
                     let source = state.source.as_ref().map(|s| s.as_str());
-                    ((self.debug)(text, source, pos).into(), false)
+                    ((self.debug)(&text, source, pos).into(), false)
                 }
                 _ => (result, func.is_method()),
             });
@@ -520,18 +513,16 @@ impl Engine {
         );
 
         // Merge in encapsulated environment, if any
-        let mut lib_merged: StaticVec<_>;
-        let mut unified = false;
+        let lib_merged;
 
-        let unified_lib = if let Some(ref env_lib) = fn_def.lib {
-            unified = true;
+        let (unified_lib, unified) = if let Some(ref env_lib) = fn_def.lib {
             state.push_fn_resolution_cache();
-            lib_merged = Default::default();
-            lib_merged.push(env_lib.as_ref());
-            lib_merged.extend(lib.iter().cloned());
-            lib_merged.as_ref()
+            lib_merged = once(env_lib.as_ref())
+                .chain(lib.iter().cloned())
+                .collect::<StaticVec<_>>();
+            (lib_merged.as_ref(), true)
         } else {
-            lib
+            (lib, false)
         };
 
         #[cfg(not(feature = "no_module"))]
@@ -686,7 +677,7 @@ impl Engine {
             crate::engine::KEYWORD_IS_DEF_FN
                 if args.len() == 2 && args[0].is::<FnPtr>() && args[1].is::<INT>() =>
             {
-                let fn_name = args[0].as_str().unwrap();
+                let fn_name = mem::take(args[0]).take_immutable_string().unwrap();
                 let num_params = args[1].as_int().unwrap();
 
                 return Ok((
@@ -694,7 +685,7 @@ impl Engine {
                         Dynamic::FALSE
                     } else {
                         let hash_script =
-                            calc_script_fn_hash(empty(), fn_name, num_params as usize);
+                            calc_script_fn_hash(empty(), &fn_name, num_params as usize);
                         self.has_override(Some(mods), state, lib, None, hash_script)
                             .into()
                     },
@@ -1140,7 +1131,7 @@ impl Engine {
             crate::engine::KEYWORD_IS_DEF_FN if args_expr.len() == 2 => {
                 let fn_name =
                     self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-                let fn_name = fn_name.as_str().map_err(|err| {
+                let fn_name = fn_name.take_immutable_string().map_err(|err| {
                     self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
                 })?;
                 let num_params =
@@ -1152,7 +1143,7 @@ impl Engine {
                 return Ok(if num_params < 0 {
                     Dynamic::FALSE
                 } else {
-                    let hash_script = calc_script_fn_hash(empty(), fn_name, num_params as usize);
+                    let hash_script = calc_script_fn_hash(empty(), &fn_name, num_params as usize);
                     self.has_override(Some(mods), state, lib, None, hash_script)
                         .into()
                 });
@@ -1162,10 +1153,10 @@ impl Engine {
             KEYWORD_IS_DEF_VAR if args_expr.len() == 1 => {
                 let var_name =
                     self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-                let var_name = var_name.as_str().map_err(|err| {
+                let var_name = var_name.take_immutable_string().map_err(|err| {
                     self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
                 })?;
-                return Ok(scope.contains(var_name).into());
+                return Ok(scope.contains(&var_name).into());
             }
 
             // Handle eval()
@@ -1177,7 +1168,7 @@ impl Engine {
                 let prev_len = scope.len();
                 let script =
                     self.eval_expr(scope, mods, state, lib, this_ptr, script_expr, level)?;
-                let script = script.as_str().map_err(|typ| {
+                let script = script.take_immutable_string().map_err(|typ| {
                     self.make_type_mismatch_err::<ImmutableString>(typ, script_pos)
                 })?;
                 let result = self.eval_script_expr_in_place(
@@ -1185,7 +1176,7 @@ impl Engine {
                     mods,
                     state,
                     lib,
-                    script,
+                    &script,
                     script_pos,
                     level + 1,
                 );

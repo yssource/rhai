@@ -180,6 +180,10 @@ pub mod serde;
 #[cfg(not(feature = "no_optimize"))]
 pub use optimize::OptimizationLevel;
 
+#[cfg(feature = "internals")]
+#[deprecated = "this type is volatile and may change"]
+pub use dynamic::Variant;
+
 // Expose internal data structures.
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]

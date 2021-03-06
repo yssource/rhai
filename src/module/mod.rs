@@ -127,6 +127,8 @@ pub struct Module {
     all_type_iterators: HashMap<TypeId, IteratorFn>,
     /// Is the [`Module`] indexed?
     indexed: bool,
+    /// Does the [`Module`] contain indexed functions that have been exposed to the global namespace?
+    contains_indexed_global_functions: bool,
 }
 
 impl Default for Module {
@@ -141,6 +143,7 @@ impl Default for Module {
             type_iterators: Default::default(),
             all_type_iterators: Default::default(),
             indexed: false,
+            contains_indexed_global_functions: false,
         }
     }
 }
@@ -434,6 +437,7 @@ impl Module {
     ) -> &mut Self {
         self.variables.insert(name.into(), Dynamic::from(value));
         self.indexed = false;
+        self.contains_indexed_global_functions = false;
         self
     }
 
@@ -477,6 +481,7 @@ impl Module {
             },
         );
         self.indexed = false;
+        self.contains_indexed_global_functions = false;
         hash_script
     }
 
@@ -521,6 +526,7 @@ impl Module {
         self.all_variables.clear();
         self.all_type_iterators.clear();
         self.indexed = false;
+        self.contains_indexed_global_functions = false;
 
         &mut self.modules
     }
@@ -581,6 +587,7 @@ impl Module {
     ) -> &mut Self {
         self.modules.insert(name.into(), sub_module.into());
         self.indexed = false;
+        self.contains_indexed_global_functions = false;
         self
     }
 
@@ -649,6 +656,7 @@ impl Module {
             f.namespace = namespace;
         }
         self.indexed = false;
+        self.contains_indexed_global_functions = false;
         self
     }
 
@@ -704,6 +712,7 @@ impl Module {
         );
 
         self.indexed = false;
+        self.contains_indexed_global_functions = false;
 
         hash_fn
     }
@@ -1497,6 +1506,7 @@ impl Module {
         self.all_variables.clear();
         self.all_type_iterators.clear();
         self.indexed = false;
+        self.contains_indexed_global_functions = false;
         self
     }
 
@@ -1515,6 +1525,7 @@ impl Module {
         self.all_variables.clear();
         self.all_type_iterators.clear();
         self.indexed = false;
+        self.contains_indexed_global_functions = false;
         self
     }
 
@@ -1542,6 +1553,7 @@ impl Module {
         self.all_variables.clear();
         self.all_type_iterators.clear();
         self.indexed = false;
+        self.contains_indexed_global_functions = false;
         self
     }
 
@@ -1602,6 +1614,7 @@ impl Module {
         self.all_variables.clear();
         self.all_type_iterators.clear();
         self.indexed = false;
+        self.contains_indexed_global_functions = false;
         self
     }
 
@@ -1634,6 +1647,7 @@ impl Module {
         self.all_variables.clear();
         self.all_type_iterators.clear();
         self.indexed = false;
+        self.contains_indexed_global_functions = false;
         self
     }
 
@@ -1820,29 +1834,14 @@ impl Module {
         Ok(module)
     }
 
-    /// Are there functions (or type iterators) marked for the specified namespace?
-    pub fn has_namespace(&self, namespace: FnNamespace, recursive: bool) -> bool {
-        // Type iterators are default global
-        if !self.type_iterators.is_empty() {
-            return true;
-        }
-        // Any function marked global?
-        if self.functions.values().any(|f| f.namespace == namespace) {
-            return true;
-        }
-
-        // Scan sub-modules
-        if recursive {
-            if self
-                .modules
-                .values()
-                .any(|m| m.has_namespace(namespace, recursive))
-            {
-                return true;
-            }
-        }
-
-        false
+    /// Does the [`Module`] contain indexed functions that have been exposed to the global namespace?
+    ///
+    /// # Panics
+    ///
+    /// Panics if the [`Module`] is not yet indexed via [`build_index`][Module::build_index].
+    #[inline(always)]
+    pub fn contains_indexed_global_functions(&self) -> bool {
+        self.contains_indexed_global_functions
     }
 
     /// Scan through all the sub-modules in the [`Module`] and build a hash index of all
@@ -1857,11 +1856,15 @@ impl Module {
             variables: &mut HashMap<NonZeroU64, Dynamic, StraightHasherBuilder>,
             functions: &mut HashMap<NonZeroU64, CallableFunction, StraightHasherBuilder>,
             type_iterators: &mut HashMap<TypeId, IteratorFn>,
-        ) {
+        ) -> bool {
+            let mut contains_indexed_global_functions = false;
+
             module.modules.iter().for_each(|(name, m)| {
                 // Index all the sub-modules first.
                 qualifiers.push(name);
-                index_module(m, qualifiers, variables, functions, type_iterators);
+                if index_module(m, qualifiers, variables, functions, type_iterators) {
+                    contains_indexed_global_functions = true;
+                }
                 qualifiers.pop();
             });
 
@@ -1875,6 +1878,7 @@ impl Module {
             // Index type iterators
             module.type_iterators.iter().for_each(|(&type_id, func)| {
                 type_iterators.insert(type_id, func.clone());
+                contains_indexed_global_functions = true;
             });
 
             // Index all Rust functions
@@ -1895,6 +1899,7 @@ impl Module {
                         FnNamespace::Global => {
                             // Flatten all functions with global namespace
                             functions.insert(hash, func.clone());
+                            contains_indexed_global_functions = true;
                         }
                         FnNamespace::Internal => (),
                     }
@@ -1927,6 +1932,8 @@ impl Module {
                     }
                 },
             );
+
+            contains_indexed_global_functions
         }
 
         if !self.indexed {
@@ -1937,7 +1944,7 @@ impl Module {
 
             qualifiers.push("root");
 
-            index_module(
+            self.contains_indexed_global_functions = index_module(
                 self,
                 &mut qualifiers,
                 &mut variables,
@@ -1968,6 +1975,7 @@ impl Module {
     pub fn set_iter(&mut self, typ: TypeId, func: IteratorFn) -> &mut Self {
         self.type_iterators.insert(typ, func);
         self.indexed = false;
+        self.contains_indexed_global_functions = false;
         self
     }
 

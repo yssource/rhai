@@ -440,8 +440,8 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Box<EvalAltResult>> {
-        if let Ok(s) = self.value.as_str() {
-            visitor.visit_enum(s.into_deserializer())
+        if let Some(s) = self.value.read_lock::<ImmutableString>() {
+            visitor.visit_enum(s.as_str().into_deserializer())
         } else {
             #[cfg(not(feature = "no_object"))]
             if let Some(map) = self.value.downcast_ref::<Map>() {

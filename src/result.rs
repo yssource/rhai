@@ -190,7 +190,7 @@ impl fmt::Display for EvalAltResult {
             | Self::ErrorTerminated(_, _) => f.write_str(desc)?,
 
             Self::ErrorRuntime(d, _) if d.is::<ImmutableString>() => {
-                let s = d.as_str().unwrap();
+                let s = &*d.read_lock::<ImmutableString>().unwrap();
                 write!(f, "{}: {}", desc, if s.is_empty() { desc } else { s })?
             }
             Self::ErrorRuntime(d, _) if d.is::<()>() => f.write_str(desc)?,
