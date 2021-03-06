@@ -334,12 +334,6 @@ impl Engine {
                 backup.as_mut().unwrap().change_first_arg_to_copy(args);
             }
 
-            // Flatten arguments passed by value
-            args.iter_mut()
-                .skip(if is_ref { 1 } else { 0 })
-                .filter(|v| v.is_shared())
-                .for_each(|v| **v = mem::take(*v).flatten());
-
             // Run external function
             let source = src.as_ref().or_else(|| source.as_ref()).map(|s| s.as_str());
             let result = if func.is_plugin_fn() {
@@ -683,7 +677,7 @@ impl Engine {
             crate::engine::KEYWORD_IS_DEF_FN
                 if args.len() == 2 && args[0].is::<FnPtr>() && args[1].is::<INT>() =>
             {
-                let fn_name = mem::take(args[0]).take_immutable_string().unwrap();
+                let fn_name = args[0].read_lock::<ImmutableString>().unwrap();
                 let num_params = args[1].as_int().unwrap();
 
                 return Ok((

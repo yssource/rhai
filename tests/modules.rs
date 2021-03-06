@@ -395,14 +395,14 @@ fn test_module_export() -> Result<(), Box<EvalAltResult>> {
 
 #[test]
 fn test_module_str() -> Result<(), Box<EvalAltResult>> {
-    fn test_fn(_input: ImmutableString) -> Result<INT, Box<EvalAltResult>> {
-        Ok(42)
+    fn test_fn(input: ImmutableString) -> Result<INT, Box<EvalAltResult>> {
+        Ok(input.len() as INT)
     }
-    fn test_fn2(_input: &str) -> Result<INT, Box<EvalAltResult>> {
-        Ok(42)
+    fn test_fn2(input: &str) -> Result<INT, Box<EvalAltResult>> {
+        Ok(input.len() as INT)
     }
-    fn test_fn3(_input: String) -> Result<INT, Box<EvalAltResult>> {
-        Ok(42)
+    fn test_fn3(input: String) -> Result<INT, Box<EvalAltResult>> {
+        Ok(input.len() as INT)
     }
 
     let mut engine = rhai::Engine::new();
@@ -417,15 +417,15 @@ fn test_module_str() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(r#"import "test" as test; test::test("test");"#)?,
-        42
+        4
     );
     assert_eq!(
         engine.eval::<INT>(r#"import "test" as test; test::test2("test");"#)?,
-        42
+        4
     );
     assert_eq!(
         engine.eval::<INT>(r#"import "test" as test; test::test3("test");"#)?,
-        42
+        4
     );
 
     Ok(())

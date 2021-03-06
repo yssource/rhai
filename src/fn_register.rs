@@ -101,11 +101,7 @@ pub fn by_ref<T: Variant + Clone>(data: &mut Dynamic) -> DynamicWriteLock<T> {
 pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
     if TypeId::of::<T>() == TypeId::of::<&str>() {
         // If T is `&str`, data must be `ImmutableString`, so map directly to it
-
-        // Beware - `Dynamic::as_str_ref` panics if `data` is shared,
-        //          but this should not happen for argument which is passed by value
-        assert!(!data.is_shared());
-
+        data.flatten_in_place();
         let ref_str = data
             .as_str_ref()
             .expect("argument passed by value should not be shared");
