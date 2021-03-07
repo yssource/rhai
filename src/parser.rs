@@ -948,7 +948,7 @@ fn parse_primary(
             }
             Token::True => Expr::BoolConstant(true, settings.pos),
             Token::False => Expr::BoolConstant(false, settings.pos),
-            t => unreachable!("unexpected token: {:?}", t),
+            _ => unreachable!(),
         },
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => {
@@ -1033,7 +1033,7 @@ fn parse_primary(
         Token::Identifier(_) => {
             let s = match input.next().unwrap().0 {
                 Token::Identifier(s) => s,
-                t => unreachable!("expecting Token::Identifier, but gets {:?}", t),
+                _ => unreachable!(),
             };
 
             match input.peek().unwrap().0 {
@@ -1080,7 +1080,7 @@ fn parse_primary(
         Token::Reserved(_) => {
             let s = match input.next().unwrap().0 {
                 Token::Reserved(s) => s,
-                t => unreachable!("expecting Token::Reserved, but gets {:?}", t),
+                _ => unreachable!(),
             };
 
             match input.peek().unwrap().0 {
@@ -1115,7 +1115,7 @@ fn parse_primary(
         Token::LexError(_) => {
             let err = match input.next().unwrap().0 {
                 Token::LexError(err) => err,
-                t => unreachable!("expecting Token::LexError, but gets {:?}", t),
+                _ => unreachable!(),
             };
 
             return Err(err.into_err(settings.pos));
@@ -2126,7 +2126,7 @@ fn parse_while_loop(
             (Some(expr), pos)
         }
         (Token::Loop, pos) => (None, pos),
-        (t, _) => unreachable!("expecting Token::While or Token::Loop, but gets {:?}", t),
+        _ => unreachable!(),
     };
     settings.pos = token_pos;
 
@@ -2544,7 +2544,7 @@ fn parse_stmt(
                         _ => return Err(PERR::WrongDocComment.into_err(comments_pos)),
                     }
                 }
-                t => unreachable!("expecting Token::Comment, but gets {:?}", t),
+                _ => unreachable!(),
             }
         }
     }
@@ -2651,10 +2651,7 @@ fn parse_stmt(
                         match token {
                             Token::Return => ReturnType::Return,
                             Token::Throw => ReturnType::Exception,
-                            t => unreachable!(
-                                "expecting Token::Return or Token::Throw, but gets {:?}",
-                                t
-                            ),
+                            _ => unreachable!(),
                         },
                         pos,
                     )

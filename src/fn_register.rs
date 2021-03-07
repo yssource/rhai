@@ -131,8 +131,7 @@ macro_rules! make_func {
             // The arguments are assumed to be of the correct number and types!
 
 			let mut _drain = args.iter_mut();
-			$($let)*
-			$($par = ($convert)(_drain.next().unwrap()); )*
+			$($let $par = ($convert)(_drain.next().unwrap()); )*
 
             // Call the function with each argument value
 			let r = $fn($($arg),*);
@@ -215,9 +214,9 @@ macro_rules! def_register {
     };
     ($p0:ident $(, $p:ident)*) => {
         def_register!(imp from_pure   : $p0 => $p0      => $p0      => $p0      => let $p0     => by_value $(, $p => $p => $p => $p => let $p => by_value)*);
-        def_register!(imp from_method : $p0 => &mut $p0  => Mut<$p0> => &mut $p0 => let mut $p0 => by_ref   $(, $p => $p => $p => $p => let $p => by_value)*);
-        //                ^ CallableFunction
-        // handle the first parameter                                              ^ first parameter passed through
+        def_register!(imp from_method : $p0 => &mut $p0 => Mut<$p0> => &mut $p0 => let mut $p0 => by_ref   $(, $p => $p => $p => $p => let $p => by_value)*);
+        //                ^ CallableFunction constructor
+        //                                                             ^ first parameter passed through
         //                                                                                                     ^ others passed by value (by_value)
 
         // Currently does not support first argument which is a reference, as there will be

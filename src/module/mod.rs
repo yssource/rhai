@@ -22,9 +22,6 @@ use crate::{
     Dynamic, EvalAltResult, ImmutableString, NativeCallContext, Position, Shared, StaticVec,
 };
 
-#[cfg(not(feature = "no_function"))]
-use crate::ast::ScriptFnDef;
-
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
 
@@ -460,7 +457,10 @@ impl Module {
     /// If there is an existing function of the same name and number of arguments, it is replaced.
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub(crate) fn set_script_fn(&mut self, fn_def: impl Into<Shared<ScriptFnDef>>) -> NonZeroU64 {
+    pub(crate) fn set_script_fn(
+        &mut self,
+        fn_def: impl Into<Shared<crate::ast::ScriptFnDef>>,
+    ) -> NonZeroU64 {
         let fn_def = fn_def.into();
 
         // None + function name + number of arguments.
@@ -493,7 +493,7 @@ impl Module {
         name: &str,
         num_params: usize,
         public_only: bool,
-    ) -> Option<&ScriptFnDef> {
+    ) -> Option<&crate::ast::ScriptFnDef> {
         self.functions
             .values()
             .find(
@@ -1692,7 +1692,8 @@ impl Module {
     #[inline(always)]
     pub(crate) fn iter_script_fn(
         &self,
-    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &ScriptFnDef)> + '_ {
+    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &crate::ast::ScriptFnDef)> + '_
+    {
         self.functions.values().filter(|f| f.func.is_script()).map(
             |FuncInfo {
                  namespace,
@@ -1751,7 +1752,7 @@ impl Module {
     #[inline(always)]
     pub fn iter_script_fn_info(
         &self,
-    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &ScriptFnDef)> {
+    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &crate::ast::ScriptFnDef)> {
         self.iter_script_fn()
     }
 

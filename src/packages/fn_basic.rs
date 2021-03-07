@@ -1,11 +1,6 @@
 use crate::plugin::*;
 use crate::{def_package, FnPtr, ImmutableString, NativeCallContext};
 
-#[cfg(not(feature = "no_function"))]
-#[cfg(not(feature = "no_index"))]
-#[cfg(not(feature = "no_object"))]
-use crate::{ast::ScriptFnDef, stdlib::collections::HashMap, Array, Map};
-
 def_package!(crate:BasicFnPackage:"Basic Fn functions.", lib, {
     combine_with_exported_module!(lib, "FnPtr", fn_ptr_functions);
 });
@@ -29,7 +24,7 @@ mod fn_ptr_functions {
     #[cfg(not(feature = "no_index"))]
     #[cfg(not(feature = "no_object"))]
     pub mod functions_and_maps {
-        pub fn get_fn_metadata_list(ctx: NativeCallContext) -> Array {
+        pub fn get_fn_metadata_list(ctx: NativeCallContext) -> crate::Array {
             collect_fn_metadata(ctx)
         }
     }
@@ -38,7 +33,9 @@ mod fn_ptr_functions {
 #[cfg(not(feature = "no_function"))]
 #[cfg(not(feature = "no_index"))]
 #[cfg(not(feature = "no_object"))]
-fn collect_fn_metadata(ctx: NativeCallContext) -> Array {
+fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
+    use crate::{ast::ScriptFnDef, stdlib::collections::HashMap, Array, Map};
+
     // Create a metadata record for a function.
     fn make_metadata(
         dict: &HashMap<&str, ImmutableString>,
@@ -76,22 +73,6 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> Array {
         map.into()
     }
 
-    // Recursively scan modules for script-defined functions.
-    fn scan_module(
-        list: &mut Array,
-        dict: &HashMap<&str, ImmutableString>,
-        namespace: ImmutableString,
-        module: &Module,
-    ) {
-        module.iter_script_fn().for_each(|(_, _, _, _, f)| {
-            list.push(make_metadata(dict, Some(namespace.clone()), f).into())
-        });
-        module.iter_sub_modules().for_each(|(ns, m)| {
-            let ns: ImmutableString = format!("{}::{}", namespace, ns).into();
-            scan_module(list, dict, ns, m.as_ref())
-        });
-    }
-
     // Intern strings
     let mut dict = HashMap::<&str, ImmutableString>::with_capacity(8);
     [
@@ -115,8 +96,26 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> Array {
         .for_each(|(_, _, _, _, f)| list.push(make_metadata(&dict, None, f).into()));
 
     #[cfg(not(feature = "no_module"))]
-    ctx.iter_imports_raw()
-        .for_each(|(ns, m)| scan_module(&mut list, &dict, ns.clone(), m.as_ref()));
+    {
+        // Recursively scan modules for script-defined functions.
+        fn scan_module(
+            list: &mut Array,
+            dict: &HashMap<&str, ImmutableString>,
+            namespace: ImmutableString,
+            module: &Module,
+        ) {
+            module.iter_script_fn().for_each(|(_, _, _, _, f)| {
+                list.push(make_metadata(dict, Some(namespace.clone()), f).into())
+            });
+            module.iter_sub_modules().for_each(|(ns, m)| {
+                let ns: ImmutableString = format!("{}::{}", namespace, ns).into();
+                scan_module(list, dict, ns, m.as_ref())
+            });
+        }
+
+        ctx.iter_imports_raw()
+            .for_each(|(ns, m)| scan_module(&mut list, &dict, ns.clone(), m.as_ref()));
+    }
 
     list
 }

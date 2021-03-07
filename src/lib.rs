@@ -122,7 +122,7 @@ pub type FLOAT = f64;
 #[cfg(feature = "f32_float")]
 pub type FLOAT = f32;
 
-pub use ast::{FnAccess, ScriptFnMetadata, AST};
+pub use ast::{FnAccess, AST};
 pub use dynamic::Dynamic;
 pub use engine::{Engine, EvalContext};
 pub use fn_native::{FnPtr, NativeCallContext};
@@ -154,6 +154,9 @@ pub use fn_func::Func;
 
 #[cfg(not(feature = "no_function"))]
 pub use fn_args::FuncArgs;
+
+#[cfg(not(feature = "no_function"))]
+pub use ast::ScriptFnMetadata;
 
 /// Variable-sized array of [`Dynamic`] values.
 ///

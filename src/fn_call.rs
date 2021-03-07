@@ -28,7 +28,7 @@ use crate::{
 };
 use crate::{
     calc_native_fn_hash, calc_script_fn_hash, Dynamic, Engine, EvalAltResult, FnPtr,
-    ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec, INT,
+    ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec,
 };
 
 #[cfg(not(feature = "no_object"))]
@@ -649,7 +649,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        hash_script: Option<NonZeroU64>,
+        _hash_script: Option<NonZeroU64>,
         args: &mut FnCallArgs,
         is_ref: bool,
         _is_method: bool,
@@ -675,7 +675,7 @@ impl Engine {
             // Handle is_def_fn()
             #[cfg(not(feature = "no_function"))]
             crate::engine::KEYWORD_IS_DEF_FN
-                if args.len() == 2 && args[0].is::<FnPtr>() && args[1].is::<INT>() =>
+                if args.len() == 2 && args[0].is::<FnPtr>() && args[1].is::<crate::INT>() =>
             {
                 let fn_name = args[0].read_lock::<ImmutableString>().unwrap();
                 let num_params = args[1].as_int().unwrap();
@@ -732,7 +732,7 @@ impl Engine {
         }
 
         #[cfg(not(feature = "no_function"))]
-        if let Some((func, source)) = hash_script.and_then(|hash| {
+        if let Some((func, source)) = _hash_script.and_then(|hash| {
             self.resolve_function(mods, state, lib, fn_name, hash, args, false, false)
                 .as_ref()
                 .map(|(f, s)| (f.clone(), s.clone()))
@@ -1139,7 +1139,7 @@ impl Engine {
                     .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[1], level)?
                     .as_int()
                     .map_err(|err| {
-                        self.make_type_mismatch_err::<INT>(err, args_expr[0].position())
+                        self.make_type_mismatch_err::<crate::INT>(err, args_expr[0].position())
                     })?;
 
                 return Ok(if num_params < 0 {

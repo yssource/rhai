@@ -108,6 +108,7 @@ impl Imports {
         self.0.iter().rev().map(|(n, m)| (n, m))
     }
     /// Get an iterator to this stack of imported [modules][Module] in forward order.
+    #[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn scan_raw(&self) -> impl Iterator<Item = (&ImmutableString, &Shared<Module>)> {
         self.0.iter().map(|(n, m)| (n, m))
@@ -405,8 +406,8 @@ impl<'a> Target<'a> {
             Self::LockGuard((r, _)) => **r = new_val,
             Self::Value(_) => panic!("cannot update a value"),
             #[cfg(not(feature = "no_index"))]
-            Self::StringChar(s, index, _) if s.is::<ImmutableString>() => {
-                let mut s = s.write_lock::<ImmutableString>().unwrap();
+            Self::StringChar(s, index, _) => {
+                let s = &mut *s.write_lock::<ImmutableString>().unwrap();
 
                 // Replace the character at the specified index position
                 let new_ch = new_val.as_char().map_err(|err| {
@@ -417,19 +418,14 @@ impl<'a> Target<'a> {
                     ))
                 })?;
 
-                let mut chars = s.chars().collect::<StaticVec<_>>();
+                let index = *index;
 
-                // See if changed - if so, update the String
-                if chars[*index] != new_ch {
-                    chars[*index] = new_ch;
-                    *s = chars.iter().collect::<String>().into();
-                }
+                *s = s
+                    .chars()
+                    .enumerate()
+                    .map(|(i, ch)| if i == index { new_ch } else { ch })
+                    .collect();
             }
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(s, _, _) => unreachable!(
-                "Target::StringChar should contain only a string, not {}",
-                s.type_name()
-            ),
         }
 
         Ok(())
@@ -543,20 +539,13 @@ impl State {
         self.fn_resolution_caches.last_mut().unwrap()
     }
     /// Push an empty functions resolution cache onto the stack and make it current.
+    #[allow(dead_code)]
     pub fn push_fn_resolution_cache(&mut self) {
         self.fn_resolution_caches.push(Default::default());
     }
     /// Remove the current functions resolution cache and make the last one current.
     pub fn pop_fn_resolution_cache(&mut self) {
         self.fn_resolution_caches.pop();
-    }
-    /// Clear the current functions resolution cache.
-    ///
-    /// # Panics
-    ///
-    /// Panics if there is no current functions resolution cache.
-    pub fn clear_fn_resolution_cache(&mut self) {
-        self.fn_resolution_caches.last_mut().unwrap().clear();
     }
 }
 
@@ -1066,9 +1055,7 @@ impl Engine {
         level: usize,
         new_val: Option<((Dynamic, Position), (&str, Position))>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        if chain_type == ChainType::NonChaining {
-            unreachable!("should not be ChainType::NonChaining");
-        }
+        assert!(chain_type != ChainType::NonChaining);
 
         let is_ref = target.is_ref();
 
@@ -1875,7 +1862,7 @@ impl Engine {
         restore_prev_state: bool,
         level: usize,
     ) -> RhaiResult {
-        let mut _restore_fn_resolution_cache = false;
+        let mut _extra_fn_resolution_cache = false;
         let prev_always_search = state.always_search;
         let prev_scope_len = scope.len();
         let prev_mods_len = mods.len();
@@ -1898,15 +1885,18 @@ impl Engine {
                     .skip(_mods_len)
                     .any(|(_, m)| m.contains_indexed_global_functions())
                 {
-                    if _restore_fn_resolution_cache {
+                    if _extra_fn_resolution_cache {
                         // When new module is imported with global functions and there is already
                         // a new cache, clear it - notice that this is expensive as all function
                         // resolutions must start again
-                        state.clear_fn_resolution_cache();
+                        state.fn_resolution_cache_mut().clear();
                     } else if restore_prev_state {
                         // When new module is imported with global functions, push a new cache
                         state.push_fn_resolution_cache();
-                        _restore_fn_resolution_cache = true;
+                        _extra_fn_resolution_cache = true;
+                    } else {
+                        // When the block is to be evaluated in-place, just clear the current cache
+                        state.fn_resolution_cache_mut().clear();
                     }
                 }
             }
@@ -1914,12 +1904,13 @@ impl Engine {
             Ok(r)
         });
 
+        if _extra_fn_resolution_cache {
+            // If imports list is modified, pop the functions lookup cache
+            state.pop_fn_resolution_cache();
+        }
+
         if restore_prev_state {
             scope.rewind(prev_scope_len);
-            if _restore_fn_resolution_cache {
-                // If imports list is modified, pop the functions lookup cache
-                state.pop_fn_resolution_cache();
-            }
             mods.truncate(prev_mods_len);
             state.scope_level -= 1;
 

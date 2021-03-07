@@ -89,6 +89,7 @@ impl fmt::Display for ScriptFnDef {
 /// A type containing the metadata of a script-defined function.
 ///
 /// Created by [`AST::iter_functions`].
+#[cfg(not(feature = "no_function"))]
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct ScriptFnMetadata<'a> {
     /// Function doc-comments (if any).
@@ -108,6 +109,7 @@ pub struct ScriptFnMetadata<'a> {
     pub params: Vec<&'a str>,
 }
 
+#[cfg(not(feature = "no_function"))]
 impl fmt::Display for ScriptFnMetadata<'_> {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -124,6 +126,7 @@ impl fmt::Display for ScriptFnMetadata<'_> {
     }
 }
 
+#[cfg(not(feature = "no_function"))]
 impl<'a> Into<ScriptFnMetadata<'a>> for &'a ScriptFnDef {
     #[inline(always)]
     fn into(self) -> ScriptFnMetadata<'a> {

@@ -1,6 +1,6 @@
 //! Module implementing the [`AST`] optimizer.
 
-use crate::ast::{Expr, ScriptFnDef, Stmt};
+use crate::ast::{Expr, Stmt};
 use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
@@ -872,7 +872,7 @@ pub fn optimize_into_ast(
     engine: &Engine,
     scope: &Scope,
     mut statements: Vec<Stmt>,
-    _functions: Vec<ScriptFnDef>,
+    _functions: Vec<crate::ast::ScriptFnDef>,
     level: OptimizationLevel,
 ) -> AST {
     let level = if cfg!(feature = "no_optimize") {
@@ -891,7 +891,7 @@ pub fn optimize_into_ast(
 
             _functions
                 .iter()
-                .map(|fn_def| ScriptFnDef {
+                .map(|fn_def| crate::ast::ScriptFnDef {
                     name: fn_def.name.clone(),
                     access: fn_def.access,
                     body: Default::default(),

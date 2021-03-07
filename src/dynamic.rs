@@ -1212,7 +1212,7 @@ impl Dynamic {
                         },
                     )
                 }
-                _ => unreachable!("self should be Shared"),
+                _ => unreachable!(),
             },
             _ => (),
         }
@@ -1680,6 +1680,16 @@ impl<T: Variant + Clone> From<&[T]> for Dynamic {
     fn from(value: &[T]) -> Self {
         Self(Union::Array(
             Box::new(value.iter().cloned().map(Dynamic::from).collect()),
+            AccessMode::ReadWrite,
+        ))
+    }
+}
+#[cfg(not(feature = "no_index"))]
+impl<T: Variant + Clone> crate::stdlib::iter::FromIterator<T> for Dynamic {
+    #[inline(always)]
+    fn from_iter<X: IntoIterator<Item = T>>(iter: X) -> Self {
+        Self(Union::Array(
+            Box::new(iter.into_iter().map(Dynamic::from).collect()),
             AccessMode::ReadWrite,
         ))
     }
