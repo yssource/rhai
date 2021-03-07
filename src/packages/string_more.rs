@@ -12,7 +12,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
     // Register string iterator
     lib.set_iter(
         TypeId::of::<ImmutableString>(),
-        |string: Dynamic| Box::new(string.cast::<ImmutableString>().chars().collect::<Vec<_>>().into_iter().map(Into::into))
+        |string| Box::new(string.cast::<ImmutableString>().chars().collect::<Vec<_>>().into_iter().map(Into::into))
     );
 });
 
@@ -41,6 +41,10 @@ mod string_functions {
     #[rhai_fn(name = "len", get = "len")]
     pub fn len(string: &str) -> INT {
         string.chars().count() as INT
+    }
+    #[rhai_fn(name = "bytes", get = "bytes")]
+    pub fn bytes(string: &str) -> INT {
+        string.len() as INT
     }
     pub fn remove(string: &mut ImmutableString, sub_string: ImmutableString) {
         *string -= sub_string;
