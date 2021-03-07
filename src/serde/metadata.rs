@@ -160,8 +160,9 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
     }
 }
 
-impl From<crate::ScriptFnMetadata<'_>> for FnMetadata {
-    fn from(info: crate::ScriptFnMetadata) -> Self {
+#[cfg(not(feature = "no_function"))]
+impl From<crate::ast::ScriptFnMetadata<'_>> for FnMetadata {
+    fn from(info: crate::ast::ScriptFnMetadata) -> Self {
         Self {
             namespace: FnNamespace::Global,
             access: info.access.into(),
