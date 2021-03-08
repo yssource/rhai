@@ -141,10 +141,6 @@ pub use fn_native::Shared;
 #[cfg(not(feature = "no_closure"))]
 use fn_native::Locked;
 
-#[cfg(feature = "internals")]
-pub use utils::{calc_fn_hash, calc_fn_params_hash, combine_hashes, HashableHashMap};
-
-#[cfg(not(feature = "internals"))]
 pub(crate) use utils::{calc_fn_hash, calc_fn_params_hash, combine_hashes};
 
 pub use rhai_codegen::*;

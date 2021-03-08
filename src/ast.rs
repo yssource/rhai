@@ -1168,14 +1168,14 @@ pub struct FnCallExpr {
     pub hash: FnHash,
     /// Does this function call capture the parent scope?
     pub capture: bool,
+    /// List of function call arguments.
+    pub args: StaticVec<Expr>,
     /// Namespace of the function, if any. Boxed because it occurs rarely.
     pub namespace: Option<NamespaceRef>,
     /// Function name.
     /// Use [`Cow<'static, str>`][Cow] because a lot of operators (e.g. `==`, `>=`) are implemented as
     /// function calls and the function names are predictable, so no need to allocate a new [`String`].
     pub name: Cow<'static, str>,
-    /// List of function call arguments.
-    pub args: StaticVec<Expr>,
 }
 
 /// A type that wraps a [`FLOAT`] and implements [`Hash`].
