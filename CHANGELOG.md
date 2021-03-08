@@ -7,11 +7,13 @@ Version 0.19.14
 Bug fixes
 ---------
 
+* Panic when passing a shared string into a registered function as `&str` argument is fixed.
+* Panic when calling `switch` statements on custom types is fixed.
+* Potential overflow panics in `range(from, to, step)` is fixed.
+* `&mut String` parameters in registered functions no longer panic when passed a string.
+* Some expressions involving shared variables now work properly, for example `x in shared_value`, `return shared_value`, `obj.field = shared_value` etc. Previously, the resultant value is still shared which is counter-intuitive.
 * Errors in native Rust functions now contain the correct function call positions.
 * Fixed error types in `EvalAltResult::ErrorMismatchDataType` which were swapped.
-* Some expressions involving shared variables now work properly, for example `x in shared_value`, `return shared_value`, `obj.field = shared_value` etc. Previously, the resultant value is still shared which is counter-intuitive.
-* Potential overflow panics in `range(from, to, step)` is fixed.
-* `switch` statements no longer panic on custom types.
 
 Breaking changes
 ----------------
@@ -36,6 +38,7 @@ Enhancements
 * More information is provided to the error variable captured by the `catch` statement in an _object map_.
 * Previously, `private` functions in an `AST` cannot be called with `call_fn` etc. This is inconvenient when trying to call a function inside a script which also serves as a loadable module exporting part (but not all) of the functions. Now, all functions (`private` or not) can be called in an `AST`. The `private` keyword is relegated to preventing a function from being exported.
 * `Dynamic::as_unit` just for completeness sake.
+* `bytes` method added for strings to get length quickly (if the string is ASCII-only).
 
 
 Version 0.19.13

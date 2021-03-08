@@ -1,11 +1,12 @@
 //! Module implementing the [`AST`] optimizer.
 
-use crate::ast::{Expr, ScriptFnDef, Stmt};
+use crate::ast::{Expr, Stmt};
 use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
 use crate::parser::map_dynamic_to_expr;
 use crate::stdlib::{
+    any::TypeId,
     boxed::Box,
     hash::{Hash, Hasher},
     iter::empty,
@@ -16,7 +17,10 @@ use crate::stdlib::{
 };
 use crate::token::is_valid_identifier;
 use crate::utils::get_hasher;
-use crate::{calc_native_fn_hash, Dynamic, Engine, Module, Position, Scope, StaticVec, AST};
+use crate::{
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, Module, Position, Scope,
+    StaticVec, AST,
+};
 
 /// Level of optimization performed.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
@@ -126,15 +130,25 @@ impl<'a> State<'a> {
     }
 }
 
+// Has a system function a Rust-native override?
+fn has_native_fn(state: &State, hash_script: u64, arg_types: &[TypeId]) -> bool {
+    let hash_params = calc_fn_params_hash(arg_types.iter().cloned());
+    let hash = combine_hashes(hash_script, hash_params);
+
+    // First check registered functions
+    state.engine.global_namespace.contains_fn(hash, false)
+            // Then check packages
+            || state.engine.global_modules.iter().any(|m| m.contains_fn(hash, false))
+            // Then check sub-modules
+            || state.engine.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash))
+}
+
 /// Call a registered function
 fn call_fn_with_constant_arguments(
     state: &State,
     fn_name: &str,
     arg_values: &mut [Dynamic],
 ) -> Option<Dynamic> {
-    // Search built-in's and external functions
-    let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_values.iter().map(|a| a.type_id()));
-
     state
         .engine
         .call_native_fn(
@@ -142,7 +156,7 @@ fn call_fn_with_constant_arguments(
             &mut Default::default(),
             state.lib,
             fn_name,
-            hash_fn.unwrap(),
+            calc_fn_hash(empty(), fn_name, arg_values.len()),
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
             false,
             false,
@@ -295,10 +309,10 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
     match stmt {
         // expr op= expr
         Stmt::Assignment(x, _) => match x.0 {
-            Expr::Variable(_) => optimize_expr(&mut x.2, state),
+            Expr::Variable(_) => optimize_expr(&mut x.1, state),
             _ => {
                 optimize_expr(&mut x.0, state);
-                optimize_expr(&mut x.2, state);
+                optimize_expr(&mut x.1, state);
             }
         },
 
@@ -393,25 +407,32 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         }
 
         // while false { block } -> Noop
-        Stmt::While(Expr::BoolConstant(false, pos), _, _) => {
+        Stmt::While(Some(Expr::BoolConstant(false, pos)), _, _) => {
             state.set_dirty();
             *stmt = Stmt::Noop(*pos)
         }
         // while expr { block }
         Stmt::While(condition, block, _) => {
             optimize_stmt(block, state, false);
-            optimize_expr(condition, state);
+
+            if let Some(condition) = condition {
+                optimize_expr(condition, state);
+            }
 
             match **block {
                 // while expr { break; } -> { expr; }
                 Stmt::Break(pos) => {
                     // Only a single break statement - turn into running the guard expression once
                     state.set_dirty();
-                    let mut statements = vec![Stmt::Expr(mem::take(condition))];
-                    if preserve_result {
-                        statements.push(Stmt::Noop(pos))
-                    }
-                    *stmt = Stmt::Block(statements, pos);
+                    if let Some(condition) = condition {
+                        let mut statements = vec![Stmt::Expr(mem::take(condition))];
+                        if preserve_result {
+                            statements.push(Stmt::Noop(pos))
+                        }
+                        *stmt = Stmt::Block(statements, pos);
+                    } else {
+                        *stmt = Stmt::Noop(pos);
+                    };
                 }
                 _ => (),
             }
@@ -511,7 +532,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         Expr::Dot(x, _) => match (&mut x.lhs, &mut x.rhs) {
             // map.string
             (Expr::Map(m, pos), Expr::Property(p)) if m.iter().all(|(_, x)| x.is_pure()) => {
-                let prop = &p.2.name;
+                let prop = &p.4.name;
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
@@ -669,7 +690,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
-            if !state.engine.has_override_by_name_and_arguments(Some(&Default::default()), &mut Default::default(), state.lib, x.name.as_ref(), arg_types.as_ref()) {
+            if !has_native_fn(state, x.hash.native_hash(), arg_types.as_ref()) {
                 if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
                                         .and_then(|f| {
                                             let ctx = (state.engine, x.name.as_ref(), state.lib).into();
@@ -865,7 +886,7 @@ pub fn optimize_into_ast(
     engine: &Engine,
     scope: &Scope,
     mut statements: Vec<Stmt>,
-    _functions: Vec<ScriptFnDef>,
+    _functions: Vec<crate::ast::ScriptFnDef>,
     level: OptimizationLevel,
 ) -> AST {
     let level = if cfg!(feature = "no_optimize") {
@@ -884,7 +905,7 @@ pub fn optimize_into_ast(
 
             _functions
                 .iter()
-                .map(|fn_def| ScriptFnDef {
+                .map(|fn_def| crate::ast::ScriptFnDef {
                     name: fn_def.name.clone(),
                     access: fn_def.access,
                     body: Default::default(),

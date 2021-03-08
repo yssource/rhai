@@ -480,7 +480,7 @@ impl Token {
                 #[cfg(not(feature = "no_module"))]
                 As => "as",
                 EOF => "{EOF}",
-                _ => unreachable!("operator should be matched in outer scope"),
+                t => unreachable!("operator should be matched in outer scope: {:?}", t),
             }
             .into(),
         }
@@ -892,7 +892,7 @@ pub fn parse_string_literal(
                     'x' => 2,
                     'u' => 4,
                     'U' => 8,
-                    _ => unreachable!("expecting 'x', 'u' or 'U', but gets {}", ch),
+                    _ => unreachable!(),
                 };
 
                 for _ in 0..len {
@@ -1190,14 +1190,14 @@ fn get_next_token_inner(
                                 'x' | 'X' => is_hex_digit,
                                 'o' | 'O' => is_numeric_digit,
                                 'b' | 'B' => is_numeric_digit,
-                                _ => unreachable!("expecting 'x', 'o' or 'b', but gets {}", ch),
+                                _ => unreachable!(),
                             };
 
                             radix_base = Some(match ch {
                                 'x' | 'X' => 16,
                                 'o' | 'O' => 8,
                                 'b' | 'B' => 2,
-                                _ => unreachable!("expecting 'x', 'o' or 'b', but gets {}", ch),
+                                _ => unreachable!(),
                             });
                         }
 

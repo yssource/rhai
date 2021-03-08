@@ -1,6 +1,6 @@
 //! Module defining interfaces to native-Rust functions.
 
-use crate::ast::{FnAccess, ScriptFnDef};
+use crate::ast::{FnAccess, FnHash};
 use crate::engine::Imports;
 use crate::plugin::PluginFunction;
 use crate::stdlib::{
@@ -14,8 +14,8 @@ use crate::stdlib::{
 };
 use crate::token::is_valid_identifier;
 use crate::{
-    calc_script_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ImmutableString, Module,
-    Position, RhaiResult,
+    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ImmutableString, Module, Position,
+    RhaiResult,
 };
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
@@ -143,6 +143,7 @@ impl<'a> NativeCallContext<'a> {
     }
     /// Get an iterator over the current set of modules imported via `import` statements.
     #[cfg(not(feature = "no_module"))]
+    #[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn iter_imports_raw(
         &self,
@@ -188,13 +189,22 @@ impl<'a> NativeCallContext<'a> {
         is_method: bool,
         args: &mut [&mut Dynamic],
     ) -> RhaiResult {
+        let hash = if is_method {
+            FnHash::from_script_and_native(
+                calc_fn_hash(empty(), fn_name, args.len() - 1),
+                calc_fn_hash(empty(), fn_name, args.len()),
+            )
+        } else {
+            FnHash::from_script(calc_fn_hash(empty(), fn_name, args.len()))
+        };
+
         self.engine()
             .exec_fn_call(
                 &mut self.mods.cloned().unwrap_or_default(),
                 &mut Default::default(),
                 self.lib,
                 fn_name,
-                calc_script_fn_hash(empty(), fn_name, args.len() - if is_method { 1 } else { 0 }),
+                hash,
                 args,
                 is_method,
                 is_method,
@@ -438,7 +448,7 @@ pub enum CallableFunction {
     Plugin(Shared<FnPlugin>),
     /// A script-defined function.
     #[cfg(not(feature = "no_function"))]
-    Script(Shared<ScriptFnDef>),
+    Script(Shared<crate::ast::ScriptFnDef>),
 }
 
 impl fmt::Debug for CallableFunction {
@@ -576,7 +586,7 @@ impl CallableFunction {
     /// Panics if the [`CallableFunction`] is not [`Script`][CallableFunction::Script].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
-    pub fn get_fn_def(&self) -> &ScriptFnDef {
+    pub fn get_fn_def(&self) -> &crate::ast::ScriptFnDef {
         match self {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => {
                 panic!("function should be scripted")
@@ -642,24 +652,18 @@ impl From<IteratorFn> for CallableFunction {
     }
 }
 
-impl From<ScriptFnDef> for CallableFunction {
+#[cfg(not(feature = "no_function"))]
+impl From<crate::ast::ScriptFnDef> for CallableFunction {
     #[inline(always)]
-    fn from(_func: ScriptFnDef) -> Self {
-        #[cfg(feature = "no_function")]
-        unreachable!("no_function active");
-
-        #[cfg(not(feature = "no_function"))]
+    fn from(_func: crate::ast::ScriptFnDef) -> Self {
         Self::Script(_func.into())
     }
 }
 
-impl From<Shared<ScriptFnDef>> for CallableFunction {
+#[cfg(not(feature = "no_function"))]
+impl From<Shared<crate::ast::ScriptFnDef>> for CallableFunction {
     #[inline(always)]
-    fn from(_func: Shared<ScriptFnDef>) -> Self {
-        #[cfg(feature = "no_function")]
-        unreachable!("no_function active");
-
-        #[cfg(not(feature = "no_function"))]
+    fn from(_func: Shared<crate::ast::ScriptFnDef>) -> Self {
         Self::Script(_func)
     }
 }

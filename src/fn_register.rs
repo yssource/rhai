@@ -6,9 +6,7 @@ use crate::dynamic::{DynamicWriteLock, Variant};
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
 use crate::r#unsafe::unsafe_cast_box;
 use crate::stdlib::{any::TypeId, boxed::Box, mem, string::String};
-use crate::{
-    Dynamic, Engine, FnAccess, FnNamespace, ImmutableString, NativeCallContext, RhaiResult,
-};
+use crate::{Dynamic, Engine, FnAccess, FnNamespace, NativeCallContext, RhaiResult};
 
 /// Trait to register custom functions with the [`Engine`].
 pub trait RegisterFn<FN, ARGS, RET> {
@@ -100,13 +98,16 @@ pub fn by_ref<T: Variant + Clone>(data: &mut Dynamic) -> DynamicWriteLock<T> {
 #[inline(always)]
 pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
     if TypeId::of::<T>() == TypeId::of::<&str>() {
-        // If T is &str, data must be ImmutableString, so map directly to it
-        let ref_str = data.as_str().unwrap();
-        let ref_T = unsafe { mem::transmute::<_, &T>(&ref_str) };
-        ref_T.clone()
+        // If T is `&str`, data must be `ImmutableString`, so map directly to it
+        data.flatten_in_place();
+        let ref_str = data
+            .as_str_ref()
+            .expect("argument passed by value should not be shared");
+        let ref_t = unsafe { mem::transmute::<_, &T>(&ref_str) };
+        ref_t.clone()
     } else if TypeId::of::<T>() == TypeId::of::<String>() {
-        // If T is String, data must be ImmutableString, so map directly to it
-        *unsafe_cast_box(Box::new(data.clone().take_string().unwrap())).unwrap()
+        // If T is `String`, data must be `ImmutableString`, so map directly to it
+        *unsafe_cast_box(Box::new(mem::take(data).take_string().unwrap())).unwrap()
     } else {
         // We consume the argument and then replace it with () - the argument is not supposed to be used again.
         // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
@@ -128,8 +129,7 @@ macro_rules! make_func {
             // The arguments are assumed to be of the correct number and types!
 
 			let mut _drain = args.iter_mut();
-			$($let)*
-			$($par = ($convert)(_drain.next().unwrap()); )*
+			$($let $par = ($convert)(_drain.next().unwrap()); )*
 
             // Call the function with each argument value
 			let r = $fn($($arg),*);
@@ -152,20 +152,6 @@ pub fn map_result(data: RhaiResult) -> RhaiResult {
     data
 }
 
-/// Remap `&str` | `String` to `ImmutableString`.
-#[inline(always)]
-fn map_type_id<T: 'static>() -> TypeId {
-    let id = TypeId::of::<T>();
-
-    if id == TypeId::of::<&str>() {
-        TypeId::of::<ImmutableString>()
-    } else if id == TypeId::of::<String>() {
-        TypeId::of::<ImmutableString>()
-    } else {
-        id
-    }
-}
-
 macro_rules! def_register {
     () => {
         def_register!(imp from_pure :);
@@ -186,7 +172,7 @@ macro_rules! def_register {
             #[inline(always)]
             fn register_fn(&mut self, name: &str, f: FN) -> &mut Self {
                 self.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public, None,
-                    &[$(map_type_id::<$par>()),*],
+                    &[$(TypeId::of::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_dynamic ; $($par => $let => $clone => $arg),*))
                 );
                 self
@@ -201,7 +187,7 @@ macro_rules! def_register {
             #[inline(always)]
             fn register_result_fn(&mut self, name: &str, f: FN) -> &mut Self {
                 self.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public, None,
-                    &[$(map_type_id::<$par>()),*],
+                    &[$(TypeId::of::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_result ; $($par => $let => $clone => $arg),*))
                 );
                 self
@@ -212,9 +198,9 @@ macro_rules! def_register {
     };
     ($p0:ident $(, $p:ident)*) => {
         def_register!(imp from_pure   : $p0 => $p0      => $p0      => $p0      => let $p0     => by_value $(, $p => $p => $p => $p => let $p => by_value)*);
-        def_register!(imp from_method : $p0 => &mut $p0  => Mut<$p0> => &mut $p0 => let mut $p0 => by_ref   $(, $p => $p => $p => $p => let $p => by_value)*);
-        //                ^ CallableFunction
-        // handle the first parameter                                              ^ first parameter passed through
+        def_register!(imp from_method : $p0 => &mut $p0 => Mut<$p0> => &mut $p0 => let mut $p0 => by_ref   $(, $p => $p => $p => $p => let $p => by_value)*);
+        //                ^ CallableFunction constructor
+        //                                                             ^ first parameter passed through
         //                                                                                                     ^ others passed by value (by_value)
 
         // Currently does not support first argument which is a reference, as there will be

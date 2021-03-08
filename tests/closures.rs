@@ -181,6 +181,51 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
 
 #[test]
 #[cfg(not(feature = "no_closure"))]
+fn test_closures_sharing() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    engine.register_fn("foo", |x: INT, s: &str| s.len() as INT + x);
+    engine.register_fn("bar", |x: INT, s: String| s.len() as INT + x);
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let s = "hello";
+                let f = || s;
+                foo(1, s)
+            "#
+        )?,
+        6
+    );
+
+    assert_eq!(
+        engine.eval::<String>(
+            r#"
+                let s = "hello";
+                let f = || s;
+                let n = foo(1, s);
+                s
+            "#
+        )?,
+        "hello"
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let s = "hello";
+                let f = || s;
+                bar(1, s)
+            "#
+        )?,
+        6
+    );
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "no_object"))]
 #[cfg(not(feature = "sync"))]
 fn test_closures_data_race() -> Result<(), Box<EvalAltResult>> {

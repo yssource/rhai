@@ -1,5 +1,6 @@
 //! Implement function-calling mechanism for [`Engine`].
 
+use crate::ast::FnHash;
 use crate::engine::{
     Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
@@ -16,19 +17,17 @@ use crate::stdlib::{
     format,
     iter::{empty, once},
     mem,
-    num::NonZeroU64,
     string::{String, ToString},
     vec::Vec,
 };
-use crate::utils::combine_hashes;
 use crate::{
     ast::{Expr, Stmt},
     fn_native::CallableFunction,
     RhaiResult,
 };
 use crate::{
-    calc_native_fn_hash, calc_script_fn_hash, Dynamic, Engine, EvalAltResult, FnPtr,
-    ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec, INT,
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, EvalAltResult, FnPtr,
+    ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec,
 };
 
 #[cfg(not(feature = "no_object"))]
@@ -183,20 +182,27 @@ impl Engine {
         state: &'s mut State,
         lib: &[&Module],
         fn_name: &str,
-        mut hash: NonZeroU64,
-        args: &mut FnCallArgs,
+        hash_script: u64,
+        args: Option<&mut FnCallArgs>,
         allow_dynamic: bool,
         is_op_assignment: bool,
     ) -> &'s Option<(CallableFunction, Option<ImmutableString>)> {
+        let mut hash = if let Some(ref args) = args {
+            let hash_params = calc_fn_params_hash(args.iter().map(|a| a.type_id()));
+            combine_hashes(hash_script, hash_params)
+        } else {
+            hash_script
+        };
+
         &*state
             .fn_resolution_cache_mut()
             .entry(hash)
             .or_insert_with(|| {
-                let num_args = args.len();
+                let num_args = args.as_ref().map(|a| a.len()).unwrap_or(0);
                 let max_bitmask = if !allow_dynamic {
                     0
                 } else {
-                    1usize << args.len().min(MAX_DYNAMIC_PARAMETERS)
+                    1usize << num_args.min(MAX_DYNAMIC_PARAMETERS)
                 };
                 let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
 
@@ -238,39 +244,41 @@ impl Engine {
                         None if bitmask >= max_bitmask => {
                             return if num_args != 2 {
                                 None
-                            } else if !is_op_assignment {
-                                if let Some(f) =
-                                    get_builtin_binary_op_fn(fn_name, &args[0], &args[1])
-                                {
-                                    Some((
-                                        CallableFunction::from_method(Box::new(f) as Box<FnAny>),
-                                        None,
-                                    ))
+                            } else if let Some(ref args) = args {
+                                if !is_op_assignment {
+                                    if let Some(f) =
+                                        get_builtin_binary_op_fn(fn_name, &args[0], &args[1])
+                                    {
+                                        Some((
+                                            CallableFunction::from_method(Box::new(f) as Box<FnAny>),
+                                            None,
+                                        ))
+                                    } else {
+                                        None
+                                    }
                                 } else {
-                                    None
+                                    let (first, second) = args.split_first().unwrap();
+
+                                    if let Some(f) =
+                                        get_builtin_op_assignment_fn(fn_name, *first, second[0])
+                                    {
+                                        Some((
+                                            CallableFunction::from_method(Box::new(f) as Box<FnAny>),
+                                            None,
+                                        ))
+                                    } else {
+                                        None
+                                    }
                                 }
                             } else {
-                                let (first, second) = args.split_first().unwrap();
-
-                                if let Some(f) =
-                                    get_builtin_op_assignment_fn(fn_name, *first, second[0])
-                                {
-                                    Some((
-                                        CallableFunction::from_method(Box::new(f) as Box<FnAny>),
-                                        None,
-                                    ))
-                                } else {
-                                    None
-                                }
+                                None
                             }
                         }
 
                         // Try all permutations with `Dynamic` wildcards
                         None => {
-                            hash = calc_native_fn_hash(
-                                empty(),
-                                fn_name,
-                                args.iter().enumerate().map(|(i, a)| {
+                            let hash_params = calc_fn_params_hash(
+                                args.as_ref().unwrap().iter().enumerate().map(|(i, a)| {
                                     let mask = 1usize << (num_args - i - 1);
                                     if bitmask & mask != 0 {
                                         // Replace with `Dynamic`
@@ -279,8 +287,8 @@ impl Engine {
                                         a.type_id()
                                     }
                                 }),
-                            )
-                            .unwrap();
+                            );
+                            hash = combine_hashes(hash_script, hash_params);
 
                             bitmask += 1;
                         }
@@ -302,7 +310,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        hash_fn: NonZeroU64,
+        hash_native: u64,
         args: &mut FnCallArgs,
         is_ref: bool,
         is_op_assignment: bool,
@@ -318,8 +326,8 @@ impl Engine {
             state,
             lib,
             fn_name,
-            hash_fn,
-            args,
+            hash_native,
+            Some(args),
             true,
             is_op_assignment,
         );
@@ -569,71 +577,37 @@ impl Engine {
         result
     }
 
-    // Has a system function an override?
+    // Does a scripted function exist?
     #[inline(always)]
-    pub(crate) fn has_override_by_name_and_arguments(
+    pub(crate) fn has_script_fn(
         &self,
         mods: Option<&Imports>,
         state: &mut State,
         lib: &[&Module],
-        fn_name: &str,
-        arg_types: &[TypeId],
-    ) -> bool {
-        let arg_types = arg_types.as_ref();
-
-        self.has_override(
-            mods,
-            state,
-            lib,
-            calc_native_fn_hash(empty(), fn_name, arg_types.iter().cloned()),
-            calc_script_fn_hash(empty(), fn_name, arg_types.len()),
-        )
-    }
-
-    // Has a system function an override?
-    #[inline(always)]
-    pub(crate) fn has_override(
-        &self,
-        mods: Option<&Imports>,
-        state: &mut State,
-        lib: &[&Module],
-        hash_fn: Option<NonZeroU64>,
-        hash_script: Option<NonZeroU64>,
+        hash_script: u64,
     ) -> bool {
         let cache = state.fn_resolution_cache_mut();
 
-        if hash_script.map_or(false, |hash| cache.contains_key(&hash))
-            || hash_fn.map_or(false, |hash| cache.contains_key(&hash))
-        {
-            return true;
+        if let Some(result) = cache.get(&hash_script).map(|v| v.is_some()) {
+            return result;
         }
 
         // First check script-defined functions
-        if hash_script.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, false)))
-            //|| hash_fn.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, false)))
+        let result = lib.iter().any(|&m| m.contains_fn(hash_script, false))
             // Then check registered functions
-            || hash_script.map_or(false, |hash| self.global_namespace.contains_fn(hash, false))
-            || hash_fn.map_or(false, |hash| self.global_namespace.contains_fn(hash, false))
+            || self.global_namespace.contains_fn(hash_script, false)
             // Then check packages
-            || hash_script.map_or(false, |hash| self.global_modules.iter().any(|m| m.contains_fn(hash, false)))
-            || hash_fn.map_or(false, |hash| self.global_modules.iter().any(|m| m.contains_fn(hash, false)))
+            || self.global_modules.iter().any(|m| m.contains_fn(hash_script, false))
             // Then check imported modules
-            || hash_script.map_or(false, |hash| mods.map_or(false, |m| m.contains_fn(hash)))
-            || hash_fn.map_or(false, |hash| mods.map_or(false, |m| m.contains_fn(hash)))
+            || mods.map_or(false, |m| m.contains_fn(hash_script))
             // Then check sub-modules
-            || hash_script.map_or(false, |hash| self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash)))
-            || hash_fn.map_or(false, |hash| self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash)))
-        {
-            true
-        } else {
-            if let Some(hash_fn) = hash_fn {
-                cache.insert(hash_fn, None);
-            }
-            if let Some(hash_script) = hash_script {
-                cache.insert(hash_script, None);
-            }
-            false
+            || self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash_script));
+
+        if !result {
+            cache.insert(hash_script, None);
         }
+
+        result
     }
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
@@ -649,7 +623,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        hash_script: Option<NonZeroU64>,
+        hash: FnHash,
         args: &mut FnCallArgs,
         is_ref: bool,
         _is_method: bool,
@@ -675,18 +649,17 @@ impl Engine {
             // Handle is_def_fn()
             #[cfg(not(feature = "no_function"))]
             crate::engine::KEYWORD_IS_DEF_FN
-                if args.len() == 2 && args[0].is::<FnPtr>() && args[1].is::<INT>() =>
+                if args.len() == 2 && args[0].is::<FnPtr>() && args[1].is::<crate::INT>() =>
             {
-                let fn_name = mem::take(args[0]).take_immutable_string().unwrap();
+                let fn_name = args[0].read_lock::<ImmutableString>().unwrap();
                 let num_params = args[1].as_int().unwrap();
 
                 return Ok((
                     if num_params < 0 {
                         Dynamic::FALSE
                     } else {
-                        let hash_script =
-                            calc_script_fn_hash(empty(), &fn_name, num_params as usize);
-                        self.has_override(Some(mods), state, lib, None, hash_script)
+                        let hash_script = calc_fn_hash(empty(), &fn_name, num_params as usize);
+                        self.has_script_fn(Some(mods), state, lib, hash_script)
                             .into()
                     },
                     false,
@@ -731,9 +704,16 @@ impl Engine {
             _ => (),
         }
 
+        // Scripted function call?
+        let hash_script = if hash.is_native_only() {
+            None
+        } else {
+            Some(hash.script_hash())
+        };
+
         #[cfg(not(feature = "no_function"))]
         if let Some((func, source)) = hash_script.and_then(|hash| {
-            self.resolve_function(mods, state, lib, fn_name, hash, args, false, false)
+            self.resolve_function(mods, state, lib, fn_name, hash, None, false, false)
                 .as_ref()
                 .map(|(f, s)| (f.clone(), s.clone()))
         }) {
@@ -815,9 +795,17 @@ impl Engine {
         }
 
         // Native function call
-        let hash_fn =
-            calc_native_fn_hash(empty(), fn_name, args.iter().map(|a| a.type_id())).unwrap();
-        self.call_native_fn(mods, state, lib, fn_name, hash_fn, args, is_ref, false, pos)
+        self.call_native_fn(
+            mods,
+            state,
+            lib,
+            fn_name,
+            hash.native_hash(),
+            args,
+            is_ref,
+            false,
+            pos,
+        )
     }
 
     /// Evaluate a list of statements with no `this` pointer.
@@ -894,7 +882,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        hash_script: Option<NonZeroU64>,
+        mut hash: FnHash,
         target: &mut crate::engine::Target,
         mut call_args: StaticVec<Dynamic>,
         pos: Position,
@@ -913,9 +901,8 @@ impl Engine {
                 // Redirect function name
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
-                // Recalculate hash
-                let hash =
-                    hash_script.and_then(|_| calc_script_fn_hash(empty(), fn_name, args_len));
+                // Recalculate hashes
+                let hash = FnHash::from_script(calc_fn_hash(empty(), fn_name, args_len));
                 // Arguments are passed as-is, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
                 let mut arg_values = curry
@@ -936,8 +923,10 @@ impl Engine {
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hash
-                let hash =
-                    hash_script.and_then(|_| calc_script_fn_hash(empty(), fn_name, args_len));
+                let hash = FnHash::from_script_and_native(
+                    calc_fn_hash(empty(), fn_name, args_len),
+                    calc_fn_hash(empty(), fn_name, args_len + 1),
+                );
                 // Replace the first argument with the object pointer, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
                 let mut arg_values = once(obj)
@@ -977,7 +966,6 @@ impl Engine {
 
             _ => {
                 let _redirected;
-                let mut hash = hash_script;
 
                 // Check if it is a map method call in OOP style
                 #[cfg(not(feature = "no_object"))]
@@ -995,16 +983,13 @@ impl Engine {
                                 .enumerate()
                                 .for_each(|(i, v)| call_args.insert(i, v));
                             // Recalculate the hash based on the new function name and new arguments
-                            hash = hash_script.and_then(|_| {
-                                calc_script_fn_hash(empty(), fn_name, call_args.len())
-                            });
+                            hash = FnHash::from_script_and_native(
+                                calc_fn_hash(empty(), fn_name, call_args.len()),
+                                calc_fn_hash(empty(), fn_name, call_args.len() + 1),
+                            );
                         }
                     }
                 };
-
-                if hash_script.is_none() {
-                    hash = None;
-                }
 
                 // Attached object pointer in front of the arguments
                 let mut arg_values = once(obj)
@@ -1036,7 +1021,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         fn_name: &str,
         args_expr: &[Expr],
-        mut hash_script: Option<NonZeroU64>,
+        mut hash: FnHash,
         pos: Position,
         capture_scope: bool,
         level: usize,
@@ -1074,7 +1059,11 @@ impl Engine {
 
                 // Recalculate hash
                 let args_len = args_expr.len() + curry.len();
-                hash_script = calc_script_fn_hash(empty(), name, args_len);
+                hash = if !hash.is_native_only() {
+                    FnHash::from_script(calc_fn_hash(empty(), name, args_len))
+                } else {
+                    FnHash::from_native(calc_fn_hash(empty(), name, args_len))
+                };
             }
 
             // Handle Fn()
@@ -1129,33 +1118,36 @@ impl Engine {
             // Handle is_def_fn()
             #[cfg(not(feature = "no_function"))]
             crate::engine::KEYWORD_IS_DEF_FN if args_expr.len() == 2 => {
-                let fn_name =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-                let fn_name = fn_name.take_immutable_string().map_err(|err| {
-                    self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
-                })?;
-                let num_params =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[1], level)?;
-                let num_params = num_params.as_int().map_err(|err| {
-                    self.make_type_mismatch_err::<INT>(err, args_expr[0].position())
-                })?;
+                let fn_name = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
+                    .take_immutable_string()
+                    .map_err(|err| {
+                        self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
+                    })?;
+                let num_params = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[1], level)?
+                    .as_int()
+                    .map_err(|err| {
+                        self.make_type_mismatch_err::<crate::INT>(err, args_expr[0].position())
+                    })?;
 
                 return Ok(if num_params < 0 {
                     Dynamic::FALSE
                 } else {
-                    let hash_script = calc_script_fn_hash(empty(), &fn_name, num_params as usize);
-                    self.has_override(Some(mods), state, lib, None, hash_script)
+                    let hash_script = calc_fn_hash(empty(), &fn_name, num_params as usize);
+                    self.has_script_fn(Some(mods), state, lib, hash_script)
                         .into()
                 });
             }
 
             // Handle is_def_var()
             KEYWORD_IS_DEF_VAR if args_expr.len() == 1 => {
-                let var_name =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-                let var_name = var_name.take_immutable_string().map_err(|err| {
-                    self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
-                })?;
+                let var_name = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
+                    .take_immutable_string()
+                    .map_err(|err| {
+                        self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
+                    })?;
                 return Ok(scope.contains(&var_name).into());
             }
 
@@ -1166,11 +1158,12 @@ impl Engine {
 
                 // eval - only in function call style
                 let prev_len = scope.len();
-                let script =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, script_expr, level)?;
-                let script = script.take_immutable_string().map_err(|typ| {
-                    self.make_type_mismatch_err::<ImmutableString>(typ, script_pos)
-                })?;
+                let script = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, script_expr, level)?
+                    .take_immutable_string()
+                    .map_err(|typ| {
+                        self.make_type_mismatch_err::<ImmutableString>(typ, script_pos)
+                    })?;
                 let result = self.eval_script_expr_in_place(
                     scope,
                     mods,
@@ -1262,17 +1255,7 @@ impl Engine {
         let args = args.as_mut();
 
         self.exec_fn_call(
-            mods,
-            state,
-            lib,
-            name,
-            hash_script,
-            args,
-            is_ref,
-            false,
-            pos,
-            capture,
-            level,
+            mods, state, lib, name, hash, args, is_ref, false, pos, capture, level,
         )
         .map(|(v, _)| v)
     }
@@ -1288,7 +1271,7 @@ impl Engine {
         namespace: Option<&NamespaceRef>,
         fn_name: &str,
         args_expr: &[Expr],
-        hash_script: NonZeroU64,
+        hash: u64,
         pos: Position,
         level: usize,
     ) -> RhaiResult {
@@ -1353,20 +1336,13 @@ impl Engine {
         })?;
 
         // First search in script-defined functions (can override built-in)
-        let func = match module.get_qualified_fn(hash_script) {
+        let func = match module.get_qualified_fn(hash) {
             // Then search in Rust functions
             None => {
                 self.inc_operations(state, pos)?;
 
-                // Namespace-qualified Rust functions are indexed in two steps:
-                // 1) Calculate a hash in a similar manner to script-defined functions,
-                //    i.e. qualifiers + function name + number of arguments.
-                // 2) Calculate a second hash with no qualifiers, empty function name,
-                //    and the actual list of argument `TypeId`'.s
-                let hash_fn_args =
-                    calc_native_fn_hash(empty(), "", args.iter().map(|a| a.type_id())).unwrap();
-                // 3) The two hashes are combined.
-                let hash_qualified_fn = combine_hashes(hash_script, hash_fn_args);
+                let hash_params = calc_fn_params_hash(args.iter().map(|a| a.type_id()));
+                let hash_qualified_fn = combine_hashes(hash, hash_params);
 
                 module.get_qualified_fn(hash_qualified_fn)
             }
