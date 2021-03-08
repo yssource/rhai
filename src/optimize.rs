@@ -15,8 +15,8 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::token::is_valid_identifier;
-use crate::utils::get_hasher;
-use crate::{calc_native_fn_hash, Dynamic, Engine, Module, Position, Scope, StaticVec, AST};
+use crate::utils::{calc_fn_hash, get_hasher};
+use crate::{Dynamic, Engine, Module, Position, Scope, StaticVec, AST};
 
 /// Level of optimization performed.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
@@ -133,7 +133,7 @@ fn call_fn_with_constant_arguments(
     arg_values: &mut [Dynamic],
 ) -> Option<Dynamic> {
     // Search built-in's and external functions
-    let hash_fn = calc_native_fn_hash(empty(), fn_name, arg_values.iter().map(|a| a.type_id()));
+    let hash_native = calc_fn_hash(empty(), fn_name, arg_values.len());
 
     state
         .engine
@@ -142,7 +142,7 @@ fn call_fn_with_constant_arguments(
             &mut Default::default(),
             state.lib,
             fn_name,
-            hash_fn.unwrap(),
+            hash_native,
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
             false,
             false,
@@ -295,10 +295,10 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
     match stmt {
         // expr op= expr
         Stmt::Assignment(x, _) => match x.0 {
-            Expr::Variable(_) => optimize_expr(&mut x.2, state),
+            Expr::Variable(_) => optimize_expr(&mut x.1, state),
             _ => {
                 optimize_expr(&mut x.0, state);
-                optimize_expr(&mut x.2, state);
+                optimize_expr(&mut x.1, state);
             }
         },
 
@@ -518,7 +518,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         Expr::Dot(x, _) => match (&mut x.lhs, &mut x.rhs) {
             // map.string
             (Expr::Map(m, pos), Expr::Property(p)) if m.iter().all(|(_, x)| x.is_pure()) => {
-                let prop = &p.2.name;
+                let prop = &p.4.name;
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
@@ -676,7 +676,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
-            if !state.engine.has_override_by_name_and_arguments(Some(&Default::default()), &mut Default::default(), state.lib, x.name.as_ref(), arg_types.as_ref()) {
+            if !state.engine.has_native_override(Some(&Default::default()), &mut Default::default(), state.lib, x.name.as_ref(), arg_types.as_ref()) {
                 if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
                                         .and_then(|f| {
                                             let ctx = (state.engine, x.name.as_ref(), state.lib).into();

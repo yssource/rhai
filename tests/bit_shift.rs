@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, INT};
+ use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
 fn test_left_shift() -> Result<(), Box<EvalAltResult>> {

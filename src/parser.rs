@@ -1,6 +1,9 @@
 //! Main module defining the lexer and parser.
 
-use crate::ast::{BinaryExpr, CustomExpr, Expr, FnCallExpr, Ident, ReturnType, ScriptFnDef, Stmt};
+use crate::ast::{
+    BinaryExpr, CustomExpr, Expr, FnCallExpr, FnHash, Ident, OpAssignment, ReturnType, ScriptFnDef,
+    Stmt,
+};
 use crate::dynamic::{AccessMode, Union};
 use crate::engine::KEYWORD_THIS;
 use crate::module::NamespaceRef;
@@ -13,7 +16,7 @@ use crate::stdlib::{
     format,
     hash::{Hash, Hasher},
     iter::empty,
-    num::{NonZeroU64, NonZeroUsize},
+    num::NonZeroUsize,
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -22,8 +25,8 @@ use crate::syntax::{CustomSyntax, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
-    calc_script_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType,
-    Position, Scope, StaticVec, AST,
+    calc_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType, Position,
+    Scope, StaticVec, AST,
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -34,7 +37,7 @@ use crate::FnAccess;
 
 type PERR = ParseErrorType;
 
-type FunctionsLib = HashMap<NonZeroU64, ScriptFnDef, StraightHasherBuilder>;
+type FunctionsLib = HashMap<u64, ScriptFnDef, StraightHasherBuilder>;
 
 /// A type that encapsulates the current state of the parser.
 #[derive(Debug)]
@@ -236,8 +239,11 @@ impl Expr {
             Self::Variable(x) if x.1.is_none() => {
                 let ident = x.2;
                 let getter = state.get_interned_string(crate::engine::make_getter(&ident.name));
+                let hash_get = calc_fn_hash(empty(), &getter, 1);
                 let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
-                Self::Property(Box::new((getter, setter, ident.into())))
+                let hash_set = calc_fn_hash(empty(), &setter, 2);
+
+                Self::Property(Box::new((getter, hash_get, setter, hash_set, ident.into())))
             }
             _ => self,
         }
@@ -334,33 +340,25 @@ fn parse_fn_call(
         Token::RightParen => {
             eat_token(input, Token::RightParen);
 
-            let mut hash_script = if let Some(ref mut modules) = namespace {
+            let hash = if let Some(ref mut modules) = namespace {
                 #[cfg(not(feature = "no_module"))]
                 modules.set_index(state.find_module(&modules[0].name));
 
-                // Rust functions are indexed in two steps:
-                // 1) Calculate a hash in a similar manner to script-defined functions,
-                //    i.e. qualifiers + function name + number of arguments.
-                // 2) Calculate a second hash with no qualifiers, empty function name,
-                //    zero number of arguments, and the actual list of argument `TypeId`'s.
-                // 3) The final hash is the XOR of the two hashes.
-                let qualifiers = modules.iter().map(|m| m.name.as_str());
-                calc_script_fn_hash(qualifiers, &id, 0)
+                calc_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, 0)
             } else {
-                calc_script_fn_hash(empty(), &id, 0)
+                calc_fn_hash(empty(), &id, 0)
             };
-
-            // script functions can only be valid identifiers
-            if !is_valid_identifier(id.chars()) {
-                hash_script = None;
-            }
 
             return Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
                     name: id.to_string().into(),
                     capture,
                     namespace,
-                    hash_script,
+                    hash: if is_valid_identifier(id.chars()) {
+                        FnHash::from_script(hash)
+                    } else {
+                        FnHash::from_native(hash)
+                    },
                     args,
                     ..Default::default()
                 }),
@@ -385,33 +383,25 @@ fn parse_fn_call(
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
 
-                let mut hash_script = if let Some(modules) = namespace.as_mut() {
+                let hash = if let Some(modules) = namespace.as_mut() {
                     #[cfg(not(feature = "no_module"))]
                     modules.set_index(state.find_module(&modules[0].name));
 
-                    // Rust functions are indexed in two steps:
-                    // 1) Calculate a hash in a similar manner to script-defined functions,
-                    //    i.e. qualifiers + function name + number of arguments.
-                    // 2) Calculate a second hash with no qualifiers, empty function name,
-                    //    zero number of arguments, and the actual list of argument `TypeId`'s.
-                    // 3) The final hash is the XOR of the two hashes.
-                    let qualifiers = modules.iter().map(|m| m.name.as_str());
-                    calc_script_fn_hash(qualifiers, &id, args.len())
+                    calc_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, args.len())
                 } else {
-                    calc_script_fn_hash(empty(), &id, args.len())
+                    calc_fn_hash(empty(), &id, args.len())
                 };
-
-                // script functions can only be valid identifiers
-                if !is_valid_identifier(id.chars()) {
-                    hash_script = None;
-                }
 
                 return Ok(Expr::FnCall(
                     Box::new(FnCallExpr {
                         name: id.to_string().into(),
                         capture,
                         namespace,
-                        hash_script,
+                        hash: if is_valid_identifier(id.chars()) {
+                            FnHash::from_script(hash)
+                        } else {
+                            FnHash::from_native(hash)
+                        },
                         args,
                         ..Default::default()
                     }),
@@ -1013,10 +1003,8 @@ fn parse_primary(
                 state.access_var(closure, *pos);
             });
 
-            lib.insert(
-                calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap(),
-                func,
-            );
+            let hash_script = calc_fn_hash(empty(), &func.name, func.params.len());
+            lib.insert(hash_script, func);
 
             expr
         }
@@ -1183,7 +1171,7 @@ fn parse_primary(
                     } else {
                         let mut ns: NamespaceRef = Default::default();
                         ns.push(var_name_def);
-                        let index = NonZeroU64::new(42).unwrap(); // Dummy
+                        let index = 42; // Dummy
                         namespace = Some((index, ns));
                     }
 
@@ -1243,8 +1231,7 @@ fn parse_primary(
     }
     .map(|x| match x.as_mut() {
         (_, Some((ref mut hash, ref mut namespace)), Ident { name, .. }) => {
-            *hash =
-                calc_script_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0).unwrap();
+            *hash = calc_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0);
 
             #[cfg(not(feature = "no_module"))]
             namespace.set_index(state.find_module(&namespace[0].name));
@@ -1300,6 +1287,7 @@ fn parse_unary(
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
                             name: op.into(),
+                            hash: FnHash::from_native(calc_fn_hash(empty(), op, 1)),
                             args,
                             ..Default::default()
                         }),
@@ -1326,6 +1314,7 @@ fn parse_unary(
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
                             name: op.into(),
+                            hash: FnHash::from_native(calc_fn_hash(empty(), op, 1)),
                             args,
                             ..Default::default()
                         }),
@@ -1346,6 +1335,7 @@ fn parse_unary(
             Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
                     name: op.into(),
+                    hash: FnHash::from_native(calc_fn_hash(empty(), op, 1)),
                     args,
                     ..Default::default()
                 }),
@@ -1361,7 +1351,7 @@ fn parse_unary(
 
 /// Make an assignment statement.
 fn make_assignment_stmt<'a>(
-    fn_name: Cow<'static, str>,
+    op: Cow<'static, str>,
     state: &mut ParseState,
     lhs: Expr,
     rhs: Expr,
@@ -1384,24 +1374,34 @@ fn make_assignment_stmt<'a>(
         }
     }
 
+    let op_info = if op.is_empty() {
+        None
+    } else {
+        let op2 = &op[..op.len() - 1]; // extract operator without =
+
+        Some(OpAssignment {
+            hash_op_assign: calc_fn_hash(empty(), &op, 2),
+            hash_op: calc_fn_hash(empty(), op2, 2),
+            op,
+        })
+    };
+
     match &lhs {
         // const_expr = rhs
         expr if expr.is_constant() => {
             Err(PERR::AssignmentToConstant("".into()).into_err(lhs.position()))
         }
         // var (non-indexed) = rhs
-        Expr::Variable(x) if x.0.is_none() => Ok(Stmt::Assignment(
-            Box::new((lhs, fn_name.into(), rhs)),
-            op_pos,
-        )),
+        Expr::Variable(x) if x.0.is_none() => {
+            Ok(Stmt::Assignment(Box::new((lhs, rhs, op_info)), op_pos))
+        }
         // var (indexed) = rhs
         Expr::Variable(x) => {
             let (index, _, Ident { name, pos }) = x.as_ref();
             match state.stack[(state.stack.len() - index.unwrap().get())].1 {
-                AccessMode::ReadWrite => Ok(Stmt::Assignment(
-                    Box::new((lhs, fn_name.into(), rhs)),
-                    op_pos,
-                )),
+                AccessMode::ReadWrite => {
+                    Ok(Stmt::Assignment(Box::new((lhs, rhs, op_info)), op_pos))
+                }
                 // Constant values cannot be assigned to
                 AccessMode::ReadOnly => {
                     Err(PERR::AssignmentToConstant(name.to_string()).into_err(*pos))
@@ -1413,18 +1413,16 @@ fn make_assignment_stmt<'a>(
             match check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _))) {
                 Position::NONE => match &x.lhs {
                     // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
-                    Expr::Variable(x) if x.0.is_none() => Ok(Stmt::Assignment(
-                        Box::new((lhs, fn_name.into(), rhs)),
-                        op_pos,
-                    )),
+                    Expr::Variable(x) if x.0.is_none() => {
+                        Ok(Stmt::Assignment(Box::new((lhs, rhs, op_info)), op_pos))
+                    }
                     // var[???] (indexed) = rhs, var.??? (indexed) = rhs
                     Expr::Variable(x) => {
                         let (index, _, Ident { name, pos }) = x.as_ref();
                         match state.stack[(state.stack.len() - index.unwrap().get())].1 {
-                            AccessMode::ReadWrite => Ok(Stmt::Assignment(
-                                Box::new((lhs, fn_name.into(), rhs)),
-                                op_pos,
-                            )),
+                            AccessMode::ReadWrite => {
+                                Ok(Stmt::Assignment(Box::new((lhs, rhs, op_info)), op_pos))
+                            }
                             // Constant values cannot be assigned to
                             AccessMode::ReadOnly => {
                                 Err(PERR::AssignmentToConstant(name.to_string()).into_err(*pos))
@@ -1506,8 +1504,11 @@ fn make_dot_expr(
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
             let ident = x.2;
             let getter = state.get_interned_string(crate::engine::make_getter(&ident.name));
+            let hash_get = calc_fn_hash(empty(), &getter, 1);
             let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
-            let rhs = Expr::Property(Box::new((getter, setter, ident)));
+            let hash_set = calc_fn_hash(empty(), &setter, 2);
+
+            let rhs = Expr::Property(Box::new((getter, hash_get, setter, hash_set, ident)));
 
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
         }
@@ -1521,10 +1522,26 @@ fn make_dot_expr(
         }
         // lhs.dot_lhs.dot_rhs
         (lhs, Expr::Dot(x, pos)) => match x.lhs {
-            Expr::Variable(_) | Expr::Property(_) | Expr::FnCall(_, _) => {
+            Expr::Variable(_) | Expr::Property(_) => {
                 let rhs = Expr::Dot(
                     Box::new(BinaryExpr {
                         lhs: x.lhs.into_property(state),
+                        rhs: x.rhs,
+                    }),
+                    pos,
+                );
+                Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
+            }
+            Expr::FnCall(mut func, func_pos) => {
+                // Recalculate hash
+                func.hash = FnHash::from_script_and_native(
+                    calc_fn_hash(empty(), &func.name, func.args.len()),
+                    calc_fn_hash(empty(), &func.name, func.args.len() + 1),
+                );
+
+                let rhs = Expr::Dot(
+                    Box::new(BinaryExpr {
+                        lhs: Expr::FnCall(func, func_pos),
                         rhs: x.rhs,
                     }),
                     pos,
@@ -1543,6 +1560,10 @@ fn make_dot_expr(
                 pos,
             );
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
+        }
+        // lhs.nnn::func(...)
+        (_, Expr::FnCall(x, _)) if x.namespace.is_some() => {
+            unreachable!("method call should not be namespace-qualified")
         }
         // lhs.Fn() or lhs.eval()
         (_, Expr::FnCall(x, pos))
@@ -1567,8 +1588,14 @@ fn make_dot_expr(
             .into_err(pos))
         }
         // lhs.func(...)
-        (lhs, func @ Expr::FnCall(_, _)) => {
-            Expr::Dot(Box::new(BinaryExpr { lhs, rhs: func }), op_pos)
+        (lhs, Expr::FnCall(mut func, func_pos)) => {
+            // Recalculate hash
+            func.hash = FnHash::from_script_and_native(
+                calc_fn_hash(empty(), &func.name, func.args.len()),
+                calc_fn_hash(empty(), &func.name, func.args.len() + 1),
+            );
+            let rhs = Expr::FnCall(func, func_pos);
+            Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
         }
         // lhs.rhs
         (_, rhs) => return Err(PERR::PropertyExpected.into_err(rhs.position())),
@@ -1792,9 +1819,11 @@ fn parse_binary_op(
         settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
         let op = op_token.syntax();
+        let hash = calc_fn_hash(empty(), &op, 2);
 
         let op_base = FnCallExpr {
             name: op,
+            hash: FnHash::from_native(hash),
             capture: false,
             ..Default::default()
         };
@@ -1863,16 +1892,15 @@ fn parse_binary_op(
                     .get(&s)
                     .map_or(false, Option::is_some) =>
             {
-                let hash_script = if is_valid_identifier(s.chars()) {
-                    // Accept non-native functions for custom operators
-                    calc_script_fn_hash(empty(), &s, 2)
-                } else {
-                    None
-                };
+                let hash = calc_fn_hash(empty(), &s, 2);
 
                 Expr::FnCall(
                     Box::new(FnCallExpr {
-                        hash_script,
+                        hash: if is_valid_identifier(s.chars()) {
+                            FnHash::from_script(hash)
+                        } else {
+                            FnHash::from_native(hash)
+                        },
                         args,
                         ..op_base
                     }),
@@ -2604,7 +2632,7 @@ fn parse_stmt(
                     };
 
                     let func = parse_fn(input, &mut new_state, lib, access, settings, _comments)?;
-                    let hash = calc_script_fn_hash(empty(), &func.name, func.params.len()).unwrap();
+                    let hash = calc_fn_hash(empty(), &func.name, func.params.len());
 
                     if lib.contains_key(&hash) {
                         return Err(PERR::FnDuplicatedDefinition(
@@ -2871,12 +2899,10 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
 
     let curry_func = crate::engine::KEYWORD_FN_PTR_CURRY;
 
-    let hash_script = calc_script_fn_hash(empty(), curry_func, num_externals + 1);
-
     let expr = Expr::FnCall(
         Box::new(FnCallExpr {
             name: curry_func.into(),
-            hash_script,
+            hash: FnHash::from_native(calc_fn_hash(empty(), curry_func, num_externals + 1)),
             args,
             ..Default::default()
         }),

@@ -6,9 +6,7 @@ use crate::dynamic::{DynamicWriteLock, Variant};
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
 use crate::r#unsafe::unsafe_cast_box;
 use crate::stdlib::{any::TypeId, boxed::Box, mem, string::String};
-use crate::{
-    Dynamic, Engine, FnAccess, FnNamespace, ImmutableString, NativeCallContext, RhaiResult,
-};
+use crate::{Dynamic, Engine, FnAccess, FnNamespace, NativeCallContext, RhaiResult};
 
 /// Trait to register custom functions with the [`Engine`].
 pub trait RegisterFn<FN, ARGS, RET> {
@@ -154,20 +152,6 @@ pub fn map_result(data: RhaiResult) -> RhaiResult {
     data
 }
 
-/// Remap `&str` | `String` to `ImmutableString`.
-#[inline(always)]
-fn map_type_id<R: 'static, T: 'static>() -> TypeId {
-    let ref_id = TypeId::of::<R>();
-
-    if ref_id == TypeId::of::<&str>() {
-        TypeId::of::<ImmutableString>()
-    } else if ref_id == TypeId::of::<String>() {
-        TypeId::of::<ImmutableString>()
-    } else {
-        TypeId::of::<T>()
-    }
-}
-
 macro_rules! def_register {
     () => {
         def_register!(imp from_pure :);
@@ -188,7 +172,7 @@ macro_rules! def_register {
             #[inline(always)]
             fn register_fn(&mut self, name: &str, f: FN) -> &mut Self {
                 self.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public, None,
-                    &[$(map_type_id::<$param, $par>()),*],
+                    &[$(TypeId::of::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_dynamic ; $($par => $let => $clone => $arg),*))
                 );
                 self
@@ -203,7 +187,7 @@ macro_rules! def_register {
             #[inline(always)]
             fn register_result_fn(&mut self, name: &str, f: FN) -> &mut Self {
                 self.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public, None,
-                    &[$(map_type_id::<$param, $par>()),*],
+                    &[$(TypeId::of::<$par>()),*],
                     CallableFunction::$abi(make_func!(f : map_result ; $($par => $let => $clone => $arg),*))
                 );
                 self

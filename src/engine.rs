@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::ast::{Expr, FnCallExpr, Ident, ReturnType, Stmt};
+use crate::ast::{Expr, FnCallExpr, FnHash, Ident, OpAssignment, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_native::{
     CallableFunction, IteratorFn, OnDebugCallback, OnPrintCallback, OnProgressCallback,
@@ -25,8 +25,8 @@ use crate::stdlib::{
 use crate::syntax::CustomSyntax;
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
-    calc_native_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position,
-    RhaiResult, Scope, Shared, StaticVec,
+    calc_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position, RhaiResult,
+    Scope, Shared, StaticVec,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -126,15 +126,12 @@ impl Imports {
     /// Does the specified function hash key exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
     #[inline(always)]
-    pub fn contains_fn(&self, hash: NonZeroU64) -> bool {
+    pub fn contains_fn(&self, hash: u64) -> bool {
         self.0.iter().any(|(_, m)| m.contains_qualified_fn(hash))
     }
     /// Get specified function via its hash key.
     #[inline(always)]
-    pub fn get_fn(
-        &self,
-        hash: NonZeroU64,
-    ) -> Option<(&CallableFunction, Option<&ImmutableString>)> {
+    pub fn get_fn(&self, hash: u64) -> Option<(&CallableFunction, Option<&ImmutableString>)> {
         self.0
             .iter()
             .rev()
@@ -510,11 +507,7 @@ pub struct State {
     pub resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
     /// Functions resolution cache.
     fn_resolution_caches: StaticVec<
-        HashMap<
-            NonZeroU64,
-            Option<(CallableFunction, Option<ImmutableString>)>,
-            StraightHasherBuilder,
-        >,
+        HashMap<u64, Option<(CallableFunction, Option<ImmutableString>)>, StraightHasherBuilder>,
     >,
 }
 
@@ -527,11 +520,8 @@ impl State {
     /// Get a mutable reference to the current functions resolution cache.
     pub fn fn_resolution_cache_mut(
         &mut self,
-    ) -> &mut HashMap<
-        NonZeroU64,
-        Option<(CallableFunction, Option<ImmutableString>)>,
-        StraightHasherBuilder,
-    > {
+    ) -> &mut HashMap<u64, Option<(CallableFunction, Option<ImmutableString>)>, StraightHasherBuilder>
+    {
         if self.fn_resolution_caches.is_empty() {
             self.fn_resolution_caches
                 .push(HashMap::with_capacity_and_hasher(16, StraightHasherBuilder));
@@ -1053,7 +1043,7 @@ impl Engine {
         idx_values: &mut StaticVec<ChainArgument>,
         chain_type: ChainType,
         level: usize,
-        new_val: Option<((Dynamic, Position), (&str, Position))>,
+        new_val: Option<((Dynamic, Position), (&Option<OpAssignment>, Position))>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         assert!(chain_type != ChainType::NonChaining);
 
@@ -1102,9 +1092,9 @@ impl Engine {
                         ) {
                             // Indexed value is a reference - update directly
                             Ok(obj_ptr) => {
-                                let ((new_val, new_pos), (op, op_pos)) = new_val.unwrap();
+                                let ((new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
                                 self.eval_op_assignment(
-                                    mods, state, lib, op, op_pos, obj_ptr, new_val, new_pos,
+                                    mods, state, lib, op_info, op_pos, obj_ptr, new_val, new_pos,
                                 )?;
                                 None
                             }
@@ -1122,11 +1112,13 @@ impl Engine {
                             let val_type_name = target_val.type_name();
                             let ((_, val_pos), _) = new_val;
 
+                            let hash_set =
+                                FnHash::from_native(calc_fn_hash(empty(), FN_IDX_SET, 3));
                             let args = &mut [target_val, &mut idx_val2, &mut (new_val.0).0];
 
                             self.exec_fn_call(
-                                mods, state, lib, FN_IDX_SET, None, args, is_ref, true, val_pos,
-                                None, level,
+                                mods, state, lib, FN_IDX_SET, hash_set, args, is_ref, true,
+                                val_pos, None, level,
                             )
                             .map_err(|err| match *err {
                                 EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
@@ -1159,11 +1151,7 @@ impl Engine {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x, pos) if x.namespace.is_none() && new_val.is_none() => {
-                        let FnCallExpr {
-                            name,
-                            hash_script: hash,
-                            ..
-                        } = x.as_ref();
+                        let FnCallExpr { name, hash, .. } = x.as_ref();
                         let args = idx_val.as_fn_call_args();
                         self.make_method_call(
                             mods, state, lib, name, *hash, target, args, *pos, level,
@@ -1179,20 +1167,20 @@ impl Engine {
                     }
                     // {xxx:map}.id op= ???
                     Expr::Property(x) if target_val.is::<Map>() && new_val.is_some() => {
-                        let Ident { name, pos } = &x.2;
+                        let Ident { name, pos } = &x.4;
                         let index = name.clone().into();
                         let val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, true, is_ref, false, level,
                         )?;
-                        let ((new_val, new_pos), (op, op_pos)) = new_val.unwrap();
+                        let ((new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
                         self.eval_op_assignment(
-                            mods, state, lib, op, op_pos, val, new_val, new_pos,
+                            mods, state, lib, op_info, op_pos, val, new_val, new_pos,
                         )?;
                         Ok((Dynamic::UNIT, true))
                     }
                     // {xxx:map}.id
                     Expr::Property(x) if target_val.is::<Map>() => {
-                        let Ident { name, pos } = &x.2;
+                        let Ident { name, pos } = &x.4;
                         let index = name.clone().into();
                         let val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, false, is_ref, false, level,
@@ -1202,21 +1190,23 @@ impl Engine {
                     }
                     // xxx.id = ???
                     Expr::Property(x) if new_val.is_some() => {
-                        let (_, setter, Ident { pos, .. }) = x.as_ref();
+                        let (_, _, setter, hash_set, Ident { pos, .. }) = x.as_ref();
+                        let hash = FnHash::from_native(*hash_set);
                         let mut new_val = new_val;
                         let mut args = [target_val, &mut (new_val.as_mut().unwrap().0).0];
                         self.exec_fn_call(
-                            mods, state, lib, setter, None, &mut args, is_ref, true, *pos, None,
+                            mods, state, lib, setter, hash, &mut args, is_ref, true, *pos, None,
                             level,
                         )
                         .map(|(v, _)| (v, true))
                     }
                     // xxx.id
                     Expr::Property(x) => {
-                        let (getter, _, Ident { pos, .. }) = x.as_ref();
+                        let (getter, hash_get, _, _, Ident { pos, .. }) = x.as_ref();
+                        let hash = FnHash::from_native(*hash_get);
                         let mut args = [target_val];
                         self.exec_fn_call(
-                            mods, state, lib, getter, None, &mut args, is_ref, true, *pos, None,
+                            mods, state, lib, getter, hash, &mut args, is_ref, true, *pos, None,
                             level,
                         )
                         .map(|(v, _)| (v, false))
@@ -1225,7 +1215,7 @@ impl Engine {
                     Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target_val.is::<Map>() => {
                         let mut val = match &x.lhs {
                             Expr::Property(p) => {
-                                let Ident { name, pos } = &p.2;
+                                let Ident { name, pos } = &p.4;
                                 let index = name.clone().into();
                                 self.get_indexed_mut(
                                     mods, state, lib, target_val, index, *pos, false, is_ref, true,
@@ -1234,11 +1224,7 @@ impl Engine {
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
                             Expr::FnCall(x, pos) if x.namespace.is_none() => {
-                                let FnCallExpr {
-                                    name,
-                                    hash_script: hash,
-                                    ..
-                                } = x.as_ref();
+                                let FnCallExpr { name, hash, .. } = x.as_ref();
                                 let args = idx_val.as_fn_call_args();
                                 let (val, _) = self.make_method_call(
                                     mods, state, lib, name, *hash, target, args, *pos, level,
@@ -1264,12 +1250,15 @@ impl Engine {
                         match &x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
-                                let (getter, setter, Ident { pos, .. }) = p.as_ref();
+                                let (getter, hash_get, setter, hash_set, Ident { pos, .. }) =
+                                    p.as_ref();
+                                let hash_get = FnHash::from_native(*hash_get);
+                                let hash_set = FnHash::from_native(*hash_set);
                                 let arg_values = &mut [target_val, &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self.exec_fn_call(
-                                    mods, state, lib, getter, None, args, is_ref, true, *pos, None,
-                                    level,
+                                    mods, state, lib, getter, hash_get, args, is_ref, true, *pos,
+                                    None, level,
                                 )?;
 
                                 let val = &mut val;
@@ -1294,8 +1283,8 @@ impl Engine {
                                     // Re-use args because the first &mut parameter will not be consumed
                                     arg_values[1] = val;
                                     self.exec_fn_call(
-                                        mods, state, lib, setter, None, arg_values, is_ref, true,
-                                        *pos, None, level,
+                                        mods, state, lib, setter, hash_set, arg_values, is_ref,
+                                        true, *pos, None, level,
                                     )
                                     .or_else(
                                         |err| match *err {
@@ -1313,11 +1302,7 @@ impl Engine {
                             }
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
                             Expr::FnCall(f, pos) if f.namespace.is_none() => {
-                                let FnCallExpr {
-                                    name,
-                                    hash_script: hash,
-                                    ..
-                                } = f.as_ref();
+                                let FnCallExpr { name, hash, .. } = f.as_ref();
                                 let args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self.make_method_call(
                                     mods, state, lib, name, *hash, target, args, *pos, level,
@@ -1359,7 +1344,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         level: usize,
-        new_val: Option<((Dynamic, Position), (&str, Position))>,
+        new_val: Option<((Dynamic, Position), (&Option<OpAssignment>, Position))>,
     ) -> RhaiResult {
         let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, op_pos) = match expr {
             Expr::Index(x, pos) => (x.as_ref(), ChainType::Index, *pos),
@@ -1593,8 +1578,9 @@ impl Engine {
                 let type_name = target.type_name();
                 let mut idx = idx;
                 let args = &mut [target, &mut idx];
+                let hash_get = FnHash::from_native(calc_fn_hash(empty(), FN_IDX_GET, 2));
                 self.exec_fn_call(
-                    _mods, state, _lib, FN_IDX_GET, None, args, _is_ref, true, idx_pos, None,
+                    _mods, state, _lib, FN_IDX_GET, hash_get, args, _is_ref, true, idx_pos, None,
                     _level,
                 )
                 .map(|(v, _)| v.into())
@@ -1640,17 +1626,13 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(mut rhs_value, _)) => {
                 // Call the `==` operator to compare each value
+                let hash = calc_fn_hash(empty(), OP_EQUALS, 2);
                 for value in rhs_value.iter_mut() {
                     let args = &mut [&mut lhs_value.clone(), value];
-                    let hash_fn =
-                        calc_native_fn_hash(empty(), OP_EQUALS, args.iter().map(|a| a.type_id()))
-                            .unwrap();
                     let pos = rhs.position();
 
                     if self
-                        .call_native_fn(
-                            mods, state, lib, OP_EQUALS, hash_fn, args, false, false, pos,
-                        )?
+                        .call_native_fn(mods, state, lib, OP_EQUALS, hash, args, false, false, pos)?
                         .0
                         .as_bool()
                         .unwrap_or(false)
@@ -1764,7 +1746,7 @@ impl Engine {
                 let FnCallExpr {
                     name,
                     capture: cap_scope,
-                    hash_script: hash,
+                    hash,
                     args,
                     ..
                 } = x.as_ref();
@@ -1778,12 +1760,12 @@ impl Engine {
                 let FnCallExpr {
                     name,
                     namespace,
-                    hash_script,
+                    hash,
                     args,
                     ..
                 } = x.as_ref();
                 let namespace = namespace.as_ref();
-                let hash = hash_script.unwrap();
+                let hash = hash.native_hash();
                 self.make_qualified_function_call(
                     scope, mods, state, lib, this_ptr, namespace, name, args, hash, *pos, level,
                 )
@@ -1927,7 +1909,7 @@ impl Engine {
         mods: &mut Imports,
         state: &mut State,
         lib: &[&Module],
-        op: &str,
+        op_info: &Option<OpAssignment>,
         op_pos: Position,
         mut target: Target,
         mut new_value: Dynamic,
@@ -1937,11 +1919,12 @@ impl Engine {
             unreachable!("LHS should not be read-only");
         }
 
-        if op.is_empty() {
-            // Normal assignment
-            target.set_value(new_value, new_value_pos)?;
-            Ok(())
-        } else {
+        if let Some(OpAssignment {
+            hash_op_assign,
+            hash_op,
+            op,
+        }) = op_info
+        {
             let mut lock_guard;
             let lhs_ptr_inner;
 
@@ -1952,28 +1935,30 @@ impl Engine {
                 lhs_ptr_inner = target.as_mut();
             }
 
+            let hash = *hash_op_assign;
             let args = &mut [lhs_ptr_inner, &mut new_value];
-            let hash_fn =
-                calc_native_fn_hash(empty(), op, args.iter().map(|a| a.type_id())).unwrap();
 
-            match self.call_native_fn(mods, state, lib, op, hash_fn, args, true, true, op_pos) {
+            match self.call_native_fn(mods, state, lib, op, hash, args, true, true, op_pos) {
                 Ok(_) => (),
-                Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
+                Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op.as_ref())) =>
                 {
                     // Expand to `var = var op rhs`
                     let op = &op[..op.len() - 1]; // extract operator without =
-                    let hash_fn =
-                        calc_native_fn_hash(empty(), op, args.iter().map(|a| a.type_id())).unwrap();
 
                     // Run function
-                    let (value, _) = self
-                        .call_native_fn(mods, state, lib, op, hash_fn, args, true, false, op_pos)?;
+                    let (value, _) = self.call_native_fn(
+                        mods, state, lib, op, *hash_op, args, true, false, op_pos,
+                    )?;
 
                     *args[0] = value.flatten();
                 }
                 err => return err.map(|_| ()),
             }
 
+            Ok(())
+        } else {
+            // Normal assignment
+            target.set_value(new_value, new_value_pos)?;
             Ok(())
         }
     }
@@ -2007,7 +1992,7 @@ impl Engine {
 
             // var op= rhs
             Stmt::Assignment(x, op_pos) if x.0.get_variable_access(false).is_some() => {
-                let (lhs_expr, op, rhs_expr) = x.as_ref();
+                let (lhs_expr, rhs_expr, op_info) = x.as_ref();
                 let rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
                     .flatten();
@@ -2035,7 +2020,7 @@ impl Engine {
                         mods,
                         state,
                         lib,
-                        op,
+                        op_info,
                         *op_pos,
                         lhs_ptr,
                         rhs_val,
@@ -2047,11 +2032,11 @@ impl Engine {
 
             // lhs op= rhs
             Stmt::Assignment(x, op_pos) => {
-                let (lhs_expr, op, rhs_expr) = x.as_ref();
+                let (lhs_expr, rhs_expr, op_info) = x.as_ref();
                 let rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
                     .flatten();
-                let _new_val = Some(((rhs_val, rhs_expr.position()), (op.as_ref(), *op_pos)));
+                let _new_val = Some(((rhs_val, rhs_expr.position()), (op_info, *op_pos)));
 
                 // Must be either `var[index] op= val` or `var.prop op= val`
                 match lhs_expr {

@@ -1,6 +1,6 @@
 //! Module defining interfaces to native-Rust functions.
 
-use crate::ast::FnAccess;
+use crate::ast::{FnAccess, FnHash};
 use crate::engine::Imports;
 use crate::plugin::PluginFunction;
 use crate::stdlib::{
@@ -14,8 +14,8 @@ use crate::stdlib::{
 };
 use crate::token::is_valid_identifier;
 use crate::{
-    calc_script_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ImmutableString, Module,
-    Position, RhaiResult,
+    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ImmutableString, Module, Position,
+    RhaiResult,
 };
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
@@ -189,13 +189,22 @@ impl<'a> NativeCallContext<'a> {
         is_method: bool,
         args: &mut [&mut Dynamic],
     ) -> RhaiResult {
+        let hash = if is_method {
+            FnHash::from_script_and_native(
+                calc_fn_hash(empty(), fn_name, args.len() - 1),
+                calc_fn_hash(empty(), fn_name, args.len()),
+            )
+        } else {
+            FnHash::from_script(calc_fn_hash(empty(), fn_name, args.len()))
+        };
+
         self.engine()
             .exec_fn_call(
                 &mut self.mods.cloned().unwrap_or_default(),
                 &mut Default::default(),
                 self.lib,
                 fn_name,
-                calc_script_fn_hash(empty(), fn_name, args.len() - if is_method { 1 } else { 0 }),
+                hash,
                 args,
                 is_method,
                 is_method,

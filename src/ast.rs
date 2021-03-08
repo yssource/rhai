@@ -8,7 +8,7 @@ use crate::stdlib::{
     boxed::Box,
     fmt,
     hash::Hash,
-    num::{NonZeroU64, NonZeroUsize},
+    num::NonZeroUsize,
     ops::{Add, AddAssign},
     string::String,
     vec,
@@ -836,7 +836,7 @@ pub enum Stmt {
     /// \[`export`\] `const` id `=` expr
     Const(Box<Ident>, Option<Expr>, bool, Position),
     /// expr op`=` expr
-    Assignment(Box<(Expr, Cow<'static, str>, Expr)>, Position),
+    Assignment(Box<(Expr, Expr, Option<OpAssignment>)>, Position),
     /// `{` stmt`;` ... `}`
     Block(Vec<Stmt>, Position),
     /// `try` `{` stmt; ... `}` `catch` `(` var `)` `{` stmt; ... `}`
@@ -1036,7 +1036,7 @@ impl Stmt {
             }
             Self::Assignment(x, _) => {
                 x.0.walk(path, on_node);
-                x.2.walk(path, on_node);
+                x.1.walk(path, on_node);
             }
             Self::Block(x, _) => x.iter().for_each(|s| s.walk(path, on_node)),
             Self::TryCatch(x, _, _) => {
@@ -1083,6 +1083,79 @@ pub struct BinaryExpr {
     pub rhs: Expr,
 }
 
+/// _(INTERNALS)_ An op-assignment operator.
+/// Exported under the `internals` feature only.
+///
+/// # Volatile Data Structure
+///
+/// This type is volatile and may change.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct OpAssignment {
+    pub hash_op_assign: u64,
+    pub hash_op: u64,
+    pub op: Cow<'static, str>,
+}
+
+/// _(INTERNALS)_ An set of function call hashes.
+/// Exported under the `internals` feature only.
+///
+/// # Volatile Data Structure
+///
+/// This type is volatile and may change.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+pub struct FnHash {
+    /// Pre-calculated hash for a script-defined function ([`None`] if native functions only).
+    script: Option<u64>,
+    /// Pre-calculated hash for a native Rust function with no parameter types.
+    native: u64,
+}
+
+impl FnHash {
+    /// Create a [`FnHash`] with only the native Rust hash.
+    #[inline(always)]
+    pub fn from_native(hash: u64) -> Self {
+        Self {
+            script: None,
+            native: hash,
+        }
+    }
+    /// Create a [`FnHash`] with both native Rust and script function hashes set to the same value.
+    #[inline(always)]
+    pub fn from_script(hash: u64) -> Self {
+        Self {
+            script: Some(hash),
+            native: hash,
+        }
+    }
+    /// Create a [`FnHash`] with both native Rust and script function hashes.
+    #[inline(always)]
+    pub fn from_script_and_native(script: u64, native: u64) -> Self {
+        Self {
+            script: Some(script),
+            native,
+        }
+    }
+    /// Is this [`FnHash`] native Rust only?
+    #[inline(always)]
+    pub fn is_native_only(&self) -> bool {
+        self.script.is_none()
+    }
+    /// Get the script function hash from this [`FnHash`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the [`FnHash`] is native Rust only.
+    #[inline(always)]
+    pub fn script_hash(&self) -> u64 {
+        self.script.unwrap()
+    }
+    /// Get the naive Rust function hash from this [`FnHash`].
+    #[inline(always)]
+    pub fn native_hash(&self) -> u64 {
+        self.native
+    }
+}
+
 /// _(INTERNALS)_ A function call.
 /// Exported under the `internals` feature only.
 ///
@@ -1091,9 +1164,8 @@ pub struct BinaryExpr {
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Default, Hash)]
 pub struct FnCallExpr {
-    /// Pre-calculated hash for a script-defined function of the same name and number of parameters.
-    /// None if native Rust only.
-    pub hash_script: Option<NonZeroU64>,
+    /// Pre-calculated hash.
+    pub hash: FnHash,
     /// Does this function call capture the parent scope?
     pub capture: bool,
     /// Namespace of the function, if any. Boxed because it occurs rarely.
@@ -1225,15 +1297,9 @@ pub enum Expr {
     /// ()
     Unit(Position),
     /// Variable access - (optional index, optional (hash, modules), variable name)
-    Variable(
-        Box<(
-            Option<NonZeroUsize>,
-            Option<(NonZeroU64, NamespaceRef)>,
-            Ident,
-        )>,
-    ),
-    /// Property access - (getter, setter), prop
-    Property(Box<(ImmutableString, ImmutableString, Ident)>),
+    Variable(Box<(Option<NonZeroUsize>, Option<(u64, NamespaceRef)>, Ident)>),
+    /// Property access - (getter, hash, setter, hash, prop)
+    Property(Box<(ImmutableString, u64, ImmutableString, u64, Ident)>),
     /// { [statement][Stmt] }
     Stmt(Box<StaticVec<Stmt>>, Position),
     /// func `(` expr `,` ... `)`
@@ -1326,7 +1392,7 @@ impl Expr {
             Self::FnPointer(_, pos) => *pos,
             Self::Array(_, pos) => *pos,
             Self::Map(_, pos) => *pos,
-            Self::Property(x) => (x.2).pos,
+            Self::Property(x) => (x.4).pos,
             Self::Stmt(_, pos) => *pos,
             Self::Variable(x) => (x.2).pos,
             Self::FnCall(_, pos) => *pos,
@@ -1355,7 +1421,7 @@ impl Expr {
             Self::Array(_, pos) => *pos = new_pos,
             Self::Map(_, pos) => *pos = new_pos,
             Self::Variable(x) => (x.2).pos = new_pos,
-            Self::Property(x) => (x.2).pos = new_pos,
+            Self::Property(x) => (x.4).pos = new_pos,
             Self::Stmt(_, pos) => *pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
             Self::And(_, pos) | Self::Or(_, pos) | Self::In(_, pos) => *pos = new_pos,

@@ -68,12 +68,12 @@ fn test_string_dynamic() -> Result<(), Box<EvalAltResult>> {
 fn test_string_mut() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    engine.register_fn("foo", |x: INT, s: &str| s.len() as INT + x);
-    engine.register_fn("bar", |x: INT, s: String| s.len() as INT + x);
+    engine.register_fn("foo", |s: &str| s.len() as INT);
+    engine.register_fn("bar", |s: String| s.len() as INT);
     engine.register_fn("baz", |s: &mut String| s.len());
 
-    assert_eq!(engine.eval::<INT>(r#"foo(1, "hello")"#)?, 6);
-    assert_eq!(engine.eval::<INT>(r#"bar(1, "hello")"#)?, 6);
+    assert_eq!(engine.eval::<INT>(r#"foo("hello")"#)?, 5);
+    assert_eq!(engine.eval::<INT>(r#"bar("hello")"#)?, 5);
     assert!(
         matches!(*engine.eval::<INT>(r#"baz("hello")"#).expect_err("should error"),
             EvalAltResult::ErrorFunctionNotFound(f, _) if f == "baz (&str | ImmutableString | String)"
