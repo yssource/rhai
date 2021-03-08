@@ -17,7 +17,6 @@ use crate::stdlib::{
     collections::{HashMap, HashSet},
     fmt, format,
     hash::{Hash, Hasher},
-    iter::empty,
     num::{NonZeroU64, NonZeroU8, NonZeroUsize},
     ops::DerefMut,
     string::{String, ToString},
@@ -25,12 +24,12 @@ use crate::stdlib::{
 use crate::syntax::CustomSyntax;
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
-    calc_fn_hash, Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position, RhaiResult,
-    Scope, Shared, StaticVec,
+    Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position, RhaiResult, Scope, Shared,
+    StaticVec,
 };
 
 #[cfg(not(feature = "no_index"))]
-use crate::Array;
+use crate::{calc_fn_hash, stdlib::iter::empty, Array};
 
 #[cfg(not(feature = "no_index"))]
 pub const TYPICAL_ARRAY_SIZE: usize = 8; // Small arrays are typical
@@ -223,11 +222,11 @@ pub enum ChainType {
 #[derive(Debug, Clone, Hash)]
 pub enum ChainArgument {
     /// Dot-property access.
-    Property,
+    Property(Position),
     /// Arguments to a dot-function call.
-    FnCallArgs(StaticVec<Dynamic>),
+    FnCallArgs(StaticVec<(Dynamic, Position)>),
     /// Index value.
-    IndexValue(Dynamic),
+    IndexValue(Dynamic, Position),
 }
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
@@ -241,8 +240,10 @@ impl ChainArgument {
     #[cfg(not(feature = "no_index"))]
     pub fn as_index_value(self) -> Dynamic {
         match self {
-            Self::Property | Self::FnCallArgs(_) => panic!("expecting ChainArgument::IndexValue"),
-            Self::IndexValue(value) => value,
+            Self::Property(_) | Self::FnCallArgs(_) => {
+                panic!("expecting ChainArgument::IndexValue")
+            }
+            Self::IndexValue(value, _) => value,
         }
     }
     /// Return the `StaticVec<Dynamic>` value.
@@ -252,27 +253,29 @@ impl ChainArgument {
     /// Panics if not `ChainArgument::FnCallArgs`.
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
-    pub fn as_fn_call_args(self) -> StaticVec<Dynamic> {
+    pub fn as_fn_call_args(self) -> StaticVec<(Dynamic, Position)> {
         match self {
-            Self::Property | Self::IndexValue(_) => panic!("expecting ChainArgument::FnCallArgs"),
+            Self::Property(_) | Self::IndexValue(_, _) => {
+                panic!("expecting ChainArgument::FnCallArgs")
+            }
             Self::FnCallArgs(value) => value,
         }
     }
 }
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-impl From<StaticVec<Dynamic>> for ChainArgument {
+impl From<StaticVec<(Dynamic, Position)>> for ChainArgument {
     #[inline(always)]
-    fn from(value: StaticVec<Dynamic>) -> Self {
+    fn from(value: StaticVec<(Dynamic, Position)>) -> Self {
         Self::FnCallArgs(value)
     }
 }
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-impl From<Dynamic> for ChainArgument {
+impl From<(Dynamic, Position)> for ChainArgument {
     #[inline(always)]
-    fn from(value: Dynamic) -> Self {
-        Self::IndexValue(value)
+    fn from((value, pos): (Dynamic, Position)) -> Self {
+        Self::IndexValue(value, pos)
     }
 }
 
@@ -395,7 +398,11 @@ impl<'a> Target<'a> {
     }
     /// Update the value of the `Target`.
     #[cfg(any(not(feature = "no_object"), not(feature = "no_index")))]
-    pub fn set_value(&mut self, new_val: Dynamic, pos: Position) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_value(
+        &mut self,
+        new_val: Dynamic,
+        _pos: Position,
+    ) -> Result<(), Box<EvalAltResult>> {
         match self {
             Self::Ref(r) => **r = new_val,
             #[cfg(not(feature = "no_closure"))]
@@ -411,7 +418,7 @@ impl<'a> Target<'a> {
                     Box::new(EvalAltResult::ErrorMismatchDataType(
                         "char".to_string(),
                         err.to_string(),
-                        pos,
+                        _pos,
                     ))
                 })?;
 
@@ -1152,9 +1159,9 @@ impl Engine {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x, pos) if x.namespace.is_none() && new_val.is_none() => {
                         let FnCallExpr { name, hash, .. } = x.as_ref();
-                        let args = idx_val.as_fn_call_args();
+                        let mut args = idx_val.as_fn_call_args();
                         self.make_method_call(
-                            mods, state, lib, name, *hash, target, args, *pos, level,
+                            mods, state, lib, name, *hash, target, &mut args, *pos, level,
                         )
                     }
                     // xxx.fn_name(...) = ???
@@ -1225,9 +1232,9 @@ impl Engine {
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
                             Expr::FnCall(x, pos) if x.namespace.is_none() => {
                                 let FnCallExpr { name, hash, .. } = x.as_ref();
-                                let args = idx_val.as_fn_call_args();
+                                let mut args = idx_val.as_fn_call_args();
                                 let (val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hash, target, args, *pos, level,
+                                    mods, state, lib, name, *hash, target, &mut args, *pos, level,
                                 )?;
                                 val.into()
                             }
@@ -1303,9 +1310,9 @@ impl Engine {
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
                             Expr::FnCall(f, pos) if f.namespace.is_none() => {
                                 let FnCallExpr { name, hash, .. } = f.as_ref();
-                                let args = idx_val.as_fn_call_args();
+                                let mut args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hash, target, args, *pos, level,
+                                    mods, state, lib, name, *hash, target, &mut args, *pos, level,
                                 )?;
                                 let val = &mut val;
                                 let target = &mut val.into();
@@ -1427,7 +1434,7 @@ impl Engine {
                     .iter()
                     .map(|arg_expr| {
                         self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
-                            .map(Dynamic::flatten)
+                            .map(|v| (v.flatten(), arg_expr.position()))
                     })
                     .collect::<Result<StaticVec<_>, _>>()?;
 
@@ -1437,8 +1444,8 @@ impl Engine {
                 unreachable!("function call in dot chain should not be namespace-qualified")
             }
 
-            Expr::Property(_) if parent_chain_type == ChainType::Dot => {
-                idx_values.push(ChainArgument::Property)
+            Expr::Property(x) if parent_chain_type == ChainType::Dot => {
+                idx_values.push(ChainArgument::Property(x.4.pos))
             }
             Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
 
@@ -1447,8 +1454,8 @@ impl Engine {
 
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
-                    Expr::Property(_) if parent_chain_type == ChainType::Dot => {
-                        ChainArgument::Property
+                    Expr::Property(x) if parent_chain_type == ChainType::Dot => {
+                        ChainArgument::Property(x.4.pos)
                     }
                     Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
                     Expr::FnCall(x, _)
@@ -1458,18 +1465,17 @@ impl Engine {
                             .iter()
                             .map(|arg_expr| {
                                 self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
-                                    .map(Dynamic::flatten)
+                                    .map(|v| (v.flatten(), arg_expr.position()))
                             })
-                            .collect::<Result<StaticVec<Dynamic>, _>>()?
+                            .collect::<Result<StaticVec<_>, _>>()?
                             .into()
                     }
                     Expr::FnCall(_, _) if parent_chain_type == ChainType::Dot => {
                         unreachable!("function call in dot chain should not be namespace-qualified")
                     }
                     _ => self
-                        .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?
-                        .flatten()
-                        .into(),
+                        .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)
+                        .map(|v| (v.flatten(), lhs.position()).into())?,
                 };
 
                 // Push in reverse order
@@ -1486,9 +1492,8 @@ impl Engine {
             }
 
             _ => idx_values.push(
-                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .flatten()
-                    .into(),
+                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                    .map(|v| (v.flatten(), expr.position()).into())?,
             ),
         }
 
@@ -1745,13 +1750,13 @@ impl Engine {
             Expr::FnCall(x, pos) if x.namespace.is_none() => {
                 let FnCallExpr {
                     name,
-                    capture: cap_scope,
+                    capture,
                     hash,
                     args,
                     ..
                 } = x.as_ref();
                 self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args, *hash, *pos, *cap_scope, level,
+                    scope, mods, state, lib, this_ptr, name, args, *hash, *pos, *capture, level,
                 )
             }
 
