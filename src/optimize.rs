@@ -6,6 +6,7 @@ use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF}
 use crate::fn_builtin::get_builtin_binary_op_fn;
 use crate::parser::map_dynamic_to_expr;
 use crate::stdlib::{
+    any::TypeId,
     boxed::Box,
     hash::{Hash, Hasher},
     iter::empty,
@@ -15,8 +16,11 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::token::is_valid_identifier;
-use crate::utils::{calc_fn_hash, get_hasher};
-use crate::{Dynamic, Engine, Module, Position, Scope, StaticVec, AST};
+use crate::utils::get_hasher;
+use crate::{
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, Module, Position, Scope,
+    StaticVec, AST,
+};
 
 /// Level of optimization performed.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
@@ -126,15 +130,25 @@ impl<'a> State<'a> {
     }
 }
 
+// Has a system function a Rust-native override?
+fn has_native_fn(state: &State, hash_script: u64, arg_types: &[TypeId]) -> bool {
+    let hash_params = calc_fn_params_hash(arg_types.iter().cloned());
+    let hash = combine_hashes(hash_script, hash_params);
+
+    // First check registered functions
+    state.engine.global_namespace.contains_fn(hash, false)
+            // Then check packages
+            || state.engine.global_modules.iter().any(|m| m.contains_fn(hash, false))
+            // Then check sub-modules
+            || state.engine.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash))
+}
+
 /// Call a registered function
 fn call_fn_with_constant_arguments(
     state: &State,
     fn_name: &str,
     arg_values: &mut [Dynamic],
 ) -> Option<Dynamic> {
-    // Search built-in's and external functions
-    let hash_native = calc_fn_hash(empty(), fn_name, arg_values.len());
-
     state
         .engine
         .call_native_fn(
@@ -142,7 +156,7 @@ fn call_fn_with_constant_arguments(
             &mut Default::default(),
             state.lib,
             fn_name,
-            hash_native,
+            calc_fn_hash(empty(), fn_name, arg_values.len()),
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
             false,
             false,
@@ -676,7 +690,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
-            if !state.engine.has_native_override(Some(&Default::default()), &mut Default::default(), state.lib, x.name.as_ref(), arg_types.as_ref()) {
+            if !has_native_fn(state, x.hash.native_hash(), arg_types.as_ref()) {
                 if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
                                         .and_then(|f| {
                                             let ctx = (state.engine, x.name.as_ref(), state.lib).into();

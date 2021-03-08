@@ -577,67 +577,37 @@ impl Engine {
         result
     }
 
-    // Has a system function a Rust-native override?
+    // Does a scripted function exist?
     #[inline(always)]
-    pub(crate) fn has_native_override(
+    pub(crate) fn has_script_fn(
         &self,
         mods: Option<&Imports>,
         state: &mut State,
         lib: &[&Module],
-        fn_name: &str,
-        arg_types: &[TypeId],
-    ) -> bool {
-        let hash_script = calc_fn_hash(empty(), fn_name, arg_types.len());
-        let hash_params = calc_fn_params_hash(arg_types.iter().cloned());
-        let hash_fn = combine_hashes(hash_script, hash_params);
-
-        self.has_override(mods, state, lib, Some(hash_fn), None)
-    }
-
-    // Has a system function an override?
-    #[inline(always)]
-    pub(crate) fn has_override(
-        &self,
-        mods: Option<&Imports>,
-        state: &mut State,
-        lib: &[&Module],
-        hash_fn: Option<u64>,
-        hash_script: Option<u64>,
+        hash_script: u64,
     ) -> bool {
         let cache = state.fn_resolution_cache_mut();
 
-        if hash_script.map_or(false, |hash| cache.contains_key(&hash))
-            || hash_fn.map_or(false, |hash| cache.contains_key(&hash))
-        {
-            return true;
+        if let Some(result) = cache.get(&hash_script).map(|v| v.is_some()) {
+            return result;
         }
 
         // First check script-defined functions
-        if hash_script.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, false)))
-            //|| hash_fn.map_or(false, |hash| lib.iter().any(|&m| m.contains_fn(hash, false)))
+        let result = lib.iter().any(|&m| m.contains_fn(hash_script, false))
             // Then check registered functions
-            || hash_script.map_or(false, |hash| self.global_namespace.contains_fn(hash, false))
-            || hash_fn.map_or(false, |hash| self.global_namespace.contains_fn(hash, false))
+            || self.global_namespace.contains_fn(hash_script, false)
             // Then check packages
-            || hash_script.map_or(false, |hash| self.global_modules.iter().any(|m| m.contains_fn(hash, false)))
-            || hash_fn.map_or(false, |hash| self.global_modules.iter().any(|m| m.contains_fn(hash, false)))
+            || self.global_modules.iter().any(|m| m.contains_fn(hash_script, false))
             // Then check imported modules
-            || hash_script.map_or(false, |hash| mods.map_or(false, |m| m.contains_fn(hash)))
-            || hash_fn.map_or(false, |hash| mods.map_or(false, |m| m.contains_fn(hash)))
+            || mods.map_or(false, |m| m.contains_fn(hash_script))
             // Then check sub-modules
-            || hash_script.map_or(false, |hash| self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash)))
-            || hash_fn.map_or(false, |hash| self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash)))
-        {
-            true
-        } else {
-            if let Some(hash_fn) = hash_fn {
-                cache.insert(hash_fn, None);
-            }
-            if let Some(hash_script) = hash_script {
-                cache.insert(hash_script, None);
-            }
-            false
+            || self.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash_script));
+
+        if !result {
+            cache.insert(hash_script, None);
         }
+
+        result
     }
 
     /// Perform an actual function call, native Rust or scripted, taking care of special functions.
@@ -689,7 +659,7 @@ impl Engine {
                         Dynamic::FALSE
                     } else {
                         let hash_script = calc_fn_hash(empty(), &fn_name, num_params as usize);
-                        self.has_override(Some(mods), state, lib, None, Some(hash_script))
+                        self.has_script_fn(Some(mods), state, lib, hash_script)
                             .into()
                     },
                     false,
@@ -1165,7 +1135,7 @@ impl Engine {
                     Dynamic::FALSE
                 } else {
                     let hash_script = calc_fn_hash(empty(), &fn_name, num_params as usize);
-                    self.has_override(Some(mods), state, lib, None, Some(hash_script))
+                    self.has_script_fn(Some(mods), state, lib, hash_script)
                         .into()
                 });
             }
