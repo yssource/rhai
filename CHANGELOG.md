@@ -27,9 +27,10 @@ Breaking changes
 * `Module::update_fn_metadata` input parameter is changed.
 * Function keywords (e.g. `type_of`, `eval`, `Fn`) can no longer be overloaded. It is more trouble than worth. To disable these keywords, use `Engine::disable_symbol`.
 * `is_def_var` and `is_def_fn` are now reserved keywords.
-* `Engine::id` field is removed.
+* `Engine::id` field is removed because it is never used.
 * `num-traits` is now a required dependency.
 * The `in` operator is now implemented on top of the `contains` function and is no longer restricted to a few specific types.
+* `EvalAltResult::ErrorInExpr` is removed because the `in` operator now calls `contains`.
 
 Enhancements
 ------------
