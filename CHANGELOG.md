@@ -29,6 +29,7 @@ Breaking changes
 * `is_def_var` and `is_def_fn` are now reserved keywords.
 * `Engine::id` field is removed.
 * `num-traits` is now a required dependency.
+* The `in` operator is now implemented on top of the `contains` function and is no longer restricted to a few specific types.
 
 Enhancements
 ------------

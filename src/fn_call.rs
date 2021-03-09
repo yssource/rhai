@@ -885,7 +885,7 @@ impl Engine {
         fn_name: &str,
         mut hash: FnHash,
         target: &mut crate::engine::Target,
-        call_args: &mut StaticVec<(Dynamic, Position)>,
+        (call_args, call_arg_positions): &mut (StaticVec<Dynamic>, StaticVec<Position>),
         pos: Position,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
@@ -908,7 +908,7 @@ impl Engine {
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
                 let mut arg_values = curry
                     .iter_mut()
-                    .chain(call_args.iter_mut().map(|v| &mut v.0))
+                    .chain(call_args.iter_mut())
                     .collect::<StaticVec<_>>();
                 let args = arg_values.as_mut();
 
@@ -919,10 +919,10 @@ impl Engine {
             }
             KEYWORD_FN_PTR_CALL => {
                 if call_args.len() > 0 {
-                    if !call_args[0].0.is::<FnPtr>() {
+                    if !call_args[0].is::<FnPtr>() {
                         return Err(self.make_type_mismatch_err::<FnPtr>(
                             self.map_type_name(obj.type_name()),
-                            call_args[0].1,
+                            call_arg_positions[0],
                         ));
                     }
                 } else {
@@ -933,7 +933,8 @@ impl Engine {
                 }
 
                 // FnPtr call on object
-                let fn_ptr = call_args.remove(0).0.cast::<FnPtr>();
+                let fn_ptr = call_args.remove(0).cast::<FnPtr>();
+                call_arg_positions.remove(0);
                 // Redirect function name
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
@@ -946,7 +947,7 @@ impl Engine {
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
                 let mut arg_values = once(obj)
                     .chain(curry.iter_mut())
-                    .chain(call_args.iter_mut().map(|v| &mut v.0))
+                    .chain(call_args.iter_mut())
                     .collect::<StaticVec<_>>();
                 let args = arg_values.as_mut();
 
@@ -976,7 +977,7 @@ impl Engine {
                                 .curry()
                                 .iter()
                                 .cloned()
-                                .chain(call_args.iter_mut().map(|v| mem::take(v).0))
+                                .chain(call_args.iter_mut().map(|v| mem::take(v)))
                                 .collect(),
                         )
                     }
@@ -1008,7 +1009,10 @@ impl Engine {
                                 .iter()
                                 .cloned()
                                 .enumerate()
-                                .for_each(|(i, v)| call_args.insert(i, (v, Position::NONE)));
+                                .for_each(|(i, v)| {
+                                    call_args.insert(i, v);
+                                    call_arg_positions.insert(i, Position::NONE);
+                                });
                             // Recalculate the hash based on the new function name and new arguments
                             hash = FnHash::from_script_and_native(
                                 calc_fn_hash(empty(), fn_name, call_args.len()),
@@ -1020,7 +1024,7 @@ impl Engine {
 
                 // Attached object pointer in front of the arguments
                 let mut arg_values = once(obj)
-                    .chain(call_args.iter_mut().map(|v| &mut v.0))
+                    .chain(call_args.iter_mut())
                     .collect::<StaticVec<_>>();
                 let args = arg_values.as_mut();
 

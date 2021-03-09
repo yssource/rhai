@@ -230,7 +230,7 @@ pub enum ChainArgument {
     /// Dot-property access.
     Property(Position),
     /// Arguments to a dot-function call.
-    FnCallArgs(StaticVec<(Dynamic, Position)>),
+    FnCallArgs(StaticVec<Dynamic>, StaticVec<Position>),
     /// Index value.
     IndexValue(Dynamic, Position),
 }
@@ -246,7 +246,7 @@ impl ChainArgument {
     #[cfg(not(feature = "no_index"))]
     pub fn as_index_value(self) -> Dynamic {
         match self {
-            Self::Property(_) | Self::FnCallArgs(_) => {
+            Self::Property(_) | Self::FnCallArgs(_, _) => {
                 panic!("expecting ChainArgument::IndexValue")
             }
             Self::IndexValue(value, _) => value,
@@ -259,21 +259,21 @@ impl ChainArgument {
     /// Panics if not `ChainArgument::FnCallArgs`.
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
-    pub fn as_fn_call_args(self) -> StaticVec<(Dynamic, Position)> {
+    pub fn as_fn_call_args(self) -> (StaticVec<Dynamic>, StaticVec<Position>) {
         match self {
             Self::Property(_) | Self::IndexValue(_, _) => {
                 panic!("expecting ChainArgument::FnCallArgs")
             }
-            Self::FnCallArgs(value) => value,
+            Self::FnCallArgs(values, positions) => (values, positions),
         }
     }
 }
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-impl From<StaticVec<(Dynamic, Position)>> for ChainArgument {
+impl From<(StaticVec<Dynamic>, StaticVec<Position>)> for ChainArgument {
     #[inline(always)]
-    fn from(value: StaticVec<(Dynamic, Position)>) -> Self {
-        Self::FnCallArgs(value)
+    fn from((values, positions): (StaticVec<Dynamic>, StaticVec<Position>)) -> Self {
+        Self::FnCallArgs(values, positions)
     }
 }
 
@@ -1436,16 +1436,19 @@ impl Engine {
 
         match expr {
             Expr::FnCall(x, _) if parent_chain_type == ChainType::Dot && x.namespace.is_none() => {
+                let mut arg_positions: StaticVec<_> = Default::default();
+
                 let arg_values = x
                     .args
                     .iter()
                     .map(|arg_expr| {
+                        arg_positions.push(arg_expr.position());
                         self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
-                            .map(|v| (v.flatten(), arg_expr.position()))
+                            .map(Dynamic::flatten)
                     })
                     .collect::<Result<StaticVec<_>, _>>()?;
 
-                idx_values.push(arg_values.into());
+                idx_values.push((arg_values, arg_positions).into());
             }
             Expr::FnCall(_, _) if parent_chain_type == ChainType::Dot => {
                 unreachable!("function call in dot chain should not be namespace-qualified")
@@ -1468,14 +1471,19 @@ impl Engine {
                     Expr::FnCall(x, _)
                         if parent_chain_type == ChainType::Dot && x.namespace.is_none() =>
                     {
-                        x.args
+                        let mut arg_positions: StaticVec<_> = Default::default();
+
+                        let arg_values = x
+                            .args
                             .iter()
                             .map(|arg_expr| {
+                                arg_positions.push(arg_expr.position());
                                 self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
-                                    .map(|v| (v.flatten(), arg_expr.position()))
+                                    .map(Dynamic::flatten)
                             })
-                            .collect::<Result<StaticVec<_>, _>>()?
-                            .into()
+                            .collect::<Result<StaticVec<_>, _>>()?;
+
+                        (arg_values, arg_positions).into()
                     }
                     Expr::FnCall(_, _) if parent_chain_type == ChainType::Dot => {
                         unreachable!("function call in dot chain should not be namespace-qualified")
