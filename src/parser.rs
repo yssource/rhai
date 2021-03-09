@@ -755,7 +755,8 @@ fn parse_map_literal(
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
         let name = state.get_interned_string(name);
-        map.push((Ident { name, pos }, expr));
+        let public = false;
+        map.push((Ident { name, pos, public }, expr));
 
         match input.peek().unwrap() {
             (Token::Comma, _) => {
@@ -1033,6 +1034,7 @@ fn parse_primary(
                     let var_name_def = Ident {
                         name: state.get_interned_string(s),
                         pos: settings.pos,
+                        public: false,
                     };
                     Expr::Variable(Box::new((None, None, var_name_def)))
                 }
@@ -1047,6 +1049,7 @@ fn parse_primary(
                     let var_name_def = Ident {
                         name: state.get_interned_string(s),
                         pos: settings.pos,
+                        public: false,
                     };
                     Expr::Variable(Box::new((None, None, var_name_def)))
                 }
@@ -1056,6 +1059,7 @@ fn parse_primary(
                     let var_name_def = Ident {
                         name: state.get_interned_string(s),
                         pos: settings.pos,
+                        public: false,
                     };
                     Expr::Variable(Box::new((index, None, var_name_def)))
                 }
@@ -1075,6 +1079,7 @@ fn parse_primary(
                     let var_name_def = Ident {
                         name: state.get_interned_string(s),
                         pos: settings.pos,
+                        public: false,
                     };
                     Expr::Variable(Box::new((None, None, var_name_def)))
                 }
@@ -1083,6 +1088,7 @@ fn parse_primary(
                     let var_name_def = Ident {
                         name: state.get_interned_string(s),
                         pos: settings.pos,
+                        public: false,
                     };
                     Expr::Variable(Box::new((None, None, var_name_def)))
                 }
@@ -1147,14 +1153,14 @@ fn parse_primary(
                     .into_err(pos));
                 }
 
-                let (_, namespace, Ident { name, pos }) = *x;
+                let (_, namespace, Ident { name, pos, .. }) = *x;
                 settings.pos = pos;
                 let ns = namespace.map(|(_, ns)| ns);
                 parse_fn_call(input, state, lib, name, true, ns, settings.level_up())?
             }
             // Function call
             (Expr::Variable(x), Token::LeftParen) => {
-                let (_, namespace, Ident { name, pos }) = *x;
+                let (_, namespace, Ident { name, pos, .. }) = *x;
                 settings.pos = pos;
                 let ns = namespace.map(|(_, ns)| ns);
                 parse_fn_call(input, state, lib, name, false, ns, settings.level_up())?
@@ -1176,6 +1182,7 @@ fn parse_primary(
                     let var_name_def = Ident {
                         name: state.get_interned_string(id2),
                         pos: pos2,
+                        public: false,
                     };
                     Expr::Variable(Box::new((index, namespace, var_name_def)))
                 }
@@ -1395,7 +1402,7 @@ fn make_assignment_stmt<'a>(
         }
         // var (indexed) = rhs
         Expr::Variable(x) => {
-            let (index, _, Ident { name, pos }) = x.as_ref();
+            let (index, _, Ident { name, pos, .. }) = x.as_ref();
             match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                 AccessMode::ReadWrite => {
                     Ok(Stmt::Assignment(Box::new((lhs, rhs, op_info)), op_pos))
@@ -1416,7 +1423,7 @@ fn make_assignment_stmt<'a>(
                     }
                     // var[???] (indexed) = rhs, var.??? (indexed) = rhs
                     Expr::Variable(x) => {
-                        let (index, _, Ident { name, pos }) = x.as_ref();
+                        let (index, _, Ident { name, pos, .. }) = x.as_ref();
                         match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                             AccessMode::ReadWrite => {
                                 Ok(Stmt::Assignment(Box::new((lhs, rhs, op_info)), op_pos))
@@ -1846,7 +1853,8 @@ fn parse_custom_syntax(
                     let name = state.get_interned_string(s);
                     segments.push(name.clone());
                     tokens.push(state.get_interned_string(MARKER_IDENT));
-                    let var_name_def = Ident { name, pos };
+                    let public = false;
+                    let var_name_def = Ident { name, pos, public };
                     keywords.push(Expr::Variable(Box::new((None, None, var_name_def))));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
@@ -1995,15 +2003,15 @@ fn parse_if(
 
     // if guard { if_body } else ...
     let else_body = if match_token(input, Token::Else).0 {
-        Some(if let (Token::If, _) = input.peek().unwrap() {
+        if let (Token::If, _) = input.peek().unwrap() {
             // if guard { if_body } else if ...
             parse_if(input, state, lib, settings.level_up())?
         } else {
             // if guard { if_body } else { else-body }
             parse_block(input, state, lib, settings.level_up())?
-        })
+        }
     } else {
-        None
+        Stmt::Noop(Position::NONE)
     };
 
     Ok(Stmt::If(
@@ -2028,9 +2036,9 @@ fn parse_while_loop(
         (Token::While, pos) => {
             ensure_not_statement_expr(input, "a boolean")?;
             let expr = parse_expr(input, state, lib, settings.level_up())?;
-            (Some(expr), pos)
+            (expr, pos)
         }
-        (Token::Loop, pos) => (None, pos),
+        (Token::Loop, pos) => (Expr::Unit(Position::NONE), pos),
         _ => unreachable!(),
     };
     settings.pos = token_pos;
@@ -2130,7 +2138,7 @@ fn parse_for(
 
     state.stack.truncate(prev_stack_len);
 
-    Ok(Stmt::For(expr, Box::new((name, body)), settings.pos))
+    Ok(Stmt::For(expr, name, Box::new(body), settings.pos))
 }
 
 /// Parse a variable definition statement.
@@ -2162,23 +2170,24 @@ fn parse_let(
     let var_def = Ident {
         name: name.clone(),
         pos,
+        public: export,
     };
 
     // let name = ...
     let expr = if match_token(input, Token::Equals).0 {
         // let name = expr
-        Some(parse_expr(input, state, lib, settings.level_up())?)
+        parse_expr(input, state, lib, settings.level_up())?
     } else {
-        None
+        Expr::Unit(Position::NONE)
     };
 
     state.stack.push((name, var_type));
 
     match var_type {
         // let name = expr
-        AccessMode::ReadWrite => Ok(Stmt::Let(Box::new(var_def), expr, export, settings.pos)),
+        AccessMode::ReadWrite => Ok(Stmt::Let(expr, var_def, settings.pos)),
         // const name = { expr:constant }
-        AccessMode::ReadOnly => Ok(Stmt::Const(Box::new(var_def), expr, export, settings.pos)),
+        AccessMode::ReadOnly => Ok(Stmt::Const(expr, var_def, settings.pos)),
     }
 }
 
@@ -2219,10 +2228,11 @@ fn parse_import(
 
     Ok(Stmt::Import(
         expr,
-        Some(Box::new(Ident {
+        Some(Ident {
             name,
             pos: name_pos,
-        })),
+            public: false,
+        }),
         settings.pos,
     ))
 }
@@ -2273,6 +2283,7 @@ fn parse_export(
                 (Token::Identifier(s), pos) => Some(Ident {
                     name: state.get_interned_string(s),
                     pos,
+                    public: false,
                 }),
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
@@ -2288,6 +2299,7 @@ fn parse_export(
             Ident {
                 name: state.get_interned_string(id),
                 pos: id_pos,
+                public: false,
             },
             rename,
         ));
@@ -2565,16 +2577,13 @@ fn parse_stmt(
 
             match input.peek().unwrap() {
                 // `return`/`throw` at <EOF>
-                (Token::EOF, pos) => Ok(Stmt::Return((return_type, token_pos), None, *pos)),
+                (Token::EOF, _) => Ok(Stmt::Return(return_type, None, token_pos)),
                 // `return;` or `throw;`
-                (Token::SemiColon, _) => {
-                    Ok(Stmt::Return((return_type, token_pos), None, settings.pos))
-                }
+                (Token::SemiColon, _) => Ok(Stmt::Return(return_type, None, token_pos)),
                 // `return` or `throw` with expression
                 (_, _) => {
                     let expr = parse_expr(input, state, lib, settings.level_up())?;
-                    let pos = expr.position();
-                    Ok(Stmt::Return((return_type, token_pos), Some(expr), pos))
+                    Ok(Stmt::Return(return_type, Some(expr), token_pos))
                 }
             }
         }
@@ -2629,6 +2638,7 @@ fn parse_try_catch(
             (Token::Identifier(s), pos) => Ident {
                 name: state.get_interned_string(s),
                 pos,
+                public: false,
             },
             (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
         };
@@ -2861,6 +2871,7 @@ fn parse_anon_fn(
                 .map(|(name, &pos)| Ident {
                     name: name.clone(),
                     pos,
+                    public: false,
                 })
                 .collect()
         }

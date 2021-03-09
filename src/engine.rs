@@ -946,7 +946,7 @@ impl Engine {
         match expr {
             Expr::Variable(v) => match v.as_ref() {
                 // Qualified variable
-                (_, Some((hash_var, modules)), Ident { name, pos }) => {
+                (_, Some((hash_var, modules)), Ident { name, pos, .. }) => {
                     let module = self.search_imports(mods, state, modules).ok_or_else(|| {
                         EvalAltResult::ErrorModuleNotFound(
                             modules[0].name.to_string(),
@@ -985,7 +985,7 @@ impl Engine {
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
     ) -> Result<(Target<'s>, Position), Box<EvalAltResult>> {
-        let (index, _, Ident { name, pos }) = match expr {
+        let (index, _, Ident { name, pos, .. }) = match expr {
             Expr::Variable(v) => v.as_ref(),
             _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
         };
@@ -1181,7 +1181,7 @@ impl Engine {
                     }
                     // {xxx:map}.id op= ???
                     Expr::Property(x) if target_val.is::<Map>() && new_val.is_some() => {
-                        let Ident { name, pos } = &x.4;
+                        let Ident { name, pos, .. } = &x.4;
                         let index = name.clone().into();
                         let val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, true, is_ref, false, level,
@@ -1194,7 +1194,7 @@ impl Engine {
                     }
                     // {xxx:map}.id
                     Expr::Property(x) if target_val.is::<Map>() => {
-                        let Ident { name, pos } = &x.4;
+                        let Ident { name, pos, .. } = &x.4;
                         let index = name.clone().into();
                         let val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, false, is_ref, false, level,
@@ -1229,7 +1229,7 @@ impl Engine {
                     Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target_val.is::<Map>() => {
                         let mut val = match &x.lhs {
                             Expr::Property(p) => {
-                                let Ident { name, pos } = &p.4;
+                                let Ident { name, pos, .. } = &p.4;
                                 let index = name.clone().into();
                                 self.get_indexed_mut(
                                     mods, state, lib, target_val, index, *pos, false, is_ref, true,
@@ -1378,6 +1378,7 @@ impl Engine {
                 let Ident {
                     name: var_name,
                     pos: var_pos,
+                    ..
                 } = &x.2;
 
                 self.inc_operations(state, *var_pos)?;
@@ -2037,8 +2038,8 @@ impl Engine {
                     .and_then(|guard_val| {
                         if guard_val {
                             self.eval_stmt(scope, mods, state, lib, this_ptr, if_block, level)
-                        } else if let Some(stmt) = else_block {
-                            self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level)
+                        } else if !else_block.is_noop() {
+                            self.eval_stmt(scope, mods, state, lib, this_ptr, else_block, level)
                         } else {
                             Ok(Dynamic::UNIT)
                         }
@@ -2076,7 +2077,7 @@ impl Engine {
 
             // While loop
             Stmt::While(expr, body, _) => loop {
-                let condition = if let Some(expr) = expr {
+                let condition = if !expr.is_unit() {
                     self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                         .as_bool()
                         .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?
@@ -2125,8 +2126,8 @@ impl Engine {
             },
 
             // For loop
-            Stmt::For(expr, x, _) => {
-                let (name, stmt) = x.as_ref();
+            Stmt::For(expr, name, x, _) => {
+                let stmt = x.as_ref();
                 let iter_obj = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten();
@@ -2287,7 +2288,7 @@ impl Engine {
             }
 
             // Return value
-            Stmt::Return((ReturnType::Return, pos), Some(expr), _) => {
+            Stmt::Return(ReturnType::Return, Some(expr), pos) => {
                 let value = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten();
@@ -2295,12 +2296,12 @@ impl Engine {
             }
 
             // Empty return
-            Stmt::Return((ReturnType::Return, pos), None, _) => {
+            Stmt::Return(ReturnType::Return, None, pos) => {
                 EvalAltResult::Return(Default::default(), *pos).into()
             }
 
             // Throw value
-            Stmt::Return((ReturnType::Exception, pos), Some(expr), _) => {
+            Stmt::Return(ReturnType::Exception, Some(expr), pos) => {
                 let value = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten();
@@ -2308,38 +2309,34 @@ impl Engine {
             }
 
             // Empty throw
-            Stmt::Return((ReturnType::Exception, pos), None, _) => {
+            Stmt::Return(ReturnType::Exception, None, pos) => {
                 EvalAltResult::ErrorRuntime(Dynamic::UNIT, *pos).into()
             }
 
             // Let/const statement
-            Stmt::Let(var_def, expr, export, _) | Stmt::Const(var_def, expr, export, _) => {
+            Stmt::Let(expr, Ident { name, public, .. }, _)
+            | Stmt::Const(expr, Ident { name, public, .. }, _) => {
                 let entry_type = match stmt {
-                    Stmt::Let(_, _, _, _) => AccessMode::ReadWrite,
-                    Stmt::Const(_, _, _, _) => AccessMode::ReadOnly,
+                    Stmt::Let(_, _, _) => AccessMode::ReadWrite,
+                    Stmt::Const(_, _, _) => AccessMode::ReadOnly,
                     _ => unreachable!("should be Stmt::Let or Stmt::Const, but gets {:?}", stmt),
                 };
 
-                let value = if let Some(expr) = expr {
-                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                        .flatten()
-                } else {
-                    Dynamic::UNIT
-                };
+                let value = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .flatten();
+
                 let (var_name, _alias): (Cow<'_, str>, _) = if state.is_global() {
                     (
-                        var_def.name.to_string().into(),
-                        if *export {
-                            Some(var_def.name.clone())
-                        } else {
-                            None
-                        },
+                        name.to_string().into(),
+                        if *public { Some(name.clone()) } else { None },
                     )
-                } else if *export {
+                } else if *public {
                     unreachable!("exported variable not on global level");
                 } else {
-                    (unsafe_cast_var_name_to_lifetime(&var_def.name).into(), None)
+                    (unsafe_cast_var_name_to_lifetime(name).into(), None)
                 };
+
                 scope.push_dynamic_value(var_name, entry_type, value);
 
                 #[cfg(not(feature = "no_module"))]
@@ -2400,14 +2397,13 @@ impl Engine {
             // Export statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(list, _) => {
-                for (Ident { name, pos: id_pos }, rename) in list.iter() {
+                for (Ident { name, pos, .. }, rename) in list.iter() {
                     // Mark scope variables as public
                     if let Some(index) = scope.get_index(name).map(|(i, _)| i) {
                         let alias = rename.as_ref().map(|x| &x.name).unwrap_or_else(|| name);
                         scope.add_entry_alias(index, alias.clone());
                     } else {
-                        return EvalAltResult::ErrorVariableNotFound(name.to_string(), *id_pos)
-                            .into();
+                        return EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos).into();
                     }
                 }
                 Ok(Dynamic::UNIT)

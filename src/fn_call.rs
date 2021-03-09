@@ -903,7 +903,7 @@ impl Engine {
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hashes
-                let hash = FnHash::from_script(calc_fn_hash(empty(), fn_name, args_len));
+                let new_hash = FnHash::from_script(calc_fn_hash(empty(), fn_name, args_len));
                 // Arguments are passed as-is, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
                 let mut arg_values = curry
@@ -914,7 +914,7 @@ impl Engine {
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, hash, args, false, false, pos, None, level,
+                    mods, state, lib, fn_name, new_hash, args, false, false, pos, None, level,
                 )
             }
             KEYWORD_FN_PTR_CALL => {
@@ -939,7 +939,7 @@ impl Engine {
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hash
-                let hash = FnHash::from_script_and_native(
+                let new_hash = FnHash::from_script_and_native(
                     calc_fn_hash(empty(), fn_name, args_len),
                     calc_fn_hash(empty(), fn_name, args_len + 1),
                 );
@@ -953,7 +953,7 @@ impl Engine {
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, hash, args, is_ref, true, pos, None, level,
+                    mods, state, lib, fn_name, new_hash, args, is_ref, true, pos, None, level,
                 )
             }
             KEYWORD_FN_PTR_CURRY => {
@@ -1096,7 +1096,6 @@ impl Engine {
                     FnHash::from_native(calc_fn_hash(empty(), name, args_len))
                 };
             }
-
             // Handle Fn()
             KEYWORD_FN_PTR if args_expr.len() == 1 => {
                 // Fn - only in function call style

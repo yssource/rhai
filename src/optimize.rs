@@ -1,6 +1,6 @@
 //! Module implementing the [`AST`] optimizer.
 
-use crate::ast::{Expr, Stmt};
+use crate::ast::{Expr, Ident, Stmt};
 use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
@@ -181,27 +181,17 @@ fn optimize_stmt_block(
     statements.iter_mut().for_each(|stmt| {
         match stmt {
             // Add constant literals into the state
-            Stmt::Const(var_def, Some(value_expr), _, _) => {
+            Stmt::Const(value_expr, Ident { name, .. }, _) => {
                 optimize_expr(value_expr, state);
 
                 if value_expr.is_constant() {
-                    state.push_var(&var_def.name, AccessMode::ReadOnly, value_expr.clone());
+                    state.push_var(name, AccessMode::ReadOnly, value_expr.clone());
                 }
-            }
-            Stmt::Const(var_def, None, _, _) => {
-                state.push_var(&var_def.name, AccessMode::ReadOnly, Expr::Unit(var_def.pos));
             }
             // Add variables into the state
-            Stmt::Let(var_def, expr, _, _) => {
-                if let Some(value_expr) = expr {
-                    optimize_expr(value_expr, state);
-                }
-
-                state.push_var(
-                    &var_def.name,
-                    AccessMode::ReadWrite,
-                    Expr::Unit(var_def.pos),
-                );
+            Stmt::Let(value_expr, Ident { name, pos, .. }, _) => {
+                optimize_expr(value_expr, state);
+                state.push_var(name, AccessMode::ReadWrite, Expr::Unit(*pos));
             }
             // Optimize the statement
             _ => optimize_stmt(stmt, state, preserve_result),
@@ -228,9 +218,7 @@ fn optimize_stmt_block(
 
     while let Some(expr) = statements.pop() {
         match expr {
-            Stmt::Let(_, expr, _, _) | Stmt::Const(_, expr, _, _) => {
-                removed = expr.as_ref().map(Expr::is_pure).unwrap_or(true)
-            }
+            Stmt::Let(expr, _, _) | Stmt::Const(expr, _, _) => removed = expr.is_pure(),
             #[cfg(not(feature = "no_module"))]
             Stmt::Import(expr, _, _) => removed = expr.is_pure(),
             _ => {
@@ -286,9 +274,9 @@ fn optimize_stmt_block(
             Stmt::Noop(pos)
         }
         // Only one let statement - leave it alone
-        [x] if matches!(x, Stmt::Let(_, _, _, _)) => Stmt::Block(statements, pos),
+        [x] if matches!(x, Stmt::Let(_, _, _)) => Stmt::Block(statements, pos),
         // Only one const statement - leave it alone
-        [x] if matches!(x, Stmt::Const(_, _, _, _)) => Stmt::Block(statements, pos),
+        [x] if matches!(x, Stmt::Const(_, _, _)) => Stmt::Block(statements, pos),
         // Only one import statement - leave it alone
         #[cfg(not(feature = "no_module"))]
         [x] if matches!(x, Stmt::Import(_, _, _)) => Stmt::Block(statements, pos),
@@ -316,17 +304,17 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         },
 
         // if false { if_block } -> Noop
-        Stmt::If(Expr::BoolConstant(false, pos), x, _) if x.1.is_none() => {
+        Stmt::If(Expr::BoolConstant(false, pos), x, _) if x.1.is_noop() => {
             state.set_dirty();
             *stmt = Stmt::Noop(*pos);
         }
         // if true { if_block } -> if_block
-        Stmt::If(Expr::BoolConstant(true, _), x, _) if x.1.is_none() => {
+        Stmt::If(Expr::BoolConstant(true, _), x, _) if x.1.is_noop() => {
             *stmt = mem::take(&mut x.0);
             optimize_stmt(stmt, state, true);
         }
         // if expr { Noop }
-        Stmt::If(condition, x, _) if x.1.is_none() && matches!(x.0, Stmt::Noop(_)) => {
+        Stmt::If(condition, x, _) if x.1.is_noop() && x.0.is_noop() => {
             state.set_dirty();
 
             let pos = condition.position();
@@ -342,13 +330,13 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             };
         }
         // if expr { if_block }
-        Stmt::If(condition, x, _) if x.1.is_none() => {
+        Stmt::If(condition, x, _) if x.1.is_noop() => {
             optimize_expr(condition, state);
             optimize_stmt(&mut x.0, state, true);
         }
         // if false { if_block } else { else_block } -> else_block
-        Stmt::If(Expr::BoolConstant(false, _), x, _) if x.1.is_some() => {
-            *stmt = mem::take(x.1.as_mut().unwrap());
+        Stmt::If(Expr::BoolConstant(false, _), x, _) if !x.1.is_noop() => {
+            *stmt = mem::take(&mut x.1);
             optimize_stmt(stmt, state, true);
         }
         // if true { if_block } else { else_block } -> if_block
@@ -360,13 +348,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         Stmt::If(condition, x, _) => {
             optimize_expr(condition, state);
             optimize_stmt(&mut x.0, state, true);
-            if let Some(else_block) = x.1.as_mut() {
-                optimize_stmt(else_block, state, true);
-                match else_block {
-                    Stmt::Noop(_) => x.1 = None, // Noop -> no else block
-                    _ => (),
-                }
-            }
+            optimize_stmt(&mut x.1, state, true);
         }
 
         // switch const { ... }
@@ -406,24 +388,21 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         }
 
         // while false { block } -> Noop
-        Stmt::While(Some(Expr::BoolConstant(false, pos)), _, _) => {
+        Stmt::While(Expr::BoolConstant(false, pos), _, _) => {
             state.set_dirty();
             *stmt = Stmt::Noop(*pos)
         }
         // while expr { block }
         Stmt::While(condition, block, _) => {
             optimize_stmt(block, state, false);
-
-            if let Some(condition) = condition {
-                optimize_expr(condition, state);
-            }
+            optimize_expr(condition, state);
 
             match **block {
                 // while expr { break; } -> { expr; }
                 Stmt::Break(pos) => {
                     // Only a single break statement - turn into running the guard expression once
                     state.set_dirty();
-                    if let Some(condition) = condition {
+                    if !condition.is_unit() {
                         let mut statements = vec![Stmt::Expr(mem::take(condition))];
                         if preserve_result {
                             statements.push(Stmt::Noop(pos))
@@ -449,14 +428,12 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             optimize_expr(condition, state);
         }
         // for id in expr { block }
-        Stmt::For(iterable, x, _) => {
+        Stmt::For(iterable, _, block, _) => {
             optimize_expr(iterable, state);
-            optimize_stmt(&mut x.1, state, false);
+            optimize_stmt(block, state, false);
         }
         // let id = expr;
-        Stmt::Let(_, Some(expr), _, _) => optimize_expr(expr, state),
-        // let id;
-        Stmt::Let(_, None, _, _) => (),
+        Stmt::Let(expr, _, _) => optimize_expr(expr, state),
         // import expr as var;
         #[cfg(not(feature = "no_module"))]
         Stmt::Import(expr, _, _) => optimize_expr(expr, state),
@@ -789,40 +766,23 @@ fn optimize_top_level(
 
         statements.iter_mut().enumerate().for_each(|(i, stmt)| {
             match stmt {
-                Stmt::Const(var_def, expr, _, _) if expr.is_some() => {
+                Stmt::Const(value_expr, Ident { name, .. }, _) => {
                     // Load constants
-                    let value_expr = expr.as_mut().unwrap();
                     optimize_expr(value_expr, &mut state);
 
                     if value_expr.is_constant() {
-                        state.push_var(&var_def.name, AccessMode::ReadOnly, value_expr.clone());
-                    }
-
-                    // Keep it in the global scope
-                    if value_expr.is_unit() {
-                        state.set_dirty();
-                        *expr = None;
+                        state.push_var(name, AccessMode::ReadOnly, value_expr.clone());
                     }
                 }
-                Stmt::Const(var_def, None, _, _) => {
-                    state.push_var(&var_def.name, AccessMode::ReadOnly, Expr::Unit(var_def.pos));
-                }
-                Stmt::Let(var_def, expr, _, _) => {
-                    if let Some(value_expr) = expr {
-                        optimize_expr(value_expr, &mut state);
-                    }
-
-                    state.push_var(
-                        &var_def.name,
-                        AccessMode::ReadWrite,
-                        Expr::Unit(var_def.pos),
-                    );
+                Stmt::Let(value_expr, Ident { name, pos, .. }, _) => {
+                    optimize_expr(value_expr, &mut state);
+                    state.push_var(name, AccessMode::ReadWrite, Expr::Unit(*pos));
                 }
                 _ => {
                     // Keep all variable declarations at this level
                     // and always keep the last return value
                     let keep = match stmt {
-                        Stmt::Let(_, _, _, _) | Stmt::Const(_, _, _, _) => true,
+                        Stmt::Let(_, _, _) | Stmt::Const(_, _, _) => true,
                         #[cfg(not(feature = "no_module"))]
                         Stmt::Import(_, _, _) => true,
                         _ => i == num_statements - 1,
@@ -911,11 +871,11 @@ pub fn optimize_into_ast(
                     // {} -> Noop
                     fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
                         // { return val; } -> val
-                        Stmt::Return((crate::ast::ReturnType::Return, _), Some(expr), _) => {
+                        Stmt::Return(crate::ast::ReturnType::Return, Some(expr), _) => {
                             Stmt::Expr(expr)
                         }
                         // { return; } -> ()
-                        Stmt::Return((crate::ast::ReturnType::Return, pos), None, _) => {
+                        Stmt::Return(crate::ast::ReturnType::Return, None, pos) => {
                             Stmt::Expr(Expr::Unit(pos))
                         }
                         // All others
