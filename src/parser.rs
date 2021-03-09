@@ -2138,7 +2138,7 @@ fn parse_for(
 
     state.stack.truncate(prev_stack_len);
 
-    Ok(Stmt::For(expr, name, Box::new(body), settings.pos))
+    Ok(Stmt::For(expr, Box::new((name, body)), settings.pos))
 }
 
 /// Parse a variable definition statement.
@@ -2210,7 +2210,15 @@ fn parse_import(
 
     // import expr as ...
     if !match_token(input, Token::As).0 {
-        return Ok(Stmt::Import(expr, None, settings.pos));
+        return Ok(Stmt::Import(
+            expr,
+            Ident {
+                name: "".into(),
+                pos: Position::NONE,
+                public: false,
+            },
+            settings.pos,
+        ));
     }
 
     // import expr as name ...
@@ -2228,11 +2236,11 @@ fn parse_import(
 
     Ok(Stmt::Import(
         expr,
-        Some(Ident {
+        Ident {
             name,
             pos: name_pos,
-            public: false,
-        }),
+            public: true,
+        },
         settings.pos,
     ))
 }

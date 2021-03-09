@@ -832,7 +832,7 @@ pub enum Stmt {
     /// `do` `{` stmt `}` `while`|`until` expr
     Do(Box<Stmt>, Expr, bool, Position),
     /// `for` id `in` expr `{` stmt `}`
-    For(Expr, String, Box<Stmt>, Position),
+    For(Expr, Box<(String, Stmt)>, Position),
     /// \[`export`\] `let` id `=` expr
     Let(Expr, Ident, Position),
     /// \[`export`\] `const` id `=` expr
@@ -853,7 +853,7 @@ pub enum Stmt {
     Return(ReturnType, Option<Expr>, Position),
     /// `import` expr `as` var
     #[cfg(not(feature = "no_module"))]
-    Import(Expr, Option<Ident>, Position),
+    Import(Expr, Ident, Position),
     /// `export` var `as` var `,` ...
     #[cfg(not(feature = "no_module"))]
     Export(Vec<(Ident, Option<Ident>)>, Position),
@@ -890,7 +890,7 @@ impl Stmt {
             | Self::Switch(_, _, pos)
             | Self::While(_, _, pos)
             | Self::Do(_, _, _, pos)
-            | Self::For(_, _, _, pos)
+            | Self::For(_, _, pos)
             | Self::Return(_, _, pos)
             | Self::Let(_, _, pos)
             | Self::Const(_, _, pos)
@@ -919,7 +919,7 @@ impl Stmt {
             | Self::Switch(_, _, pos)
             | Self::While(_, _, pos)
             | Self::Do(_, _, _, pos)
-            | Self::For(_, _, _, pos)
+            | Self::For(_, _, pos)
             | Self::Return(_, _, pos)
             | Self::Let(_, _, pos)
             | Self::Const(_, _, pos)
@@ -946,7 +946,7 @@ impl Stmt {
             Self::If(_, _, _)
             | Self::Switch(_, _, _)
             | Self::While(_, _, _)
-            | Self::For(_, _, _, _)
+            | Self::For(_, _, _)
             | Self::Block(_, _)
             | Self::TryCatch(_, _, _) => true,
 
@@ -985,7 +985,7 @@ impl Stmt {
             Self::While(condition, block, _) | Self::Do(block, condition, _, _) => {
                 condition.is_pure() && block.is_pure()
             }
-            Self::For(iterable, _, block, _) => iterable.is_pure() && block.is_pure(),
+            Self::For(iterable, x, _) => iterable.is_pure() && x.1.is_pure(),
             Self::Let(_, _, _) | Self::Const(_, _, _) | Self::Assignment(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::Return(_, _, _) => false,
@@ -1024,9 +1024,9 @@ impl Stmt {
                 e.walk(path, on_node);
                 s.walk(path, on_node);
             }
-            Self::For(e, _, s, _) => {
+            Self::For(e, x, _) => {
                 e.walk(path, on_node);
-                s.walk(path, on_node);
+                x.1.walk(path, on_node);
             }
             Self::Assignment(x, _) => {
                 x.0.walk(path, on_node);

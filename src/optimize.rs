@@ -428,9 +428,9 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             optimize_expr(condition, state);
         }
         // for id in expr { block }
-        Stmt::For(iterable, _, block, _) => {
+        Stmt::For(iterable, x, _) => {
             optimize_expr(iterable, state);
-            optimize_stmt(block, state, false);
+            optimize_stmt(&mut x.1, state, false);
         }
         // let id = expr;
         Stmt::Let(expr, _, _) => optimize_expr(expr, state),

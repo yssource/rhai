@@ -2126,8 +2126,8 @@ impl Engine {
             },
 
             // For loop
-            Stmt::For(expr, name, x, _) => {
-                let stmt = x.as_ref();
+            Stmt::For(expr, x, _) => {
+                let (name, stmt) = x.as_ref();
                 let iter_obj = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten();
@@ -2348,7 +2348,7 @@ impl Engine {
 
             // Import statement
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(expr, alias, _pos) => {
+            Stmt::Import(expr, Ident { name, public, .. }, _pos) => {
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
                 if state.modules >= self.max_modules() {
@@ -2375,14 +2375,14 @@ impl Engine {
                         })
                         .unwrap_or_else(|| self.module_resolver.resolve(self, &path, expr_pos))?;
 
-                    if let Some(name_def) = alias {
+                    if *public {
                         if !module.is_indexed() {
                             // Index the module (making a clone copy if necessary) if it is not indexed
                             let mut module = crate::fn_native::shared_take_or_clone(module);
                             module.build_index();
-                            mods.push(name_def.name.clone(), module);
+                            mods.push(name.clone(), module);
                         } else {
-                            mods.push(name_def.name.clone(), module);
+                            mods.push(name.clone(), module);
                         }
                     }
 
