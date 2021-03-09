@@ -900,6 +900,7 @@ impl Engine {
     }
 
     /// Search for a module within an imports stack.
+    #[inline]
     pub(crate) fn search_imports(
         &self,
         mods: &Imports,
@@ -1609,6 +1610,7 @@ impl Engine {
     }
 
     // Evaluate an 'in' expression.
+    #[inline(always)]
     fn eval_in_expr(
         &self,
         scope: &mut Scope,
@@ -1623,17 +1625,23 @@ impl Engine {
         self.inc_operations(state, rhs.position())?;
 
         let lhs_value = self.eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?;
-        let rhs_value = self
-            .eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?
-            .flatten();
 
-        match rhs_value {
+        let mut rhs_target = if rhs.get_variable_access(false).is_some() {
+            let (rhs_ptr, pos) = self.search_namespace(scope, mods, state, lib, this_ptr, rhs)?;
+            self.inc_operations(state, pos)?;
+            rhs_ptr
+        } else {
+            self.eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?
+                .into()
+        };
+
+        match rhs_target.as_mut() {
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Array(mut rhs_value, _)) => {
+            Dynamic(Union::Array(rhs_value, _)) => {
                 // Call the `==` operator to compare each value
                 let hash = calc_fn_hash(empty(), OP_EQUALS, 2);
                 for value in rhs_value.iter_mut() {
-                    let args = &mut [&mut lhs_value.clone(), value];
+                    let args = &mut [&mut lhs_value.clone(), &mut value.clone()];
                     let pos = rhs.position();
 
                     if self
@@ -1649,18 +1657,26 @@ impl Engine {
                 Ok(false.into())
             }
             #[cfg(not(feature = "no_object"))]
-            Dynamic(Union::Map(rhs_value, _)) => match lhs_value {
+            Dynamic(Union::Map(rhs_value, _)) => {
                 // Only allows string or char
-                Dynamic(Union::Str(s, _)) => Ok(rhs_value.contains_key(&s).into()),
-                Dynamic(Union::Char(c, _)) => Ok(rhs_value.contains_key(&c.to_string()).into()),
-                _ => EvalAltResult::ErrorInExpr(lhs.position()).into(),
-            },
-            Dynamic(Union::Str(rhs_value, _)) => match lhs_value {
+                if let Ok(c) = lhs_value.as_char() {
+                    Ok(rhs_value.contains_key(&c.to_string()).into())
+                } else if let Some(s) = lhs_value.read_lock::<ImmutableString>() {
+                    Ok(rhs_value.contains_key(&*s).into())
+                } else {
+                    EvalAltResult::ErrorInExpr(lhs.position()).into()
+                }
+            }
+            Dynamic(Union::Str(rhs_value, _)) => {
                 // Only allows string or char
-                Dynamic(Union::Str(s, _)) => Ok(rhs_value.contains(s.as_str()).into()),
-                Dynamic(Union::Char(c, _)) => Ok(rhs_value.contains(c).into()),
-                _ => EvalAltResult::ErrorInExpr(lhs.position()).into(),
-            },
+                if let Ok(c) = lhs_value.as_char() {
+                    Ok(rhs_value.contains(c).into())
+                } else if let Some(s) = lhs_value.read_lock::<ImmutableString>() {
+                    Ok(rhs_value.contains(s.as_str()).into())
+                } else {
+                    EvalAltResult::ErrorInExpr(lhs.position()).into()
+                }
+            }
             _ => EvalAltResult::ErrorInExpr(rhs.position()).into(),
         }
     }
@@ -2487,6 +2503,7 @@ impl Engine {
 
     /// Check a result to ensure that the data size is within allowable limit.
     #[cfg(not(feature = "unchecked"))]
+    #[inline(always)]
     fn check_data_size(&self, result: RhaiResult, pos: Position) -> RhaiResult {
         // Simply return all errors
         if result.is_err() {
