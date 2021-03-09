@@ -1102,12 +1102,26 @@ pub struct OpAssignment {
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct FnHash {
     /// Pre-calculated hash for a script-defined function ([`None`] if native functions only).
     script: Option<u64>,
     /// Pre-calculated hash for a native Rust function with no parameter types.
     native: u64,
+}
+
+impl fmt::Debug for FnHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(script) = self.script {
+            if script == self.native {
+                write!(f, "({}=={})", script, self.native)
+            } else {
+                write!(f, "({}, {})", script, self.native)
+            }
+        } else {
+            write!(f, "{}", self.native)
+        }
+    }
 }
 
 impl FnHash {

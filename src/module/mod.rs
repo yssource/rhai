@@ -2022,13 +2022,18 @@ pub struct NamespaceRef {
 
 impl fmt::Debug for NamespaceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.path, f)?;
-
         if let Some(index) = self.index {
-            write!(f, " -> {}", index)
-        } else {
-            Ok(())
+            write!(f, "{} -> ", index)?;
         }
+
+        f.write_str(
+            &self
+                .path
+                .iter()
+                .map(|Ident { name, .. }| name.as_str())
+                .collect::<Vec<_>>()
+                .join("::"),
+        )
     }
 }
 
