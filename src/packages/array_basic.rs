@@ -164,7 +164,7 @@ mod array_functions {
             result
         }
     }
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, pure)]
     pub fn map(
         ctx: NativeCallContext,
         array: &mut Array,
@@ -197,7 +197,7 @@ mod array_functions {
 
         Ok(ar.into())
     }
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, pure)]
     pub fn filter(
         ctx: NativeCallContext,
         array: &mut Array,
@@ -233,8 +233,70 @@ mod array_functions {
 
         Ok(ar.into())
     }
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, pure)]
+    pub fn contains(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        mut value: Dynamic,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        for item in array.iter() {
+            if ctx
+                .call_fn_dynamic_raw(OP_EQUALS, true, &mut [&mut value, &mut item.clone()])
+                .or_else(|err| match *err {
+                    EvalAltResult::ErrorFunctionNotFound(ref fn_sig, _)
+                        if fn_sig.starts_with(OP_EQUALS) =>
+                    {
+                        if item.type_id() == value.type_id() {
+                            // No default when comparing same type
+                            Err(err)
+                        } else {
+                            Ok(Dynamic::FALSE)
+                        }
+                    }
+                    _ => Err(err),
+                })?
+                .as_bool()
+                .unwrap_or(false)
+            {
+                return Ok(Dynamic::TRUE);
+            }
+        }
+
+        Ok(Dynamic::FALSE)
+    }
+    #[rhai_fn(return_raw, pure)]
     pub fn index_of(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        mut value: Dynamic,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        for (i, item) in array.iter().enumerate() {
+            if ctx
+                .call_fn_dynamic_raw(OP_EQUALS, true, &mut [&mut value, &mut item.clone()])
+                .or_else(|err| match *err {
+                    EvalAltResult::ErrorFunctionNotFound(ref fn_sig, _)
+                        if fn_sig.starts_with(OP_EQUALS) =>
+                    {
+                        if item.type_id() == value.type_id() {
+                            // No default when comparing same type
+                            Err(err)
+                        } else {
+                            Ok(Dynamic::FALSE)
+                        }
+                    }
+                    _ => Err(err),
+                })?
+                .as_bool()
+                .unwrap_or(false)
+            {
+                return Ok((i as INT).into());
+            }
+        }
+
+        Ok((-1 as INT).into())
+    }
+    #[rhai_fn(name = "index_of", return_raw, pure)]
+    pub fn index_of_filter(
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
@@ -267,7 +329,7 @@ mod array_functions {
 
         Ok((-1 as INT).into())
     }
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, pure)]
     pub fn some(
         ctx: NativeCallContext,
         array: &mut Array,
@@ -301,7 +363,7 @@ mod array_functions {
 
         Ok(false.into())
     }
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, pure)]
     pub fn all(
         ctx: NativeCallContext,
         array: &mut Array,
@@ -335,7 +397,7 @@ mod array_functions {
 
         Ok(true.into())
     }
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, pure)]
     pub fn reduce(
         ctx: NativeCallContext,
         array: &mut Array,
@@ -366,7 +428,7 @@ mod array_functions {
 
         Ok(result)
     }
-    #[rhai_fn(name = "reduce", return_raw)]
+    #[rhai_fn(name = "reduce", return_raw, pure)]
     pub fn reduce_with_initial(
         ctx: NativeCallContext,
         array: &mut Array,
@@ -405,7 +467,7 @@ mod array_functions {
 
         Ok(result)
     }
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, pure)]
     pub fn reduce_rev(
         ctx: NativeCallContext,
         array: &mut Array,
@@ -436,7 +498,7 @@ mod array_functions {
 
         Ok(result)
     }
-    #[rhai_fn(name = "reduce_rev", return_raw)]
+    #[rhai_fn(name = "reduce_rev", return_raw, pure)]
     pub fn reduce_rev_with_initial(
         ctx: NativeCallContext,
         array: &mut Array,
@@ -634,7 +696,7 @@ mod array_functions {
 
         drained
     }
-    #[rhai_fn(name = "==", return_raw)]
+    #[rhai_fn(name = "==", return_raw, pure)]
     pub fn equals(
         ctx: NativeCallContext,
         array: &mut Array,
@@ -648,18 +710,31 @@ mod array_functions {
         }
 
         for (a1, a2) in array.iter_mut().zip(array2.iter_mut()) {
-            let equals = ctx
+            if !ctx
                 .call_fn_dynamic_raw(OP_EQUALS, true, &mut [a1, a2])
-                .map(|v| v.as_bool().unwrap_or(false))?;
-
-            if !equals {
-                return Ok(false.into());
+                .or_else(|err| match *err {
+                    EvalAltResult::ErrorFunctionNotFound(ref fn_sig, _)
+                        if fn_sig.starts_with(OP_EQUALS) =>
+                    {
+                        if a1.type_id() == a2.type_id() {
+                            // No default when comparing same type
+                            Err(err)
+                        } else {
+                            Ok(Dynamic::FALSE)
+                        }
+                    }
+                    _ => Err(err),
+                })?
+                .as_bool()
+                .unwrap_or(false)
+            {
+                return Ok(Dynamic::FALSE);
             }
         }
 
-        Ok(true.into())
+        Ok(Dynamic::TRUE)
     }
-    #[rhai_fn(name = "!=", return_raw)]
+    #[rhai_fn(name = "!=", return_raw, pure)]
     pub fn not_equals(
         ctx: NativeCallContext,
         array: &mut Array,
