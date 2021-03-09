@@ -1582,7 +1582,6 @@ mod tests {
         assert_eq!(size_of::<Option<Dynamic>>(), 16);
         assert_eq!(size_of::<Position>(), 4);
         assert_eq!(size_of::<ast::Expr>(), 16);
-        assert_eq!(size_of::<crate::ast_packed::ExprPacked>(), 32);
         assert_eq!(size_of::<Option<ast::Expr>>(), 16);
         assert_eq!(size_of::<ast::Stmt>(), 32);
         assert_eq!(size_of::<Option<ast::Stmt>>(), 32);
