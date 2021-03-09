@@ -237,11 +237,11 @@ mod array_functions {
     pub fn contains(
         ctx: NativeCallContext,
         array: &mut Array,
-        mut value: Dynamic,
+        value: Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        for item in array.iter() {
+        for item in array.iter_mut() {
             if ctx
-                .call_fn_dynamic_raw(OP_EQUALS, true, &mut [&mut value, &mut item.clone()])
+                .call_fn_dynamic_raw(OP_EQUALS, true, &mut [item, &mut value.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(ref fn_sig, _)
                         if fn_sig.starts_with(OP_EQUALS) =>
@@ -268,11 +268,11 @@ mod array_functions {
     pub fn index_of(
         ctx: NativeCallContext,
         array: &mut Array,
-        mut value: Dynamic,
+        value: Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        for (i, item) in array.iter().enumerate() {
+        for (i, item) in array.iter_mut().enumerate() {
             if ctx
-                .call_fn_dynamic_raw(OP_EQUALS, true, &mut [&mut value, &mut item.clone()])
+                .call_fn_dynamic_raw(OP_EQUALS, true, &mut [item, &mut value.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(ref fn_sig, _)
                         if fn_sig.starts_with(OP_EQUALS) =>

@@ -15,7 +15,6 @@ use crate::stdlib::{
     vec,
     vec::Vec,
 };
-use crate::token::is_valid_identifier;
 use crate::utils::get_hasher;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, Module, Position, Scope,
@@ -598,32 +597,6 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         // #{ key:value, .. }
         #[cfg(not(feature = "no_object"))]
         Expr::Map(x, _) => x.iter_mut().for_each(|(_, expr)| optimize_expr(expr, state)),
-        // lhs in rhs
-        Expr::In(x, _) => match (&mut x.lhs, &mut x.rhs) {
-            // "xxx" in "xxxxx"
-            (Expr::StringConstant(a, pos), Expr::StringConstant(b, _)) => {
-                state.set_dirty();
-                *expr = Expr::BoolConstant( b.contains(a.as_str()), *pos);
-            }
-            // 'x' in "xxxxx"
-            (Expr::CharConstant(a, pos), Expr::StringConstant(b, _)) => {
-                state.set_dirty();
-                *expr = Expr::BoolConstant(b.contains(*a), *pos);
-            }
-            // "xxx" in #{...}
-            (Expr::StringConstant(a, pos), Expr::Map(b, _)) => {
-                state.set_dirty();
-                *expr = Expr::BoolConstant(b.iter().find(|(x, _)| x.name == *a).is_some(), *pos);
-            }
-            // 'x' in #{...}
-            (Expr::CharConstant(a, pos), Expr::Map(b, _)) => {
-                state.set_dirty();
-                let ch = a.to_string();
-                *expr = Expr::BoolConstant(b.iter().find(|(x, _)| x.name == &ch).is_some(), *pos);
-            }
-            // lhs in rhs
-            (lhs, rhs) => { optimize_expr(lhs, state); optimize_expr(rhs, state); }
-        },
         // lhs && rhs
         Expr::And(x, _) => match (&mut x.lhs, &mut x.rhs) {
             // true && rhs -> rhs
@@ -684,7 +657,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                 && state.optimization_level == OptimizationLevel::Simple // simple optimizations
                 && x.args.len() == 2 // binary call
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
-                && !is_valid_identifier(x.name.chars()) // cannot be scripted
+                //&& !is_valid_identifier(x.name.chars()) // cannot be scripted
         => {
             let mut arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap()).collect();
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();

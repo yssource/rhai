@@ -831,6 +831,7 @@ impl Engine {
     }
 
     /// Evaluate a text script in place - used primarily for 'eval'.
+    #[inline]
     fn eval_script_expr_in_place(
         &self,
         scope: &mut Scope,

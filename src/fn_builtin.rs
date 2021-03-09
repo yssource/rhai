@@ -1,5 +1,6 @@
 //! Built-in implementations for common operators.
 
+use crate::engine::OP_CONTAINS;
 use crate::fn_native::{FnCallArgs, NativeCallContext};
 use crate::stdlib::{any::TypeId, format, string::ToString};
 use crate::{Dynamic, ImmutableString, RhaiResult, INT};
@@ -75,6 +76,13 @@ pub fn get_builtin_binary_op_fn(
                 let x = &*args[0].read_lock::<$xx>().unwrap();
                 let y = &*args[1].read_lock::<$yy>().unwrap();
                 Ok((x $op y).into())
+            })
+        };
+        ($xx:ident . $func:ident ( $yy:ty )) => {
+            return Some(|_, args| {
+                let x = &*args[0].read_lock::<$xx>().unwrap();
+                let y = &*args[1].read_lock::<$yy>().unwrap();
+                Ok(x.$func(y).into())
             })
         };
         ($func:ident ( $op:tt )) => {
@@ -259,6 +267,24 @@ pub fn get_builtin_binary_op_fn(
             ">=" => impl_op!(get_s1s2(>=)),
             "<" => impl_op!(get_s1s2(<)),
             "<=" => impl_op!(get_s1s2(<=)),
+            OP_CONTAINS => {
+                return Some(|_, args| {
+                    let s = &*args[0].read_lock::<ImmutableString>().unwrap();
+                    let c = args[1].as_char().unwrap();
+                    Ok((s.contains(c)).into())
+                })
+            }
+            _ => return None,
+        }
+    }
+
+    // map op string
+    #[cfg(not(feature = "no_object"))]
+    if types_pair == (TypeId::of::<crate::Map>(), TypeId::of::<ImmutableString>()) {
+        use crate::Map;
+
+        match op {
+            OP_CONTAINS => impl_op!(Map.contains_key(ImmutableString)),
             _ => return None,
         }
     }
@@ -342,6 +368,13 @@ pub fn get_builtin_binary_op_fn(
             ">=" => impl_op!(ImmutableString >= ImmutableString),
             "<" => impl_op!(ImmutableString < ImmutableString),
             "<=" => impl_op!(ImmutableString <= ImmutableString),
+            OP_CONTAINS => {
+                return Some(|_, args| {
+                    let s1 = &*args[0].read_lock::<ImmutableString>().unwrap();
+                    let s2 = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    Ok((s1.contains(s2.as_str())).into())
+                })
+            }
             _ => return None,
         }
     }

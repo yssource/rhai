@@ -1300,7 +1300,7 @@ pub enum Expr {
     Variable(Box<(Option<NonZeroUsize>, Option<(u64, NamespaceRef)>, Ident)>),
     /// Property access - (getter, hash, setter, hash, prop)
     Property(Box<(ImmutableString, u64, ImmutableString, u64, Ident)>),
-    /// { [statement][Stmt] }
+    /// { [statement][Stmt] ... }
     Stmt(Box<StaticVec<Stmt>>, Position),
     /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
@@ -1308,8 +1308,6 @@ pub enum Expr {
     Dot(Box<BinaryExpr>, Position),
     /// expr `[` expr `]`
     Index(Box<BinaryExpr>, Position),
-    /// lhs `in` rhs
-    In(Box<BinaryExpr>, Position),
     /// lhs `&&` rhs
     And(Box<BinaryExpr>, Position),
     /// lhs `||` rhs
@@ -1397,7 +1395,7 @@ impl Expr {
             Self::Variable(x) => (x.2).pos,
             Self::FnCall(_, pos) => *pos,
 
-            Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => x.lhs.position(),
+            Self::And(x, _) | Self::Or(x, _) => x.lhs.position(),
 
             Self::Unit(pos) => *pos,
 
@@ -1424,7 +1422,7 @@ impl Expr {
             Self::Property(x) => (x.4).pos = new_pos,
             Self::Stmt(_, pos) => *pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
-            Self::And(_, pos) | Self::Or(_, pos) | Self::In(_, pos) => *pos = new_pos,
+            Self::And(_, pos) | Self::Or(_, pos) => *pos = new_pos,
             Self::Unit(pos) => *pos = new_pos,
             Self::Dot(_, pos) | Self::Index(_, pos) => *pos = new_pos,
             Self::Custom(_, pos) => *pos = new_pos,
@@ -1441,7 +1439,7 @@ impl Expr {
 
             Self::Map(x, _) => x.iter().map(|(_, v)| v).all(Self::is_pure),
 
-            Self::Index(x, _) | Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => {
+            Self::Index(x, _) | Self::And(x, _) | Self::Or(x, _) => {
                 x.lhs.is_pure() && x.rhs.is_pure()
             }
 
@@ -1480,13 +1478,6 @@ impl Expr {
             // An map literal is constant if all items are constant
             Self::Map(x, _) => x.iter().map(|(_, expr)| expr).all(Self::is_constant),
 
-            // Check in expression
-            Self::In(x, _) => match (&x.lhs, &x.rhs) {
-                (Self::StringConstant(_, _), Self::StringConstant(_, _))
-                | (Self::CharConstant(_, _), Self::StringConstant(_, _)) => true,
-                _ => false,
-            },
-
             _ => false,
         }
     }
@@ -1507,7 +1498,6 @@ impl Expr {
             | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::FnPointer(_, _)
-            | Self::In(_, _)
             | Self::And(_, _)
             | Self::Or(_, _)
             | Self::Unit(_) => false,
@@ -1553,11 +1543,7 @@ impl Expr {
             Self::Stmt(x, _) => x.iter().for_each(|s| s.walk(path, on_node)),
             Self::Array(x, _) => x.iter().for_each(|e| e.walk(path, on_node)),
             Self::Map(x, _) => x.iter().for_each(|(_, e)| e.walk(path, on_node)),
-            Self::Index(x, _)
-            | Self::Dot(x, _)
-            | Expr::In(x, _)
-            | Expr::And(x, _)
-            | Expr::Or(x, _) => {
+            Self::Index(x, _) | Self::Dot(x, _) | Expr::And(x, _) | Expr::Or(x, _) => {
                 x.lhs.walk(path, on_node);
                 x.rhs.walk(path, on_node);
             }
@@ -1582,6 +1568,7 @@ mod tests {
         assert_eq!(size_of::<Option<Dynamic>>(), 16);
         assert_eq!(size_of::<Position>(), 4);
         assert_eq!(size_of::<ast::Expr>(), 16);
+        assert_eq!(size_of::<crate::ast_packed::ExprPacked>(), 32);
         assert_eq!(size_of::<Option<ast::Expr>>(), 16);
         assert_eq!(size_of::<ast::Stmt>(), 32);
         assert_eq!(size_of::<Option<ast::Stmt>>(), 32);

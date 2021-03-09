@@ -124,7 +124,7 @@ pub type FLOAT = f32;
 
 pub use ast::{FnAccess, AST};
 pub use dynamic::Dynamic;
-pub use engine::{Engine, EvalContext};
+pub use engine::{Engine, EvalContext, OP_CONTAINS, OP_EQUALS};
 pub use fn_native::{FnPtr, NativeCallContext};
 pub use fn_register::{RegisterFn, RegisterResultFn};
 pub use module::{FnNamespace, Module};

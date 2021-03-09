@@ -202,8 +202,14 @@ pub const FN_IDX_GET: &str = "index$get$";
 pub const FN_IDX_SET: &str = "index$set$";
 #[cfg(not(feature = "no_function"))]
 pub const FN_ANONYMOUS: &str = "anon$";
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+
+/// Standard equality comparison operator.
 pub const OP_EQUALS: &str = "==";
+
+/// Standard method function for containment testing.
+///
+/// The `in` operator is implemented as a call to this method.
+pub const OP_CONTAINS: &str = "contains";
 
 /// Method of chaining.
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
@@ -1609,78 +1615,6 @@ impl Engine {
         }
     }
 
-    // Evaluate an 'in' expression.
-    #[inline(always)]
-    fn eval_in_expr(
-        &self,
-        scope: &mut Scope,
-        mods: &mut Imports,
-        state: &mut State,
-        lib: &[&Module],
-        this_ptr: &mut Option<&mut Dynamic>,
-        lhs: &Expr,
-        rhs: &Expr,
-        level: usize,
-    ) -> RhaiResult {
-        self.inc_operations(state, rhs.position())?;
-
-        let lhs_value = self.eval_expr(scope, mods, state, lib, this_ptr, lhs, level)?;
-
-        let mut rhs_target = if rhs.get_variable_access(false).is_some() {
-            let (rhs_ptr, pos) = self.search_namespace(scope, mods, state, lib, this_ptr, rhs)?;
-            self.inc_operations(state, pos)?;
-            rhs_ptr
-        } else {
-            self.eval_expr(scope, mods, state, lib, this_ptr, rhs, level)?
-                .into()
-        };
-
-        match rhs_target.as_mut() {
-            #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Array(rhs_value, _)) => {
-                // Call the `==` operator to compare each value
-                let hash = calc_fn_hash(empty(), OP_EQUALS, 2);
-                for value in rhs_value.iter_mut() {
-                    let args = &mut [&mut lhs_value.clone(), &mut value.clone()];
-                    let pos = rhs.position();
-
-                    if self
-                        .call_native_fn(mods, state, lib, OP_EQUALS, hash, args, false, false, pos)?
-                        .0
-                        .as_bool()
-                        .unwrap_or(false)
-                    {
-                        return Ok(true.into());
-                    }
-                }
-
-                Ok(false.into())
-            }
-            #[cfg(not(feature = "no_object"))]
-            Dynamic(Union::Map(rhs_value, _)) => {
-                // Only allows string or char
-                if let Ok(c) = lhs_value.as_char() {
-                    Ok(rhs_value.contains_key(&c.to_string()).into())
-                } else if let Some(s) = lhs_value.read_lock::<ImmutableString>() {
-                    Ok(rhs_value.contains_key(&*s).into())
-                } else {
-                    EvalAltResult::ErrorInExpr(lhs.position()).into()
-                }
-            }
-            Dynamic(Union::Str(rhs_value, _)) => {
-                // Only allows string or char
-                if let Ok(c) = lhs_value.as_char() {
-                    Ok(rhs_value.contains(c).into())
-                } else if let Some(s) = lhs_value.read_lock::<ImmutableString>() {
-                    Ok(rhs_value.contains(s.as_str()).into())
-                } else {
-                    EvalAltResult::ErrorInExpr(lhs.position()).into()
-                }
-            }
-            _ => EvalAltResult::ErrorInExpr(rhs.position()).into(),
-        }
-    }
-
     /// Evaluate an expression.
     pub(crate) fn eval_expr(
         &self,
@@ -1790,10 +1724,6 @@ impl Engine {
                 self.make_qualified_function_call(
                     scope, mods, state, lib, this_ptr, namespace, name, args, hash, *pos, level,
                 )
-            }
-
-            Expr::In(x, _) => {
-                self.eval_in_expr(scope, mods, state, lib, this_ptr, &x.lhs, &x.rhs, level)
             }
 
             Expr::And(x, _) => {

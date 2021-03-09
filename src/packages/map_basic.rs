@@ -13,8 +13,8 @@ def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
 
 #[export_module]
 mod map_functions {
-    #[rhai_fn(pure)]
-    pub fn has(map: &mut Map, prop: ImmutableString) -> bool {
+    #[rhai_fn(name = "has", pure)]
+    pub fn contains(map: &mut Map, prop: ImmutableString) -> bool {
         map.contains_key(&prop)
     }
     #[rhai_fn(pure)]

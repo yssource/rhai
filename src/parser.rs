@@ -5,7 +5,7 @@ use crate::ast::{
     Stmt,
 };
 use crate::dynamic::{AccessMode, Union};
-use crate::engine::KEYWORD_THIS;
+use crate::engine::{KEYWORD_THIS, OP_CONTAINS};
 use crate::module::NamespaceRef;
 use crate::optimize::optimize_into_ast;
 use crate::optimize::OptimizationLevel;
@@ -480,7 +480,6 @@ fn parse_index_chain(
             Expr::CharConstant(_, _)
             | Expr::And(_, _)
             | Expr::Or(_, _)
-            | Expr::In(_, _)
             | Expr::BoolConstant(_, _)
             | Expr::Unit(_) => {
                 return Err(PERR::MalformedIndexExpr(
@@ -514,7 +513,6 @@ fn parse_index_chain(
             Expr::CharConstant(_, _)
             | Expr::And(_, _)
             | Expr::Or(_, _)
-            | Expr::In(_, _)
             | Expr::BoolConstant(_, _)
             | Expr::Unit(_) => {
                 return Err(PERR::MalformedIndexExpr(
@@ -548,8 +546,8 @@ fn parse_index_chain(
             )
             .into_err(x.position()))
         }
-        // lhs[??? && ???], lhs[??? || ???], lhs[??? in ???]
-        x @ Expr::And(_, _) | x @ Expr::Or(_, _) | x @ Expr::In(_, _) => {
+        // lhs[??? && ???], lhs[??? || ???]
+        x @ Expr::And(_, _) | x @ Expr::Or(_, _) => {
             return Err(PERR::MalformedIndexExpr(
                 "Array access expects integer index, not a boolean".into(),
             )
@@ -1602,139 +1600,6 @@ fn make_dot_expr(
     })
 }
 
-/// Make an 'in' expression.
-fn make_in_expr(lhs: Expr, rhs: Expr, op_pos: Position) -> Result<Expr, ParseError> {
-    match (&lhs, &rhs) {
-        (_, x @ Expr::IntegerConstant(_, _))
-        | (_, x @ Expr::And(_, _))
-        | (_, x @ Expr::Or(_, _))
-        | (_, x @ Expr::In(_, _))
-        | (_, x @ Expr::BoolConstant(_, _))
-        | (_, x @ Expr::Unit(_)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression expects a string, array or object map".into(),
-            )
-            .into_err(x.position()))
-        }
-
-        #[cfg(not(feature = "no_float"))]
-        (_, x @ Expr::FloatConstant(_, _)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression expects a string, array or object map".into(),
-            )
-            .into_err(x.position()))
-        }
-
-        // "xxx" in "xxxx", 'x' in "xxxx" - OK!
-        (Expr::StringConstant(_, _), Expr::StringConstant(_, _))
-        | (Expr::CharConstant(_, _), Expr::StringConstant(_, _)) => (),
-
-        // 123.456 in "xxxx"
-        #[cfg(not(feature = "no_float"))]
-        (x @ Expr::FloatConstant(_, _), Expr::StringConstant(_, _)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for a string expects a string, not a float".into(),
-            )
-            .into_err(x.position()))
-        }
-        // 123 in "xxxx"
-        (x @ Expr::IntegerConstant(_, _), Expr::StringConstant(_, _)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for a string expects a string, not a number".into(),
-            )
-            .into_err(x.position()))
-        }
-        // (??? && ???) in "xxxx", (??? || ???) in "xxxx", (??? in ???) in "xxxx",
-        //  true in "xxxx", false in "xxxx"
-        (x @ Expr::And(_, _), Expr::StringConstant(_, _))
-        | (x @ Expr::Or(_, _), Expr::StringConstant(_, _))
-        | (x @ Expr::In(_, _), Expr::StringConstant(_, _))
-        | (x @ Expr::BoolConstant(_, _), Expr::StringConstant(_, _)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for a string expects a string, not a boolean".into(),
-            )
-            .into_err(x.position()))
-        }
-        // [???, ???, ???] in "xxxx"
-        (x @ Expr::Array(_, _), Expr::StringConstant(_, _)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for a string expects a string, not an array".into(),
-            )
-            .into_err(x.position()))
-        }
-        // #{...} in "xxxx"
-        (x @ Expr::Map(_, _), Expr::StringConstant(_, _)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for a string expects a string, not an object map".into(),
-            )
-            .into_err(x.position()))
-        }
-        // () in "xxxx"
-        (x @ Expr::Unit(_), Expr::StringConstant(_, _)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for a string expects a string, not ()".into(),
-            )
-            .into_err(x.position()))
-        }
-
-        // "xxx" in #{...}, 'x' in #{...} - OK!
-        (Expr::StringConstant(_, _), Expr::Map(_, _))
-        | (Expr::CharConstant(_, _), Expr::Map(_, _)) => (),
-
-        // 123.456 in #{...}
-        #[cfg(not(feature = "no_float"))]
-        (x @ Expr::FloatConstant(_, _), Expr::Map(_, _)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for an object map expects a string, not a float".into(),
-            )
-            .into_err(x.position()))
-        }
-        // 123 in #{...}
-        (x @ Expr::IntegerConstant(_, _), Expr::Map(_, _)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for an object map expects a string, not a number".into(),
-            )
-            .into_err(x.position()))
-        }
-        // (??? && ???) in #{...}, (??? || ???) in #{...}, (??? in ???) in #{...},
-        // true in #{...}, false in #{...}
-        (x @ Expr::And(_, _), Expr::Map(_, _))
-        | (x @ Expr::Or(_, _), Expr::Map(_, _))
-        | (x @ Expr::In(_, _), Expr::Map(_, _))
-        | (x @ Expr::BoolConstant(_, _), Expr::Map(_, _)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for an object map expects a string, not a boolean".into(),
-            )
-            .into_err(x.position()))
-        }
-        // [???, ???, ???] in #{..}
-        (x @ Expr::Array(_, _), Expr::Map(_, _)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for an object map expects a string, not an array".into(),
-            )
-            .into_err(x.position()))
-        }
-        // #{...} in #{..}
-        (x @ Expr::Map(_, _), Expr::Map(_, _)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for an object map expects a string, not an object map".into(),
-            )
-            .into_err(x.position()))
-        }
-        // () in #{...}
-        (x @ Expr::Unit(_), Expr::Map(_, _)) => {
-            return Err(PERR::MalformedInExpr(
-                "'in' expression for an object map expects a string, not ()".into(),
-            )
-            .into_err(x.position()))
-        }
-
-        _ => (),
-    }
-
-    Ok(Expr::In(Box::new(BinaryExpr { lhs, rhs }), op_pos))
-}
-
 /// Parse a binary expression.
 fn parse_binary_op(
     input: &mut TokenStream,
@@ -1880,9 +1745,21 @@ fn parse_binary_op(
                 )
             }
             Token::In => {
-                let rhs = args.pop().unwrap();
-                let current_lhs = args.pop().unwrap();
-                make_in_expr(current_lhs, rhs, pos)?
+                // Swap the arguments
+                let current_lhs = args.remove(0);
+                args.push(current_lhs);
+
+                // Convert into a call to `contains`
+                let hash = calc_fn_hash(empty(), OP_CONTAINS, 2);
+                Expr::FnCall(
+                    Box::new(FnCallExpr {
+                        hash: FnHash::from_script(hash),
+                        args,
+                        name: OP_CONTAINS.into(),
+                        ..op_base
+                    }),
+                    pos,
+                )
             }
 
             Token::Custom(s)
