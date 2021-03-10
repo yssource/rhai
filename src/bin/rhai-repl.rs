@@ -1,4 +1,6 @@
-use rhai::{Dynamic, Engine, EvalAltResult, Module, Scope, AST};
+use rhai::{
+    module_resolvers::FileModuleResolver, Dynamic, Engine, EvalAltResult, Module, Scope, AST,
+};
 
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
@@ -56,11 +58,18 @@ fn print_help() {
 }
 
 fn main() {
-    let mut engine = Engine::new();
-
     println!("Rhai REPL tool");
     println!("==============");
     print_help();
+
+    // Initialize scripting engine
+    let mut engine = Engine::new();
+
+    // Set a file module resolver without caching
+    let mut resolver = FileModuleResolver::new();
+    resolver.enable_cache(false);
+
+    engine.set_module_resolver(resolver);
 
     // Load init scripts
 
@@ -129,6 +138,9 @@ fn main() {
     let mut main_ast: AST = Default::default();
     let mut ast_u: AST = Default::default();
     let mut ast: AST = Default::default();
+
+    // Make Engine immutable
+    let engine = engine;
 
     // REPL loop
 
