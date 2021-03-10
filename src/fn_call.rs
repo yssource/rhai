@@ -493,6 +493,10 @@ impl Engine {
 
         self.inc_operations(state, pos)?;
 
+        if fn_def.body.is_empty() {
+            return Ok(Dynamic::UNIT);
+        }
+
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
@@ -539,10 +543,10 @@ impl Engine {
         }
 
         // Evaluate the function
-        let stmt = &fn_def.body;
+        let body = &fn_def.body.statements;
 
         let result = self
-            .eval_stmt(scope, mods, state, unified_lib, this_ptr, stmt, level)
+            .eval_stmt_block(scope, mods, state, unified_lib, this_ptr, body, true, level)
             .or_else(|err| match *err {
                 // Convert return statement to return value
                 EvalAltResult::Return(x, _) => Ok(x),
@@ -721,6 +725,10 @@ impl Engine {
             assert!(func.is_script());
 
             let func = func.get_fn_def();
+
+            if func.body.is_empty() {
+                return Ok((Dynamic::UNIT, false));
+            }
 
             let scope: &mut Scope = &mut Default::default();
 
@@ -1391,22 +1399,27 @@ impl Engine {
         match func {
             #[cfg(not(feature = "no_function"))]
             Some(f) if f.is_script() => {
-                let args = args.as_mut();
-                let new_scope = &mut Default::default();
-                let fn_def = f.get_fn_def().clone();
+                let fn_def = f.get_fn_def();
 
-                let mut source = module.id_raw().cloned();
-                mem::swap(&mut state.source, &mut source);
+                if fn_def.body.is_empty() {
+                    Ok(Dynamic::UNIT)
+                } else {
+                    let args = args.as_mut();
+                    let new_scope = &mut Default::default();
 
-                let level = level + 1;
+                    let mut source = module.id_raw().cloned();
+                    mem::swap(&mut state.source, &mut source);
 
-                let result = self.call_script_fn(
-                    new_scope, mods, state, lib, &mut None, &fn_def, args, pos, level,
-                );
+                    let level = level + 1;
 
-                state.source = source;
+                    let result = self.call_script_fn(
+                        new_scope, mods, state, lib, &mut None, fn_def, args, pos, level,
+                    );
 
-                result
+                    state.source = source;
+
+                    result
+                }
             }
 
             Some(f) if f.is_plugin_fn() => f

@@ -46,7 +46,7 @@ pub enum FnAccess {
 #[derive(Debug, Clone)]
 pub struct ScriptFnDef {
     /// Function body.
-    pub body: Stmt,
+    pub body: StmtBlock,
     /// Encapsulated running environment, if any.
     pub lib: Option<Shared<Module>>,
     /// Encapsulated imported modules.
@@ -692,7 +692,7 @@ impl AST {
             .chain({
                 #[cfg(not(feature = "no_function"))]
                 {
-                    self.iter_fn_def().map(|f| &f.body)
+                    self.iter_fn_def().flat_map(|f| f.body.statements.iter())
                 }
                 #[cfg(feature = "no_function")]
                 {
@@ -862,8 +862,8 @@ pub enum Stmt {
     Switch(
         Expr,
         Box<(
-            HashableHashMap<u64, Stmt, StraightHasherBuilder>,
-            Option<Stmt>,
+            HashableHashMap<u64, StmtBlock, StraightHasherBuilder>,
+            StmtBlock,
         )>,
         Position,
     ),
@@ -914,6 +914,7 @@ impl Default for Stmt {
 }
 
 impl From<Stmt> for StmtBlock {
+    #[inline(always)]
     fn from(stmt: Stmt) -> Self {
         match stmt {
             Stmt::Block(block, pos) => Self {
@@ -924,7 +925,11 @@ impl From<Stmt> for StmtBlock {
                 statements: Default::default(),
                 pos,
             },
-            _ => panic!("cannot convert {:?} into a StmtBlock", stmt),
+            _ => {
+                let pos = stmt.position();
+                let statements = vec![stmt].into();
+                Self { statements, pos }
+            }
         }
     }
 }
@@ -1043,8 +1048,11 @@ impl Stmt {
             }
             Self::Switch(expr, x, _) => {
                 expr.is_pure()
-                    && x.0.values().all(Stmt::is_pure)
-                    && x.1.as_ref().map(Stmt::is_pure).unwrap_or(true)
+                    && x.0
+                        .values()
+                        .flat_map(|block| block.statements.iter())
+                        .all(Stmt::is_pure)
+                    && x.1.statements.iter().all(Stmt::is_pure)
             }
             Self::While(condition, block, _) | Self::Do(block, condition, _, _) => {
                 condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
@@ -1083,10 +1091,10 @@ impl Stmt {
             }
             Self::Switch(e, x, _) => {
                 e.walk(path, on_node);
-                x.0.values().for_each(|s| s.walk(path, on_node));
-                if let Some(ref s) = x.1 {
-                    s.walk(path, on_node);
-                }
+                x.0.values()
+                    .flat_map(|block| block.statements.iter())
+                    .for_each(|s| s.walk(path, on_node));
+                x.1.statements.iter().for_each(|s| s.walk(path, on_node));
             }
             Self::While(e, s, _) | Self::Do(s, e, _, _) => {
                 e.walk(path, on_node);
@@ -1384,10 +1392,10 @@ pub enum Expr {
     Unit(Position),
     /// Variable access - (optional index, optional (hash, modules), variable name)
     Variable(Box<(Option<NonZeroUsize>, Option<(u64, NamespaceRef)>, Ident)>),
-    /// Property access - (getter, hash, setter, hash, prop)
-    Property(Box<(ImmutableString, u64, ImmutableString, u64, Ident)>),
+    /// Property access - ((getter, hash), (setter, hash), prop)
+    Property(Box<((ImmutableString, u64), (ImmutableString, u64), Ident)>),
     /// { [statement][Stmt] ... }
-    Stmt(Box<StaticVec<Stmt>>, Position),
+    Stmt(Box<StmtBlock>),
     /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
     /// lhs `.` rhs
@@ -1478,8 +1486,8 @@ impl Expr {
             Self::FnPointer(_, pos) => *pos,
             Self::Array(_, pos) => *pos,
             Self::Map(_, pos) => *pos,
-            Self::Property(x) => (x.4).pos,
-            Self::Stmt(_, pos) => *pos,
+            Self::Property(x) => (x.2).pos,
+            Self::Stmt(x) => x.pos,
             Self::Variable(x) => (x.2).pos,
             Self::FnCall(_, pos) => *pos,
 
@@ -1508,8 +1516,8 @@ impl Expr {
             Self::Array(_, pos) => *pos = new_pos,
             Self::Map(_, pos) => *pos = new_pos,
             Self::Variable(x) => (x.2).pos = new_pos,
-            Self::Property(x) => (x.4).pos = new_pos,
-            Self::Stmt(_, pos) => *pos = new_pos,
+            Self::Property(x) => (x.2).pos = new_pos,
+            Self::Stmt(x) => x.pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
             Self::And(_, pos) | Self::Or(_, pos) => *pos = new_pos,
             Self::Unit(pos) => *pos = new_pos,
@@ -1533,7 +1541,7 @@ impl Expr {
                 x.lhs.is_pure() && x.rhs.is_pure()
             }
 
-            Self::Stmt(x, _) => x.iter().all(Stmt::is_pure),
+            Self::Stmt(x) => x.statements.iter().all(Stmt::is_pure),
 
             Self::Variable(_) => true,
 
@@ -1596,7 +1604,7 @@ impl Expr {
 
             Self::StringConstant(_, _)
             | Self::FnCall(_, _)
-            | Self::Stmt(_, _)
+            | Self::Stmt(_)
             | Self::Dot(_, _)
             | Self::Index(_, _)
             | Self::Array(_, _)
@@ -1632,7 +1640,7 @@ impl Expr {
         on_node(path);
 
         match self {
-            Self::Stmt(x, _) => x.iter().for_each(|s| s.walk(path, on_node)),
+            Self::Stmt(x) => x.statements.iter().for_each(|s| s.walk(path, on_node)),
             Self::Array(x, _) => x.iter().for_each(|e| e.walk(path, on_node)),
             Self::Map(x, _) => x.iter().for_each(|(_, e)| e.walk(path, on_node)),
             Self::Index(x, _) | Self::Dot(x, _) | Expr::And(x, _) | Expr::Or(x, _) => {

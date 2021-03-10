@@ -1,6 +1,6 @@
 //! Module implementing the [`AST`] optimizer.
 
-use crate::ast::{Expr, Ident, Stmt};
+use crate::ast::{Expr, Ident, Stmt, StmtBlock};
 use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
@@ -362,29 +362,54 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
 
             let table = &mut x.0;
 
-            if let Some(stmt) = table.get_mut(&hash) {
-                optimize_stmt(stmt, state, true);
-                *expr = Expr::Stmt(Box::new(vec![mem::take(stmt)].into()), *pos);
-            } else if let Some(def_stmt) = x.1.as_mut() {
-                optimize_stmt(def_stmt, state, true);
-                *expr = Expr::Stmt(Box::new(vec![mem::take(def_stmt)].into()), *pos);
+            let (statements, new_pos) = if let Some(block) = table.get_mut(&hash) {
+                (
+                    optimize_stmt_block(
+                        mem::take(&mut block.statements).into_vec(),
+                        block.pos,
+                        state,
+                        true,
+                    )
+                    .into(),
+                    block.pos,
+                )
             } else {
-                *expr = Expr::Unit(*pos);
-            }
+                (
+                    optimize_stmt_block(
+                        mem::take(&mut x.1.statements).into_vec(),
+                        x.1.pos,
+                        state,
+                        true,
+                    )
+                    .into(),
+                    if x.1.pos.is_none() { *pos } else { x.1.pos },
+                )
+            };
+
+            *expr = Expr::Stmt(Box::new(StmtBlock {
+                statements,
+                pos: new_pos,
+            }));
         }
         // switch
         Stmt::Switch(expr, x, _) => {
             optimize_expr(expr, state);
-            x.0.values_mut()
-                .for_each(|stmt| optimize_stmt(stmt, state, preserve_result));
-            if let Some(def_stmt) = x.1.as_mut() {
-                optimize_stmt(def_stmt, state, preserve_result);
-
-                match def_stmt {
-                    Stmt::Noop(_) | Stmt::Expr(Expr::Unit(_)) => x.1 = None,
-                    _ => (),
-                }
-            }
+            x.0.values_mut().for_each(|block| {
+                block.statements = optimize_stmt_block(
+                    mem::take(&mut block.statements).into_vec(),
+                    block.pos,
+                    state,
+                    preserve_result,
+                )
+                .into()
+            });
+            x.1.statements = optimize_stmt_block(
+                mem::take(&mut x.1.statements).into_vec(),
+                x.1.pos,
+                state,
+                preserve_result,
+            )
+            .into()
         }
 
         // while false { block } -> Noop
@@ -512,14 +537,14 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             .into();
         }
         // {}
-        Stmt::Expr(Expr::Stmt(x, pos)) if x.is_empty() => {
+        Stmt::Expr(Expr::Stmt(x)) if x.statements.is_empty() => {
             state.set_dirty();
-            *stmt = Stmt::Noop(*pos);
+            *stmt = Stmt::Noop(x.pos);
         }
         // {...};
-        Stmt::Expr(Expr::Stmt(x, pos)) => {
+        Stmt::Expr(Expr::Stmt(x)) => {
             state.set_dirty();
-            *stmt = Stmt::Block(mem::take(x).into_vec(), *pos);
+            *stmt = Stmt::Block(mem::take(&mut x.statements).into_vec(), x.pos);
         }
         // expr;
         Stmt::Expr(expr) => optimize_expr(expr, state),
@@ -542,18 +567,15 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
 
     match expr {
         // {}
-        Expr::Stmt(x, pos) if x.is_empty() => { state.set_dirty(); *expr = Expr::Unit(*pos) }
+        Expr::Stmt(x) if x.statements.is_empty() => { state.set_dirty(); *expr = Expr::Unit(x.pos) }
         // { stmt; ... } - do not count promotion as dirty because it gets turned back into an array
-        Expr::Stmt(x, pos) =>  {
-            let statements = optimize_stmt_block(mem::take(x).into_vec(), *pos, state, true);
-            *expr = Expr::Stmt(Box::new(statements.into()), *pos);
-        }
+        Expr::Stmt(x) => x.statements = optimize_stmt_block(mem::take(&mut x.statements).into_vec(), x.pos, state, true).into(),
         // lhs.rhs
         #[cfg(not(feature = "no_object"))]
         Expr::Dot(x, _) => match (&mut x.lhs, &mut x.rhs) {
             // map.string
             (Expr::Map(m, pos), Expr::Property(p)) if m.iter().all(|(_, x)| x.is_pure()) => {
-                let prop = &p.4.name;
+                let prop = &p.2.name;
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
@@ -902,30 +924,34 @@ pub fn optimize_into_ast(
             _functions
                 .into_iter()
                 .map(|mut fn_def| {
-                    let pos = fn_def.body.position();
+                    let pos = fn_def.body.pos;
 
                     // Optimize the function body
                     let mut body = optimize_top_level(
-                        vec![fn_def.body],
+                        fn_def.body.statements.into_vec(),
                         engine,
                         &Scope::new(),
                         &[&lib2],
                         level,
                     );
 
-                    // {} -> Noop
-                    fn_def.body = match body.pop().unwrap_or_else(|| Stmt::Noop(pos)) {
+                    match &mut body[..] {
                         // { return val; } -> val
-                        Stmt::Return(crate::ast::ReturnType::Return, Some(expr), _) => {
-                            Stmt::Expr(expr)
+                        [Stmt::Return(crate::ast::ReturnType::Return, Some(expr), _)] => {
+                            body[0] = Stmt::Expr(mem::take(expr))
                         }
                         // { return; } -> ()
-                        Stmt::Return(crate::ast::ReturnType::Return, None, pos) => {
-                            Stmt::Expr(Expr::Unit(pos))
+                        [Stmt::Return(crate::ast::ReturnType::Return, None, _)] => {
+                            body.clear();
                         }
-                        // All others
-                        stmt => stmt,
+                        _ => (),
+                    }
+
+                    fn_def.body = StmtBlock {
+                        statements: body.into(),
+                        pos,
                     };
+
                     fn_def
                 })
                 .for_each(|fn_def| {

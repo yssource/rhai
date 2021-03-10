@@ -1181,7 +1181,7 @@ impl Engine {
                     }
                     // {xxx:map}.id op= ???
                     Expr::Property(x) if target_val.is::<Map>() && new_val.is_some() => {
-                        let Ident { name, pos, .. } = &x.4;
+                        let Ident { name, pos, .. } = &x.2;
                         let index = name.clone().into();
                         let val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, true, is_ref, false, level,
@@ -1194,7 +1194,7 @@ impl Engine {
                     }
                     // {xxx:map}.id
                     Expr::Property(x) if target_val.is::<Map>() => {
-                        let Ident { name, pos, .. } = &x.4;
+                        let Ident { name, pos, .. } = &x.2;
                         let index = name.clone().into();
                         let val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, false, is_ref, false, level,
@@ -1204,7 +1204,7 @@ impl Engine {
                     }
                     // xxx.id = ???
                     Expr::Property(x) if new_val.is_some() => {
-                        let (_, _, setter, hash_set, Ident { pos, .. }) = x.as_ref();
+                        let (_, (setter, hash_set), Ident { pos, .. }) = x.as_ref();
                         let hash = FnHash::from_native(*hash_set);
                         let mut new_val = new_val;
                         let mut args = [target_val, &mut (new_val.as_mut().unwrap().0).0];
@@ -1216,7 +1216,7 @@ impl Engine {
                     }
                     // xxx.id
                     Expr::Property(x) => {
-                        let (getter, hash_get, _, _, Ident { pos, .. }) = x.as_ref();
+                        let ((getter, hash_get), _, Ident { pos, .. }) = x.as_ref();
                         let hash = FnHash::from_native(*hash_get);
                         let mut args = [target_val];
                         self.exec_fn_call(
@@ -1229,7 +1229,7 @@ impl Engine {
                     Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target_val.is::<Map>() => {
                         let mut val = match &x.lhs {
                             Expr::Property(p) => {
-                                let Ident { name, pos, .. } = &p.4;
+                                let Ident { name, pos, .. } = &p.2;
                                 let index = name.clone().into();
                                 self.get_indexed_mut(
                                     mods, state, lib, target_val, index, *pos, false, is_ref, true,
@@ -1264,7 +1264,7 @@ impl Engine {
                         match &x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
-                                let (getter, hash_get, setter, hash_set, Ident { pos, .. }) =
+                                let ((getter, hash_get), (setter, hash_set), Ident { pos, .. }) =
                                     p.as_ref();
                                 let hash_get = FnHash::from_native(*hash_get);
                                 let hash_set = FnHash::from_native(*hash_set);
@@ -1456,7 +1456,7 @@ impl Engine {
             }
 
             Expr::Property(x) if parent_chain_type == ChainType::Dot => {
-                idx_values.push(ChainArgument::Property(x.4.pos))
+                idx_values.push(ChainArgument::Property(x.2.pos))
             }
             Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
 
@@ -1466,7 +1466,7 @@ impl Engine {
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
                     Expr::Property(x) if parent_chain_type == ChainType::Dot => {
-                        ChainArgument::Property(x.4.pos)
+                        ChainArgument::Property(x.2.pos)
                     }
                     Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
                     Expr::FnCall(x, _)
@@ -1655,16 +1655,11 @@ impl Engine {
                 .map(|(val, _)| val.take_or_clone()),
 
             // Statement block
-            Expr::Stmt(x, _) => self.eval_stmt_block(
-                scope,
-                mods,
-                state,
-                lib,
-                this_ptr,
-                x.as_ref().as_ref(),
-                true,
-                level,
-            ),
+            Expr::Stmt(x) if x.is_empty() => Ok(Dynamic::UNIT),
+            Expr::Stmt(x) => {
+                let statements = &x.statements;
+                self.eval_stmt_block(scope, mods, state, lib, this_ptr, statements, true, level)
+            }
 
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
@@ -1804,6 +1799,10 @@ impl Engine {
         restore_prev_state: bool,
         level: usize,
     ) -> RhaiResult {
+        if statements.is_empty() {
+            return Ok(Dynamic::UNIT);
+        }
+
         let mut _extra_fn_resolution_cache = false;
         let prev_always_search = state.always_search;
         let prev_scope_len = scope.len();
@@ -2025,6 +2024,7 @@ impl Engine {
             }
 
             // Block scope
+            Stmt::Block(statements, _) if statements.is_empty() => Ok(Dynamic::UNIT),
             Stmt::Block(statements, _) => {
                 self.eval_stmt_block(scope, mods, state, lib, this_ptr, statements, true, level)
             }
@@ -2046,15 +2046,21 @@ impl Engine {
                     .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))
                     .and_then(|guard_val| {
                         if guard_val {
-                            self.eval_stmt_block(
-                                scope, mods, state, lib, this_ptr, if_stmt, true, level,
-                            )
-                        } else if !else_stmt.is_empty() {
-                            self.eval_stmt_block(
-                                scope, mods, state, lib, this_ptr, else_stmt, true, level,
-                            )
+                            if !if_stmt.is_empty() {
+                                self.eval_stmt_block(
+                                    scope, mods, state, lib, this_ptr, if_stmt, true, level,
+                                )
+                            } else {
+                                Ok(Dynamic::UNIT)
+                            }
                         } else {
-                            Ok(Dynamic::UNIT)
+                            if !else_stmt.is_empty() {
+                                self.eval_stmt_block(
+                                    scope, mods, state, lib, this_ptr, else_stmt, true, level,
+                                )
+                            } else {
+                                Ok(Dynamic::UNIT)
+                            }
                         }
                     })
             }
@@ -2070,21 +2076,29 @@ impl Engine {
                     value.hash(hasher);
                     let hash = hasher.finish();
 
-                    table
-                        .get(&hash)
-                        .map(|stmt| self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level))
+                    table.get(&hash).map(|StmtBlock { statements, .. }| {
+                        if !statements.is_empty() {
+                            self.eval_stmt_block(
+                                scope, mods, state, lib, this_ptr, statements, true, level,
+                            )
+                        } else {
+                            Ok(Dynamic::UNIT)
+                        }
+                    })
                 } else {
                     // Non-hashable values never match any specific clause
                     None
                 }
                 .unwrap_or_else(|| {
                     // Default match clause
-                    def_stmt.as_ref().map_or_else(
-                        || Ok(Dynamic::UNIT),
-                        |def_stmt| {
-                            self.eval_stmt(scope, mods, state, lib, this_ptr, def_stmt, level)
-                        },
-                    )
+                    let def_stmt = &def_stmt.statements;
+                    if !def_stmt.is_empty() {
+                        self.eval_stmt_block(
+                            scope, mods, state, lib, this_ptr, def_stmt, true, level,
+                        )
+                    } else {
+                        Ok(Dynamic::UNIT)
+                    }
                 })
             }
 
@@ -2102,19 +2116,21 @@ impl Engine {
                         true
                     };
 
-                    if condition {
-                        match self
-                            .eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
-                        {
-                            Ok(_) => (),
-                            Err(err) => match *err {
-                                EvalAltResult::LoopBreak(false, _) => (),
-                                EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
-                                _ => return Err(err),
-                            },
-                        }
-                    } else {
+                    if !condition {
                         return Ok(Dynamic::UNIT);
+                    }
+                    if body.is_empty() {
+                        continue;
+                    }
+
+                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    {
+                        Ok(_) => (),
+                        Err(err) => match *err {
+                            EvalAltResult::LoopBreak(false, _) => (),
+                            EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
+                            _ => return Err(err),
+                        },
                     }
                 }
             }
@@ -2124,14 +2140,17 @@ impl Engine {
                 let body = &body.statements;
 
                 loop {
-                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
-                    {
-                        Ok(_) => (),
-                        Err(err) => match *err {
-                            EvalAltResult::LoopBreak(false, _) => continue,
-                            EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
-                            _ => return Err(err),
-                        },
+                    if !body.is_empty() {
+                        match self
+                            .eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                        {
+                            Ok(_) => (),
+                            Err(err) => match *err {
+                                EvalAltResult::LoopBreak(false, _) => continue,
+                                EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
+                                _ => return Err(err),
+                            },
+                        }
                     }
 
                     if self
@@ -2202,6 +2221,10 @@ impl Engine {
                         }
 
                         self.inc_operations(state, *pos)?;
+
+                        if statements.is_empty() {
+                            continue;
+                        }
 
                         match self.eval_stmt_block(
                             scope, mods, state, lib, this_ptr, statements, true, level,

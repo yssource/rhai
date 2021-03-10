@@ -243,7 +243,11 @@ impl Expr {
                 let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
                 let hash_set = calc_fn_hash(empty(), &setter, 2);
 
-                Self::Property(Box::new((getter, hash_get, setter, hash_set, ident.into())))
+                Self::Property(Box::new((
+                    (getter, hash_get),
+                    (setter, hash_set),
+                    ident.into(),
+                )))
             }
             _ => self,
         }
@@ -809,7 +813,7 @@ fn parse_switch(
         }
     }
 
-    let mut table = HashMap::new();
+    let mut table = HashMap::<u64, StmtBlock>::new();
     let mut def_stmt = None;
 
     loop {
@@ -869,10 +873,10 @@ fn parse_switch(
         let need_comma = !stmt.is_self_terminated();
 
         def_stmt = if let Some(hash) = hash {
-            table.insert(hash, stmt);
+            table.insert(hash, stmt.into());
             None
         } else {
-            Some(stmt)
+            Some(stmt.into())
         };
 
         match input.peek().unwrap() {
@@ -903,7 +907,10 @@ fn parse_switch(
 
     Ok(Stmt::Switch(
         item,
-        Box::new((final_table.into(), def_stmt)),
+        Box::new((
+            final_table.into(),
+            def_stmt.unwrap_or_else(|| Stmt::Noop(Position::NONE).into()),
+        )),
         settings.pos,
     ))
 }
@@ -954,7 +961,7 @@ fn parse_primary(
         // { - block statement as expression
         Token::LeftBrace if settings.allow_stmt_expr => {
             match parse_block(input, state, lib, settings.level_up())? {
-                Stmt::Block(statements, pos) => Expr::Stmt(Box::new(statements.into()), pos),
+                block @ Stmt::Block(_, _) => Expr::Stmt(Box::new(block.into())),
                 stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
             }
         }
@@ -962,15 +969,14 @@ fn parse_primary(
         Token::LeftParen => parse_paren_expr(input, state, lib, settings.level_up())?,
 
         // If statement is allowed to act as expressions
-        Token::If if settings.allow_if_expr => Expr::Stmt(
-            Box::new(vec![parse_if(input, state, lib, settings.level_up())?].into()),
-            settings.pos,
-        ),
+        Token::If if settings.allow_if_expr => Expr::Stmt(Box::new(
+            parse_if(input, state, lib, settings.level_up())?.into(),
+        )),
         // Switch statement is allowed to act as expressions
-        Token::Switch if settings.allow_switch_expr => Expr::Stmt(
-            Box::new(vec![parse_switch(input, state, lib, settings.level_up())?].into()),
-            settings.pos,
-        ),
+        Token::Switch if settings.allow_switch_expr => Expr::Stmt(Box::new(
+            parse_switch(input, state, lib, settings.level_up())?.into(),
+        )),
+
         // | ...
         #[cfg(not(feature = "no_function"))]
         Token::Pipe | Token::Or if settings.allow_anonymous_fn => {
@@ -1506,7 +1512,7 @@ fn make_dot_expr(
             let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
             let hash_set = calc_fn_hash(empty(), &setter, 2);
 
-            let rhs = Expr::Property(Box::new((getter, hash_get, setter, hash_set, ident)));
+            let rhs = Expr::Property(Box::new(((getter, hash_get), (setter, hash_set), ident)));
 
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
         }
@@ -1861,8 +1867,8 @@ fn parse_custom_syntax(
                 tokens.push(keyword);
             }
             MARKER_BLOCK => match parse_block(input, state, lib, settings)? {
-                Stmt::Block(statements, pos) => {
-                    keywords.push(Expr::Stmt(Box::new(statements.into()), pos));
+                block @ Stmt::Block(_, _) => {
+                    keywords.push(Expr::Stmt(Box::new(block.into())));
                     let keyword = state.get_interned_string(MARKER_BLOCK);
                     segments.push(keyword.clone());
                     tokens.push(keyword);
@@ -2006,19 +2012,9 @@ fn parse_if(
         Stmt::Noop(Position::NONE)
     };
 
-    let else_body = match else_body {
-        Stmt::If(_, _, pos) => {
-            let mut statements: StaticVec<_> = Default::default();
-            statements.push(else_body);
-            StmtBlock { statements, pos }
-        }
-        Stmt::Block(_, _) | Stmt::Noop(_) => else_body.into(),
-        _ => unreachable!("should either be if or a block, not {:?}", else_body),
-    };
-
     Ok(Stmt::If(
         guard,
-        Box::new((if_body.into(), else_body)),
+        Box::new((if_body.into(), else_body.into())),
         settings.pos,
     ))
 }
@@ -2741,7 +2737,8 @@ fn parse_fn(
             parse_block(input, state, lib, settings.level_up())?
         }
         (_, pos) => return Err(PERR::FnMissingBody(name).into_err(*pos)),
-    };
+    }
+    .into();
 
     let params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
 
@@ -2803,7 +2800,7 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
     let mut statements: StaticVec<_> = Default::default();
     statements.extend(externals.into_iter().map(Stmt::Share));
     statements.push(Stmt::Expr(expr));
-    Expr::Stmt(Box::new(statements), pos)
+    Expr::Stmt(Box::new(StmtBlock { statements, pos }))
 }
 
 /// Parse an anonymous function definition.
@@ -2905,7 +2902,7 @@ fn parse_anon_fn(
         params,
         #[cfg(not(feature = "no_closure"))]
         externals: Default::default(),
-        body,
+        body: body.into(),
         lib: None,
         #[cfg(not(feature = "no_module"))]
         mods: Default::default(),
