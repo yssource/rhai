@@ -1,9 +1,4 @@
-use rhai::{
-    module_resolvers::FileModuleResolver, Dynamic, Engine, EvalAltResult, Module, Scope, AST,
-};
-
-#[cfg(not(feature = "no_optimize"))]
-use rhai::OptimizationLevel;
+use rhai::{Dynamic, Engine, EvalAltResult, Module, Scope, AST};
 
 use std::{
     env,
@@ -65,35 +60,31 @@ fn main() {
     // Initialize scripting engine
     let mut engine = Engine::new();
 
-    // Set a file module resolver without caching
-    let mut resolver = FileModuleResolver::new();
-    resolver.enable_cache(false);
-
-    engine.set_module_resolver(resolver);
-
-    // Load init scripts
-
     #[cfg(not(feature = "no_module"))]
     {
+        // Set a file module resolver without caching
+        let mut resolver = rhai::module_resolvers::FileModuleResolver::new();
+        resolver.enable_cache(false);
+        engine.set_module_resolver(resolver);
+
+        // Load init scripts
         let mut contents = String::new();
         let mut has_init_scripts = false;
 
         for filename in env::args().skip(1) {
-            {
-                contents.clear();
+            contents.clear();
 
-                let mut f = match File::open(&filename) {
-                    Err(err) => {
-                        eprintln!("Error reading script file: {}\n{}", filename, err);
-                        exit(1);
-                    }
-                    Ok(f) => f,
-                };
-
-                if let Err(err) = f.read_to_string(&mut contents) {
-                    println!("Error reading script file: {}\n{}", filename, err);
+            let mut f = match File::open(&filename) {
+                Err(err) => {
+                    eprintln!("Error reading script file: {}\n{}", filename, err);
                     exit(1);
                 }
+                Ok(f) => f,
+            };
+
+            if let Err(err) = f.read_to_string(&mut contents) {
+                println!("Error reading script file: {}\n{}", filename, err);
+                exit(1);
             }
 
             let module = match engine
@@ -128,9 +119,8 @@ fn main() {
     }
 
     // Setup Engine
-
     #[cfg(not(feature = "no_optimize"))]
-    engine.set_optimization_level(OptimizationLevel::None);
+    engine.set_optimization_level(rhai::OptimizationLevel::None);
 
     let mut scope = Scope::new();
 
@@ -143,7 +133,6 @@ fn main() {
     let engine = engine;
 
     // REPL loop
-
     'main_loop: loop {
         print!("rhai-repl> ");
         stdout().flush().expect("couldn't flush stdout");
@@ -245,7 +234,7 @@ fn main() {
 
                 #[cfg(not(feature = "no_optimize"))]
                 {
-                    ast = engine.optimize_ast(&scope, r, OptimizationLevel::Simple);
+                    ast = engine.optimize_ast(&scope, r, rhai::OptimizationLevel::Simple);
                 }
 
                 #[cfg(feature = "no_optimize")]

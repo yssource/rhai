@@ -11,6 +11,7 @@ use crate::stdlib::{
     num::NonZeroUsize,
     ops::{Add, AddAssign},
     string::String,
+    vec,
     vec::Vec,
 };
 use crate::token::Token;
@@ -244,7 +245,7 @@ impl AST {
     #[deprecated = "this method is volatile and may change"]
     #[inline(always)]
     pub fn statements(&self) -> &[Stmt] {
-        &self.statements
+        &self.body.statements
     }
     /// Get a mutable reference to the statements.
     #[cfg(not(feature = "no_optimize"))]
@@ -711,7 +712,7 @@ impl AST {
             .chain({
                 #[cfg(not(feature = "no_function"))]
                 {
-                    self.iter_fn_def().map(|f| &f.body)
+                    self.iter_fn_def().flat_map(|f| f.body.statements.iter())
                 }
                 #[cfg(feature = "no_function")]
                 {
