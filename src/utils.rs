@@ -116,16 +116,19 @@ pub(crate) fn combine_hashes(a: u64, b: u64) -> u64 {
 pub struct HashableHashMap<K, T, H: BuildHasher>(HashMap<K, T, H>);
 
 impl<K, T, H: BuildHasher> From<HashMap<K, T, H>> for HashableHashMap<K, T, H> {
+    #[inline(always)]
     fn from(value: HashMap<K, T, H>) -> Self {
         Self(value)
     }
 }
 impl<K, T, H: BuildHasher> AsRef<HashMap<K, T, H>> for HashableHashMap<K, T, H> {
+    #[inline(always)]
     fn as_ref(&self) -> &HashMap<K, T, H> {
         &self.0
     }
 }
 impl<K, T, H: BuildHasher> AsMut<HashMap<K, T, H>> for HashableHashMap<K, T, H> {
+    #[inline(always)]
     fn as_mut(&mut self) -> &mut HashMap<K, T, H> {
         &mut self.0
     }
@@ -133,21 +136,25 @@ impl<K, T, H: BuildHasher> AsMut<HashMap<K, T, H>> for HashableHashMap<K, T, H> 
 impl<K, T, H: BuildHasher> Deref for HashableHashMap<K, T, H> {
     type Target = HashMap<K, T, H>;
 
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 impl<K, T, H: BuildHasher> DerefMut for HashableHashMap<K, T, H> {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 impl<K: Debug, T: Debug, H: BuildHasher> Debug for HashableHashMap<K, T, H> {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 impl<K: Hash + Ord, T: Hash, H: BuildHasher> Hash for HashableHashMap<K, T, H> {
+    #[inline(always)]
     fn hash<B: Hasher>(&self, state: &mut B) {
         let mut keys: Vec<_> = self.0.keys().collect();
         keys.sort();

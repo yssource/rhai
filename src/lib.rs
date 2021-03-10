@@ -192,7 +192,7 @@ pub use token::{get_next_token, parse_string_literal, InputStream, Token, Tokeni
 #[deprecated = "this type is volatile and may change"]
 pub use ast::{
     ASTNode, BinaryExpr, CustomExpr, Expr, FloatWrapper, FnCallExpr, FnHash, Ident, OpAssignment,
-    ReturnType, ScriptFnDef, Stmt,
+    ReturnType, ScriptFnDef, Stmt, StmtBlock,
 };
 
 #[cfg(feature = "internals")]

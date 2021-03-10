@@ -1832,7 +1832,7 @@ impl Engine {
         let lib = Default::default();
 
         let stmt = crate::stdlib::mem::take(ast.statements_mut());
-        crate::optimize::optimize_into_ast(self, scope, stmt, lib, optimization_level)
+        crate::optimize::optimize_into_ast(self, scope, stmt.into_vec(), lib, optimization_level)
     }
     /// Generate a list of all registered functions.
     ///

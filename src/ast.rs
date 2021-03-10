@@ -11,7 +11,6 @@ use crate::stdlib::{
     num::NonZeroUsize,
     ops::{Add, AddAssign},
     string::String,
-    vec,
     vec::Vec,
 };
 use crate::token::Token;
@@ -61,9 +60,9 @@ pub struct ScriptFnDef {
     pub params: StaticVec<ImmutableString>,
     /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
-    pub externals: Vec<ImmutableString>,
+    pub externals: StaticVec<ImmutableString>,
     /// Function doc-comments (if any).
-    pub comments: Vec<String>,
+    pub comments: StaticVec<String>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -149,7 +148,7 @@ pub struct AST {
     /// Source of the [`AST`].
     source: Option<ImmutableString>,
     /// Global statements.
-    statements: Vec<Stmt>,
+    body: StmtBlock,
     /// Script-defined functions.
     functions: Shared<Module>,
     /// Embedded module resolver, if any.
@@ -162,7 +161,7 @@ impl Default for AST {
     fn default() -> Self {
         Self {
             source: None,
-            statements: Vec::with_capacity(16),
+            body: Default::default(),
             functions: Default::default(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -179,7 +178,10 @@ impl AST {
     ) -> Self {
         Self {
             source: None,
-            statements: statements.into_iter().collect(),
+            body: StmtBlock {
+                statements: statements.into_iter().collect(),
+                pos: Position::NONE,
+            },
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -194,7 +196,10 @@ impl AST {
     ) -> Self {
         Self {
             source: Some(source.into()),
-            statements: statements.into_iter().collect(),
+            body: StmtBlock {
+                statements: statements.into_iter().collect(),
+                pos: Position::NONE,
+            },
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -231,7 +236,7 @@ impl AST {
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
     pub(crate) fn statements(&self) -> &[Stmt] {
-        &self.statements
+        &self.body.statements
     }
     /// _(INTERNALS)_ Get the statements.
     /// Exported under the `internals` feature only.
@@ -244,8 +249,8 @@ impl AST {
     /// Get a mutable reference to the statements.
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
-    pub(crate) fn statements_mut(&mut self) -> &mut Vec<Stmt> {
-        &mut self.statements
+    pub(crate) fn statements_mut(&mut self) -> &mut StaticVec<Stmt> {
+        &mut self.body.statements
     }
     /// Get the internal shared [`Module`] containing all script-defined functions.
     #[cfg(not(feature = "internals"))]
@@ -333,7 +338,7 @@ impl AST {
         functions.merge_filtered(&self.functions, &filter);
         Self {
             source: self.source.clone(),
-            statements: Default::default(),
+            body: Default::default(),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: self.resolver.clone(),
@@ -345,7 +350,7 @@ impl AST {
     pub fn clone_statements_only(&self) -> Self {
         Self {
             source: self.source.clone(),
-            statements: self.statements.clone(),
+            body: self.body.clone(),
             functions: Default::default(),
             #[cfg(not(feature = "no_module"))]
             resolver: self.resolver.clone(),
@@ -515,20 +520,19 @@ impl AST {
         filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> Self {
         let Self {
-            statements,
-            functions,
-            ..
+            body, functions, ..
         } = self;
 
-        let ast = match (statements.is_empty(), other.statements.is_empty()) {
+        let merged = match (body.is_empty(), other.body.is_empty()) {
             (false, false) => {
-                let mut statements = statements.clone();
-                statements.extend(other.statements.iter().cloned());
-                statements
+                let mut body = body.clone();
+                body.statements
+                    .extend(other.body.statements.iter().cloned());
+                body
             }
-            (false, true) => statements.clone(),
-            (true, false) => other.statements.clone(),
-            (true, true) => vec![],
+            (false, true) => body.clone(),
+            (true, false) => other.body.clone(),
+            (true, true) => Default::default(),
         };
 
         let source = other.source.clone().or_else(|| self.source.clone());
@@ -537,9 +541,9 @@ impl AST {
         functions.merge_filtered(&other.functions, &filter);
 
         if let Some(source) = source {
-            Self::new_with_source(ast, functions, source)
+            Self::new_with_source(merged.statements, functions, source)
         } else {
-            Self::new(ast, functions)
+            Self::new(merged.statements, functions)
         }
     }
     /// Combine one [`AST`] with another.  The second [`AST`] is consumed.
@@ -599,7 +603,10 @@ impl AST {
         other: Self,
         filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> &mut Self {
-        self.statements.extend(other.statements.into_iter());
+        self.body
+            .statements
+            .extend(other.body.statements.into_iter());
+
         if !other.functions.is_empty() {
             shared_make_mut(&mut self.functions).merge_filtered(&other.functions, &filter);
         }
@@ -673,7 +680,7 @@ impl AST {
     /// Clear all statements in the [`AST`], leaving only function definitions.
     #[inline(always)]
     pub fn clear_statements(&mut self) {
-        self.statements = vec![];
+        self.body = Default::default();
     }
     /// Recursively walk the [`AST`], including function bodies (if any).
     #[cfg(not(feature = "internals"))]
@@ -810,7 +817,7 @@ impl<'a> From<&'a Expr> for ASTNode<'a> {
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Hash)]
+#[derive(Clone, Hash, Default)]
 pub struct StmtBlock {
     pub statements: StaticVec<Stmt>,
     pub pos: Position,
@@ -818,12 +825,24 @@ pub struct StmtBlock {
 
 impl StmtBlock {
     /// Is this statements block empty?
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.statements.is_empty()
     }
     /// Number of statements in this statements block.
+    #[inline(always)]
     pub fn len(&self) -> usize {
         self.statements.len()
+    }
+}
+
+impl fmt::Debug for StmtBlock {
+    #[inline(always)]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if !self.pos.is_none() {
+            write!(f, "{} @ ", self.pos)?;
+        }
+        fmt::Debug::fmt(&self.statements, f)
     }
 }
 
@@ -1242,6 +1261,7 @@ pub struct FloatWrapper(FLOAT);
 
 #[cfg(not(feature = "no_float"))]
 impl Hash for FloatWrapper {
+    #[inline(always)]
     fn hash<H: crate::stdlib::hash::Hasher>(&self, state: &mut H) {
         self.0.to_ne_bytes().hash(state);
     }
@@ -1249,6 +1269,7 @@ impl Hash for FloatWrapper {
 
 #[cfg(not(feature = "no_float"))]
 impl AsRef<FLOAT> for FloatWrapper {
+    #[inline(always)]
     fn as_ref(&self) -> &FLOAT {
         &self.0
     }
@@ -1256,6 +1277,7 @@ impl AsRef<FLOAT> for FloatWrapper {
 
 #[cfg(not(feature = "no_float"))]
 impl AsMut<FLOAT> for FloatWrapper {
+    #[inline(always)]
     fn as_mut(&mut self) -> &mut FLOAT {
         &mut self.0
     }
@@ -1265,6 +1287,7 @@ impl AsMut<FLOAT> for FloatWrapper {
 impl crate::stdlib::ops::Deref for FloatWrapper {
     type Target = FLOAT;
 
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -1272,6 +1295,7 @@ impl crate::stdlib::ops::Deref for FloatWrapper {
 
 #[cfg(not(feature = "no_float"))]
 impl crate::stdlib::ops::DerefMut for FloatWrapper {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -1279,6 +1303,7 @@ impl crate::stdlib::ops::DerefMut for FloatWrapper {
 
 #[cfg(not(feature = "no_float"))]
 impl fmt::Debug for FloatWrapper {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self, f)
     }
@@ -1286,6 +1311,7 @@ impl fmt::Debug for FloatWrapper {
 
 #[cfg(not(feature = "no_float"))]
 impl fmt::Display for FloatWrapper {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(feature = "no_std")]
         use num_traits::Float;
@@ -1301,6 +1327,7 @@ impl fmt::Display for FloatWrapper {
 
 #[cfg(not(feature = "no_float"))]
 impl From<FLOAT> for FloatWrapper {
+    #[inline(always)]
     fn from(value: FLOAT) -> Self {
         Self::new(value)
     }
@@ -1310,6 +1337,7 @@ impl From<FLOAT> for FloatWrapper {
 impl FromStr for FloatWrapper {
     type Err = <FLOAT as FromStr>::Err;
 
+    #[inline(always)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         FLOAT::from_str(s).map(Into::<Self>::into)
     }
@@ -1317,6 +1345,7 @@ impl FromStr for FloatWrapper {
 
 #[cfg(not(feature = "no_float"))]
 impl FloatWrapper {
+    #[inline(always)]
     pub const fn new(value: FLOAT) -> Self {
         Self(value)
     }
@@ -1384,6 +1413,7 @@ impl Expr {
     /// Get the [`Dynamic`] value of a constant expression.
     ///
     /// Returns [`None`] if the expression is not constant.
+    #[inline]
     pub fn get_constant_value(&self) -> Option<Dynamic> {
         Some(match self {
             Self::DynamicConstant(x, _) => x.as_ref().clone(),
@@ -1434,6 +1464,7 @@ impl Expr {
         }
     }
     /// Get the [position][Position] of the expression.
+    #[inline]
     pub fn position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_float"))]
@@ -1462,6 +1493,7 @@ impl Expr {
         }
     }
     /// Override the [position][Position] of the expression.
+    #[inline]
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
             #[cfg(not(feature = "no_float"))]
@@ -1490,6 +1522,7 @@ impl Expr {
     /// Is the expression pure?
     ///
     /// A pure expression has no side effects.
+    #[inline]
     pub fn is_pure(&self) -> bool {
         match self {
             Self::Array(x, _) => x.iter().all(Self::is_pure),
@@ -1516,6 +1549,7 @@ impl Expr {
         }
     }
     /// Is the expression a constant?
+    #[inline]
     pub fn is_constant(&self) -> bool {
         match self {
             #[cfg(not(feature = "no_float"))]
@@ -1539,6 +1573,7 @@ impl Expr {
         }
     }
     /// Is a particular [token][Token] allowed as a postfix operator to this expression?
+    #[inline]
     pub fn is_valid_postfix(&self, token: &Token) -> bool {
         match token {
             #[cfg(not(feature = "no_object"))]
@@ -1591,7 +1626,7 @@ impl Expr {
         }
     }
     /// Recursively walk this expression.
-    #[inline(always)]
+    #[inline]
     pub fn walk<'a>(&'a self, path: &mut Vec<ASTNode<'a>>, on_node: &mut impl FnMut(&[ASTNode])) {
         path.push(self.into());
         on_node(path);

@@ -2434,7 +2434,7 @@ fn parse_stmt(
 ) -> Result<Stmt, ParseError> {
     use AccessMode::{ReadOnly, ReadWrite};
 
-    let mut _comments: Vec<String> = Default::default();
+    let mut _comments: StaticVec<String> = Default::default();
 
     #[cfg(not(feature = "no_function"))]
     {
@@ -2678,7 +2678,7 @@ fn parse_fn(
     lib: &mut FunctionsLib,
     access: FnAccess,
     mut settings: ParseSettings,
-    comments: Vec<String>,
+    comments: StaticVec<String>,
 ) -> Result<ScriptFnDef, ParseError> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
