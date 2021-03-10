@@ -2,7 +2,7 @@
 
 use crate::ast::{
     BinaryExpr, CustomExpr, Expr, FnCallExpr, FnHash, Ident, OpAssignment, ReturnType, ScriptFnDef,
-    Stmt,
+    Stmt, StmtBlock,
 };
 use crate::dynamic::{AccessMode, Union};
 use crate::engine::{KEYWORD_THIS, OP_CONTAINS};
@@ -755,8 +755,7 @@ fn parse_map_literal(
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
         let name = state.get_interned_string(name);
-        let public = false;
-        map.push((Ident { name, pos, public }, expr));
+        map.push((Ident { name, pos }, expr));
 
         match input.peek().unwrap() {
             (Token::Comma, _) => {
@@ -1034,7 +1033,6 @@ fn parse_primary(
                     let var_name_def = Ident {
                         name: state.get_interned_string(s),
                         pos: settings.pos,
-                        public: false,
                     };
                     Expr::Variable(Box::new((None, None, var_name_def)))
                 }
@@ -1049,7 +1047,6 @@ fn parse_primary(
                     let var_name_def = Ident {
                         name: state.get_interned_string(s),
                         pos: settings.pos,
-                        public: false,
                     };
                     Expr::Variable(Box::new((None, None, var_name_def)))
                 }
@@ -1059,7 +1056,6 @@ fn parse_primary(
                     let var_name_def = Ident {
                         name: state.get_interned_string(s),
                         pos: settings.pos,
-                        public: false,
                     };
                     Expr::Variable(Box::new((index, None, var_name_def)))
                 }
@@ -1079,7 +1075,6 @@ fn parse_primary(
                     let var_name_def = Ident {
                         name: state.get_interned_string(s),
                         pos: settings.pos,
-                        public: false,
                     };
                     Expr::Variable(Box::new((None, None, var_name_def)))
                 }
@@ -1088,7 +1083,6 @@ fn parse_primary(
                     let var_name_def = Ident {
                         name: state.get_interned_string(s),
                         pos: settings.pos,
-                        public: false,
                     };
                     Expr::Variable(Box::new((None, None, var_name_def)))
                 }
@@ -1182,7 +1176,6 @@ fn parse_primary(
                     let var_name_def = Ident {
                         name: state.get_interned_string(id2),
                         pos: pos2,
-                        public: false,
                     };
                     Expr::Variable(Box::new((index, namespace, var_name_def)))
                 }
@@ -1853,8 +1846,7 @@ fn parse_custom_syntax(
                     let name = state.get_interned_string(s);
                     segments.push(name.clone());
                     tokens.push(state.get_interned_string(MARKER_IDENT));
-                    let public = false;
-                    let var_name_def = Ident { name, pos, public };
+                    let var_name_def = Ident { name, pos };
                     keywords.push(Expr::Variable(Box::new((None, None, var_name_def))));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
@@ -2014,9 +2006,19 @@ fn parse_if(
         Stmt::Noop(Position::NONE)
     };
 
+    let else_body = match else_body {
+        Stmt::If(_, _, pos) => {
+            let mut statements: StaticVec<_> = Default::default();
+            statements.push(else_body);
+            StmtBlock { statements, pos }
+        }
+        Stmt::Block(_, _) | Stmt::Noop(_) => else_body.into(),
+        _ => unreachable!("should either be if or a block, not {:?}", else_body),
+    };
+
     Ok(Stmt::If(
         guard,
-        Box::new((if_body, else_body)),
+        Box::new((if_body.into(), else_body)),
         settings.pos,
     ))
 }
@@ -2045,9 +2047,9 @@ fn parse_while_loop(
 
     ensure_not_assignment(input)?;
     settings.is_breakable = true;
-    let body = Box::new(parse_block(input, state, lib, settings.level_up())?);
+    let body = parse_block(input, state, lib, settings.level_up())?;
 
-    Ok(Stmt::While(guard, body, settings.pos))
+    Ok(Stmt::While(guard, Box::new(body.into()), settings.pos))
 }
 
 /// Parse a do loop.
@@ -2065,7 +2067,7 @@ fn parse_do(
 
     // do { body } [while|until] guard
     settings.is_breakable = true;
-    let body = Box::new(parse_block(input, state, lib, settings.level_up())?);
+    let body = parse_block(input, state, lib, settings.level_up())?;
 
     let is_while = match input.next().unwrap() {
         (Token::While, _) => true,
@@ -2083,7 +2085,12 @@ fn parse_do(
     let guard = parse_expr(input, state, lib, settings.level_up())?;
     ensure_not_assignment(input)?;
 
-    Ok(Stmt::Do(body, guard, is_while, settings.pos))
+    Ok(Stmt::Do(
+        Box::new(body.into()),
+        guard,
+        is_while,
+        settings.pos,
+    ))
 }
 
 /// Parse a for loop.
@@ -2138,7 +2145,7 @@ fn parse_for(
 
     state.stack.truncate(prev_stack_len);
 
-    Ok(Stmt::For(expr, Box::new((name, body)), settings.pos))
+    Ok(Stmt::For(expr, Box::new((name, body.into())), settings.pos))
 }
 
 /// Parse a variable definition statement.
@@ -2170,7 +2177,6 @@ fn parse_let(
     let var_def = Ident {
         name: name.clone(),
         pos,
-        public: export,
     };
 
     // let name = ...
@@ -2185,9 +2191,9 @@ fn parse_let(
 
     match var_type {
         // let name = expr
-        AccessMode::ReadWrite => Ok(Stmt::Let(expr, var_def, settings.pos)),
+        AccessMode::ReadWrite => Ok(Stmt::Let(expr, var_def, export, settings.pos)),
         // const name = { expr:constant }
-        AccessMode::ReadOnly => Ok(Stmt::Const(expr, var_def, settings.pos)),
+        AccessMode::ReadOnly => Ok(Stmt::Const(expr, var_def, export, settings.pos)),
     }
 }
 
@@ -2210,15 +2216,7 @@ fn parse_import(
 
     // import expr as ...
     if !match_token(input, Token::As).0 {
-        return Ok(Stmt::Import(
-            expr,
-            Ident {
-                name: "".into(),
-                pos: Position::NONE,
-                public: false,
-            },
-            settings.pos,
-        ));
+        return Ok(Stmt::Import(expr, None, settings.pos));
     }
 
     // import expr as name ...
@@ -2236,11 +2234,10 @@ fn parse_import(
 
     Ok(Stmt::Import(
         expr,
-        Ident {
+        Some(Ident {
             name,
             pos: name_pos,
-            public: true,
-        },
+        }),
         settings.pos,
     ))
 }
@@ -2291,7 +2288,6 @@ fn parse_export(
                 (Token::Identifier(s), pos) => Some(Ident {
                     name: state.get_interned_string(s),
                     pos,
-                    public: false,
                 }),
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
@@ -2307,7 +2303,6 @@ fn parse_export(
             Ident {
                 name: state.get_interned_string(id),
                 pos: id_pos,
-                public: false,
             },
             rename,
         ));
@@ -2646,7 +2641,6 @@ fn parse_try_catch(
             (Token::Identifier(s), pos) => Ident {
                 name: state.get_interned_string(s),
                 pos,
-                public: false,
             },
             (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
         };
@@ -2670,7 +2664,7 @@ fn parse_try_catch(
     let catch_body = parse_block(input, state, lib, settings.level_up())?;
 
     Ok(Stmt::TryCatch(
-        Box::new((body, var_def, catch_body)),
+        Box::new((body.into(), var_def, catch_body.into())),
         settings.pos,
         catch_pos,
     ))
@@ -2879,7 +2873,6 @@ fn parse_anon_fn(
                 .map(|(name, &pos)| Ident {
                     name: name.clone(),
                     pos,
-                    public: false,
                 })
                 .collect()
         }

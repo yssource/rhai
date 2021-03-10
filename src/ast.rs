@@ -757,8 +757,6 @@ pub struct Ident {
     pub name: ImmutableString,
     /// Declaration position.
     pub pos: Position,
-    /// Is this identifier public?
-    pub public: bool,
 }
 
 impl fmt::Debug for Ident {
@@ -806,6 +804,29 @@ impl<'a> From<&'a Expr> for ASTNode<'a> {
     }
 }
 
+/// _(INTERNALS)_ A statements block.
+/// Exported under the `internals` feature only.
+///
+/// # Volatile Data Structure
+///
+/// This type is volatile and may change.
+#[derive(Debug, Clone, Hash)]
+pub struct StmtBlock {
+    pub statements: StaticVec<Stmt>,
+    pub pos: Position,
+}
+
+impl StmtBlock {
+    /// Is this statements block empty?
+    pub fn is_empty(&self) -> bool {
+        self.statements.is_empty()
+    }
+    /// Number of statements in this statements block.
+    pub fn len(&self) -> usize {
+        self.statements.len()
+    }
+}
+
 /// _(INTERNALS)_ A statement.
 /// Exported under the `internals` feature only.
 ///
@@ -817,7 +838,7 @@ pub enum Stmt {
     /// No-op.
     Noop(Position),
     /// `if` expr `{` stmt `}` `else` `{` stmt `}`
-    If(Expr, Box<(Stmt, Stmt)>, Position),
+    If(Expr, Box<(StmtBlock, StmtBlock)>, Position),
     /// `switch` expr `{` literal or _ `=>` stmt `,` ... `}`
     Switch(
         Expr,
@@ -828,21 +849,25 @@ pub enum Stmt {
         Position,
     ),
     /// `while` expr `{` stmt `}`
-    While(Expr, Box<Stmt>, Position),
+    While(Expr, Box<StmtBlock>, Position),
     /// `do` `{` stmt `}` `while`|`until` expr
-    Do(Box<Stmt>, Expr, bool, Position),
+    Do(Box<StmtBlock>, Expr, bool, Position),
     /// `for` id `in` expr `{` stmt `}`
-    For(Expr, Box<(String, Stmt)>, Position),
+    For(Expr, Box<(String, StmtBlock)>, Position),
     /// \[`export`\] `let` id `=` expr
-    Let(Expr, Ident, Position),
+    Let(Expr, Ident, bool, Position),
     /// \[`export`\] `const` id `=` expr
-    Const(Expr, Ident, Position),
+    Const(Expr, Ident, bool, Position),
     /// expr op`=` expr
     Assignment(Box<(Expr, Expr, Option<OpAssignment>)>, Position),
     /// `{` stmt`;` ... `}`
     Block(Vec<Stmt>, Position),
     /// `try` `{` stmt; ... `}` `catch` `(` var `)` `{` stmt; ... `}`
-    TryCatch(Box<(Stmt, Option<Ident>, Stmt)>, Position, Position),
+    TryCatch(
+        Box<(StmtBlock, Option<Ident>, StmtBlock)>,
+        Position,
+        Position,
+    ),
     /// [expression][Expr]
     Expr(Expr),
     /// `continue`
@@ -853,7 +878,7 @@ pub enum Stmt {
     Return(ReturnType, Option<Expr>, Position),
     /// `import` expr `as` var
     #[cfg(not(feature = "no_module"))]
-    Import(Expr, Ident, Position),
+    Import(Expr, Option<Ident>, Position),
     /// `export` var `as` var `,` ...
     #[cfg(not(feature = "no_module"))]
     Export(Vec<(Ident, Option<Ident>)>, Position),
@@ -866,6 +891,22 @@ impl Default for Stmt {
     #[inline(always)]
     fn default() -> Self {
         Self::Noop(Position::NONE)
+    }
+}
+
+impl From<Stmt> for StmtBlock {
+    fn from(stmt: Stmt) -> Self {
+        match stmt {
+            Stmt::Block(block, pos) => Self {
+                statements: block.into(),
+                pos,
+            },
+            Stmt::Noop(pos) => Self {
+                statements: Default::default(),
+                pos,
+            },
+            _ => panic!("cannot convert {:?} into a StmtBlock", stmt),
+        }
     }
 }
 
@@ -892,8 +933,8 @@ impl Stmt {
             | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
             | Self::Return(_, _, pos)
-            | Self::Let(_, _, pos)
-            | Self::Const(_, _, pos)
+            | Self::Let(_, _, _, pos)
+            | Self::Const(_, _, _, pos)
             | Self::TryCatch(_, pos, _) => *pos,
 
             Self::Expr(x) => x.position(),
@@ -921,8 +962,8 @@ impl Stmt {
             | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
             | Self::Return(_, _, pos)
-            | Self::Let(_, _, pos)
-            | Self::Const(_, _, pos)
+            | Self::Let(_, _, _, pos)
+            | Self::Const(_, _, _, pos)
             | Self::TryCatch(_, pos, _) => *pos = new_pos,
 
             Self::Expr(x) => {
@@ -953,8 +994,8 @@ impl Stmt {
             // A No-op requires a semicolon in order to know it is an empty statement!
             Self::Noop(_) => false,
 
-            Self::Let(_, _, _)
-            | Self::Const(_, _, _)
+            Self::Let(_, _, _, _)
+            | Self::Const(_, _, _, _)
             | Self::Assignment(_, _)
             | Self::Expr(_)
             | Self::Do(_, _, _, _)
@@ -976,20 +1017,28 @@ impl Stmt {
         match self {
             Self::Noop(_) => true,
             Self::Expr(expr) => expr.is_pure(),
-            Self::If(condition, x, _) => condition.is_pure() && x.0.is_pure() && x.1.is_pure(),
+            Self::If(condition, x, _) => {
+                condition.is_pure()
+                    && x.0.statements.iter().all(Stmt::is_pure)
+                    && x.1.statements.iter().all(Stmt::is_pure)
+            }
             Self::Switch(expr, x, _) => {
                 expr.is_pure()
                     && x.0.values().all(Stmt::is_pure)
                     && x.1.as_ref().map(Stmt::is_pure).unwrap_or(true)
             }
             Self::While(condition, block, _) | Self::Do(block, condition, _, _) => {
-                condition.is_pure() && block.is_pure()
+                condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
             }
-            Self::For(iterable, x, _) => iterable.is_pure() && x.1.is_pure(),
-            Self::Let(_, _, _) | Self::Const(_, _, _) | Self::Assignment(_, _) => false,
+            Self::For(iterable, x, _) => {
+                iterable.is_pure() && x.1.statements.iter().all(Stmt::is_pure)
+            }
+            Self::Let(_, _, _, _) | Self::Const(_, _, _, _) | Self::Assignment(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::Return(_, _, _) => false,
-            Self::TryCatch(x, _, _) => x.0.is_pure() && x.2.is_pure(),
+            Self::TryCatch(x, _, _) => {
+                x.0.statements.iter().all(Stmt::is_pure) && x.2.statements.iter().all(Stmt::is_pure)
+            }
 
             #[cfg(not(feature = "no_module"))]
             Self::Import(_, _, _) => false,
@@ -1007,11 +1056,11 @@ impl Stmt {
         on_node(path);
 
         match self {
-            Self::Let(e, _, _) | Self::Const(e, _, _) => e.walk(path, on_node),
+            Self::Let(e, _, _, _) | Self::Const(e, _, _, _) => e.walk(path, on_node),
             Self::If(e, x, _) => {
                 e.walk(path, on_node);
-                x.0.walk(path, on_node);
-                x.1.walk(path, on_node);
+                x.0.statements.iter().for_each(|s| s.walk(path, on_node));
+                x.1.statements.iter().for_each(|s| s.walk(path, on_node));
             }
             Self::Switch(e, x, _) => {
                 e.walk(path, on_node);
@@ -1022,11 +1071,11 @@ impl Stmt {
             }
             Self::While(e, s, _) | Self::Do(s, e, _, _) => {
                 e.walk(path, on_node);
-                s.walk(path, on_node);
+                s.statements.iter().for_each(|s| s.walk(path, on_node));
             }
             Self::For(e, x, _) => {
                 e.walk(path, on_node);
-                x.1.walk(path, on_node);
+                x.1.statements.iter().for_each(|s| s.walk(path, on_node));
             }
             Self::Assignment(x, _) => {
                 x.0.walk(path, on_node);
@@ -1034,8 +1083,8 @@ impl Stmt {
             }
             Self::Block(x, _) => x.iter().for_each(|s| s.walk(path, on_node)),
             Self::TryCatch(x, _, _) => {
-                x.0.walk(path, on_node);
-                x.2.walk(path, on_node);
+                x.0.statements.iter().for_each(|s| s.walk(path, on_node));
+                x.2.statements.iter().for_each(|s| s.walk(path, on_node));
             }
             Self::Expr(e) | Self::Return(_, Some(e), _) => e.walk(path, on_node),
             #[cfg(not(feature = "no_module"))]

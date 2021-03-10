@@ -54,9 +54,8 @@ fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
     engine.set_optimization_level(OptimizationLevel::Simple);
 
     let ast = engine.compile("{ const DECISION = false; if DECISION { 42 } else { 123 } }")?;
-    println!("{:?}", ast);
 
-    assert!(format!("{:?}", ast).starts_with(r#"AST { source: None, statements: [Block([Const(BoolConstant(false, 1:20), Ident("DECISION" @ 1:9), 1:3), Expr(IntegerConstant(123, 1:53))], 1:1)], functions: Module("#));
+    assert!(format!("{:?}", ast).starts_with(r#"AST { source: None, statements: [Block([Const(BoolConstant(false, 1:20), Ident("DECISION" @ 1:9), false, 1:3), Expr(IntegerConstant(123, 1:53))], 1:1)], functions: Module("#));
 
     let ast = engine.compile("if 1 == 2 { 42 }")?;
 

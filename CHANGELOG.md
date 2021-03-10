@@ -4,6 +4,8 @@ Rhai Release Notes
 Version 0.19.14
 ===============
 
+This version runs faster due to optimizations done on AST node structures.
+
 Bug fixes
 ---------
 
@@ -35,6 +37,7 @@ Breaking changes
 Enhancements
 ------------
 
+* Layout of AST nodes is optimized to reduce redirections, so speed is improved.
 * Function calls are more optimized and should now run faster.
 * `range` function now supports negative step and decreasing streams (i.e. to < from).
 * More information is provided to the error variable captured by the `catch` statement in an _object map_.

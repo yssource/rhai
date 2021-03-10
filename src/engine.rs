@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::ast::{Expr, FnCallExpr, FnHash, Ident, OpAssignment, ReturnType, Stmt};
+use crate::ast::{Expr, FnCallExpr, FnHash, Ident, OpAssignment, ReturnType, Stmt, StmtBlock};
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_native::{
     CallableFunction, IteratorFn, OnDebugCallback, OnPrintCallback, OnProgressCallback,
@@ -2031,15 +2031,28 @@ impl Engine {
 
             // If statement
             Stmt::If(expr, x, _) => {
-                let (if_block, else_block) = x.as_ref();
+                let (
+                    StmtBlock {
+                        statements: if_stmt,
+                        ..
+                    },
+                    StmtBlock {
+                        statements: else_stmt,
+                        ..
+                    },
+                ) = x.as_ref();
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
                     .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))
                     .and_then(|guard_val| {
                         if guard_val {
-                            self.eval_stmt(scope, mods, state, lib, this_ptr, if_block, level)
-                        } else if !else_block.is_noop() {
-                            self.eval_stmt(scope, mods, state, lib, this_ptr, else_block, level)
+                            self.eval_stmt_block(
+                                scope, mods, state, lib, this_ptr, if_stmt, true, level,
+                            )
+                        } else if !else_stmt.is_empty() {
+                            self.eval_stmt_block(
+                                scope, mods, state, lib, this_ptr, else_stmt, true, level,
+                            )
                         } else {
                             Ok(Dynamic::UNIT)
                         }
@@ -2076,58 +2089,70 @@ impl Engine {
             }
 
             // While loop
-            Stmt::While(expr, body, _) => loop {
-                let condition = if !expr.is_unit() {
-                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                        .as_bool()
-                        .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?
-                } else {
-                    true
-                };
+            Stmt::While(expr, body, _) => {
+                let body = &body.statements;
+                loop {
+                    let condition = if !expr.is_unit() {
+                        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                            .as_bool()
+                            .map_err(|err| {
+                                self.make_type_mismatch_err::<bool>(err, expr.position())
+                            })?
+                    } else {
+                        true
+                    };
 
-                if condition {
-                    match self.eval_stmt(scope, mods, state, lib, this_ptr, body, level) {
+                    if condition {
+                        match self
+                            .eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                        {
+                            Ok(_) => (),
+                            Err(err) => match *err {
+                                EvalAltResult::LoopBreak(false, _) => (),
+                                EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
+                                _ => return Err(err),
+                            },
+                        }
+                    } else {
+                        return Ok(Dynamic::UNIT);
+                    }
+                }
+            }
+
+            // Do loop
+            Stmt::Do(body, expr, is_while, _) => {
+                let body = &body.statements;
+
+                loop {
+                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    {
                         Ok(_) => (),
                         Err(err) => match *err {
-                            EvalAltResult::LoopBreak(false, _) => (),
+                            EvalAltResult::LoopBreak(false, _) => continue,
                             EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
                             _ => return Err(err),
                         },
                     }
-                } else {
-                    return Ok(Dynamic::UNIT);
-                }
-            },
 
-            // Do loop
-            Stmt::Do(body, expr, is_while, _) => loop {
-                match self.eval_stmt(scope, mods, state, lib, this_ptr, body, level) {
-                    Ok(_) => (),
-                    Err(err) => match *err {
-                        EvalAltResult::LoopBreak(false, _) => continue,
-                        EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
-                        _ => return Err(err),
-                    },
-                }
-
-                if self
-                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?
-                {
-                    if !*is_while {
-                        return Ok(Dynamic::UNIT);
-                    }
-                } else {
-                    if *is_while {
-                        return Ok(Dynamic::UNIT);
+                    if self
+                        .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                        .as_bool()
+                        .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?
+                    {
+                        if !*is_while {
+                            return Ok(Dynamic::UNIT);
+                        }
+                    } else {
+                        if *is_while {
+                            return Ok(Dynamic::UNIT);
+                        }
                     }
                 }
-            },
+            }
 
             // For loop
             Stmt::For(expr, x, _) => {
-                let (name, stmt) = x.as_ref();
+                let (name, StmtBlock { statements, pos }) = x.as_ref();
                 let iter_obj = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten();
@@ -2176,9 +2201,11 @@ impl Engine {
                             *loop_var = value;
                         }
 
-                        self.inc_operations(state, stmt.position())?;
+                        self.inc_operations(state, *pos)?;
 
-                        match self.eval_stmt(scope, mods, state, lib, this_ptr, stmt, level) {
+                        match self.eval_stmt_block(
+                            scope, mods, state, lib, this_ptr, statements, true, level,
+                        ) {
                             Ok(_) => (),
                             Err(err) => match *err {
                                 EvalAltResult::LoopBreak(false, _) => (),
@@ -2204,10 +2231,20 @@ impl Engine {
 
             // Try/Catch statement
             Stmt::TryCatch(x, _, _) => {
-                let (try_body, err_var, catch_body) = x.as_ref();
+                let (
+                    StmtBlock {
+                        statements: try_body,
+                        ..
+                    },
+                    err_var,
+                    StmtBlock {
+                        statements: catch_body,
+                        ..
+                    },
+                ) = x.as_ref();
 
                 let result = self
-                    .eval_stmt(scope, mods, state, lib, this_ptr, try_body, level)
+                    .eval_stmt_block(scope, mods, state, lib, this_ptr, try_body, true, level)
                     .map(|_| Dynamic::UNIT);
 
                 match result {
@@ -2266,8 +2303,9 @@ impl Engine {
                             scope.push(unsafe_cast_var_name_to_lifetime(&name), err_value);
                         }
 
-                        let result =
-                            self.eval_stmt(scope, mods, state, lib, this_ptr, catch_body, level);
+                        let result = self.eval_stmt_block(
+                            scope, mods, state, lib, this_ptr, catch_body, true, level,
+                        );
 
                         state.scope_level -= 1;
                         scope.rewind(orig_scope_len);
@@ -2314,11 +2352,11 @@ impl Engine {
             }
 
             // Let/const statement
-            Stmt::Let(expr, Ident { name, public, .. }, _)
-            | Stmt::Const(expr, Ident { name, public, .. }, _) => {
+            Stmt::Let(expr, Ident { name, .. }, export, _)
+            | Stmt::Const(expr, Ident { name, .. }, export, _) => {
                 let entry_type = match stmt {
-                    Stmt::Let(_, _, _) => AccessMode::ReadWrite,
-                    Stmt::Const(_, _, _) => AccessMode::ReadOnly,
+                    Stmt::Let(_, _, _, _) => AccessMode::ReadWrite,
+                    Stmt::Const(_, _, _, _) => AccessMode::ReadOnly,
                     _ => unreachable!("should be Stmt::Let or Stmt::Const, but gets {:?}", stmt),
                 };
 
@@ -2329,9 +2367,9 @@ impl Engine {
                 let (var_name, _alias): (Cow<'_, str>, _) = if state.is_global() {
                     (
                         name.to_string().into(),
-                        if *public { Some(name.clone()) } else { None },
+                        if *export { Some(name.clone()) } else { None },
                     )
-                } else if *public {
+                } else if *export {
                     unreachable!("exported variable not on global level");
                 } else {
                     (unsafe_cast_var_name_to_lifetime(name).into(), None)
@@ -2348,7 +2386,7 @@ impl Engine {
 
             // Import statement
             #[cfg(not(feature = "no_module"))]
-            Stmt::Import(expr, Ident { name, public, .. }, _pos) => {
+            Stmt::Import(expr, export, _pos) => {
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
                 if state.modules >= self.max_modules() {
@@ -2375,14 +2413,14 @@ impl Engine {
                         })
                         .unwrap_or_else(|| self.module_resolver.resolve(self, &path, expr_pos))?;
 
-                    if *public {
+                    if let Some(name) = export.as_ref().map(|x| x.name.clone()) {
                         if !module.is_indexed() {
                             // Index the module (making a clone copy if necessary) if it is not indexed
                             let mut module = crate::fn_native::shared_take_or_clone(module);
                             module.build_index();
-                            mods.push(name.clone(), module);
+                            mods.push(name, module);
                         } else {
-                            mods.push(name.clone(), module);
+                            mods.push(name, module);
                         }
                     }
 
