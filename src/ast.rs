@@ -710,20 +710,22 @@ impl AST {
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]
-    pub fn walk(&self, on_node: &mut impl FnMut(&[ASTNode])) {
-        self.statements()
-            .iter()
-            .chain({
-                #[cfg(not(feature = "no_function"))]
-                {
-                    self.iter_fn_def().flat_map(|f| f.body.statements.iter())
-                }
-                #[cfg(feature = "no_function")]
-                {
-                    crate::stdlib::iter::empty()
-                }
-            })
-            .for_each(|stmt| stmt.walk(&mut Default::default(), on_node));
+    pub fn walk(&self, on_node: &mut impl FnMut(&[ASTNode]) -> bool) -> bool {
+        let path = &mut Default::default();
+
+        for stmt in self.statements() {
+            if !stmt.walk(path, on_node) {
+                return false;
+            }
+        }
+        #[cfg(not(feature = "no_function"))]
+        for stmt in self.iter_fn_def().flat_map(|f| f.body.statements.iter()) {
+            if !stmt.walk(path, on_node) {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
