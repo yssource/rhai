@@ -926,8 +926,9 @@ impl Engine {
                     if !resolver.contains_path(s) && !imports.contains(s) =>
                 {
                     imports.insert(s.clone());
+                    true
                 }
-                _ => (),
+                _ => true,
             });
         }
 

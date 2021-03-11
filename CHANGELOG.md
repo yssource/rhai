@@ -4,7 +4,8 @@ Rhai Release Notes
 Version 0.19.14
 ===============
 
-This version runs faster due to optimizations done on AST node structures.
+This version runs faster due to optimizations done on AST node structures. It also fixes a number of
+panic bugs related to passing shared values as function call arguments.
 
 Bug fixes
 ---------
@@ -33,6 +34,7 @@ Breaking changes
 * `num-traits` is now a required dependency.
 * The `in` operator is now implemented on top of the `contains` function and is no longer restricted to a few specific types.
 * `EvalAltResult::ErrorInExpr` is removed because the `in` operator now calls `contains`.
+* The methods `AST::walk`, `Expr::walk`, `Stmt::walk` and `ASTNode::walk` and the callbacks they take now return `bool` to optionally terminate the recursive walk.
 
 Enhancements
 ------------
@@ -45,6 +47,7 @@ Enhancements
 * `Dynamic::as_unit` just for completeness sake.
 * `bytes` method added for strings to get length quickly (if the string is ASCII-only).
 * `FileModuleResolver` can now enable/disable caching.
+* Recursively walking an `AST` can now be terminated in the middle.
 
 
 Version 0.19.13

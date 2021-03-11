@@ -684,25 +684,29 @@ impl AST {
         self.body = Default::default();
     }
     /// Recursively walk the [`AST`], including function bodies (if any).
+    /// Return `false` from the callback to terminate the walk.
     #[cfg(not(feature = "internals"))]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    pub(crate) fn walk(&self, on_node: &mut impl FnMut(&[ASTNode])) {
-        self.statements()
-            .iter()
-            .chain({
-                #[cfg(not(feature = "no_function"))]
-                {
-                    self.iter_fn_def().flat_map(|f| f.body.statements.iter())
-                }
-                #[cfg(feature = "no_function")]
-                {
-                    crate::stdlib::iter::empty()
-                }
-            })
-            .for_each(|stmt| stmt.walk(&mut Default::default(), on_node));
+    pub(crate) fn walk(&self, on_node: &mut impl FnMut(&[ASTNode]) -> bool) -> bool {
+        let path = &mut Default::default();
+
+        for stmt in self.statements() {
+            if !stmt.walk(path, on_node) {
+                return false;
+            }
+        }
+        #[cfg(not(feature = "no_function"))]
+        for stmt in self.iter_fn_def().flat_map(|f| f.body.statements.iter()) {
+            if !stmt.walk(path, on_node) {
+                return false;
+            }
+        }
+
+        true
     }
     /// _(INTERNALS)_ Recursively walk the [`AST`], including function bodies (if any).
+    /// Return `false` from the callback to terminate the walk.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]
@@ -1108,6 +1112,7 @@ impl Stmt {
     ///
     /// Only variable declarations (i.e. `let` and `const`) and `import`/`export` statements
     /// are internally pure.
+    #[inline(always)]
     pub fn is_internally_pure(&self) -> bool {
         match self {
             Self::Let(expr, _, _, _) | Self::Const(expr, _, _, _) => expr.is_pure(),
@@ -1125,70 +1130,126 @@ impl Stmt {
     /// Currently this is only true for `return`, `throw`, `break` and `continue`.
     ///
     /// All statements following this statement will essentially be dead code.
+    #[inline(always)]
     pub fn is_control_flow_break(&self) -> bool {
         match self {
             Self::Return(_, _, _) | Self::Break(_) | Self::Continue(_) => true,
-
-            Self::Noop(_)
-            | Self::If(_, _, _)
-            | Self::Switch(_, _, _)
-            | Self::While(_, _, _)
-            | Self::Do(_, _, _, _)
-            | Self::For(_, _, _)
-            | Self::Let(_, _, _, _)
-            | Self::Const(_, _, _, _)
-            | Self::Assignment(_, _)
-            | Self::Block(_, _)
-            | Self::TryCatch(_, _, _)
-            | Self::Expr(_)
-            | Self::Import(_, _, _)
-            | Self::Export(_, _)
-            | Self::Share(_) => false,
+            _ => false,
         }
     }
     /// Recursively walk this statement.
-    pub fn walk<'a>(&'a self, path: &mut Vec<ASTNode<'a>>, on_node: &mut impl FnMut(&[ASTNode])) {
+    /// Return `false` from the callback to terminate the walk.
+    pub fn walk<'a>(
+        &'a self,
+        path: &mut Vec<ASTNode<'a>>,
+        on_node: &mut impl FnMut(&[ASTNode]) -> bool,
+    ) -> bool {
         path.push(self.into());
-        on_node(path);
+
+        if !on_node(path) {
+            return false;
+        }
 
         match self {
-            Self::Let(e, _, _, _) | Self::Const(e, _, _, _) => e.walk(path, on_node),
+            Self::Let(e, _, _, _) | Self::Const(e, _, _, _) => {
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+            }
             Self::If(e, x, _) => {
-                e.walk(path, on_node);
-                x.0.statements.iter().for_each(|s| s.walk(path, on_node));
-                x.1.statements.iter().for_each(|s| s.walk(path, on_node));
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+                for s in &x.0.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
+                for s in &x.1.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
             }
             Self::Switch(e, x, _) => {
-                e.walk(path, on_node);
-                x.0.values()
-                    .flat_map(|block| block.statements.iter())
-                    .for_each(|s| s.walk(path, on_node));
-                x.1.statements.iter().for_each(|s| s.walk(path, on_node));
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+                for s in x.0.values().flat_map(|block| block.statements.iter()) {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
+                for s in &x.1.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
             }
             Self::While(e, s, _) | Self::Do(s, e, _, _) => {
-                e.walk(path, on_node);
-                s.statements.iter().for_each(|s| s.walk(path, on_node));
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+                for s in &s.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
             }
             Self::For(e, x, _) => {
-                e.walk(path, on_node);
-                x.1.statements.iter().for_each(|s| s.walk(path, on_node));
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+                for s in &x.1.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
             }
             Self::Assignment(x, _) => {
-                x.0.walk(path, on_node);
-                x.1.walk(path, on_node);
+                if !x.0.walk(path, on_node) {
+                    return false;
+                }
+                if !x.1.walk(path, on_node) {
+                    return false;
+                }
             }
-            Self::Block(x, _) => x.iter().for_each(|s| s.walk(path, on_node)),
+            Self::Block(x, _) => {
+                for s in x {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
+            }
             Self::TryCatch(x, _, _) => {
-                x.0.statements.iter().for_each(|s| s.walk(path, on_node));
-                x.2.statements.iter().for_each(|s| s.walk(path, on_node));
+                for s in &x.0.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
+                for s in &x.2.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
             }
-            Self::Expr(e) | Self::Return(_, Some(e), _) => e.walk(path, on_node),
+            Self::Expr(e) | Self::Return(_, Some(e), _) => {
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+            }
             #[cfg(not(feature = "no_module"))]
-            Self::Import(e, _, _) => e.walk(path, on_node),
+            Self::Import(e, _, _) => {
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+            }
             _ => (),
         }
 
         path.pop().unwrap();
+
+        true
     }
 }
 
@@ -1703,25 +1764,68 @@ impl Expr {
         }
     }
     /// Recursively walk this expression.
-    #[inline]
-    pub fn walk<'a>(&'a self, path: &mut Vec<ASTNode<'a>>, on_node: &mut impl FnMut(&[ASTNode])) {
+    /// Return `false` from the callback to terminate the walk.
+    pub fn walk<'a>(
+        &'a self,
+        path: &mut Vec<ASTNode<'a>>,
+        on_node: &mut impl FnMut(&[ASTNode]) -> bool,
+    ) -> bool {
         path.push(self.into());
-        on_node(path);
+
+        if !on_node(path) {
+            return false;
+        }
 
         match self {
-            Self::Stmt(x) => x.statements.iter().for_each(|s| s.walk(path, on_node)),
-            Self::Array(x, _) => x.iter().for_each(|e| e.walk(path, on_node)),
-            Self::Map(x, _) => x.iter().for_each(|(_, e)| e.walk(path, on_node)),
-            Self::Index(x, _) | Self::Dot(x, _) | Expr::And(x, _) | Expr::Or(x, _) => {
-                x.lhs.walk(path, on_node);
-                x.rhs.walk(path, on_node);
+            Self::Stmt(x) => {
+                for s in &x.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
             }
-            Self::FnCall(x, _) => x.args.iter().for_each(|e| e.walk(path, on_node)),
-            Self::Custom(x, _) => x.keywords.iter().for_each(|e| e.walk(path, on_node)),
+            Self::Array(x, _) => {
+                for e in x.as_ref() {
+                    if !e.walk(path, on_node) {
+                        return false;
+                    }
+                }
+            }
+            Self::Map(x, _) => {
+                for (_, e) in x.as_ref() {
+                    if !e.walk(path, on_node) {
+                        return false;
+                    }
+                }
+            }
+            Self::Index(x, _) | Self::Dot(x, _) | Expr::And(x, _) | Expr::Or(x, _) => {
+                if !x.lhs.walk(path, on_node) {
+                    return false;
+                }
+                if !x.rhs.walk(path, on_node) {
+                    return false;
+                }
+            }
+            Self::FnCall(x, _) => {
+                for e in &x.args {
+                    if !e.walk(path, on_node) {
+                        return false;
+                    }
+                }
+            }
+            Self::Custom(x, _) => {
+                for e in &x.keywords {
+                    if !e.walk(path, on_node) {
+                        return false;
+                    }
+                }
+            }
             _ => (),
         }
 
         path.pop().unwrap();
+
+        true
     }
 }
 
