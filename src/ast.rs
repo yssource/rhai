@@ -47,7 +47,7 @@ pub enum FnAccess {
 #[derive(Debug, Clone)]
 pub struct ScriptFnDef {
     /// Function body.
-    pub body: Stmt,
+    pub body: StmtBlock,
     /// Encapsulated running environment, if any.
     pub lib: Option<Shared<Module>>,
     /// Encapsulated imported modules.
@@ -61,9 +61,9 @@ pub struct ScriptFnDef {
     pub params: StaticVec<ImmutableString>,
     /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
-    pub externals: Vec<ImmutableString>,
+    pub externals: StaticVec<ImmutableString>,
     /// Function doc-comments (if any).
-    pub comments: Vec<String>,
+    pub comments: StaticVec<String>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -149,7 +149,7 @@ pub struct AST {
     /// Source of the [`AST`].
     source: Option<ImmutableString>,
     /// Global statements.
-    statements: Vec<Stmt>,
+    body: StmtBlock,
     /// Script-defined functions.
     functions: Shared<Module>,
     /// Embedded module resolver, if any.
@@ -162,7 +162,7 @@ impl Default for AST {
     fn default() -> Self {
         Self {
             source: None,
-            statements: Vec::with_capacity(16),
+            body: Default::default(),
             functions: Default::default(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -179,7 +179,10 @@ impl AST {
     ) -> Self {
         Self {
             source: None,
-            statements: statements.into_iter().collect(),
+            body: StmtBlock {
+                statements: statements.into_iter().collect(),
+                pos: Position::NONE,
+            },
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -194,7 +197,10 @@ impl AST {
     ) -> Self {
         Self {
             source: Some(source.into()),
-            statements: statements.into_iter().collect(),
+            body: StmtBlock {
+                statements: statements.into_iter().collect(),
+                pos: Position::NONE,
+            },
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -231,7 +237,7 @@ impl AST {
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
     pub(crate) fn statements(&self) -> &[Stmt] {
-        &self.statements
+        &self.body.statements
     }
     /// _(INTERNALS)_ Get the statements.
     /// Exported under the `internals` feature only.
@@ -239,13 +245,13 @@ impl AST {
     #[deprecated = "this method is volatile and may change"]
     #[inline(always)]
     pub fn statements(&self) -> &[Stmt] {
-        &self.statements
+        &self.body.statements
     }
     /// Get a mutable reference to the statements.
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
-    pub(crate) fn statements_mut(&mut self) -> &mut Vec<Stmt> {
-        &mut self.statements
+    pub(crate) fn statements_mut(&mut self) -> &mut StaticVec<Stmt> {
+        &mut self.body.statements
     }
     /// Get the internal shared [`Module`] containing all script-defined functions.
     #[cfg(not(feature = "internals"))]
@@ -333,7 +339,7 @@ impl AST {
         functions.merge_filtered(&self.functions, &filter);
         Self {
             source: self.source.clone(),
-            statements: Default::default(),
+            body: Default::default(),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: self.resolver.clone(),
@@ -345,7 +351,7 @@ impl AST {
     pub fn clone_statements_only(&self) -> Self {
         Self {
             source: self.source.clone(),
-            statements: self.statements.clone(),
+            body: self.body.clone(),
             functions: Default::default(),
             #[cfg(not(feature = "no_module"))]
             resolver: self.resolver.clone(),
@@ -515,20 +521,19 @@ impl AST {
         filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> Self {
         let Self {
-            statements,
-            functions,
-            ..
+            body, functions, ..
         } = self;
 
-        let ast = match (statements.is_empty(), other.statements.is_empty()) {
+        let merged = match (body.is_empty(), other.body.is_empty()) {
             (false, false) => {
-                let mut statements = statements.clone();
-                statements.extend(other.statements.iter().cloned());
-                statements
+                let mut body = body.clone();
+                body.statements
+                    .extend(other.body.statements.iter().cloned());
+                body
             }
-            (false, true) => statements.clone(),
-            (true, false) => other.statements.clone(),
-            (true, true) => vec![],
+            (false, true) => body.clone(),
+            (true, false) => other.body.clone(),
+            (true, true) => Default::default(),
         };
 
         let source = other.source.clone().or_else(|| self.source.clone());
@@ -537,9 +542,9 @@ impl AST {
         functions.merge_filtered(&other.functions, &filter);
 
         if let Some(source) = source {
-            Self::new_with_source(ast, functions, source)
+            Self::new_with_source(merged.statements, functions, source)
         } else {
-            Self::new(ast, functions)
+            Self::new(merged.statements, functions)
         }
     }
     /// Combine one [`AST`] with another.  The second [`AST`] is consumed.
@@ -599,7 +604,10 @@ impl AST {
         other: Self,
         filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> &mut Self {
-        self.statements.extend(other.statements.into_iter());
+        self.body
+            .statements
+            .extend(other.body.statements.into_iter());
+
         if !other.functions.is_empty() {
             shared_make_mut(&mut self.functions).merge_filtered(&other.functions, &filter);
         }
@@ -673,45 +681,51 @@ impl AST {
     /// Clear all statements in the [`AST`], leaving only function definitions.
     #[inline(always)]
     pub fn clear_statements(&mut self) {
-        self.statements = vec![];
+        self.body = Default::default();
     }
     /// Recursively walk the [`AST`], including function bodies (if any).
+    /// Return `false` from the callback to terminate the walk.
     #[cfg(not(feature = "internals"))]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    pub(crate) fn walk(&self, on_node: &mut impl FnMut(&[ASTNode])) {
-        self.statements()
-            .iter()
-            .chain({
-                #[cfg(not(feature = "no_function"))]
-                {
-                    self.iter_fn_def().map(|f| &f.body)
-                }
-                #[cfg(feature = "no_function")]
-                {
-                    crate::stdlib::iter::empty()
-                }
-            })
-            .for_each(|stmt| stmt.walk(&mut Default::default(), on_node));
+    pub(crate) fn walk(&self, on_node: &mut impl FnMut(&[ASTNode]) -> bool) -> bool {
+        let path = &mut Default::default();
+
+        for stmt in self.statements() {
+            if !stmt.walk(path, on_node) {
+                return false;
+            }
+        }
+        #[cfg(not(feature = "no_function"))]
+        for stmt in self.iter_fn_def().flat_map(|f| f.body.statements.iter()) {
+            if !stmt.walk(path, on_node) {
+                return false;
+            }
+        }
+
+        true
     }
     /// _(INTERNALS)_ Recursively walk the [`AST`], including function bodies (if any).
+    /// Return `false` from the callback to terminate the walk.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]
-    pub fn walk(&self, on_node: &mut impl FnMut(&[ASTNode])) {
-        self.statements()
-            .iter()
-            .chain({
-                #[cfg(not(feature = "no_function"))]
-                {
-                    self.iter_fn_def().map(|f| &f.body)
-                }
-                #[cfg(feature = "no_function")]
-                {
-                    crate::stdlib::iter::empty()
-                }
-            })
-            .for_each(|stmt| stmt.walk(&mut Default::default(), on_node));
+    pub fn walk(&self, on_node: &mut impl FnMut(&[ASTNode]) -> bool) -> bool {
+        let path = &mut Default::default();
+
+        for stmt in self.statements() {
+            if !stmt.walk(path, on_node) {
+                return false;
+            }
+        }
+        #[cfg(not(feature = "no_function"))]
+        for stmt in self.iter_fn_def().flat_map(|f| f.body.statements.iter()) {
+            if !stmt.walk(path, on_node) {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
@@ -804,6 +818,41 @@ impl<'a> From<&'a Expr> for ASTNode<'a> {
     }
 }
 
+/// _(INTERNALS)_ A statements block.
+/// Exported under the `internals` feature only.
+///
+/// # Volatile Data Structure
+///
+/// This type is volatile and may change.
+#[derive(Clone, Hash, Default)]
+pub struct StmtBlock {
+    pub statements: StaticVec<Stmt>,
+    pub pos: Position,
+}
+
+impl StmtBlock {
+    /// Is this statements block empty?
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.statements.is_empty()
+    }
+    /// Number of statements in this statements block.
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.statements.len()
+    }
+}
+
+impl fmt::Debug for StmtBlock {
+    #[inline(always)]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if !self.pos.is_none() {
+            write!(f, "{} @ ", self.pos)?;
+        }
+        fmt::Debug::fmt(&self.statements, f)
+    }
+}
+
 /// _(INTERNALS)_ A statement.
 /// Exported under the `internals` feature only.
 ///
@@ -815,32 +864,36 @@ pub enum Stmt {
     /// No-op.
     Noop(Position),
     /// `if` expr `{` stmt `}` `else` `{` stmt `}`
-    If(Expr, Box<(Stmt, Option<Stmt>)>, Position),
+    If(Expr, Box<(StmtBlock, StmtBlock)>, Position),
     /// `switch` expr `{` literal or _ `=>` stmt `,` ... `}`
     Switch(
         Expr,
         Box<(
-            HashableHashMap<u64, Stmt, StraightHasherBuilder>,
-            Option<Stmt>,
+            HashableHashMap<u64, StmtBlock, StraightHasherBuilder>,
+            StmtBlock,
         )>,
         Position,
     ),
     /// `while` expr `{` stmt `}`
-    While(Option<Expr>, Box<Stmt>, Position),
+    While(Expr, Box<StmtBlock>, Position),
     /// `do` `{` stmt `}` `while`|`until` expr
-    Do(Box<Stmt>, Expr, bool, Position),
+    Do(Box<StmtBlock>, Expr, bool, Position),
     /// `for` id `in` expr `{` stmt `}`
-    For(Expr, Box<(String, Stmt)>, Position),
+    For(Expr, Box<(String, StmtBlock)>, Position),
     /// \[`export`\] `let` id `=` expr
-    Let(Box<Ident>, Option<Expr>, bool, Position),
+    Let(Expr, Ident, bool, Position),
     /// \[`export`\] `const` id `=` expr
-    Const(Box<Ident>, Option<Expr>, bool, Position),
+    Const(Expr, Ident, bool, Position),
     /// expr op`=` expr
     Assignment(Box<(Expr, Expr, Option<OpAssignment>)>, Position),
     /// `{` stmt`;` ... `}`
     Block(Vec<Stmt>, Position),
     /// `try` `{` stmt; ... `}` `catch` `(` var `)` `{` stmt; ... `}`
-    TryCatch(Box<(Stmt, Option<Ident>, Stmt)>, Position, Position),
+    TryCatch(
+        Box<(StmtBlock, Option<Ident>, StmtBlock)>,
+        Position,
+        Position,
+    ),
     /// [expression][Expr]
     Expr(Expr),
     /// `continue`
@@ -848,10 +901,10 @@ pub enum Stmt {
     /// `break`
     Break(Position),
     /// `return`/`throw`
-    Return((ReturnType, Position), Option<Expr>, Position),
+    Return(ReturnType, Option<Expr>, Position),
     /// `import` expr `as` var
     #[cfg(not(feature = "no_module"))]
-    Import(Expr, Option<Box<Ident>>, Position),
+    Import(Expr, Option<Ident>, Position),
     /// `export` var `as` var `,` ...
     #[cfg(not(feature = "no_module"))]
     Export(Vec<(Ident, Option<Ident>)>, Position),
@@ -864,6 +917,27 @@ impl Default for Stmt {
     #[inline(always)]
     fn default() -> Self {
         Self::Noop(Position::NONE)
+    }
+}
+
+impl From<Stmt> for StmtBlock {
+    #[inline(always)]
+    fn from(stmt: Stmt) -> Self {
+        match stmt {
+            Stmt::Block(block, pos) => Self {
+                statements: block.into(),
+                pos,
+            },
+            Stmt::Noop(pos) => Self {
+                statements: Default::default(),
+                pos,
+            },
+            _ => {
+                let pos = stmt.position();
+                let statements = vec![stmt].into();
+                Self { statements, pos }
+            }
+        }
     }
 }
 
@@ -889,7 +963,7 @@ impl Stmt {
             | Self::While(_, _, pos)
             | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
-            | Self::Return((_, pos), _, _)
+            | Self::Return(_, _, pos)
             | Self::Let(_, _, _, pos)
             | Self::Const(_, _, _, pos)
             | Self::TryCatch(_, pos, _) => *pos,
@@ -918,7 +992,7 @@ impl Stmt {
             | Self::While(_, _, pos)
             | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
-            | Self::Return((_, pos), _, _)
+            | Self::Return(_, _, pos)
             | Self::Let(_, _, _, pos)
             | Self::Const(_, _, _, pos)
             | Self::TryCatch(_, pos, _) => *pos = new_pos,
@@ -937,6 +1011,31 @@ impl Stmt {
         }
 
         self
+    }
+    /// Does this statement return a value?
+    pub fn returns_value(&self) -> bool {
+        match self {
+            Self::If(_, _, _) | Self::Switch(_, _, _) | Self::Block(_, _) | Self::Expr(_) => true,
+
+            Self::Noop(_)
+            | Self::While(_, _, _)
+            | Self::Do(_, _, _, _)
+            | Self::For(_, _, _)
+            | Self::TryCatch(_, _, _) => false,
+
+            Self::Let(_, _, _, _)
+            | Self::Const(_, _, _, _)
+            | Self::Assignment(_, _)
+            | Self::Continue(_)
+            | Self::Break(_)
+            | Self::Return(_, _, _) => false,
+
+            #[cfg(not(feature = "no_module"))]
+            Self::Import(_, _, _) | Self::Export(_, _) => false,
+
+            #[cfg(not(feature = "no_closure"))]
+            Self::Share(_) => unreachable!("Stmt::Share should not be parsed"),
+        }
     }
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     pub fn is_self_terminated(&self) -> bool {
@@ -976,23 +1075,29 @@ impl Stmt {
             Self::Expr(expr) => expr.is_pure(),
             Self::If(condition, x, _) => {
                 condition.is_pure()
-                    && x.0.is_pure()
-                    && x.1.as_ref().map(Stmt::is_pure).unwrap_or(true)
+                    && x.0.statements.iter().all(Stmt::is_pure)
+                    && x.1.statements.iter().all(Stmt::is_pure)
             }
             Self::Switch(expr, x, _) => {
                 expr.is_pure()
-                    && x.0.values().all(Stmt::is_pure)
-                    && x.1.as_ref().map(Stmt::is_pure).unwrap_or(true)
+                    && x.0
+                        .values()
+                        .flat_map(|block| block.statements.iter())
+                        .all(Stmt::is_pure)
+                    && x.1.statements.iter().all(Stmt::is_pure)
             }
-            Self::While(Some(condition), block, _) | Self::Do(block, condition, _, _) => {
-                condition.is_pure() && block.is_pure()
+            Self::While(condition, block, _) | Self::Do(block, condition, _, _) => {
+                condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
             }
-            Self::While(None, block, _) => block.is_pure(),
-            Self::For(iterable, x, _) => iterable.is_pure() && x.1.is_pure(),
+            Self::For(iterable, x, _) => {
+                iterable.is_pure() && x.1.statements.iter().all(Stmt::is_pure)
+            }
             Self::Let(_, _, _, _) | Self::Const(_, _, _, _) | Self::Assignment(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::Return(_, _, _) => false,
-            Self::TryCatch(x, _, _) => x.0.is_pure() && x.2.is_pure(),
+            Self::TryCatch(x, _, _) => {
+                x.0.statements.iter().all(Stmt::is_pure) && x.2.statements.iter().all(Stmt::is_pure)
+            }
 
             #[cfg(not(feature = "no_module"))]
             Self::Import(_, _, _) => false,
@@ -1003,53 +1108,150 @@ impl Stmt {
             Self::Share(_) => false,
         }
     }
-    /// Recursively walk this statement.
+    /// Is this statement _pure_ within the containing block?
+    ///
+    /// An internally pure statement only has side effects that disappear outside the block.
+    ///
+    /// Only variable declarations (i.e. `let` and `const`) and `import`/`export` statements
+    /// are internally pure.
     #[inline(always)]
-    pub fn walk<'a>(&'a self, path: &mut Vec<ASTNode<'a>>, on_node: &mut impl FnMut(&[ASTNode])) {
+    pub fn is_internally_pure(&self) -> bool {
+        match self {
+            Self::Let(expr, _, _, _) | Self::Const(expr, _, _, _) => expr.is_pure(),
+
+            #[cfg(not(feature = "no_module"))]
+            Self::Import(expr, _, _) => expr.is_pure(),
+            #[cfg(not(feature = "no_module"))]
+            Self::Export(_, _) => true,
+
+            _ => self.is_pure(),
+        }
+    }
+    /// Does this statement break the current control flow through the containing block?
+    ///
+    /// Currently this is only true for `return`, `throw`, `break` and `continue`.
+    ///
+    /// All statements following this statement will essentially be dead code.
+    #[inline(always)]
+    pub fn is_control_flow_break(&self) -> bool {
+        match self {
+            Self::Return(_, _, _) | Self::Break(_) | Self::Continue(_) => true,
+            _ => false,
+        }
+    }
+    /// Recursively walk this statement.
+    /// Return `false` from the callback to terminate the walk.
+    pub fn walk<'a>(
+        &'a self,
+        path: &mut Vec<ASTNode<'a>>,
+        on_node: &mut impl FnMut(&[ASTNode]) -> bool,
+    ) -> bool {
         path.push(self.into());
-        on_node(path);
+
+        if !on_node(path) {
+            return false;
+        }
 
         match self {
-            Self::Let(_, Some(e), _, _) | Self::Const(_, Some(e), _, _) => e.walk(path, on_node),
+            Self::Let(e, _, _, _) | Self::Const(e, _, _, _) => {
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+            }
             Self::If(e, x, _) => {
-                e.walk(path, on_node);
-                x.0.walk(path, on_node);
-                if let Some(ref s) = x.1 {
-                    s.walk(path, on_node);
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+                for s in &x.0.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
+                for s in &x.1.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
                 }
             }
             Self::Switch(e, x, _) => {
-                e.walk(path, on_node);
-                x.0.values().for_each(|s| s.walk(path, on_node));
-                if let Some(ref s) = x.1 {
-                    s.walk(path, on_node);
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+                for s in x.0.values().flat_map(|block| block.statements.iter()) {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
+                for s in &x.1.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
                 }
             }
-            Self::While(Some(e), s, _) | Self::Do(s, e, _, _) => {
-                e.walk(path, on_node);
-                s.walk(path, on_node);
+            Self::While(e, s, _) | Self::Do(s, e, _, _) => {
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+                for s in &s.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
             }
-            Self::While(None, s, _) => s.walk(path, on_node),
             Self::For(e, x, _) => {
-                e.walk(path, on_node);
-                x.1.walk(path, on_node);
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+                for s in &x.1.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
             }
             Self::Assignment(x, _) => {
-                x.0.walk(path, on_node);
-                x.1.walk(path, on_node);
+                if !x.0.walk(path, on_node) {
+                    return false;
+                }
+                if !x.1.walk(path, on_node) {
+                    return false;
+                }
             }
-            Self::Block(x, _) => x.iter().for_each(|s| s.walk(path, on_node)),
+            Self::Block(x, _) => {
+                for s in x {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
+            }
             Self::TryCatch(x, _, _) => {
-                x.0.walk(path, on_node);
-                x.2.walk(path, on_node);
+                for s in &x.0.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
+                for s in &x.2.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
             }
-            Self::Expr(e) | Self::Return(_, Some(e), _) => e.walk(path, on_node),
+            Self::Expr(e) | Self::Return(_, Some(e), _) => {
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+            }
             #[cfg(not(feature = "no_module"))]
-            Self::Import(e, _, _) => e.walk(path, on_node),
+            Self::Import(e, _, _) => {
+                if !e.walk(path, on_node) {
+                    return false;
+                }
+            }
             _ => (),
         }
 
         path.pop().unwrap();
+
+        true
     }
 }
 
@@ -1102,12 +1304,26 @@ pub struct OpAssignment {
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct FnHash {
     /// Pre-calculated hash for a script-defined function ([`None`] if native functions only).
     script: Option<u64>,
     /// Pre-calculated hash for a native Rust function with no parameter types.
     native: u64,
+}
+
+impl fmt::Debug for FnHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(script) = self.script {
+            if script == self.native {
+                write!(f, "({}=={})", script, self.native)
+            } else {
+                write!(f, "({}, {})", script, self.native)
+            }
+        } else {
+            write!(f, "{}", self.native)
+        }
+    }
 }
 
 impl FnHash {
@@ -1185,6 +1401,7 @@ pub struct FloatWrapper(FLOAT);
 
 #[cfg(not(feature = "no_float"))]
 impl Hash for FloatWrapper {
+    #[inline(always)]
     fn hash<H: crate::stdlib::hash::Hasher>(&self, state: &mut H) {
         self.0.to_ne_bytes().hash(state);
     }
@@ -1192,6 +1409,7 @@ impl Hash for FloatWrapper {
 
 #[cfg(not(feature = "no_float"))]
 impl AsRef<FLOAT> for FloatWrapper {
+    #[inline(always)]
     fn as_ref(&self) -> &FLOAT {
         &self.0
     }
@@ -1199,6 +1417,7 @@ impl AsRef<FLOAT> for FloatWrapper {
 
 #[cfg(not(feature = "no_float"))]
 impl AsMut<FLOAT> for FloatWrapper {
+    #[inline(always)]
     fn as_mut(&mut self) -> &mut FLOAT {
         &mut self.0
     }
@@ -1208,6 +1427,7 @@ impl AsMut<FLOAT> for FloatWrapper {
 impl crate::stdlib::ops::Deref for FloatWrapper {
     type Target = FLOAT;
 
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -1215,6 +1435,7 @@ impl crate::stdlib::ops::Deref for FloatWrapper {
 
 #[cfg(not(feature = "no_float"))]
 impl crate::stdlib::ops::DerefMut for FloatWrapper {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -1222,6 +1443,7 @@ impl crate::stdlib::ops::DerefMut for FloatWrapper {
 
 #[cfg(not(feature = "no_float"))]
 impl fmt::Debug for FloatWrapper {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self, f)
     }
@@ -1229,6 +1451,7 @@ impl fmt::Debug for FloatWrapper {
 
 #[cfg(not(feature = "no_float"))]
 impl fmt::Display for FloatWrapper {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(feature = "no_std")]
         use num_traits::Float;
@@ -1244,6 +1467,7 @@ impl fmt::Display for FloatWrapper {
 
 #[cfg(not(feature = "no_float"))]
 impl From<FLOAT> for FloatWrapper {
+    #[inline(always)]
     fn from(value: FLOAT) -> Self {
         Self::new(value)
     }
@@ -1253,6 +1477,7 @@ impl From<FLOAT> for FloatWrapper {
 impl FromStr for FloatWrapper {
     type Err = <FLOAT as FromStr>::Err;
 
+    #[inline(always)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         FLOAT::from_str(s).map(Into::<Self>::into)
     }
@@ -1260,6 +1485,7 @@ impl FromStr for FloatWrapper {
 
 #[cfg(not(feature = "no_float"))]
 impl FloatWrapper {
+    #[inline(always)]
     pub const fn new(value: FLOAT) -> Self {
         Self(value)
     }
@@ -1298,18 +1524,16 @@ pub enum Expr {
     Unit(Position),
     /// Variable access - (optional index, optional (hash, modules), variable name)
     Variable(Box<(Option<NonZeroUsize>, Option<(u64, NamespaceRef)>, Ident)>),
-    /// Property access - (getter, hash, setter, hash, prop)
-    Property(Box<(ImmutableString, u64, ImmutableString, u64, Ident)>),
-    /// { [statement][Stmt] }
-    Stmt(Box<StaticVec<Stmt>>, Position),
+    /// Property access - ((getter, hash), (setter, hash), prop)
+    Property(Box<((ImmutableString, u64), (ImmutableString, u64), Ident)>),
+    /// { [statement][Stmt] ... }
+    Stmt(Box<StmtBlock>),
     /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
     /// lhs `.` rhs
     Dot(Box<BinaryExpr>, Position),
     /// expr `[` expr `]`
     Index(Box<BinaryExpr>, Position),
-    /// lhs `in` rhs
-    In(Box<BinaryExpr>, Position),
     /// lhs `&&` rhs
     And(Box<BinaryExpr>, Position),
     /// lhs `||` rhs
@@ -1329,6 +1553,7 @@ impl Expr {
     /// Get the [`Dynamic`] value of a constant expression.
     ///
     /// Returns [`None`] if the expression is not constant.
+    #[inline]
     pub fn get_constant_value(&self) -> Option<Dynamic> {
         Some(match self {
             Self::DynamicConstant(x, _) => x.as_ref().clone(),
@@ -1379,6 +1604,7 @@ impl Expr {
         }
     }
     /// Get the [position][Position] of the expression.
+    #[inline]
     pub fn position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_float"))]
@@ -1392,12 +1618,12 @@ impl Expr {
             Self::FnPointer(_, pos) => *pos,
             Self::Array(_, pos) => *pos,
             Self::Map(_, pos) => *pos,
-            Self::Property(x) => (x.4).pos,
-            Self::Stmt(_, pos) => *pos,
+            Self::Property(x) => (x.2).pos,
+            Self::Stmt(x) => x.pos,
             Self::Variable(x) => (x.2).pos,
             Self::FnCall(_, pos) => *pos,
 
-            Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => x.lhs.position(),
+            Self::And(x, _) | Self::Or(x, _) => x.lhs.position(),
 
             Self::Unit(pos) => *pos,
 
@@ -1407,6 +1633,7 @@ impl Expr {
         }
     }
     /// Override the [position][Position] of the expression.
+    #[inline]
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
             #[cfg(not(feature = "no_float"))]
@@ -1421,10 +1648,10 @@ impl Expr {
             Self::Array(_, pos) => *pos = new_pos,
             Self::Map(_, pos) => *pos = new_pos,
             Self::Variable(x) => (x.2).pos = new_pos,
-            Self::Property(x) => (x.4).pos = new_pos,
-            Self::Stmt(_, pos) => *pos = new_pos,
+            Self::Property(x) => (x.2).pos = new_pos,
+            Self::Stmt(x) => x.pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
-            Self::And(_, pos) | Self::Or(_, pos) | Self::In(_, pos) => *pos = new_pos,
+            Self::And(_, pos) | Self::Or(_, pos) => *pos = new_pos,
             Self::Unit(pos) => *pos = new_pos,
             Self::Dot(_, pos) | Self::Index(_, pos) => *pos = new_pos,
             Self::Custom(_, pos) => *pos = new_pos,
@@ -1435,17 +1662,18 @@ impl Expr {
     /// Is the expression pure?
     ///
     /// A pure expression has no side effects.
+    #[inline]
     pub fn is_pure(&self) -> bool {
         match self {
             Self::Array(x, _) => x.iter().all(Self::is_pure),
 
             Self::Map(x, _) => x.iter().map(|(_, v)| v).all(Self::is_pure),
 
-            Self::Index(x, _) | Self::And(x, _) | Self::Or(x, _) | Self::In(x, _) => {
+            Self::Index(x, _) | Self::And(x, _) | Self::Or(x, _) => {
                 x.lhs.is_pure() && x.rhs.is_pure()
             }
 
-            Self::Stmt(x, _) => x.iter().all(Stmt::is_pure),
+            Self::Stmt(x) => x.statements.iter().all(Stmt::is_pure),
 
             Self::Variable(_) => true,
 
@@ -1461,6 +1689,7 @@ impl Expr {
         }
     }
     /// Is the expression a constant?
+    #[inline]
     pub fn is_constant(&self) -> bool {
         match self {
             #[cfg(not(feature = "no_float"))]
@@ -1480,17 +1709,11 @@ impl Expr {
             // An map literal is constant if all items are constant
             Self::Map(x, _) => x.iter().map(|(_, expr)| expr).all(Self::is_constant),
 
-            // Check in expression
-            Self::In(x, _) => match (&x.lhs, &x.rhs) {
-                (Self::StringConstant(_, _), Self::StringConstant(_, _))
-                | (Self::CharConstant(_, _), Self::StringConstant(_, _)) => true,
-                _ => false,
-            },
-
             _ => false,
         }
     }
     /// Is a particular [token][Token] allowed as a postfix operator to this expression?
+    #[inline]
     pub fn is_valid_postfix(&self, token: &Token) -> bool {
         match token {
             #[cfg(not(feature = "no_object"))]
@@ -1507,14 +1730,13 @@ impl Expr {
             | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::FnPointer(_, _)
-            | Self::In(_, _)
             | Self::And(_, _)
             | Self::Or(_, _)
             | Self::Unit(_) => false,
 
             Self::StringConstant(_, _)
             | Self::FnCall(_, _)
-            | Self::Stmt(_, _)
+            | Self::Stmt(_)
             | Self::Dot(_, _)
             | Self::Index(_, _)
             | Self::Array(_, _)
@@ -1544,29 +1766,68 @@ impl Expr {
         }
     }
     /// Recursively walk this expression.
-    #[inline(always)]
-    pub fn walk<'a>(&'a self, path: &mut Vec<ASTNode<'a>>, on_node: &mut impl FnMut(&[ASTNode])) {
+    /// Return `false` from the callback to terminate the walk.
+    pub fn walk<'a>(
+        &'a self,
+        path: &mut Vec<ASTNode<'a>>,
+        on_node: &mut impl FnMut(&[ASTNode]) -> bool,
+    ) -> bool {
         path.push(self.into());
-        on_node(path);
+
+        if !on_node(path) {
+            return false;
+        }
 
         match self {
-            Self::Stmt(x, _) => x.iter().for_each(|s| s.walk(path, on_node)),
-            Self::Array(x, _) => x.iter().for_each(|e| e.walk(path, on_node)),
-            Self::Map(x, _) => x.iter().for_each(|(_, e)| e.walk(path, on_node)),
-            Self::Index(x, _)
-            | Self::Dot(x, _)
-            | Expr::In(x, _)
-            | Expr::And(x, _)
-            | Expr::Or(x, _) => {
-                x.lhs.walk(path, on_node);
-                x.rhs.walk(path, on_node);
+            Self::Stmt(x) => {
+                for s in &x.statements {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
+                }
             }
-            Self::FnCall(x, _) => x.args.iter().for_each(|e| e.walk(path, on_node)),
-            Self::Custom(x, _) => x.keywords.iter().for_each(|e| e.walk(path, on_node)),
+            Self::Array(x, _) => {
+                for e in x.as_ref() {
+                    if !e.walk(path, on_node) {
+                        return false;
+                    }
+                }
+            }
+            Self::Map(x, _) => {
+                for (_, e) in x.as_ref() {
+                    if !e.walk(path, on_node) {
+                        return false;
+                    }
+                }
+            }
+            Self::Index(x, _) | Self::Dot(x, _) | Expr::And(x, _) | Expr::Or(x, _) => {
+                if !x.lhs.walk(path, on_node) {
+                    return false;
+                }
+                if !x.rhs.walk(path, on_node) {
+                    return false;
+                }
+            }
+            Self::FnCall(x, _) => {
+                for e in &x.args {
+                    if !e.walk(path, on_node) {
+                        return false;
+                    }
+                }
+            }
+            Self::Custom(x, _) => {
+                for e in &x.keywords {
+                    if !e.walk(path, on_node) {
+                        return false;
+                    }
+                }
+            }
             _ => (),
         }
 
         path.pop().unwrap();
+
+        true
     }
 }
 
@@ -1583,8 +1844,8 @@ mod tests {
         assert_eq!(size_of::<Position>(), 4);
         assert_eq!(size_of::<ast::Expr>(), 16);
         assert_eq!(size_of::<Option<ast::Expr>>(), 16);
-        assert_eq!(size_of::<ast::Stmt>(), 32);
-        assert_eq!(size_of::<Option<ast::Stmt>>(), 32);
+        assert_eq!(size_of::<ast::Stmt>(), 40);
+        assert_eq!(size_of::<Option<ast::Stmt>>(), 40);
         assert_eq!(size_of::<FnPtr>(), 32);
         assert_eq!(size_of::<Scope>(), 48);
         assert_eq!(size_of::<LexError>(), 56);

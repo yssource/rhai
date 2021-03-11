@@ -74,14 +74,6 @@ mod string_functions {
         }
     }
 
-    #[rhai_fn(name = "contains")]
-    pub fn contains_char(string: &str, character: char) -> bool {
-        string.contains(character)
-    }
-    pub fn contains(string: &str, find_string: &str) -> bool {
-        string.contains(find_string)
-    }
-
     #[rhai_fn(name = "index_of")]
     pub fn index_of_char_starting_from(string: &str, character: char, start: INT) -> INT {
         let start = if start < 0 {

@@ -39,6 +39,7 @@ pub enum FnNamespace {
 }
 
 impl Default for FnNamespace {
+    #[inline(always)]
     fn default() -> Self {
         Self::Internal
     }
@@ -150,6 +151,7 @@ pub struct Module {
 }
 
 impl Default for Module {
+    #[inline(always)]
     fn default() -> Self {
         Self {
             id: None,
@@ -226,6 +228,7 @@ impl AsRef<Module> for Module {
 impl<M: AsRef<Module>> Add<M> for &Module {
     type Output = Module;
 
+    #[inline(always)]
     fn add(self, rhs: M) -> Self::Output {
         let mut module = self.clone();
         module.merge(rhs.as_ref());
@@ -236,6 +239,7 @@ impl<M: AsRef<Module>> Add<M> for &Module {
 impl<M: AsRef<Module>> Add<M> for Module {
     type Output = Self;
 
+    #[inline(always)]
     fn add(mut self, rhs: M) -> Self::Output {
         self.merge(rhs.as_ref());
         self
@@ -243,6 +247,7 @@ impl<M: AsRef<Module>> Add<M> for Module {
 }
 
 impl<M: Into<Module>> AddAssign<M> for Module {
+    #[inline(always)]
     fn add_assign(&mut self, rhs: M) {
         self.combine(rhs.into());
     }
@@ -1953,16 +1958,19 @@ impl Module {
     }
 
     /// Does a type iterator exist in the entire module tree?
+    #[inline(always)]
     pub fn contains_qualified_iter(&self, id: TypeId) -> bool {
         self.all_type_iterators.contains_key(&id)
     }
 
     /// Does a type iterator exist in the module?
+    #[inline(always)]
     pub fn contains_iter(&self, id: TypeId) -> bool {
         self.type_iterators.contains_key(&id)
     }
 
     /// Set a type iterator into the [`Module`].
+    #[inline(always)]
     pub fn set_iter(&mut self, typ: TypeId, func: IteratorFn) -> &mut Self {
         self.type_iterators.insert(typ, func);
         self.indexed = false;
@@ -1971,6 +1979,7 @@ impl Module {
     }
 
     /// Set a type iterator into the [`Module`].
+    #[inline(always)]
     pub fn set_iterable<T>(&mut self) -> &mut Self
     where
         T: Variant + Clone + IntoIterator,
@@ -1982,6 +1991,7 @@ impl Module {
     }
 
     /// Set an iterator type into the [`Module`] as a type iterator.
+    #[inline(always)]
     pub fn set_iterator<T>(&mut self) -> &mut Self
     where
         T: Variant + Clone + Iterator,
@@ -1993,11 +2003,13 @@ impl Module {
     }
 
     /// Get the specified type iterator.
+    #[inline(always)]
     pub(crate) fn get_qualified_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.all_type_iterators.get(&id).cloned()
     }
 
     /// Get the specified type iterator.
+    #[inline(always)]
     pub(crate) fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.type_iterators.get(&id).cloned()
     }
@@ -2021,32 +2033,41 @@ pub struct NamespaceRef {
 }
 
 impl fmt::Debug for NamespaceRef {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.path, f)?;
-
         if let Some(index) = self.index {
-            write!(f, " -> {}", index)
-        } else {
-            Ok(())
+            write!(f, "{} -> ", index)?;
         }
+
+        f.write_str(
+            &self
+                .path
+                .iter()
+                .map(|Ident { name, .. }| name.as_str())
+                .collect::<Vec<_>>()
+                .join("::"),
+        )
     }
 }
 
 impl Deref for NamespaceRef {
     type Target = StaticVec<Ident>;
 
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.path
     }
 }
 
 impl DerefMut for NamespaceRef {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.path
     }
 }
 
 impl fmt::Display for NamespaceRef {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for Ident { name, .. } in self.path.iter() {
             write!(f, "{}{}", name, Token::DoubleColon.syntax())?;
@@ -2056,6 +2077,7 @@ impl fmt::Display for NamespaceRef {
 }
 
 impl From<StaticVec<Ident>> for NamespaceRef {
+    #[inline(always)]
     fn from(path: StaticVec<Ident>) -> Self {
         Self { index: None, path }
     }
@@ -2063,11 +2085,13 @@ impl From<StaticVec<Ident>> for NamespaceRef {
 
 impl NamespaceRef {
     /// Get the [`Scope`][crate::Scope] index offset.
+    #[inline(always)]
     pub(crate) fn index(&self) -> Option<NonZeroUsize> {
         self.index
     }
     /// Set the [`Scope`][crate::Scope] index offset.
     #[cfg(not(feature = "no_module"))]
+    #[inline(always)]
     pub(crate) fn set_index(&mut self, index: Option<NonZeroUsize>) {
         self.index = index
     }

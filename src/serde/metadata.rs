@@ -151,7 +151,7 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
                 }
                 #[cfg(not(feature = "no_function"))]
                 {
-                    info.func.get_fn_def().comments.clone()
+                    info.func.get_fn_def().comments.to_vec()
                 }
             } else {
                 Default::default()

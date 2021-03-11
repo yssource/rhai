@@ -493,6 +493,10 @@ impl Engine {
 
         self.inc_operations(state, pos)?;
 
+        if fn_def.body.is_empty() {
+            return Ok(Dynamic::UNIT);
+        }
+
         // Check for stack overflow
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
@@ -539,10 +543,10 @@ impl Engine {
         }
 
         // Evaluate the function
-        let stmt = &fn_def.body;
+        let body = &fn_def.body.statements;
 
         let result = self
-            .eval_stmt(scope, mods, state, unified_lib, this_ptr, stmt, level)
+            .eval_stmt_block(scope, mods, state, unified_lib, this_ptr, body, true, level)
             .or_else(|err| match *err {
                 // Convert return statement to return value
                 EvalAltResult::Return(x, _) => Ok(x),
@@ -722,6 +726,10 @@ impl Engine {
 
             let func = func.get_fn_def();
 
+            if func.body.is_empty() {
+                return Ok((Dynamic::UNIT, false));
+            }
+
             let scope: &mut Scope = &mut Default::default();
 
             // Move captured variables into scope
@@ -831,6 +839,7 @@ impl Engine {
     }
 
     /// Evaluate a text script in place - used primarily for 'eval'.
+    #[inline]
     fn eval_script_expr_in_place(
         &self,
         scope: &mut Scope,
@@ -884,7 +893,7 @@ impl Engine {
         fn_name: &str,
         mut hash: FnHash,
         target: &mut crate::engine::Target,
-        mut call_args: StaticVec<Dynamic>,
+        (call_args, call_arg_positions): &mut (StaticVec<Dynamic>, StaticVec<Position>),
         pos: Position,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
@@ -902,7 +911,7 @@ impl Engine {
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hashes
-                let hash = FnHash::from_script(calc_fn_hash(empty(), fn_name, args_len));
+                let new_hash = FnHash::from_script(calc_fn_hash(empty(), fn_name, args_len));
                 // Arguments are passed as-is, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
                 let mut arg_values = curry
@@ -913,17 +922,32 @@ impl Engine {
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, hash, args, false, false, pos, None, level,
+                    mods, state, lib, fn_name, new_hash, args, false, false, pos, None, level,
                 )
             }
-            KEYWORD_FN_PTR_CALL if call_args.len() > 0 && call_args[0].is::<FnPtr>() => {
+            KEYWORD_FN_PTR_CALL => {
+                if call_args.len() > 0 {
+                    if !call_args[0].is::<FnPtr>() {
+                        return Err(self.make_type_mismatch_err::<FnPtr>(
+                            self.map_type_name(obj.type_name()),
+                            call_arg_positions[0],
+                        ));
+                    }
+                } else {
+                    return Err(self.make_type_mismatch_err::<FnPtr>(
+                        self.map_type_name(obj.type_name()),
+                        pos,
+                    ));
+                }
+
                 // FnPtr call on object
                 let fn_ptr = call_args.remove(0).cast::<FnPtr>();
+                call_arg_positions.remove(0);
                 // Redirect function name
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hash
-                let hash = FnHash::from_script_and_native(
+                let new_hash = FnHash::from_script_and_native(
                     calc_fn_hash(empty(), fn_name, args_len),
                     calc_fn_hash(empty(), fn_name, args_len + 1),
                 );
@@ -937,22 +961,34 @@ impl Engine {
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, hash, args, is_ref, true, pos, None, level,
+                    mods, state, lib, fn_name, new_hash, args, is_ref, true, pos, None, level,
                 )
             }
-            KEYWORD_FN_PTR_CURRY if obj.is::<FnPtr>() => {
-                // Curry call
+            KEYWORD_FN_PTR_CURRY => {
+                if !obj.is::<FnPtr>() {
+                    return Err(self.make_type_mismatch_err::<FnPtr>(
+                        self.map_type_name(obj.type_name()),
+                        pos,
+                    ));
+                }
+
                 let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
+
+                // Curry call
                 Ok((
-                    FnPtr::new_unchecked(
-                        fn_ptr.get_fn_name().clone(),
-                        fn_ptr
-                            .curry()
-                            .iter()
-                            .cloned()
-                            .chain(call_args.into_iter())
-                            .collect(),
-                    )
+                    if call_args.is_empty() {
+                        fn_ptr.clone()
+                    } else {
+                        FnPtr::new_unchecked(
+                            fn_ptr.get_fn_name().clone(),
+                            fn_ptr
+                                .curry()
+                                .iter()
+                                .cloned()
+                                .chain(call_args.iter_mut().map(|v| mem::take(v)))
+                                .collect(),
+                        )
+                    }
                     .into(),
                     false,
                 ))
@@ -981,7 +1017,10 @@ impl Engine {
                                 .iter()
                                 .cloned()
                                 .enumerate()
-                                .for_each(|(i, v)| call_args.insert(i, v));
+                                .for_each(|(i, v)| {
+                                    call_args.insert(i, v);
+                                    call_arg_positions.insert(i, Position::NONE);
+                                });
                             // Recalculate the hash based on the new function name and new arguments
                             hash = FnHash::from_script_and_native(
                                 calc_fn_hash(empty(), fn_name, call_args.len()),
@@ -1065,7 +1104,6 @@ impl Engine {
                     FnHash::from_native(calc_fn_hash(empty(), name, args_len))
                 };
             }
-
             // Handle Fn()
             KEYWORD_FN_PTR if args_expr.len() == 1 => {
                 // Fn - only in function call style
@@ -1361,22 +1399,27 @@ impl Engine {
         match func {
             #[cfg(not(feature = "no_function"))]
             Some(f) if f.is_script() => {
-                let args = args.as_mut();
-                let new_scope = &mut Default::default();
-                let fn_def = f.get_fn_def().clone();
+                let fn_def = f.get_fn_def();
 
-                let mut source = module.id_raw().cloned();
-                mem::swap(&mut state.source, &mut source);
+                if fn_def.body.is_empty() {
+                    Ok(Dynamic::UNIT)
+                } else {
+                    let args = args.as_mut();
+                    let new_scope = &mut Default::default();
 
-                let level = level + 1;
+                    let mut source = module.id_raw().cloned();
+                    mem::swap(&mut state.source, &mut source);
 
-                let result = self.call_script_fn(
-                    new_scope, mods, state, lib, &mut None, &fn_def, args, pos, level,
-                );
+                    let level = level + 1;
 
-                state.source = source;
+                    let result = self.call_script_fn(
+                        new_scope, mods, state, lib, &mut None, fn_def, args, pos, level,
+                    );
 
-                result
+                    state.source = source;
+
+                    result
+                }
             }
 
             Some(f) if f.is_plugin_fn() => f

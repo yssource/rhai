@@ -38,6 +38,7 @@ pub enum LexError {
 impl Error for LexError {}
 
 impl fmt::Display for LexError {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnexpectedInput(s) => write!(f, "Unexpected '{}'", s),
@@ -293,7 +294,7 @@ pub struct ParseError(pub Box<ParseErrorType>, pub Position);
 impl Error for ParseError {}
 
 impl fmt::Display for ParseError {
-    #[inline]
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0, f)?;
 

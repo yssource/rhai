@@ -4,6 +4,9 @@ Rhai Release Notes
 Version 0.19.14
 ===============
 
+This version runs faster due to optimizations done on AST node structures. It also fixes a number of
+panic bugs related to passing shared values as function call arguments.
+
 Bug fixes
 ---------
 
@@ -27,18 +30,24 @@ Breaking changes
 * `Module::update_fn_metadata` input parameter is changed.
 * Function keywords (e.g. `type_of`, `eval`, `Fn`) can no longer be overloaded. It is more trouble than worth. To disable these keywords, use `Engine::disable_symbol`.
 * `is_def_var` and `is_def_fn` are now reserved keywords.
-* `Engine::id` field is removed.
+* `Engine::id` field is removed because it is never used.
 * `num-traits` is now a required dependency.
+* The `in` operator is now implemented on top of the `contains` function and is no longer restricted to a few specific types.
+* `EvalAltResult::ErrorInExpr` is removed because the `in` operator now calls `contains`.
+* The methods `AST::walk`, `Expr::walk`, `Stmt::walk` and `ASTNode::walk` and the callbacks they take now return `bool` to optionally terminate the recursive walk.
 
 Enhancements
 ------------
 
+* Layout of AST nodes is optimized to reduce redirections, so speed is improved.
 * Function calls are more optimized and should now run faster.
 * `range` function now supports negative step and decreasing streams (i.e. to < from).
 * More information is provided to the error variable captured by the `catch` statement in an _object map_.
 * Previously, `private` functions in an `AST` cannot be called with `call_fn` etc. This is inconvenient when trying to call a function inside a script which also serves as a loadable module exporting part (but not all) of the functions. Now, all functions (`private` or not) can be called in an `AST`. The `private` keyword is relegated to preventing a function from being exported.
 * `Dynamic::as_unit` just for completeness sake.
 * `bytes` method added for strings to get length quickly (if the string is ASCII-only).
+* `FileModuleResolver` can now enable/disable caching.
+* Recursively walking an `AST` can now be terminated in the middle.
 
 
 Version 0.19.13

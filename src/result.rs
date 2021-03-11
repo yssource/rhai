@@ -58,8 +58,6 @@ pub enum EvalAltResult {
     /// Trying to index into a type that is not an array, an object map, or a string, and has no
     /// indexer function defined. Wrapped value is the type name.
     ErrorIndexingType(String, Position),
-    /// Invalid arguments for `in` operator.
-    ErrorInExpr(Position),
     /// The `for` statement encounters a type that is not an iterator.
     ErrorFor(Position),
     /// Data race detected when accessing a variable. Wrapped value is the variable name.
@@ -122,7 +120,6 @@ impl EvalAltResult {
             Self::ErrorDataRace(_, _) => "Data race detected when accessing variable",
             Self::ErrorAssignmentToConstant(_, _) => "Cannot modify a constant",
             Self::ErrorMismatchOutputType(_, _, _) => "Output type is incorrect",
-            Self::ErrorInExpr(_) => "Malformed 'in' expression",
             Self::ErrorDotExpr(_, _) => "Malformed dot expression",
             Self::ErrorArithmetic(_, _) => "Arithmetic error",
             Self::ErrorTooManyOperations(_) => "Too many operations",
@@ -182,7 +179,6 @@ impl fmt::Display for EvalAltResult {
 
             Self::ErrorUnboundThis(_)
             | Self::ErrorFor(_)
-            | Self::ErrorInExpr(_)
             | Self::ErrorDotExpr(_, _)
             | Self::ErrorTooManyOperations(_)
             | Self::ErrorTooManyModules(_)
@@ -305,7 +301,6 @@ impl EvalAltResult {
             | Self::ErrorDataRace(_, _)
             | Self::ErrorAssignmentToConstant(_, _)
             | Self::ErrorMismatchOutputType(_, _, _)
-            | Self::ErrorInExpr(_)
             | Self::ErrorDotExpr(_, _)
             | Self::ErrorArithmetic(_, _)
             | Self::ErrorRuntime(_, _) => true,
@@ -362,7 +357,6 @@ impl EvalAltResult {
             | Self::ErrorParsing(_, _)
             | Self::ErrorUnboundThis(_)
             | Self::ErrorFor(_)
-            | Self::ErrorInExpr(_)
             | Self::ErrorArithmetic(_, _)
             | Self::ErrorTooManyOperations(_)
             | Self::ErrorTooManyModules(_)
@@ -430,7 +424,6 @@ impl EvalAltResult {
             | Self::ErrorDataRace(_, pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, _, pos)
-            | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)
             | Self::ErrorTooManyOperations(pos)
@@ -471,7 +464,6 @@ impl EvalAltResult {
             | Self::ErrorDataRace(_, pos)
             | Self::ErrorAssignmentToConstant(_, pos)
             | Self::ErrorMismatchOutputType(_, _, pos)
-            | Self::ErrorInExpr(pos)
             | Self::ErrorDotExpr(_, pos)
             | Self::ErrorArithmetic(_, pos)
             | Self::ErrorTooManyOperations(pos)

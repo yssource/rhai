@@ -41,6 +41,7 @@ use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 pub struct FileModuleResolver {
     base_path: PathBuf,
     extension: String,
+    cache_enabled: bool,
 
     #[cfg(not(feature = "sync"))]
     cache: crate::stdlib::cell::RefCell<HashMap<PathBuf, Shared<Module>>>,
@@ -101,6 +102,7 @@ impl FileModuleResolver {
         Self {
             base_path: path.into(),
             extension: extension.into(),
+            cache_enabled: true,
             cache: Default::default(),
         }
     }
@@ -152,9 +154,25 @@ impl FileModuleResolver {
         self
     }
 
+    /// Enable/disable the cache.
+    #[inline(always)]
+    pub fn enable_cache(&mut self, enable: bool) -> &mut Self {
+        self.cache_enabled = enable;
+        self
+    }
+    /// Is the cache enabled?
+    #[inline(always)]
+    pub fn is_cache_enabled(&self) -> bool {
+        self.cache_enabled
+    }
+
     /// Is a particular path cached?
     #[inline(always)]
     pub fn is_cached(&self, path: &str) -> bool {
+        if !self.cache_enabled {
+            return false;
+        }
+
         let file_path = self.get_file_path(path);
 
         #[cfg(not(feature = "sync"))]
@@ -211,7 +229,7 @@ impl ModuleResolver for FileModuleResolver {
         let file_path = self.get_file_path(path);
 
         // See if it is cached
-        {
+        if self.is_cache_enabled() {
             #[cfg(not(feature = "sync"))]
             let c = self.cache.borrow();
             #[cfg(feature = "sync")]
@@ -242,10 +260,12 @@ impl ModuleResolver for FileModuleResolver {
             .into();
 
         // Put it into the cache
-        #[cfg(not(feature = "sync"))]
-        self.cache.borrow_mut().insert(file_path, m.clone());
-        #[cfg(feature = "sync")]
-        self.cache.write().unwrap().insert(file_path, m.clone());
+        if self.is_cache_enabled() {
+            #[cfg(not(feature = "sync"))]
+            self.cache.borrow_mut().insert(file_path, m.clone());
+            #[cfg(feature = "sync")]
+            self.cache.write().unwrap().insert(file_path, m.clone());
+        }
 
         Ok(m)
     }
