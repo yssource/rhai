@@ -1006,6 +1006,31 @@ impl Stmt {
 
         self
     }
+    /// Does this statement return a value?
+    pub fn returns_value(&self) -> bool {
+        match self {
+            Self::If(_, _, _) | Self::Switch(_, _, _) | Self::Block(_, _) | Self::Expr(_) => true,
+
+            Self::Noop(_)
+            | Self::While(_, _, _)
+            | Self::Do(_, _, _, _)
+            | Self::For(_, _, _)
+            | Self::TryCatch(_, _, _) => false,
+
+            Self::Let(_, _, _, _)
+            | Self::Const(_, _, _, _)
+            | Self::Assignment(_, _)
+            | Self::Continue(_)
+            | Self::Break(_)
+            | Self::Return(_, _, _) => false,
+
+            #[cfg(not(feature = "no_module"))]
+            Self::Import(_, _, _) | Self::Export(_, _) => false,
+
+            #[cfg(not(feature = "no_closure"))]
+            Self::Share(_) => unreachable!("Stmt::Share should not be parsed"),
+        }
+    }
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     pub fn is_self_terminated(&self) -> bool {
         match self {
@@ -1077,8 +1102,51 @@ impl Stmt {
             Self::Share(_) => false,
         }
     }
+    /// Is this statement _pure_ within the containing block?
+    ///
+    /// An internally pure statement only has side effects that disappear outside the block.
+    ///
+    /// Only variable declarations (i.e. `let` and `const`) and `import`/`export` statements
+    /// are internally pure.
+    pub fn is_internally_pure(&self) -> bool {
+        match self {
+            Self::Let(expr, _, _, _) | Self::Const(expr, _, _, _) => expr.is_pure(),
+
+            #[cfg(not(feature = "no_module"))]
+            Self::Import(expr, _, _) => expr.is_pure(),
+            #[cfg(not(feature = "no_module"))]
+            Self::Export(_, _) => true,
+
+            _ => self.is_pure(),
+        }
+    }
+    /// Does this statement break the current control flow through the containing block?
+    ///
+    /// Currently this is only true for `return`, `throw`, `break` and `continue`.
+    ///
+    /// All statements following this statement will essentially be dead code.
+    pub fn is_control_flow_break(&self) -> bool {
+        match self {
+            Self::Return(_, _, _) | Self::Break(_) | Self::Continue(_) => true,
+
+            Self::Noop(_)
+            | Self::If(_, _, _)
+            | Self::Switch(_, _, _)
+            | Self::While(_, _, _)
+            | Self::Do(_, _, _, _)
+            | Self::For(_, _, _)
+            | Self::Let(_, _, _, _)
+            | Self::Const(_, _, _, _)
+            | Self::Assignment(_, _)
+            | Self::Block(_, _)
+            | Self::TryCatch(_, _, _)
+            | Self::Expr(_)
+            | Self::Import(_, _, _)
+            | Self::Export(_, _)
+            | Self::Share(_) => false,
+        }
+    }
     /// Recursively walk this statement.
-    #[inline(always)]
     pub fn walk<'a>(&'a self, path: &mut Vec<ASTNode<'a>>, on_node: &mut impl FnMut(&[ASTNode])) {
         path.push(self.into());
         on_node(path);
