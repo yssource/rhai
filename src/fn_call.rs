@@ -539,7 +539,10 @@ impl Engine {
 
         #[cfg(not(feature = "no_module"))]
         if !fn_def.mods.is_empty() {
-            mods.extend(fn_def.mods.iter_raw().map(|(n, m)| (n.clone(), m.clone())));
+            fn_def
+                .mods
+                .iter_raw()
+                .for_each(|(n, m)| mods.push(n.clone(), m.clone()));
         }
 
         // Evaluate the function

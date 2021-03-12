@@ -1836,7 +1836,7 @@ impl Module {
         // Collect a particular module.
         fn index_module<'a>(
             module: &'a Module,
-            qualifiers: &mut Vec<&'a str>,
+            path: &mut Vec<&'a str>,
             variables: &mut HashMap<u64, Dynamic, StraightHasherBuilder>,
             functions: &mut HashMap<u64, CallableFunction, StraightHasherBuilder>,
             type_iterators: &mut HashMap<TypeId, IteratorFn>,
@@ -1845,16 +1845,16 @@ impl Module {
 
             module.modules.iter().for_each(|(name, m)| {
                 // Index all the sub-modules first.
-                qualifiers.push(name);
-                if index_module(m, qualifiers, variables, functions, type_iterators) {
+                path.push(name);
+                if index_module(m, path, variables, functions, type_iterators) {
                     contains_indexed_global_functions = true;
                 }
-                qualifiers.pop();
+                path.pop();
             });
 
             // Index all variables
             module.variables.iter().for_each(|(var_name, value)| {
-                let hash_var = crate::calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, 0);
+                let hash_var = crate::calc_fn_hash(path.iter().map(|&v| v), var_name, 0);
                 variables.insert(hash_var, value.clone());
             });
 
@@ -1880,15 +1880,12 @@ impl Module {
                 }
 
                 if !f.func.is_script() {
-                    let hash_qualified_fn = calc_native_fn_hash(
-                        qualifiers.iter().cloned(),
-                        f.name.as_str(),
-                        &f.param_types,
-                    );
+                    let hash_qualified_fn =
+                        calc_native_fn_hash(path.iter().cloned(), f.name.as_str(), &f.param_types);
                     functions.insert(hash_qualified_fn, f.func.clone());
                 } else if cfg!(not(feature = "no_function")) {
                     let hash_qualified_script =
-                        crate::calc_fn_hash(qualifiers.iter().cloned(), f.name.as_str(), f.params);
+                        crate::calc_fn_hash(path.iter().cloned(), f.name.as_str(), f.params);
                     functions.insert(hash_qualified_script, f.func.clone());
                 }
             });
@@ -1897,16 +1894,16 @@ impl Module {
         }
 
         if !self.indexed {
-            let mut qualifiers = Vec::with_capacity(4);
+            let mut path = Vec::with_capacity(4);
             let mut variables = HashMap::with_capacity_and_hasher(16, StraightHasherBuilder);
             let mut functions = HashMap::with_capacity_and_hasher(256, StraightHasherBuilder);
             let mut type_iterators = HashMap::with_capacity(16);
 
-            qualifiers.push("root");
+            path.push("root");
 
             self.contains_indexed_global_functions = index_module(
                 self,
-                &mut qualifiers,
+                &mut path,
                 &mut variables,
                 &mut functions,
                 &mut type_iterators,

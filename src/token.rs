@@ -840,8 +840,8 @@ pub fn parse_string_literal(
     pos: &mut Position,
     enclosing_char: char,
 ) -> Result<String, (LexError, Position)> {
-    let mut result: StaticVec<char> = Default::default();
-    let mut escape: StaticVec<char> = Default::default();
+    let mut result: smallvec::SmallVec<[char; 16]> = Default::default();
+    let mut escape: smallvec::SmallVec<[char; 12]> = Default::default();
 
     let start = *pos;
 
@@ -1109,7 +1109,7 @@ fn get_next_token_inner(
 
             // digit ...
             ('0'..='9', _) => {
-                let mut result: StaticVec<char> = Default::default();
+                let mut result: smallvec::SmallVec<[char; 16]> = Default::default();
                 let mut radix_base: Option<u32> = None;
                 let mut valid: fn(char) -> bool = is_numeric_digit;
                 result.push(c);
@@ -1596,7 +1596,7 @@ fn get_identifier(
     start_pos: Position,
     first_char: char,
 ) -> Option<(Token, Position)> {
-    let mut result: StaticVec<_> = Default::default();
+    let mut result: smallvec::SmallVec<[char; 8]> = Default::default();
     result.push(first_char);
 
     while let Some(next_char) = stream.peek_next() {
@@ -1691,10 +1691,10 @@ pub fn is_id_continue(x: char) -> bool {
 pub struct MultiInputsStream<'a> {
     /// Buffered character, if any.
     buf: Option<char>,
-    /// The input character streams.
-    streams: StaticVec<Peekable<Chars<'a>>>,
     /// The current stream index.
     index: usize,
+    /// The input character streams.
+    streams: StaticVec<Peekable<Chars<'a>>>,
 }
 
 impl InputStream for MultiInputsStream<'_> {
