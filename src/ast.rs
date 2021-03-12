@@ -658,7 +658,7 @@ impl AST {
     pub(crate) fn iter_fn_def(&self) -> impl Iterator<Item = &ScriptFnDef> {
         self.functions
             .iter_script_fn()
-            .map(|(_, _, _, _, fn_def)| fn_def)
+            .map(|(_, _, _, _, fn_def)| fn_def.as_ref())
     }
     /// Iterate through all function definitions.
     ///
@@ -668,7 +668,7 @@ impl AST {
     pub fn iter_functions<'a>(&'a self) -> impl Iterator<Item = ScriptFnMetadata> + 'a {
         self.functions
             .iter_script_fn()
-            .map(|(_, _, _, _, fn_def)| fn_def.into())
+            .map(|(_, _, _, _, fn_def)| fn_def.as_ref().into())
     }
     /// Clear all function definitions in the [`AST`].
     ///

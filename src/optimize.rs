@@ -849,7 +849,7 @@ pub fn optimize_into_ast(
     engine: &Engine,
     scope: &Scope,
     mut statements: Vec<Stmt>,
-    _functions: Vec<crate::ast::ScriptFnDef>,
+    _functions: Vec<crate::Shared<crate::ast::ScriptFnDef>>,
     optimization_level: OptimizationLevel,
 ) -> AST {
     let level = if cfg!(feature = "no_optimize") {
@@ -888,7 +888,9 @@ pub fn optimize_into_ast(
 
             _functions
                 .into_iter()
-                .map(|mut fn_def| {
+                .map(|fn_def| {
+                    let mut fn_def = crate::fn_native::shared_take_or_clone(fn_def);
+
                     let pos = fn_def.body.pos;
 
                     let mut body = fn_def.body.statements.into_vec();

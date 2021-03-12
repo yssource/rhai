@@ -26,7 +26,7 @@ use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream}
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
     calc_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType, Position,
-    Scope, StaticVec, AST,
+    Scope, Shared, StaticVec, AST,
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -37,7 +37,7 @@ use crate::FnAccess;
 
 type PERR = ParseErrorType;
 
-type FunctionsLib = HashMap<u64, ScriptFnDef, StraightHasherBuilder>;
+type FunctionsLib = HashMap<u64, Shared<ScriptFnDef>, StraightHasherBuilder>;
 
 /// A type that encapsulates the current state of the parser.
 #[derive(Debug)]
@@ -1008,7 +1008,7 @@ fn parse_primary(
             });
 
             let hash_script = calc_fn_hash(empty(), &func.name, func.params.len());
-            lib.insert(hash_script, func);
+            lib.insert(hash_script, func.into());
 
             expr
         }
@@ -2530,7 +2530,7 @@ fn parse_stmt(
                         .into_err(pos));
                     }
 
-                    lib.insert(hash, func);
+                    lib.insert(hash, func.into());
 
                     Ok(Stmt::Noop(pos))
                 }
@@ -2969,7 +2969,7 @@ impl Engine {
     fn parse_global_level(
         &self,
         input: &mut TokenStream,
-    ) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
+    ) -> Result<(Vec<Stmt>, Vec<Shared<ScriptFnDef>>), ParseError> {
         let mut statements = Vec::with_capacity(16);
         let mut functions = HashMap::with_capacity_and_hasher(16, StraightHasherBuilder);
         let mut state = ParseState::new(
