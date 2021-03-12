@@ -1847,7 +1847,7 @@ mod tests {
         assert_eq!(size_of::<ast::Stmt>(), 40);
         assert_eq!(size_of::<Option<ast::Stmt>>(), 40);
         assert_eq!(size_of::<FnPtr>(), 32);
-        assert_eq!(size_of::<Scope>(), 48);
+        assert_eq!(size_of::<Scope>(), 288);
         assert_eq!(size_of::<LexError>(), 56);
         assert_eq!(size_of::<ParseError>(), 16);
         assert_eq!(size_of::<EvalAltResult>(), 72);
