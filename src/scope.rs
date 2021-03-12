@@ -4,6 +4,9 @@ use crate::dynamic::{AccessMode, Variant};
 use crate::stdlib::{borrow::Cow, boxed::Box, iter, vec::Vec};
 use crate::{Dynamic, ImmutableString, StaticVec};
 
+/// Keep a number of entries inline (since [`Dynamic`] is usually small enough).
+const SCOPE_SIZE: usize = 16;
+
 /// Type containing information about the current scope.
 /// Useful for keeping state between [`Engine`][crate::Engine] evaluation runs.
 ///
@@ -49,17 +52,17 @@ use crate::{Dynamic, ImmutableString, StaticVec};
 #[derive(Debug, Clone, Hash)]
 pub struct Scope<'a> {
     /// Current value of the entry.
-    values: Vec<Dynamic>,
+    values: smallvec::SmallVec<[Dynamic; SCOPE_SIZE]>,
     /// (Name, aliases) of the entry.
-    names: Vec<(Cow<'a, str>, Box<StaticVec<ImmutableString>>)>,
+    names: Vec<(Cow<'a, str>, Option<Box<StaticVec<ImmutableString>>>)>,
 }
 
 impl Default for Scope<'_> {
     #[inline(always)]
     fn default() -> Self {
         Self {
-            values: Vec::with_capacity(16),
-            names: Vec::with_capacity(16),
+            values: Default::default(),
+            names: Vec::with_capacity(SCOPE_SIZE),
         }
     }
 }
@@ -244,7 +247,7 @@ impl<'a> Scope<'a> {
         access: AccessMode,
         mut value: Dynamic,
     ) -> &mut Self {
-        self.names.push((name.into(), Box::new(Default::default())));
+        self.names.push((name.into(), None));
         value.set_access_mode(access);
         self.values.push(value.into());
         self
@@ -413,8 +416,11 @@ impl<'a> Scope<'a> {
         alias: impl Into<ImmutableString> + PartialEq<ImmutableString>,
     ) -> &mut Self {
         let entry = self.names.get_mut(index).expect("invalid index in Scope");
-        if !entry.1.iter().any(|a| &alias == a) {
-            entry.1.push(alias.into());
+        if entry.1.is_none() {
+            entry.1 = Some(Default::default());
+        }
+        if !entry.1.as_ref().unwrap().iter().any(|a| &alias == a) {
+            entry.1.as_mut().unwrap().push(alias.into());
         }
         self
     }
@@ -446,7 +452,9 @@ impl<'a> Scope<'a> {
         self.names
             .into_iter()
             .zip(self.values.into_iter())
-            .map(|((name, alias), value)| (name, value, alias.to_vec()))
+            .map(|((name, alias), value)| {
+                (name, value, alias.map(|a| a.to_vec()).unwrap_or_default())
+            })
     }
     /// Get an iterator to entries in the [`Scope`].
     /// Shared values are flatten-cloned.
@@ -493,7 +501,7 @@ impl<'a, K: Into<Cow<'a, str>>> iter::Extend<(K, Dynamic)> for Scope<'a> {
     #[inline(always)]
     fn extend<T: IntoIterator<Item = (K, Dynamic)>>(&mut self, iter: T) {
         iter.into_iter().for_each(|(name, value)| {
-            self.names.push((name.into(), Box::new(Default::default())));
+            self.names.push((name.into(), None));
             self.values.push(value);
         });
     }
