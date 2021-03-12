@@ -1727,7 +1727,15 @@ impl Module {
     #[inline(always)]
     pub fn iter_script_fn_info(
         &self,
-    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &crate::ast::ScriptFnDef)> {
+    ) -> impl Iterator<
+        Item = (
+            FnNamespace,
+            FnAccess,
+            &str,
+            usize,
+            &Shared<crate::ast::ScriptFnDef>,
+        ),
+    > {
         self.iter_script_fn()
     }
 
