@@ -20,6 +20,7 @@ use crate::stdlib::{
     num::{NonZeroU64, NonZeroU8, NonZeroUsize},
     ops::DerefMut,
     string::{String, ToString},
+    vec::Vec,
 };
 use crate::syntax::CustomSyntax;
 use crate::utils::{get_hasher, StraightHasherBuilder};
