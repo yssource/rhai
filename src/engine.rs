@@ -488,6 +488,18 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
     }
 }
 
+/// An entry in a function resolution cache.
+#[derive(Debug, Clone)]
+pub struct FnResolutionCacheEntry {
+    /// Function.
+    pub func: CallableFunction,
+    /// Optional source.
+    pub source: Option<ImmutableString>,
+}
+
+/// A function resolution cache.
+pub type FnResolutionCache = HashMap<u64, Option<FnResolutionCacheEntry>, StraightHasherBuilder>;
+
 /// _(INTERNALS)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
@@ -512,10 +524,10 @@ pub struct State {
     /// Embedded module resolver.
     #[cfg(not(feature = "no_module"))]
     pub resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
-    /// Functions resolution cache.
-    fn_resolution_caches: StaticVec<
-        HashMap<u64, Option<(CallableFunction, Option<ImmutableString>)>, StraightHasherBuilder>,
-    >,
+    /// function resolution cache.
+    fn_resolution_caches: StaticVec<FnResolutionCache>,
+    /// Free resolution caches.
+    fn_resolution_caches_free_list: Vec<FnResolutionCache>,
 }
 
 impl State {
@@ -524,25 +536,32 @@ impl State {
     pub fn is_global(&self) -> bool {
         self.scope_level == 0
     }
-    /// Get a mutable reference to the current functions resolution cache.
-    pub fn fn_resolution_cache_mut(
-        &mut self,
-    ) -> &mut HashMap<u64, Option<(CallableFunction, Option<ImmutableString>)>, StraightHasherBuilder>
-    {
+    /// Get a mutable reference to the current function resolution cache.
+    pub fn fn_resolution_cache_mut(&mut self) -> &mut FnResolutionCache {
         if self.fn_resolution_caches.is_empty() {
             self.fn_resolution_caches
                 .push(HashMap::with_capacity_and_hasher(16, StraightHasherBuilder));
         }
         self.fn_resolution_caches.last_mut().unwrap()
     }
-    /// Push an empty functions resolution cache onto the stack and make it current.
+    /// Push an empty function resolution cache onto the stack and make it current.
     #[allow(dead_code)]
     pub fn push_fn_resolution_cache(&mut self) {
-        self.fn_resolution_caches.push(Default::default());
+        self.fn_resolution_caches.push(
+            self.fn_resolution_caches_free_list
+                .pop()
+                .unwrap_or_default(),
+        );
     }
-    /// Remove the current functions resolution cache and make the last one current.
+    /// Remove the current function resolution cache from the stack and make the last one current.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there are no more function resolution cache in the stack.
     pub fn pop_fn_resolution_cache(&mut self) {
-        self.fn_resolution_caches.pop();
+        let mut cache = self.fn_resolution_caches.pop().unwrap();
+        cache.clear();
+        self.fn_resolution_caches_free_list.push(cache);
     }
 }
 
