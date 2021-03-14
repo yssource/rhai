@@ -17,9 +17,10 @@ use crate::stdlib::{
     collections::{HashMap, HashSet},
     fmt, format,
     hash::{Hash, Hasher},
-    num::{NonZeroU64, NonZeroU8, NonZeroUsize},
+    num::{NonZeroU8, NonZeroUsize},
     ops::DerefMut,
     string::{String, ToString},
+    vec::Vec,
 };
 use crate::syntax::CustomSyntax;
 use crate::utils::{get_hasher, StraightHasherBuilder};
@@ -40,6 +41,8 @@ use crate::Map;
 #[cfg(not(feature = "no_object"))]
 pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 
+pub type Precedence = NonZeroU8;
+
 /// _(INTERNALS)_ A stack of imported [modules][Module].
 /// Exported under the `internals` feature only.
 ///
@@ -53,7 +56,7 @@ pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 // the module name will live beyond the AST of the eval script text.
 // The best we can do is a shared reference.
 #[derive(Debug, Clone, Default)]
-pub struct Imports(StaticVec<(ImmutableString, Shared<Module>)>);
+pub struct Imports(StaticVec<ImmutableString>, StaticVec<Shared<Module>>);
 
 impl Imports {
     /// Get the length of this stack of imported [modules][Module].
@@ -69,7 +72,7 @@ impl Imports {
     /// Get the imported [modules][Module] at a particular index.
     #[inline(always)]
     pub fn get(&self, index: usize) -> Option<Shared<Module>> {
-        self.0.get(index).map(|(_, m)| m).cloned()
+        self.1.get(index).cloned()
     }
     /// Get the index of an imported [modules][Module] by name.
     #[inline(always)]
@@ -78,18 +81,19 @@ impl Imports {
             .iter()
             .enumerate()
             .rev()
-            .find(|(_, (key, _))| key.as_str() == name)
-            .map(|(index, _)| index)
+            .find_map(|(i, key)| if key.as_str() == name { Some(i) } else { None })
     }
     /// Push an imported [modules][Module] onto the stack.
     #[inline(always)]
     pub fn push(&mut self, name: impl Into<ImmutableString>, module: impl Into<Shared<Module>>) {
-        self.0.push((name.into(), module.into()));
+        self.0.push(name.into());
+        self.1.push(module.into());
     }
     /// Truncate the stack of imported [modules][Module] to a particular length.
     #[inline(always)]
     pub fn truncate(&mut self, size: usize) {
         self.0.truncate(size);
+        self.1.truncate(size);
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
@@ -97,6 +101,7 @@ impl Imports {
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.0
             .iter()
+            .zip(self.1.iter())
             .rev()
             .map(|(name, module)| (name.as_str(), module.as_ref()))
     }
@@ -104,52 +109,44 @@ impl Imports {
     #[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn iter_raw(&self) -> impl Iterator<Item = (&ImmutableString, &Shared<Module>)> {
-        self.0.iter().rev().map(|(n, m)| (n, m))
+        self.0.iter().rev().zip(self.1.iter().rev())
     }
     /// Get an iterator to this stack of imported [modules][Module] in forward order.
     #[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn scan_raw(&self) -> impl Iterator<Item = (&ImmutableString, &Shared<Module>)> {
-        self.0.iter().map(|(n, m)| (n, m))
+        self.0.iter().zip(self.1.iter())
     }
     /// Get a consuming iterator to this stack of imported [modules][Module] in reverse order.
     #[inline(always)]
     pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
-        self.0.into_iter().rev()
-    }
-    /// Add a stream of imported [modules][Module].
-    #[inline(always)]
-    pub fn extend(&mut self, stream: impl Iterator<Item = (ImmutableString, Shared<Module>)>) {
-        self.0.extend(stream)
+        self.0.into_iter().rev().zip(self.1.into_iter().rev())
     }
     /// Does the specified function hash key exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
     #[inline(always)]
     pub fn contains_fn(&self, hash: u64) -> bool {
-        self.0.iter().any(|(_, m)| m.contains_qualified_fn(hash))
+        self.1.iter().any(|m| m.contains_qualified_fn(hash))
     }
     /// Get specified function via its hash key.
     #[inline(always)]
     pub fn get_fn(&self, hash: u64) -> Option<(&CallableFunction, Option<&ImmutableString>)> {
-        self.0
+        self.1
             .iter()
             .rev()
-            .find_map(|(_, m)| m.get_qualified_fn(hash).map(|f| (f, m.id_raw())))
+            .find_map(|m| m.get_qualified_fn(hash).map(|f| (f, m.id_raw())))
     }
     /// Does the specified [`TypeId`][std::any::TypeId] iterator exist in this stack of
     /// imported [modules][Module]?
     #[allow(dead_code)]
     #[inline(always)]
     pub fn contains_iter(&self, id: TypeId) -> bool {
-        self.0.iter().any(|(_, m)| m.contains_qualified_iter(id))
+        self.1.iter().any(|m| m.contains_qualified_iter(id))
     }
     /// Get the specified [`TypeId`][std::any::TypeId] iterator.
     #[inline(always)]
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
-        self.0
-            .iter()
-            .rev()
-            .find_map(|(_, m)| m.get_qualified_iter(id))
+        self.1.iter().rev().find_map(|m| m.get_qualified_iter(id))
     }
 }
 
@@ -494,6 +491,18 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
     }
 }
 
+/// An entry in a function resolution cache.
+#[derive(Debug, Clone)]
+pub struct FnResolutionCacheEntry {
+    /// Function.
+    pub func: CallableFunction,
+    /// Optional source.
+    pub source: Option<ImmutableString>,
+}
+
+/// A function resolution cache.
+pub type FnResolutionCache = HashMap<u64, Option<FnResolutionCacheEntry>, StraightHasherBuilder>;
+
 /// _(INTERNALS)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
@@ -518,10 +527,10 @@ pub struct State {
     /// Embedded module resolver.
     #[cfg(not(feature = "no_module"))]
     pub resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
-    /// Functions resolution cache.
-    fn_resolution_caches: StaticVec<
-        HashMap<u64, Option<(CallableFunction, Option<ImmutableString>)>, StraightHasherBuilder>,
-    >,
+    /// function resolution cache.
+    fn_resolution_caches: StaticVec<FnResolutionCache>,
+    /// Free resolution caches.
+    fn_resolution_caches_free_list: Vec<FnResolutionCache>,
 }
 
 impl State {
@@ -530,25 +539,32 @@ impl State {
     pub fn is_global(&self) -> bool {
         self.scope_level == 0
     }
-    /// Get a mutable reference to the current functions resolution cache.
-    pub fn fn_resolution_cache_mut(
-        &mut self,
-    ) -> &mut HashMap<u64, Option<(CallableFunction, Option<ImmutableString>)>, StraightHasherBuilder>
-    {
+    /// Get a mutable reference to the current function resolution cache.
+    pub fn fn_resolution_cache_mut(&mut self) -> &mut FnResolutionCache {
         if self.fn_resolution_caches.is_empty() {
             self.fn_resolution_caches
                 .push(HashMap::with_capacity_and_hasher(16, StraightHasherBuilder));
         }
         self.fn_resolution_caches.last_mut().unwrap()
     }
-    /// Push an empty functions resolution cache onto the stack and make it current.
+    /// Push an empty function resolution cache onto the stack and make it current.
     #[allow(dead_code)]
     pub fn push_fn_resolution_cache(&mut self) {
-        self.fn_resolution_caches.push(Default::default());
+        self.fn_resolution_caches.push(
+            self.fn_resolution_caches_free_list
+                .pop()
+                .unwrap_or_default(),
+        );
     }
-    /// Remove the current functions resolution cache and make the last one current.
+    /// Remove the current function resolution cache from the stack and make the last one current.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there are no more function resolution cache in the stack.
     pub fn pop_fn_resolution_cache(&mut self) {
-        self.fn_resolution_caches.pop();
+        let mut cache = self.fn_resolution_caches.pop().unwrap();
+        cache.clear();
+        self.fn_resolution_caches_free_list.push(cache);
     }
 }
 
@@ -576,7 +592,7 @@ pub struct Limits {
     #[cfg(not(feature = "no_function"))]
     pub max_function_expr_depth: Option<NonZeroUsize>,
     /// Maximum number of operations allowed to run.
-    pub max_operations: Option<NonZeroU64>,
+    pub max_operations: Option<crate::stdlib::num::NonZeroU64>,
     /// Maximum number of [modules][Module] allowed to load.
     ///
     /// Set to zero to effectively disable loading any [module][Module].
@@ -710,7 +726,7 @@ pub struct Engine {
     /// A hashset containing symbols to disable.
     pub(crate) disabled_symbols: HashSet<String>,
     /// A hashmap containing custom keywords and precedence to recognize.
-    pub(crate) custom_keywords: HashMap<String, Option<NonZeroU8>>,
+    pub(crate) custom_keywords: HashMap<String, Option<Precedence>>,
     /// Custom syntax.
     pub(crate) custom_syntax: HashMap<ImmutableString, CustomSyntax>,
     /// Callback closure for resolving variable access.

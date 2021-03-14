@@ -2,8 +2,8 @@
 
 use crate::ast::FnHash;
 use crate::engine::{
-    Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
-    KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+    FnResolutionCacheEntry, Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
+    KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
     MAX_DYNAMIC_PARAMETERS,
 };
 use crate::fn_builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
@@ -186,7 +186,7 @@ impl Engine {
         args: Option<&mut FnCallArgs>,
         allow_dynamic: bool,
         is_op_assignment: bool,
-    ) -> &'s Option<(CallableFunction, Option<ImmutableString>)> {
+    ) -> &'s Option<FnResolutionCacheEntry> {
         let mut hash = if let Some(ref args) = args {
             let hash_params = calc_fn_params_hash(args.iter().map(|a| a.type_id()));
             combine_hashes(hash_script, hash_params)
@@ -211,28 +211,43 @@ impl Engine {
                         .iter()
                         .find_map(|m| {
                             m.get_fn(hash, false)
-                                .map(|f| (f.clone(), m.id_raw().cloned()))
+                                .cloned()
+                                .map(|func| FnResolutionCacheEntry {
+                                    func,
+                                    source: m.id_raw().cloned(),
+                                })
                         })
                         .or_else(|| {
                             self.global_namespace
                                 .get_fn(hash, false)
                                 .cloned()
-                                .map(|f| (f, None))
+                                .map(|func| FnResolutionCacheEntry { func, source: None })
                         })
                         .or_else(|| {
                             self.global_modules.iter().find_map(|m| {
                                 m.get_fn(hash, false)
-                                    .map(|f| (f.clone(), m.id_raw().cloned()))
+                                    .cloned()
+                                    .map(|func| FnResolutionCacheEntry {
+                                        func,
+                                        source: m.id_raw().cloned(),
+                                    })
                             })
                         })
                         .or_else(|| {
                             mods.get_fn(hash)
-                                .map(|(f, source)| (f.clone(), source.cloned()))
+                                .map(|(func, source)| FnResolutionCacheEntry {
+                                    func: func.clone(),
+                                    source: source.cloned(),
+                                })
                         })
                         .or_else(|| {
                             self.global_sub_modules.values().find_map(|m| {
-                                m.get_qualified_fn(hash)
-                                    .map(|f| (f.clone(), m.id_raw().cloned()))
+                                m.get_qualified_fn(hash).cloned().map(|func| {
+                                    FnResolutionCacheEntry {
+                                        func,
+                                        source: m.id_raw().cloned(),
+                                    }
+                                })
                             })
                         });
 
@@ -249,10 +264,12 @@ impl Engine {
                                     if let Some(f) =
                                         get_builtin_binary_op_fn(fn_name, &args[0], &args[1])
                                     {
-                                        Some((
-                                            CallableFunction::from_method(Box::new(f) as Box<FnAny>),
-                                            None,
-                                        ))
+                                        Some(FnResolutionCacheEntry {
+                                            func: CallableFunction::from_method(
+                                                Box::new(f) as Box<FnAny>
+                                            ),
+                                            source: None,
+                                        })
                                     } else {
                                         None
                                     }
@@ -262,10 +279,12 @@ impl Engine {
                                     if let Some(f) =
                                         get_builtin_op_assignment_fn(fn_name, *first, second[0])
                                     {
-                                        Some((
-                                            CallableFunction::from_method(Box::new(f) as Box<FnAny>),
-                                            None,
-                                        ))
+                                        Some(FnResolutionCacheEntry {
+                                            func: CallableFunction::from_method(
+                                                Box::new(f) as Box<FnAny>
+                                            ),
+                                            source: None,
+                                        })
                                     } else {
                                         None
                                     }
@@ -318,7 +337,7 @@ impl Engine {
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         self.inc_operations(state, pos)?;
 
-        let source = state.source.clone();
+        let state_source = state.source.clone();
 
         // Check if function access already in the cache
         let func = self.resolve_function(
@@ -332,7 +351,7 @@ impl Engine {
             is_op_assignment,
         );
 
-        if let Some((func, src)) = func {
+        if let Some(FnResolutionCacheEntry { func, source }) = func {
             assert!(func.is_native());
 
             // Calling pure function but the first argument is a reference?
@@ -343,7 +362,10 @@ impl Engine {
             }
 
             // Run external function
-            let source = src.as_ref().or_else(|| source.as_ref()).map(|s| s.as_str());
+            let source = source
+                .as_ref()
+                .or_else(|| state_source.as_ref())
+                .map(|s| s.as_str());
             let result = if func.is_plugin_fn() {
                 func.get_plugin_fn()
                     .call((self, fn_name, source, mods, lib).into(), args)
@@ -539,7 +561,10 @@ impl Engine {
 
         #[cfg(not(feature = "no_module"))]
         if !fn_def.mods.is_empty() {
-            mods.extend(fn_def.mods.iter_raw().map(|(n, m)| (n.clone(), m.clone())));
+            fn_def
+                .mods
+                .iter_raw()
+                .for_each(|(n, m)| mods.push(n.clone(), m.clone()));
         }
 
         // Evaluate the function
@@ -582,6 +607,7 @@ impl Engine {
     }
 
     // Does a scripted function exist?
+    #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub(crate) fn has_script_fn(
         &self,
@@ -709,6 +735,7 @@ impl Engine {
         }
 
         // Scripted function call?
+        #[cfg(not(feature = "no_function"))]
         let hash_script = if hash.is_native_only() {
             None
         } else {
@@ -716,10 +743,9 @@ impl Engine {
         };
 
         #[cfg(not(feature = "no_function"))]
-        if let Some((func, source)) = hash_script.and_then(|hash| {
+        if let Some(FnResolutionCacheEntry { func, source }) = hash_script.and_then(|hash| {
             self.resolve_function(mods, state, lib, fn_name, hash, None, false, false)
-                .as_ref()
-                .map(|(f, s)| (f.clone(), s.clone()))
+                .clone()
         }) {
             // Script function call
             assert!(func.is_script());

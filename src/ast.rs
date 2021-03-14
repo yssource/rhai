@@ -658,7 +658,7 @@ impl AST {
     pub(crate) fn iter_fn_def(&self) -> impl Iterator<Item = &ScriptFnDef> {
         self.functions
             .iter_script_fn()
-            .map(|(_, _, _, _, fn_def)| fn_def)
+            .map(|(_, _, _, _, fn_def)| fn_def.as_ref())
     }
     /// Iterate through all function definitions.
     ///
@@ -668,7 +668,7 @@ impl AST {
     pub fn iter_functions<'a>(&'a self) -> impl Iterator<Item = ScriptFnMetadata> + 'a {
         self.functions
             .iter_script_fn()
-            .map(|(_, _, _, _, fn_def)| fn_def.into())
+            .map(|(_, _, _, _, fn_def)| fn_def.as_ref().into())
     }
     /// Clear all function definitions in the [`AST`].
     ///
@@ -1847,7 +1847,7 @@ mod tests {
         assert_eq!(size_of::<ast::Stmt>(), 40);
         assert_eq!(size_of::<Option<ast::Stmt>>(), 40);
         assert_eq!(size_of::<FnPtr>(), 32);
-        assert_eq!(size_of::<Scope>(), 48);
+        assert_eq!(size_of::<Scope>(), 288);
         assert_eq!(size_of::<LexError>(), 56);
         assert_eq!(size_of::<ParseError>(), 16);
         assert_eq!(size_of::<EvalAltResult>(), 72);

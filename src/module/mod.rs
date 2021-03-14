@@ -136,7 +136,7 @@ pub struct Module {
     /// Flattened collection of all [`Module`] variables, including those in sub-modules.
     all_variables: HashMap<u64, Dynamic, StraightHasherBuilder>,
     /// External Rust functions.
-    functions: HashMap<u64, FuncInfo, StraightHasherBuilder>,
+    functions: HashMap<u64, Box<FuncInfo>, StraightHasherBuilder>,
     /// Flattened collection of all external Rust functions, native or scripted.
     /// including those in sub-modules.
     all_functions: HashMap<u64, CallableFunction, StraightHasherBuilder>,
@@ -207,7 +207,7 @@ impl fmt::Debug for Module {
                     "    functions: {}\n",
                     self.functions
                         .values()
-                        .map(|FuncInfo { func, .. }| func.to_string())
+                        .map(|f| f.func.to_string())
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -384,11 +384,11 @@ impl Module {
     pub fn gen_fn_signatures(&self) -> impl Iterator<Item = String> + '_ {
         self.functions
             .values()
-            .filter(|FuncInfo { access, .. }| match access {
+            .filter(|f| match f.access {
                 FnAccess::Public => true,
                 FnAccess::Private => false,
             })
-            .map(FuncInfo::gen_signature)
+            .map(|f| f.gen_signature())
     }
 
     /// Does a variable exist in the [`Module`]?
@@ -490,7 +490,7 @@ impl Module {
         param_names.push("Dynamic".into());
         self.functions.insert(
             hash_script,
-            FuncInfo {
+            Box::new(FuncInfo {
                 name: fn_def.name.to_string(),
                 namespace: FnNamespace::Internal,
                 access: fn_def.access,
@@ -498,14 +498,15 @@ impl Module {
                 param_types: Default::default(),
                 param_names,
                 func: fn_def.into(),
-            },
+            }),
         );
         self.indexed = false;
         self.contains_indexed_global_functions = false;
         hash_script
     }
 
-    /// Get a script-defined function in the [`Module`] based on name and number of parameters.
+    /// Get a shared reference to the script-defined function in the [`Module`] based on name
+    /// and number of parameters.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn get_script_fn(
@@ -513,22 +514,15 @@ impl Module {
         name: &str,
         num_params: usize,
         public_only: bool,
-    ) -> Option<&crate::ast::ScriptFnDef> {
+    ) -> Option<&Shared<crate::ast::ScriptFnDef>> {
         self.functions
             .values()
-            .find(
-                |FuncInfo {
-                     name: fn_name,
-                     access,
-                     params,
-                     ..
-                 }| {
-                    (!public_only || *access == FnAccess::Public)
-                        && *params == num_params
-                        && fn_name == name
-                },
-            )
-            .map(|FuncInfo { func, .. }| func.get_fn_def())
+            .find(|f| {
+                (!public_only || f.access == FnAccess::Public)
+                    && f.params == num_params
+                    && f.name == name
+            })
+            .map(|f| f.func.get_fn_def())
     }
 
     /// Get a mutable reference to the underlying [`HashMap`] of sub-modules.
@@ -629,7 +623,7 @@ impl Module {
         if public_only {
             self.functions
                 .get(&hash_fn)
-                .map_or(false, |FuncInfo { access, .. }| match access {
+                .map_or(false, |f| match f.access {
                     FnAccess::Public => true,
                     FnAccess::Private => false,
                 })
@@ -717,7 +711,7 @@ impl Module {
 
         self.functions.insert(
             hash_fn,
-            FuncInfo {
+            Box::new(FuncInfo {
                 name,
                 namespace,
                 access,
@@ -729,7 +723,7 @@ impl Module {
                     Default::default()
                 },
                 func: func.into(),
-            },
+            }),
         );
 
         self.indexed = false;
@@ -1478,13 +1472,11 @@ impl Module {
     /// The [`u64`] hash is returned by the `set_fn_XXX` calls.
     #[inline(always)]
     pub(crate) fn get_fn(&self, hash_fn: u64, public_only: bool) -> Option<&CallableFunction> {
-        self.functions
-            .get(&hash_fn)
-            .and_then(|FuncInfo { access, func, .. }| match access {
-                _ if !public_only => Some(func),
-                FnAccess::Public => Some(func),
-                FnAccess::Private => None,
-            })
+        self.functions.get(&hash_fn).and_then(|f| match f.access {
+            _ if !public_only => Some(&f.func),
+            FnAccess::Public => Some(&f.func),
+            FnAccess::Private => None,
+        })
     }
 
     /// Does the particular namespace-qualified function exist in the [`Module`]?
@@ -1594,27 +1586,15 @@ impl Module {
             other
                 .functions
                 .iter()
-                .filter(
-                    |(
-                        _,
-                        FuncInfo {
-                            namespace,
-                            access,
-                            name,
-                            params,
-                            func,
-                            ..
-                        },
-                    )| {
-                        _filter(
-                            *namespace,
-                            *access,
-                            func.is_script(),
-                            name.as_str(),
-                            *params,
-                        )
-                    },
-                )
+                .filter(|(_, f)| {
+                    _filter(
+                        f.namespace,
+                        f.access,
+                        f.func.is_script(),
+                        f.name.as_str(),
+                        f.params,
+                    )
+                })
                 .map(|(&k, v)| (k, v.clone())),
         );
 
@@ -1634,23 +1614,13 @@ impl Module {
         &mut self,
         filter: impl Fn(FnNamespace, FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
-        self.functions.retain(
-            |_,
-             FuncInfo {
-                 namespace,
-                 access,
-                 name,
-                 params,
-                 func,
-                 ..
-             }| {
-                if func.is_script() {
-                    filter(*namespace, *access, name.as_str(), *params)
-                } else {
-                    false
-                }
-            },
-        );
+        self.functions.retain(|_, f| {
+            if f.func.is_script() {
+                filter(f.namespace, f.access, f.name.as_str(), f.params)
+            } else {
+                false
+            }
+        });
 
         self.all_functions.clear();
         self.all_variables.clear();
@@ -1686,7 +1656,7 @@ impl Module {
     #[inline(always)]
     #[allow(dead_code)]
     pub(crate) fn iter_fn(&self) -> impl Iterator<Item = &FuncInfo> {
-        self.functions.values()
+        self.functions.values().map(Box::as_ref)
     }
 
     /// Get an iterator over all script-defined functions in the [`Module`].
@@ -1701,26 +1671,27 @@ impl Module {
     #[inline(always)]
     pub(crate) fn iter_script_fn(
         &self,
-    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &crate::ast::ScriptFnDef)> + '_
-    {
-        self.functions.values().filter(|f| f.func.is_script()).map(
-            |FuncInfo {
-                 namespace,
-                 access,
-                 name,
-                 params,
-                 func,
-                 ..
-             }| {
+    ) -> impl Iterator<
+        Item = (
+            FnNamespace,
+            FnAccess,
+            &str,
+            usize,
+            &Shared<crate::ast::ScriptFnDef>,
+        ),
+    > + '_ {
+        self.functions
+            .values()
+            .filter(|f| f.func.is_script())
+            .map(|f| {
                 (
-                    *namespace,
-                    *access,
-                    name.as_str(),
-                    *params,
-                    func.get_fn_def(),
+                    f.namespace,
+                    f.access,
+                    f.name.as_str(),
+                    f.params,
+                    f.func.get_fn_def(),
                 )
-            },
-        )
+            })
     }
 
     /// Get an iterator over all script-defined functions in the [`Module`].
@@ -1736,15 +1707,10 @@ impl Module {
     pub fn iter_script_fn_info(
         &self,
     ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize)> {
-        self.functions.values().filter(|f| f.func.is_script()).map(
-            |FuncInfo {
-                 name,
-                 namespace,
-                 access,
-                 params,
-                 ..
-             }| (*namespace, *access, name.as_str(), *params),
-        )
+        self.functions
+            .values()
+            .filter(|f| f.func.is_script())
+            .map(|f| (f.namespace, f.access, f.name.as_str(), f.params))
     }
 
     /// _(INTERNALS)_ Get an iterator over all script-defined functions in the [`Module`].
@@ -1761,7 +1727,15 @@ impl Module {
     #[inline(always)]
     pub fn iter_script_fn_info(
         &self,
-    ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize, &crate::ast::ScriptFnDef)> {
+    ) -> impl Iterator<
+        Item = (
+            FnNamespace,
+            FnAccess,
+            &str,
+            usize,
+            &Shared<crate::ast::ScriptFnDef>,
+        ),
+    > {
         self.iter_script_fn()
     }
 
@@ -1825,14 +1799,14 @@ impl Module {
         ast.lib()
             .functions
             .values()
-            .filter(|FuncInfo { access, .. }| match access {
+            .filter(|f| match f.access {
                 FnAccess::Public => true,
                 FnAccess::Private => false,
             })
-            .filter(|FuncInfo { func, .. }| func.is_script())
-            .for_each(|FuncInfo { func, .. }| {
+            .filter(|f| f.func.is_script())
+            .for_each(|f| {
                 // Encapsulate AST environment
-                let mut func = func.get_fn_def().clone();
+                let mut func = crate::fn_native::shared_take_or_clone(f.func.get_fn_def().clone());
                 func.lib = Some(ast.shared_lib());
                 func.mods = func_mods.clone();
                 module.set_script_fn(func);
@@ -1862,7 +1836,7 @@ impl Module {
         // Collect a particular module.
         fn index_module<'a>(
             module: &'a Module,
-            qualifiers: &mut Vec<&'a str>,
+            path: &mut Vec<&'a str>,
             variables: &mut HashMap<u64, Dynamic, StraightHasherBuilder>,
             functions: &mut HashMap<u64, CallableFunction, StraightHasherBuilder>,
             type_iterators: &mut HashMap<TypeId, IteratorFn>,
@@ -1871,16 +1845,16 @@ impl Module {
 
             module.modules.iter().for_each(|(name, m)| {
                 // Index all the sub-modules first.
-                qualifiers.push(name);
-                if index_module(m, qualifiers, variables, functions, type_iterators) {
+                path.push(name);
+                if index_module(m, path, variables, functions, type_iterators) {
                     contains_indexed_global_functions = true;
                 }
-                qualifiers.pop();
+                path.pop();
             });
 
             // Index all variables
             module.variables.iter().for_each(|(var_name, value)| {
-                let hash_var = crate::calc_fn_hash(qualifiers.iter().map(|&v| v), var_name, 0);
+                let hash_var = crate::calc_fn_hash(path.iter().map(|&v| v), var_name, 0);
                 variables.insert(hash_var, value.clone());
             });
 
@@ -1891,58 +1865,45 @@ impl Module {
             });
 
             // Index all Rust functions
-            module.functions.iter().for_each(
-                |(
-                    &hash,
-                    FuncInfo {
-                        name,
-                        namespace,
-                        access,
-                        params,
-                        param_types,
-                        func,
-                        ..
-                    },
-                )| {
-                    match namespace {
-                        FnNamespace::Global => {
-                            // Flatten all functions with global namespace
-                            functions.insert(hash, func.clone());
-                            contains_indexed_global_functions = true;
-                        }
-                        FnNamespace::Internal => (),
+            module.functions.iter().for_each(|(&hash, f)| {
+                match f.namespace {
+                    FnNamespace::Global => {
+                        // Flatten all functions with global namespace
+                        functions.insert(hash, f.func.clone());
+                        contains_indexed_global_functions = true;
                     }
-                    match access {
-                        FnAccess::Public => (),
-                        FnAccess::Private => return, // Do not index private functions
-                    }
+                    FnNamespace::Internal => (),
+                }
+                match f.access {
+                    FnAccess::Public => (),
+                    FnAccess::Private => return, // Do not index private functions
+                }
 
-                    if !func.is_script() {
-                        let hash_qualified_fn =
-                            calc_native_fn_hash(qualifiers.iter().cloned(), name, param_types);
-                        functions.insert(hash_qualified_fn, func.clone());
-                    } else if cfg!(not(feature = "no_function")) {
-                        let hash_qualified_script =
-                            crate::calc_fn_hash(qualifiers.iter().cloned(), name, *params);
-                        functions.insert(hash_qualified_script, func.clone());
-                    }
-                },
-            );
+                if !f.func.is_script() {
+                    let hash_qualified_fn =
+                        calc_native_fn_hash(path.iter().cloned(), f.name.as_str(), &f.param_types);
+                    functions.insert(hash_qualified_fn, f.func.clone());
+                } else if cfg!(not(feature = "no_function")) {
+                    let hash_qualified_script =
+                        crate::calc_fn_hash(path.iter().cloned(), f.name.as_str(), f.params);
+                    functions.insert(hash_qualified_script, f.func.clone());
+                }
+            });
 
             contains_indexed_global_functions
         }
 
         if !self.indexed {
-            let mut qualifiers = Vec::with_capacity(4);
+            let mut path = Vec::with_capacity(4);
             let mut variables = HashMap::with_capacity_and_hasher(16, StraightHasherBuilder);
             let mut functions = HashMap::with_capacity_and_hasher(256, StraightHasherBuilder);
             let mut type_iterators = HashMap::with_capacity(16);
 
-            qualifiers.push("root");
+            path.push("root");
 
             self.contains_indexed_global_functions = index_module(
                 self,
-                &mut qualifiers,
+                &mut path,
                 &mut variables,
                 &mut functions,
                 &mut type_iterators,

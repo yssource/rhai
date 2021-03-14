@@ -570,9 +570,9 @@ impl CallableFunction {
     /// Panics if the [`CallableFunction`] is not [`Pure`][CallableFunction::Pure] or
     /// [`Method`][CallableFunction::Method].
     #[inline(always)]
-    pub fn get_native_fn(&self) -> &FnAny {
+    pub fn get_native_fn(&self) -> &Shared<FnAny> {
         match self {
-            Self::Pure(f) | Self::Method(f) => f.as_ref(),
+            Self::Pure(f) | Self::Method(f) => f,
             Self::Iterator(_) | Self::Plugin(_) => panic!("function should be native"),
 
             #[cfg(not(feature = "no_function"))]
@@ -586,12 +586,12 @@ impl CallableFunction {
     /// Panics if the [`CallableFunction`] is not [`Script`][CallableFunction::Script].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
-    pub fn get_fn_def(&self) -> &crate::ast::ScriptFnDef {
+    pub fn get_fn_def(&self) -> &Shared<crate::ast::ScriptFnDef> {
         match self {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => {
                 panic!("function should be scripted")
             }
-            Self::Script(f) => f.as_ref(),
+            Self::Script(f) => f,
         }
     }
     /// Get a reference to an iterator function.
@@ -617,9 +617,9 @@ impl CallableFunction {
     ///
     /// Panics if the [`CallableFunction`] is not [`Plugin`][CallableFunction::Plugin].
     #[inline(always)]
-    pub fn get_plugin_fn<'s>(&'s self) -> &FnPlugin {
+    pub fn get_plugin_fn<'s>(&'s self) -> &Shared<FnPlugin> {
         match self {
-            Self::Plugin(f) => f.as_ref(),
+            Self::Plugin(f) => f,
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => {
                 panic!("function should a plugin")
             }

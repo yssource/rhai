@@ -55,7 +55,13 @@ fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
 
     let ast = engine.compile("{ const DECISION = false; if DECISION { 42 } else { 123 } }")?;
 
-    assert!(format!("{:?}", ast).starts_with(r#"AST { source: None, body: [Block([Const(BoolConstant(false, 1:20), Ident("DECISION" @ 1:9), false, 1:3), Expr(IntegerConstant(123, 1:53))], 1:1)], functions: Module("#));
+    assert!(format!("{:?}", ast).starts_with(
+        r#"AST { source: None, body: [Expr(IntegerConstant(123, 1:53))], functions: Module("#
+    ));
+
+    let ast = engine.compile("const DECISION = false; if DECISION { 42 } else { 123 }")?;
+
+    assert!(format!("{:?}", ast).starts_with(r#"AST { source: None, body: [Const(BoolConstant(false, 1:18), Ident("DECISION" @ 1:7), false, 1:1), Expr(IntegerConstant(123, 1:51))], functions: Module("#));
 
     let ast = engine.compile("if 1 == 2 { 42 }")?;
 

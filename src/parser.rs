@@ -5,7 +5,7 @@ use crate::ast::{
     Stmt, StmtBlock,
 };
 use crate::dynamic::{AccessMode, Union};
-use crate::engine::{KEYWORD_THIS, OP_CONTAINS};
+use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::module::NamespaceRef;
 use crate::optimize::optimize_into_ast;
 use crate::optimize::OptimizationLevel;
@@ -26,7 +26,7 @@ use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream}
 use crate::utils::{get_hasher, StraightHasherBuilder};
 use crate::{
     calc_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType, Position,
-    Scope, StaticVec, AST,
+    Scope, Shared, StaticVec, AST,
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -37,7 +37,7 @@ use crate::FnAccess;
 
 type PERR = ParseErrorType;
 
-type FunctionsLib = HashMap<u64, ScriptFnDef, StraightHasherBuilder>;
+type FunctionsLib = HashMap<u64, Shared<ScriptFnDef>, StraightHasherBuilder>;
 
 /// A type that encapsulates the current state of the parser.
 #[derive(Debug)]
@@ -1008,7 +1008,7 @@ fn parse_primary(
             });
 
             let hash_script = calc_fn_hash(empty(), &func.name, func.params.len());
-            lib.insert(hash_script, func);
+            lib.insert(hash_script, func.into());
 
             expr
         }
@@ -1611,7 +1611,7 @@ fn parse_binary_op(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    parent_precedence: u8,
+    parent_precedence: Option<Precedence>,
     lhs: Expr,
     mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
@@ -1625,18 +1625,12 @@ fn parse_binary_op(
     loop {
         let (current_op, current_pos) = input.peek().unwrap();
         let precedence = match current_op {
-            Token::Custom(c) => {
-                if state
-                    .engine
-                    .custom_keywords
-                    .get(c)
-                    .map_or(false, Option::is_some)
-                {
-                    state.engine.custom_keywords.get(c).unwrap().unwrap().get()
-                } else {
-                    return Err(PERR::Reserved(c.clone()).into_err(*current_pos));
-                }
-            }
+            Token::Custom(c) => state
+                .engine
+                .custom_keywords
+                .get(c)
+                .cloned()
+                .ok_or_else(|| PERR::Reserved(c.clone()).into_err(*current_pos))?,
             Token::Reserved(c) if !is_valid_identifier(c.chars()) => {
                 return Err(PERR::UnknownOperator(c.into()).into_err(*current_pos))
             }
@@ -1656,18 +1650,12 @@ fn parse_binary_op(
 
         let (next_op, next_pos) = input.peek().unwrap();
         let next_precedence = match next_op {
-            Token::Custom(c) => {
-                if state
-                    .engine
-                    .custom_keywords
-                    .get(c)
-                    .map_or(false, Option::is_some)
-                {
-                    state.engine.custom_keywords.get(c).unwrap().unwrap().get()
-                } else {
-                    return Err(PERR::Reserved(c.clone()).into_err(*next_pos));
-                }
-            }
+            Token::Custom(c) => state
+                .engine
+                .custom_keywords
+                .get(c)
+                .cloned()
+                .ok_or_else(|| PERR::Reserved(c.clone()).into_err(*next_pos))?,
             Token::Reserved(c) if !is_valid_identifier(c.chars()) => {
                 return Err(PERR::UnknownOperator(c.into()).into_err(*next_pos))
             }
@@ -1937,7 +1925,14 @@ fn parse_expr(
 
     // Parse expression normally.
     let lhs = parse_unary(input, state, lib, settings.level_up())?;
-    parse_binary_op(input, state, lib, 1, lhs, settings.level_up())
+    parse_binary_op(
+        input,
+        state,
+        lib,
+        Precedence::new(1),
+        lhs,
+        settings.level_up(),
+    )
 }
 
 /// Make sure that the expression is not a statement expression (i.e. wrapped in `{}`).
@@ -2530,7 +2525,7 @@ fn parse_stmt(
                         .into_err(pos));
                     }
 
-                    lib.insert(hash, func);
+                    lib.insert(hash, func.into());
 
                     Ok(Stmt::Noop(pos))
                 }
@@ -2969,7 +2964,7 @@ impl Engine {
     fn parse_global_level(
         &self,
         input: &mut TokenStream,
-    ) -> Result<(Vec<Stmt>, Vec<ScriptFnDef>), ParseError> {
+    ) -> Result<(Vec<Stmt>, Vec<Shared<ScriptFnDef>>), ParseError> {
         let mut statements = Vec::with_capacity(16);
         let mut functions = HashMap::with_capacity_and_hasher(16, StraightHasherBuilder);
         let mut state = ParseState::new(

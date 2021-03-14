@@ -1,6 +1,7 @@
 //! Configuration settings for [`Engine`].
 
-use crate::stdlib::{format, num::NonZeroU8, string::String};
+use crate::engine::Precedence;
+use crate::stdlib::{format, string::String};
 use crate::token::Token;
 use crate::Engine;
 
@@ -272,7 +273,7 @@ impl Engine {
         keyword: &str,
         precedence: u8,
     ) -> Result<&mut Self, String> {
-        let precedence = NonZeroU8::new(precedence);
+        let precedence = Precedence::new(precedence);
 
         if precedence.is_none() {
             return Err("precedence cannot be zero".into());
