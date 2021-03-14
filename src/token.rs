@@ -1,8 +1,8 @@
 //! Main module defining the lexer and parser.
 
 use crate::engine::{
-    KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY,
-    KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
+    Precedence, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
+    KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 use crate::stdlib::{
     borrow::Cow,
@@ -666,10 +666,10 @@ impl Token {
     }
 
     /// Get the precedence number of the token.
-    pub fn precedence(&self) -> u8 {
+    pub fn precedence(&self) -> Option<Precedence> {
         use Token::*;
 
-        match self {
+        Precedence::new(match self {
             // Assignments are not considered expressions - set to zero
             Equals | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | PowerOfAssign
             | LeftShiftAssign | RightShiftAssign | AndAssign | OrAssign | XOrAssign
@@ -696,7 +696,7 @@ impl Token {
             Period => 240,
 
             _ => 0,
-        }
+        })
     }
 
     /// Does an expression bind to the right (instead of left)?

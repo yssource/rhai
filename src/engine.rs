@@ -17,7 +17,7 @@ use crate::stdlib::{
     collections::{HashMap, HashSet},
     fmt, format,
     hash::{Hash, Hasher},
-    num::{NonZeroU64, NonZeroU8, NonZeroUsize},
+    num::{NonZeroU8, NonZeroUsize},
     ops::DerefMut,
     string::{String, ToString},
     vec::Vec,
@@ -40,6 +40,8 @@ use crate::Map;
 
 #[cfg(not(feature = "no_object"))]
 pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
+
+pub type Precedence = NonZeroU8;
 
 /// _(INTERNALS)_ A stack of imported [modules][Module].
 /// Exported under the `internals` feature only.
@@ -590,7 +592,7 @@ pub struct Limits {
     #[cfg(not(feature = "no_function"))]
     pub max_function_expr_depth: Option<NonZeroUsize>,
     /// Maximum number of operations allowed to run.
-    pub max_operations: Option<NonZeroU64>,
+    pub max_operations: Option<crate::stdlib::num::NonZeroU64>,
     /// Maximum number of [modules][Module] allowed to load.
     ///
     /// Set to zero to effectively disable loading any [module][Module].
@@ -724,7 +726,7 @@ pub struct Engine {
     /// A hashset containing symbols to disable.
     pub(crate) disabled_symbols: HashSet<String>,
     /// A hashmap containing custom keywords and precedence to recognize.
-    pub(crate) custom_keywords: HashMap<String, Option<NonZeroU8>>,
+    pub(crate) custom_keywords: HashMap<String, Option<Precedence>>,
     /// Custom syntax.
     pub(crate) custom_syntax: HashMap<ImmutableString, CustomSyntax>,
     /// Callback closure for resolving variable access.
