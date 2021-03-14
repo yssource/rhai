@@ -607,6 +607,7 @@ impl Engine {
     }
 
     // Does a scripted function exist?
+    #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub(crate) fn has_script_fn(
         &self,
@@ -734,6 +735,7 @@ impl Engine {
         }
 
         // Scripted function call?
+        #[cfg(not(feature = "no_function"))]
         let hash_script = if hash.is_native_only() {
             None
         } else {

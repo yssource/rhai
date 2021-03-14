@@ -240,19 +240,25 @@ fn optimize_stmt_block(
             .find_map(|(i, stmt)| match stmt {
                 stmt if !is_pure(stmt) => Some(i),
 
-                Stmt::Noop(_) | Stmt::Return(_, None, _) | Stmt::Export(_, _) | Stmt::Share(_) => {
-                    None
-                }
+                Stmt::Noop(_) | Stmt::Return(_, None, _) => None,
 
                 Stmt::Let(e, _, _, _)
                 | Stmt::Const(e, _, _, _)
                 | Stmt::Expr(e)
                 | Stmt::Return(_, Some(e), _)
-                | Stmt::Import(e, _, _)
                     if e.is_constant() =>
                 {
                     None
                 }
+
+                #[cfg(not(feature = "no_module"))]
+                Stmt::Import(e, _, _) if e.is_constant() => None,
+
+                #[cfg(not(feature = "no_module"))]
+                Stmt::Export(_, _) => None,
+
+                #[cfg(not(feature = "no_closure"))]
+                Stmt::Share(_) => None,
 
                 _ => Some(i),
             })
@@ -369,8 +375,6 @@ fn optimize_stmt_block(
     if is_dirty {
         state.set_dirty();
     }
-
-    println!("{:?}", statements);
 
     statements.shrink_to_fit();
     statements
