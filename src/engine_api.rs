@@ -9,7 +9,7 @@ use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
     format,
-    string::String,
+    string::{String, ToString},
     vec::Vec,
 };
 use crate::{
