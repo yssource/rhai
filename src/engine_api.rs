@@ -14,7 +14,7 @@ use crate::stdlib::{
 };
 use crate::{
     scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Module, NativeCallContext,
-    ParseError, Position, RhaiResult, Shared, AST,
+    ParseError, Position, RhaiResult, Shared, StaticVec, AST,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -51,16 +51,28 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline]
     pub fn register_fn<A, F>(&mut self, name: &str, func: F) -> &mut Self
     where
         F: RegisterNativeFunction<A, ()>,
     {
+        let param_types = F::param_types();
+        let mut param_type_names: StaticVec<_> = F::param_names()
+            .iter()
+            .map(|ty| format!("_: {}", self.map_type_name(ty)))
+            .collect();
+        if F::return_type() != TypeId::of::<()>() {
+            param_type_names.push(self.map_type_name(F::return_type_name()).to_string());
+        }
+        let param_type_names: StaticVec<_> =
+            param_type_names.iter().map(|ty| ty.as_str()).collect();
+
         self.global_namespace.set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
-            None,
-            &F::param_types(),
+            Some(&param_type_names),
+            &param_types,
             func.into_callable_function(),
         );
         self
@@ -89,16 +101,26 @@ impl Engine {
     /// engine.eval::<i64>("div(42, 0)")
     ///       .expect_err("expecting division by zero error!");
     /// ```
+    #[inline]
     pub fn register_result_fn<A, F>(&mut self, name: &str, func: F) -> &mut Self
     where
         F: RegisterNativeFunction<A, RhaiResult>,
     {
+        let param_types = F::param_types();
+        let mut param_type_names: StaticVec<_> = F::param_names()
+            .iter()
+            .map(|ty| format!("_: {}", self.map_type_name(ty)))
+            .collect();
+        param_type_names.push(self.map_type_name(F::return_type_name()).to_string());
+        let param_type_names: StaticVec<&str> =
+            param_type_names.iter().map(|ty| ty.as_str()).collect();
+
         self.global_namespace.set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
-            None,
-            &F::param_types(),
+            Some(&param_type_names),
+            &param_types,
             func.into_callable_function(),
         );
         self

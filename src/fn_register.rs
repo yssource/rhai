@@ -5,7 +5,13 @@
 use crate::dynamic::{DynamicWriteLock, Variant};
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
 use crate::r#unsafe::unsafe_try_cast;
-use crate::stdlib::{any::TypeId, boxed::Box, mem, string::String, vec};
+use crate::stdlib::{
+    any::{type_name, TypeId},
+    boxed::Box,
+    mem,
+    string::String,
+    vec,
+};
 use crate::{Dynamic, EvalAltResult, NativeCallContext};
 
 // These types are used to build a unique _marker_ tuple type for each combination
@@ -55,8 +61,14 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
 
 /// Trait to register custom Rust functions.
 pub trait RegisterNativeFunction<Args, Result> {
-    /// Get the types of this function's parameters.
+    /// Get the type ID's of this function's parameters.
     fn param_types() -> Box<[TypeId]>;
+    /// Get the type names of this function's parameters.
+    fn param_names() -> Box<[&'static str]>;
+    /// Get the type ID of this function's return value.
+    fn return_type() -> TypeId;
+    /// Get the type name of this function's return value.
+    fn return_type_name() -> &'static str;
     /// Convert this function into a [`CallableFunction`].
     fn into_callable_function(self) -> CallableFunction;
 }
@@ -78,8 +90,10 @@ macro_rules! def_register {
             $($par: Variant + Clone,)*
             RET: Variant + Clone
         > RegisterNativeFunction<($($mark,)*), ()> for FN {
-            #[inline(always)]
-            fn param_types() -> Box<[TypeId]> { vec![$(TypeId::of::<$par>()),*].into_boxed_slice() }
+            #[inline(always)] fn param_types() -> Box<[TypeId]> { vec![$(TypeId::of::<$par>()),*].into_boxed_slice() }
+            #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(type_name::<$par>()),*].into_boxed_slice() }
+            #[inline(always)] fn return_type() -> TypeId { TypeId::of::<RET>() }
+            #[inline(always)] fn return_type_name() -> &'static str { type_name::<RET>() }
             #[inline(always)]
             fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |_: NativeCallContext, args: &mut FnCallArgs| {
@@ -101,8 +115,10 @@ macro_rules! def_register {
             $($par: Variant + Clone,)*
             RET: Variant + Clone
         > RegisterNativeFunction<(NativeCallContext<'static>, $($mark,)*), ()> for FN {
-            #[inline(always)]
-            fn param_types() -> Box<[TypeId]> { vec![$(TypeId::of::<$par>()),*].into_boxed_slice() }
+            #[inline(always)] fn param_types() -> Box<[TypeId]> { vec![$(TypeId::of::<$par>()),*].into_boxed_slice() }
+            #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(type_name::<$par>()),*].into_boxed_slice() }
+            #[inline(always)] fn return_type() -> TypeId { TypeId::of::<RET>() }
+            #[inline(always)] fn return_type_name() -> &'static str { type_name::<RET>() }
             #[inline(always)]
             fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
@@ -124,8 +140,10 @@ macro_rules! def_register {
             $($par: Variant + Clone,)*
             RET: Variant + Clone
         > RegisterNativeFunction<($($mark,)*), Result<RET, Box<EvalAltResult>>> for FN {
-            #[inline(always)]
-            fn param_types() -> Box<[TypeId]> { vec![$(TypeId::of::<$par>()),*].into_boxed_slice() }
+            #[inline(always)] fn param_types() -> Box<[TypeId]> { vec![$(TypeId::of::<$par>()),*].into_boxed_slice() }
+            #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(type_name::<$par>()),*].into_boxed_slice() }
+            #[inline(always)] fn return_type() -> TypeId { TypeId::of::<Result<RET, Box<EvalAltResult>>>() }
+            #[inline(always)] fn return_type_name() -> &'static str { type_name::<Result<RET, Box<EvalAltResult>>>() }
             #[inline(always)]
             fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |_: NativeCallContext, args: &mut FnCallArgs| {
@@ -144,8 +162,10 @@ macro_rules! def_register {
             $($par: Variant + Clone,)*
             RET: Variant + Clone
         > RegisterNativeFunction<(NativeCallContext<'static>, $($mark,)*), Result<RET, Box<EvalAltResult>>> for FN {
-            #[inline(always)]
-            fn param_types() -> Box<[TypeId]> { vec![$(TypeId::of::<$par>()),*].into_boxed_slice() }
+            #[inline(always)] fn param_types() -> Box<[TypeId]> { vec![$(TypeId::of::<$par>()),*].into_boxed_slice() }
+            #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(type_name::<$par>()),*].into_boxed_slice() }
+            #[inline(always)] fn return_type() -> TypeId { TypeId::of::<Result<RET, Box<EvalAltResult>>>() }
+            #[inline(always)] fn return_type_name() -> &'static str { type_name::<Result<RET, Box<EvalAltResult>>>() }
             #[inline(always)]
             fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {

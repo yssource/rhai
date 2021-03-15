@@ -218,7 +218,7 @@ fn main() {
             //     println!(
             //         "{}",
             //         engine
-            //             .gen_fn_metadata_to_json(Some(&main_ast), false)
+            //             .gen_fn_metadata_with_ast_to_json(&main_ast, true)
             //             .unwrap()
             //     );
             //     continue;
