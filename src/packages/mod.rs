@@ -53,8 +53,7 @@ pub trait Package {
 /// Macro that makes it easy to define a _package_ (which is basically a shared [module][Module])
 /// and register functions into it.
 ///
-/// Functions can be added to the package using the standard module methods such as
-/// [`set_fn_2`][Module::set_fn_2], [`set_fn_3_mut`][Module::set_fn_3_mut], [`set_fn_0`][Module::set_fn_0] etc.
+/// Functions can be added to the package using [`Module::set_native_fn`].
 ///
 /// # Example
 ///
@@ -69,7 +68,7 @@ pub trait Package {
 /// def_package!(rhai:MyPackage:"My super-duper package", lib,
 /// {
 ///     // Load a binary function with all value parameters.
-///     lib.set_fn_2("my_add", add);
+///     lib.set_native_fn("my_add", add);
 /// });
 /// ```
 #[macro_export]

@@ -75,7 +75,7 @@ fn test_functions_namespaces() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_module"))]
     {
         let mut m = Module::new();
-        let hash = m.set_fn_0("test", || Ok(999 as INT));
+        let hash = m.set_native_fn("test", || Ok(999 as INT));
         m.update_fn_namespace(hash, FnNamespace::Global);
 
         engine.register_static_module("hello", m.into());

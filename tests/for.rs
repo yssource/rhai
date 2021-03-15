@@ -171,7 +171,7 @@ fn test_for_module_iterator() -> Result<(), Box<EvalAltResult>> {
     // Set a type iterator deep inside a nested module chain
     let mut sub_module = Module::new();
     sub_module.set_iterable::<MyIterableType>();
-    sub_module.set_fn_0("new_ts", || Ok(MyIterableType("hello".to_string())));
+    sub_module.set_native_fn("new_ts", || Ok(MyIterableType("hello".to_string())));
 
     let mut module = Module::new();
     module.set_sub_module("inner", sub_module);

@@ -23,11 +23,12 @@ fn test_module_sub_module() -> Result<(), Box<EvalAltResult>> {
     let mut sub_module2 = Module::new();
     sub_module2.set_var("answer", 41 as INT);
 
-    let hash_inc = sub_module2.set_fn_1_mut("inc", FnNamespace::Internal, |x: &mut INT| Ok(*x + 1));
+    let hash_inc = sub_module2.set_native_fn("inc", |x: &mut INT| Ok(*x + 1));
     sub_module2.build_index();
     assert!(!sub_module2.contains_indexed_global_functions());
 
-    sub_module2.set_fn_1_mut("super_inc", FnNamespace::Global, |x: &mut INT| Ok(*x + 1));
+    let super_hash = sub_module2.set_native_fn("super_inc", |x: &mut INT| Ok(*x + 1));
+    sub_module2.update_fn_namespace(super_hash, FnNamespace::Global);
     sub_module2.build_index();
     assert!(sub_module2.contains_indexed_global_functions());
 
@@ -91,16 +92,16 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
     let mut module = Module::new();
 
     module.set_var("answer", 42 as INT);
-    module.set_fn_4("sum", |x: INT, y: INT, z: INT, w: INT| Ok(x + y + z + w));
-    module.set_fn_1_mut("double", FnNamespace::Global, |x: &mut INT| {
+    module.set_native_fn("sum", |x: INT, y: INT, z: INT, w: INT| Ok(x + y + z + w));
+    let double_hash = module.set_native_fn("double", |x: &mut INT| {
         *x *= 2;
         Ok(())
     });
+    module.update_fn_namespace(double_hash, FnNamespace::Global);
 
     #[cfg(not(feature = "no_float"))]
-    module.set_fn_4_mut(
+    module.set_native_fn(
         "sum_of_three_args",
-        FnNamespace::Internal,
         |target: &mut INT, a: INT, b: INT, c: rhai::FLOAT| {
             *target = a + b + c as INT;
             Ok(())
@@ -407,9 +408,9 @@ fn test_module_str() -> Result<(), Box<EvalAltResult>> {
 
     let mut engine = rhai::Engine::new();
     let mut module = Module::new();
-    module.set_fn_1("test", test_fn);
-    module.set_fn_1("test2", test_fn2);
-    module.set_fn_1("test3", test_fn3);
+    module.set_native_fn("test", test_fn);
+    module.set_native_fn("test2", test_fn2);
+    module.set_native_fn("test3", test_fn3);
 
     let mut static_modules = rhai::module_resolvers::StaticModuleResolver::new();
     static_modules.insert("test", module);

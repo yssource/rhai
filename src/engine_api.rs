@@ -51,8 +51,18 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn register_fn<A>(&mut self, name: &str, func: impl RegisterNativeFunction<A, ()>) -> &mut Self {
-        func.register_into(self, name);
+    pub fn register_fn<A, F>(&mut self, name: &str, func: F) -> &mut Self
+    where
+        F: RegisterNativeFunction<A, ()>,
+    {
+        self.global_namespace.set_fn(
+            name,
+            FnNamespace::Global,
+            FnAccess::Public,
+            None,
+            &F::param_types(),
+            func.into_callable_function(),
+        );
         self
     }
     /// Register a custom fallible function with the [`Engine`].
@@ -79,12 +89,18 @@ impl Engine {
     /// engine.eval::<i64>("div(42, 0)")
     ///       .expect_err("expecting division by zero error!");
     /// ```
-    pub fn register_result_fn<A>(
-        &mut self,
-        name: &str,
-        func: impl RegisterNativeFunction<A, RhaiResult>,
-    ) -> &mut Self {
-        func.register_into(self, name);
+    pub fn register_result_fn<A, F>(&mut self, name: &str, func: F) -> &mut Self
+    where
+        F: RegisterNativeFunction<A, RhaiResult>,
+    {
+        self.global_namespace.set_fn(
+            name,
+            FnNamespace::Global,
+            FnAccess::Public,
+            None,
+            &F::param_types(),
+            func.into_callable_function(),
+        );
         self
     }
     /// Register a function of the [`Engine`].
@@ -803,8 +819,7 @@ impl Engine {
     pub fn load_package(&mut self, module: impl Into<Shared<Module>>) -> &mut Self {
         self.register_global_module(module.into())
     }
-    /// Register a shared [`Module`] as a static module namespace with the
-    /// [`Engine`].
+    /// Register a shared [`Module`] as a static module namespace with the [`Engine`].
     ///
     /// Functions marked [`FnNamespace::Global`] and type iterators are exposed to scripts without
     /// namespace qualifications.
@@ -819,7 +834,7 @@ impl Engine {
     ///
     /// // Create the module
     /// let mut module = Module::new();
-    /// module.set_fn_1("calc", |x: i64| Ok(x + 1));
+    /// module.set_native_fn("calc", |x: i64| Ok(x + 1));
     ///
     /// let module: Shared<Module> = module.into();
     ///
