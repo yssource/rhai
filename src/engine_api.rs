@@ -3,6 +3,7 @@
 use crate::dynamic::Variant;
 use crate::engine::{EvalContext, Imports, State};
 use crate::fn_native::{FnCallArgs, SendSync};
+use crate::fn_register::RegisterNativeFunction;
 use crate::optimize::OptimizationLevel;
 use crate::stdlib::{
     any::{type_name, TypeId},
@@ -24,6 +25,68 @@ use crate::Map;
 
 /// Engine public API
 impl Engine {
+    /// Register a custom function with the [`Engine`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::Engine;
+    ///
+    /// // Normal function
+    /// fn add(x: i64, y: i64) -> i64 {
+    ///     x + y
+    /// }
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// engine.register_fn("add", add);
+    ///
+    /// assert_eq!(engine.eval::<i64>("add(40, 2)")?, 42);
+    ///
+    /// // You can also register a closure.
+    /// engine.register_fn("sub", |x: i64, y: i64| x - y );
+    ///
+    /// assert_eq!(engine.eval::<i64>("sub(44, 2)")?, 42);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn register_fn<A>(&mut self, name: &str, func: impl RegisterNativeFunction<A, ()>) -> &mut Self {
+        func.register_into(self, name);
+        self
+    }
+    /// Register a custom fallible function with the [`Engine`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::{Engine, Dynamic, EvalAltResult};
+    ///
+    /// // Normal function
+    /// fn div(x: i64, y: i64) -> Result<Dynamic, Box<EvalAltResult>> {
+    ///     if y == 0 {
+    ///         // '.into()' automatically converts to 'Box<EvalAltResult::ErrorRuntime>'
+    ///         Err("division by zero!".into())
+    ///     } else {
+    ///         Ok((x / y).into())
+    ///     }
+    /// }
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// engine.register_result_fn("div", div);
+    ///
+    /// engine.eval::<i64>("div(42, 0)")
+    ///       .expect_err("expecting division by zero error!");
+    /// ```
+    pub fn register_result_fn<A>(
+        &mut self,
+        name: &str,
+        func: impl RegisterNativeFunction<A, RhaiResult>,
+    ) -> &mut Self {
+        func.register_into(self, name);
+        self
+    }
     /// Register a function of the [`Engine`].
     ///
     /// # WARNING - Low Level API
@@ -76,7 +139,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, RegisterFn};
+    /// use rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -115,7 +178,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, RegisterFn};
+    /// use rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -177,7 +240,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, RegisterFn};
+    /// use rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -199,7 +262,7 @@ impl Engine {
         name: &str,
         get_fn: impl Fn(&mut T) -> U + SendSync + 'static,
     ) -> &mut Self {
-        use crate::{engine::make_getter, RegisterFn};
+        use crate::engine::make_getter;
         self.register_fn(&make_getter(name), get_fn)
     }
     /// Register a getter function for a member of a registered type with the [`Engine`].
@@ -209,7 +272,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, Dynamic, EvalAltResult, RegisterFn};
+    /// use rhai::{Engine, Dynamic, EvalAltResult};
     ///
     /// #[derive(Clone)]
     /// struct TestStruct {
@@ -246,7 +309,7 @@ impl Engine {
         name: &str,
         get_fn: impl Fn(&mut T) -> RhaiResult + SendSync + 'static,
     ) -> &mut Self {
-        use crate::{engine::make_getter, RegisterResultFn};
+        use crate::engine::make_getter;
         self.register_result_fn(&make_getter(name), get_fn)
     }
     /// Register a setter function for a member of a registered type with the [`Engine`].
@@ -266,7 +329,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, RegisterFn};
+    /// use rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -292,7 +355,7 @@ impl Engine {
         name: &str,
         set_fn: impl Fn(&mut T, U) + SendSync + 'static,
     ) -> &mut Self {
-        use crate::{engine::make_setter, RegisterFn};
+        use crate::engine::make_setter;
         self.register_fn(&make_setter(name), set_fn)
     }
     /// Register a setter function for a member of a registered type with the [`Engine`].
@@ -300,7 +363,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, Dynamic, EvalAltResult, RegisterFn};
+    /// use rhai::{Engine, Dynamic, EvalAltResult};
     ///
     /// #[derive(Debug, Clone, Eq, PartialEq)]
     /// struct TestStruct {
@@ -341,7 +404,7 @@ impl Engine {
         name: &str,
         set_fn: impl Fn(&mut T, U) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
-        use crate::{engine::make_setter, RegisterResultFn};
+        use crate::engine::make_setter;
         self.register_result_fn(&make_setter(name), move |obj: &mut T, value: U| {
             set_fn(obj, value).map(Into::into)
         })
@@ -369,7 +432,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, RegisterFn};
+    /// use rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -420,7 +483,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, RegisterFn};
+    /// use rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -457,8 +520,7 @@ impl Engine {
             panic!("Cannot register indexer for strings.");
         }
 
-        use crate::{engine::FN_IDX_GET, RegisterFn};
-        self.register_fn(FN_IDX_GET, get_fn)
+        self.register_fn(crate::engine::FN_IDX_GET, get_fn)
     }
     /// Register an index getter for a custom type with the [`Engine`].
     ///
@@ -472,7 +534,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, Dynamic, EvalAltResult, RegisterFn};
+    /// use rhai::{Engine, Dynamic, EvalAltResult};
     ///
     /// #[derive(Clone)]
     /// struct TestStruct {
@@ -524,8 +586,7 @@ impl Engine {
             panic!("Cannot register indexer for strings.");
         }
 
-        use crate::{engine::FN_IDX_GET, RegisterResultFn};
-        self.register_result_fn(FN_IDX_GET, get_fn)
+        self.register_result_fn(crate::engine::FN_IDX_GET, get_fn)
     }
     /// Register an index setter for a custom type with the [`Engine`].
     ///
@@ -549,7 +610,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, RegisterFn};
+    /// use rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -589,8 +650,7 @@ impl Engine {
             panic!("Cannot register indexer for strings.");
         }
 
-        use crate::{engine::FN_IDX_SET, RegisterFn};
-        self.register_fn(FN_IDX_SET, set_fn)
+        self.register_fn(crate::engine::FN_IDX_SET, set_fn)
     }
     /// Register an index setter for a custom type with the [`Engine`].
     ///
@@ -602,7 +662,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, Dynamic, EvalAltResult, RegisterFn};
+    /// use rhai::{Engine, Dynamic, EvalAltResult};
     ///
     /// #[derive(Clone)]
     /// struct TestStruct {
@@ -661,10 +721,10 @@ impl Engine {
             panic!("Cannot register indexer for strings.");
         }
 
-        use crate::{engine::FN_IDX_SET, RegisterResultFn};
-        self.register_result_fn(FN_IDX_SET, move |obj: &mut T, index: X, value: U| {
-            set_fn(obj, index, value).map(Into::into)
-        })
+        self.register_result_fn(
+            crate::engine::FN_IDX_SET,
+            move |obj: &mut T, index: X, value: U| set_fn(obj, index, value).map(Into::into),
+        )
     }
     /// Short-hand for register both index getter and setter functions for a custom type with the [`Engine`].
     ///
@@ -691,7 +751,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, RegisterFn};
+    /// use rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///

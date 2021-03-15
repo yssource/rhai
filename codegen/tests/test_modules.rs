@@ -1,5 +1,5 @@
 use rhai::module_resolvers::*;
-use rhai::{Array, Engine, EvalAltResult, RegisterFn, FLOAT, INT};
+use rhai::{Array, Engine, EvalAltResult, FLOAT, INT};
 
 pub mod empty_module {
     use rhai::plugin::*;

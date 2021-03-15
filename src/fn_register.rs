@@ -4,71 +4,9 @@
 
 use crate::dynamic::{DynamicWriteLock, Variant};
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
-use crate::r#unsafe::unsafe_cast_box;
+use crate::r#unsafe::unsafe_try_cast;
 use crate::stdlib::{any::TypeId, boxed::Box, mem, string::String};
 use crate::{Dynamic, Engine, FnAccess, FnNamespace, NativeCallContext, RhaiResult};
-
-/// Trait to register custom functions with the [`Engine`].
-pub trait RegisterFn<FN, ARGS, RET> {
-    /// Register a custom function with the [`Engine`].
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, RegisterFn};
-    ///
-    /// // Normal function
-    /// fn add(x: i64, y: i64) -> i64 {
-    ///     x + y
-    /// }
-    ///
-    /// let mut engine = Engine::new();
-    ///
-    /// // You must use the trait rhai::RegisterFn to get this method.
-    /// engine.register_fn("add", add);
-    ///
-    /// assert_eq!(engine.eval::<i64>("add(40, 2)")?, 42);
-    ///
-    /// // You can also register a closure.
-    /// engine.register_fn("sub", |x: i64, y: i64| x - y );
-    ///
-    /// assert_eq!(engine.eval::<i64>("sub(44, 2)")?, 42);
-    /// # Ok(())
-    /// # }
-    /// ```
-    fn register_fn(&mut self, name: &str, f: FN) -> &mut Self;
-}
-
-/// Trait to register fallible custom functions returning [`Result`]`<`[`Dynamic`]`, `[`Box`]`<`[`EvalAltResult`][crate::EvalAltResult]`>>` with the [`Engine`].
-pub trait RegisterResultFn<FN, ARGS> {
-    /// Register a custom fallible function with the [`Engine`].
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use rhai::{Engine, Dynamic, RegisterResultFn, EvalAltResult};
-    ///
-    /// // Normal function
-    /// fn div(x: i64, y: i64) -> Result<Dynamic, Box<EvalAltResult>> {
-    ///     if y == 0 {
-    ///         // '.into()' automatically converts to 'Box<EvalAltResult::ErrorRuntime>'
-    ///         Err("division by zero!".into())
-    ///     } else {
-    ///         Ok((x / y).into())
-    ///     }
-    /// }
-    ///
-    /// let mut engine = Engine::new();
-    ///
-    /// // You must use the trait rhai::RegisterResultFn to get this method.
-    /// engine.register_result_fn("div", div);
-    ///
-    /// engine.eval::<i64>("div(42, 0)")
-    ///         .expect_err("expecting division by zero error!");
-    /// ```
-    fn register_result_fn(&mut self, name: &str, f: FN) -> &mut Self;
-}
 
 // These types are used to build a unique _marker_ tuple type for each combination
 // of function parameter types in order to make each trait implementation unique.
@@ -77,7 +15,7 @@ pub trait RegisterResultFn<FN, ARGS> {
 //
 // For example:
 //
-// `RegisterFn<FN, (Mut<A>, B, Ref<C>), R>`
+// `NativeFunction<(Mut<A>, B, Ref<C>), R>`
 //
 // will have the function prototype constraint to:
 //
@@ -107,7 +45,7 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
         ref_t.clone()
     } else if TypeId::of::<T>() == TypeId::of::<String>() {
         // If T is `String`, data must be `ImmutableString`, so map directly to it
-        *unsafe_cast_box(Box::new(mem::take(data).take_string().unwrap())).unwrap()
+        unsafe_try_cast(mem::take(data).take_string().unwrap()).unwrap()
     } else {
         // We consume the argument and then replace it with () - the argument is not supposed to be used again.
         // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
@@ -115,41 +53,10 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
     }
 }
 
-/// This macro creates a closure wrapping a registered function.
-macro_rules! make_func {
-	($fn:ident : $map:expr ; $($par:ident => $let:stmt => $convert:expr => $arg:expr),*) => {
-//   ^ function pointer
-//               ^ result mapping function
-//                           ^ function parameter generic type name (A, B, C etc.)
-//                                          ^ argument let statement(e.g. let mut A ...)
-//                                                       ^ dereferencing function
-//                                                                         ^ argument reference expression(like A, *B, &mut C etc)
-
-		Box::new(move |_: NativeCallContext, args: &mut FnCallArgs| {
-            // The arguments are assumed to be of the correct number and types!
-
-			let mut _drain = args.iter_mut();
-			$($let $par = ($convert)(_drain.next().unwrap()); )*
-
-            // Call the function with each argument value
-			let r = $fn($($arg),*);
-
-            // Map the result
-            $map(r)
-		}) as Box<FnAny>
-	};
-}
-
-/// To Dynamic mapping function.
-#[inline(always)]
-pub fn map_dynamic(data: impl Variant + Clone) -> RhaiResult {
-    Ok(data.into_dynamic())
-}
-
-/// To Dynamic mapping function.
-#[inline(always)]
-pub fn map_result(data: RhaiResult) -> RhaiResult {
-    data
+/// Trait to register custom functions with an [`Engine`].
+pub trait RegisterNativeFunction<Args, Result> {
+    /// Register the function with an [`Engine`].
+    fn register_into(self, engine: &mut Engine, name: &str);
 }
 
 macro_rules! def_register {
@@ -160,37 +67,95 @@ macro_rules! def_register {
     //   ^ function ABI type
     //                  ^ function parameter generic type name (A, B, C etc.)
     //                                ^ call argument(like A, *B, &mut C etc)
-    //                                            ^ function parameter marker type (T, Ref<T> or Mut<T>)
+    //                                             ^ function parameter marker type (T, Ref<T> or Mut<T>)
     //                                                         ^ function parameter actual type (T, &T or &mut T)
     //                                                                      ^ argument let statement
+
         impl<
-            $($par: Variant + Clone,)*
             FN: Fn($($param),*) -> RET + SendSync + 'static,
+            $($par: Variant + Clone,)*
             RET: Variant + Clone
-        > RegisterFn<FN, ($($mark,)*), RET> for Engine
-        {
+        > RegisterNativeFunction<($($mark,)*), ()> for FN {
             #[inline(always)]
-            fn register_fn(&mut self, name: &str, f: FN) -> &mut Self {
-                self.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public, None,
+            fn register_into(self, engine: &mut Engine, name: &str) {
+                engine.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public, None,
                     &[$(TypeId::of::<$par>()),*],
-                    CallableFunction::$abi(make_func!(f : map_dynamic ; $($par => $let => $clone => $arg),*))
+                    CallableFunction::$abi(Box::new(move |_: NativeCallContext, args: &mut FnCallArgs| {
+                        // The arguments are assumed to be of the correct number and types!
+                        let mut _drain = args.iter_mut();
+                        $($let $par = ($clone)(_drain.next().unwrap()); )*
+
+                        // Call the function with each argument value
+                        let r = self($($arg),*);
+
+                        // Map the result
+                        Ok(r.into_dynamic())
+                    }) as Box<FnAny>)
                 );
-                self
             }
         }
 
         impl<
+            FN: for<'a> Fn(NativeCallContext<'a>, $($param),*) -> RET + SendSync + 'static,
             $($par: Variant + Clone,)*
-            FN: Fn($($param),*) -> RhaiResult + SendSync + 'static,
-        > RegisterResultFn<FN, ($($mark,)*)> for Engine
-        {
+            RET: Variant + Clone
+        > RegisterNativeFunction<(NativeCallContext<'static>, $($mark,)*), ()> for FN {
             #[inline(always)]
-            fn register_result_fn(&mut self, name: &str, f: FN) -> &mut Self {
-                self.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public, None,
+            fn register_into(self, engine: &mut Engine, name: &str) {
+                engine.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public, None,
                     &[$(TypeId::of::<$par>()),*],
-                    CallableFunction::$abi(make_func!(f : map_result ; $($par => $let => $clone => $arg),*))
+                    CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
+                        // The arguments are assumed to be of the correct number and types!
+                        let mut _drain = args.iter_mut();
+                        $($let $par = ($clone)(_drain.next().unwrap()); )*
+
+                        // Call the function with each argument value
+                        let r = self(ctx, $($arg),*);
+
+                        // Map the result
+                        Ok(r.into_dynamic())
+                    }) as Box<FnAny>)
                 );
-                self
+            }
+        }
+
+        impl<
+            FN: Fn($($param),*) -> RhaiResult + SendSync + 'static,
+            $($par: Variant + Clone,)*
+        > RegisterNativeFunction<($($mark,)*), RhaiResult> for FN {
+            #[inline(always)]
+            fn register_into(self, engine: &mut Engine, name: &str) {
+                engine.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public, None,
+                    &[$(TypeId::of::<$par>()),*],
+                    CallableFunction::$abi(Box::new(move |_: NativeCallContext, args: &mut FnCallArgs| {
+                        // The arguments are assumed to be of the correct number and types!
+                        let mut _drain = args.iter_mut();
+                        $($let $par = ($clone)(_drain.next().unwrap()); )*
+
+                        // Call the function with each argument value
+                        self($($arg),*)
+                    }) as Box<FnAny>)
+                );
+            }
+        }
+
+        impl<
+            FN: for<'a> Fn(NativeCallContext<'a>, $($param),*) -> RhaiResult + SendSync + 'static,
+            $($par: Variant + Clone,)*
+        > RegisterNativeFunction<(NativeCallContext<'static>, $($mark,)*), RhaiResult> for FN {
+            #[inline(always)]
+            fn register_into(self, engine: &mut Engine, name: &str) {
+                engine.global_namespace.set_fn(name, FnNamespace::Global, FnAccess::Public, None,
+                    &[$(TypeId::of::<$par>()),*],
+                    CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
+                        // The arguments are assumed to be of the correct number and types!
+                        let mut _drain = args.iter_mut();
+                        $($let $par = ($clone)(_drain.next().unwrap()); )*
+
+                        // Call the function with each argument value
+                        self(ctx, $($arg),*)
+                    }) as Box<FnAny>)
+                );
             }
         }
 

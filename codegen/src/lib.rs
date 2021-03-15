@@ -35,7 +35,7 @@
 //! # Register a Rust Function with a Rhai `Module`
 //!
 //! ```
-//! use rhai::{EvalAltResult, FLOAT, Module, RegisterFn};
+//! use rhai::{EvalAltResult, FLOAT, Module};
 //! use rhai::plugin::*;
 //! use rhai::module_resolvers::*;
 //!
@@ -65,7 +65,7 @@
 //! # Register a Plugin Function with an `Engine`
 //!
 //! ```
-//! use rhai::{EvalAltResult, FLOAT, Module, RegisterFn};
+//! use rhai::{EvalAltResult, FLOAT, Module};
 //! use rhai::plugin::*;
 //! use rhai::module_resolvers::*;
 //!

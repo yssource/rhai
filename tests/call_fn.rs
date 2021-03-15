@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Func, FuncArgs, RegisterFn, Scope, INT};
+use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Func, FuncArgs, Scope, INT};
 use std::{any::TypeId, iter::once};
 
 #[test]
@@ -131,7 +131,7 @@ fn test_fn_ptr_raw() -> Result<(), Box<EvalAltResult>> {
                 let value = args[2].clone();
                 let this_ptr = args.get_mut(0).unwrap();
 
-                fp.call_dynamic(context, Some(this_ptr), [value])
+                fp.call_dynamic(&context, Some(this_ptr), [value])
             },
         );
 

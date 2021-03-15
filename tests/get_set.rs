@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_object"))]
 
-use rhai::{Engine, EvalAltResult, ImmutableString, RegisterFn, INT};
+use rhai::{Engine, EvalAltResult, ImmutableString, INT};
 
 #[test]
 fn test_get_set() -> Result<(), Box<EvalAltResult>> {

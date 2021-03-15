@@ -49,7 +49,7 @@ pub use crate::stdlib::cell::RefCell as Locked;
 pub use crate::stdlib::sync::RwLock as Locked;
 
 /// Context of a native Rust function call.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 pub struct NativeCallContext<'a> {
     engine: &'a Engine,
     fn_name: &'a str,
@@ -320,7 +320,7 @@ impl FnPtr {
     #[inline(always)]
     pub fn call_dynamic(
         &self,
-        ctx: NativeCallContext,
+        ctx: &NativeCallContext,
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {

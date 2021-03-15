@@ -5,7 +5,7 @@ pub use crate::stdlib::{any::TypeId, boxed::Box, format, mem, string::ToString, 
 use crate::RhaiResult;
 pub use crate::{
     Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, ImmutableString, Module,
-    NativeCallContext, Position, RegisterFn, RegisterResultFn,
+    NativeCallContext, Position,
 };
 
 #[cfg(not(features = "no_module"))]

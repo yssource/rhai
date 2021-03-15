@@ -1,7 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{
-    Engine, EvalAltResult, FnPtr, NativeCallContext, ParseErrorType, RegisterFn, Scope, INT,
-};
+use rhai::{Engine, EvalAltResult, FnPtr, NativeCallContext, ParseErrorType, Scope, INT};
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::mem::take;
@@ -20,7 +18,7 @@ fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
         &[TypeId::of::<FnPtr>(), TypeId::of::<INT>()],
         |context, args| {
             let fn_ptr = std::mem::take(args[0]).cast::<FnPtr>();
-            fn_ptr.call_dynamic(context, None, [std::mem::take(args[1])])
+            fn_ptr.call_dynamic(&context, None, [std::mem::take(args[1])])
         },
     );
 
@@ -159,7 +157,7 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
         |context, args| {
             let func = take(args[1]).cast::<FnPtr>();
 
-            func.call_dynamic(context, None, [])
+            func.call_dynamic(&context, None, [])
         },
     );
 
@@ -343,7 +341,7 @@ fn test_closures_external() -> Result<(), Box<EvalAltResult>> {
     let context = NativeCallContext::new(&engine, &fn_name, &lib);
 
     // Closure  'f' captures: the engine, the AST, and the curried function pointer
-    let f = move |x: INT| fn_ptr.call_dynamic(context, None, [x.into()]);
+    let f = move |x: INT| fn_ptr.call_dynamic(&context, None, [x.into()]);
 
     assert_eq!(f(42)?.take_string(), Ok("hello42".to_string()));
 

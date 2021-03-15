@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, RegisterFn, Scope, INT};
+use rhai::{Engine, EvalAltResult, Scope, INT};
 use std::sync::{Arc, RwLock};
 
 #[cfg(not(feature = "only_i32"))]

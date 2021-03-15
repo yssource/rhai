@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_optimize"))]
 
-use rhai::{Engine, EvalAltResult, OptimizationLevel, RegisterFn, INT};
+use rhai::{Engine, EvalAltResult, OptimizationLevel, INT};
 
 #[test]
 fn test_optimizer_run() -> Result<(), Box<EvalAltResult>> {

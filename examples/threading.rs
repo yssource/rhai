@@ -1,4 +1,4 @@
-use rhai::{Engine, RegisterFn, INT};
+use rhai::{Engine, INT};
 
 #[cfg(feature = "sync")]
 use std::sync::Mutex;

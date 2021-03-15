@@ -4,6 +4,12 @@ Rhai Release Notes
 Version 0.19.15
 ===============
 
+Breaking changes
+----------------
+
+* The traits `RegisterFn` and `RegisterResultFn` are removed.  `Engine::register_fn` and `Engine::register_result_fn` are now implemented directly on `Engine`.
+* `FnPtr::call_dynamic` now takes `&NativeCallContext` instead of consuming it.
+
 
 Version 0.19.14
 ===============

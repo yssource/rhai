@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, FnNamespace, Module, ParseErrorType, RegisterFn, INT};
+use rhai::{Engine, EvalAltResult, FnNamespace, Module, ParseErrorType, INT};
 
 #[test]
 fn test_functions() -> Result<(), Box<EvalAltResult>> {

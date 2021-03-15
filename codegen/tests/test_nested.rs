@@ -1,5 +1,5 @@
 use rhai::module_resolvers::*;
-use rhai::{Array, Engine, EvalAltResult, RegisterFn, FLOAT, INT};
+use rhai::{Array, Engine, EvalAltResult, FLOAT, INT};
 
 pub mod one_fn_module_nested_attr {
     use rhai::plugin::*;

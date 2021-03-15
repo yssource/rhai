@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, RegisterFn, INT};
+use rhai::{Engine, EvalAltResult, INT};
 
 fn add(x: INT, y: INT) -> INT {
     x + y

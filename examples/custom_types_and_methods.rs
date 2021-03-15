@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, RegisterFn, INT};
+use rhai::{Engine, EvalAltResult, INT};
 
 #[derive(Debug, Clone)]
 struct TestStruct {

@@ -25,7 +25,7 @@
 //! ## The Rust part
 //!
 //! ```,no_run
-//! use rhai::{Engine, EvalAltResult, RegisterFn};
+//! use rhai::{Engine, EvalAltResult};
 //!
 //! fn main() -> Result<(), Box<EvalAltResult>>
 //! {
@@ -126,7 +126,7 @@ pub use ast::{FnAccess, AST};
 pub use dynamic::Dynamic;
 pub use engine::{Engine, EvalContext, OP_CONTAINS, OP_EQUALS};
 pub use fn_native::{FnPtr, NativeCallContext};
-pub use fn_register::{RegisterFn, RegisterResultFn};
+pub use fn_register::RegisterNativeFunction;
 pub use module::{FnNamespace, Module};
 pub use parse_error::{LexError, ParseError, ParseErrorType};
 pub use result::EvalAltResult;

@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_index"))]
-use rhai::{Array, Engine, EvalAltResult, RegisterFn, INT};
+use rhai::{Array, Engine, EvalAltResult, INT};
 
 #[test]
 fn test_arrays() -> Result<(), Box<EvalAltResult>> {

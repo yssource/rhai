@@ -3,7 +3,7 @@
 ///! Test evaluating expressions
 extern crate test;
 
-use rhai::{Engine, OptimizationLevel, RegisterFn, Scope, INT};
+use rhai::{Engine, OptimizationLevel, Scope, INT};
 use test::Bencher;
 
 #[derive(Debug, Clone)]
