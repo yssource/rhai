@@ -82,15 +82,15 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, Dynamic, EvalAltResult};
+    /// use rhai::{Engine, EvalAltResult};
     ///
     /// // Normal function
-    /// fn div(x: i64, y: i64) -> Result<Dynamic, Box<EvalAltResult>> {
+    /// fn div(x: i64, y: i64) -> Result<i64, Box<EvalAltResult>> {
     ///     if y == 0 {
     ///         // '.into()' automatically converts to 'Box<EvalAltResult::ErrorRuntime>'
     ///         Err("division by zero!".into())
     ///     } else {
-    ///         Ok((x / y).into())
+    ///         Ok(x / y)
     ///     }
     /// }
     ///
@@ -102,9 +102,9 @@ impl Engine {
     ///       .expect_err("expecting division by zero error!");
     /// ```
     #[inline]
-    pub fn register_result_fn<A, F>(&mut self, name: &str, func: F) -> &mut Self
+    pub fn register_result_fn<A, F, R>(&mut self, name: &str, func: F) -> &mut Self
     where
-        F: RegisterNativeFunction<A, RhaiResult>,
+        F: RegisterNativeFunction<A, Result<R, Box<EvalAltResult>>>,
     {
         let param_types = F::param_types();
         let mut param_type_names: StaticVec<_> = F::param_names()
@@ -321,8 +321,8 @@ impl Engine {
     ///     fn new() -> Self { Self { field: 1 } }
     ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self) -> Result<Dynamic, Box<EvalAltResult>> {
-    ///         Ok(self.field.into())
+    ///     fn get_field(&mut self) -> Result<i64, Box<EvalAltResult>> {
+    ///         Ok(self.field)
     ///     }
     /// }
     ///
@@ -342,10 +342,10 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn register_get_result<T: Variant + Clone>(
+    pub fn register_get_result<T: Variant + Clone, U: Variant + Clone>(
         &mut self,
         name: &str,
-        get_fn: impl Fn(&mut T) -> RhaiResult + SendSync + 'static,
+        get_fn: impl Fn(&mut T) -> Result<U, Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
         use crate::engine::make_getter;
         self.register_result_fn(&make_getter(name), get_fn)
@@ -444,7 +444,7 @@ impl Engine {
     ) -> &mut Self {
         use crate::engine::make_setter;
         self.register_result_fn(&make_setter(name), move |obj: &mut T, value: U| {
-            set_fn(obj, value).map(Into::into)
+            set_fn(obj, value)
         })
     }
     /// Short-hand for registering both getter and setter functions
@@ -583,8 +583,8 @@ impl Engine {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
     ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self, index: i64) -> Result<Dynamic, Box<EvalAltResult>> {
-    ///         Ok(self.fields[index as usize].into())
+    ///     fn get_field(&mut self, index: i64) -> Result<i64, Box<EvalAltResult>> {
+    ///         Ok(self.fields[index as usize])
     ///     }
     /// }
     ///
@@ -606,9 +606,13 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
-    pub fn register_indexer_get_result<T: Variant + Clone, X: Variant + Clone>(
+    pub fn register_indexer_get_result<
+        T: Variant + Clone,
+        X: Variant + Clone,
+        U: Variant + Clone,
+    >(
         &mut self,
-        get_fn: impl Fn(&mut T, X) -> RhaiResult + SendSync + 'static,
+        get_fn: impl Fn(&mut T, X) -> Result<U, Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
@@ -761,7 +765,7 @@ impl Engine {
 
         self.register_result_fn(
             crate::engine::FN_IDX_SET,
-            move |obj: &mut T, index: X, value: U| set_fn(obj, index, value).map(Into::into),
+            move |obj: &mut T, index: X, value: U| set_fn(obj, index, value),
         )
     }
     /// Short-hand for register both index getter and setter functions for a custom type with the [`Engine`].

@@ -11,6 +11,11 @@ Breaking changes
 * `FnPtr::call_dynamic` now takes `&NativeCallContext` instead of consuming it.
 * All `Module::set_fn_XXX` methods are removed, in favor of `Module::set_native_fn`.
 
+Enhancements
+------------
+
+* `Engine::register_result_fn` no longer requires the successful return type to be `Dynamic`.  It can now be any type.
+
 
 Version 0.19.14
 ===============
