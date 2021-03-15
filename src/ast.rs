@@ -74,7 +74,7 @@ impl fmt::Display for ScriptFnDef {
             "{}{}({})",
             match self.access {
                 FnAccess::Public => "",
-                FnAccess::Private => "private",
+                FnAccess::Private => "private ",
             },
             self.name,
             self.params
@@ -118,7 +118,7 @@ impl fmt::Display for ScriptFnMetadata<'_> {
             "{}{}({})",
             match self.access {
                 FnAccess::Public => "",
-                FnAccess::Private => "private",
+                FnAccess::Private => "private ",
             },
             self.name,
             self.params.iter().cloned().collect::<Vec<_>>().join(", ")
