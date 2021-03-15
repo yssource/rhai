@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, FnNamespace, Module, ParseErrorType, INT};
+use rhai::{Engine, EvalAltResult, FnNamespace, Module, NativeCallContext, ParseErrorType, INT};
 
 #[test]
 fn test_functions() -> Result<(), Box<EvalAltResult>> {
@@ -52,6 +52,20 @@ fn test_functions() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
+fn test_functions_context() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    engine.set_max_modules(40);
+    engine.register_fn("test", |context: NativeCallContext, x: INT| {
+        context.engine().max_modules() as INT + x
+    });
+
+    assert_eq!(engine.eval::<INT>("test(2)")?, 42);
+
+    Ok(())
+}
+
+#[test]
 fn test_functions_params() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
@@ -67,7 +81,6 @@ fn test_functions_params() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
-#[cfg(not(feature = "no_function"))]
 #[test]
 fn test_functions_namespaces() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
@@ -81,12 +94,16 @@ fn test_functions_namespaces() -> Result<(), Box<EvalAltResult>> {
         engine.register_static_module("hello", m.into());
 
         assert_eq!(engine.eval::<INT>("test()")?, 999);
+
+        #[cfg(not(feature = "no_function"))]
         assert_eq!(engine.eval::<INT>("fn test() { 123 } test()")?, 123);
     }
 
     engine.register_fn("test", || 42 as INT);
 
     assert_eq!(engine.eval::<INT>("test()")?, 42);
+
+    #[cfg(not(feature = "no_function"))]
     assert_eq!(engine.eval::<INT>("fn test() { 123 } test()")?, 123);
 
     Ok(())
