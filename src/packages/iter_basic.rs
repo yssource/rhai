@@ -29,7 +29,7 @@ where
         #[cfg(not(feature = "unchecked"))]
         if let Some(r) = from.checked_add(&step) {
             if r == from {
-                return Err(Box::new(EvalAltResult::ErrorInFunctionCall(
+                return EvalAltResult::ErrorInFunctionCall(
                     "range".to_string(),
                     "".to_string(),
                     Box::new(EvalAltResult::ErrorArithmetic(
@@ -37,7 +37,8 @@ where
                         crate::Position::NONE,
                     )),
                     crate::Position::NONE,
-                )));
+                )
+                .into();
             }
         }
 
@@ -204,10 +205,10 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
                 if step.is_zero() {
                     use crate::stdlib::string::ToString;
 
-                    return Err(Box::new(EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
+                    return EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
                         Box::new(EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE)),
                         crate::Position::NONE,
-                    )));
+                    ).into();
                 }
 
                 Ok(Self(from, to, step))
@@ -245,6 +246,8 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
                 }
             }
         }
+
+        impl crate::stdlib::iter::FusedIterator for StepDecimalRange {}
 
         lib.set_iterator::<StepDecimalRange>();
 

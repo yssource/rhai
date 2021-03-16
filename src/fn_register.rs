@@ -94,8 +94,7 @@ macro_rules! def_register {
             #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(type_name::<$par>()),*].into_boxed_slice() }
             #[inline(always)] fn return_type() -> TypeId { TypeId::of::<RET>() }
             #[inline(always)] fn return_type_name() -> &'static str { type_name::<RET>() }
-            #[inline(always)]
-            fn into_callable_function(self) -> CallableFunction {
+            #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |_: NativeCallContext, args: &mut FnCallArgs| {
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
@@ -119,8 +118,7 @@ macro_rules! def_register {
             #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(type_name::<$par>()),*].into_boxed_slice() }
             #[inline(always)] fn return_type() -> TypeId { TypeId::of::<RET>() }
             #[inline(always)] fn return_type_name() -> &'static str { type_name::<RET>() }
-            #[inline(always)]
-            fn into_callable_function(self) -> CallableFunction {
+            #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
@@ -144,8 +142,7 @@ macro_rules! def_register {
             #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(type_name::<$par>()),*].into_boxed_slice() }
             #[inline(always)] fn return_type() -> TypeId { TypeId::of::<Result<RET, Box<EvalAltResult>>>() }
             #[inline(always)] fn return_type_name() -> &'static str { type_name::<Result<RET, Box<EvalAltResult>>>() }
-            #[inline(always)]
-            fn into_callable_function(self) -> CallableFunction {
+            #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |_: NativeCallContext, args: &mut FnCallArgs| {
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
@@ -166,8 +163,7 @@ macro_rules! def_register {
             #[inline(always)] fn param_names() -> Box<[&'static str]> { vec![$(type_name::<$par>()),*].into_boxed_slice() }
             #[inline(always)] fn return_type() -> TypeId { TypeId::of::<Result<RET, Box<EvalAltResult>>>() }
             #[inline(always)] fn return_type_name() -> &'static str { type_name::<Result<RET, Box<EvalAltResult>>>() }
-            #[inline(always)]
-            fn into_callable_function(self) -> CallableFunction {
+            #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();

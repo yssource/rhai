@@ -33,28 +33,6 @@ use crate::{
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
 
-/// Extract the property name from a getter function name.
-#[cfg(not(feature = "no_object"))]
-#[inline(always)]
-fn extract_prop_from_getter(_fn_name: &str) -> Option<&str> {
-    if _fn_name.starts_with(crate::engine::FN_GET) {
-        Some(&_fn_name[crate::engine::FN_GET.len()..])
-    } else {
-        None
-    }
-}
-
-/// Extract the property name from a setter function name.
-#[cfg(not(feature = "no_object"))]
-#[inline(always)]
-fn extract_prop_from_setter(_fn_name: &str) -> Option<&str> {
-    if _fn_name.starts_with(crate::engine::FN_SET) {
-        Some(&_fn_name[crate::engine::FN_SET.len()..])
-    } else {
-        None
-    }
-}
-
 /// A type that temporarily stores a mutable reference to a `Dynamic`,
 /// replacing it with a cloned copy.
 #[derive(Debug, Default)]
@@ -407,69 +385,79 @@ impl Engine {
             });
         }
 
-        // Getter function not found?
-        #[cfg(not(feature = "no_object"))]
-        if let Some(prop) = extract_prop_from_getter(fn_name) {
-            return EvalAltResult::ErrorDotExpr(
-                format!(
-                    "Unknown property '{}' - a getter is not registered for type '{}'",
-                    prop,
-                    self.map_type_name(args[0].type_name())
-                ),
+        match fn_name {
+            // index getter function not found?
+            #[cfg(not(feature = "no_index"))]
+            crate::engine::FN_IDX_GET => {
+                assert!(args.len() == 2);
+
+                EvalAltResult::ErrorFunctionNotFound(
+                    format!(
+                        "{} [{}]",
+                        self.map_type_name(args[0].type_name()),
+                        self.map_type_name(args[1].type_name()),
+                    ),
+                    pos,
+                )
+                .into()
+            }
+
+            // index setter function not found?
+            #[cfg(not(feature = "no_index"))]
+            crate::engine::FN_IDX_SET => {
+                assert!(args.len() == 3);
+
+                EvalAltResult::ErrorFunctionNotFound(
+                    format!(
+                        "{} [{}]=",
+                        self.map_type_name(args[0].type_name()),
+                        self.map_type_name(args[1].type_name()),
+                    ),
+                    pos,
+                )
+                .into()
+            }
+
+            // Getter function not found?
+            #[cfg(not(feature = "no_object"))]
+            _ if fn_name.starts_with(crate::engine::FN_GET) => {
+                assert!(args.len() == 1);
+
+                EvalAltResult::ErrorDotExpr(
+                    format!(
+                        "Unknown property '{}' - a getter is not registered for type '{}'",
+                        &fn_name[crate::engine::FN_GET.len()..],
+                        self.map_type_name(args[0].type_name())
+                    ),
+                    pos,
+                )
+                .into()
+            }
+
+            // Setter function not found?
+            #[cfg(not(feature = "no_object"))]
+            _ if fn_name.starts_with(crate::engine::FN_SET) => {
+                assert!(args.len() == 2);
+
+                EvalAltResult::ErrorDotExpr(
+                    format!(
+                        "No writable property '{}' - a setter is not registered for type '{}' to handle '{}'",
+                        &fn_name[crate::engine::FN_SET.len()..],
+                        self.map_type_name(args[0].type_name()),
+                        self.map_type_name(args[1].type_name()),
+                    ),
+                    pos,
+                )
+                .into()
+            }
+
+            // Raise error
+            _ => EvalAltResult::ErrorFunctionNotFound(
+                self.gen_call_signature(None, fn_name, args.as_ref()),
                 pos,
             )
-            .into();
+            .into(),
         }
-
-        // Setter function not found?
-        #[cfg(not(feature = "no_object"))]
-        if let Some(prop) = extract_prop_from_setter(fn_name) {
-            return EvalAltResult::ErrorDotExpr(
-                format!(
-                    "No writable property '{}' - a setter is not registered for type '{}' to handle '{}'",
-                    prop,
-                    self.map_type_name(args[0].type_name()),
-                    self.map_type_name(args[1].type_name()),
-                ),
-                pos,
-            )
-            .into();
-        }
-
-        // index getter function not found?
-        #[cfg(not(feature = "no_index"))]
-        if fn_name == crate::engine::FN_IDX_GET && args.len() == 2 {
-            return EvalAltResult::ErrorFunctionNotFound(
-                format!(
-                    "{} [{}]",
-                    self.map_type_name(args[0].type_name()),
-                    self.map_type_name(args[1].type_name()),
-                ),
-                pos,
-            )
-            .into();
-        }
-
-        // index setter function not found?
-        #[cfg(not(feature = "no_index"))]
-        if fn_name == crate::engine::FN_IDX_SET {
-            return EvalAltResult::ErrorFunctionNotFound(
-                format!(
-                    "{} [{}]=",
-                    self.map_type_name(args[0].type_name()),
-                    self.map_type_name(args[1].type_name()),
-                ),
-                pos,
-            )
-            .into();
-        }
-
-        // Raise error
-        EvalAltResult::ErrorFunctionNotFound(
-            self.gen_call_signature(None, fn_name, args.as_ref()),
-            pos,
-        )
-        .into()
     }
 
     /// Call a script-defined function.
@@ -500,7 +488,7 @@ impl Engine {
             err: Box<EvalAltResult>,
             pos: Position,
         ) -> RhaiResult {
-            Err(Box::new(EvalAltResult::ErrorInFunctionCall(
+            EvalAltResult::ErrorInFunctionCall(
                 name,
                 fn_def
                     .lib
@@ -510,7 +498,8 @@ impl Engine {
                     .to_string(),
                 err,
                 pos,
-            )))
+            )
+            .into()
         }
 
         self.inc_operations(state, pos)?;
@@ -523,7 +512,7 @@ impl Engine {
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
         if level > self.max_call_levels() {
-            return Err(Box::new(EvalAltResult::ErrorStackOverflow(pos)));
+            return EvalAltResult::ErrorStackOverflow(pos).into();
         }
 
         let orig_scope_level = state.scope_level;
@@ -586,10 +575,10 @@ impl Engine {
                     make_error(fn_name, fn_def, state, err, pos)
                 }
                 // System errors are passed straight-through
-                mut err if err.is_system_exception() => Err(Box::new({
+                mut err if err.is_system_exception() => {
                     err.set_position(pos);
-                    err
-                })),
+                    err.into()
+                }
                 // Other errors are wrapped in `ErrorInFunctionCall`
                 _ => make_error(fn_def.name.to_string(), fn_def, state, err, pos),
             });
@@ -699,36 +688,39 @@ impl Engine {
             // Handle is_shared()
             #[cfg(not(feature = "no_closure"))]
             crate::engine::KEYWORD_IS_SHARED if args.len() == 1 => {
-                return Err(Box::new(EvalAltResult::ErrorRuntime(
+                return EvalAltResult::ErrorRuntime(
                     format!(
                         "'{}' should not be called this way. Try {}(...);",
                         fn_name, fn_name
                     )
                     .into(),
                     pos,
-                )))
+                )
+                .into()
             }
 
             KEYWORD_FN_PTR | KEYWORD_EVAL | KEYWORD_IS_DEF_VAR if args.len() == 1 => {
-                return Err(Box::new(EvalAltResult::ErrorRuntime(
+                return EvalAltResult::ErrorRuntime(
                     format!(
                         "'{}' should not be called this way. Try {}(...);",
                         fn_name, fn_name
                     )
                     .into(),
                     pos,
-                )))
+                )
+                .into()
             }
 
             KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY if !args.is_empty() => {
-                return Err(Box::new(EvalAltResult::ErrorRuntime(
+                return EvalAltResult::ErrorRuntime(
                     format!(
                         "'{}' should not be called this way. Try {}(...);",
                         fn_name, fn_name
                     )
                     .into(),
                     pos,
-                )))
+                )
+                .into()
             }
 
             _ => (),
@@ -865,7 +857,6 @@ impl Engine {
     }
 
     /// Evaluate a text script in place - used primarily for 'eval'.
-    #[inline]
     fn eval_script_expr_in_place(
         &self,
         scope: &mut Scope,

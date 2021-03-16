@@ -1133,7 +1133,7 @@ impl Engine {
                                 #[cfg(not(feature = "no_index"))]
                                 EvalAltResult::ErrorIndexingType(_, _) => Some(new_val.unwrap()),
                                 // Any other error - return
-                                err => return Err(Box::new(err)),
+                                err => return err.into(),
                             },
                         };
 
@@ -1986,10 +1986,11 @@ impl Engine {
 
                 if lhs_ptr.as_ref().is_read_only() {
                     // Assignment to constant variable
-                    Err(Box::new(EvalAltResult::ErrorAssignmentToConstant(
+                    EvalAltResult::ErrorAssignmentToConstant(
                         lhs_expr.get_variable_access(false).unwrap().to_string(),
                         pos,
-                    )))
+                    )
+                    .into()
                 } else {
                     self.eval_op_assignment(
                         mods,
