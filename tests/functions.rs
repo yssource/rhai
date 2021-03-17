@@ -52,6 +52,7 @@ fn test_functions() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[cfg(not(feature = "no_module"))]
+#[cfg(not(feature = "unchecked"))]
 #[test]
 fn test_functions_context() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
