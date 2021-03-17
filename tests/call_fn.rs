@@ -215,5 +215,13 @@ fn test_anonymous_fn() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(calc_func(42, "hello".to_string(), 9)?, 423);
 
+    let calc_func = Func::<(INT, &str, INT), INT>::create_from_script(
+        Engine::new(),
+        "fn calc(x, y, z) { (x + len(y)) * z }",
+        "calc",
+    )?;
+
+    assert_eq!(calc_func(42, "hello", 9)?, 423);
+
     Ok(())
 }

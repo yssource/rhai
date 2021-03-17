@@ -21,9 +21,9 @@ pub trait Func<ARGS, RET> {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, Func};                       // use 'Func' for 'create_from_ast'
+    /// use rhai::{Engine, Func};               // use 'Func' for 'create_from_ast'
     ///
-    /// let engine = Engine::new();                     // create a new 'Engine' just for this
+    /// let engine = Engine::new();             // create a new 'Engine' just for this
     ///
     /// let ast = engine.compile("fn calc(x, y) { x + len(y) < 42 }")?;
     ///
@@ -32,15 +32,15 @@ pub trait Func<ARGS, RET> {
     /// //   2) the return type of the script function
     ///
     /// // 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, Box<EvalAltResult>>> and is callable!
-    /// let func = Func::<(i64, String), bool>::create_from_ast(
-    /// //                ^^^^^^^^^^^^^ function parameter types in tuple
+    /// let func = Func::<(i64, &str), bool>::create_from_ast(
+    /// //                ^^^^^^^^^^^ function parameter types in tuple
     ///
     ///                                             engine, // the 'Engine' is consumed into the closure
     ///                                             ast,    // the 'AST'
     ///                                             "calc"  // the entry-point function name
     ///                                         );
     ///
-    /// func(123, "hello".to_string())? == false;       // call the anonymous function
+    /// func(123, "hello")? == false;           // call the anonymous function
     /// # Ok(())
     /// # }
     fn create_from_ast(self, ast: AST, entry_point: &str) -> Self::Output;
@@ -53,9 +53,9 @@ pub trait Func<ARGS, RET> {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, Func};                       // use 'Func' for 'create_from_script'
+    /// use rhai::{Engine, Func};               // use 'Func' for 'create_from_script'
     ///
-    /// let engine = Engine::new();                     // create a new 'Engine' just for this
+    /// let engine = Engine::new();             // create a new 'Engine' just for this
     ///
     /// let script = "fn calc(x, y) { x + len(y) < 42 }";
     ///
@@ -64,15 +64,15 @@ pub trait Func<ARGS, RET> {
     /// //   2) the return type of the script function
     ///
     /// // 'func' will have type Box<dyn Fn(i64, String) -> Result<bool, Box<EvalAltResult>>> and is callable!
-    /// let func = Func::<(i64, String), bool>::create_from_script(
-    /// //                ^^^^^^^^^^^^^ function parameter types in tuple
+    /// let func = Func::<(i64, &str), bool>::create_from_script(
+    /// //                ^^^^^^^^^^^ function parameter types in tuple
     ///
     ///                                             engine, // the 'Engine' is consumed into the closure
     ///                                             script, // the script, notice number of parameters must match
     ///                                             "calc"  // the entry-point function name
     ///                                         )?;
     ///
-    /// func(123, "hello".to_string())? == false;       // call the anonymous function
+    /// func(123, "hello")? == false;           // call the anonymous function
     /// # Ok(())
     /// # }
     /// ```
