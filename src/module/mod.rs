@@ -782,7 +782,7 @@ impl Module {
     ///                     Ok(orig)                // return Result<T, Box<EvalAltResult>>
     ///                 });
     ///
-    /// assert!(module.contains_fn(hash, true));
+    /// assert!(module.contains_fn(hash));
     /// ```
     #[inline(always)]
     pub fn set_raw_fn<T: Variant + Clone>(
@@ -829,7 +829,7 @@ impl Module {
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_native_fn("calc", || Ok(42_i64));
-    /// assert!(module.contains_fn(hash, true));
+    /// assert!(module.contains_fn(hash));
     /// ```
     #[inline(always)]
     pub fn set_native_fn<ARGS, T, F>(&mut self, name: impl Into<String>, func: F) -> u64
@@ -863,7 +863,7 @@ impl Module {
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_getter_fn("value", |x: &mut i64| { Ok(*x) });
-    /// assert!(module.contains_fn(hash, true));
+    /// assert!(module.contains_fn(hash));
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
@@ -904,7 +904,7 @@ impl Module {
     ///     *x = y.len() as i64;
     ///     Ok(())
     /// });
-    /// assert!(module.contains_fn(hash, true));
+    /// assert!(module.contains_fn(hash));
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
@@ -949,7 +949,7 @@ impl Module {
     /// let hash = module.set_indexer_get_fn(|x: &mut i64, y: ImmutableString| {
     ///     Ok(*x + y.len() as i64)
     /// });
-    /// assert!(module.contains_fn(hash, true));
+    /// assert!(module.contains_fn(hash));
     /// ```
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
@@ -1010,7 +1010,7 @@ impl Module {
     ///     *x = y.len() as i64 + value;
     ///     Ok(())
     /// });
-    /// assert!(module.contains_fn(hash, true));
+    /// assert!(module.contains_fn(hash));
     /// ```
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
@@ -1076,8 +1076,8 @@ impl Module {
     ///         Ok(())
     ///     }
     /// );
-    /// assert!(module.contains_fn(hash_get, true));
-    /// assert!(module.contains_fn(hash_set, true));
+    /// assert!(module.contains_fn(hash_get));
+    /// assert!(module.contains_fn(hash_set));
     /// ```
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]

@@ -1303,7 +1303,7 @@ pub struct OpAssignment {
 ///
 /// Two separate hashes are pre-calculated because of the following pattern:
 ///
-/// ```rust,no_run
+/// ```,ignore
 /// func(a, b, c);      // Native: func(a, b, c) - 3 parameters
 ///                     // Script: func(a, b, c) - 3 parameters
 ///
