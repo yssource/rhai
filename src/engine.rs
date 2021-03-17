@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::ast::{Expr, FnCallExpr, FnHash, Ident, OpAssignment, ReturnType, Stmt, StmtBlock};
+use crate::ast::{Expr, FnCallExpr, FnCallHash, Ident, OpAssignment, ReturnType, Stmt, StmtBlock};
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_native::{
     CallableFunction, IteratorFn, OnDebugCallback, OnPrintCallback, OnProgressCallback,
@@ -527,10 +527,8 @@ pub struct State {
     /// Embedded module resolver.
     #[cfg(not(feature = "no_module"))]
     pub resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
-    /// function resolution cache.
-    fn_resolution_caches: StaticVec<FnResolutionCache>,
-    /// Free resolution caches.
-    fn_resolution_caches_free_list: Vec<FnResolutionCache>,
+    /// Function resolution cache and free list.
+    fn_resolution_caches: (StaticVec<FnResolutionCache>, Vec<FnResolutionCache>),
 }
 
 impl State {
@@ -541,20 +539,19 @@ impl State {
     }
     /// Get a mutable reference to the current function resolution cache.
     pub fn fn_resolution_cache_mut(&mut self) -> &mut FnResolutionCache {
-        if self.fn_resolution_caches.is_empty() {
+        if self.fn_resolution_caches.0.is_empty() {
             self.fn_resolution_caches
-                .push(HashMap::with_capacity_and_hasher(16, StraightHasherBuilder));
+                .0
+                .push(HashMap::with_capacity_and_hasher(64, StraightHasherBuilder));
         }
-        self.fn_resolution_caches.last_mut().unwrap()
+        self.fn_resolution_caches.0.last_mut().unwrap()
     }
     /// Push an empty function resolution cache onto the stack and make it current.
     #[allow(dead_code)]
     pub fn push_fn_resolution_cache(&mut self) {
-        self.fn_resolution_caches.push(
-            self.fn_resolution_caches_free_list
-                .pop()
-                .unwrap_or_default(),
-        );
+        self.fn_resolution_caches
+            .0
+            .push(self.fn_resolution_caches.1.pop().unwrap_or_default());
     }
     /// Remove the current function resolution cache from the stack and make the last one current.
     ///
@@ -562,9 +559,9 @@ impl State {
     ///
     /// Panics if there are no more function resolution cache in the stack.
     pub fn pop_fn_resolution_cache(&mut self) {
-        let mut cache = self.fn_resolution_caches.pop().unwrap();
+        let mut cache = self.fn_resolution_caches.0.pop().unwrap();
         cache.clear();
-        self.fn_resolution_caches_free_list.push(cache);
+        self.fn_resolution_caches.1.push(cache);
     }
 }
 
@@ -1143,7 +1140,7 @@ impl Engine {
                             let ((_, val_pos), _) = new_val;
 
                             let hash_set =
-                                FnHash::from_native(calc_fn_hash(empty(), FN_IDX_SET, 3));
+                                FnCallHash::from_native(calc_fn_hash(empty(), FN_IDX_SET, 3));
                             let args = &mut [target_val, &mut idx_val2, &mut (new_val.0).0];
 
                             self.exec_fn_call(
@@ -1221,7 +1218,7 @@ impl Engine {
                     // xxx.id = ???
                     Expr::Property(x) if new_val.is_some() => {
                         let (_, (setter, hash_set), Ident { pos, .. }) = x.as_ref();
-                        let hash = FnHash::from_native(*hash_set);
+                        let hash = FnCallHash::from_native(*hash_set);
                         let mut new_val = new_val;
                         let mut args = [target_val, &mut (new_val.as_mut().unwrap().0).0];
                         self.exec_fn_call(
@@ -1233,7 +1230,7 @@ impl Engine {
                     // xxx.id
                     Expr::Property(x) => {
                         let ((getter, hash_get), _, Ident { pos, .. }) = x.as_ref();
-                        let hash = FnHash::from_native(*hash_get);
+                        let hash = FnCallHash::from_native(*hash_get);
                         let mut args = [target_val];
                         self.exec_fn_call(
                             mods, state, lib, getter, hash, &mut args, is_ref, true, *pos, None,
@@ -1282,8 +1279,8 @@ impl Engine {
                             Expr::Property(p) => {
                                 let ((getter, hash_get), (setter, hash_set), Ident { pos, .. }) =
                                     p.as_ref();
-                                let hash_get = FnHash::from_native(*hash_get);
-                                let hash_set = FnHash::from_native(*hash_set);
+                                let hash_get = FnCallHash::from_native(*hash_get);
+                                let hash_set = FnCallHash::from_native(*hash_set);
                                 let arg_values = &mut [target_val, &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self.exec_fn_call(
@@ -1615,7 +1612,7 @@ impl Engine {
                 let type_name = target.type_name();
                 let mut idx = idx;
                 let args = &mut [target, &mut idx];
-                let hash_get = FnHash::from_native(calc_fn_hash(empty(), FN_IDX_GET, 2));
+                let hash_get = FnCallHash::from_native(calc_fn_hash(empty(), FN_IDX_GET, 2));
                 self.exec_fn_call(
                     _mods, state, _lib, FN_IDX_GET, hash_get, args, _is_ref, true, idx_pos, None,
                     _level,

@@ -1,6 +1,6 @@
 //! Implement function-calling mechanism for [`Engine`].
 
-use crate::ast::FnHash;
+use crate::ast::FnCallHash;
 use crate::engine::{
     FnResolutionCacheEntry, Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
     KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
@@ -627,7 +627,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        hash: FnHash,
+        hash: FnCallHash,
         args: &mut FnCallArgs,
         is_ref: bool,
         _is_method: bool,
@@ -893,7 +893,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        mut hash: FnHash,
+        mut hash: FnCallHash,
         target: &mut crate::engine::Target,
         (call_args, call_arg_positions): &mut (StaticVec<Dynamic>, StaticVec<Position>),
         pos: Position,
@@ -913,7 +913,7 @@ impl Engine {
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hashes
-                let new_hash = FnHash::from_script(calc_fn_hash(empty(), fn_name, args_len));
+                let new_hash = FnCallHash::from_script(calc_fn_hash(empty(), fn_name, args_len));
                 // Arguments are passed as-is, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
                 let mut arg_values = curry
@@ -949,7 +949,7 @@ impl Engine {
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hash
-                let new_hash = FnHash::from_script_and_native(
+                let new_hash = FnCallHash::from_script_and_native(
                     calc_fn_hash(empty(), fn_name, args_len),
                     calc_fn_hash(empty(), fn_name, args_len + 1),
                 );
@@ -1024,7 +1024,7 @@ impl Engine {
                                     call_arg_positions.insert(i, Position::NONE);
                                 });
                             // Recalculate the hash based on the new function name and new arguments
-                            hash = FnHash::from_script_and_native(
+                            hash = FnCallHash::from_script_and_native(
                                 calc_fn_hash(empty(), fn_name, call_args.len()),
                                 calc_fn_hash(empty(), fn_name, call_args.len() + 1),
                             );
@@ -1062,7 +1062,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         fn_name: &str,
         args_expr: &[Expr],
-        mut hash: FnHash,
+        mut hash: FnCallHash,
         pos: Position,
         capture_scope: bool,
         level: usize,
@@ -1101,9 +1101,9 @@ impl Engine {
                 // Recalculate hash
                 let args_len = args_expr.len() + curry.len();
                 hash = if !hash.is_native_only() {
-                    FnHash::from_script(calc_fn_hash(empty(), name, args_len))
+                    FnCallHash::from_script(calc_fn_hash(empty(), name, args_len))
                 } else {
-                    FnHash::from_native(calc_fn_hash(empty(), name, args_len))
+                    FnCallHash::from_native(calc_fn_hash(empty(), name, args_len))
                 };
             }
             // Handle Fn()

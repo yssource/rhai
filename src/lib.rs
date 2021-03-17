@@ -191,8 +191,8 @@ pub use token::{get_next_token, parse_string_literal, InputStream, Token, Tokeni
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
 pub use ast::{
-    ASTNode, BinaryExpr, CustomExpr, Expr, FloatWrapper, FnCallExpr, FnHash, Ident, OpAssignment,
-    ReturnType, ScriptFnDef, Stmt, StmtBlock,
+    ASTNode, BinaryExpr, CustomExpr, Expr, FloatWrapper, FnCallExpr, FnCallHash, Ident,
+    OpAssignment, ReturnType, ScriptFnDef, Stmt, StmtBlock,
 };
 
 #[cfg(feature = "internals")]
@@ -207,15 +207,72 @@ pub use engine::Limits;
 #[deprecated = "this type is volatile and may change"]
 pub use module::NamespaceRef;
 
-/// _(INTERNALS)_ Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
-/// which is a specialized [`Vec`] backed by a small, fixed-size array when there are <= 4 items stored.
-/// Exported under the `internals` feature only.
+/// Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec), which is a
+/// specialized [`Vec`] backed by a small, inline, fixed-size array when there are <= 4 items stored.
+///
+/// # Background
+///
+/// And Saint Attila raised the `SmallVec` up on high, saying, "O Lord, bless this Thy `SmallVec`
+/// that, with it, Thou mayest blow Thine allocation costs to tiny bits in Thy mercy."
+///
+/// And the Lord did grin, and the people did feast upon the lambs and sloths and carp and anchovies
+/// and orangutans and breakfast cereals and fruit bats and large chu...
+///
+/// And the Lord spake, saying, "First shalt thou depend on the [`smallvec`](https://crates.io/crates/smallvec) crate.
+/// Then, shalt thou keep four inline. No more. No less. Four shalt be the number thou shalt keep inline,
+/// and the number to keep inline shalt be four. Five shalt thou not keep inline, nor either keep inline
+/// thou two or three, excepting that thou then proceed to four. Six is right out. Once the number four,
+/// being the forth number, be reached, then, lobbest thou thy `SmallVec` towards thy heap, who,
+/// being slow and cache-naughty in My sight, shall snuff it."
+///
+/// # Explanation on the Number Four
+///
+/// `StaticVec` is used frequently to keep small lists of items in inline (non-heap) storage in
+/// order to improve cache friendliness and reduce indirections.
+///
+/// The number 4, other than being the holy number, is carefully chosen for a balance between
+/// storage space and reduce allocations. That is because most function calls (and most functions,
+/// in that matter) contain fewer than 5 arguments, the exception being closures that capture a
+/// large number of external variables.
+///
+/// In addition, most scripts blocks either contain many statements, or just a few lines;
+/// most scripts load fewer than 5 external modules; most module paths contain fewer than 5 levels
+/// (e.g. `std::collections::map::HashMap` is 4 levels, and that's already quite long).
 #[cfg(not(feature = "internals"))]
 type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 
-/// _(INTERNALS)_ Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec),
-/// which is a specialized [`Vec`] backed by a small, fixed-size array when there are <= 4 items stored.
+/// _(INTERNALS)_ Alias to [`smallvec`](https://crates.io/crates/smallvec), which is a specialized
+/// [`Vec`] backed by a small, inline, fixed-size array when there are <= 4 items stored.
 /// Exported under the `internals` feature only.
+///
+/// # Background
+///
+/// And Saint Attila raised the `SmallVec` up on high, saying, "O Lord, bless this Thy `SmallVec`
+/// that, with it, Thou mayest blow Thine allocation costs to tiny bits in Thy mercy."
+///
+/// And the Lord did grin, and the people did feast upon the lambs and sloths and carp and anchovies
+/// and orangutans and breakfast cereals and fruit bats and large chu...
+///
+/// And the Lord spake, saying, "First shalt thou depend on the [`smallvec`](https://crates.io/crates/smallvec) crate.
+/// Then, shalt thou keep four inline. No more. No less. Four shalt be the number thou shalt keep inline,
+/// and the number to keep inline shalt be four. Five shalt thou not keep inline, nor either keep inline
+/// thou two or three, excepting that thou then proceed to four. Six is right out. Once the number four,
+/// being the forth number, be reached, then, lobbest thou thy `SmallVec` towards thy heap, who,
+/// being slow and cache-naughty in My sight, shall snuff it."
+///
+/// # Explanation on the Number Four
+///
+/// `StaticVec` is used frequently to keep small lists of items in inline (non-heap) storage in
+/// order to improve cache friendliness and reduce indirections.
+///
+/// The number 4, other than being the holy number, is carefully chosen for a balance between
+/// storage space and reduce allocations. That is because most function calls (and most functions,
+/// in that matter) contain fewer than 5 arguments, the exception being closures that capture a
+/// large number of external variables.
+///
+/// In addition, most scripts blocks either contain many statements, or just a few lines;
+/// most scripts load fewer than 5 external modules; most module paths contain fewer than 5 levels
+/// (e.g. `std::collections::map::HashMap` is 4 levels, and that's already quite long).
 #[cfg(feature = "internals")]
 pub type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 

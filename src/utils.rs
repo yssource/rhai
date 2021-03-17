@@ -72,17 +72,16 @@ pub fn get_hasher() -> ahash::AHasher {
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline(always)]
-pub fn calc_fn_hash<'a>(
-    mut modules: impl Iterator<Item = &'a str>,
-    fn_name: &str,
-    num: usize,
-) -> u64 {
+pub fn calc_fn_hash<'a>(modules: impl Iterator<Item = &'a str>, fn_name: &str, num: usize) -> u64 {
     let s = &mut get_hasher();
 
-    // Hash a boolean indicating whether the hash is namespace-qualified.
-    modules.next().is_some().hash(s);
     // We always skip the first module
-    modules.for_each(|m| m.hash(s));
+    let mut len = 0;
+    modules
+        .inspect(|_| len += 1)
+        .skip(1)
+        .for_each(|m| m.hash(s));
+    len.hash(s);
     fn_name.hash(s);
     num.hash(s);
     s.finish()
@@ -96,10 +95,7 @@ pub fn calc_fn_hash<'a>(
 pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
     let s = &mut get_hasher();
     let mut len = 0;
-    params.for_each(|t| {
-        t.hash(s);
-        len += 1;
-    });
+    params.inspect(|_| len += 1).for_each(|t| t.hash(s));
     len.hash(s);
     s.finish()
 }

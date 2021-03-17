@@ -434,10 +434,10 @@ impl<'a> Scope<'a> {
             .iter()
             .enumerate()
             .rev()
-            .for_each(|(index, (name, alias))| {
+            .for_each(|(i, (name, alias))| {
                 if !entries.names.iter().any(|(key, _)| key == name) {
                     entries.names.push((name.clone(), alias.clone()));
-                    entries.values.push(self.values[index].clone());
+                    entries.values.push(self.values[i].clone());
                 }
             });
 

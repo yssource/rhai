@@ -1,6 +1,6 @@
 //! Module defining interfaces to native-Rust functions.
 
-use crate::ast::{FnAccess, FnHash};
+use crate::ast::{FnAccess, FnCallHash};
 use crate::engine::Imports;
 use crate::plugin::PluginFunction;
 use crate::stdlib::{
@@ -190,12 +190,12 @@ impl<'a> NativeCallContext<'a> {
         args: &mut [&mut Dynamic],
     ) -> RhaiResult {
         let hash = if is_method {
-            FnHash::from_script_and_native(
+            FnCallHash::from_script_and_native(
                 calc_fn_hash(empty(), fn_name, args.len() - 1),
                 calc_fn_hash(empty(), fn_name, args.len()),
             )
         } else {
-            FnHash::from_script(calc_fn_hash(empty(), fn_name, args.len()))
+            FnCallHash::from_script(calc_fn_hash(empty(), fn_name, args.len()))
         };
 
         self.engine()

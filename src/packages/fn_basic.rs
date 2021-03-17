@@ -108,8 +108,8 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
                 list.push(make_metadata(dict, Some(namespace.clone()), f).into())
             });
             module.iter_sub_modules().for_each(|(ns, m)| {
-                let ns: ImmutableString = format!("{}::{}", namespace, ns).into();
-                scan_module(list, dict, ns, m.as_ref())
+                let ns = format!("{}::{}", namespace, ns);
+                scan_module(list, dict, ns.into(), m.as_ref())
             });
         }
 

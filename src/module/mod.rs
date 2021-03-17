@@ -1398,12 +1398,14 @@ impl Module {
 
         scope.into_iter().for_each(|(_, value, mut aliases)| {
             // Variables with an alias left in the scope become module variables
-            if aliases.len() > 1 {
-                aliases.into_iter().for_each(|alias| {
+            match aliases.len() {
+                0 => (),
+                1 => {
+                    module.variables.insert(aliases.pop().unwrap(), value);
+                }
+                _ => aliases.into_iter().for_each(|alias| {
                     module.variables.insert(alias, value.clone());
-                });
-            } else if aliases.len() == 1 {
-                module.variables.insert(aliases.pop().unwrap(), value);
+                }),
             }
         });
 

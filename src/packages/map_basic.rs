@@ -29,15 +29,11 @@ mod map_functions {
     }
     #[rhai_fn(name = "mixin", name = "+=")]
     pub fn mixin(map: &mut Map, map2: Map) {
-        map2.into_iter().for_each(|(key, value)| {
-            map.insert(key, value);
-        });
+        map.extend(map2.into_iter());
     }
     #[rhai_fn(name = "+")]
     pub fn merge(mut map: Map, map2: Map) -> Map {
-        map2.into_iter().for_each(|(key, value)| {
-            map.insert(key, value);
-        });
+        map.extend(map2.into_iter());
         map
     }
     pub fn fill_with(map: &mut Map, map2: Map) {
