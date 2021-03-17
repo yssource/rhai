@@ -576,10 +576,10 @@ impl Token {
             "import" | "export" | "as" => Reserved(syntax.into()),
 
             "===" | "!==" | "->" | "<-" | ":=" | "~" | "::<" | "(*" | "*)" | "#" | "public"
-            | "new" | "use" | "module" | "package" | "var" | "static" | "begin" | "end"
-            | "shared" | "with" | "each" | "then" | "goto" | "unless" | "exit" | "match"
-            | "case" | "default" | "void" | "null" | "nil" | "spawn" | "thread" | "go" | "sync"
-            | "async" | "await" | "yield" => Reserved(syntax.into()),
+            | "protected" | "super" | "new" | "use" | "module" | "package" | "var" | "static"
+            | "begin" | "end" | "shared" | "with" | "each" | "then" | "goto" | "unless"
+            | "exit" | "match" | "case" | "default" | "void" | "null" | "nil" | "spawn"
+            | "thread" | "go" | "sync" | "async" | "await" | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
             | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_THIS | KEYWORD_IS_DEF_VAR => {
