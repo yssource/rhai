@@ -513,15 +513,10 @@ impl Module {
         &self,
         name: &str,
         num_params: usize,
-        public_only: bool,
     ) -> Option<&Shared<crate::ast::ScriptFnDef>> {
         self.functions
             .values()
-            .find(|f| {
-                (!public_only || f.access == FnAccess::Public)
-                    && f.params == num_params
-                    && f.name == name
-            })
+            .find(|f| f.params == num_params && f.name == name)
             .map(|f| f.func.get_fn_def())
     }
 
@@ -616,20 +611,11 @@ impl Module {
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_native_fn("calc", || Ok(42_i64));
-    /// assert!(module.contains_fn(hash, true));
+    /// assert!(module.contains_fn(hash));
     /// ```
     #[inline(always)]
-    pub fn contains_fn(&self, hash_fn: u64, public_only: bool) -> bool {
-        if public_only {
-            self.functions
-                .get(&hash_fn)
-                .map_or(false, |f| match f.access {
-                    FnAccess::Public => true,
-                    FnAccess::Private => false,
-                })
-        } else {
-            self.functions.contains_key(&hash_fn)
-        }
+    pub fn contains_fn(&self, hash_fn: u64) -> bool {
+        self.functions.contains_key(&hash_fn)
     }
 
     /// Update the metadata (parameter names/types and return type) of a registered function.
@@ -1110,12 +1096,8 @@ impl Module {
     ///
     /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
     #[inline(always)]
-    pub(crate) fn get_fn(&self, hash_fn: u64, public_only: bool) -> Option<&CallableFunction> {
-        self.functions.get(&hash_fn).and_then(|f| match f.access {
-            _ if !public_only => Some(&f.func),
-            FnAccess::Public => Some(&f.func),
-            FnAccess::Private => None,
-        })
+    pub(crate) fn get_fn(&self, hash_fn: u64) -> Option<&CallableFunction> {
+        self.functions.get(&hash_fn).map(|f| &f.func)
     }
 
     /// Does the particular namespace-qualified function exist in the [`Module`]?

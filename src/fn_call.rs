@@ -124,6 +124,7 @@ pub fn ensure_no_data_race(
 
 impl Engine {
     /// Generate the signature for a function call.
+    #[inline]
     fn gen_call_signature(
         &self,
         namespace: Option<&NamespaceRef>,
@@ -176,7 +177,7 @@ impl Engine {
             .fn_resolution_cache_mut()
             .entry(hash)
             .or_insert_with(|| {
-                let num_args = args.as_ref().map(|a| a.len()).unwrap_or(0);
+                let num_args = args.as_ref().map_or(0, |a| a.len());
                 let max_bitmask = if !allow_dynamic {
                     0
                 } else {
@@ -188,43 +189,37 @@ impl Engine {
                     let func = lib
                         .iter()
                         .find_map(|m| {
-                            m.get_fn(hash, false)
-                                .cloned()
-                                .map(|func| FnResolutionCacheEntry {
-                                    func,
-                                    source: m.id_raw().cloned(),
-                                })
+                            m.get_fn(hash).cloned().map(|func| {
+                                let source = m.id_raw().cloned();
+                                FnResolutionCacheEntry { func, source }
+                            })
                         })
                         .or_else(|| {
                             self.global_namespace
-                                .get_fn(hash, false)
+                                .get_fn(hash)
                                 .cloned()
                                 .map(|func| FnResolutionCacheEntry { func, source: None })
                         })
                         .or_else(|| {
                             self.global_modules.iter().find_map(|m| {
-                                m.get_fn(hash, false)
-                                    .cloned()
-                                    .map(|func| FnResolutionCacheEntry {
-                                        func,
-                                        source: m.id_raw().cloned(),
-                                    })
+                                m.get_fn(hash).cloned().map(|func| {
+                                    let source = m.id_raw().cloned();
+                                    FnResolutionCacheEntry { func, source }
+                                })
                             })
                         })
                         .or_else(|| {
-                            mods.get_fn(hash)
-                                .map(|(func, source)| FnResolutionCacheEntry {
-                                    func: func.clone(),
-                                    source: source.cloned(),
-                                })
+                            mods.get_fn(hash).map(|(func, source)| {
+                                let func = func.clone();
+                                let source = source.cloned();
+                                FnResolutionCacheEntry { func, source }
+                            })
                         })
                         .or_else(|| {
                             self.global_sub_modules.values().find_map(|m| {
                                 m.get_qualified_fn(hash).cloned().map(|func| {
-                                    FnResolutionCacheEntry {
-                                        func,
-                                        source: m.id_raw().cloned(),
-                                    }
+                                    let source = m.id_raw().cloned();
+                                    FnResolutionCacheEntry { func, source }
                                 })
                             })
                         });
@@ -235,41 +230,31 @@ impl Engine {
 
                         // Stop when all permutations are exhausted
                         None if bitmask >= max_bitmask => {
-                            return if num_args != 2 {
-                                None
-                            } else if let Some(ref args) = args {
+                            if num_args != 2 {
+                                return None;
+                            }
+
+                            return args.and_then(|args| {
                                 if !is_op_assignment {
-                                    if let Some(f) =
-                                        get_builtin_binary_op_fn(fn_name, &args[0], &args[1])
-                                    {
-                                        Some(FnResolutionCacheEntry {
-                                            func: CallableFunction::from_method(
-                                                Box::new(f) as Box<FnAny>
-                                            ),
-                                            source: None,
-                                        })
-                                    } else {
-                                        None
-                                    }
+                                    get_builtin_binary_op_fn(fn_name, &args[0], &args[1]).map(|f| {
+                                        let func = CallableFunction::from_method(
+                                            Box::new(f) as Box<FnAny>
+                                        );
+                                        FnResolutionCacheEntry { func, source: None }
+                                    })
                                 } else {
                                     let (first, second) = args.split_first().unwrap();
 
-                                    if let Some(f) =
-                                        get_builtin_op_assignment_fn(fn_name, *first, second[0])
-                                    {
-                                        Some(FnResolutionCacheEntry {
-                                            func: CallableFunction::from_method(
+                                    get_builtin_op_assignment_fn(fn_name, *first, second[0]).map(
+                                        |f| {
+                                            let func = CallableFunction::from_method(
                                                 Box::new(f) as Box<FnAny>
-                                            ),
-                                            source: None,
-                                        })
-                                    } else {
-                                        None
-                                    }
+                                            );
+                                            FnResolutionCacheEntry { func, source: None }
+                                        },
+                                    )
                                 }
-                            } else {
-                                None
-                            }
+                            });
                         }
 
                         // Try all permutations with `Dynamic` wildcards
@@ -612,11 +597,11 @@ impl Engine {
         }
 
         // First check script-defined functions
-        let result = lib.iter().any(|&m| m.contains_fn(hash_script, false))
+        let result = lib.iter().any(|&m| m.contains_fn(hash_script))
             // Then check registered functions
-            || self.global_namespace.contains_fn(hash_script, false)
+            || self.global_namespace.contains_fn(hash_script)
             // Then check packages
-            || self.global_modules.iter().any(|m| m.contains_fn(hash_script, false))
+            || self.global_modules.iter().any(|m| m.contains_fn(hash_script))
             // Then check imported modules
             || mods.map_or(false, |m| m.contains_fn(hash_script))
             // Then check sub-modules

@@ -139,9 +139,9 @@ fn has_native_fn(state: &State, hash_script: u64, arg_types: &[TypeId]) -> bool 
     let hash = combine_hashes(hash_script, hash_params);
 
     // First check registered functions
-    state.engine.global_namespace.contains_fn(hash, false)
+    state.engine.global_namespace.contains_fn(hash)
             // Then check packages
-            || state.engine.global_modules.iter().any(|m| m.contains_fn(hash, false))
+            || state.engine.global_modules.iter().any(|m| m.contains_fn(hash))
             // Then check sub-modules
             || state.engine.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash))
 }
@@ -774,7 +774,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         => {
             // First search for script-defined functions (can override built-in)
             #[cfg(not(feature = "no_function"))]
-            let has_script_fn = state.lib.iter().any(|&m| m.get_script_fn(x.name.as_ref(), x.args.len(), false).is_some());
+            let has_script_fn = state.lib.iter().any(|&m| m.get_script_fn(x.name.as_ref(), x.args.len()).is_some());
             #[cfg(feature = "no_function")]
             let has_script_fn = false;
 

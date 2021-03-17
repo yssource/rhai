@@ -575,6 +575,11 @@ Bug fixes
 * Fixes bug that prevents calling functions in closures.
 * Fixes bug that erroneously consumes the first argument to a namespace-qualified function call.
 
+Breaking changes
+----------------
+
+* `Module::contains_fn` and `Module::get_script_fn` no longer take the `public_only` parameter.
+
 New features
 ------------
 

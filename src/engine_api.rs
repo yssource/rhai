@@ -1881,7 +1881,7 @@ impl Engine {
 
         let fn_def = ast
             .lib()
-            .get_script_fn(name, args.len(), false)
+            .get_script_fn(name, args.len())
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::NONE))?;
 
         // Check for data race.
