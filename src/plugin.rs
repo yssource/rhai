@@ -2,11 +2,11 @@
 
 pub use crate::fn_native::{CallableFunction, FnCallArgs};
 pub use crate::stdlib::{any::TypeId, boxed::Box, format, mem, string::ToString, vec as new_vec};
-use crate::RhaiResult;
 pub use crate::{
     Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, ImmutableString, Module,
     NativeCallContext, Position,
 };
+pub type RhaiResult = Result<Dynamic, Box<EvalAltResult>>;
 
 #[cfg(not(features = "no_module"))]
 pub use rhai_codegen::*;

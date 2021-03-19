@@ -1,6 +1,6 @@
 [package]
 name = "rhai_codegen"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2018"
 authors = ["jhwgh1968"]
 description = "Procedural macro support package for Rhai, a scripting language for Rust"
@@ -12,7 +12,7 @@ license = "MIT OR Apache-2.0"
 proc-macro = true
 
 [dev-dependencies]
-rhai = { path = ".." }
+rhai = { path = "..", version = "0.19.15" }
 trybuild = "1"
 
 [dependencies]

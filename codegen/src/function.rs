@@ -908,7 +908,7 @@ impl ExportedFn {
         let type_name = syn::Ident::new(on_type_name, proc_macro2::Span::call_site());
         quote! {
             impl PluginFunction for #type_name {
-                fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
+                fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                     debug_assert_eq!(args.len(), #arg_count, "wrong arg count: {} != {}", args.len(), #arg_count);
                     #(#unpack_statements)*
                     #return_expr

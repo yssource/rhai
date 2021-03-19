@@ -277,7 +277,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
-                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 0usize,
                                          "wrong arg count: {} != {}", args.len(), 0usize);
                         Ok(Dynamic::from(do_nothing()))
@@ -331,7 +331,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
-                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 1usize,
                                     "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).cast::<usize>();
@@ -386,7 +386,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
-                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 1usize,
                                     "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).cast::<usize>();
@@ -444,7 +444,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
-                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 0usize,
                                          "wrong arg count: {} != {}", args.len(), 0usize);
                         Ok(return_dynamic())
@@ -494,7 +494,7 @@ mod generate_tests {
 
         let expected_tokens = quote! {
             impl PluginFunction for TestStruct {
-                fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
+                fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                     debug_assert_eq!(args.len(), 1usize,
                                 "wrong arg count: {} != {}", args.len(), 1usize);
                     let arg0 = mem::take(args[0usize]).cast::<usize>();
@@ -532,7 +532,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
-                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 2usize,
                                     "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg0 = mem::take(args[0usize]).cast::<usize>();
@@ -589,7 +589,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
-                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 2usize,
                                     "wrong arg count: {} != {}", args.len(), 2usize);
                         if args[0usize].is_read_only() {
@@ -652,7 +652,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
-                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> Result<Dynamic, Box<EvalAltResult>> {
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 1usize,
                                     "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).take_immutable_string().unwrap();
