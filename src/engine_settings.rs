@@ -250,7 +250,7 @@ impl Engine {
     ///
     /// ```rust
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, RegisterFn};
+    /// use rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///

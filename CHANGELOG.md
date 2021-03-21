@@ -1,6 +1,23 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.15
+===============
+
+Breaking changes
+----------------
+
+* The traits `RegisterFn` and `RegisterResultFn` are removed.  `Engine::register_fn` and `Engine::register_result_fn` are now implemented directly on `Engine`.
+* `FnPtr::call_dynamic` now takes `&NativeCallContext` instead of consuming it.
+* All `Module::set_fn_XXX` methods are removed, in favor of `Module::set_native_fn`.
+* `protected`, `super` are now reserved keywords.
+
+Enhancements
+------------
+
+* `Engine::register_result_fn` no longer requires the successful return type to be `Dynamic`.  It can now be any type.
+
+
 Version 0.19.14
 ===============
 
@@ -558,6 +575,11 @@ Bug fixes
 
 * Fixes bug that prevents calling functions in closures.
 * Fixes bug that erroneously consumes the first argument to a namespace-qualified function call.
+
+Breaking changes
+----------------
+
+* `Module::contains_fn` and `Module::get_script_fn` no longer take the `public_only` parameter.
 
 New features
 ------------

@@ -1,8 +1,8 @@
 //! Main module defining the lexer and parser.
 
 use crate::ast::{
-    BinaryExpr, CustomExpr, Expr, FnCallExpr, FnHash, Ident, OpAssignment, ReturnType, ScriptFnDef,
-    Stmt, StmtBlock,
+    BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHash, Ident, OpAssignment, ReturnType,
+    ScriptFnDef, Stmt, StmtBlock,
 };
 use crate::dynamic::{AccessMode, Union};
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
@@ -359,9 +359,9 @@ fn parse_fn_call(
                     capture,
                     namespace,
                     hash: if is_valid_identifier(id.chars()) {
-                        FnHash::from_script(hash)
+                        FnCallHash::from_script(hash)
                     } else {
-                        FnHash::from_native(hash)
+                        FnCallHash::from_native(hash)
                     },
                     args,
                     ..Default::default()
@@ -402,9 +402,9 @@ fn parse_fn_call(
                         capture,
                         namespace,
                         hash: if is_valid_identifier(id.chars()) {
-                            FnHash::from_script(hash)
+                            FnCallHash::from_script(hash)
                         } else {
-                            FnHash::from_native(hash)
+                            FnCallHash::from_native(hash)
                         },
                         args,
                         ..Default::default()
@@ -1291,7 +1291,7 @@ fn parse_unary(
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
                             name: op.into(),
-                            hash: FnHash::from_native(calc_fn_hash(empty(), op, 1)),
+                            hash: FnCallHash::from_native(calc_fn_hash(empty(), op, 1)),
                             args,
                             ..Default::default()
                         }),
@@ -1318,7 +1318,7 @@ fn parse_unary(
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
                             name: op.into(),
-                            hash: FnHash::from_native(calc_fn_hash(empty(), op, 1)),
+                            hash: FnCallHash::from_native(calc_fn_hash(empty(), op, 1)),
                             args,
                             ..Default::default()
                         }),
@@ -1339,7 +1339,7 @@ fn parse_unary(
             Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
                     name: op.into(),
-                    hash: FnHash::from_native(calc_fn_hash(empty(), op, 1)),
+                    hash: FnCallHash::from_native(calc_fn_hash(empty(), op, 1)),
                     args,
                     ..Default::default()
                 }),
@@ -1538,7 +1538,7 @@ fn make_dot_expr(
             }
             Expr::FnCall(mut func, func_pos) => {
                 // Recalculate hash
-                func.hash = FnHash::from_script_and_native(
+                func.hash = FnCallHash::from_script_and_native(
                     calc_fn_hash(empty(), &func.name, func.args.len()),
                     calc_fn_hash(empty(), &func.name, func.args.len() + 1),
                 );
@@ -1594,7 +1594,7 @@ fn make_dot_expr(
         // lhs.func(...)
         (lhs, Expr::FnCall(mut func, func_pos)) => {
             // Recalculate hash
-            func.hash = FnHash::from_script_and_native(
+            func.hash = FnCallHash::from_script_and_native(
                 calc_fn_hash(empty(), &func.name, func.args.len()),
                 calc_fn_hash(empty(), &func.name, func.args.len() + 1),
             );
@@ -1682,7 +1682,7 @@ fn parse_binary_op(
 
         let op_base = FnCallExpr {
             name: op,
-            hash: FnHash::from_native(hash),
+            hash: FnCallHash::from_native(hash),
             capture: false,
             ..Default::default()
         };
@@ -1747,7 +1747,7 @@ fn parse_binary_op(
                 let hash = calc_fn_hash(empty(), OP_CONTAINS, 2);
                 Expr::FnCall(
                     Box::new(FnCallExpr {
-                        hash: FnHash::from_script(hash),
+                        hash: FnCallHash::from_script(hash),
                         args,
                         name: OP_CONTAINS.into(),
                         ..op_base
@@ -1768,9 +1768,9 @@ fn parse_binary_op(
                 Expr::FnCall(
                     Box::new(FnCallExpr {
                         hash: if is_valid_identifier(s.chars()) {
-                            FnHash::from_script(hash)
+                            FnCallHash::from_script(hash)
                         } else {
-                            FnHash::from_native(hash)
+                            FnCallHash::from_native(hash)
                         },
                         args,
                         ..op_base
@@ -2783,7 +2783,7 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
     let expr = Expr::FnCall(
         Box::new(FnCallExpr {
             name: curry_func.into(),
-            hash: FnHash::from_native(calc_fn_hash(empty(), curry_func, num_externals + 1)),
+            hash: FnCallHash::from_native(calc_fn_hash(empty(), curry_func, num_externals + 1)),
             args,
             ..Default::default()
         }),
@@ -2884,7 +2884,7 @@ fn parse_anon_fn(
 
     // Create unique function name by hashing the script body plus the parameters.
     let hasher = &mut get_hasher();
-    params.iter().for_each(|p| p.as_str().hash(hasher));
+    params.iter().for_each(|p| p.hash(hasher));
     body.hash(hasher);
     let hash = hasher.finish();
 

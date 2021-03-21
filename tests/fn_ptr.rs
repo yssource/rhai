@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, RegisterFn, INT};
+use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
 fn test_fn_ptr() -> Result<(), Box<EvalAltResult>> {

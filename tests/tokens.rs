@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, LexError, ParseErrorType, RegisterFn, INT};
+use rhai::{Engine, EvalAltResult, LexError, ParseErrorType, INT};
 
 #[test]
 fn test_tokens_disabled() {

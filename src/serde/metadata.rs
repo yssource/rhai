@@ -228,8 +228,8 @@ impl Engine {
         if include_global {
             self.global_modules
                 .iter()
-                .flat_map(|m| m.iter_fn().map(|f| f.into()))
-                .for_each(|info| global.functions.push(info));
+                .flat_map(|m| m.iter_fn())
+                .for_each(|f| global.functions.push(f.into()));
         }
 
         self.global_sub_modules.iter().for_each(|(name, m)| {
@@ -238,13 +238,11 @@ impl Engine {
 
         self.global_namespace
             .iter_fn()
-            .map(|f| f.into())
-            .for_each(|info| global.functions.push(info));
+            .for_each(|f| global.functions.push(f.into()));
 
         #[cfg(not(feature = "no_function"))]
         _ast.iter_functions()
-            .map(|f| f.into())
-            .for_each(|info| global.functions.push(info));
+            .for_each(|f| global.functions.push(f.into()));
 
         global.functions.sort();
 

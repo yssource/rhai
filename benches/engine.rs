@@ -3,7 +3,7 @@
 ///! Test evaluating expressions
 extern crate test;
 
-use rhai::{Array, Engine, Map, RegisterFn, INT};
+use rhai::{Array, Engine, Map, INT};
 use test::Bencher;
 
 #[bench]

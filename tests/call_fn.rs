@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Func, FuncArgs, RegisterFn, Scope, INT};
+use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Func, FuncArgs, Scope, INT};
 use std::{any::TypeId, iter::once};
 
 #[test]
@@ -131,7 +131,7 @@ fn test_fn_ptr_raw() -> Result<(), Box<EvalAltResult>> {
                 let value = args[2].clone();
                 let this_ptr = args.get_mut(0).unwrap();
 
-                fp.call_dynamic(context, Some(this_ptr), [value])
+                fp.call_dynamic(&context, Some(this_ptr), [value])
             },
         );
 
@@ -214,6 +214,14 @@ fn test_anonymous_fn() -> Result<(), Box<EvalAltResult>> {
     )?;
 
     assert_eq!(calc_func(42, "hello".to_string(), 9)?, 423);
+
+    let calc_func = Func::<(INT, &str, INT), INT>::create_from_script(
+        Engine::new(),
+        "fn calc(x, y, z) { (x + len(y)) * z }",
+        "calc",
+    )?;
+
+    assert_eq!(calc_func(42, "hello", 9)?, 423);
 
     Ok(())
 }

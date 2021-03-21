@@ -1,6 +1,6 @@
 //! Module defining interfaces to native-Rust functions.
 
-use crate::ast::{FnAccess, FnHash};
+use crate::ast::{FnAccess, FnCallHash};
 use crate::engine::Imports;
 use crate::plugin::PluginFunction;
 use crate::stdlib::{
@@ -49,7 +49,7 @@ pub use crate::stdlib::cell::RefCell as Locked;
 pub use crate::stdlib::sync::RwLock as Locked;
 
 /// Context of a native Rust function call.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 pub struct NativeCallContext<'a> {
     engine: &'a Engine,
     fn_name: &'a str,
@@ -190,12 +190,12 @@ impl<'a> NativeCallContext<'a> {
         args: &mut [&mut Dynamic],
     ) -> RhaiResult {
         let hash = if is_method {
-            FnHash::from_script_and_native(
+            FnCallHash::from_script_and_native(
                 calc_fn_hash(empty(), fn_name, args.len() - 1),
                 calc_fn_hash(empty(), fn_name, args.len()),
             )
         } else {
-            FnHash::from_script(calc_fn_hash(empty(), fn_name, args.len()))
+            FnCallHash::from_script(calc_fn_hash(empty(), fn_name, args.len()))
         };
 
         self.engine()
@@ -320,7 +320,7 @@ impl FnPtr {
     #[inline(always)]
     pub fn call_dynamic(
         &self,
-        ctx: NativeCallContext,
+        ctx: &NativeCallContext,
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {

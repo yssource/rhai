@@ -74,7 +74,7 @@ impl fmt::Display for ScriptFnDef {
             "{}{}({})",
             match self.access {
                 FnAccess::Public => "",
-                FnAccess::Private => "private",
+                FnAccess::Private => "private ",
             },
             self.name,
             self.params
@@ -118,7 +118,7 @@ impl fmt::Display for ScriptFnMetadata<'_> {
             "{}{}({})",
             match self.access {
                 FnAccess::Public => "",
-                FnAccess::Private => "private",
+                FnAccess::Private => "private ",
             },
             self.name,
             self.params.iter().cloned().collect::<Vec<_>>().join(", ")
@@ -1301,18 +1301,41 @@ pub struct OpAssignment {
 /// _(INTERNALS)_ An set of function call hashes.
 /// Exported under the `internals` feature only.
 ///
+/// Two separate hashes are pre-calculated because of the following pattern:
+///
+/// ```,ignore
+/// func(a, b, c);      // Native: func(a, b, c) - 3 parameters
+///                     // Script: func(a, b, c) - 3 parameters
+///
+/// a.func(b, c);       // Native: func(&mut a, b, c) - 3 parameters
+///                     // Script: func(b, c) - 2 parameters
+/// ```
+///
+/// For normal function calls, the native hash equals the script hash.
+/// For method-style calls, the script hash contains one fewer parameter.
+///
+/// Function call hashes are used in the following manner:
+///
+/// * First, the script hash is tried, which contains only the called function's name plus the
+///   of parameters.
+///
+/// * Next, the actual types of arguments are hashed and _combined_ with the native hash, which is
+///   then used to search for a native function.
+///   In other words, a native function call hash always contains the called function's name plus
+///   the types of the arguments.  This is to due to possible function overloading for different parameter types.
+///
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Default)]
-pub struct FnHash {
+pub struct FnCallHash {
     /// Pre-calculated hash for a script-defined function ([`None`] if native functions only).
-    script: Option<u64>,
+    pub script: Option<u64>,
     /// Pre-calculated hash for a native Rust function with no parameter types.
-    native: u64,
+    pub native: u64,
 }
 
-impl fmt::Debug for FnHash {
+impl fmt::Debug for FnCallHash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(script) = self.script {
             if script == self.native {
@@ -1326,8 +1349,8 @@ impl fmt::Debug for FnHash {
     }
 }
 
-impl FnHash {
-    /// Create a [`FnHash`] with only the native Rust hash.
+impl FnCallHash {
+    /// Create a [`FnCallHash`] with only the native Rust hash.
     #[inline(always)]
     pub fn from_native(hash: u64) -> Self {
         Self {
@@ -1335,7 +1358,7 @@ impl FnHash {
             native: hash,
         }
     }
-    /// Create a [`FnHash`] with both native Rust and script function hashes set to the same value.
+    /// Create a [`FnCallHash`] with both native Rust and script function hashes set to the same value.
     #[inline(always)]
     pub fn from_script(hash: u64) -> Self {
         Self {
@@ -1343,7 +1366,7 @@ impl FnHash {
             native: hash,
         }
     }
-    /// Create a [`FnHash`] with both native Rust and script function hashes.
+    /// Create a [`FnCallHash`] with both native Rust and script function hashes.
     #[inline(always)]
     pub fn from_script_and_native(script: u64, native: u64) -> Self {
         Self {
@@ -1351,21 +1374,21 @@ impl FnHash {
             native,
         }
     }
-    /// Is this [`FnHash`] native Rust only?
+    /// Is this [`FnCallHash`] native Rust only?
     #[inline(always)]
     pub fn is_native_only(&self) -> bool {
         self.script.is_none()
     }
-    /// Get the script function hash from this [`FnHash`].
+    /// Get the script function hash from this [`FnCallHash`].
     ///
     /// # Panics
     ///
-    /// Panics if the [`FnHash`] is native Rust only.
+    /// Panics if the [`FnCallHash`] is native Rust only.
     #[inline(always)]
     pub fn script_hash(&self) -> u64 {
         self.script.unwrap()
     }
-    /// Get the naive Rust function hash from this [`FnHash`].
+    /// Get the naive Rust function hash from this [`FnCallHash`].
     #[inline(always)]
     pub fn native_hash(&self) -> u64 {
         self.native
@@ -1381,7 +1404,7 @@ impl FnHash {
 #[derive(Debug, Clone, Default, Hash)]
 pub struct FnCallExpr {
     /// Pre-calculated hash.
-    pub hash: FnHash,
+    pub hash: FnCallHash,
     /// Does this function call capture the parent scope?
     pub capture: bool,
     /// List of function call arguments.

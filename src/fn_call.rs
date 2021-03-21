@@ -1,6 +1,6 @@
 //! Implement function-calling mechanism for [`Engine`].
 
-use crate::ast::FnHash;
+use crate::ast::FnCallHash;
 use crate::engine::{
     FnResolutionCacheEntry, Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
     KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
@@ -32,28 +32,6 @@ use crate::{
 
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
-
-/// Extract the property name from a getter function name.
-#[cfg(not(feature = "no_object"))]
-#[inline(always)]
-fn extract_prop_from_getter(_fn_name: &str) -> Option<&str> {
-    if _fn_name.starts_with(crate::engine::FN_GET) {
-        Some(&_fn_name[crate::engine::FN_GET.len()..])
-    } else {
-        None
-    }
-}
-
-/// Extract the property name from a setter function name.
-#[cfg(not(feature = "no_object"))]
-#[inline(always)]
-fn extract_prop_from_setter(_fn_name: &str) -> Option<&str> {
-    if _fn_name.starts_with(crate::engine::FN_SET) {
-        Some(&_fn_name[crate::engine::FN_SET.len()..])
-    } else {
-        None
-    }
-}
 
 /// A type that temporarily stores a mutable reference to a `Dynamic`,
 /// replacing it with a cloned copy.
@@ -146,6 +124,7 @@ pub fn ensure_no_data_race(
 
 impl Engine {
     /// Generate the signature for a function call.
+    #[inline]
     fn gen_call_signature(
         &self,
         namespace: Option<&NamespaceRef>,
@@ -198,7 +177,7 @@ impl Engine {
             .fn_resolution_cache_mut()
             .entry(hash)
             .or_insert_with(|| {
-                let num_args = args.as_ref().map(|a| a.len()).unwrap_or(0);
+                let num_args = args.as_ref().map_or(0, |a| a.len());
                 let max_bitmask = if !allow_dynamic {
                     0
                 } else {
@@ -210,43 +189,37 @@ impl Engine {
                     let func = lib
                         .iter()
                         .find_map(|m| {
-                            m.get_fn(hash, false)
-                                .cloned()
-                                .map(|func| FnResolutionCacheEntry {
-                                    func,
-                                    source: m.id_raw().cloned(),
-                                })
+                            m.get_fn(hash).cloned().map(|func| {
+                                let source = m.id_raw().cloned();
+                                FnResolutionCacheEntry { func, source }
+                            })
                         })
                         .or_else(|| {
                             self.global_namespace
-                                .get_fn(hash, false)
+                                .get_fn(hash)
                                 .cloned()
                                 .map(|func| FnResolutionCacheEntry { func, source: None })
                         })
                         .or_else(|| {
                             self.global_modules.iter().find_map(|m| {
-                                m.get_fn(hash, false)
-                                    .cloned()
-                                    .map(|func| FnResolutionCacheEntry {
-                                        func,
-                                        source: m.id_raw().cloned(),
-                                    })
+                                m.get_fn(hash).cloned().map(|func| {
+                                    let source = m.id_raw().cloned();
+                                    FnResolutionCacheEntry { func, source }
+                                })
                             })
                         })
                         .or_else(|| {
-                            mods.get_fn(hash)
-                                .map(|(func, source)| FnResolutionCacheEntry {
-                                    func: func.clone(),
-                                    source: source.cloned(),
-                                })
+                            mods.get_fn(hash).map(|(func, source)| {
+                                let func = func.clone();
+                                let source = source.cloned();
+                                FnResolutionCacheEntry { func, source }
+                            })
                         })
                         .or_else(|| {
                             self.global_sub_modules.values().find_map(|m| {
                                 m.get_qualified_fn(hash).cloned().map(|func| {
-                                    FnResolutionCacheEntry {
-                                        func,
-                                        source: m.id_raw().cloned(),
-                                    }
+                                    let source = m.id_raw().cloned();
+                                    FnResolutionCacheEntry { func, source }
                                 })
                             })
                         });
@@ -257,41 +230,31 @@ impl Engine {
 
                         // Stop when all permutations are exhausted
                         None if bitmask >= max_bitmask => {
-                            return if num_args != 2 {
-                                None
-                            } else if let Some(ref args) = args {
+                            if num_args != 2 {
+                                return None;
+                            }
+
+                            return args.and_then(|args| {
                                 if !is_op_assignment {
-                                    if let Some(f) =
-                                        get_builtin_binary_op_fn(fn_name, &args[0], &args[1])
-                                    {
-                                        Some(FnResolutionCacheEntry {
-                                            func: CallableFunction::from_method(
-                                                Box::new(f) as Box<FnAny>
-                                            ),
-                                            source: None,
-                                        })
-                                    } else {
-                                        None
-                                    }
+                                    get_builtin_binary_op_fn(fn_name, &args[0], &args[1]).map(|f| {
+                                        let func = CallableFunction::from_method(
+                                            Box::new(f) as Box<FnAny>
+                                        );
+                                        FnResolutionCacheEntry { func, source: None }
+                                    })
                                 } else {
                                     let (first, second) = args.split_first().unwrap();
 
-                                    if let Some(f) =
-                                        get_builtin_op_assignment_fn(fn_name, *first, second[0])
-                                    {
-                                        Some(FnResolutionCacheEntry {
-                                            func: CallableFunction::from_method(
+                                    get_builtin_op_assignment_fn(fn_name, *first, second[0]).map(
+                                        |f| {
+                                            let func = CallableFunction::from_method(
                                                 Box::new(f) as Box<FnAny>
-                                            ),
-                                            source: None,
-                                        })
-                                    } else {
-                                        None
-                                    }
+                                            );
+                                            FnResolutionCacheEntry { func, source: None }
+                                        },
+                                    )
                                 }
-                            } else {
-                                None
-                            }
+                            });
                         }
 
                         // Try all permutations with `Dynamic` wildcards
@@ -407,69 +370,79 @@ impl Engine {
             });
         }
 
-        // Getter function not found?
-        #[cfg(not(feature = "no_object"))]
-        if let Some(prop) = extract_prop_from_getter(fn_name) {
-            return EvalAltResult::ErrorDotExpr(
-                format!(
-                    "Unknown property '{}' - a getter is not registered for type '{}'",
-                    prop,
-                    self.map_type_name(args[0].type_name())
-                ),
+        match fn_name {
+            // index getter function not found?
+            #[cfg(not(feature = "no_index"))]
+            crate::engine::FN_IDX_GET => {
+                assert!(args.len() == 2);
+
+                EvalAltResult::ErrorFunctionNotFound(
+                    format!(
+                        "{} [{}]",
+                        self.map_type_name(args[0].type_name()),
+                        self.map_type_name(args[1].type_name()),
+                    ),
+                    pos,
+                )
+                .into()
+            }
+
+            // index setter function not found?
+            #[cfg(not(feature = "no_index"))]
+            crate::engine::FN_IDX_SET => {
+                assert!(args.len() == 3);
+
+                EvalAltResult::ErrorFunctionNotFound(
+                    format!(
+                        "{} [{}]=",
+                        self.map_type_name(args[0].type_name()),
+                        self.map_type_name(args[1].type_name()),
+                    ),
+                    pos,
+                )
+                .into()
+            }
+
+            // Getter function not found?
+            #[cfg(not(feature = "no_object"))]
+            _ if fn_name.starts_with(crate::engine::FN_GET) => {
+                assert!(args.len() == 1);
+
+                EvalAltResult::ErrorDotExpr(
+                    format!(
+                        "Unknown property '{}' - a getter is not registered for type '{}'",
+                        &fn_name[crate::engine::FN_GET.len()..],
+                        self.map_type_name(args[0].type_name())
+                    ),
+                    pos,
+                )
+                .into()
+            }
+
+            // Setter function not found?
+            #[cfg(not(feature = "no_object"))]
+            _ if fn_name.starts_with(crate::engine::FN_SET) => {
+                assert!(args.len() == 2);
+
+                EvalAltResult::ErrorDotExpr(
+                    format!(
+                        "No writable property '{}' - a setter is not registered for type '{}' to handle '{}'",
+                        &fn_name[crate::engine::FN_SET.len()..],
+                        self.map_type_name(args[0].type_name()),
+                        self.map_type_name(args[1].type_name()),
+                    ),
+                    pos,
+                )
+                .into()
+            }
+
+            // Raise error
+            _ => EvalAltResult::ErrorFunctionNotFound(
+                self.gen_call_signature(None, fn_name, args.as_ref()),
                 pos,
             )
-            .into();
+            .into(),
         }
-
-        // Setter function not found?
-        #[cfg(not(feature = "no_object"))]
-        if let Some(prop) = extract_prop_from_setter(fn_name) {
-            return EvalAltResult::ErrorDotExpr(
-                format!(
-                    "No writable property '{}' - a setter is not registered for type '{}' to handle '{}'",
-                    prop,
-                    self.map_type_name(args[0].type_name()),
-                    self.map_type_name(args[1].type_name()),
-                ),
-                pos,
-            )
-            .into();
-        }
-
-        // index getter function not found?
-        #[cfg(not(feature = "no_index"))]
-        if fn_name == crate::engine::FN_IDX_GET && args.len() == 2 {
-            return EvalAltResult::ErrorFunctionNotFound(
-                format!(
-                    "{} [{}]",
-                    self.map_type_name(args[0].type_name()),
-                    self.map_type_name(args[1].type_name()),
-                ),
-                pos,
-            )
-            .into();
-        }
-
-        // index setter function not found?
-        #[cfg(not(feature = "no_index"))]
-        if fn_name == crate::engine::FN_IDX_SET {
-            return EvalAltResult::ErrorFunctionNotFound(
-                format!(
-                    "{} [{}]=",
-                    self.map_type_name(args[0].type_name()),
-                    self.map_type_name(args[1].type_name()),
-                ),
-                pos,
-            )
-            .into();
-        }
-
-        // Raise error
-        EvalAltResult::ErrorFunctionNotFound(
-            self.gen_call_signature(None, fn_name, args.as_ref()),
-            pos,
-        )
-        .into()
     }
 
     /// Call a script-defined function.
@@ -500,7 +473,7 @@ impl Engine {
             err: Box<EvalAltResult>,
             pos: Position,
         ) -> RhaiResult {
-            Err(Box::new(EvalAltResult::ErrorInFunctionCall(
+            EvalAltResult::ErrorInFunctionCall(
                 name,
                 fn_def
                     .lib
@@ -510,7 +483,8 @@ impl Engine {
                     .to_string(),
                 err,
                 pos,
-            )))
+            )
+            .into()
         }
 
         self.inc_operations(state, pos)?;
@@ -523,7 +497,7 @@ impl Engine {
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
         if level > self.max_call_levels() {
-            return Err(Box::new(EvalAltResult::ErrorStackOverflow(pos)));
+            return EvalAltResult::ErrorStackOverflow(pos).into();
         }
 
         let orig_scope_level = state.scope_level;
@@ -586,10 +560,10 @@ impl Engine {
                     make_error(fn_name, fn_def, state, err, pos)
                 }
                 // System errors are passed straight-through
-                mut err if err.is_system_exception() => Err(Box::new({
+                mut err if err.is_system_exception() => {
                     err.set_position(pos);
-                    err
-                })),
+                    err.into()
+                }
                 // Other errors are wrapped in `ErrorInFunctionCall`
                 _ => make_error(fn_def.name.to_string(), fn_def, state, err, pos),
             });
@@ -623,11 +597,11 @@ impl Engine {
         }
 
         // First check script-defined functions
-        let result = lib.iter().any(|&m| m.contains_fn(hash_script, false))
+        let result = lib.iter().any(|&m| m.contains_fn(hash_script))
             // Then check registered functions
-            || self.global_namespace.contains_fn(hash_script, false)
+            || self.global_namespace.contains_fn(hash_script)
             // Then check packages
-            || self.global_modules.iter().any(|m| m.contains_fn(hash_script, false))
+            || self.global_modules.iter().any(|m| m.contains_fn(hash_script))
             // Then check imported modules
             || mods.map_or(false, |m| m.contains_fn(hash_script))
             // Then check sub-modules
@@ -653,7 +627,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        hash: FnHash,
+        hash: FnCallHash,
         args: &mut FnCallArgs,
         is_ref: bool,
         _is_method: bool,
@@ -699,36 +673,39 @@ impl Engine {
             // Handle is_shared()
             #[cfg(not(feature = "no_closure"))]
             crate::engine::KEYWORD_IS_SHARED if args.len() == 1 => {
-                return Err(Box::new(EvalAltResult::ErrorRuntime(
+                return EvalAltResult::ErrorRuntime(
                     format!(
                         "'{}' should not be called this way. Try {}(...);",
                         fn_name, fn_name
                     )
                     .into(),
                     pos,
-                )))
+                )
+                .into()
             }
 
             KEYWORD_FN_PTR | KEYWORD_EVAL | KEYWORD_IS_DEF_VAR if args.len() == 1 => {
-                return Err(Box::new(EvalAltResult::ErrorRuntime(
+                return EvalAltResult::ErrorRuntime(
                     format!(
                         "'{}' should not be called this way. Try {}(...);",
                         fn_name, fn_name
                     )
                     .into(),
                     pos,
-                )))
+                )
+                .into()
             }
 
             KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY if !args.is_empty() => {
-                return Err(Box::new(EvalAltResult::ErrorRuntime(
+                return EvalAltResult::ErrorRuntime(
                     format!(
                         "'{}' should not be called this way. Try {}(...);",
                         fn_name, fn_name
                     )
                     .into(),
                     pos,
-                )))
+                )
+                .into()
             }
 
             _ => (),
@@ -865,7 +842,6 @@ impl Engine {
     }
 
     /// Evaluate a text script in place - used primarily for 'eval'.
-    #[inline]
     fn eval_script_expr_in_place(
         &self,
         scope: &mut Scope,
@@ -917,7 +893,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        mut hash: FnHash,
+        mut hash: FnCallHash,
         target: &mut crate::engine::Target,
         (call_args, call_arg_positions): &mut (StaticVec<Dynamic>, StaticVec<Position>),
         pos: Position,
@@ -937,7 +913,7 @@ impl Engine {
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hashes
-                let new_hash = FnHash::from_script(calc_fn_hash(empty(), fn_name, args_len));
+                let new_hash = FnCallHash::from_script(calc_fn_hash(empty(), fn_name, args_len));
                 // Arguments are passed as-is, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
                 let mut arg_values = curry
@@ -973,7 +949,7 @@ impl Engine {
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hash
-                let new_hash = FnHash::from_script_and_native(
+                let new_hash = FnCallHash::from_script_and_native(
                     calc_fn_hash(empty(), fn_name, args_len),
                     calc_fn_hash(empty(), fn_name, args_len + 1),
                 );
@@ -1048,7 +1024,7 @@ impl Engine {
                                     call_arg_positions.insert(i, Position::NONE);
                                 });
                             // Recalculate the hash based on the new function name and new arguments
-                            hash = FnHash::from_script_and_native(
+                            hash = FnCallHash::from_script_and_native(
                                 calc_fn_hash(empty(), fn_name, call_args.len()),
                                 calc_fn_hash(empty(), fn_name, call_args.len() + 1),
                             );
@@ -1086,7 +1062,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         fn_name: &str,
         args_expr: &[Expr],
-        mut hash: FnHash,
+        mut hash: FnCallHash,
         pos: Position,
         capture_scope: bool,
         level: usize,
@@ -1125,9 +1101,9 @@ impl Engine {
                 // Recalculate hash
                 let args_len = args_expr.len() + curry.len();
                 hash = if !hash.is_native_only() {
-                    FnHash::from_script(calc_fn_hash(empty(), name, args_len))
+                    FnCallHash::from_script(calc_fn_hash(empty(), name, args_len))
                 } else {
-                    FnHash::from_native(calc_fn_hash(empty(), name, args_len))
+                    FnCallHash::from_native(calc_fn_hash(empty(), name, args_len))
                 };
             }
             // Handle Fn()
