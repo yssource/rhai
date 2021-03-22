@@ -445,7 +445,6 @@ pub mod decimal_functions {
         if cfg!(not(feature = "unchecked")) {
             x.checked_add(y)
                 .ok_or_else(|| make_err(format!("Addition overflow: {} + {}", x, y)))
-                .map(Into::<Dynamic>::into)
         } else {
             Ok(x + y)
         }
@@ -455,7 +454,6 @@ pub mod decimal_functions {
         if cfg!(not(feature = "unchecked")) {
             x.checked_sub(y)
                 .ok_or_else(|| make_err(format!("Subtraction overflow: {} - {}", x, y)))
-                .map(Into::<Dynamic>::into)
         } else {
             Ok(x - y)
         }
@@ -465,7 +463,6 @@ pub mod decimal_functions {
         if cfg!(not(feature = "unchecked")) {
             x.checked_mul(y)
                 .ok_or_else(|| make_err(format!("Multiplication overflow: {} * {}", x, y)))
-                .map(Into::<Dynamic>::into)
         } else {
             Ok(x * y)
         }
@@ -479,7 +476,6 @@ pub mod decimal_functions {
             } else {
                 x.checked_div(y)
                     .ok_or_else(|| make_err(format!("Division overflow: {} / {}", x, y)))
-                    .map(Into::<Dynamic>::into)
             }
         } else {
             Ok(x / y)
@@ -488,14 +484,12 @@ pub mod decimal_functions {
     #[rhai_fn(skip, return_raw)]
     pub fn modulo(x: Decimal, y: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) {
-            x.checked_rem(y)
-                .ok_or_else(|| {
-                    make_err(format!(
-                        "Modulo division by zero or overflow: {} % {}",
-                        x, y
-                    ))
-                })
-                .map(Into::<Dynamic>::into)
+            x.checked_rem(y).ok_or_else(|| {
+                make_err(format!(
+                    "Modulo division by zero or overflow: {} % {}",
+                    x, y
+                ))
+            })
         } else {
             Ok(x % y)
         }

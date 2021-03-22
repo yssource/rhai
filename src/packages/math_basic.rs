@@ -283,7 +283,7 @@ mod float_functions {
         }
     }
     #[rhai_fn(return_raw)]
-    pub fn parse_float(s: &str) -> Result<f64, Box<EvalAltResult>> {
+    pub fn parse_float(s: &str) -> Result<FLOAT, Box<EvalAltResult>> {
         s.trim().parse::<FLOAT>().map_err(|err| {
             EvalAltResult::ErrorArithmetic(
                 format!("Error parsing floating-point number '{}': {}", s, err),
