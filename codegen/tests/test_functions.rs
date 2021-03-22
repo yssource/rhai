@@ -1,4 +1,3 @@
-use rhai::module_resolvers::*;
 use rhai::plugin::*;
 use rhai::{Engine, EvalAltResult, Module, FLOAT};
 
@@ -152,10 +151,8 @@ pub mod raw_returning_fn {
         y1: FLOAT,
         x2: FLOAT,
         y2: FLOAT,
-    ) -> Result<rhai::Dynamic, Box<rhai::EvalAltResult>> {
-        Ok(Dynamic::from(
-            ((y2 - y1).abs().powf(2.0) + (x2 - x1).abs().powf(2.0)).sqrt(),
-        ))
+    ) -> Result<rhai::FLOAT, Box<rhai::EvalAltResult>> {
+        Ok(((y2 - y1).abs().powf(2.0) + (x2 - x1).abs().powf(2.0)).sqrt())
     }
 }
 

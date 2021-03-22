@@ -1,5 +1,4 @@
-use rhai::module_resolvers::*;
-use rhai::{Array, Engine, EvalAltResult, FLOAT, INT};
+use rhai::{Array, Engine, EvalAltResult, FLOAT};
 
 pub mod one_fn_module_nested_attr {
     use rhai::plugin::*;
@@ -10,8 +9,8 @@ pub mod one_fn_module_nested_attr {
         use rhai::FLOAT;
 
         #[rhai_fn(return_raw)]
-        pub fn get_mystic_number() -> Result<Dynamic, Box<EvalAltResult>> {
-            Ok(Dynamic::from(42.0 as FLOAT))
+        pub fn get_mystic_number() -> Result<FLOAT, Box<EvalAltResult>> {
+            Ok(42.0)
         }
     }
 }
@@ -39,8 +38,8 @@ pub mod one_fn_sub_module_nested_attr {
             use rhai::plugin::*;
             use rhai::FLOAT;
             #[rhai_fn(return_raw)]
-            pub fn get_mystic_number() -> Result<Dynamic, Box<EvalAltResult>> {
-                Ok(Dynamic::from(42.0 as FLOAT))
+            pub fn get_mystic_number() -> Result<FLOAT, Box<EvalAltResult>> {
+                Ok(42.0)
             }
         }
     }

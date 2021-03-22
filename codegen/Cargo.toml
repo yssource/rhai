@@ -12,7 +12,7 @@ license = "MIT OR Apache-2.0"
 proc-macro = true
 
 [dev-dependencies]
-rhai = { path = "..", version = "0.19.15" }
+rhai = { path = "..", version = "^0.19.15" }
 trybuild = "1"
 
 [dependencies]
