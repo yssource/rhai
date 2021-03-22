@@ -277,39 +277,33 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
-                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
+                    #[inline(always)] fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 0usize,
                                          "wrong arg count: {} != {}", args.len(), 0usize);
                         Ok(Dynamic::from(do_nothing()))
                     }
 
-                    fn is_method_call(&self) -> bool { false }
-                    fn is_variadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_names(&self) -> Box<[&'static str]> {
-                        new_vec![].into_boxed_slice()
+                    #[inline(always)] fn is_method_call(&self) -> bool { false }
+                    #[inline(always)] fn is_variadic(&self) -> bool { false }
+                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
+                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
+                        new_vec!["()"].into_boxed_slice()
                     }
-                    fn input_types(&self) -> Box<[TypeId]> {
+                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![].into_boxed_slice()
-                    }
-                    fn return_type(&self) -> &'static str {
-                        "()"
                     }
                 }
-                pub fn token_callable() -> CallableFunction {
+                #[inline(always)] pub fn token_callable() -> CallableFunction {
                     Token().into()
                 }
-                pub fn token_input_names() -> Box<[&'static str]> {
-                    Token().input_names()
+                #[inline(always)] pub fn token_param_names() -> Box<[&'static str]> {
+                    Token().param_names()
                 }
-                pub fn token_input_types() -> Box<[TypeId]> {
+                #[inline(always)] pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
-                pub fn token_return_type() -> &'static str {
-                    Token().return_type()
-                }
                 #[allow(unused)]
-                pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
+                #[inline(always)] pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(do_nothing()))
                 }
             }
@@ -331,6 +325,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
+                    #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 1usize,
                                     "wrong arg count: {} != {}", args.len(), 1usize);
@@ -338,33 +333,27 @@ mod generate_tests {
                         Ok(Dynamic::from(do_something(arg0)))
                     }
 
-                    fn is_method_call(&self) -> bool { false }
-                    fn is_variadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: usize"].into_boxed_slice()
+                    #[inline(always)] fn is_method_call(&self) -> bool { false }
+                    #[inline(always)] fn is_variadic(&self) -> bool { false }
+                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
+                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
+                        new_vec!["x: usize", "()"].into_boxed_slice()
                     }
-                    fn input_types(&self) -> Box<[TypeId]> {
+                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<usize>()].into_boxed_slice()
                     }
-                    fn return_type(&self) -> &'static str {
-                        "()"
-                    }
                 }
-                pub fn token_callable() -> CallableFunction {
+                #[inline(always)] pub fn token_callable() -> CallableFunction {
                     Token().into()
                 }
-                pub fn token_input_names() -> Box<[&'static str]> {
-                    Token().input_names()
+                #[inline(always)] pub fn token_param_names() -> Box<[&'static str]> {
+                    Token().param_names()
                 }
-                pub fn token_input_types() -> Box<[TypeId]> {
+                #[inline(always)] pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
-                pub fn token_return_type() -> &'static str {
-                    Token().return_type()
-                }
                 #[allow(unused)]
-                pub fn dynamic_result_fn(x: usize) -> Result<Dynamic, Box<EvalAltResult> > {
+                #[inline(always)] pub fn dynamic_result_fn(x: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(do_something(x)))
                 }
             }
@@ -386,6 +375,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
+                    #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 1usize,
                                     "wrong arg count: {} != {}", args.len(), 1usize);
@@ -393,33 +383,27 @@ mod generate_tests {
                         Ok(Dynamic::from(do_something(context, arg0)))
                     }
 
-                    fn is_method_call(&self) -> bool { false }
-                    fn is_variadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: usize"].into_boxed_slice()
+                    #[inline(always)] fn is_method_call(&self) -> bool { false }
+                    #[inline(always)] fn is_variadic(&self) -> bool { false }
+                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
+                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
+                        new_vec!["x: usize", "()"].into_boxed_slice()
                     }
-                    fn input_types(&self) -> Box<[TypeId]> {
+                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<usize>()].into_boxed_slice()
                     }
-                    fn return_type(&self) -> &'static str {
-                        "()"
-                    }
                 }
-                pub fn token_callable() -> CallableFunction {
+                #[inline(always)] pub fn token_callable() -> CallableFunction {
                     Token().into()
                 }
-                pub fn token_input_names() -> Box<[&'static str]> {
-                    Token().input_names()
+                #[inline(always)] pub fn token_param_names() -> Box<[&'static str]> {
+                    Token().param_names()
                 }
-                pub fn token_input_types() -> Box<[TypeId]> {
+                #[inline(always)] pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
-                pub fn token_return_type() -> &'static str {
-                    Token().return_type()
-                }
                 #[allow(unused)]
-                pub fn dynamic_result_fn(context: NativeCallContext, x: usize) -> Result<Dynamic, Box<EvalAltResult> > {
+                #[inline(always)] pub fn dynamic_result_fn(context: NativeCallContext, x: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(do_something(context, x)))
                 }
             }
@@ -444,39 +428,34 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
+                    #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 0usize,
                                          "wrong arg count: {} != {}", args.len(), 0usize);
                         Ok(Dynamic::from(return_dynamic()))
                     }
 
-                    fn is_method_call(&self) -> bool { false }
-                    fn is_variadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_names(&self) -> Box<[&'static str]> {
-                        new_vec![].into_boxed_slice()
+                    #[inline(always)] fn is_method_call(&self) -> bool { false }
+                    #[inline(always)] fn is_variadic(&self) -> bool { false }
+                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
+                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
+                        new_vec!["rhai::Dynamic"].into_boxed_slice()
                     }
-                    fn input_types(&self) -> Box<[TypeId]> {
+                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![].into_boxed_slice()
-                    }
-                    fn return_type(&self) -> &'static str {
-                        "rhai::Dynamic"
                     }
                 }
-                pub fn token_callable() -> CallableFunction {
+                #[inline(always)] pub fn token_callable() -> CallableFunction {
                     Token().into()
                 }
-                pub fn token_input_names() -> Box<[&'static str]> {
-                    Token().input_names()
+                #[inline(always)] pub fn token_param_names() -> Box<[&'static str]> {
+                    Token().param_names()
                 }
-                pub fn token_input_types() -> Box<[TypeId]> {
+                #[inline(always)] pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
-                pub fn token_return_type() -> &'static str {
-                    Token().return_type()
-                }
                 #[allow(unused)]
-                pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
+                #[inline(always)] pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(return_dynamic()))
                 }
             }
@@ -494,6 +473,7 @@ mod generate_tests {
 
         let expected_tokens = quote! {
             impl PluginFunction for TestStruct {
+                #[inline(always)]
                 fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                     debug_assert_eq!(args.len(), 1usize,
                                 "wrong arg count: {} != {}", args.len(), 1usize);
@@ -501,17 +481,14 @@ mod generate_tests {
                     Ok(Dynamic::from(do_something(arg0)))
                 }
 
-                fn is_method_call(&self) -> bool { false }
-                fn is_variadic(&self) -> bool { false }
-                fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(TestStruct()) }
-                fn input_names(&self) -> Box<[&'static str]> {
-                    new_vec!["x: usize"].into_boxed_slice()
+                #[inline(always)] fn is_method_call(&self) -> bool { false }
+                #[inline(always)] fn is_variadic(&self) -> bool { false }
+                #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(TestStruct()) }
+                #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
+                    new_vec!["x: usize", "()"].into_boxed_slice()
                 }
-                fn input_types(&self) -> Box<[TypeId]> {
+                #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
                     new_vec![TypeId::of::<usize>()].into_boxed_slice()
-                }
-                fn return_type(&self) -> &'static str {
-                    "()"
                 }
         }
         };
@@ -532,6 +509,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
+                    #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 2usize,
                                     "wrong arg count: {} != {}", args.len(), 2usize);
@@ -540,34 +518,28 @@ mod generate_tests {
                         Ok(Dynamic::from(add_together(arg0, arg1)))
                     }
 
-                    fn is_method_call(&self) -> bool { false }
-                    fn is_variadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: usize", "y: usize"].into_boxed_slice()
+                    #[inline(always)] fn is_method_call(&self) -> bool { false }
+                    #[inline(always)] fn is_variadic(&self) -> bool { false }
+                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
+                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
+                        new_vec!["x: usize", "y: usize", "usize"].into_boxed_slice()
                     }
-                    fn input_types(&self) -> Box<[TypeId]> {
+                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<usize>(),
                              TypeId::of::<usize>()].into_boxed_slice()
                     }
-                    fn return_type(&self) -> &'static str {
-                        "usize"
-                    }
                 }
-                pub fn token_callable() -> CallableFunction {
+                #[inline(always)] pub fn token_callable() -> CallableFunction {
                     Token().into()
                 }
-                pub fn token_input_names() -> Box<[&'static str]> {
-                    Token().input_names()
+                #[inline(always)] pub fn token_param_names() -> Box<[&'static str]> {
+                    Token().param_names()
                 }
-                pub fn token_input_types() -> Box<[TypeId]> {
+                #[inline(always)] pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
-                pub fn token_return_type() -> &'static str {
-                    Token().return_type()
-                }
                 #[allow(unused)]
-                pub fn dynamic_result_fn(x: usize, y: usize) -> Result<Dynamic, Box<EvalAltResult> > {
+                #[inline(always)] pub fn dynamic_result_fn(x: usize, y: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(add_together(x, y)))
                 }
             }
@@ -589,6 +561,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
+                    #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 2usize,
                                     "wrong arg count: {} != {}", args.len(), 2usize);
@@ -602,34 +575,28 @@ mod generate_tests {
                         Ok(Dynamic::from(increment(arg0, arg1)))
                     }
 
-                    fn is_method_call(&self) -> bool { true }
-                    fn is_variadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: &mut usize", "y: usize"].into_boxed_slice()
+                    #[inline(always)] fn is_method_call(&self) -> bool { true }
+                    #[inline(always)] fn is_variadic(&self) -> bool { false }
+                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
+                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
+                        new_vec!["x: &mut usize", "y: usize", "()"].into_boxed_slice()
                     }
-                    fn input_types(&self) -> Box<[TypeId]> {
+                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<usize>(),
                              TypeId::of::<usize>()].into_boxed_slice()
                     }
-                    fn return_type(&self) -> &'static str {
-                        "()"
-                    }
                 }
-                pub fn token_callable() -> CallableFunction {
+                #[inline(always)] pub fn token_callable() -> CallableFunction {
                     Token().into()
                 }
-                pub fn token_input_names() -> Box<[&'static str]> {
-                    Token().input_names()
+                #[inline(always)] pub fn token_param_names() -> Box<[&'static str]> {
+                    Token().param_names()
                 }
-                pub fn token_input_types() -> Box<[TypeId]> {
+                #[inline(always)] pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
-                pub fn token_return_type() -> &'static str {
-                    Token().return_type()
-                }
                 #[allow(unused)]
-                pub fn dynamic_result_fn(x: &mut usize, y: usize) -> Result<Dynamic, Box<EvalAltResult> > {
+                #[inline(always)] pub fn dynamic_result_fn(x: &mut usize, y: usize) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(increment(x, y)))
                 }
             }
@@ -652,6 +619,7 @@ mod generate_tests {
                 use super::*;
                 struct Token();
                 impl PluginFunction for Token {
+                    #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 1usize,
                                     "wrong arg count: {} != {}", args.len(), 1usize);
@@ -659,33 +627,27 @@ mod generate_tests {
                         Ok(Dynamic::from(special_print(&arg0)))
                     }
 
-                    fn is_method_call(&self) -> bool { false }
-                    fn is_variadic(&self) -> bool { false }
-                    fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
-                    fn input_names(&self) -> Box<[&'static str]> {
-                        new_vec!["message: &str"].into_boxed_slice()
+                    #[inline(always)] fn is_method_call(&self) -> bool { false }
+                    #[inline(always)] fn is_variadic(&self) -> bool { false }
+                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(Token()) }
+                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
+                        new_vec!["message: &str", "()"].into_boxed_slice()
                     }
-                    fn input_types(&self) -> Box<[TypeId]> {
+                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
                         new_vec![TypeId::of::<ImmutableString>()].into_boxed_slice()
                     }
-                    fn return_type(&self) -> &'static str {
-                        "()"
-                    }
                 }
-                pub fn token_callable() -> CallableFunction {
+                #[inline(always)] pub fn token_callable() -> CallableFunction {
                     Token().into()
                 }
-                pub fn token_input_names() -> Box<[&'static str]> {
-                    Token().input_names()
+                #[inline(always)] pub fn token_param_names() -> Box<[&'static str]> {
+                    Token().param_names()
                 }
-                pub fn token_input_types() -> Box<[TypeId]> {
+                #[inline(always)] pub fn token_input_types() -> Box<[TypeId]> {
                     Token().input_types()
                 }
-                pub fn token_return_type() -> &'static str {
-                    Token().return_type()
-                }
                 #[allow(unused)]
-                pub fn dynamic_result_fn(message: &str) -> Result<Dynamic, Box<EvalAltResult> > {
+                #[inline(always)] pub fn dynamic_result_fn(message: &str) -> Result<Dynamic, Box<EvalAltResult> > {
                     Ok(Dynamic::from(special_print(message)))
                 }
             }

@@ -185,9 +185,8 @@ pub fn generate_body(
         });
         gen_fn_tokens.push(function.generate_impl(&fn_token_name.to_string()));
         gen_fn_tokens.push(function.generate_callable(&fn_token_name.to_string()));
-        gen_fn_tokens.push(function.generate_input_names(&fn_token_name.to_string()));
+        gen_fn_tokens.push(function.generate_param_names(&fn_token_name.to_string()));
         gen_fn_tokens.push(function.generate_input_types(&fn_token_name.to_string()));
-        gen_fn_tokens.push(function.generate_return_type(&fn_token_name.to_string()));
     }
 
     let mut generate_fn_call = syn::parse2::<syn::ItemMod>(quote! {
