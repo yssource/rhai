@@ -10,12 +10,14 @@ Breaking changes
 * The traits `RegisterFn` and `RegisterResultFn` are removed.  `Engine::register_fn` and `Engine::register_result_fn` are now implemented directly on `Engine`.
 * `FnPtr::call_dynamic` now takes `&NativeCallContext` instead of consuming it.
 * All `Module::set_fn_XXX` methods are removed, in favor of `Module::set_native_fn`.
+* `Array::reduce` and `Array::reduce_rev` now take a `Dynamic` as initial value instead of a function pointer.
 * `protected`, `super` are now reserved keywords.
 
 Enhancements
 ------------
 
-* `Engine::register_result_fn` no longer requires the successful return type to be `Dynamic`.  It can now be any type.
+* `Engine::register_result_fn` no longer requires the successful return type to be `Dynamic`.  It can now be any clonable type.
+* `#[rhai_fn(return_raw)]` can now return `Result<T, Box<EvalAltResult>>` where `T` is any clonable type instead of `Result<Dynamic, Box<EvalAltResult>>`.
 
 
 Version 0.19.14

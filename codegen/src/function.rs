@@ -279,7 +279,6 @@ pub struct ExportedFn {
     signature: syn::Signature,
     visibility: syn::Visibility,
     pass_context: bool,
-    return_dynamic: bool,
     mut_receiver: bool,
     params: ExportedFnParams,
 }
@@ -289,10 +288,6 @@ impl Parse for ExportedFn {
         let fn_all: syn::ItemFn = input.parse()?;
         let entire_span = fn_all.span();
         let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
-
-        let dynamic_type_path1 = syn::parse2::<syn::Path>(quote! { Dynamic }).unwrap();
-        let dynamic_type_path2 = syn::parse2::<syn::Path>(quote! { rhai::Dynamic }).unwrap();
-        let mut return_dynamic = false;
 
         let context_type_path1 = syn::parse2::<syn::Path>(quote! { NativeCallContext }).unwrap();
         let context_type_path2 =
@@ -400,11 +395,6 @@ impl Parse for ExportedFn {
                         "Rhai functions cannot return references",
                     ))
                 }
-                syn::Type::Path(p)
-                    if p.path == dynamic_type_path1 || p.path == dynamic_type_path2 =>
-                {
-                    return_dynamic = true
-                }
                 _ => {}
             }
         }
@@ -413,7 +403,6 @@ impl Parse for ExportedFn {
             signature: fn_all.sig,
             visibility,
             pass_context,
-            return_dynamic,
             mut_receiver,
             params: Default::default(),
         })
@@ -520,7 +509,7 @@ impl ExportedFn {
         if params.return_raw.is_some() && self.return_type().is_none() {
             return Err(syn::Error::new(
                 params.return_raw.unwrap(),
-                "functions marked with 'return_raw' must return Result<Dynamic, Box<EvalAltResult>>",
+                "functions marked with 'return_raw' must return Result<T, Box<EvalAltResult>>",
             ));
         }
 
@@ -656,13 +645,7 @@ impl ExportedFn {
         if self.params.return_raw.is_some() {
             quote_spanned! { return_span =>
                 pub #dynamic_signature {
-                    #name(#(#arguments),*)
-                }
-            }
-        } else if self.return_dynamic {
-            quote_spanned! { return_span =>
-                pub #dynamic_signature {
-                    Ok(#name(#(#arguments),*))
+                    #name(#(#arguments),*).map(Dynamic::from)
                 }
             }
         } else {
@@ -890,18 +873,12 @@ impl ExportedFn {
             .map(|r| r.span())
             .unwrap_or_else(|| proc_macro2::Span::call_site());
         let return_expr = if !self.params.return_raw.is_some() {
-            if self.return_dynamic {
-                quote_spanned! { return_span =>
-                    Ok(#sig_name(#(#unpack_exprs),*))
-                }
-            } else {
-                quote_spanned! { return_span =>
-                    Ok(Dynamic::from(#sig_name(#(#unpack_exprs),*)))
-                }
+            quote_spanned! { return_span =>
+                Ok(Dynamic::from(#sig_name(#(#unpack_exprs),*)))
             }
         } else {
             quote_spanned! { return_span =>
-                #sig_name(#(#unpack_exprs),*)
+                #sig_name(#(#unpack_exprs),*).map(Dynamic::from)
             }
         };
 

@@ -1047,12 +1047,6 @@ impl Engine {
 
         let val = scope.get_mut_by_index(index);
 
-        // Check for data race - probably not necessary because the only place it should conflict is
-        //                       in a method call when the object variable is also used as a parameter.
-        // if cfg!(not(feature = "no_closure")) && val.is_locked() {
-        //     return EvalAltResult::ErrorDataRace(name.into(), *pos).into();
-        // }
-
         Ok((val.into(), *pos))
     }
 

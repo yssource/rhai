@@ -833,8 +833,12 @@ impl Dynamic {
     /// assert_eq!(new_result.to_string(), "hello");
     /// ```
     #[inline(always)]
-    pub fn from<T: Variant + Clone>(value: T) -> Self {
+    pub fn from<T: Variant + Clone>(mut value: T) -> Self {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
+
+        if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
+            return unsafe_try_cast::<_, Dynamic>(value).ok().unwrap();
+        }
 
         if TypeId::of::<T>() == TypeId::of::<INT>() {
             return <dyn Any>::downcast_ref::<INT>(&value)
@@ -884,46 +888,43 @@ impl Dynamic {
             return ().into();
         }
 
-        let mut boxed = Box::new(value);
-
-        boxed = match unsafe_cast_box::<_, Dynamic>(boxed) {
-            Ok(d) => return *d,
-            Err(val) => val,
-        };
-        boxed = match unsafe_cast_box::<_, String>(boxed) {
-            Ok(s) => return (*s).into(),
+        value = match unsafe_try_cast::<_, String>(value) {
+            Ok(s) => return (s).into(),
             Err(val) => val,
         };
         #[cfg(not(feature = "no_index"))]
         {
-            boxed = match unsafe_cast_box::<_, Array>(boxed) {
-                Ok(array) => return (*array).into(),
+            value = match unsafe_try_cast::<_, Array>(value) {
+                Ok(array) => return (array).into(),
                 Err(val) => val,
             };
         }
 
         #[cfg(not(feature = "no_object"))]
         {
-            boxed = match unsafe_cast_box::<_, Map>(boxed) {
-                Ok(map) => return (*map).into(),
+            value = match unsafe_try_cast::<_, Map>(value) {
+                Ok(map) => return (map).into(),
                 Err(val) => val,
             }
         }
 
-        boxed = match unsafe_cast_box::<_, FnPtr>(boxed) {
-            Ok(fn_ptr) => return (*fn_ptr).into(),
+        value = match unsafe_try_cast::<_, FnPtr>(value) {
+            Ok(fn_ptr) => return (fn_ptr).into(),
             Err(val) => val,
         };
 
         #[cfg(not(feature = "no_std"))]
         {
-            boxed = match unsafe_cast_box::<_, Instant>(boxed) {
-                Ok(timestamp) => return (*timestamp).into(),
+            value = match unsafe_try_cast::<_, Instant>(value) {
+                Ok(timestamp) => return (timestamp).into(),
                 Err(val) => val,
             }
         }
 
-        Self(Union::Variant(Box::new(boxed), AccessMode::ReadWrite))
+        Self(Union::Variant(
+            Box::new(Box::new(value)),
+            AccessMode::ReadWrite,
+        ))
     }
     /// Turn the [`Dynamic`] value into a shared [`Dynamic`] value backed by an
     /// [`Rc`][std::rc::Rc]`<`[`RefCell`][std::cell::RefCell]`<`[`Dynamic`]`>>` or
@@ -986,12 +987,12 @@ impl Dynamic {
         }
 
         if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
-            return unsafe_cast_box::<_, T>(Box::new(self)).ok().map(|v| *v);
+            return unsafe_try_cast::<_, T>(self).ok();
         }
 
         if TypeId::of::<T>() == TypeId::of::<INT>() {
             return match self.0 {
-                Union::Int(value, _) => unsafe_try_cast(value),
+                Union::Int(value, _) => unsafe_try_cast(value).ok(),
                 _ => None,
             };
         }
@@ -999,7 +1000,7 @@ impl Dynamic {
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
             return match self.0 {
-                Union::Float(value, _) => unsafe_try_cast(*value),
+                Union::Float(value, _) => unsafe_try_cast(*value).ok(),
                 _ => None,
             };
         }
@@ -1007,35 +1008,35 @@ impl Dynamic {
         #[cfg(feature = "decimal")]
         if TypeId::of::<T>() == TypeId::of::<Decimal>() {
             return match self.0 {
-                Union::Decimal(value, _) => unsafe_try_cast(*value),
+                Union::Decimal(value, _) => unsafe_try_cast(*value).ok(),
                 _ => None,
             };
         }
 
         if TypeId::of::<T>() == TypeId::of::<bool>() {
             return match self.0 {
-                Union::Bool(value, _) => unsafe_try_cast(value),
+                Union::Bool(value, _) => unsafe_try_cast(value).ok(),
                 _ => None,
             };
         }
 
         if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
             return match self.0 {
-                Union::Str(value, _) => unsafe_try_cast(value),
+                Union::Str(value, _) => unsafe_try_cast(value).ok(),
                 _ => None,
             };
         }
 
         if TypeId::of::<T>() == TypeId::of::<String>() {
             return match self.0 {
-                Union::Str(value, _) => unsafe_try_cast(value.into_owned()),
+                Union::Str(value, _) => unsafe_try_cast(value.into_owned()).ok(),
                 _ => None,
             };
         }
 
         if TypeId::of::<T>() == TypeId::of::<char>() {
             return match self.0 {
-                Union::Char(value, _) => unsafe_try_cast(value),
+                Union::Char(value, _) => unsafe_try_cast(value).ok(),
                 _ => None,
             };
         }
@@ -1073,7 +1074,7 @@ impl Dynamic {
 
         if TypeId::of::<T>() == TypeId::of::<()>() {
             return match self.0 {
-                Union::Unit(value, _) => unsafe_try_cast(value),
+                Union::Unit(value, _) => unsafe_try_cast(value).ok(),
                 _ => None,
             };
         }

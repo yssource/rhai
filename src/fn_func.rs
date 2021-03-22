@@ -98,10 +98,7 @@ macro_rules! def_anonymous_fn {
             #[inline(always)]
             fn create_from_ast(self, ast: AST, entry_point: &str) -> Self::Output {
                 let fn_name = entry_point.to_string();
-
-                Box::new(move |$($par: $par),*| {
-                    self.call_fn(&mut Scope::new(), &ast, &fn_name, ($($par,)*))
-                })
+                Box::new(move |$($par),*| self.call_fn(&mut Scope::new(), &ast, &fn_name, ($($par,)*)))
             }
 
             #[inline(always)]

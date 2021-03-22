@@ -1885,9 +1885,8 @@ impl Engine {
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::NONE))?;
 
         // Check for data race.
-        if cfg!(not(feature = "no_closure")) {
-            crate::fn_call::ensure_no_data_race(name, args, false)?;
-        }
+        #[cfg(not(feature = "no_closure"))]
+        crate::fn_call::ensure_no_data_race(name, args, false)?;
 
         self.call_script_fn(
             scope,

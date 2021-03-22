@@ -447,7 +447,7 @@ mod generate_tests {
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         debug_assert_eq!(args.len(), 0usize,
                                          "wrong arg count: {} != {}", args.len(), 0usize);
-                        Ok(return_dynamic())
+                        Ok(Dynamic::from(return_dynamic()))
                     }
 
                     fn is_method_call(&self) -> bool { false }
@@ -477,7 +477,7 @@ mod generate_tests {
                 }
                 #[allow(unused)]
                 pub fn dynamic_result_fn() -> Result<Dynamic, Box<EvalAltResult> > {
-                    Ok(return_dynamic())
+                    Ok(Dynamic::from(return_dynamic()))
                 }
             }
         };

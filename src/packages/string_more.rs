@@ -235,7 +235,7 @@ mod string_functions {
         string: &mut ImmutableString,
         len: INT,
         character: char,
-    ) -> Result<Dynamic, Box<crate::EvalAltResult>> {
+    ) -> Result<(), Box<crate::EvalAltResult>> {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
@@ -269,7 +269,7 @@ mod string_functions {
             }
         }
 
-        Ok(Dynamic::UNIT)
+        Ok(())
     }
     #[rhai_fn(name = "pad", return_raw)]
     pub fn pad_with_string(
@@ -277,7 +277,7 @@ mod string_functions {
         string: &mut ImmutableString,
         len: INT,
         padding: &str,
-    ) -> Result<Dynamic, Box<crate::EvalAltResult>> {
+    ) -> Result<(), Box<crate::EvalAltResult>> {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
@@ -318,7 +318,7 @@ mod string_functions {
             }
         }
 
-        Ok(Dynamic::UNIT)
+        Ok(())
     }
 
     #[cfg(not(feature = "no_index"))]

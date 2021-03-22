@@ -1,4 +1,4 @@
-error: functions marked with 'return_raw' must return Result<Dynamic, Box<EvalAltResult>>
+error: functions marked with 'return_raw' must return Result<T, Box<EvalAltResult>>
  --> $DIR/export_fn_raw_noreturn.rs:9:13
   |
 9 | #[export_fn(return_raw)]

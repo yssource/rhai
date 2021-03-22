@@ -11,7 +11,7 @@
 //!
 //! ## Contents of `my_script.rhai`
 //!
-//! ```,ignore
+//! ```ignore
 //! /// Brute force factorial function
 //! fn factorial(x) {
 //!     if x == 1 { return 1; }
@@ -24,7 +24,7 @@
 //!
 //! ## The Rust part
 //!
-//! ```,no_run
+//! ```no_run
 //! use rhai::{Engine, EvalAltResult};
 //!
 //! fn main() -> Result<(), Box<EvalAltResult>>
@@ -88,7 +88,7 @@ mod token;
 mod r#unsafe;
 mod utils;
 
-type RhaiResult = Result<Dynamic, stdlib::boxed::Box<EvalAltResult>>;
+type RhaiResult = stdlib::result::Result<Dynamic, stdlib::boxed::Box<EvalAltResult>>;
 
 /// The system integer type. It is defined as [`i64`].
 ///
