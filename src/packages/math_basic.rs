@@ -304,6 +304,7 @@ mod float_functions {
 #[cfg(feature = "decimal")]
 #[export_module]
 mod decimal_functions {
+    use crate::stdlib::convert::TryFrom;
     use rust_decimal::{
         prelude::{FromStr, RoundingStrategy},
         Decimal,
@@ -420,6 +421,40 @@ mod decimal_functions {
                 )
                 .into()
             })
+    }
+
+    #[cfg(not(feature = "no_float"))]
+    pub mod float {
+        #[rhai_fn(name = "to_decimal", return_raw)]
+        pub fn f32_to_decimal(x: f32) -> Result<Decimal, Box<EvalAltResult>> {
+            Decimal::try_from(x).map_err(|_| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Cannot convert to Decimal: to_decimal({})", x),
+                    Position::NONE,
+                )
+                .into()
+            })
+        }
+        #[rhai_fn(name = "to_decimal", return_raw)]
+        pub fn f64_to_decimal(x: f64) -> Result<Decimal, Box<EvalAltResult>> {
+            Decimal::try_from(x).map_err(|_| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Cannot convert to Decimal: to_decimal({})", x),
+                    Position::NONE,
+                )
+                .into()
+            })
+        }
+        #[rhai_fn(return_raw)]
+        pub fn to_float(x: Decimal) -> Result<FLOAT, Box<EvalAltResult>> {
+            FLOAT::try_from(x).map_err(|_| {
+                EvalAltResult::ErrorArithmetic(
+                    format!("Cannot convert to floating-point: to_float({})", x),
+                    Position::NONE,
+                )
+                .into()
+            })
+        }
     }
 }
 
