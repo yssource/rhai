@@ -342,13 +342,13 @@ impl<'a> Target<'a> {
     #[inline(always)]
     pub fn is<T: Variant + Clone>(&self) -> bool {
         match self {
-            Target::Ref(r) => r.is::<T>(),
+            Self::Ref(r) => r.is::<T>(),
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "no_object"))]
-            Target::LockGuard((r, _)) => r.is::<T>(),
-            Target::Value(r) => r.is::<T>(),
+            Self::LockGuard((r, _)) => r.is::<T>(),
+            Self::Value(r) => r.is::<T>(),
             #[cfg(not(feature = "no_index"))]
-            Target::StringChar(_, _, _) => TypeId::of::<T>() == TypeId::of::<char>(),
+            Self::StringChar(_, _, _) => TypeId::of::<T>() == TypeId::of::<char>(),
         }
     }
     /// Get the value of the `Target` as a `Dynamic`, cloning a referenced value if necessary.
@@ -1056,7 +1056,7 @@ impl Engine {
         idx_values: &mut StaticVec<ChainArgument>,
         chain_type: ChainType,
         level: usize,
-        new_val: Option<((Dynamic, Position), (&Option<OpAssignment>, Position))>,
+        new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         assert!(chain_type != ChainType::NonChaining);
 
@@ -1097,6 +1097,8 @@ impl Engine {
                     // xxx[rhs] op= new_val
                     _ if new_val.is_some() => {
                         let idx_val = idx_val.as_index_value();
+
+                        #[cfg(not(feature = "no_index"))]
                         let mut idx_val2 = idx_val.clone();
 
                         // `call_setter` is introduced to bypass double mutable borrowing of target
@@ -1357,7 +1359,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         level: usize,
-        new_val: Option<((Dynamic, Position), (&Option<OpAssignment>, Position))>,
+        new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
     ) -> RhaiResult {
         let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, op_pos) = match expr {
             Expr::Index(x, pos) => (x.as_ref(), ChainType::Index, *pos),
@@ -1524,7 +1526,7 @@ impl Engine {
         state: &mut State,
         _lib: &[&Module],
         target: &'t mut Dynamic,
-        idx: Dynamic,
+        mut idx: Dynamic,
         idx_pos: Position,
         _create: bool,
         _is_ref: bool,
@@ -1557,21 +1559,18 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(map, _)) => {
                 // val_map[idx]
-                Ok(if _create {
-                    let index = idx.take_immutable_string().map_err(|err| {
-                        self.make_type_mismatch_err::<ImmutableString>(err, idx_pos)
-                    })?;
+                let index = &*idx.read_lock::<ImmutableString>().ok_or_else(|| {
+                    self.make_type_mismatch_err::<ImmutableString>(idx.type_name(), idx_pos)
+                })?;
 
-                    map.entry(index).or_insert_with(Default::default).into()
-                } else {
-                    let index = idx.read_lock::<ImmutableString>().ok_or_else(|| {
-                        self.make_type_mismatch_err::<ImmutableString>("", idx_pos)
-                    })?;
+                if _create && !map.contains_key(index) {
+                    map.insert(index.clone(), Default::default());
+                }
 
-                    map.get_mut(&*index)
-                        .map(Target::from)
-                        .unwrap_or_else(|| Target::from(()))
-                })
+                Ok(map
+                    .get_mut(index)
+                    .map(Target::from)
+                    .unwrap_or_else(|| Target::from(())))
             }
 
             #[cfg(not(feature = "no_index"))]
@@ -1596,7 +1595,6 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             _ if _indexers => {
                 let type_name = target.type_name();
-                let mut idx = idx;
                 let args = &mut [target, &mut idx];
                 let hash_get = FnCallHash::from_native(calc_fn_hash(empty(), FN_IDX_GET, 2));
                 self.exec_fn_call(
@@ -1863,7 +1861,7 @@ impl Engine {
         mods: &mut Imports,
         state: &mut State,
         lib: &[&Module],
-        op_info: &Option<OpAssignment>,
+        op_info: Option<OpAssignment>,
         op_pos: Position,
         mut target: Target,
         mut new_value: Dynamic,
@@ -1889,20 +1887,19 @@ impl Engine {
                 lhs_ptr_inner = target.as_mut();
             }
 
-            let hash = *hash_op_assign;
+            let hash = hash_op_assign;
             let args = &mut [lhs_ptr_inner, &mut new_value];
 
             match self.call_native_fn(mods, state, lib, op, hash, args, true, true, op_pos) {
                 Ok(_) => (),
-                Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op.as_ref())) =>
+                Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
                 {
                     // Expand to `var = var op rhs`
                     let op = &op[..op.len() - 1]; // extract operator without =
 
                     // Run function
-                    let (value, _) = self.call_native_fn(
-                        mods, state, lib, op, *hash_op, args, true, false, op_pos,
-                    )?;
+                    let (value, _) = self
+                        .call_native_fn(mods, state, lib, op, hash_op, args, true, false, op_pos)?;
 
                     *args[0] = value.flatten();
                 }
@@ -1975,7 +1972,7 @@ impl Engine {
                         mods,
                         state,
                         lib,
-                        op_info,
+                        op_info.clone(),
                         *op_pos,
                         lhs_ptr,
                         rhs_val,
@@ -1991,7 +1988,7 @@ impl Engine {
                 let rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
                     .flatten();
-                let _new_val = Some(((rhs_val, rhs_expr.position()), (op_info, *op_pos)));
+                let _new_val = Some(((rhs_val, rhs_expr.position()), (op_info.clone(), *op_pos)));
 
                 // Must be either `var[index] op= val` or `var.prop op= val`
                 match lhs_expr {

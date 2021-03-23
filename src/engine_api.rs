@@ -1278,9 +1278,9 @@ impl Engine {
 
         // Trims the JSON string and add a '#' in front
         let json_text = json.trim_start();
-        let scripts = if json_text.starts_with(Token::MapStart.syntax().as_ref()) {
+        let scripts = if json_text.starts_with(Token::MapStart.keyword_syntax()) {
             [json_text, ""]
-        } else if json_text.starts_with(Token::LeftBrace.syntax().as_ref()) {
+        } else if json_text.starts_with(Token::LeftBrace.keyword_syntax()) {
             ["#", json_text]
         } else {
             return Err(crate::ParseErrorType::MissingToken(

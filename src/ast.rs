@@ -1285,7 +1285,7 @@ pub struct BinaryExpr {
 pub struct OpAssignment {
     pub hash_op_assign: u64,
     pub hash_op: u64,
-    pub op: Cow<'static, str>,
+    pub op: &'static str,
 }
 
 /// _(INTERNALS)_ An set of function call hashes.

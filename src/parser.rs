@@ -10,7 +10,6 @@ use crate::module::NamespaceRef;
 use crate::optimize::optimize_into_ast;
 use crate::optimize::OptimizationLevel;
 use crate::stdlib::{
-    borrow::Cow,
     boxed::Box,
     collections::BTreeMap,
     format,
@@ -1355,7 +1354,7 @@ fn parse_unary(
 
 /// Make an assignment statement.
 fn make_assignment_stmt<'a>(
-    op: Cow<'static, str>,
+    op: &'static str,
     state: &mut ParseState,
     lhs: Expr,
     rhs: Expr,
@@ -1479,7 +1478,7 @@ fn parse_op_assignment_stmt(
         | Token::PowerOfAssign
         | Token::AndAssign
         | Token::OrAssign
-        | Token::XOrAssign => token.syntax(),
+        | Token::XOrAssign => token.keyword_syntax(),
 
         _ => return Ok(Stmt::Expr(lhs)),
     };
