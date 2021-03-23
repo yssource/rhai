@@ -9,7 +9,7 @@ use crate::stdlib::{
 
 /// Cast a type into another type.
 #[inline(always)]
-pub fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Option<B> {
+pub fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Result<B, A> {
     if TypeId::of::<B>() == a.type_id() {
         // SAFETY: Just checked we have the right type. We explicitly forget the
         // value immediately after moving out, removing any chance of a destructor
@@ -17,10 +17,10 @@ pub fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Option<B> {
         unsafe {
             let ret: B = ptr::read(&a as *const _ as *const B);
             mem::forget(a);
-            Some(ret)
+            Ok(ret)
         }
     } else {
-        None
+        Err(a)
     }
 }
 

@@ -12,7 +12,7 @@ use crate::optimize::OptimizationLevel;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
-    collections::HashMap,
+    collections::BTreeMap,
     format,
     hash::{Hash, Hasher},
     iter::empty,
@@ -23,7 +23,7 @@ use crate::stdlib::{
 };
 use crate::syntax::{CustomSyntax, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
-use crate::utils::{get_hasher, StraightHasherBuilder};
+use crate::utils::get_hasher;
 use crate::{
     calc_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType, Position,
     Scope, Shared, StaticVec, AST,
@@ -37,7 +37,7 @@ use crate::FnAccess;
 
 type PERR = ParseErrorType;
 
-type FunctionsLib = HashMap<u64, Shared<ScriptFnDef>, StraightHasherBuilder>;
+type FunctionsLib = BTreeMap<u64, Shared<ScriptFnDef>>;
 
 /// A type that encapsulates the current state of the parser.
 #[derive(Debug)]
@@ -45,14 +45,14 @@ struct ParseState<'e> {
     /// Reference to the scripting [`Engine`].
     engine: &'e Engine,
     /// Interned strings.
-    strings: HashMap<String, ImmutableString>,
+    interned_strings: BTreeMap<String, ImmutableString>,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(ImmutableString, AccessMode)>,
     /// Size of the local variables stack upon entry of the current block scope.
     entry_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
-    externals: HashMap<ImmutableString, Position>,
+    external_vars: BTreeMap<ImmutableString, Position>,
     /// An indicator that disables variable capturing into externals one single time
     /// up until the nearest consumed Identifier token.
     /// If set to false the next call to `access_var` will not capture the variable.
@@ -89,10 +89,10 @@ impl<'e> ParseState<'e> {
             #[cfg(not(feature = "no_function"))]
             max_function_expr_depth,
             #[cfg(not(feature = "no_closure"))]
-            externals: Default::default(),
+            external_vars: Default::default(),
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
-            strings: HashMap::with_capacity(64),
+            interned_strings: Default::default(),
             stack: Vec::with_capacity(16),
             entry_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
@@ -130,8 +130,8 @@ impl<'e> ParseState<'e> {
 
         #[cfg(not(feature = "no_closure"))]
         if self.allow_capture {
-            if index.is_none() && !self.externals.contains_key(name) {
-                self.externals.insert(name.into(), _pos);
+            if index.is_none() && !self.external_vars.contains_key(name) {
+                self.external_vars.insert(name.into(), _pos);
             }
         } else {
             self.allow_capture = true
@@ -171,12 +171,13 @@ impl<'e> ParseState<'e> {
         text: impl AsRef<str> + Into<ImmutableString>,
     ) -> ImmutableString {
         #[allow(clippy::map_entry)]
-        if !self.strings.contains_key(text.as_ref()) {
+        if !self.interned_strings.contains_key(text.as_ref()) {
             let value = text.into();
-            self.strings.insert(value.clone().into(), value.clone());
+            self.interned_strings
+                .insert(value.clone().into(), value.clone());
             value
         } else {
-            self.strings.get(text.as_ref()).unwrap().clone()
+            self.interned_strings.get(text.as_ref()).unwrap().clone()
         }
     }
 }
@@ -813,7 +814,7 @@ fn parse_switch(
         }
     }
 
-    let mut table = HashMap::<u64, StmtBlock>::new();
+    let mut table = BTreeMap::<u64, StmtBlock>::new();
     let mut def_stmt = None;
 
     loop {
@@ -902,13 +903,10 @@ fn parse_switch(
         }
     }
 
-    let mut final_table = HashMap::with_capacity_and_hasher(table.len(), StraightHasherBuilder);
-    final_table.extend(table.into_iter());
-
     Ok(Stmt::Switch(
         item,
         Box::new((
-            final_table.into(),
+            table,
             def_stmt.unwrap_or_else(|| Stmt::Noop(Position::NONE).into()),
         )),
         settings.pos,
@@ -1003,7 +1001,7 @@ fn parse_primary(
             let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
 
             #[cfg(not(feature = "no_closure"))]
-            new_state.externals.iter().for_each(|(closure, pos)| {
+            new_state.external_vars.iter().for_each(|(closure, pos)| {
                 state.access_var(closure, *pos);
             });
 
@@ -2739,7 +2737,7 @@ fn parse_fn(
 
     #[cfg(not(feature = "no_closure"))]
     let externals = state
-        .externals
+        .external_vars
         .iter()
         .map(|(name, _)| name)
         .filter(|name| !params.contains(name))
@@ -2860,7 +2858,7 @@ fn parse_anon_fn(
         #[cfg(not(feature = "no_closure"))]
         {
             state
-                .externals
+                .external_vars
                 .iter()
                 .map(|(name, &pos)| Ident {
                     name: name.clone(),
@@ -2966,7 +2964,7 @@ impl Engine {
         input: &mut TokenStream,
     ) -> Result<(Vec<Stmt>, Vec<Shared<ScriptFnDef>>), ParseError> {
         let mut statements = Vec::with_capacity(16);
-        let mut functions = HashMap::with_capacity_and_hasher(16, StraightHasherBuilder);
+        let mut functions = BTreeMap::new();
         let mut state = ParseState::new(
             self,
             #[cfg(not(feature = "unchecked"))]

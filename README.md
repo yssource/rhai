@@ -28,11 +28,11 @@ Supported targets and builds
 Standard features
 -----------------
 
-* Simple language similar to JavaScript+Rust with dynamic typing.
+* Simple language similar to JavaScript+Rust with [dynamic](https://rhai.rs/book/language/dynamic.html) typing.
 * Fairly efficient evaluation (1 million iterations in 0.3 sec on a single-core, 2.3 GHz Linux VM).
 * Tight integration with native Rust [functions](https://rhai.rs/book/rust/functions.html) and [types]([#custom-types-and-methods](https://rhai.rs/book/rust/custom.html)), including [getters/setters](https://rhai.rs/book/rust/getters-setters.html), [methods](https://rhai.rs/book/rust/custom.html) and [indexers](https://rhai.rs/book/rust/indexers.html).
-* Freely pass Rust variables/constants into a script via an external [`Scope`](https://rhai.rs/book/rust/scope.html) - all clonable Rust types are supported; no need to implement any special trait.
-* Built-in support for most common [data types](https://rhai.rs/book/language/values-and-types.html) including booleans, integers, floating-point numbers (including [`Decimal`](https://crates.io/crates/rust_decimal)), strings, Unicode characters, arrays and maps.
+* Freely pass Rust values into a script as [variables](https://rhai.rs/book/language/variables.html)/[constants](https://rhai.rs/book/language/constants.html) via an external [`Scope`](https://rhai.rs/book/rust/scope.html) - all clonable Rust types are supported; no need to implement any special trait. Or tap directly into the [variable resolution process](https://rhai.rs/book/engine/var.html).
+* Built-in support for most common [data types](https://rhai.rs/book/language/values-and-types.html) including booleans, [integers](https://rhai.rs/book/language/numbers.html), [floating-point numbers](https://rhai.rs/book/language/numbers.html) (including [`Decimal`](https://crates.io/crates/rust_decimal)), [strings](https://rhai.rs/book/language/strings-chars.html), [Unicode characters](https://rhai.rs/book/language/strings-chars.html), [arrays](https://rhai.rs/book/language/arrays.html) and [object maps](https://rhai.rs/book/language/object-maps.html).
 * Easily [call a script-defined function](https://rhai.rs/book/engine/call-fn.html) from Rust.
 * Relatively little `unsafe` code (yes there are some for performance reasons).
 * Few dependencies (currently only [`smallvec`](https://crates.io/crates/smallvec), [`num-traits`](https://crates.io/crates/num-traits) and [`ahash`](https://crates.io/crates/ahash)).
@@ -44,7 +44,7 @@ Standard features
 * Dynamic dispatch via [function pointers](https://rhai.rs/book/language/fn-ptr.html) with additional support for [currying](https://rhai.rs/book/language/fn-curry.html).
 * [Closures](https://rhai.rs/book/language/fn-closure.html) (anonymous functions) that can capture shared values.
 * Some syntactic support for [object-oriented programming (OOP)](https://rhai.rs/book/language/oop.html).
-* Organize code base with dynamically-loadable [modules](https://rhai.rs/book/language/modules.html), optionally overriding the resolution process
+* Organize code base with dynamically-loadable [modules](https://rhai.rs/book/language/modules.html), optionally [overriding the resolution process](https://rhai.rs/book/rust/modules/resolvers.html).
 * Serialization/deserialization support via [serde](https://crates.io/crates/serde) (requires the `serde` feature).
 * Support for [minimal builds](https://rhai.rs/book/start/builds/minimal.html) by excluding unneeded language [features](https://rhai.rs/book/start/features.html).
 
@@ -52,7 +52,8 @@ Standard features
 Protected against attacks
 -------------------------
 
-* Sand-boxed - the scripting engine, if declared immutable, cannot mutate the containing environment unless [explicitly permitted](https://rhai.rs/book/patterns/control.html).
+* _Don't Panic_ guarantee - Any panic is a bug. Rhai subscribes to the motto that a library should never panic the host system, and is coded with this in mind.
+* [Sand-boxed](https://rhai.rs/book/safety/sandbox.html) - the scripting engine, if declared immutable, cannot mutate the containing environment unless [explicitly permitted](https://rhai.rs/book/patterns/control.html).
 * Rugged - protected against malicious attacks (such as [stack-overflow](https://rhai.rs/book/safety/max-call-stack.html), [over-sized data](https://rhai.rs/book/safety/max-string-size.html), and [runaway scripts](https://rhai.rs/book/safety/max-operations.html) etc.) that may come from untrusted third-party user-land scripts.
 * Track script evaluation [progress](https://rhai.rs/book/safety/progress.html) and manually terminate a script run.
 
@@ -75,14 +76,14 @@ Project Site
 Documentation
 -------------
 
-See [The Rhai Book](https://rhai.rs/book) for details on the Rhai scripting engine and language.
+See [_The Rhai Book_](https://rhai.rs/book) for details on the Rhai scripting engine and language.
 
 
 Playground
 ----------
 
-An [Online Playground](https://rhai.rs/playground) is available with
-syntax-highlighting editor, powered by WebAssembly.
+An [_Online Playground_](https://rhai.rs/playground) is available with syntax-highlighting editor,
+powered by WebAssembly.
 
 Scripts can be evaluated directly from the editor.
 

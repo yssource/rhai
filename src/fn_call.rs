@@ -102,21 +102,18 @@ pub fn ensure_no_data_race(
     args: &FnCallArgs,
     is_ref: bool,
 ) -> Result<(), Box<EvalAltResult>> {
-    if cfg!(not(feature = "no_closure")) {
-        let skip = if is_ref { 1 } else { 0 };
-
-        if let Some((n, _)) = args
-            .iter()
-            .skip(skip)
-            .enumerate()
-            .find(|(_, a)| a.is_locked())
-        {
-            return EvalAltResult::ErrorDataRace(
-                format!("argument #{} of function '{}'", n + 1 + skip, fn_name),
-                Position::NONE,
-            )
-            .into();
-        }
+    #[cfg(not(feature = "no_closure"))]
+    if let Some((n, _)) = args
+        .iter()
+        .enumerate()
+        .skip(if is_ref { 1 } else { 0 })
+        .find(|(_, a)| a.is_locked())
+    {
+        return EvalAltResult::ErrorDataRace(
+            format!("argument #{} of function '{}'", n + 1, fn_name),
+            Position::NONE,
+        )
+        .into();
     }
 
     Ok(())
@@ -636,9 +633,8 @@ impl Engine {
         _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         // Check for data race.
-        if cfg!(not(feature = "no_closure")) {
-            ensure_no_data_race(fn_name, args, is_ref)?;
-        }
+        #[cfg(not(feature = "no_closure"))]
+        ensure_no_data_race(fn_name, args, is_ref)?;
 
         // These may be redirected from method style calls.
         match fn_name {
@@ -1259,7 +1255,10 @@ impl Engine {
                 arg_values = args_expr
                     .iter()
                     .skip(1)
-                    .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
+                    .map(|expr| {
+                        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                            .map(Dynamic::flatten)
+                    })
                     .collect::<Result<_, _>>()?;
 
                 let (mut target, pos) =
@@ -1285,7 +1284,10 @@ impl Engine {
                 // func(..., ...)
                 arg_values = args_expr
                     .iter()
-                    .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
+                    .map(|expr| {
+                        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                            .map(Dynamic::flatten)
+                    })
                     .collect::<Result<_, _>>()?;
 
                 args = curry.iter_mut().chain(arg_values.iter_mut()).collect();
@@ -1340,6 +1342,7 @@ impl Engine {
                             Ok(Default::default())
                         } else {
                             self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                                .map(Dynamic::flatten)
                         }
                     })
                     .collect::<Result<_, _>>()?;
@@ -1364,7 +1367,10 @@ impl Engine {
                 // func(..., ...) or func(mod::x, ...)
                 arg_values = args_expr
                     .iter()
-                    .map(|expr| self.eval_expr(scope, mods, state, lib, this_ptr, expr, level))
+                    .map(|expr| {
+                        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                            .map(Dynamic::flatten)
+                    })
                     .collect::<Result<_, _>>()?;
 
                 args = arg_values.iter_mut().collect();

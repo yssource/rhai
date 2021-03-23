@@ -61,6 +61,7 @@ fn main() {
     let mut engine = Engine::new();
 
     #[cfg(not(feature = "no_module"))]
+    #[cfg(not(feature = "no_std"))]
     {
         // Set a file module resolver without caching
         let mut resolver = rhai::module_resolvers::FileModuleResolver::new();

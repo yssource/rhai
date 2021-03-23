@@ -390,7 +390,7 @@ impl Serializer for &mut DynamicSerializer {
         #[cfg(not(feature = "no_object"))]
         return Ok(StructVariantSerializer {
             variant: _variant,
-            map: Map::with_capacity(_len),
+            map: Default::default(),
         });
         #[cfg(feature = "no_object")]
         return EvalAltResult::ErrorMismatchDataType(
@@ -691,7 +691,7 @@ impl serde::ser::SerializeStructVariant for StructVariantSerializer {
 
 #[cfg(not(feature = "no_object"))]
 fn make_variant(variant: &'static str, value: Dynamic) -> RhaiResult {
-    let mut map = Map::with_capacity(1);
+    let mut map = Map::new();
     map.insert(variant.into(), value);
     Ok(map.into())
 }

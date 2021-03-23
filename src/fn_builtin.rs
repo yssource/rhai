@@ -109,7 +109,7 @@ pub fn get_builtin_binary_op_fn(
             return Some(|_, args| {
                 let x = args[0].$xx().unwrap() as $base;
                 let y = args[1].$yy().unwrap() as $base;
-                $func(x, y)
+                $func(x, y).map(Into::<Dynamic>::into)
             })
         };
         (from $base:ty => $xx:ident $op:tt $yy:ident) => {
@@ -130,7 +130,7 @@ pub fn get_builtin_binary_op_fn(
             return Some(|_, args| {
                 let x = <$base>::from(args[0].$xx().unwrap());
                 let y = <$base>::from(args[1].$yy().unwrap());
-                $func(x, y)
+                $func(x, y).map(Into::<Dynamic>::into)
             })
         };
     }

@@ -14,7 +14,7 @@ use crate::stdlib::{
     any::{type_name, TypeId},
     borrow::Cow,
     boxed::Box,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     fmt, format,
     hash::{Hash, Hasher},
     num::{NonZeroU8, NonZeroUsize},
@@ -23,7 +23,7 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::syntax::CustomSyntax;
-use crate::utils::{get_hasher, StraightHasherBuilder};
+use crate::utils::get_hasher;
 use crate::{
     Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position, RhaiResult, Scope, Shared,
     StaticVec,
@@ -32,14 +32,8 @@ use crate::{
 #[cfg(not(feature = "no_index"))]
 use crate::{calc_fn_hash, stdlib::iter::empty, Array};
 
-#[cfg(not(feature = "no_index"))]
-pub const TYPICAL_ARRAY_SIZE: usize = 8; // Small arrays are typical
-
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
-
-#[cfg(not(feature = "no_object"))]
-pub const TYPICAL_MAP_SIZE: usize = 8; // Small maps are typical
 
 pub type Precedence = NonZeroU8;
 
@@ -501,7 +495,7 @@ pub struct FnResolutionCacheEntry {
 }
 
 /// A function resolution cache.
-pub type FnResolutionCache = HashMap<u64, Option<FnResolutionCacheEntry>, StraightHasherBuilder>;
+pub type FnResolutionCache = BTreeMap<u64, Option<FnResolutionCacheEntry>>;
 
 /// _(INTERNALS)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
@@ -540,9 +534,7 @@ impl State {
     /// Get a mutable reference to the current function resolution cache.
     pub fn fn_resolution_cache_mut(&mut self) -> &mut FnResolutionCache {
         if self.fn_resolution_caches.0.is_empty() {
-            self.fn_resolution_caches
-                .0
-                .push(HashMap::with_capacity_and_hasher(64, StraightHasherBuilder));
+            self.fn_resolution_caches.0.push(BTreeMap::new());
         }
         self.fn_resolution_caches.0.last_mut().unwrap()
     }
@@ -711,21 +703,21 @@ pub struct Engine {
     /// A collection of all modules loaded into the global namespace of the Engine.
     pub(crate) global_modules: StaticVec<Shared<Module>>,
     /// A collection of all sub-modules directly loaded into the Engine.
-    pub(crate) global_sub_modules: HashMap<ImmutableString, Shared<Module>>,
+    pub(crate) global_sub_modules: BTreeMap<ImmutableString, Shared<Module>>,
 
     /// A module resolution service.
     #[cfg(not(feature = "no_module"))]
     pub(crate) module_resolver: Box<dyn crate::ModuleResolver>,
 
-    /// A hashmap mapping type names to pretty-print names.
-    pub(crate) type_names: HashMap<String, String>,
+    /// A map mapping type names to pretty-print names.
+    pub(crate) type_names: BTreeMap<String, String>,
 
-    /// A hashset containing symbols to disable.
-    pub(crate) disabled_symbols: HashSet<String>,
-    /// A hashmap containing custom keywords and precedence to recognize.
-    pub(crate) custom_keywords: HashMap<String, Option<Precedence>>,
+    /// A set of symbols to disable.
+    pub(crate) disabled_symbols: BTreeSet<String>,
+    /// A map containing custom keywords and precedence to recognize.
+    pub(crate) custom_keywords: BTreeMap<String, Option<Precedence>>,
     /// Custom syntax.
-    pub(crate) custom_syntax: HashMap<ImmutableString, CustomSyntax>,
+    pub(crate) custom_syntax: BTreeMap<ImmutableString, CustomSyntax>,
     /// Callback closure for resolving variable access.
     pub(crate) resolve_var: Option<OnVarCallback>,
 
@@ -1046,12 +1038,6 @@ impl Engine {
         };
 
         let val = scope.get_mut_by_index(index);
-
-        // Check for data race - probably not necessary because the only place it should conflict is
-        //                       in a method call when the object variable is also used as a parameter.
-        // if cfg!(not(feature = "no_closure")) && val.is_locked() {
-        //     return EvalAltResult::ErrorDataRace(name.into(), *pos).into();
-        // }
 
         Ok((val.into(), *pos))
     }
@@ -1688,8 +1674,7 @@ impl Engine {
 
             #[cfg(not(feature = "no_index"))]
             Expr::Array(x, _) => {
-                let mut arr =
-                    Array::with_capacity(crate::stdlib::cmp::max(TYPICAL_ARRAY_SIZE, x.len()));
+                let mut arr = Array::with_capacity(x.len());
                 for item in x.as_ref() {
                     arr.push(
                         self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?
@@ -1701,8 +1686,7 @@ impl Engine {
 
             #[cfg(not(feature = "no_object"))]
             Expr::Map(x, _) => {
-                let mut map =
-                    Map::with_capacity(crate::stdlib::cmp::max(TYPICAL_MAP_SIZE, x.len()));
+                let mut map = Map::new();
                 for (Ident { name: key, .. }, expr) in x.as_ref() {
                     map.insert(
                         key.clone(),

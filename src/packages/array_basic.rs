@@ -1,9 +1,9 @@
 #![cfg(not(feature = "no_index"))]
 #![allow(non_snake_case)]
 
-use crate::engine::{OP_EQUALS, TYPICAL_ARRAY_SIZE};
+use crate::engine::OP_EQUALS;
 use crate::plugin::*;
-use crate::stdlib::{any::TypeId, boxed::Box, cmp::max, cmp::Ordering, mem, string::ToString};
+use crate::stdlib::{any::TypeId, boxed::Box, cmp::Ordering, mem, string::ToString};
 use crate::{def_package, Array, Dynamic, EvalAltResult, FnPtr, NativeCallContext, Position, INT};
 
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
@@ -47,7 +47,7 @@ mod array_functions {
         array: &mut Array,
         len: INT,
         item: Dynamic,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> Result<(), Box<EvalAltResult>> {
         // Check if array will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_array_size() > 0
@@ -62,7 +62,7 @@ mod array_functions {
             array.resize(len as usize, item);
         }
 
-        Ok(Dynamic::UNIT)
+        Ok(())
     }
     pub fn pop(array: &mut Array) -> Dynamic {
         array.pop().unwrap_or_else(|| ().into())
@@ -169,8 +169,8 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         mapper: FnPtr,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut ar = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, array.len()));
+    ) -> Result<Array, Box<EvalAltResult>> {
+        let mut ar = Array::with_capacity(array.len());
 
         for (i, item) in array.iter().enumerate() {
             ar.push(
@@ -195,15 +195,15 @@ mod array_functions {
             );
         }
 
-        Ok(ar.into())
+        Ok(ar)
     }
     #[rhai_fn(return_raw, pure)]
     pub fn filter(
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut ar = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, array.len()));
+    ) -> Result<Array, Box<EvalAltResult>> {
+        let mut ar = Array::new();
 
         for (i, item) in array.iter().enumerate() {
             if filter
@@ -231,14 +231,14 @@ mod array_functions {
             }
         }
 
-        Ok(ar.into())
+        Ok(ar)
     }
     #[rhai_fn(return_raw, pure)]
     pub fn contains(
         ctx: NativeCallContext,
         array: &mut Array,
         value: Dynamic,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> Result<bool, Box<EvalAltResult>> {
         for item in array.iter_mut() {
             if ctx
                 .call_fn_dynamic_raw(OP_EQUALS, true, &mut [item, &mut value.clone()])
@@ -258,18 +258,18 @@ mod array_functions {
                 .as_bool()
                 .unwrap_or(false)
             {
-                return Ok(Dynamic::TRUE);
+                return Ok(true);
             }
         }
 
-        Ok(Dynamic::FALSE)
+        Ok(false)
     }
     #[rhai_fn(return_raw, pure)]
     pub fn index_of(
         ctx: NativeCallContext,
         array: &mut Array,
         value: Dynamic,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> Result<INT, Box<EvalAltResult>> {
         for (i, item) in array.iter_mut().enumerate() {
             if ctx
                 .call_fn_dynamic_raw(OP_EQUALS, true, &mut [item, &mut value.clone()])
@@ -289,18 +289,18 @@ mod array_functions {
                 .as_bool()
                 .unwrap_or(false)
             {
-                return Ok((i as INT).into());
+                return Ok(i as INT);
             }
         }
 
-        Ok((-1 as INT).into())
+        Ok(-1 as INT)
     }
     #[rhai_fn(name = "index_of", return_raw, pure)]
     pub fn index_of_filter(
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> Result<INT, Box<EvalAltResult>> {
         for (i, item) in array.iter().enumerate() {
             if filter
                 .call_dynamic(&ctx, None, [item.clone()])
@@ -323,18 +323,18 @@ mod array_functions {
                 .as_bool()
                 .unwrap_or(false)
             {
-                return Ok((i as INT).into());
+                return Ok(i as INT);
             }
         }
 
-        Ok((-1 as INT).into())
+        Ok(-1 as INT)
     }
     #[rhai_fn(return_raw, pure)]
     pub fn some(
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> Result<bool, Box<EvalAltResult>> {
         for (i, item) in array.iter().enumerate() {
             if filter
                 .call_dynamic(&ctx, None, [item.clone()])
@@ -357,18 +357,18 @@ mod array_functions {
                 .as_bool()
                 .unwrap_or(false)
             {
-                return Ok(true.into());
+                return Ok(true);
             }
         }
 
-        Ok(false.into())
+        Ok(false)
     }
     #[rhai_fn(return_raw, pure)]
     pub fn all(
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> Result<bool, Box<EvalAltResult>> {
         for (i, item) in array.iter().enumerate() {
             if !filter
                 .call_dynamic(&ctx, None, [item.clone()])
@@ -391,11 +391,11 @@ mod array_functions {
                 .as_bool()
                 .unwrap_or(false)
             {
-                return Ok(false.into());
+                return Ok(false);
             }
         }
 
-        Ok(true.into())
+        Ok(true)
     }
     #[rhai_fn(return_raw, pure)]
     pub fn reduce(
@@ -403,7 +403,7 @@ mod array_functions {
         array: &mut Array,
         reducer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut result: Dynamic = Dynamic::UNIT;
+        let mut result = Dynamic::UNIT;
 
         for (i, item) in array.iter().enumerate() {
             result = reducer
@@ -433,16 +433,9 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         reducer: FnPtr,
-        initial: FnPtr,
+        initial: Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut result = initial.call_dynamic(&ctx, None, []).map_err(|err| {
-            Box::new(EvalAltResult::ErrorInFunctionCall(
-                "reduce".to_string(),
-                ctx.source().unwrap_or("").to_string(),
-                err,
-                Position::NONE,
-            ))
-        })?;
+        let mut result = initial;
 
         for (i, item) in array.iter().enumerate() {
             result = reducer
@@ -473,7 +466,7 @@ mod array_functions {
         array: &mut Array,
         reducer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut result: Dynamic = Dynamic::UNIT;
+        let mut result = Dynamic::UNIT;
 
         for (i, item) in array.iter().enumerate().rev() {
             result = reducer
@@ -503,16 +496,9 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         reducer: FnPtr,
-        initial: FnPtr,
+        initial: Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut result = initial.call_dynamic(&ctx, None, []).map_err(|err| {
-            Box::new(EvalAltResult::ErrorInFunctionCall(
-                "reduce_rev".to_string(),
-                ctx.source().unwrap_or("").to_string(),
-                err,
-                Position::NONE,
-            ))
-        })?;
+        let mut result = initial;
 
         for (i, item) in array.iter().enumerate().rev() {
             result = reducer
@@ -542,7 +528,7 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         comparer: FnPtr,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> Result<(), Box<EvalAltResult>> {
         array.sort_by(|x, y| {
             comparer
                 .call_dynamic(&ctx, None, [x.clone(), y.clone()])
@@ -571,15 +557,15 @@ mod array_functions {
                 })
         });
 
-        Ok(Dynamic::UNIT)
+        Ok(())
     }
     #[rhai_fn(return_raw)]
     pub fn drain(
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut drained = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, array.len()));
+    ) -> Result<Array, Box<EvalAltResult>> {
+        let mut drained = Array::with_capacity(array.len());
 
         let mut i = array.len();
 
@@ -611,7 +597,7 @@ mod array_functions {
             }
         }
 
-        Ok(drained.into())
+        Ok(drained)
     }
     #[rhai_fn(name = "drain")]
     pub fn drain_range(array: &mut Array, start: INT, len: INT) -> Array {
@@ -638,8 +624,8 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        let mut drained = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, array.len()));
+    ) -> Result<Array, Box<EvalAltResult>> {
+        let mut drained = Array::new();
 
         let mut i = array.len();
 
@@ -671,7 +657,7 @@ mod array_functions {
             }
         }
 
-        Ok(drained.into())
+        Ok(drained)
     }
     #[rhai_fn(name = "retain")]
     pub fn retain_range(array: &mut Array, start: INT, len: INT) -> Array {
@@ -701,12 +687,12 @@ mod array_functions {
         ctx: NativeCallContext,
         array: &mut Array,
         mut array2: Array,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> Result<bool, Box<EvalAltResult>> {
         if array.len() != array2.len() {
-            return Ok(false.into());
+            return Ok(false);
         }
         if array.is_empty() {
-            return Ok(true.into());
+            return Ok(true);
         }
 
         for (a1, a2) in array.iter_mut().zip(array2.iter_mut()) {
@@ -728,18 +714,18 @@ mod array_functions {
                 .as_bool()
                 .unwrap_or(false)
             {
-                return Ok(Dynamic::FALSE);
+                return Ok(false);
             }
         }
 
-        Ok(Dynamic::TRUE)
+        Ok(true)
     }
     #[rhai_fn(name = "!=", return_raw, pure)]
     pub fn not_equals(
         ctx: NativeCallContext,
         array: &mut Array,
         array2: Array,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        equals(ctx, array, array2).map(|r| (!r.as_bool().unwrap()).into())
+    ) -> Result<bool, Box<EvalAltResult>> {
+        equals(ctx, array, array2).map(|r| !r)
     }
 }

@@ -1,4 +1,4 @@
-use crate::stdlib::{boxed::Box, collections::HashMap, ops::AddAssign, string::String};
+use crate::stdlib::{boxed::Box, collections::BTreeMap, ops::AddAssign, string::String};
 use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 
 /// A static [module][Module] resolution service that serves [modules][Module] added into it.
@@ -19,7 +19,7 @@ use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 /// engine.set_module_resolver(resolver);
 /// ```
 #[derive(Debug, Clone, Default)]
-pub struct StaticModuleResolver(HashMap<String, Shared<Module>>);
+pub struct StaticModuleResolver(BTreeMap<String, Shared<Module>>);
 
 impl StaticModuleResolver {
     /// Create a new [`StaticModuleResolver`].

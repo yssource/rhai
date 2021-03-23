@@ -143,28 +143,28 @@ mod time_functions {
         }
 
         #[rhai_fn(return_raw, name = "+")]
-        pub fn add(timestamp: Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
-            add_impl(timestamp, seconds).map(Into::<Dynamic>::into)
+        pub fn add(timestamp: Instant, seconds: FLOAT) -> Result<Instant, Box<EvalAltResult>> {
+            add_impl(timestamp, seconds)
         }
         #[rhai_fn(return_raw, name = "+=")]
         pub fn add_assign(
             timestamp: &mut Instant,
             seconds: FLOAT,
-        ) -> Result<Dynamic, Box<EvalAltResult>> {
+        ) -> Result<(), Box<EvalAltResult>> {
             *timestamp = add_impl(*timestamp, seconds)?;
-            Ok(Dynamic::UNIT)
+            Ok(())
         }
         #[rhai_fn(return_raw, name = "-")]
-        pub fn subtract(timestamp: Instant, seconds: FLOAT) -> Result<Dynamic, Box<EvalAltResult>> {
-            subtract_impl(timestamp, seconds).map(Into::<Dynamic>::into)
+        pub fn subtract(timestamp: Instant, seconds: FLOAT) -> Result<Instant, Box<EvalAltResult>> {
+            subtract_impl(timestamp, seconds)
         }
         #[rhai_fn(return_raw, name = "-=")]
         pub fn subtract_assign(
             timestamp: &mut Instant,
             seconds: FLOAT,
-        ) -> Result<Dynamic, Box<EvalAltResult>> {
+        ) -> Result<(), Box<EvalAltResult>> {
             *timestamp = subtract_impl(*timestamp, seconds)?;
-            Ok(Dynamic::UNIT)
+            Ok(())
         }
     }
 
@@ -202,28 +202,25 @@ mod time_functions {
     }
 
     #[rhai_fn(return_raw, name = "+")]
-    pub fn add(timestamp: Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
-        add_impl(timestamp, seconds).map(Into::<Dynamic>::into)
+    pub fn add(timestamp: Instant, seconds: INT) -> Result<Instant, Box<EvalAltResult>> {
+        add_impl(timestamp, seconds)
     }
     #[rhai_fn(return_raw, name = "+=")]
-    pub fn add_assign(
-        timestamp: &mut Instant,
-        seconds: INT,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    pub fn add_assign(timestamp: &mut Instant, seconds: INT) -> Result<(), Box<EvalAltResult>> {
         *timestamp = add_impl(*timestamp, seconds)?;
-        Ok(Dynamic::UNIT)
+        Ok(())
     }
     #[rhai_fn(return_raw, name = "-")]
-    pub fn subtract(timestamp: Instant, seconds: INT) -> Result<Dynamic, Box<EvalAltResult>> {
-        subtract_impl(timestamp, seconds).map(Into::<Dynamic>::into)
+    pub fn subtract(timestamp: Instant, seconds: INT) -> Result<Instant, Box<EvalAltResult>> {
+        subtract_impl(timestamp, seconds)
     }
     #[rhai_fn(return_raw, name = "-=")]
     pub fn subtract_assign(
         timestamp: &mut Instant,
         seconds: INT,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> Result<(), Box<EvalAltResult>> {
         *timestamp = subtract_impl(*timestamp, seconds)?;
-        Ok(Dynamic::UNIT)
+        Ok(())
     }
 
     #[rhai_fn(name = "==")]

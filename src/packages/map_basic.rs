@@ -46,12 +46,12 @@ mod map_functions {
         ctx: NativeCallContext,
         map: &mut Map,
         mut map2: Map,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
+    ) -> Result<bool, Box<EvalAltResult>> {
         if map.len() != map2.len() {
-            return Ok(false.into());
+            return Ok(false);
         }
         if map.is_empty() {
-            return Ok(true.into());
+            return Ok(true);
         }
 
         for (m1, v1) in map.iter_mut() {
@@ -61,22 +61,22 @@ mod map_functions {
                     .map(|v| v.as_bool().unwrap_or(false))?;
 
                 if !equals {
-                    return Ok(false.into());
+                    return Ok(false);
                 }
             } else {
-                return Ok(false.into());
+                return Ok(false);
             }
         }
 
-        Ok(true.into())
+        Ok(true)
     }
     #[rhai_fn(name = "!=", return_raw, pure)]
     pub fn not_equals(
         ctx: NativeCallContext,
         map: &mut Map,
         map2: Map,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        equals(ctx, map, map2).map(|r| (!r.as_bool().unwrap()).into())
+    ) -> Result<bool, Box<EvalAltResult>> {
+        equals(ctx, map, map2).map(|r| !r)
     }
 
     #[cfg(not(feature = "no_index"))]

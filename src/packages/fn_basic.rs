@@ -34,34 +34,34 @@ mod fn_ptr_functions {
 #[cfg(not(feature = "no_index"))]
 #[cfg(not(feature = "no_object"))]
 fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
-    use crate::{ast::ScriptFnDef, stdlib::collections::HashMap, Array, Map};
+    use crate::{ast::ScriptFnDef, stdlib::collections::BTreeSet, Array, Map};
 
     // Create a metadata record for a function.
     fn make_metadata(
-        dict: &HashMap<&str, ImmutableString>,
+        dict: &BTreeSet<ImmutableString>,
         namespace: Option<ImmutableString>,
         f: &ScriptFnDef,
     ) -> Map {
-        let mut map = Map::with_capacity(6);
+        let mut map = Map::new();
 
         if let Some(ns) = namespace {
-            map.insert(dict["namespace"].clone(), ns.into());
+            map.insert(dict.get("namespace").unwrap().clone(), ns.into());
         }
-        map.insert(dict["name"].clone(), f.name.clone().into());
+        map.insert(dict.get("name").unwrap().clone(), f.name.clone().into());
         map.insert(
-            dict["access"].clone(),
+            dict.get("access").unwrap().clone(),
             match f.access {
-                FnAccess::Public => dict["public"].clone(),
-                FnAccess::Private => dict["private"].clone(),
+                FnAccess::Public => dict.get("public").unwrap().clone(),
+                FnAccess::Private => dict.get("private").unwrap().clone(),
             }
             .into(),
         );
         map.insert(
-            dict["is_anonymous"].clone(),
+            dict.get("is_anonymous").unwrap().clone(),
             f.name.starts_with(crate::engine::FN_ANONYMOUS).into(),
         );
         map.insert(
-            dict["params"].clone(),
+            dict.get("params").unwrap().clone(),
             f.params
                 .iter()
                 .cloned()
@@ -74,8 +74,7 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
     }
 
     // Intern strings
-    let mut dict = HashMap::<&str, ImmutableString>::with_capacity(8);
-    [
+    let dict: BTreeSet<ImmutableString> = [
         "namespace",
         "name",
         "access",
@@ -85,9 +84,8 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
         "params",
     ]
     .iter()
-    .for_each(|&s| {
-        dict.insert(s, s.into());
-    });
+    .map(|&s| s.into())
+    .collect();
 
     let mut list: Array = Default::default();
 
@@ -100,7 +98,7 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
         // Recursively scan modules for script-defined functions.
         fn scan_module(
             list: &mut Array,
-            dict: &HashMap<&str, ImmutableString>,
+            dict: &BTreeSet<ImmutableString>,
             namespace: ImmutableString,
             module: &Module,
         ) {

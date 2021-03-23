@@ -4,18 +4,33 @@ Rhai Release Notes
 Version 0.19.15
 ===============
 
+This version replaces internal usage of `HashMap` with `BTreeMap` in many cases, which should result
+in speed improvements because a `BTreeMap` is faster when the number of items held is small.
+
+This also translates to the Rhai object map type, `Map`, which used to be an alias to `HashMap` and
+is now aliased to `BTreeMap` instead.  This change is due to the fact that, in the vast majority of
+object map usages, the number of properties held is small.
+
+`HashMap` and `BTreeMap` have almost identical public API's so this change is unlikely to break a
+lot of existing code.
+
+
 Breaking changes
 ----------------
 
+* `Map` is now an alias to `BTreeMap` instead of `HashMap`.  This is because most object maps used have few properties.
 * The traits `RegisterFn` and `RegisterResultFn` are removed.  `Engine::register_fn` and `Engine::register_result_fn` are now implemented directly on `Engine`.
 * `FnPtr::call_dynamic` now takes `&NativeCallContext` instead of consuming it.
 * All `Module::set_fn_XXX` methods are removed, in favor of `Module::set_native_fn`.
+* `Array::reduce` and `Array::reduce_rev` now take a `Dynamic` as initial value instead of a function pointer.
 * `protected`, `super` are now reserved keywords.
 
 Enhancements
 ------------
 
-* `Engine::register_result_fn` no longer requires the successful return type to be `Dynamic`.  It can now be any type.
+* Replaced most `HashMap` usage with `BTreeMap` for better performance when the number of items is small.
+* `Engine::register_result_fn` no longer requires the successful return type to be `Dynamic`.  It can now be any clonable type.
+* `#[rhai_fn(return_raw)]` can now return `Result<T, Box<EvalAltResult>>` where `T` is any clonable type instead of `Result<Dynamic, Box<EvalAltResult>>`.
 
 
 Version 0.19.14

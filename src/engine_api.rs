@@ -880,7 +880,7 @@ impl Engine {
     #[cfg(not(feature = "no_module"))]
     pub fn register_static_module(&mut self, name: &str, module: Shared<Module>) -> &mut Self {
         fn register_static_module_raw(
-            root: &mut crate::stdlib::collections::HashMap<crate::ImmutableString, Shared<Module>>,
+            root: &mut crate::stdlib::collections::BTreeMap<crate::ImmutableString, Shared<Module>>,
             name: &str,
             module: Shared<Module>,
         ) {
@@ -1012,14 +1012,14 @@ impl Engine {
             ast::{ASTNode, Expr, Stmt},
             fn_native::shared_take_or_clone,
             module::resolvers::StaticModuleResolver,
-            stdlib::collections::HashSet,
+            stdlib::collections::BTreeSet,
             ImmutableString,
         };
 
         fn collect_imports(
             ast: &AST,
             resolver: &StaticModuleResolver,
-            imports: &mut HashSet<ImmutableString>,
+            imports: &mut BTreeSet<ImmutableString>,
         ) {
             ast.walk(&mut |path| match path.last().unwrap() {
                 // Collect all `import` statements with a string constant path
@@ -1035,7 +1035,7 @@ impl Engine {
 
         let mut resolver = StaticModuleResolver::new();
         let mut ast = self.compile_scripts_with_scope(scope, &[script])?;
-        let mut imports = HashSet::<ImmutableString>::new();
+        let mut imports = Default::default();
 
         collect_imports(&ast, &mut resolver, &mut imports);
 
@@ -1885,9 +1885,8 @@ impl Engine {
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::NONE))?;
 
         // Check for data race.
-        if cfg!(not(feature = "no_closure")) {
-            crate::fn_call::ensure_no_data_race(name, args, false)?;
-        }
+        #[cfg(not(feature = "no_closure"))]
+        crate::fn_call::ensure_no_data_race(name, args, false)?;
 
         self.call_script_fn(
             scope,
