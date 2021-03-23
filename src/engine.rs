@@ -1686,13 +1686,11 @@ impl Engine {
 
             #[cfg(not(feature = "no_object"))]
             Expr::Map(x, _) => {
-                let mut map = Map::new();
-                for (Ident { name: key, .. }, expr) in x.as_ref() {
-                    map.insert(
-                        key.clone(),
-                        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                            .flatten(),
-                    );
+                let mut map = x.1.clone();
+                for (Ident { name: key, .. }, expr) in &x.0 {
+                    *map.get_mut(key).unwrap() = self
+                        .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                        .flatten();
                 }
                 Ok(Dynamic(Union::Map(Box::new(map), AccessMode::ReadWrite)))
             }

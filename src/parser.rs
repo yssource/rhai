@@ -690,6 +690,7 @@ fn parse_map_literal(
     settings.pos = eat_token(input, Token::MapStart);
 
     let mut map: StaticVec<(Ident, Expr)> = Default::default();
+    let mut template: BTreeMap<ImmutableString, Dynamic> = Default::default();
 
     loop {
         const MISSING_RBRACE: &str = "to end this object map literal";
@@ -760,6 +761,7 @@ fn parse_map_literal(
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
         let name = state.get_interned_string(name);
+        template.insert(name.clone(), Default::default());
         map.push((Ident { name, pos }, expr));
 
         match input.peek().unwrap() {
@@ -784,7 +786,7 @@ fn parse_map_literal(
         }
     }
 
-    Ok(Expr::Map(Box::new(map), settings.pos))
+    Ok(Expr::Map(Box::new((map, template)), settings.pos))
 }
 
 /// Parse a switch expression.

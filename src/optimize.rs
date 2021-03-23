@@ -615,12 +615,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         #[cfg(not(feature = "no_object"))]
         Expr::Dot(x, _) => match (&mut x.lhs, &mut x.rhs) {
             // map.string
-            (Expr::Map(m, pos), Expr::Property(p)) if m.iter().all(|(_, x)| x.is_pure()) => {
+            (Expr::Map(m, pos), Expr::Property(p)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
                 let prop = &p.2.name;
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                *expr = mem::take(m).into_iter().find(|(x, _)| &x.name == prop)
+                *expr = mem::take(&mut m.0).into_iter().find(|(x, _)| &x.name == prop)
                             .map(|(_, mut expr)| { expr.set_position(*pos); expr })
                             .unwrap_or_else(|| Expr::Unit(*pos));
             }
@@ -645,11 +645,11 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                 *expr = result;
             }
             // map[string]
-            (Expr::Map(m, pos), Expr::StringConstant(s, _)) if m.iter().all(|(_, x)| x.is_pure()) => {
+            (Expr::Map(m, pos), Expr::StringConstant(s, _)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                *expr = mem::take(m).into_iter().find(|(x, _)| x.name == *s)
+                *expr = mem::take(&mut m.0).into_iter().find(|(x, _)| x.name == *s)
                             .map(|(_, mut expr)| { expr.set_position(*pos); expr })
                             .unwrap_or_else(|| Expr::Unit(*pos));
             }
@@ -681,7 +681,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         }
         // #{ key:value, .. }
         #[cfg(not(feature = "no_object"))]
-        Expr::Map(x, _) => x.iter_mut().for_each(|(_, expr)| optimize_expr(expr, state)),
+        Expr::Map(x, _) => x.0.iter_mut().for_each(|(_, expr)| optimize_expr(expr, state)),
         // lhs && rhs
         Expr::And(x, _) => match (&mut x.lhs, &mut x.rhs) {
             // true && rhs -> rhs

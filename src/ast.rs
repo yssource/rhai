@@ -26,9 +26,6 @@ use crate::{stdlib::str::FromStr, FLOAT};
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
 
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
 /// A type representing the access mode of a function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum FnAccess {
@@ -1535,7 +1532,10 @@ pub enum Expr {
     /// [ expr, ... ]
     Array(Box<StaticVec<Expr>>, Position),
     /// #{ name:expr, ... }
-    Map(Box<StaticVec<(Ident, Expr)>>, Position),
+    Map(
+        Box<(StaticVec<(Ident, Expr)>, BTreeMap<ImmutableString, Dynamic>)>,
+        Position,
+    ),
     /// ()
     Unit(Position),
     /// Variable access - (optional index, optional (hash, modules), variable name)
@@ -1594,11 +1594,10 @@ impl Expr {
 
             #[cfg(not(feature = "no_object"))]
             Self::Map(x, _) if self.is_constant() => {
-                let mut map = Map::new();
-                map.extend(
-                    x.iter()
-                        .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap())),
-                );
+                let mut map = x.1.clone();
+                x.0.iter().for_each(|(k, v)| {
+                    *map.get_mut(&k.name).unwrap() = v.get_constant_value().unwrap()
+                });
                 Dynamic(Union::Map(Box::new(map), AccessMode::ReadOnly))
             }
 
@@ -1677,7 +1676,7 @@ impl Expr {
         match self {
             Self::Array(x, _) => x.iter().all(Self::is_pure),
 
-            Self::Map(x, _) => x.iter().map(|(_, v)| v).all(Self::is_pure),
+            Self::Map(x, _) => x.0.iter().map(|(_, v)| v).all(Self::is_pure),
 
             Self::Index(x, _) | Self::And(x, _) | Self::Or(x, _) => {
                 x.lhs.is_pure() && x.rhs.is_pure()
@@ -1717,7 +1716,7 @@ impl Expr {
             Self::Array(x, _) => x.iter().all(Self::is_constant),
 
             // An map literal is constant if all items are constant
-            Self::Map(x, _) => x.iter().map(|(_, expr)| expr).all(Self::is_constant),
+            Self::Map(x, _) => x.0.iter().map(|(_, expr)| expr).all(Self::is_constant),
 
             _ => false,
         }
@@ -1804,7 +1803,7 @@ impl Expr {
                 }
             }
             Self::Map(x, _) => {
-                for (_, e) in x.as_ref() {
+                for (_, e) in &x.0 {
                     if !e.walk(path, on_node) {
                         return false;
                     }
