@@ -812,8 +812,8 @@ impl Dynamic {
     /// A [`Vec<T>`][Vec] does not get automatically converted to an [`Array`], but will be a generic
     /// restricted trait object instead, because [`Vec<T>`][Vec] is not a supported standard type.
     ///
-    /// Similarly, passing in a [`HashMap<String, T>`][std::collections::HashMap] will not get a [`Map`]
-    /// but a trait object.
+    /// Similarly, passing in a [`HashMap<String, T>`][std::collections::HashMap] or
+    /// [`BTreeMap<String, T>`][std::collections::BTreeMap] will not get a [`Map`] but a trait object.
     ///
     /// # Examples
     ///
@@ -1696,11 +1696,29 @@ impl<T: Variant + Clone> crate::stdlib::iter::FromIterator<T> for Dynamic {
     }
 }
 #[cfg(not(feature = "no_object"))]
+#[cfg(not(feature = "no_std"))]
 impl<K: Into<ImmutableString>, T: Variant + Clone> From<crate::stdlib::collections::HashMap<K, T>>
     for Dynamic
 {
     #[inline(always)]
     fn from(value: crate::stdlib::collections::HashMap<K, T>) -> Self {
+        Self(Union::Map(
+            Box::new(
+                value
+                    .into_iter()
+                    .map(|(k, v)| (k.into(), Dynamic::from(v)))
+                    .collect(),
+            ),
+            AccessMode::ReadWrite,
+        ))
+    }
+}
+#[cfg(not(feature = "no_object"))]
+impl<K: Into<ImmutableString>, T: Variant + Clone> From<crate::stdlib::collections::BTreeMap<K, T>>
+    for Dynamic
+{
+    #[inline(always)]
+    fn from(value: crate::stdlib::collections::BTreeMap<K, T>) -> Self {
         Self(Union::Map(
             Box::new(
                 value

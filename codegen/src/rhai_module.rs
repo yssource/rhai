@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use quote::{quote, ToTokens};
 
@@ -238,8 +238,8 @@ pub fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::Error> 
             })
     }
 
-    let mut renames = HashMap::<String, proc_macro2::Span>::new();
-    let mut fn_defs = HashMap::<String, proc_macro2::Span>::new();
+    let mut renames = BTreeMap::<String, proc_macro2::Span>::new();
+    let mut fn_defs = BTreeMap::<String, proc_macro2::Span>::new();
 
     for item_fn in fns.iter() {
         if !item_fn.params().name.is_empty() || item_fn.params().special != FnSpecialAccess::None {

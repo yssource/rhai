@@ -1,9 +1,9 @@
 #![cfg(not(feature = "no_index"))]
 #![allow(non_snake_case)]
 
-use crate::engine::{OP_EQUALS, TYPICAL_ARRAY_SIZE};
+use crate::engine::OP_EQUALS;
 use crate::plugin::*;
-use crate::stdlib::{any::TypeId, boxed::Box, cmp::max, cmp::Ordering, mem, string::ToString};
+use crate::stdlib::{any::TypeId, boxed::Box, cmp::Ordering, mem, string::ToString};
 use crate::{def_package, Array, Dynamic, EvalAltResult, FnPtr, NativeCallContext, Position, INT};
 
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
@@ -170,7 +170,7 @@ mod array_functions {
         array: &mut Array,
         mapper: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
-        let mut ar = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, array.len()));
+        let mut ar = Array::with_capacity(array.len());
 
         for (i, item) in array.iter().enumerate() {
             ar.push(
@@ -203,7 +203,7 @@ mod array_functions {
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
-        let mut ar = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, array.len()));
+        let mut ar = Array::new();
 
         for (i, item) in array.iter().enumerate() {
             if filter
@@ -565,7 +565,7 @@ mod array_functions {
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
-        let mut drained = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, array.len()));
+        let mut drained = Array::with_capacity(array.len());
 
         let mut i = array.len();
 
@@ -625,7 +625,7 @@ mod array_functions {
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
-        let mut drained = Array::with_capacity(max(TYPICAL_ARRAY_SIZE, array.len()));
+        let mut drained = Array::new();
 
         let mut i = array.len();
 

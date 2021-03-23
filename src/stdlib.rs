@@ -19,7 +19,8 @@ mod inner {
     pub use core_error as error;
 
     pub mod collections {
-        pub use hashbrown::{hash_map, hash_set, HashMap, HashSet};
+        pub use alloc::collections::btree_map::BTreeMap;
+        pub use alloc::collections::btree_set::BTreeSet;
     }
 }
 

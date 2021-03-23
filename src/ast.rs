@@ -6,6 +6,7 @@ use crate::module::NamespaceRef;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
+    collections::BTreeMap,
     fmt,
     hash::Hash,
     num::NonZeroUsize,
@@ -15,7 +16,6 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::token::Token;
-use crate::utils::{HashableHashMap, StraightHasherBuilder};
 use crate::{
     Dynamic, FnNamespace, FnPtr, ImmutableString, Module, Position, Shared, StaticVec, INT,
 };
@@ -866,14 +866,7 @@ pub enum Stmt {
     /// `if` expr `{` stmt `}` `else` `{` stmt `}`
     If(Expr, Box<(StmtBlock, StmtBlock)>, Position),
     /// `switch` expr `{` literal or _ `=>` stmt `,` ... `}`
-    Switch(
-        Expr,
-        Box<(
-            HashableHashMap<u64, StmtBlock, StraightHasherBuilder>,
-            StmtBlock,
-        )>,
-        Position,
-    ),
+    Switch(Expr, Box<(BTreeMap<u64, StmtBlock>, StmtBlock)>, Position),
     /// `while` expr `{` stmt `}`
     While(Expr, Box<StmtBlock>, Position),
     /// `do` `{` stmt `}` `while`|`until` expr
@@ -1594,20 +1587,14 @@ impl Expr {
 
             #[cfg(not(feature = "no_index"))]
             Self::Array(x, _) if self.is_constant() => {
-                let mut arr = Array::with_capacity(crate::stdlib::cmp::max(
-                    crate::engine::TYPICAL_ARRAY_SIZE,
-                    x.len(),
-                ));
+                let mut arr = Array::with_capacity(x.len());
                 arr.extend(x.iter().map(|v| v.get_constant_value().unwrap()));
                 Dynamic(Union::Array(Box::new(arr), AccessMode::ReadOnly))
             }
 
             #[cfg(not(feature = "no_object"))]
             Self::Map(x, _) if self.is_constant() => {
-                let mut map = Map::with_capacity(crate::stdlib::cmp::max(
-                    crate::engine::TYPICAL_MAP_SIZE,
-                    x.len(),
-                ));
+                let mut map = Map::new();
                 map.extend(
                     x.iter()
                         .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap())),

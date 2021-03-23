@@ -1,6 +1,6 @@
 use crate::stdlib::{
     boxed::Box,
-    collections::HashMap,
+    collections::BTreeMap,
     io::Error as IoError,
     path::{Path, PathBuf},
     string::String,
@@ -44,9 +44,9 @@ pub struct FileModuleResolver {
     cache_enabled: bool,
 
     #[cfg(not(feature = "sync"))]
-    cache: crate::stdlib::cell::RefCell<HashMap<PathBuf, Shared<Module>>>,
+    cache: crate::stdlib::cell::RefCell<BTreeMap<PathBuf, Shared<Module>>>,
     #[cfg(feature = "sync")]
-    cache: crate::stdlib::sync::RwLock<HashMap<PathBuf, Shared<Module>>>,
+    cache: crate::stdlib::sync::RwLock<BTreeMap<PathBuf, Shared<Module>>>,
 }
 
 impl Default for FileModuleResolver {

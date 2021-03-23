@@ -7,7 +7,7 @@ use crate::fn_register::RegisterNativeFunction;
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
-    collections::HashMap,
+    collections::BTreeMap,
     fmt, format,
     iter::empty,
     num::NonZeroUsize,
@@ -16,7 +16,6 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::token::Token;
-use crate::utils::StraightHasherBuilder;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, EvalAltResult, ImmutableString,
     NativeCallContext, Position, Shared, StaticVec,
@@ -130,20 +129,20 @@ pub struct Module {
     /// ID identifying the module.
     id: Option<ImmutableString>,
     /// Sub-modules.
-    modules: HashMap<ImmutableString, Shared<Module>>,
+    modules: BTreeMap<ImmutableString, Shared<Module>>,
     /// [`Module`] variables.
-    variables: HashMap<ImmutableString, Dynamic>,
+    variables: BTreeMap<ImmutableString, Dynamic>,
     /// Flattened collection of all [`Module`] variables, including those in sub-modules.
-    all_variables: HashMap<u64, Dynamic, StraightHasherBuilder>,
+    all_variables: BTreeMap<u64, Dynamic>,
     /// External Rust functions.
-    functions: HashMap<u64, Box<FuncInfo>, StraightHasherBuilder>,
+    functions: BTreeMap<u64, Box<FuncInfo>>,
     /// Flattened collection of all external Rust functions, native or scripted.
     /// including those in sub-modules.
-    all_functions: HashMap<u64, CallableFunction, StraightHasherBuilder>,
+    all_functions: BTreeMap<u64, CallableFunction>,
     /// Iterator functions, keyed by the type producing the iterator.
-    type_iterators: HashMap<TypeId, IteratorFn>,
+    type_iterators: BTreeMap<TypeId, IteratorFn>,
     /// Flattened collection of iterator functions, including those in sub-modules.
-    all_type_iterators: HashMap<TypeId, IteratorFn>,
+    all_type_iterators: BTreeMap<TypeId, IteratorFn>,
     /// Is the [`Module`] indexed?
     indexed: bool,
     /// Does the [`Module`] contain indexed functions that have been exposed to the global namespace?
@@ -158,8 +157,8 @@ impl Default for Module {
             modules: Default::default(),
             variables: Default::default(),
             all_variables: Default::default(),
-            functions: HashMap::with_capacity_and_hasher(64, StraightHasherBuilder),
-            all_functions: HashMap::with_capacity_and_hasher(256, StraightHasherBuilder),
+            functions: Default::default(),
+            all_functions: Default::default(),
             type_iterators: Default::default(),
             all_type_iterators: Default::default(),
             indexed: false,
@@ -268,25 +267,6 @@ impl Module {
     #[inline(always)]
     pub fn new() -> Self {
         Default::default()
-    }
-
-    /// Create a new [`Module`] with a specified capacity for native Rust functions.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use rhai::Module;
-    ///
-    /// let mut module = Module::new();
-    /// module.set_var("answer", 42_i64);
-    /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
-    /// ```
-    #[inline(always)]
-    pub fn new_with_capacity(capacity: usize) -> Self {
-        Self {
-            functions: HashMap::with_capacity_and_hasher(capacity, StraightHasherBuilder),
-            ..Default::default()
-        }
     }
 
     /// Get the ID of the [`Module`], if any.
@@ -520,7 +500,7 @@ impl Module {
             .map(|f| f.func.get_fn_def())
     }
 
-    /// Get a mutable reference to the underlying [`HashMap`] of sub-modules.
+    /// Get a mutable reference to the underlying [`BTreeMap`] of sub-modules.
     ///
     /// # WARNING
     ///
@@ -528,7 +508,7 @@ impl Module {
     /// Thus the [`Module`] is automatically set to be non-indexed.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    pub(crate) fn sub_modules_mut(&mut self) -> &mut HashMap<ImmutableString, Shared<Module>> {
+    pub(crate) fn sub_modules_mut(&mut self) -> &mut BTreeMap<ImmutableString, Shared<Module>> {
         // We must assume that the user has changed the sub-modules
         // (otherwise why take a mutable reference?)
         self.all_functions.clear();
@@ -1235,13 +1215,16 @@ impl Module {
         &mut self,
         filter: impl Fn(FnNamespace, FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
-        self.functions.retain(|_, f| {
-            if f.func.is_script() {
-                filter(f.namespace, f.access, f.name.as_str(), f.params)
-            } else {
-                false
-            }
-        });
+        self.functions = crate::stdlib::mem::take(&mut self.functions)
+            .into_iter()
+            .filter(|(_, f)| {
+                if f.func.is_script() {
+                    filter(f.namespace, f.access, f.name.as_str(), f.params)
+                } else {
+                    false
+                }
+            })
+            .collect();
 
         self.all_functions.clear();
         self.all_variables.clear();
@@ -1460,9 +1443,9 @@ impl Module {
         fn index_module<'a>(
             module: &'a Module,
             path: &mut Vec<&'a str>,
-            variables: &mut HashMap<u64, Dynamic, StraightHasherBuilder>,
-            functions: &mut HashMap<u64, CallableFunction, StraightHasherBuilder>,
-            type_iterators: &mut HashMap<TypeId, IteratorFn>,
+            variables: &mut BTreeMap<u64, Dynamic>,
+            functions: &mut BTreeMap<u64, CallableFunction>,
+            type_iterators: &mut BTreeMap<TypeId, IteratorFn>,
         ) -> bool {
             let mut contains_indexed_global_functions = false;
 
@@ -1518,9 +1501,9 @@ impl Module {
 
         if !self.indexed {
             let mut path = Vec::with_capacity(4);
-            let mut variables = HashMap::with_capacity_and_hasher(16, StraightHasherBuilder);
-            let mut functions = HashMap::with_capacity_and_hasher(256, StraightHasherBuilder);
-            let mut type_iterators = HashMap::with_capacity(16);
+            let mut variables = Default::default();
+            let mut functions = Default::default();
+            let mut type_iterators = Default::default();
 
             path.push("root");
 
