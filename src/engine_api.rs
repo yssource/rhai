@@ -9,12 +9,11 @@ use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
     format,
-    string::{String, ToString},
-    vec::Vec,
+    string::String,
 };
 use crate::{
     scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, ImmutableString, Module,
-    NativeCallContext, ParseError, Position, RhaiResult, Shared, StaticVec, AST,
+    NativeCallContext, ParseError, Position, RhaiResult, Shared, AST,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -52,30 +51,36 @@ impl Engine {
     /// # }
     /// ```
     #[inline]
-    pub fn register_fn<A, F>(
-        &mut self,
-        name: impl AsRef<str> + Into<ImmutableString>,
-        func: F,
-    ) -> &mut Self
+    pub fn register_fn<N, A, F>(&mut self, name: N, func: F) -> &mut Self
     where
+        N: AsRef<str> + Into<ImmutableString>,
         F: RegisterNativeFunction<A, ()>,
     {
         let param_types = F::param_types();
-        let mut param_type_names: StaticVec<_> = F::param_names()
+
+        #[cfg(feature = "metadata")]
+        let mut param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
             .map(|ty| format!("_: {}", self.map_type_name(ty)))
             .collect();
+
+        #[cfg(feature = "metadata")]
         if F::return_type() != TypeId::of::<()>() {
-            param_type_names.push(self.map_type_name(F::return_type_name()).to_string());
+            param_type_names.push(self.map_type_name(F::return_type_name()).into());
         }
-        let param_type_names: StaticVec<_> =
-            param_type_names.iter().map(|ty| ty.as_str()).collect();
+
+        #[cfg(feature = "metadata")]
+        let param_type_names: Option<crate::StaticVec<_>> =
+            Some(param_type_names.iter().map(|ty| ty.as_str()).collect());
+
+        #[cfg(not(feature = "metadata"))]
+        let param_type_names: Option<[&str; 0]> = None;
 
         self.global_namespace.set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
-            Some(&param_type_names),
+            param_type_names.as_ref().map(|v| v.as_ref()),
             &param_types,
             func.into_callable_function(),
         );
@@ -106,28 +111,34 @@ impl Engine {
     ///       .expect_err("expecting division by zero error!");
     /// ```
     #[inline]
-    pub fn register_result_fn<A, F, R>(
-        &mut self,
-        name: impl AsRef<str> + Into<ImmutableString>,
-        func: F,
-    ) -> &mut Self
+    pub fn register_result_fn<N, A, F, R>(&mut self, name: N, func: F) -> &mut Self
     where
+        N: AsRef<str> + Into<ImmutableString>,
         F: RegisterNativeFunction<A, Result<R, Box<EvalAltResult>>>,
     {
         let param_types = F::param_types();
-        let mut param_type_names: StaticVec<_> = F::param_names()
+
+        #[cfg(feature = "metadata")]
+        let param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
             .map(|ty| format!("_: {}", self.map_type_name(ty)))
+            .chain(crate::stdlib::iter::once(
+                self.map_type_name(F::return_type_name()).into(),
+            ))
             .collect();
-        param_type_names.push(self.map_type_name(F::return_type_name()).to_string());
-        let param_type_names: StaticVec<&str> =
-            param_type_names.iter().map(|ty| ty.as_str()).collect();
+
+        #[cfg(feature = "metadata")]
+        let param_type_names: Option<crate::StaticVec<_>> =
+            Some(param_type_names.iter().map(|ty| ty.as_str()).collect());
+
+        #[cfg(not(feature = "metadata"))]
+        let param_type_names: Option<[&str; 0]> = None;
 
         self.global_namespace.set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
-            Some(&param_type_names),
+            param_type_names.as_ref().map(|v| v.as_ref()),
             &param_types,
             func.into_callable_function(),
         );
@@ -150,14 +161,18 @@ impl Engine {
     /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
     #[deprecated = "this function is volatile and may change"]
     #[inline(always)]
-    pub fn register_raw_fn<T: Variant + Clone>(
+    pub fn register_raw_fn<N, T>(
         &mut self,
-        name: impl AsRef<str> + Into<ImmutableString>,
+        name: N,
         arg_types: &[TypeId],
         func: impl Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
             + SendSync
             + 'static,
-    ) -> &mut Self {
+    ) -> &mut Self
+    where
+        N: AsRef<str> + Into<ImmutableString>,
+        T: Variant + Clone,
+    {
         self.global_namespace.set_raw_fn(
             name,
             FnNamespace::Global,
@@ -1958,13 +1973,15 @@ impl Engine {
         crate::optimize::optimize_into_ast(self, scope, stmt.into_vec(), lib, optimization_level)
     }
     /// Generate a list of all registered functions.
+    /// Available under the `metadata` feature only.
     ///
     /// Functions from the following sources are included, in order:
     /// 1) Functions registered into the global namespace
     /// 2) Functions in registered sub-modules
     /// 3) Functions in packages (optional)
-    pub fn gen_fn_signatures(&self, include_packages: bool) -> Vec<String> {
-        let mut signatures: Vec<_> = Default::default();
+    #[cfg(feature = "metadata")]
+    pub fn gen_fn_signatures(&self, include_packages: bool) -> crate::stdlib::vec::Vec<String> {
+        let mut signatures: crate::stdlib::vec::Vec<_> = Default::default();
 
         signatures.extend(self.global_namespace.gen_fn_signatures());
 

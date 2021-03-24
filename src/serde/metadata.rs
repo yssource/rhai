@@ -211,7 +211,8 @@ impl From<&crate::Module> for ModuleMetadata {
 #[cfg(feature = "metadata")]
 impl Engine {
     /// _(METADATA)_ Generate a list of all functions (including those defined in an
-    /// [`AST`][crate::AST]) in JSON format.  Available only under the `metadata` feature.
+    /// [`AST`][crate::AST]) in JSON format.
+    /// Available under the `metadata` feature only.
     ///
     /// Functions from the following sources are included:
     /// 1) Functions defined in an [`AST`][crate::AST]

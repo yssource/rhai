@@ -12,7 +12,7 @@ use crate::stdlib::{
     iter::empty,
     num::NonZeroUsize,
     ops::{Add, AddAssign, Deref, DerefMut},
-    string::{String, ToString},
+    string::String,
     vec::Vec,
 };
 use crate::token::Token;
@@ -61,21 +61,21 @@ pub struct FuncInfo {
     /// Parameter types (if applicable).
     pub param_types: StaticVec<TypeId>,
     /// Parameter names (if available).
+    #[cfg(feature = "metadata")]
     pub param_names: StaticVec<ImmutableString>,
 }
 
 impl FuncInfo {
     /// Generate a signature of the function.
+    /// Available under the `metadata` feature only.
+    #[cfg(feature = "metadata")]
     pub fn gen_signature(&self) -> String {
         let mut sig = format!("{}(", self.name);
 
         if !self.param_names.is_empty() {
-            let mut params: Vec<_> = self
-                .param_names
-                .iter()
-                .map(ImmutableString::to_string)
-                .collect();
-            let return_type = params.pop().unwrap_or_else(|| "()".to_string());
+            let mut params: crate::stdlib::vec::Vec<String> =
+                self.param_names.iter().map(|s| s.as_str().into()).collect();
+            let return_type = params.pop().unwrap_or_else(|| "()".into());
             sig.push_str(&params.join(", "));
             if return_type != "()" {
                 sig.push_str(") -> ");
@@ -190,7 +190,7 @@ impl fmt::Debug for Module {
                         .join(", ")
                 )
             } else {
-                "".to_string()
+                Default::default()
             },
             if !self.variables.is_empty() {
                 format!(
@@ -202,19 +202,19 @@ impl fmt::Debug for Module {
                         .join(", ")
                 )
             } else {
-                "".to_string()
+                Default::default()
             },
             if !self.functions.is_empty() {
                 format!(
                     "    functions: {}\n",
                     self.functions
                         .values()
-                        .map(|f| f.func.to_string())
+                        .map(|f| crate::stdlib::string::ToString::to_string(&f.func))
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
             } else {
-                "".to_string()
+                Default::default()
             }
         )
     }
@@ -363,6 +363,8 @@ impl Module {
     }
 
     /// Generate signatures for all the non-private functions in the [`Module`].
+    /// Available under the `metadata` feature only.
+    #[cfg(feature = "metadata")]
     #[inline(always)]
     pub fn gen_fn_signatures(&self) -> impl Iterator<Item = String> + '_ {
         self.functions
@@ -479,6 +481,7 @@ impl Module {
                 access: fn_def.access,
                 params: num_params,
                 param_types: Default::default(),
+                #[cfg(feature = "metadata")]
                 param_names,
                 func: fn_def.into(),
             }),
@@ -602,6 +605,7 @@ impl Module {
     }
 
     /// Update the metadata (parameter names/types and return type) of a registered function.
+    /// Available under the `metadata` feature only.
     ///
     /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
     ///
@@ -613,6 +617,7 @@ impl Module {
     ///
     /// The _last entry_ in the list should be the _return type_ of the function.
     /// In other words, the number of entries should be one larger than the number of parameters.
+    #[cfg(feature = "metadata")]
     #[inline(always)]
     pub fn update_fn_metadata(&mut self, hash_fn: u64, arg_names: &[&str]) -> &mut Self {
         let param_names = arg_names
@@ -652,7 +657,7 @@ impl Module {
         name: impl AsRef<str> + Into<ImmutableString>,
         namespace: FnNamespace,
         access: FnAccess,
-        arg_names: Option<&[&str]>,
+        _arg_names: Option<&[&str]>,
         arg_types: &[TypeId],
         func: CallableFunction,
     ) -> u64 {
@@ -683,7 +688,9 @@ impl Module {
         let hash_fn = calc_native_fn_hash(empty(), &name, &param_types);
 
         let name = self.interned_strings.get(name);
-        let param_names = arg_names
+
+        #[cfg(feature = "metadata")]
+        let param_names = _arg_names
             .iter()
             .flat_map(|p| p.iter())
             .map(|&arg| self.interned_strings.get(arg))
@@ -697,6 +704,7 @@ impl Module {
                 access,
                 params: param_types.len(),
                 param_types,
+                #[cfg(feature = "metadata")]
                 param_names,
                 func: func.into(),
             }),

@@ -27,6 +27,7 @@ Breaking changes
 * `Array::reduce` and `Array::reduce_rev` now take a `Dynamic` as initial value instead of a function pointer.
 * `protected`, `super` are now reserved keywords.
 * The `Module::set_fn_XXX` API now take `&str` as the function name instead of `Into<String>`.
+* The _reflections_ API such as `Engine::gen_fn_signatures`, `Module::update_fn_metadata` etc. are put under the `metadata` feature gate.
 
 Enhancements
 ------------

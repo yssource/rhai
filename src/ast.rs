@@ -84,6 +84,7 @@ impl fmt::Display for ScriptFnDef {
 }
 
 /// A type containing the metadata of a script-defined function.
+/// Not available under `no_function`.
 ///
 /// Created by [`AST::iter_functions`].
 #[cfg(not(feature = "no_function"))]
@@ -260,6 +261,7 @@ impl AST {
     }
     /// _(INTERNALS)_ Get the internal shared [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
+    /// Not available under `no_function`.
     #[cfg(feature = "internals")]
     #[deprecated = "this method is volatile and may change"]
     #[cfg(not(feature = "no_module"))]
@@ -276,6 +278,7 @@ impl AST {
     }
     /// _(INTERNALS)_ Get the internal [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
+    /// Not available under `no_function`.
     #[cfg(feature = "internals")]
     #[deprecated = "this method is volatile and may change"]
     #[inline(always)]
@@ -311,10 +314,9 @@ impl AST {
     }
     /// Clone the [`AST`]'s functions into a new [`AST`].
     /// No statements are cloned.
+    /// Not available under `no_function`.
     ///
     /// This operation is cheap because functions are shared.
-    ///
-    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clone_functions_only(&self) -> Self {
@@ -322,10 +324,9 @@ impl AST {
     }
     /// Clone the [`AST`]'s functions into a new [`AST`] based on a filter predicate.
     /// No statements are cloned.
+    /// Not available under `no_function`.
     ///
     /// This operation is cheap because functions are shared.
-    ///
-    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clone_functions_only_filtered(
@@ -354,8 +355,8 @@ impl AST {
             resolver: self.resolver.clone(),
         }
     }
-    /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged, version
-    /// is returned.
+    /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged,
+    /// version is returned.
     ///
     /// Statements in the second [`AST`] are simply appended to the end of the first _without any processing_.
     /// Thus, the return value of the first [`AST`] (if using expression-statement syntax) is buried.
