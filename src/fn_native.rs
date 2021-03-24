@@ -7,7 +7,7 @@ use crate::stdlib::{
     boxed::Box,
     convert::{TryFrom, TryInto},
     fmt,
-    iter::empty,
+    iter::{empty, once},
     mem,
     string::String,
 };
@@ -326,22 +326,28 @@ impl FnPtr {
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
-        let arg_values = arg_values.as_mut();
+        let mut args_data;
 
-        let mut args_data = self
-            .curry()
-            .iter()
-            .cloned()
-            .chain(arg_values.iter_mut().map(mem::take))
-            .collect::<Vec<_>>();
+        let arg_values = if self.curry().is_empty() {
+            arg_values.as_mut()
+        } else {
+            args_data = self
+                .curry()
+                .iter()
+                .cloned()
+                .chain(arg_values.as_mut().iter_mut().map(mem::take))
+                .collect::<StaticVec<_>>();
 
-        let mut args = args_data.iter_mut().collect::<Vec<_>>();
+            args_data.as_mut()
+        };
 
         let is_method = this_ptr.is_some();
 
-        if let Some(obj) = this_ptr {
-            args.insert(0, obj);
-        }
+        let mut args: StaticVec<_> = if let Some(obj) = this_ptr {
+            once(obj).chain(arg_values.iter_mut()).collect()
+        } else {
+            arg_values.iter_mut().collect()
+        };
 
         ctx.call_fn_dynamic_raw(self.fn_name(), is_method, args.as_mut())
     }
