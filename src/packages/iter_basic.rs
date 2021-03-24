@@ -255,10 +255,12 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
 
         lib.set_iterator::<StepDecimalRange>();
 
-        let hash = lib.set_native_fn("range", |from, to| StepDecimalRange::new(from, to, Decimal::one()));
-        lib.update_fn_metadata(hash, &["from: Decimal", "to: Decimal", "Iterator<Item=Decimal>"]);
+        let _hash = lib.set_native_fn("range", |from, to| StepDecimalRange::new(from, to, Decimal::one()));
+        #[cfg(feature = "metadata")]
+        lib.update_fn_metadata(_hash, &["from: Decimal", "to: Decimal", "Iterator<Item=Decimal>"]);
 
-        let hash = lib.set_native_fn("range", |from, to, step| StepDecimalRange::new(from, to, step));
-        lib.update_fn_metadata(hash, &["from: Decimal", "to: Decimal", "step: Decimal", "Iterator<Item=Decimal>"]);
+        let _hash = lib.set_native_fn("range", |from, to, step| StepDecimalRange::new(from, to, step));
+        #[cfg(feature = "metadata")]
+        lib.update_fn_metadata(_hash, &["from: Decimal", "to: Decimal", "step: Decimal", "Iterator<Item=Decimal>"]);
     }
 });
