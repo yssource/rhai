@@ -212,10 +212,9 @@ pub fn export_module(
 #[proc_macro]
 pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let module_path = parse_macro_input!(module_path as syn::Path);
-    let tokens = quote::quote! {
+    proc_macro::TokenStream::from(quote::quote! {
         #module_path::rhai_module_generate()
-    };
-    proc_macro::TokenStream::from(tokens)
+    })
 }
 
 /// Macro to combine a _plugin module_ into an existing module.
@@ -258,15 +257,12 @@ pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::Toke
 /// ```
 #[proc_macro]
 pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let (module_expr, _export_name, module_path) = match crate::register::parse_register_macro(args)
-    {
-        Ok(triple) => triple,
-        Err(e) => return e.to_compile_error().into(),
-    };
-    let tokens = quote! {
-        #module_path::rhai_generate_into_module(#module_expr, true);
-    };
-    proc_macro::TokenStream::from(tokens)
+    match crate::register::parse_register_macro(args) {
+        Ok((module_expr, _export_name, module_path)) => proc_macro::TokenStream::from(quote! {
+            #module_path::rhai_generate_into_module(#module_expr, true);
+        }),
+        Err(e) => e.to_compile_error().into(),
+    }
 }
 
 /// Macro to register a _plugin function_ (defined via [`#[export_fn]`][export_fn]) into an `Engine`.
@@ -293,16 +289,15 @@ pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro
 /// ```
 #[proc_macro]
 pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let (engine_expr, export_name, rust_mod_path) =
-        match crate::register::parse_register_macro(args) {
-            Ok(triple) => triple,
-            Err(e) => return e.to_compile_error().into(),
-        };
-    let gen_mod_path = crate::register::generated_module_path(&rust_mod_path);
-    let tokens = quote! {
-        #engine_expr.register_result_fn(&(#export_name), #gen_mod_path::dynamic_result_fn);
-    };
-    proc_macro::TokenStream::from(tokens)
+    match crate::register::parse_register_macro(args) {
+        Ok((engine_expr, export_name, rust_mod_path)) => {
+            let gen_mod_path = crate::register::generated_module_path(&rust_mod_path);
+            proc_macro::TokenStream::from(quote! {
+                #engine_expr.register_result_fn(&(#export_name), #gen_mod_path::dynamic_result_fn);
+            })
+        }
+        Err(e) => e.to_compile_error().into(),
+    }
 }
 
 /// Macro to register a _plugin function_ into a Rhai `Module`.
@@ -332,19 +327,18 @@ pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenS
 /// ```
 #[proc_macro]
 pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let (module_expr, export_name, rust_mod_path) =
-        match crate::register::parse_register_macro(args) {
-            Ok(triple) => triple,
-            Err(e) => return e.to_compile_error().into(),
-        };
-    let gen_mod_path = crate::register::generated_module_path(&rust_mod_path);
-    let tokens = quote! {
-        #module_expr.set_fn(#export_name, FnNamespace::Internal, FnAccess::Public,
-                            Some(#gen_mod_path::token_param_names().as_ref()),
-                            #gen_mod_path::token_input_types().as_ref(),
-                            #gen_mod_path::token_callable());
-    };
-    proc_macro::TokenStream::from(tokens)
+    match crate::register::parse_register_macro(args) {
+        Ok((module_expr, export_name, rust_mod_path)) => {
+            let gen_mod_path = crate::register::generated_module_path(&rust_mod_path);
+            proc_macro::TokenStream::from(quote! {
+                #module_expr.set_fn(#export_name, FnNamespace::Internal, FnAccess::Public,
+                                    Some(#gen_mod_path::token_param_names().as_ref()),
+                                    #gen_mod_path::token_input_types().as_ref(),
+                                    #gen_mod_path::token_callable());
+            })
+        }
+        Err(e) => e.to_compile_error().into(),
+    }
 }
 
 /// Macro to register a _plugin function_ into a Rhai `Module` and expose it globally.
@@ -374,17 +368,16 @@ pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream
 /// ```
 #[proc_macro]
 pub fn set_exported_global_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let (module_expr, export_name, rust_mod_path) =
-        match crate::register::parse_register_macro(args) {
-            Ok(triple) => triple,
-            Err(e) => return e.to_compile_error().into(),
-        };
-    let gen_mod_path = crate::register::generated_module_path(&rust_mod_path);
-    let tokens = quote! {
-        #module_expr.set_fn(#export_name, FnNamespace::Global, FnAccess::Public,
-                            Some(#gen_mod_path::token_param_names().as_ref()),
-                            #gen_mod_path::token_input_types().as_ref(),
-                            #gen_mod_path::token_callable());
-    };
-    proc_macro::TokenStream::from(tokens)
+    match crate::register::parse_register_macro(args) {
+        Ok((module_expr, export_name, rust_mod_path)) => {
+            let gen_mod_path = crate::register::generated_module_path(&rust_mod_path);
+            proc_macro::TokenStream::from(quote! {
+                #module_expr.set_fn(#export_name, FnNamespace::Global, FnAccess::Public,
+                                    Some(#gen_mod_path::token_param_names().as_ref()),
+                                    #gen_mod_path::token_input_types().as_ref(),
+                                    #gen_mod_path::token_callable());
+            })
+        }
+        Err(e) => e.to_compile_error().into(),
+    }
 }

@@ -33,8 +33,7 @@ pub fn parse_register_macro(
         ));
     }
     let export_name = match &items[1] {
-        syn::Expr::Lit(lit_str) => quote_spanned!(items[1].span() =>
-                                                 #lit_str.to_string()),
+        syn::Expr::Lit(lit_str) => quote_spanned!(items[1].span() => #lit_str),
         expr => quote! { #expr },
     };
     let rust_mod_path = if let syn::Expr::Path(ref path) = &items[2] {

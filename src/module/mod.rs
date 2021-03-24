@@ -7,7 +7,7 @@ use crate::fn_register::RegisterNativeFunction;
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fmt, format,
     iter::empty,
     num::NonZeroUsize,
@@ -54,7 +54,7 @@ pub struct FuncInfo {
     /// Function access mode.
     pub access: FnAccess,
     /// Function name.
-    pub name: String,
+    pub name: ImmutableString,
     /// Number of parameters.
     pub params: usize,
     /// Parameter types (if applicable).
@@ -147,6 +147,8 @@ pub struct Module {
     indexed: bool,
     /// Does the [`Module`] contain indexed functions that have been exposed to the global namespace?
     contains_indexed_global_functions: bool,
+    /// Interned strings
+    interned_strings: BTreeSet<ImmutableString>,
 }
 
 impl Default for Module {
@@ -163,6 +165,7 @@ impl Default for Module {
             all_type_iterators: Default::default(),
             indexed: false,
             contains_indexed_global_functions: false,
+            interned_strings: Default::default(),
         }
     }
 }
@@ -172,11 +175,10 @@ impl fmt::Debug for Module {
         write!(
             f,
             "Module({}\n{}{}{})",
-            if let Some(ref id) = self.id {
-                format!("id: {:?},", id)
-            } else {
-                "".to_string()
-            },
+            self.id
+                .as_ref()
+                .map(|id| format!("id: {:?},", id))
+                .unwrap_or_default(),
             if !self.modules.is_empty() {
                 format!(
                     "    modules: {}\n",
@@ -359,6 +361,15 @@ impl Module {
         self.indexed
     }
 
+    /// Return an interned string.
+    fn get_interned_string(&mut self, s: &str) -> ImmutableString {
+        self.interned_strings.get(s).cloned().unwrap_or_else(|| {
+            let s: ImmutableString = s.into();
+            self.interned_strings.insert(s.clone());
+            s
+        })
+    }
+
     /// Generate signatures for all the non-private functions in the [`Module`].
     #[inline(always)]
     pub fn gen_fn_signatures(&self) -> impl Iterator<Item = String> + '_ {
@@ -466,12 +477,12 @@ impl Module {
         // None + function name + number of arguments.
         let num_params = fn_def.params.len();
         let hash_script = crate::calc_fn_hash(empty(), &fn_def.name, num_params);
-        let mut param_names: StaticVec<_> = fn_def.params.iter().cloned().collect();
+        let mut param_names = fn_def.params.clone();
         param_names.push("Dynamic".into());
         self.functions.insert(
             hash_script,
             Box::new(FuncInfo {
-                name: fn_def.name.to_string(),
+                name: fn_def.name.clone(),
                 namespace: FnNamespace::Internal,
                 access: fn_def.access,
                 params: num_params,
@@ -612,8 +623,13 @@ impl Module {
     /// In other words, the number of entries should be one larger than the number of parameters.
     #[inline(always)]
     pub fn update_fn_metadata(&mut self, hash_fn: u64, arg_names: &[&str]) -> &mut Self {
+        let param_names = arg_names
+            .iter()
+            .map(|&name| self.get_interned_string(name))
+            .collect();
+
         if let Some(f) = self.functions.get_mut(&hash_fn) {
-            f.param_names = arg_names.iter().map(|&n| n.into()).collect();
+            f.param_names = param_names;
         }
         self
     }
@@ -625,9 +641,9 @@ impl Module {
     pub fn update_fn_namespace(&mut self, hash_fn: u64, namespace: FnNamespace) -> &mut Self {
         if let Some(f) = self.functions.get_mut(&hash_fn) {
             f.namespace = namespace;
+            self.indexed = false;
+            self.contains_indexed_global_functions = false;
         }
-        self.indexed = false;
-        self.contains_indexed_global_functions = false;
         self
     }
 
@@ -641,14 +657,13 @@ impl Module {
     #[inline]
     pub fn set_fn(
         &mut self,
-        name: impl Into<String>,
+        name: &str,
         namespace: FnNamespace,
         access: FnAccess,
         arg_names: Option<&[&str]>,
         arg_types: &[TypeId],
         func: CallableFunction,
     ) -> u64 {
-        let name = name.into();
         let is_method = func.is_method();
 
         let param_types = arg_types
@@ -675,6 +690,13 @@ impl Module {
 
         let hash_fn = calc_native_fn_hash(empty(), &name, &param_types);
 
+        let name = self.get_interned_string(name);
+        let param_names = arg_names
+            .iter()
+            .flat_map(|p| p.iter())
+            .map(|&name| self.get_interned_string(name))
+            .collect();
+
         self.functions.insert(
             hash_fn,
             Box::new(FuncInfo {
@@ -683,11 +705,7 @@ impl Module {
                 access,
                 params: param_types.len(),
                 param_types,
-                param_names: if let Some(p) = arg_names {
-                    p.iter().map(|&v| v.into()).collect()
-                } else {
-                    Default::default()
-                },
+                param_names,
                 func: func.into(),
             }),
         );
@@ -767,7 +785,7 @@ impl Module {
     #[inline(always)]
     pub fn set_raw_fn<T: Variant + Clone>(
         &mut self,
-        name: impl Into<String>,
+        name: &str,
         namespace: FnNamespace,
         access: FnAccess,
         arg_types: &[TypeId],
@@ -812,7 +830,7 @@ impl Module {
     /// assert!(module.contains_fn(hash));
     /// ```
     #[inline(always)]
-    pub fn set_native_fn<ARGS, T, F>(&mut self, name: impl Into<String>, func: F) -> u64
+    pub fn set_native_fn<ARGS, T, F>(&mut self, name: &str, func: F) -> u64
     where
         T: Variant + Clone,
         F: RegisterNativeFunction<ARGS, Result<T, Box<EvalAltResult>>>,
@@ -847,7 +865,7 @@ impl Module {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn set_getter_fn<ARGS, A, T, F>(&mut self, name: impl Into<String>, func: F) -> u64
+    pub fn set_getter_fn<ARGS, A, T, F>(&mut self, name: &str, func: F) -> u64
     where
         A: Variant + Clone,
         T: Variant + Clone,
@@ -855,7 +873,7 @@ impl Module {
         F: Fn(&mut A) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     {
         self.set_fn(
-            crate::engine::make_getter(&name.into()),
+            &crate::engine::make_getter(name),
             FnNamespace::Global,
             FnAccess::Public,
             None,
@@ -888,7 +906,7 @@ impl Module {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn set_setter_fn<ARGS, A, B, F>(&mut self, name: impl Into<String>, func: F) -> u64
+    pub fn set_setter_fn<ARGS, A, B, F>(&mut self, name: &str, func: F) -> u64
     where
         A: Variant + Clone,
         B: Variant + Clone,
@@ -896,7 +914,7 @@ impl Module {
         F: Fn(&mut A, B) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     {
         self.set_fn(
-            crate::engine::make_setter(&name.into()),
+            &crate::engine::make_setter(name),
             FnNamespace::Global,
             FnAccess::Public,
             None,

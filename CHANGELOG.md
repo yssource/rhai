@@ -26,6 +26,7 @@ Breaking changes
 * All `Module::set_fn_XXX` methods are removed, in favor of `Module::set_native_fn`.
 * `Array::reduce` and `Array::reduce_rev` now take a `Dynamic` as initial value instead of a function pointer.
 * `protected`, `super` are now reserved keywords.
+* The `Module::set_fn_XXX` API now take `&str` as the function name instead of `Into<String>`.
 
 Enhancements
 ------------
