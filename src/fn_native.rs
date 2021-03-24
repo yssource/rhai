@@ -10,12 +10,11 @@ use crate::stdlib::{
     iter::empty,
     mem,
     string::String,
-    vec::Vec,
 };
 use crate::token::is_valid_identifier;
 use crate::{
     calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ImmutableString, Module, Position,
-    RhaiResult,
+    RhaiResult, StaticVec,
 };
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
@@ -251,7 +250,7 @@ pub type FnCallArgs<'a> = [&'a mut Dynamic];
 /// A general function pointer, which may carry additional (i.e. curried) argument values
 /// to be passed onto a function during a call.
 #[derive(Debug, Clone)]
-pub struct FnPtr(ImmutableString, Vec<Dynamic>);
+pub struct FnPtr(ImmutableString, StaticVec<Dynamic>);
 
 impl FnPtr {
     /// Create a new function pointer.
@@ -261,7 +260,10 @@ impl FnPtr {
     }
     /// Create a new function pointer without checking its parameters.
     #[inline(always)]
-    pub(crate) fn new_unchecked(name: impl Into<ImmutableString>, curry: Vec<Dynamic>) -> Self {
+    pub(crate) fn new_unchecked(
+        name: impl Into<ImmutableString>,
+        curry: StaticVec<Dynamic>,
+    ) -> Self {
         Self(name.into(), curry)
     }
     /// Get the name of the function.
@@ -276,7 +278,7 @@ impl FnPtr {
     }
     /// Get the underlying data of the function pointer.
     #[inline(always)]
-    pub(crate) fn take_data(self) -> (ImmutableString, Vec<Dynamic>) {
+    pub(crate) fn take_data(self) -> (ImmutableString, StaticVec<Dynamic>) {
         (self.0, self.1)
     }
     /// Get the curried arguments.

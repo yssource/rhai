@@ -1132,13 +1132,10 @@ impl Engine {
 
                 // Append the new curried arguments to the existing list.
 
-                args_expr.iter().skip(1).try_for_each(
-                    |expr| -> Result<(), Box<EvalAltResult>> {
-                        fn_curry
-                            .push(self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?);
-                        Ok(())
-                    },
-                )?;
+                args_expr.iter().skip(1).try_for_each(|expr| {
+                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                        .map(|value| fn_curry.push(value))
+                })?;
 
                 return Ok(FnPtr::new_unchecked(name, fn_curry).into());
             }

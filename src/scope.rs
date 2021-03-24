@@ -71,6 +71,7 @@ impl<'a> IntoIterator for Scope<'a> {
     type Item = (Cow<'a, str>, Dynamic);
     type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
+    #[inline(always)]
     fn into_iter(self) -> Self::IntoIter {
         Box::new(
             self.values

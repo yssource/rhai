@@ -61,6 +61,8 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
 
 /// Trait to register custom Rust functions.
 pub trait RegisterNativeFunction<Args, Result> {
+    /// Convert this function into a [`CallableFunction`].
+    fn into_callable_function(self) -> CallableFunction;
     /// Get the type ID's of this function's parameters.
     fn param_types() -> Box<[TypeId]>;
     /// Get the type names of this function's parameters.
@@ -69,8 +71,6 @@ pub trait RegisterNativeFunction<Args, Result> {
     fn return_type() -> TypeId;
     /// Get the type name of this function's return value.
     fn return_type_name() -> &'static str;
-    /// Convert this function into a [`CallableFunction`].
-    fn into_callable_function(self) -> CallableFunction;
 }
 
 macro_rules! def_register {

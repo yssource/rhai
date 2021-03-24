@@ -997,11 +997,11 @@ impl Engine {
 
         // Check if the variable is `this`
         if name.as_str() == KEYWORD_THIS {
-            if let Some(val) = this_ptr {
-                return Ok(((*val).into(), *pos));
+            return if let Some(val) = this_ptr {
+                Ok(((*val).into(), *pos))
             } else {
-                return EvalAltResult::ErrorUnboundThis(*pos).into();
-            }
+                EvalAltResult::ErrorUnboundThis(*pos).into()
+            };
         }
 
         // Check if it is directly indexed
