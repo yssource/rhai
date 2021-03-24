@@ -13,8 +13,8 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::{
-    scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Module, NativeCallContext,
-    ParseError, Position, RhaiResult, Shared, StaticVec, AST,
+    scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, ImmutableString, Module,
+    NativeCallContext, ParseError, Position, RhaiResult, Shared, StaticVec, AST,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -52,7 +52,11 @@ impl Engine {
     /// # }
     /// ```
     #[inline]
-    pub fn register_fn<A, F>(&mut self, name: &str, func: F) -> &mut Self
+    pub fn register_fn<A, F>(
+        &mut self,
+        name: impl AsRef<str> + Into<ImmutableString>,
+        func: F,
+    ) -> &mut Self
     where
         F: RegisterNativeFunction<A, ()>,
     {
@@ -102,7 +106,11 @@ impl Engine {
     ///       .expect_err("expecting division by zero error!");
     /// ```
     #[inline]
-    pub fn register_result_fn<A, F, R>(&mut self, name: &str, func: F) -> &mut Self
+    pub fn register_result_fn<A, F, R>(
+        &mut self,
+        name: impl AsRef<str> + Into<ImmutableString>,
+        func: F,
+    ) -> &mut Self
     where
         F: RegisterNativeFunction<A, Result<R, Box<EvalAltResult>>>,
     {
@@ -144,7 +152,7 @@ impl Engine {
     #[inline(always)]
     pub fn register_raw_fn<T: Variant + Clone>(
         &mut self,
-        name: &str,
+        name: impl AsRef<str> + Into<ImmutableString>,
         arg_types: &[TypeId],
         func: impl Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
             + SendSync
@@ -878,25 +886,29 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_module"))]
-    pub fn register_static_module(&mut self, name: &str, module: Shared<Module>) -> &mut Self {
+    pub fn register_static_module(
+        &mut self,
+        name: impl AsRef<str> + Into<ImmutableString>,
+        module: Shared<Module>,
+    ) -> &mut Self {
         fn register_static_module_raw(
             root: &mut crate::stdlib::collections::BTreeMap<crate::ImmutableString, Shared<Module>>,
-            name: &str,
+            name: impl AsRef<str> + Into<ImmutableString>,
             module: Shared<Module>,
         ) {
             let separator = crate::token::Token::DoubleColon.syntax();
 
-            if !name.contains(separator.as_ref()) {
+            if !name.as_ref().contains(separator.as_ref()) {
                 if !module.is_indexed() {
                     // Index the module (making a clone copy if necessary) if it is not indexed
                     let mut module = crate::fn_native::shared_take_or_clone(module);
                     module.build_index();
-                    root.insert(name.trim().into(), module.into());
+                    root.insert(name.into(), module.into());
                 } else {
-                    root.insert(name.trim().into(), module);
+                    root.insert(name.into(), module);
                 }
             } else {
-                let mut iter = name.splitn(2, separator.as_ref());
+                let mut iter = name.as_ref().splitn(2, separator.as_ref());
                 let sub_module = iter.next().unwrap().trim();
                 let remainder = iter.next().unwrap().trim();
 
@@ -915,7 +927,7 @@ impl Engine {
             }
         }
 
-        register_static_module_raw(&mut self.global_sub_modules, name.as_ref(), module);
+        register_static_module_raw(&mut self.global_sub_modules, name, module);
         self
     }
 
@@ -927,7 +939,11 @@ impl Engine {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[deprecated = "use `register_static_module` instead"]
-    pub fn register_module(&mut self, name: &str, module: impl Into<Shared<Module>>) -> &mut Self {
+    pub fn register_module(
+        &mut self,
+        name: impl AsRef<str> + Into<ImmutableString>,
+        module: impl Into<Shared<Module>>,
+    ) -> &mut Self {
         self.register_static_module(name, module.into())
     }
     /// Compile a string into an [`AST`], which can be used later for evaluation.
@@ -1013,7 +1029,6 @@ impl Engine {
             fn_native::shared_take_or_clone,
             module::resolvers::StaticModuleResolver,
             stdlib::collections::BTreeSet,
-            ImmutableString,
         };
 
         fn collect_imports(
@@ -1271,9 +1286,14 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn parse_json(&self, json: &str, has_null: bool) -> Result<Map, Box<EvalAltResult>> {
+    pub fn parse_json(
+        &self,
+        json: impl AsRef<str>,
+        has_null: bool,
+    ) -> Result<Map, Box<EvalAltResult>> {
         use crate::token::Token;
 
+        let json = json.as_ref();
         let mut scope = Default::default();
 
         // Trims the JSON string and add a '#' in front
@@ -1765,7 +1785,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         ast: &AST,
-        name: &str,
+        name: impl AsRef<str>,
         args: impl crate::fn_args::FuncArgs,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values: crate::StaticVec<_> = Default::default();
@@ -1844,7 +1864,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
         eval_ast: bool,
-        name: &str,
+        name: impl AsRef<str>,
         mut this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
@@ -1867,7 +1887,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
         eval_ast: bool,
-        name: &str,
+        name: impl AsRef<str>,
         this_ptr: &mut Option<&mut Dynamic>,
         args: &mut FnCallArgs,
     ) -> RhaiResult {
@@ -1881,12 +1901,14 @@ impl Engine {
 
         let fn_def = ast
             .lib()
-            .get_script_fn(name, args.len())
-            .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::NONE))?;
+            .get_script_fn(name.as_ref(), args.len())
+            .ok_or_else(|| {
+                EvalAltResult::ErrorFunctionNotFound(name.as_ref().into(), Position::NONE)
+            })?;
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
-        crate::fn_call::ensure_no_data_race(name, args, false)?;
+        crate::fn_call::ensure_no_data_race(name.as_ref(), args, false)?;
 
         self.call_script_fn(
             scope,

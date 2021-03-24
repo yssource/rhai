@@ -236,7 +236,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn disable_symbol(&mut self, symbol: &str) -> &mut Self {
+    pub fn disable_symbol(&mut self, symbol: impl Into<String>) -> &mut Self {
         self.disabled_symbols.insert(symbol.into());
         self
     }
@@ -270,7 +270,7 @@ impl Engine {
     /// ```
     pub fn register_custom_operator(
         &mut self,
-        keyword: &str,
+        keyword: impl AsRef<str> + Into<String>,
         precedence: u8,
     ) -> Result<&mut Self, String> {
         let precedence = Precedence::new(precedence);
@@ -279,25 +279,25 @@ impl Engine {
             return Err("precedence cannot be zero".into());
         }
 
-        match Token::lookup_from_syntax(keyword) {
+        match Token::lookup_from_syntax(keyword.as_ref()) {
             // Standard identifiers, reserved keywords and custom keywords are OK
             None | Some(Token::Reserved(_)) | Some(Token::Custom(_)) => (),
             // Active standard keywords cannot be made custom
             // Disabled keywords are OK
             Some(token) if token.is_keyword() => {
                 if !self.disabled_symbols.contains(token.syntax().as_ref()) {
-                    return Err(format!("'{}' is a reserved keyword", keyword).into());
+                    return Err(format!("'{}' is a reserved keyword", keyword.as_ref()).into());
                 }
             }
             // Active standard symbols cannot be made custom
             Some(token) if token.is_symbol() => {
                 if !self.disabled_symbols.contains(token.syntax().as_ref()) {
-                    return Err(format!("'{}' is a reserved operator", keyword).into());
+                    return Err(format!("'{}' is a reserved operator", keyword.as_ref()).into());
                 }
             }
             // Active standard symbols cannot be made custom
             Some(token) if !self.disabled_symbols.contains(token.syntax().as_ref()) => {
-                return Err(format!("'{}' is a reserved symbol", keyword).into())
+                return Err(format!("'{}' is a reserved symbol", keyword.as_ref()).into())
             }
             // Disabled symbols are OK
             Some(_) => (),

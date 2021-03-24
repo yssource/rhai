@@ -184,10 +184,12 @@ impl<'a> NativeCallContext<'a> {
     #[inline(always)]
     pub fn call_fn_dynamic_raw(
         &self,
-        fn_name: &str,
+        fn_name: impl AsRef<str>,
         is_method: bool,
         args: &mut [&mut Dynamic],
     ) -> RhaiResult {
+        let fn_name = fn_name.as_ref();
+
         let hash = if is_method {
             FnCallHash::from_script_and_native(
                 calc_fn_hash(empty(), fn_name, args.len() - 1),

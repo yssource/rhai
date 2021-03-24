@@ -1349,7 +1349,7 @@ impl Dynamic {
         }
         if TypeId::of::<T>() == TypeId::of::<String>() {
             return match &self.0 {
-                Union::Str(value, _) => <dyn Any>::downcast_ref::<T>(value.as_ref()),
+                Union::Str(value, _) => <dyn Any>::downcast_ref::<T>(value.as_ref() as &String),
                 _ => None,
             };
         }

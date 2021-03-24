@@ -7,7 +7,7 @@ use crate::fn_register::RegisterNativeFunction;
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fmt, format,
     iter::empty,
     num::NonZeroUsize,
@@ -16,6 +16,7 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::token::Token;
+use crate::utils::StringInterner;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, EvalAltResult, ImmutableString,
     NativeCallContext, Position, Shared, StaticVec,
@@ -114,7 +115,7 @@ impl FuncInfo {
 #[inline(always)]
 fn calc_native_fn_hash<'a>(
     modules: impl Iterator<Item = &'a str>,
-    fn_name: &str,
+    fn_name: impl AsRef<str>,
     params: &[TypeId],
 ) -> u64 {
     let hash_script = calc_fn_hash(modules, fn_name, params.len());
@@ -148,7 +149,7 @@ pub struct Module {
     /// Does the [`Module`] contain indexed functions that have been exposed to the global namespace?
     contains_indexed_global_functions: bool,
     /// Interned strings
-    interned_strings: BTreeSet<ImmutableString>,
+    interned_strings: StringInterner,
 }
 
 impl Default for Module {
@@ -359,15 +360,6 @@ impl Module {
     #[inline(always)]
     pub fn is_indexed(&self) -> bool {
         self.indexed
-    }
-
-    /// Return an interned string.
-    fn get_interned_string(&mut self, s: &str) -> ImmutableString {
-        self.interned_strings.get(s).cloned().unwrap_or_else(|| {
-            let s: ImmutableString = s.into();
-            self.interned_strings.insert(s.clone());
-            s
-        })
     }
 
     /// Generate signatures for all the non-private functions in the [`Module`].
@@ -625,7 +617,7 @@ impl Module {
     pub fn update_fn_metadata(&mut self, hash_fn: u64, arg_names: &[&str]) -> &mut Self {
         let param_names = arg_names
             .iter()
-            .map(|&name| self.get_interned_string(name))
+            .map(|&name| self.interned_strings.get(name))
             .collect();
 
         if let Some(f) = self.functions.get_mut(&hash_fn) {
@@ -657,7 +649,7 @@ impl Module {
     #[inline]
     pub fn set_fn(
         &mut self,
-        name: &str,
+        name: impl AsRef<str> + Into<ImmutableString>,
         namespace: FnNamespace,
         access: FnAccess,
         arg_names: Option<&[&str]>,
@@ -690,11 +682,11 @@ impl Module {
 
         let hash_fn = calc_native_fn_hash(empty(), &name, &param_types);
 
-        let name = self.get_interned_string(name);
+        let name = self.interned_strings.get(name);
         let param_names = arg_names
             .iter()
             .flat_map(|p| p.iter())
-            .map(|&name| self.get_interned_string(name))
+            .map(|&arg| self.interned_strings.get(arg))
             .collect();
 
         self.functions.insert(
@@ -783,16 +775,21 @@ impl Module {
     /// assert!(module.contains_fn(hash));
     /// ```
     #[inline(always)]
-    pub fn set_raw_fn<T: Variant + Clone>(
+    pub fn set_raw_fn<N, T, F>(
         &mut self,
-        name: &str,
+        name: N,
         namespace: FnNamespace,
         access: FnAccess,
         arg_types: &[TypeId],
-        func: impl Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
+        func: F,
+    ) -> u64
+    where
+        N: AsRef<str> + Into<ImmutableString>,
+        T: Variant + Clone,
+        F: Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
             + SendSync
             + 'static,
-    ) -> u64 {
+    {
         let f =
             move |ctx: NativeCallContext, args: &mut FnCallArgs| func(ctx, args).map(Dynamic::from);
 
@@ -830,8 +827,9 @@ impl Module {
     /// assert!(module.contains_fn(hash));
     /// ```
     #[inline(always)]
-    pub fn set_native_fn<ARGS, T, F>(&mut self, name: &str, func: F) -> u64
+    pub fn set_native_fn<ARGS, N, T, F>(&mut self, name: N, func: F) -> u64
     where
+        N: AsRef<str> + Into<ImmutableString>,
         T: Variant + Clone,
         F: RegisterNativeFunction<ARGS, Result<T, Box<EvalAltResult>>>,
     {
@@ -1079,11 +1077,16 @@ impl Module {
     /// ```
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
-    pub fn set_indexer_get_set_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
+    pub fn set_indexer_get_set_fn<A, B, T>(
         &mut self,
         get_fn: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
         set_fn: impl Fn(&mut A, B, T) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
-    ) -> (u64, u64) {
+    ) -> (u64, u64)
+    where
+        A: Variant + Clone,
+        B: Variant + Clone,
+        T: Variant + Clone,
+    {
         (
             self.set_indexer_get_fn(get_fn),
             self.set_indexer_set_fn(set_fn),

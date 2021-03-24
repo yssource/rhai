@@ -6,7 +6,7 @@ use crate::module::NamespaceRef;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fmt,
     hash::Hash,
     num::NonZeroUsize,
@@ -58,7 +58,7 @@ pub struct ScriptFnDef {
     pub params: StaticVec<ImmutableString>,
     /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
-    pub externals: StaticVec<ImmutableString>,
+    pub externals: BTreeSet<ImmutableString>,
     /// Function doc-comments (if any).
     pub comments: StaticVec<String>,
 }

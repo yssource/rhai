@@ -22,7 +22,7 @@ use crate::stdlib::{
 };
 use crate::syntax::{CustomSyntax, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
-use crate::utils::get_hasher;
+use crate::utils::{get_hasher, StringInterner};
 use crate::{
     calc_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType, Position,
     Scope, Shared, StaticVec, AST,
@@ -44,7 +44,7 @@ struct ParseState<'e> {
     /// Reference to the scripting [`Engine`].
     engine: &'e Engine,
     /// Interned strings.
-    interned_strings: BTreeMap<String, ImmutableString>,
+    interned_strings: StringInterner,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(ImmutableString, AccessMode)>,
     /// Size of the local variables stack upon entry of the current block scope.
@@ -160,24 +160,17 @@ impl<'e> ParseState<'e> {
             .iter()
             .rev()
             .enumerate()
-            .find(|(_, n)| **n == name)
+            .find(|&(_, n)| *n == name)
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
     }
 
     /// Get an interned string, creating one if it is not yet interned.
+    #[inline(always)]
     pub fn get_interned_string(
         &mut self,
         text: impl AsRef<str> + Into<ImmutableString>,
     ) -> ImmutableString {
-        #[allow(clippy::map_entry)]
-        if !self.interned_strings.contains_key(text.as_ref()) {
-            let value = text.into();
-            self.interned_strings
-                .insert(value.clone().into(), value.clone());
-            value
-        } else {
-            self.interned_strings.get(text.as_ref()).unwrap().clone()
-        }
+        self.interned_strings.get(text)
     }
 }
 
