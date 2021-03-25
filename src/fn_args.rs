@@ -26,7 +26,7 @@ pub trait FuncArgs {
     /// }
     ///
     /// impl FuncArgs for Options {
-    ///     fn parse<C: Extend<Dynamic>>(self, container: &mut C) {
+    ///     fn parse<CONTAINER: Extend<Dynamic>>(self, container: &mut CONTAINER) {
     ///         container.extend(std::iter::once(self.foo.into()));
     ///         container.extend(std::iter::once(self.bar.into()));
     ///         container.extend(std::iter::once(self.baz.into()));
@@ -51,11 +51,12 @@ pub trait FuncArgs {
     /// # Ok(())
     /// # }
     /// ```
-    fn parse<T: Extend<Dynamic>>(self, container: &mut T);
+    fn parse<CONTAINER: Extend<Dynamic>>(self, container: &mut CONTAINER);
 }
 
 impl<T: Variant + Clone> FuncArgs for Vec<T> {
-    fn parse<C: Extend<Dynamic>>(self, container: &mut C) {
+    #[inline(always)]
+    fn parse<CONTAINER: Extend<Dynamic>>(self, container: &mut CONTAINER) {
         container.extend(self.into_iter().map(Variant::into_dynamic));
     }
 }

@@ -7,15 +7,14 @@ use crate::stdlib::{
     boxed::Box,
     convert::{TryFrom, TryInto},
     fmt,
-    iter::empty,
+    iter::{empty, once},
     mem,
     string::String,
-    vec::Vec,
 };
 use crate::token::is_valid_identifier;
 use crate::{
     calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ImmutableString, Module, Position,
-    RhaiResult,
+    RhaiResult, StaticVec,
 };
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
@@ -185,10 +184,12 @@ impl<'a> NativeCallContext<'a> {
     #[inline(always)]
     pub fn call_fn_dynamic_raw(
         &self,
-        fn_name: &str,
+        fn_name: impl AsRef<str>,
         is_method: bool,
         args: &mut [&mut Dynamic],
     ) -> RhaiResult {
+        let fn_name = fn_name.as_ref();
+
         let hash = if is_method {
             FnCallHash::from_script_and_native(
                 calc_fn_hash(empty(), fn_name, args.len() - 1),
@@ -251,7 +252,7 @@ pub type FnCallArgs<'a> = [&'a mut Dynamic];
 /// A general function pointer, which may carry additional (i.e. curried) argument values
 /// to be passed onto a function during a call.
 #[derive(Debug, Clone)]
-pub struct FnPtr(ImmutableString, Vec<Dynamic>);
+pub struct FnPtr(ImmutableString, StaticVec<Dynamic>);
 
 impl FnPtr {
     /// Create a new function pointer.
@@ -261,7 +262,10 @@ impl FnPtr {
     }
     /// Create a new function pointer without checking its parameters.
     #[inline(always)]
-    pub(crate) fn new_unchecked(name: impl Into<ImmutableString>, curry: Vec<Dynamic>) -> Self {
+    pub(crate) fn new_unchecked(
+        name: impl Into<ImmutableString>,
+        curry: StaticVec<Dynamic>,
+    ) -> Self {
         Self(name.into(), curry)
     }
     /// Get the name of the function.
@@ -276,7 +280,7 @@ impl FnPtr {
     }
     /// Get the underlying data of the function pointer.
     #[inline(always)]
-    pub(crate) fn take_data(self) -> (ImmutableString, Vec<Dynamic>) {
+    pub(crate) fn take_data(self) -> (ImmutableString, StaticVec<Dynamic>) {
         (self.0, self.1)
     }
     /// Get the curried arguments.
@@ -324,22 +328,28 @@ impl FnPtr {
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
-        let arg_values = arg_values.as_mut();
+        let mut args_data;
 
-        let mut args_data = self
-            .curry()
-            .iter()
-            .cloned()
-            .chain(arg_values.iter_mut().map(mem::take))
-            .collect::<Vec<_>>();
+        let arg_values = if self.curry().is_empty() {
+            arg_values.as_mut()
+        } else {
+            args_data = self
+                .curry()
+                .iter()
+                .cloned()
+                .chain(arg_values.as_mut().iter_mut().map(mem::take))
+                .collect::<StaticVec<_>>();
 
-        let mut args = args_data.iter_mut().collect::<Vec<_>>();
+            args_data.as_mut()
+        };
 
         let is_method = this_ptr.is_some();
 
-        if let Some(obj) = this_ptr {
-            args.insert(0, obj);
-        }
+        let mut args: StaticVec<_> = if let Some(obj) = this_ptr {
+            once(obj).chain(arg_values.iter_mut()).collect()
+        } else {
+            arg_values.iter_mut().collect()
+        };
 
         ctx.call_fn_dynamic_raw(self.fn_name(), is_method, args.as_mut())
     }

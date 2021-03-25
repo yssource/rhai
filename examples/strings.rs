@@ -21,7 +21,7 @@ fn count_string_bytes(s: &str) -> INT {
 
 /// This version uses `ImmutableString` and `&str`.
 fn find_substring(s: ImmutableString, sub: &str) -> INT {
-    s.as_str().find(sub).map(|x| x as INT).unwrap_or(-1)
+    s.find(sub).map(|x| x as INT).unwrap_or(-1)
 }
 
 fn main() -> Result<(), Box<EvalAltResult>> {

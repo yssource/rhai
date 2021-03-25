@@ -6,6 +6,7 @@ use crate::stdlib::{
     borrow::Borrow,
     boxed::Box,
     cmp::Ordering,
+    collections::BTreeSet,
     fmt,
     fmt::{Debug, Display},
     hash::{BuildHasher, Hash, Hasher},
@@ -70,7 +71,11 @@ pub fn get_hasher() -> ahash::AHasher {
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline(always)]
-pub fn calc_fn_hash<'a>(modules: impl Iterator<Item = &'a str>, fn_name: &str, num: usize) -> u64 {
+pub fn calc_fn_hash<'a>(
+    modules: impl Iterator<Item = &'a str>,
+    fn_name: impl AsRef<str>,
+    num: usize,
+) -> u64 {
     let s = &mut get_hasher();
 
     // We always skip the first module
@@ -80,7 +85,7 @@ pub fn calc_fn_hash<'a>(modules: impl Iterator<Item = &'a str>, fn_name: &str, n
         .skip(1)
         .for_each(|m| m.hash(s));
     len.hash(s);
-    fn_name.hash(s);
+    fn_name.as_ref().hash(s);
     num.hash(s);
     s.finish()
 }
@@ -137,7 +142,7 @@ pub(crate) fn combine_hashes(a: u64, b: u64) -> u64 {
 /// assert_ne!(s2.as_str(), s.as_str());
 /// assert_eq!(s, "hello, world!");
 /// ```
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
+#[derive(Clone, Eq, Ord, Hash, Default)]
 pub struct ImmutableString(Shared<String>);
 
 impl Deref for ImmutableString {
@@ -152,6 +157,13 @@ impl Deref for ImmutableString {
 impl AsRef<String> for ImmutableString {
     #[inline(always)]
     fn as_ref(&self) -> &String {
+        &self.0
+    }
+}
+
+impl AsRef<str> for ImmutableString {
+    #[inline(always)]
+    fn as_ref(&self) -> &str {
         &self.0
     }
 }
@@ -559,7 +571,6 @@ impl PartialEq<ImmutableString> for String {
 }
 
 impl<S: AsRef<str>> PartialOrd<S> for ImmutableString {
-    #[inline(always)]
     fn partial_cmp(&self, other: &S) -> Option<Ordering> {
         self.as_str().partial_cmp(other.as_ref())
     }
@@ -592,5 +603,21 @@ impl ImmutableString {
     #[inline(always)]
     pub fn make_mut(&mut self) -> &mut String {
         shared_make_mut(&mut self.0)
+    }
+}
+
+/// A collection of interned strings.
+#[derive(Debug, Clone, Default, Hash)]
+pub struct StringInterner(BTreeSet<ImmutableString>);
+
+impl StringInterner {
+    /// Get an interned string, creating one if it is not yet interned.
+    #[inline(always)]
+    pub fn get(&mut self, text: impl AsRef<str> + Into<ImmutableString>) -> ImmutableString {
+        self.0.get(text.as_ref()).cloned().unwrap_or_else(|| {
+            let s = text.into();
+            self.0.insert(s.clone());
+            s
+        })
     }
 }

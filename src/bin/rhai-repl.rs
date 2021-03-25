@@ -45,6 +45,7 @@ fn print_help() {
     println!("help       => print this help");
     println!("quit, exit => quit");
     println!("scope      => print all variables in the scope");
+    #[cfg(feature = "metadata")]
     println!("functions  => print all functions defined");
     println!("ast        => print the last AST (optimized)");
     println!("astu       => print the last raw, un-optimized AST");
@@ -202,6 +203,7 @@ fn main() {
                 println!("{:#?}\n", ast);
                 continue;
             }
+            #[cfg(feature = "metadata")]
             "functions" => {
                 // print a list of all registered functions
                 engine

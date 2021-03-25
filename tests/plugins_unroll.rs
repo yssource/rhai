@@ -34,7 +34,7 @@ macro_rules! register_in_bulk {
             {
                 let type_str = stringify!($type_names);
                 set_exported_fn!($mod_name,
-                                 format!(concat!(stringify!($op_name), "_{}"), type_str),
+                                 &format!(concat!(stringify!($op_name), "_{}"), type_str),
                                  crate::$op_name::$type_names::op);
             }
         )*

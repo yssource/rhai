@@ -381,6 +381,99 @@ pub enum Token {
 }
 
 impl Token {
+    /// Get the syntax of the token if it is a keyword.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the token is not a keyword.
+    pub fn keyword_syntax(&self) -> &'static str {
+        use Token::*;
+
+        match self {
+            LeftBrace => "{",
+            RightBrace => "}",
+            LeftParen => "(",
+            RightParen => ")",
+            LeftBracket => "[",
+            RightBracket => "]",
+            Plus => "+",
+            UnaryPlus => "+",
+            Minus => "-",
+            UnaryMinus => "-",
+            Multiply => "*",
+            Divide => "/",
+            SemiColon => ";",
+            Colon => ":",
+            DoubleColon => "::",
+            DoubleArrow => "=>",
+            Underscore => "_",
+            Comma => ",",
+            Period => ".",
+            MapStart => "#{",
+            Equals => "=",
+            True => "true",
+            False => "false",
+            Let => "let",
+            Const => "const",
+            If => "if",
+            Else => "else",
+            Switch => "switch",
+            Do => "do",
+            While => "while",
+            Until => "until",
+            Loop => "loop",
+            For => "for",
+            In => "in",
+            LessThan => "<",
+            GreaterThan => ">",
+            Bang => "!",
+            LessThanEqualsTo => "<=",
+            GreaterThanEqualsTo => ">=",
+            EqualsTo => "==",
+            NotEqualsTo => "!=",
+            Pipe => "|",
+            Or => "||",
+            Ampersand => "&",
+            And => "&&",
+            Continue => "continue",
+            Break => "break",
+            Return => "return",
+            Throw => "throw",
+            Try => "try",
+            Catch => "catch",
+            PlusAssign => "+=",
+            MinusAssign => "-=",
+            MultiplyAssign => "*=",
+            DivideAssign => "/=",
+            LeftShiftAssign => "<<=",
+            RightShiftAssign => ">>=",
+            AndAssign => "&=",
+            OrAssign => "|=",
+            XOrAssign => "^=",
+            LeftShift => "<<",
+            RightShift => ">>",
+            XOr => "^",
+            Modulo => "%",
+            ModuloAssign => "%=",
+            PowerOf => "**",
+            PowerOfAssign => "**=",
+
+            #[cfg(not(feature = "no_function"))]
+            Fn => "fn",
+            #[cfg(not(feature = "no_function"))]
+            Private => "private",
+
+            #[cfg(not(feature = "no_module"))]
+            Import => "import",
+            #[cfg(not(feature = "no_module"))]
+            Export => "export",
+            #[cfg(not(feature = "no_module"))]
+            As => "as",
+
+            t => unreachable!("{:?} is not a keyword", t),
+        }
+    }
+
     /// Get the syntax of the token.
     pub fn syntax(&self) -> Cow<'static, str> {
         use Token::*;
@@ -399,90 +492,9 @@ impl Token {
             LexError(err) => err.to_string().into(),
             Comment(s) => s.clone().into(),
 
-            token => match token {
-                LeftBrace => "{",
-                RightBrace => "}",
-                LeftParen => "(",
-                RightParen => ")",
-                LeftBracket => "[",
-                RightBracket => "]",
-                Plus => "+",
-                UnaryPlus => "+",
-                Minus => "-",
-                UnaryMinus => "-",
-                Multiply => "*",
-                Divide => "/",
-                SemiColon => ";",
-                Colon => ":",
-                DoubleColon => "::",
-                DoubleArrow => "=>",
-                Underscore => "_",
-                Comma => ",",
-                Period => ".",
-                MapStart => "#{",
-                Equals => "=",
-                True => "true",
-                False => "false",
-                Let => "let",
-                Const => "const",
-                If => "if",
-                Else => "else",
-                Switch => "switch",
-                Do => "do",
-                While => "while",
-                Until => "until",
-                Loop => "loop",
-                For => "for",
-                In => "in",
-                LessThan => "<",
-                GreaterThan => ">",
-                Bang => "!",
-                LessThanEqualsTo => "<=",
-                GreaterThanEqualsTo => ">=",
-                EqualsTo => "==",
-                NotEqualsTo => "!=",
-                Pipe => "|",
-                Or => "||",
-                Ampersand => "&",
-                And => "&&",
-                Continue => "continue",
-                Break => "break",
-                Return => "return",
-                Throw => "throw",
-                Try => "try",
-                Catch => "catch",
-                PlusAssign => "+=",
-                MinusAssign => "-=",
-                MultiplyAssign => "*=",
-                DivideAssign => "/=",
-                LeftShiftAssign => "<<=",
-                RightShiftAssign => ">>=",
-                AndAssign => "&=",
-                OrAssign => "|=",
-                XOrAssign => "^=",
-                LeftShift => "<<",
-                RightShift => ">>",
-                XOr => "^",
-                Modulo => "%",
-                ModuloAssign => "%=",
-                PowerOf => "**",
-                PowerOfAssign => "**=",
+            EOF => "{EOF}".into(),
 
-                #[cfg(not(feature = "no_function"))]
-                Fn => "fn",
-                #[cfg(not(feature = "no_function"))]
-                Private => "private",
-
-                #[cfg(not(feature = "no_module"))]
-                Import => "import",
-                #[cfg(not(feature = "no_module"))]
-                Export => "export",
-                #[cfg(not(feature = "no_module"))]
-                As => "as",
-                EOF => "{EOF}",
-                t => unreachable!("operator should be matched in outer scope: {:?}", t),
-            }
-            .into(),
+            token => token.keyword_syntax().into(),
         }
     }
 

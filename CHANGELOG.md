@@ -4,31 +4,37 @@ Rhai Release Notes
 Version 0.19.15
 ===============
 
-This version replaces internal usage of `HashMap` with `BTreeMap` in many cases, which should result
-in speed improvements because a `BTreeMap` is faster when the number of items held is small.
+This version replaces all internal usage of `HashMap` with `BTreeMap`, which should result
+in some speed improvement because a `BTreeMap` is leaner when the number of items held is small.
+Most, if not all, collections in Rhai hold very few data items, so this is a typical scenario of
+many tiny-sized collections.
 
-This also translates to the Rhai object map type, `Map`, which used to be an alias to `HashMap` and
-is now aliased to `BTreeMap` instead.  This change is due to the fact that, in the vast majority of
-object map usages, the number of properties held is small.
+The Rhai object map type, `Map`, used to be an alias to `HashMap` and is now aliased to `BTreeMap`
+instead. This is also because, in the vast majority of usage cases, the number of properties held by
+an object map is small.
 
-`HashMap` and `BTreeMap` have almost identical public API's so this change is unlikely to break a
-lot of existing code.
+`HashMap` and `BTreeMap` have almost identical public API's so this change is unlikely to break
+existing code.
+
+All function signature/metadata methods are now grouped under the umbrella `metadata` feature.
 
 
 Breaking changes
 ----------------
 
-* `Map` is now an alias to `BTreeMap` instead of `HashMap`.  This is because most object maps used have few properties.
+* `Map` is now an alias to `BTreeMap` instead of `HashMap` because most object maps hold few properties.
 * The traits `RegisterFn` and `RegisterResultFn` are removed.  `Engine::register_fn` and `Engine::register_result_fn` are now implemented directly on `Engine`.
 * `FnPtr::call_dynamic` now takes `&NativeCallContext` instead of consuming it.
 * All `Module::set_fn_XXX` methods are removed, in favor of `Module::set_native_fn`.
 * `Array::reduce` and `Array::reduce_rev` now take a `Dynamic` as initial value instead of a function pointer.
 * `protected`, `super` are now reserved keywords.
+* The `Module::set_fn_XXX` API now take `&str` as the function name instead of `Into<String>`.
+* The _reflections_ API such as `Engine::gen_fn_signatures`, `Module::update_fn_metadata` etc. are put under the `metadata` feature gate.
 
 Enhancements
 ------------
 
-* Replaced most `HashMap` usage with `BTreeMap` for better performance when the number of items is small.
+* Replaced all `HashMap` usage with `BTreeMap` for better performance because collections in Rhai are tiny.
 * `Engine::register_result_fn` no longer requires the successful return type to be `Dynamic`.  It can now be any clonable type.
 * `#[rhai_fn(return_raw)]` can now return `Result<T, Box<EvalAltResult>>` where `T` is any clonable type instead of `Result<Dynamic, Box<EvalAltResult>>`.
 

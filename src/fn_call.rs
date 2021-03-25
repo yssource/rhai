@@ -475,9 +475,9 @@ impl Engine {
                 fn_def
                     .lib
                     .as_ref()
-                    .and_then(|m| m.id())
-                    .unwrap_or_else(|| state.source.as_ref().map_or_else(|| "", |s| s.as_str()))
-                    .to_string(),
+                    .and_then(|m| m.id().map(|id| id.to_string()))
+                    .or_else(|| state.source.as_ref().map(|s| s.to_string()))
+                    .unwrap_or_default(),
                 err,
                 pos,
             )
@@ -651,14 +651,14 @@ impl Engine {
             crate::engine::KEYWORD_IS_DEF_FN
                 if args.len() == 2 && args[0].is::<FnPtr>() && args[1].is::<crate::INT>() =>
             {
-                let fn_name = args[0].read_lock::<ImmutableString>().unwrap();
+                let fn_name = &*args[0].read_lock::<ImmutableString>().unwrap();
                 let num_params = args[1].as_int().unwrap();
 
                 return Ok((
                     if num_params < 0 {
                         Dynamic::FALSE
                     } else {
-                        let hash_script = calc_fn_hash(empty(), &fn_name, num_params as usize);
+                        let hash_script = calc_fn_hash(empty(), fn_name, num_params as usize);
                         self.has_script_fn(Some(mods), state, lib, hash_script)
                             .into()
                     },
@@ -737,7 +737,7 @@ impl Engine {
                 if !func.externals.is_empty() {
                     captured
                         .into_iter()
-                        .filter(|(name, _, _)| func.externals.iter().any(|ex| ex == name))
+                        .filter(|(name, _, _)| func.externals.contains(name.as_ref()))
                         .for_each(|(name, value, _)| {
                             // Consume the scope values.
                             scope.push_dynamic(name, value);
@@ -1132,13 +1132,10 @@ impl Engine {
 
                 // Append the new curried arguments to the existing list.
 
-                args_expr.iter().skip(1).try_for_each(
-                    |expr| -> Result<(), Box<EvalAltResult>> {
-                        fn_curry
-                            .push(self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?);
-                        Ok(())
-                    },
-                )?;
+                args_expr.iter().skip(1).try_for_each(|expr| {
+                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                        .map(|value| fn_curry.push(value))
+                })?;
 
                 return Ok(FnPtr::new_unchecked(name, fn_curry).into());
             }
@@ -1222,8 +1219,8 @@ impl Engine {
                         state
                             .source
                             .as_ref()
-                            .map_or_else(|| "", |s| s.as_str())
-                            .to_string(),
+                            .map(|s| s.to_string())
+                            .unwrap_or_default(),
                         err,
                         pos,
                     ))

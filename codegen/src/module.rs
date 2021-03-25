@@ -156,8 +156,11 @@ impl Parse for Module {
                     }) => {
                         // #[cfg] attributes are not allowed on const declarations
                         crate::attrs::deny_cfg_attr(&attrs)?;
-                        if let syn::Visibility::Public(_) = vis {
-                            consts.push((ident.to_string(), ty.clone(), expr.as_ref().clone()));
+                        match vis {
+                            syn::Visibility::Public(_) => {
+                                consts.push((ident.to_string(), ty.clone(), expr.as_ref().clone()))
+                            }
+                            _ => {}
                         }
                     }
                     _ => {}
@@ -170,26 +173,23 @@ impl Parse for Module {
             sub_modules.reserve(content.len() - fns.len() - consts.len());
             let mut i = 0;
             while i < content.len() {
-                if let syn::Item::Mod(_) = &content[i] {
-                    let mut item_mod = match content.remove(i) {
-                        syn::Item::Mod(m) => m,
-                        _ => unreachable!(),
-                    };
-                    let params: ExportedModParams = match crate::attrs::inner_item_attributes(
-                        &mut item_mod.attrs,
-                        "rhai_mod",
-                    ) {
-                        Ok(p) => p,
-                        Err(e) => return Err(e),
-                    };
-                    let module =
-                        syn::parse2::<Module>(item_mod.to_token_stream()).and_then(|mut m| {
-                            m.set_params(params)?;
-                            Ok(m)
-                        })?;
-                    sub_modules.push(module);
-                } else {
-                    i += 1;
+                match content[i] {
+                    syn::Item::Mod(_) => {
+                        let mut item_mod = match content.remove(i) {
+                            syn::Item::Mod(m) => m,
+                            _ => unreachable!(),
+                        };
+                        let params: ExportedModParams =
+                            crate::attrs::inner_item_attributes(&mut item_mod.attrs, "rhai_mod")?;
+                        let module = syn::parse2::<Module>(item_mod.to_token_stream()).and_then(
+                            |mut m| {
+                                m.set_params(params)?;
+                                Ok(m)
+                            },
+                        )?;
+                        sub_modules.push(module);
+                    }
+                    _ => i += 1,
                 }
             }
         } else {

@@ -297,40 +297,25 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public, Some(&["INT"]), &[],
+                    m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
+                             Some(get_mystic_number_token::PARAM_NAMES), &[],
                              get_mystic_number_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct get_mystic_number_token();
+                pub struct get_mystic_number_token();
+                impl get_mystic_number_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["INT"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 0usize] { [] }
+                }
                 impl PluginFunction for get_mystic_number_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 0usize,
-                                            "wrong arg count: {} != {}", args.len(), 0usize);
                         Ok(Dynamic::from(get_mystic_number()))
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(get_mystic_number_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["INT"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn get_mystic_number_token_callable() -> CallableFunction {
-                    get_mystic_number_token().into()
-                }
-                #[inline(always)] pub fn get_mystic_number_token_param_names() -> Box<[&'static str]> {
-                    get_mystic_number_token().param_names()
-                }
-                #[inline(always)] pub fn get_mystic_number_token_input_types() -> Box<[TypeId]> {
-                    get_mystic_number_token().input_types()
                 }
             }
         };
@@ -366,42 +351,26 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("add_one_to", FnNamespace::Global, FnAccess::Public, Some(&["x: INT", "INT"]),
-                             &[core::any::TypeId::of::<INT>()],
+                    m.set_fn("add_one_to", FnNamespace::Global, FnAccess::Public,
+                             Some(add_one_to_token::PARAM_NAMES), &[TypeId::of::<INT>()],
                              add_one_to_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct add_one_to_token();
+                pub struct add_one_to_token();
+                impl add_one_to_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: INT", "INT"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<INT>()] }
+                }
                 impl PluginFunction for add_one_to_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 1usize,
-                                            "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).cast::<INT>();
                         Ok(Dynamic::from(add_one_to(arg0)))
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(add_one_to_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: INT", "INT"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<INT>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn add_one_to_token_callable() -> CallableFunction {
-                    add_one_to_token().into()
-                }
-                #[inline(always)] pub fn add_one_to_token_param_names() -> Box<[&'static str]> {
-                    add_one_to_token().param_names()
-                }
-                #[inline(always)] pub fn add_one_to_token_input_types() -> Box<[TypeId]> {
-                    add_one_to_token().input_types()
                 }
             }
         };
@@ -436,42 +405,26 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("add_one_to", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "INT"]),
-                             &[core::any::TypeId::of::<INT>()],
+                    m.set_fn("add_one_to", FnNamespace::Internal, FnAccess::Public, Some(add_one_to_token::PARAM_NAMES),
+                             &[TypeId::of::<INT>()],
                              add_one_to_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct add_one_to_token();
+                pub struct add_one_to_token();
+                impl add_one_to_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: INT", "INT"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<INT>()] }
+                }
                 impl PluginFunction for add_one_to_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 1usize,
-                                            "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).cast::<INT>();
                         Ok(Dynamic::from(add_one_to(arg0)))
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(add_one_to_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: INT", "INT"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<INT>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn add_one_to_token_callable() -> CallableFunction {
-                    add_one_to_token().into()
-                }
-                #[inline(always)] pub fn add_one_to_token_param_names() -> Box<[&'static str]> {
-                    add_one_to_token().param_names()
-                }
-                #[inline(always)] pub fn add_one_to_token_input_types() -> Box<[TypeId]> {
-                    add_one_to_token().input_types()
                 }
             }
         };
@@ -517,54 +470,40 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("add_n", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "INT"]),
-                             &[core::any::TypeId::of::<INT>()],
+                    m.set_fn("add_n", FnNamespace::Internal, FnAccess::Public, Some(add_one_to_token::PARAM_NAMES),
+                             &[TypeId::of::<INT>()],
                              add_one_to_token().into());
-                    m.set_fn("add_n", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT", "INT"]),
-                             &[core::any::TypeId::of::<INT>(), core::any::TypeId::of::<INT>()],
+                    m.set_fn("add_n", FnNamespace::Internal, FnAccess::Public, Some(add_n_to_token::PARAM_NAMES),
+                             &[TypeId::of::<INT>(), TypeId::of::<INT>()],
                              add_n_to_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct add_one_to_token();
+                pub struct add_one_to_token();
+                impl add_one_to_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: INT", "INT"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<INT>()] }
+                }
                 impl PluginFunction for add_one_to_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 1usize,
-                                            "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).cast::<INT>();
                         Ok(Dynamic::from(add_one_to(arg0)))
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(add_one_to_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: INT", "INT"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<INT>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn add_one_to_token_callable() -> CallableFunction {
-                    add_one_to_token().into()
-                }
-                #[inline(always)] pub fn add_one_to_token_param_names() -> Box<[&'static str]> {
-                    add_one_to_token().param_names()
-                }
-                #[inline(always)] pub fn add_one_to_token_input_types() -> Box<[TypeId]> {
-                    add_one_to_token().input_types()
                 }
 
                 #[allow(non_camel_case_types)]
-                struct add_n_to_token();
+                pub struct add_n_to_token();
+                impl add_n_to_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: INT", "y: INT", "INT"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<INT>(), TypeId::of::<INT>()] }
+                }
                 impl PluginFunction for add_n_to_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 2usize,
-                                            "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg0 = mem::take(args[0usize]).cast::<INT>();
                         let arg1 = mem::take(args[1usize]).cast::<INT>();
                         Ok(Dynamic::from(add_n_to(arg0, arg1)))
@@ -572,25 +511,6 @@ mod generate_tests {
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(add_n_to_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: INT", "y: INT", "INT"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<INT>(),
-                                 TypeId::of::<INT>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn add_n_to_token_callable() -> CallableFunction {
-                    add_n_to_token().into()
-                }
-                #[inline(always)] pub fn add_n_to_token_param_names() -> Box<[&'static str]> {
-                    add_n_to_token().param_names()
-                }
-                #[inline(always)] pub fn add_n_to_token_input_types() -> Box<[TypeId]> {
-                    add_n_to_token().input_types()
                 }
             }
         };
@@ -625,18 +545,20 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("add_together", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT", "INT"]),
-                             &[core::any::TypeId::of::<INT>(), core::any::TypeId::of::<INT>()],
+                    m.set_fn("add_together", FnNamespace::Internal, FnAccess::Public, Some(add_together_token::PARAM_NAMES),
+                             &[TypeId::of::<INT>(), TypeId::of::<INT>()],
                              add_together_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct add_together_token();
+                pub struct add_together_token();
+                impl add_together_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: INT", "y: INT", "INT"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<INT>(), TypeId::of::<INT>()] }
+                }
                 impl PluginFunction for add_together_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 2usize,
-                                            "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg0 = mem::take(args[0usize]).cast::<INT>();
                         let arg1 = mem::take(args[1usize]).cast::<INT>();
                         Ok(Dynamic::from(add_together(arg0, arg1)))
@@ -644,25 +566,6 @@ mod generate_tests {
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(add_together_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: INT", "y: INT", "INT"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<INT>(),
-                             TypeId::of::<INT>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn add_together_token_callable() -> CallableFunction {
-                    add_together_token().into()
-                }
-                #[inline(always)] pub fn add_together_token_param_names() -> Box<[&'static str]> {
-                    add_together_token().param_names()
-                }
-                #[inline(always)] pub fn add_together_token_input_types() -> Box<[TypeId]> {
-                    add_together_token().input_types()
                 }
             }
         };
@@ -698,24 +601,26 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("add", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT", "INT"]),
-                             &[core::any::TypeId::of::<INT>(), core::any::TypeId::of::<INT>()],
+                    m.set_fn("add", FnNamespace::Internal, FnAccess::Public, Some(add_together_token::PARAM_NAMES),
+                             &[TypeId::of::<INT>(), TypeId::of::<INT>()],
                              add_together_token().into());
-                    m.set_fn("+", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT", "INT"]),
-                             &[core::any::TypeId::of::<INT>(), core::any::TypeId::of::<INT>()],
+                    m.set_fn("+", FnNamespace::Internal, FnAccess::Public, Some(add_together_token::PARAM_NAMES),
+                             &[TypeId::of::<INT>(), TypeId::of::<INT>()],
                              add_together_token().into());
-                    m.set_fn("add_together", FnNamespace::Internal, FnAccess::Public, Some(&["x: INT", "y: INT", "INT"]),
-                             &[core::any::TypeId::of::<INT>(), core::any::TypeId::of::<INT>()],
+                    m.set_fn("add_together", FnNamespace::Internal, FnAccess::Public, Some(add_together_token::PARAM_NAMES),
+                             &[TypeId::of::<INT>(), TypeId::of::<INT>()],
                              add_together_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct add_together_token();
+                pub struct add_together_token();
+                impl add_together_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: INT", "y: INT", "INT"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<INT>(), TypeId::of::<INT>()] }
+                }
                 impl PluginFunction for add_together_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 2usize,
-                                            "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg0 = mem::take(args[0usize]).cast::<INT>();
                         let arg1 = mem::take(args[1usize]).cast::<INT>();
                         Ok(Dynamic::from(add_together(arg0, arg1)))
@@ -723,25 +628,6 @@ mod generate_tests {
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(add_together_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: INT", "y: INT", "INT"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<INT>(),
-                             TypeId::of::<INT>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn add_together_token_callable() -> CallableFunction {
-                    add_together_token().into()
-                }
-                #[inline(always)] pub fn add_together_token_param_names() -> Box<[&'static str]> {
-                    add_together_token().param_names()
-                }
-                #[inline(always)] pub fn add_together_token_input_types() -> Box<[TypeId]> {
-                    add_together_token().input_types()
                 }
             }
         };
@@ -958,40 +844,25 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public, Some(&["INT"]), &[],
+                    m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
+                             Some(get_mystic_number_token::PARAM_NAMES), &[],
                              get_mystic_number_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct get_mystic_number_token();
+                pub struct get_mystic_number_token();
+                impl get_mystic_number_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["INT"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 0usize] { [] }
+                }
                 impl PluginFunction for get_mystic_number_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 0usize,
-                                            "wrong arg count: {} != {}", args.len(), 0usize);
                         Ok(Dynamic::from(get_mystic_number()))
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(get_mystic_number_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["INT"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn get_mystic_number_token_callable() -> CallableFunction {
-                    get_mystic_number_token().into()
-                }
-                #[inline(always)] pub fn get_mystic_number_token_param_names() -> Box<[&'static str]> {
-                    get_mystic_number_token().param_names()
-                }
-                #[inline(always)] pub fn get_mystic_number_token_input_types() -> Box<[TypeId]> {
-                    get_mystic_number_token().input_types()
                 }
             }
         };
@@ -1057,42 +928,26 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("print_out_to", FnNamespace::Internal, FnAccess::Public, Some(&["x: &str", "()"]),
-                             &[core::any::TypeId::of::<ImmutableString>()],
+                    m.set_fn("print_out_to", FnNamespace::Internal, FnAccess::Public, Some(print_out_to_token::PARAM_NAMES),
+                             &[TypeId::of::<ImmutableString>()],
                              print_out_to_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct print_out_to_token();
+                pub struct print_out_to_token();
+                impl print_out_to_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: &str", "()"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<ImmutableString>()] }
+                }
                 impl PluginFunction for print_out_to_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 1usize,
-                                            "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).take_immutable_string().unwrap();
                         Ok(Dynamic::from(print_out_to(&arg0)))
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(print_out_to_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: &str", "()"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<ImmutableString>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn print_out_to_token_callable() -> CallableFunction {
-                    print_out_to_token().into()
-                }
-                #[inline(always)] pub fn print_out_to_token_param_names() -> Box<[&'static str]> {
-                    print_out_to_token().param_names()
-                }
-                #[inline(always)] pub fn print_out_to_token_input_types() -> Box<[TypeId]> {
-                    print_out_to_token().input_types()
                 }
             }
         };
@@ -1127,42 +982,26 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("print_out_to", FnNamespace::Internal, FnAccess::Public, Some(&["x: String", "()"]),
-                             &[core::any::TypeId::of::<ImmutableString>()],
+                    m.set_fn("print_out_to", FnNamespace::Internal, FnAccess::Public, Some(print_out_to_token::PARAM_NAMES),
+                             &[TypeId::of::<ImmutableString>()],
                              print_out_to_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct print_out_to_token();
+                pub struct print_out_to_token();
+                impl print_out_to_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: String", "()"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<ImmutableString>()] }
+                }
                 impl PluginFunction for print_out_to_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 1usize,
-                                            "wrong arg count: {} != {}", args.len(), 1usize);
                         let arg0 = mem::take(args[0usize]).take_string().unwrap();
                         Ok(Dynamic::from(print_out_to(arg0)))
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(print_out_to_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: String", "()"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<ImmutableString>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn print_out_to_token_callable() -> CallableFunction {
-                    print_out_to_token().into()
-                }
-                #[inline(always)] pub fn print_out_to_token_param_names() -> Box<[&'static str]> {
-                    print_out_to_token().param_names()
-                }
-                #[inline(always)] pub fn print_out_to_token_input_types() -> Box<[TypeId]> {
-                    print_out_to_token().input_types()
                 }
             }
         };
@@ -1198,18 +1037,20 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("foo", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut FLOAT", "y: INT", "FLOAT"]),
-                             &[core::any::TypeId::of::<FLOAT>(), core::any::TypeId::of::<INT>()],
+                    m.set_fn("foo", FnNamespace::Internal, FnAccess::Public, Some(foo_token::PARAM_NAMES),
+                             &[TypeId::of::<FLOAT>(), TypeId::of::<INT>()],
                              foo_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct foo_token();
+                pub struct foo_token();
+                impl foo_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut FLOAT", "y: INT", "FLOAT"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<FLOAT>(), TypeId::of::<INT>()] }
+                }
                 impl PluginFunction for foo_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 2usize,
-                                            "wrong arg count: {} != {}", args.len(), 2usize);
                         let arg1 = mem::take(args[1usize]).cast::<INT>();
                         let arg0 = &mut args[0usize].write_lock::<FLOAT>().unwrap();
                         Ok(Dynamic::from(foo(arg0, arg1)))
@@ -1217,24 +1058,6 @@ mod generate_tests {
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(foo_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: &mut FLOAT", "y: INT", "FLOAT"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<FLOAT>(), TypeId::of::<INT>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn foo_token_callable() -> CallableFunction {
-                    foo_token().into()
-                }
-                #[inline(always)] pub fn foo_token_param_names() -> Box<[&'static str]> {
-                    foo_token().param_names()
-                }
-                #[inline(always)] pub fn foo_token_input_types() -> Box<[TypeId]> {
-                    foo_token().input_types()
                 }
             }
         };
@@ -1269,18 +1092,20 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut FLOAT", "()"]),
-                             &[core::any::TypeId::of::<FLOAT>()],
+                    m.set_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(increment_token::PARAM_NAMES),
+                             &[TypeId::of::<FLOAT>()],
                              increment_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct increment_token();
+                pub struct increment_token();
+                impl increment_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut FLOAT", "()"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<FLOAT>()] }
+                }
                 impl PluginFunction for increment_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 1usize,
-                                            "wrong arg count: {} != {}", args.len(), 1usize);
                         if args[0usize].is_read_only() {
                             return Err(Box::new(
                                 EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
@@ -1292,24 +1117,6 @@ mod generate_tests {
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(increment_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: &mut FLOAT", "()"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<FLOAT>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn increment_token_callable() -> CallableFunction {
-                    increment_token().into()
-                }
-                #[inline(always)] pub fn increment_token_param_names() -> Box<[&'static str]> {
-                    increment_token().param_names()
-                }
-                #[inline(always)] pub fn increment_token_input_types() -> Box<[TypeId]> {
-                    increment_token().input_types()
                 }
             }
         };
@@ -1347,18 +1154,20 @@ mod generate_tests {
                     }
                     #[allow(unused_mut)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                        m.set_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut FLOAT", "()"]),
-                                 &[core::any::TypeId::of::<FLOAT>()],
+                        m.set_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(increment_token::PARAM_NAMES),
+                                 &[TypeId::of::<FLOAT>()],
                                  increment_token().into());
                         if flatten {} else {}
                     }
                     #[allow(non_camel_case_types)]
-                    struct increment_token();
+                    pub struct increment_token();
+                    impl increment_token {
+                        pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut FLOAT", "()"];
+                        #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<FLOAT>()] }
+                    }
                     impl PluginFunction for increment_token {
                         #[inline(always)]
                         fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                            debug_assert_eq!(args.len(), 1usize,
-                                                "wrong arg count: {} != {}", args.len(), 1usize);
                             if args[0usize].is_read_only() {
                                 return Err(Box::new(
                                     EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
@@ -1370,24 +1179,6 @@ mod generate_tests {
 
                         #[inline(always)] fn is_method_call(&self) -> bool { true }
                         #[inline(always)] fn is_variadic(&self) -> bool { false }
-                        #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                            Box::new(increment_token())
-                        }
-                        #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                            new_vec!["x: &mut FLOAT", "()"].into_boxed_slice()
-                        }
-                        #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                            new_vec![TypeId::of::<FLOAT>()].into_boxed_slice()
-                        }
-                    }
-                    #[inline(always)] pub fn increment_token_callable() -> CallableFunction {
-                        increment_token().into()
-                    }
-                    #[inline(always)] pub fn increment_token_param_names() -> Box<[&'static str]> {
-                        increment_token().param_names()
-                    }
-                    #[inline(always)] pub fn increment_token_input_types() -> Box<[TypeId]> {
-                        increment_token().input_types()
                     }
                 }
                 #[allow(unused_imports)]
@@ -1446,18 +1237,20 @@ mod generate_tests {
                     }
                     #[allow(unused_mut)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                        m.set_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut FLOAT", "()"]),
-                                 &[core::any::TypeId::of::<FLOAT>()],
+                        m.set_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(increment_token::PARAM_NAMES),
+                                 &[TypeId::of::<FLOAT>()],
                                  increment_token().into());
                         if flatten {} else {}
                     }
                     #[allow(non_camel_case_types)]
-                    struct increment_token();
+                    pub struct increment_token();
+                    impl increment_token {
+                        pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut FLOAT", "()"];
+                        #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<FLOAT>()] }
+                    }
                     impl PluginFunction for increment_token {
                         #[inline(always)]
                         fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                            debug_assert_eq!(args.len(), 1usize,
-                                                "wrong arg count: {} != {}", args.len(), 1usize);
                             if args[0usize].is_read_only() {
                                 return Err(Box::new(
                                     EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
@@ -1469,24 +1262,6 @@ mod generate_tests {
 
                         #[inline(always)] fn is_method_call(&self) -> bool { true }
                         #[inline(always)] fn is_variadic(&self) -> bool { false }
-                        #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                            Box::new(increment_token())
-                        }
-                        #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                            new_vec!["x: &mut FLOAT", "()"].into_boxed_slice()
-                        }
-                        #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                            new_vec![TypeId::of::<FLOAT>()].into_boxed_slice()
-                        }
-                    }
-                    #[inline(always)] pub fn increment_token_callable() -> CallableFunction {
-                        increment_token().into()
-                    }
-                    #[inline(always)] pub fn increment_token_param_names() -> Box<[&'static str]> {
-                        increment_token().param_names()
-                    }
-                    #[inline(always)] pub fn increment_token_input_types() -> Box<[TypeId]> {
-                        increment_token().input_types()
                     }
                 }
                 #[allow(unused_imports)]
@@ -1544,18 +1319,20 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("get$square", FnNamespace::Global, FnAccess::Public, Some(&["x: &mut u64", "u64"]),
-                             &[core::any::TypeId::of::<u64>()],
+                    m.set_fn("get$square", FnNamespace::Global, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
+                             &[TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct int_foo_token();
+                pub struct int_foo_token();
+                impl int_foo_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut u64", "u64"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<u64>()] }
+                }
                 impl PluginFunction for int_foo_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 1usize,
-                                            "wrong arg count: {} != {}", args.len(), 1usize);
                         if args[0usize].is_read_only() {
                             return Err(Box::new(
                                 EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
@@ -1567,24 +1344,6 @@ mod generate_tests {
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(int_foo_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: &mut u64", "u64"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<u64>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn int_foo_token_callable() -> CallableFunction {
-                    int_foo_token().into()
-                }
-                #[inline(always)] pub fn int_foo_token_param_names() -> Box<[&'static str]> {
-                    int_foo_token().param_names()
-                }
-                #[inline(always)] pub fn int_foo_token_input_types() -> Box<[TypeId]> {
-                    int_foo_token().input_types()
                 }
             }
         };
@@ -1620,21 +1379,23 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("square", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "u64"]),
-                             &[core::any::TypeId::of::<u64>()],
+                    m.set_fn("square", FnNamespace::Internal, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
+                             &[TypeId::of::<u64>()],
                              int_foo_token().into());
-                    m.set_fn("get$square", FnNamespace::Global, FnAccess::Public, Some(&["x: &mut u64", "u64"]),
-                             &[core::any::TypeId::of::<u64>()],
+                    m.set_fn("get$square", FnNamespace::Global, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
+                             &[TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct int_foo_token();
+                pub struct int_foo_token();
+                impl int_foo_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut u64", "u64"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 1usize] { [TypeId::of::<u64>()] }
+                }
                 impl PluginFunction for int_foo_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 1usize,
-                                            "wrong arg count: {} != {}", args.len(), 1usize);
                         if args[0usize].is_read_only() {
                             return Err(Box::new(
                                 EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
@@ -1646,24 +1407,6 @@ mod generate_tests {
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(int_foo_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: &mut u64", "u64"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<u64>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn int_foo_token_callable() -> CallableFunction {
-                    int_foo_token().into()
-                }
-                #[inline(always)] pub fn int_foo_token_param_names() -> Box<[&'static str]> {
-                    int_foo_token().param_names()
-                }
-                #[inline(always)] pub fn int_foo_token_input_types() -> Box<[TypeId]> {
-                    int_foo_token().input_types()
                 }
             }
         };
@@ -1699,18 +1442,20 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("set$squared", FnNamespace::Global, FnAccess::Public, Some(&["x: &mut u64", "y: u64", "()"]),
-                             &[core::any::TypeId::of::<u64>(), core::any::TypeId::of::<u64>()],
+                    m.set_fn("set$squared", FnNamespace::Global, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
+                             &[TypeId::of::<u64>(), TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct int_foo_token();
+                pub struct int_foo_token();
+                impl int_foo_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut u64", "y: u64", "()"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<u64>(), TypeId::of::<u64>()] }
+                }
                 impl PluginFunction for int_foo_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 2usize,
-                                            "wrong arg count: {} != {}", args.len(), 2usize);
                         if args[0usize].is_read_only() {
                             return Err(Box::new(
                                 EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
@@ -1723,24 +1468,6 @@ mod generate_tests {
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(int_foo_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: &mut u64", "y: u64", "()"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<u64>(), TypeId::of::<u64>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn int_foo_token_callable() -> CallableFunction {
-                    int_foo_token().into()
-                }
-                #[inline(always)] pub fn int_foo_token_param_names() -> Box<[&'static str]> {
-                    int_foo_token().param_names()
-                }
-                #[inline(always)] pub fn int_foo_token_input_types() -> Box<[TypeId]> {
-                    int_foo_token().input_types()
                 }
             }
         };
@@ -1776,21 +1503,23 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("set_sq", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut u64", "y: u64", "()"]),
-                             &[core::any::TypeId::of::<u64>(), core::any::TypeId::of::<u64>()],
+                    m.set_fn("set_sq", FnNamespace::Internal, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
+                             &[TypeId::of::<u64>(), TypeId::of::<u64>()],
                              int_foo_token().into());
-                    m.set_fn("set$squared", FnNamespace::Global, FnAccess::Public, Some(&["x: &mut u64", "y: u64", "()"]),
-                             &[core::any::TypeId::of::<u64>(), core::any::TypeId::of::<u64>()],
+                    m.set_fn("set$squared", FnNamespace::Global, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
+                             &[TypeId::of::<u64>(), TypeId::of::<u64>()],
                              int_foo_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct int_foo_token();
+                pub struct int_foo_token();
+                impl int_foo_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut u64", "y: u64", "()"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<u64>(), TypeId::of::<u64>()] }
+                }
                 impl PluginFunction for int_foo_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 2usize,
-                                            "wrong arg count: {} != {}", args.len(), 2usize);
                         if args[0usize].is_read_only() {
                             return Err(Box::new(
                                 EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
@@ -1803,24 +1532,6 @@ mod generate_tests {
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(int_foo_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: &mut u64", "y: u64", "()"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<u64>(), TypeId::of::<u64>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn int_foo_token_callable() -> CallableFunction {
-                    int_foo_token().into()
-                }
-                #[inline(always)] pub fn int_foo_token_param_names() -> Box<[&'static str]> {
-                    int_foo_token().param_names()
-                }
-                #[inline(always)] pub fn int_foo_token_input_types() -> Box<[TypeId]> {
-                    int_foo_token().input_types()
                 }
             }
         };
@@ -1856,18 +1567,20 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("index$get$", FnNamespace::Global, FnAccess::Public, Some(&["x: &mut MyCollection", "i: u64", "FLOAT"]),
-                             &[core::any::TypeId::of::<MyCollection>(), core::any::TypeId::of::<u64>()],
+                    m.set_fn("index$get$", FnNamespace::Global, FnAccess::Public, Some(get_by_index_token::PARAM_NAMES),
+                             &[TypeId::of::<MyCollection>(), TypeId::of::<u64>()],
                              get_by_index_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct get_by_index_token();
+                pub struct get_by_index_token();
+                impl get_by_index_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut MyCollection", "i: u64", "FLOAT"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<MyCollection>(), TypeId::of::<u64>()] }
+                }
                 impl PluginFunction for get_by_index_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 2usize,
-                                            "wrong arg count: {} != {}", args.len(), 2usize);
                         if args[0usize].is_read_only() {
                             return Err(Box::new(
                                 EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
@@ -1880,25 +1593,6 @@ mod generate_tests {
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(get_by_index_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: &mut MyCollection", "i: u64", "FLOAT"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<MyCollection>(),
-                                 TypeId::of::<u64>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn get_by_index_token_callable() -> CallableFunction {
-                    get_by_index_token().into()
-                }
-                #[inline(always)] pub fn get_by_index_token_param_names() -> Box<[&'static str]> {
-                    get_by_index_token().param_names()
-                }
-                #[inline(always)] pub fn get_by_index_token_input_types() -> Box<[TypeId]> {
-                    get_by_index_token().input_types()
                 }
             }
         };
@@ -1934,21 +1628,23 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("get", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut MyCollection", "i: u64", "FLOAT"]),
-                             &[core::any::TypeId::of::<MyCollection>(), core::any::TypeId::of::<u64>()],
+                    m.set_fn("get", FnNamespace::Internal, FnAccess::Public, Some(get_by_index_token::PARAM_NAMES),
+                             &[TypeId::of::<MyCollection>(), TypeId::of::<u64>()],
                              get_by_index_token().into());
-                    m.set_fn("index$get$", FnNamespace::Global, FnAccess::Public, Some(&["x: &mut MyCollection", "i: u64", "FLOAT"]),
-                             &[core::any::TypeId::of::<MyCollection>(), core::any::TypeId::of::<u64>()],
+                    m.set_fn("index$get$", FnNamespace::Global, FnAccess::Public, Some(get_by_index_token::PARAM_NAMES),
+                             &[TypeId::of::<MyCollection>(), TypeId::of::<u64>()],
                              get_by_index_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct get_by_index_token();
+                pub struct get_by_index_token();
+                impl get_by_index_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut MyCollection", "i: u64", "FLOAT"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<MyCollection>(), TypeId::of::<u64>()] }
+                }
                 impl PluginFunction for get_by_index_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 2usize,
-                                            "wrong arg count: {} != {}", args.len(), 2usize);
                         if args[0usize].is_read_only() {
                             return Err(Box::new(
                                 EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
@@ -1961,25 +1657,6 @@ mod generate_tests {
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(get_by_index_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: &mut MyCollection", "i: u64", "FLOAT"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<MyCollection>(),
-                                 TypeId::of::<u64>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn get_by_index_token_callable() -> CallableFunction {
-                    get_by_index_token().into()
-                }
-                #[inline(always)] pub fn get_by_index_token_param_names() -> Box<[&'static str]> {
-                    get_by_index_token().param_names()
-                }
-                #[inline(always)] pub fn get_by_index_token_input_types() -> Box<[TypeId]> {
-                    get_by_index_token().input_types()
                 }
             }
         };
@@ -2015,18 +1692,20 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("index$set$", FnNamespace::Global, FnAccess::Public, Some(&["x: &mut MyCollection", "i: u64", "item: FLOAT", "()"]),
-                             &[core::any::TypeId::of::<MyCollection>(), core::any::TypeId::of::<u64>(), core::any::TypeId::of::<FLOAT>()],
+                    m.set_fn("index$set$", FnNamespace::Global, FnAccess::Public, Some(set_by_index_token::PARAM_NAMES),
+                             &[TypeId::of::<MyCollection>(), TypeId::of::<u64>(), TypeId::of::<FLOAT>()],
                              set_by_index_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct set_by_index_token();
+                pub struct set_by_index_token();
+                impl set_by_index_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut MyCollection", "i: u64", "item: FLOAT", "()"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 3usize] { [TypeId::of::<MyCollection>(), TypeId::of::<u64>(), TypeId::of::<FLOAT>()] }
+                }
                 impl PluginFunction for set_by_index_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 3usize,
-                                            "wrong arg count: {} != {}", args.len(), 3usize);
                         if args[0usize].is_read_only() {
                             return Err(Box::new(
                                 EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
@@ -2040,26 +1719,6 @@ mod generate_tests {
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(set_by_index_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: &mut MyCollection", "i: u64", "item: FLOAT", "()"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<MyCollection>(),
-                                 TypeId::of::<u64>(),
-                                 TypeId::of::<FLOAT>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn set_by_index_token_callable() -> CallableFunction {
-                    set_by_index_token().into()
-                }
-                #[inline(always)] pub fn set_by_index_token_param_names() -> Box<[&'static str]> {
-                    set_by_index_token().param_names()
-                }
-                #[inline(always)] pub fn set_by_index_token_input_types() -> Box<[TypeId]> {
-                    set_by_index_token().input_types()
                 }
             }
         };
@@ -2095,21 +1754,23 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_fn("set", FnNamespace::Internal, FnAccess::Public, Some(&["x: &mut MyCollection", "i: u64", "item: FLOAT", "()"]),
-                             &[core::any::TypeId::of::<MyCollection>(), core::any::TypeId::of::<u64>(), core::any::TypeId::of::<FLOAT>()],
+                    m.set_fn("set", FnNamespace::Internal, FnAccess::Public, Some(set_by_index_token::PARAM_NAMES),
+                             &[TypeId::of::<MyCollection>(), TypeId::of::<u64>(), TypeId::of::<FLOAT>()],
                              set_by_index_token().into());
-                    m.set_fn("index$set$", FnNamespace::Global, FnAccess::Public, Some(&["x: &mut MyCollection", "i: u64", "item: FLOAT", "()"]),
-                             &[core::any::TypeId::of::<MyCollection>(), core::any::TypeId::of::<u64>(), core::any::TypeId::of::<FLOAT>()],
+                    m.set_fn("index$set$", FnNamespace::Global, FnAccess::Public, Some(set_by_index_token::PARAM_NAMES),
+                             &[TypeId::of::<MyCollection>(), TypeId::of::<u64>(), TypeId::of::<FLOAT>()],
                              set_by_index_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
-                struct set_by_index_token();
+                pub struct set_by_index_token();
+                impl set_by_index_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut MyCollection", "i: u64", "item: FLOAT", "()"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 3usize] { [TypeId::of::<MyCollection>(), TypeId::of::<u64>(), TypeId::of::<FLOAT>()] }
+                }
                 impl PluginFunction for set_by_index_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        debug_assert_eq!(args.len(), 3usize,
-                                            "wrong arg count: {} != {}", args.len(), 3usize);
                         if args[0usize].is_read_only() {
                             return Err(Box::new(
                                 EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
@@ -2123,26 +1784,6 @@ mod generate_tests {
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
                     #[inline(always)] fn is_variadic(&self) -> bool { false }
-                    #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> {
-                        Box::new(set_by_index_token())
-                    }
-                    #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                        new_vec!["x: &mut MyCollection", "i: u64", "item: FLOAT", "()"].into_boxed_slice()
-                    }
-                    #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                        new_vec![TypeId::of::<MyCollection>(),
-                                 TypeId::of::<u64>(),
-                                 TypeId::of::<FLOAT>()].into_boxed_slice()
-                    }
-                }
-                #[inline(always)] pub fn set_by_index_token_callable() -> CallableFunction {
-                    set_by_index_token().into()
-                }
-                #[inline(always)] pub fn set_by_index_token_param_names() -> Box<[&'static str]> {
-                    set_by_index_token().param_names()
-                }
-                #[inline(always)] pub fn set_by_index_token_input_types() -> Box<[TypeId]> {
-                    set_by_index_token().input_types()
                 }
             }
         };

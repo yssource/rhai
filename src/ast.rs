@@ -6,7 +6,7 @@ use crate::module::NamespaceRef;
 use crate::stdlib::{
     borrow::Cow,
     boxed::Box,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fmt,
     hash::Hash,
     num::NonZeroUsize,
@@ -25,9 +25,6 @@ use crate::{stdlib::str::FromStr, FLOAT};
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
 
 /// A type representing the access mode of a function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -61,7 +58,7 @@ pub struct ScriptFnDef {
     pub params: StaticVec<ImmutableString>,
     /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
-    pub externals: StaticVec<ImmutableString>,
+    pub externals: BTreeSet<ImmutableString>,
     /// Function doc-comments (if any).
     pub comments: StaticVec<String>,
 }
@@ -87,6 +84,7 @@ impl fmt::Display for ScriptFnDef {
 }
 
 /// A type containing the metadata of a script-defined function.
+/// Not available under `no_function`.
 ///
 /// Created by [`AST::iter_functions`].
 #[cfg(not(feature = "no_function"))]
@@ -263,6 +261,7 @@ impl AST {
     }
     /// _(INTERNALS)_ Get the internal shared [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
+    /// Not available under `no_function`.
     #[cfg(feature = "internals")]
     #[deprecated = "this method is volatile and may change"]
     #[cfg(not(feature = "no_module"))]
@@ -279,6 +278,7 @@ impl AST {
     }
     /// _(INTERNALS)_ Get the internal [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
+    /// Not available under `no_function`.
     #[cfg(feature = "internals")]
     #[deprecated = "this method is volatile and may change"]
     #[inline(always)]
@@ -314,10 +314,9 @@ impl AST {
     }
     /// Clone the [`AST`]'s functions into a new [`AST`].
     /// No statements are cloned.
+    /// Not available under `no_function`.
     ///
     /// This operation is cheap because functions are shared.
-    ///
-    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clone_functions_only(&self) -> Self {
@@ -325,10 +324,9 @@ impl AST {
     }
     /// Clone the [`AST`]'s functions into a new [`AST`] based on a filter predicate.
     /// No statements are cloned.
+    /// Not available under `no_function`.
     ///
     /// This operation is cheap because functions are shared.
-    ///
-    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clone_functions_only_filtered(
@@ -357,8 +355,8 @@ impl AST {
             resolver: self.resolver.clone(),
         }
     }
-    /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged, version
-    /// is returned.
+    /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged,
+    /// version is returned.
     ///
     /// Statements in the second [`AST`] are simply appended to the end of the first _without any processing_.
     /// Thus, the return value of the first [`AST`] (if using expression-statement syntax) is buried.
@@ -1288,7 +1286,7 @@ pub struct BinaryExpr {
 pub struct OpAssignment {
     pub hash_op_assign: u64,
     pub hash_op: u64,
-    pub op: Cow<'static, str>,
+    pub op: &'static str,
 }
 
 /// _(INTERNALS)_ An set of function call hashes.
@@ -1516,7 +1514,7 @@ impl FloatWrapper {
 #[derive(Debug, Clone, Hash)]
 pub enum Expr {
     /// Dynamic constant.
-    /// Used to hold either an [`Array`] or [`Map`] literal for quick cloning.
+    /// Used to hold either an [`Array`] or [`Map`][crate::Map] literal for quick cloning.
     /// All other primitive data types should use the appropriate variants for better speed.
     DynamicConstant(Box<Dynamic>, Position),
     /// Boolean constant.
@@ -1535,7 +1533,10 @@ pub enum Expr {
     /// [ expr, ... ]
     Array(Box<StaticVec<Expr>>, Position),
     /// #{ name:expr, ... }
-    Map(Box<StaticVec<(Ident, Expr)>>, Position),
+    Map(
+        Box<(StaticVec<(Ident, Expr)>, BTreeMap<ImmutableString, Dynamic>)>,
+        Position,
+    ),
     /// ()
     Unit(Position),
     /// Variable access - (optional index, optional (hash, modules), variable name)
@@ -1594,11 +1595,10 @@ impl Expr {
 
             #[cfg(not(feature = "no_object"))]
             Self::Map(x, _) if self.is_constant() => {
-                let mut map = Map::new();
-                map.extend(
-                    x.iter()
-                        .map(|(k, v)| (k.name.clone(), v.get_constant_value().unwrap())),
-                );
+                let mut map = x.1.clone();
+                x.0.iter().for_each(|(k, v)| {
+                    *map.get_mut(&k.name).unwrap() = v.get_constant_value().unwrap()
+                });
                 Dynamic(Union::Map(Box::new(map), AccessMode::ReadOnly))
             }
 
@@ -1677,7 +1677,7 @@ impl Expr {
         match self {
             Self::Array(x, _) => x.iter().all(Self::is_pure),
 
-            Self::Map(x, _) => x.iter().map(|(_, v)| v).all(Self::is_pure),
+            Self::Map(x, _) => x.0.iter().map(|(_, v)| v).all(Self::is_pure),
 
             Self::Index(x, _) | Self::And(x, _) | Self::Or(x, _) => {
                 x.lhs.is_pure() && x.rhs.is_pure()
@@ -1717,7 +1717,7 @@ impl Expr {
             Self::Array(x, _) => x.iter().all(Self::is_constant),
 
             // An map literal is constant if all items are constant
-            Self::Map(x, _) => x.iter().map(|(_, expr)| expr).all(Self::is_constant),
+            Self::Map(x, _) => x.0.iter().map(|(_, expr)| expr).all(Self::is_constant),
 
             _ => false,
         }
@@ -1804,7 +1804,7 @@ impl Expr {
                 }
             }
             Self::Map(x, _) => {
-                for (_, e) in x.as_ref() {
+                for (_, e) in &x.0 {
                     if !e.walk(path, on_node) {
                         return false;
                     }
@@ -1856,7 +1856,7 @@ mod tests {
         assert_eq!(size_of::<Option<ast::Expr>>(), 16);
         assert_eq!(size_of::<ast::Stmt>(), 40);
         assert_eq!(size_of::<Option<ast::Stmt>>(), 40);
-        assert_eq!(size_of::<FnPtr>(), 32);
+        assert_eq!(size_of::<FnPtr>(), 80);
         assert_eq!(size_of::<Scope>(), 288);
         assert_eq!(size_of::<LexError>(), 56);
         assert_eq!(size_of::<ParseError>(), 16);

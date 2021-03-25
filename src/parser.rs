@@ -10,7 +10,6 @@ use crate::module::NamespaceRef;
 use crate::optimize::optimize_into_ast;
 use crate::optimize::OptimizationLevel;
 use crate::stdlib::{
-    borrow::Cow,
     boxed::Box,
     collections::BTreeMap,
     format,
@@ -23,7 +22,7 @@ use crate::stdlib::{
 };
 use crate::syntax::{CustomSyntax, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
-use crate::utils::get_hasher;
+use crate::utils::{get_hasher, StringInterner};
 use crate::{
     calc_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType, Position,
     Scope, Shared, StaticVec, AST,
@@ -45,7 +44,7 @@ struct ParseState<'e> {
     /// Reference to the scripting [`Engine`].
     engine: &'e Engine,
     /// Interned strings.
-    interned_strings: BTreeMap<String, ImmutableString>,
+    interned_strings: StringInterner,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(ImmutableString, AccessMode)>,
     /// Size of the local variables stack upon entry of the current block scope.
@@ -161,24 +160,17 @@ impl<'e> ParseState<'e> {
             .iter()
             .rev()
             .enumerate()
-            .find(|(_, n)| **n == name)
+            .find(|&(_, n)| *n == name)
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
     }
 
     /// Get an interned string, creating one if it is not yet interned.
+    #[inline(always)]
     pub fn get_interned_string(
         &mut self,
         text: impl AsRef<str> + Into<ImmutableString>,
     ) -> ImmutableString {
-        #[allow(clippy::map_entry)]
-        if !self.interned_strings.contains_key(text.as_ref()) {
-            let value = text.into();
-            self.interned_strings
-                .insert(value.clone().into(), value.clone());
-            value
-        } else {
-            self.interned_strings.get(text.as_ref()).unwrap().clone()
-        }
+        self.interned_strings.get(text)
     }
 }
 
@@ -690,6 +682,7 @@ fn parse_map_literal(
     settings.pos = eat_token(input, Token::MapStart);
 
     let mut map: StaticVec<(Ident, Expr)> = Default::default();
+    let mut template: BTreeMap<ImmutableString, Dynamic> = Default::default();
 
     loop {
         const MISSING_RBRACE: &str = "to end this object map literal";
@@ -760,6 +753,7 @@ fn parse_map_literal(
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
         let name = state.get_interned_string(name);
+        template.insert(name.clone(), Default::default());
         map.push((Ident { name, pos }, expr));
 
         match input.peek().unwrap() {
@@ -784,7 +778,7 @@ fn parse_map_literal(
         }
     }
 
-    Ok(Expr::Map(Box::new(map), settings.pos))
+    Ok(Expr::Map(Box::new((map, template)), settings.pos))
 }
 
 /// Parse a switch expression.
@@ -1353,7 +1347,7 @@ fn parse_unary(
 
 /// Make an assignment statement.
 fn make_assignment_stmt<'a>(
-    op: Cow<'static, str>,
+    op: &'static str,
     state: &mut ParseState,
     lhs: Expr,
     rhs: Expr,
@@ -1477,7 +1471,7 @@ fn parse_op_assignment_stmt(
         | Token::PowerOfAssign
         | Token::AndAssign
         | Token::OrAssign
-        | Token::XOrAssign => token.syntax(),
+        | Token::XOrAssign => token.keyword_syntax(),
 
         _ => return Ok(Stmt::Expr(lhs)),
     };

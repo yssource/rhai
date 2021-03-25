@@ -9,12 +9,11 @@ use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
     format,
-    string::{String, ToString},
-    vec::Vec,
+    string::String,
 };
 use crate::{
-    scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Module, NativeCallContext,
-    ParseError, Position, RhaiResult, Shared, StaticVec, AST,
+    scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, ImmutableString, Module,
+    NativeCallContext, ParseError, Position, RhaiResult, Shared, AST,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -52,26 +51,36 @@ impl Engine {
     /// # }
     /// ```
     #[inline]
-    pub fn register_fn<A, F>(&mut self, name: &str, func: F) -> &mut Self
+    pub fn register_fn<N, A, F>(&mut self, name: N, func: F) -> &mut Self
     where
+        N: AsRef<str> + Into<ImmutableString>,
         F: RegisterNativeFunction<A, ()>,
     {
         let param_types = F::param_types();
-        let mut param_type_names: StaticVec<_> = F::param_names()
+
+        #[cfg(feature = "metadata")]
+        let mut param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
             .map(|ty| format!("_: {}", self.map_type_name(ty)))
             .collect();
+
+        #[cfg(feature = "metadata")]
         if F::return_type() != TypeId::of::<()>() {
-            param_type_names.push(self.map_type_name(F::return_type_name()).to_string());
+            param_type_names.push(self.map_type_name(F::return_type_name()).into());
         }
-        let param_type_names: StaticVec<_> =
-            param_type_names.iter().map(|ty| ty.as_str()).collect();
+
+        #[cfg(feature = "metadata")]
+        let param_type_names: Option<crate::StaticVec<_>> =
+            Some(param_type_names.iter().map(|ty| ty.as_str()).collect());
+
+        #[cfg(not(feature = "metadata"))]
+        let param_type_names: Option<[&str; 0]> = None;
 
         self.global_namespace.set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
-            Some(&param_type_names),
+            param_type_names.as_ref().map(|v| v.as_ref()),
             &param_types,
             func.into_callable_function(),
         );
@@ -102,24 +111,34 @@ impl Engine {
     ///       .expect_err("expecting division by zero error!");
     /// ```
     #[inline]
-    pub fn register_result_fn<A, F, R>(&mut self, name: &str, func: F) -> &mut Self
+    pub fn register_result_fn<N, A, F, R>(&mut self, name: N, func: F) -> &mut Self
     where
+        N: AsRef<str> + Into<ImmutableString>,
         F: RegisterNativeFunction<A, Result<R, Box<EvalAltResult>>>,
     {
         let param_types = F::param_types();
-        let mut param_type_names: StaticVec<_> = F::param_names()
+
+        #[cfg(feature = "metadata")]
+        let param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
             .map(|ty| format!("_: {}", self.map_type_name(ty)))
+            .chain(crate::stdlib::iter::once(
+                self.map_type_name(F::return_type_name()).into(),
+            ))
             .collect();
-        param_type_names.push(self.map_type_name(F::return_type_name()).to_string());
-        let param_type_names: StaticVec<&str> =
-            param_type_names.iter().map(|ty| ty.as_str()).collect();
+
+        #[cfg(feature = "metadata")]
+        let param_type_names: Option<crate::StaticVec<_>> =
+            Some(param_type_names.iter().map(|ty| ty.as_str()).collect());
+
+        #[cfg(not(feature = "metadata"))]
+        let param_type_names: Option<[&str; 0]> = None;
 
         self.global_namespace.set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
-            Some(&param_type_names),
+            param_type_names.as_ref().map(|v| v.as_ref()),
             &param_types,
             func.into_callable_function(),
         );
@@ -142,14 +161,18 @@ impl Engine {
     /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
     #[deprecated = "this function is volatile and may change"]
     #[inline(always)]
-    pub fn register_raw_fn<T: Variant + Clone>(
+    pub fn register_raw_fn<N, T>(
         &mut self,
-        name: &str,
+        name: N,
         arg_types: &[TypeId],
         func: impl Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
             + SendSync
             + 'static,
-    ) -> &mut Self {
+    ) -> &mut Self
+    where
+        N: AsRef<str> + Into<ImmutableString>,
+        T: Variant + Clone,
+    {
         self.global_namespace.set_raw_fn(
             name,
             FnNamespace::Global,
@@ -878,25 +901,29 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_module"))]
-    pub fn register_static_module(&mut self, name: &str, module: Shared<Module>) -> &mut Self {
+    pub fn register_static_module(
+        &mut self,
+        name: impl AsRef<str> + Into<ImmutableString>,
+        module: Shared<Module>,
+    ) -> &mut Self {
         fn register_static_module_raw(
             root: &mut crate::stdlib::collections::BTreeMap<crate::ImmutableString, Shared<Module>>,
-            name: &str,
+            name: impl AsRef<str> + Into<ImmutableString>,
             module: Shared<Module>,
         ) {
             let separator = crate::token::Token::DoubleColon.syntax();
 
-            if !name.contains(separator.as_ref()) {
+            if !name.as_ref().contains(separator.as_ref()) {
                 if !module.is_indexed() {
                     // Index the module (making a clone copy if necessary) if it is not indexed
                     let mut module = crate::fn_native::shared_take_or_clone(module);
                     module.build_index();
-                    root.insert(name.trim().into(), module.into());
+                    root.insert(name.into(), module.into());
                 } else {
-                    root.insert(name.trim().into(), module);
+                    root.insert(name.into(), module);
                 }
             } else {
-                let mut iter = name.splitn(2, separator.as_ref());
+                let mut iter = name.as_ref().splitn(2, separator.as_ref());
                 let sub_module = iter.next().unwrap().trim();
                 let remainder = iter.next().unwrap().trim();
 
@@ -915,7 +942,7 @@ impl Engine {
             }
         }
 
-        register_static_module_raw(&mut self.global_sub_modules, name.as_ref(), module);
+        register_static_module_raw(&mut self.global_sub_modules, name, module);
         self
     }
 
@@ -927,7 +954,11 @@ impl Engine {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[deprecated = "use `register_static_module` instead"]
-    pub fn register_module(&mut self, name: &str, module: impl Into<Shared<Module>>) -> &mut Self {
+    pub fn register_module(
+        &mut self,
+        name: impl AsRef<str> + Into<ImmutableString>,
+        module: impl Into<Shared<Module>>,
+    ) -> &mut Self {
         self.register_static_module(name, module.into())
     }
     /// Compile a string into an [`AST`], which can be used later for evaluation.
@@ -1013,7 +1044,6 @@ impl Engine {
             fn_native::shared_take_or_clone,
             module::resolvers::StaticModuleResolver,
             stdlib::collections::BTreeSet,
-            ImmutableString,
         };
 
         fn collect_imports(
@@ -1232,7 +1262,7 @@ impl Engine {
         Self::read_file(path).and_then(|contents| Ok(self.compile_with_scope(scope, &contents)?))
     }
     /// Parse a JSON string into an [object map][`Map`].
-    /// This is a light-weight alternative to using, say, [`serde_json`][https://crates.io/crates/serde_json] to deserialize the JSON.
+    /// This is a light-weight alternative to using, say, [`serde_json`] to deserialize the JSON.
     ///
     /// The JSON string must be an object hash.  It cannot be a simple scalar value.
     ///
@@ -1271,16 +1301,21 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    pub fn parse_json(&self, json: &str, has_null: bool) -> Result<Map, Box<EvalAltResult>> {
+    pub fn parse_json(
+        &self,
+        json: impl AsRef<str>,
+        has_null: bool,
+    ) -> Result<Map, Box<EvalAltResult>> {
         use crate::token::Token;
 
+        let json = json.as_ref();
         let mut scope = Default::default();
 
         // Trims the JSON string and add a '#' in front
         let json_text = json.trim_start();
-        let scripts = if json_text.starts_with(Token::MapStart.syntax().as_ref()) {
+        let scripts = if json_text.starts_with(Token::MapStart.keyword_syntax()) {
             [json_text, ""]
-        } else if json_text.starts_with(Token::LeftBrace.syntax().as_ref()) {
+        } else if json_text.starts_with(Token::LeftBrace.keyword_syntax()) {
             ["#", json_text]
         } else {
             return Err(crate::ParseErrorType::MissingToken(
@@ -1765,7 +1800,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         ast: &AST,
-        name: &str,
+        name: impl AsRef<str>,
         args: impl crate::fn_args::FuncArgs,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values: crate::StaticVec<_> = Default::default();
@@ -1844,7 +1879,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
         eval_ast: bool,
-        name: &str,
+        name: impl AsRef<str>,
         mut this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
@@ -1867,7 +1902,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
         eval_ast: bool,
-        name: &str,
+        name: impl AsRef<str>,
         this_ptr: &mut Option<&mut Dynamic>,
         args: &mut FnCallArgs,
     ) -> RhaiResult {
@@ -1881,12 +1916,14 @@ impl Engine {
 
         let fn_def = ast
             .lib()
-            .get_script_fn(name, args.len())
-            .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::NONE))?;
+            .get_script_fn(name.as_ref(), args.len())
+            .ok_or_else(|| {
+                EvalAltResult::ErrorFunctionNotFound(name.as_ref().into(), Position::NONE)
+            })?;
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
-        crate::fn_call::ensure_no_data_race(name, args, false)?;
+        crate::fn_call::ensure_no_data_race(name.as_ref(), args, false)?;
 
         self.call_script_fn(
             scope,
@@ -1936,13 +1973,15 @@ impl Engine {
         crate::optimize::optimize_into_ast(self, scope, stmt.into_vec(), lib, optimization_level)
     }
     /// Generate a list of all registered functions.
+    /// Available under the `metadata` feature only.
     ///
     /// Functions from the following sources are included, in order:
     /// 1) Functions registered into the global namespace
     /// 2) Functions in registered sub-modules
     /// 3) Functions in packages (optional)
-    pub fn gen_fn_signatures(&self, include_packages: bool) -> Vec<String> {
-        let mut signatures: Vec<_> = Default::default();
+    #[cfg(feature = "metadata")]
+    pub fn gen_fn_signatures(&self, include_packages: bool) -> crate::stdlib::vec::Vec<String> {
+        let mut signatures: crate::stdlib::vec::Vec<_> = Default::default();
 
         signatures.extend(self.global_namespace.gen_fn_signatures());
 

@@ -38,7 +38,7 @@ no_closure = []                 # no automatic sharing and capture of anonymous 
 no_module = []                  # no modules
 internals = []                  # expose internal data structures
 unicode-xid-ident = ["unicode-xid"] # allow Unicode Standard Annex #31 for identifiers.
-metadata = ["serde", "serde_json"]  # enables exporting functions metadata to JSON
+metadata = ["serde_json"]       # enable exporting functions metadata
 
 no_std = ["smallvec/union", "num-traits/libm", "core-error", "libm", "ahash/compile-time-rng"]
 
@@ -92,4 +92,4 @@ instant = { version = "0.1" } # WASM implementation of std::time::Instant
 instant = { version = "0.1" } # WASM implementation of std::time::Instant
 
 [package.metadata.docs.rs]
-features = ["metadata", "internals", "decimal"] # compiling for no-std
+features = ["metadata", "serde", "internals", "decimal"] # compiling for no-std

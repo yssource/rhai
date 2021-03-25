@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use quote::{quote, ToTokens};
+use quote::quote;
 
 use crate::attrs::ExportScope;
 use crate::function::{
@@ -81,16 +81,6 @@ pub fn generate_body(
         );
         let reg_names = function.exported_names();
 
-        let fn_input_names: Vec<String> = function
-            .arg_list()
-            .map(|fn_arg| match fn_arg {
-                syn::FnArg::Receiver(_) => panic!("internal error: receiver fn outside impl!?"),
-                syn::FnArg::Typed(syn::PatType { pat, ty, .. }) => {
-                    format!("{}: {}", pat.to_token_stream(), print_type(ty))
-                }
-            })
-            .collect();
-
         let fn_input_types: Vec<syn::Expr> = function
             .arg_list()
             .map(|fn_arg| match fn_arg {
@@ -128,16 +118,11 @@ pub fn generate_body(
                     };
 
                     syn::parse2::<syn::Expr>(quote! {
-                    core::any::TypeId::of::<#arg_type>()})
+                    TypeId::of::<#arg_type>()})
                     .unwrap()
                 }
             })
             .collect();
-
-        let return_type = function
-            .return_type()
-            .map(print_type)
-            .unwrap_or_else(|| "()".to_string());
 
         for fn_literal in reg_names {
             let mut namespace = FnNamespaceAccess::Internal;
@@ -172,7 +157,7 @@ pub fn generate_body(
             set_fn_statements.push(
                 syn::parse2::<syn::Stmt>(quote! {
                     m.set_fn(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
-                                Some(&[#(#fn_input_names,)* #return_type]), &[#(#fn_input_types),*],
+                                Some(#fn_token_name::PARAM_NAMES), &[#(#fn_input_types),*],
                                 #fn_token_name().into());
                 })
                 .unwrap(),
@@ -181,12 +166,9 @@ pub fn generate_body(
 
         gen_fn_tokens.push(quote! {
             #[allow(non_camel_case_types)]
-            struct #fn_token_name();
+            pub struct #fn_token_name();
         });
         gen_fn_tokens.push(function.generate_impl(&fn_token_name.to_string()));
-        gen_fn_tokens.push(function.generate_callable(&fn_token_name.to_string()));
-        gen_fn_tokens.push(function.generate_param_names(&fn_token_name.to_string()));
-        gen_fn_tokens.push(function.generate_input_types(&fn_token_name.to_string()));
     }
 
     let mut generate_fn_call = syn::parse2::<syn::ItemMod>(quote! {

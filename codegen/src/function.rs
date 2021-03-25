@@ -300,55 +300,50 @@ impl Parse for ExportedFn {
         let visibility = fn_all.vis;
 
         // Determine if the function requires a call context
-        if let Some(first_arg) = fn_all.sig.inputs.first() {
-            if let syn::FnArg::Typed(syn::PatType { ref ty, .. }) = first_arg {
+        match fn_all.sig.inputs.first() {
+            Some(syn::FnArg::Typed(syn::PatType { ref ty, .. })) => {
                 match flatten_type_groups(ty.as_ref()) {
                     syn::Type::Path(p)
                         if p.path == context_type_path1 || p.path == context_type_path2 =>
                     {
                         pass_context = true;
                     }
-                    _ => (),
+                    _ => {}
                 }
             }
+            _ => {}
         }
 
         let skip_slots = if pass_context { 1 } else { 0 };
 
         // Determine whether function generates a special calling convention for a mutable receiver.
-        let mut_receiver = {
-            if let Some(first_arg) = fn_all.sig.inputs.iter().skip(skip_slots).next() {
-                match first_arg {
-                    syn::FnArg::Receiver(syn::Receiver {
-                        reference: Some(_), ..
+        let mut_receiver = match fn_all.sig.inputs.iter().skip(skip_slots).next() {
+            Some(syn::FnArg::Receiver(syn::Receiver {
+                reference: Some(_), ..
+            })) => true,
+            Some(syn::FnArg::Typed(syn::PatType { ref ty, .. })) => {
+                match flatten_type_groups(ty.as_ref()) {
+                    syn::Type::Reference(syn::TypeReference {
+                        mutability: Some(_),
+                        ..
                     }) => true,
-                    syn::FnArg::Typed(syn::PatType { ref ty, .. }) => {
-                        match flatten_type_groups(ty.as_ref()) {
-                            syn::Type::Reference(syn::TypeReference {
-                                mutability: Some(_),
-                                ..
-                            }) => true,
-                            syn::Type::Reference(syn::TypeReference {
-                                mutability: None,
-                                ref elem,
-                                ..
-                            }) => match flatten_type_groups(elem.as_ref()) {
-                                syn::Type::Path(ref p) if p.path == str_type_path => false,
-                                _ => {
-                                    return Err(syn::Error::new(
-                                        ty.span(),
-                                        "references from Rhai in this position must be mutable",
-                                    ))
-                                }
-                            },
-                            _ => false,
+                    syn::Type::Reference(syn::TypeReference {
+                        mutability: None,
+                        ref elem,
+                        ..
+                    }) => match flatten_type_groups(elem.as_ref()) {
+                        syn::Type::Path(ref p) if p.path == str_type_path => false,
+                        _ => {
+                            return Err(syn::Error::new(
+                                ty.span(),
+                                "references from Rhai in this position must be mutable",
+                            ))
                         }
-                    }
+                    },
                     _ => false,
                 }
-            } else {
-                false
             }
+            _ => false,
         };
 
         // All arguments after the first must be moved except for &str.
@@ -381,22 +376,25 @@ impl Parse for ExportedFn {
         }
 
         // Check return type.
-        if let syn::ReturnType::Type(_, ref ret_type) = fn_all.sig.output {
-            match flatten_type_groups(ret_type.as_ref()) {
-                syn::Type::Ptr(_) => {
-                    return Err(syn::Error::new(
-                        fn_all.sig.output.span(),
-                        "Rhai functions cannot return pointers",
-                    ))
+        match fn_all.sig.output {
+            syn::ReturnType::Type(_, ref ret_type) => {
+                match flatten_type_groups(ret_type.as_ref()) {
+                    syn::Type::Ptr(_) => {
+                        return Err(syn::Error::new(
+                            fn_all.sig.output.span(),
+                            "Rhai functions cannot return pointers",
+                        ))
+                    }
+                    syn::Type::Reference(_) => {
+                        return Err(syn::Error::new(
+                            fn_all.sig.output.span(),
+                            "Rhai functions cannot return references",
+                        ))
+                    }
+                    _ => {}
                 }
-                syn::Type::Reference(_) => {
-                    return Err(syn::Error::new(
-                        fn_all.sig.output.span(),
-                        "Rhai functions cannot return references",
-                    ))
-                }
-                _ => {}
             }
+            _ => {}
         }
         Ok(ExportedFn {
             entire_span,
@@ -494,10 +492,9 @@ impl ExportedFn {
     }
 
     pub fn return_type(&self) -> Option<&syn::Type> {
-        if let syn::ReturnType::Type(_, ref ret_type) = self.signature.output {
-            Some(flatten_type_groups(ret_type))
-        } else {
-            None
+        match self.signature.output {
+            syn::ReturnType::Type(_, ref ret_type) => Some(flatten_type_groups(ret_type)),
+            _ => None,
         }
     }
 
@@ -590,20 +587,14 @@ impl ExportedFn {
         let name: syn::Ident =
             syn::Ident::new(&format!("rhai_fn_{}", self.name()), self.name().span());
         let impl_block = self.generate_impl("Token");
-        let callable_block = self.generate_callable("Token");
-        let param_names_block = self.generate_param_names("Token");
-        let input_types_block = self.generate_input_types("Token");
         let dyn_result_fn_block = self.generate_dynamic_fn();
         let vis = self.visibility;
         quote! {
             #[automatically_derived]
             #vis mod #name {
                 use super::*;
-                struct Token();
+                pub struct Token();
                 #impl_block
-                #callable_block
-                #param_names_block
-                #input_types_block
                 #dyn_result_fn_block
             }
         }
@@ -616,22 +607,18 @@ impl ExportedFn {
         dynamic_signature.ident =
             syn::Ident::new("dynamic_result_fn", proc_macro2::Span::call_site());
         dynamic_signature.output = syn::parse2::<syn::ReturnType>(quote! {
-            -> Result<Dynamic, Box<EvalAltResult>>
+            -> RhaiResult
         })
         .unwrap();
         let arguments: Vec<syn::Ident> = dynamic_signature
             .inputs
             .iter()
-            .filter_map(|fn_arg| {
-                if let syn::FnArg::Typed(syn::PatType { ref pat, .. }) = fn_arg {
-                    if let syn::Pat::Ident(ref ident) = pat.as_ref() {
-                        Some(ident.ident.clone())
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
+            .filter_map(|fn_arg| match fn_arg {
+                syn::FnArg::Typed(syn::PatType { ref pat, .. }) => match pat.as_ref() {
+                    syn::Pat::Ident(ref ident) => Some(ident.ident.clone()),
+                    _ => None,
+                },
+                _ => None,
             })
             .collect();
 
@@ -652,48 +639,6 @@ impl ExportedFn {
                 pub #dynamic_signature {
                     Ok(Dynamic::from(#name(#(#arguments),*)))
                 }
-            }
-        }
-    }
-
-    pub fn generate_callable(&self, on_type_name: &str) -> proc_macro2::TokenStream {
-        let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
-        let callable_fn_name: syn::Ident = syn::Ident::new(
-            &format!("{}_callable", on_type_name.to_lowercase()),
-            self.name().span(),
-        );
-        quote! {
-            #[inline(always)]
-            pub fn #callable_fn_name() -> CallableFunction {
-                #token_name().into()
-            }
-        }
-    }
-
-    pub fn generate_param_names(&self, on_type_name: &str) -> proc_macro2::TokenStream {
-        let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
-        let param_names_fn_name: syn::Ident = syn::Ident::new(
-            &format!("{}_param_names", on_type_name.to_lowercase()),
-            self.name().span(),
-        );
-        quote! {
-            #[inline(always)]
-            pub fn #param_names_fn_name() -> Box<[&'static str]> {
-                #token_name().param_names()
-            }
-        }
-    }
-
-    pub fn generate_input_types(&self, on_type_name: &str) -> proc_macro2::TokenStream {
-        let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
-        let input_types_fn_name: syn::Ident = syn::Ident::new(
-            &format!("{}_input_types", on_type_name.to_lowercase()),
-            self.name().span(),
-        );
-        quote! {
-            #[inline(always)]
-            pub fn #input_types_fn_name() -> Box<[TypeId]> {
-                #token_name().input_types()
             }
         }
     }
@@ -873,23 +818,19 @@ impl ExportedFn {
 
         let type_name = syn::Ident::new(on_type_name, proc_macro2::Span::call_site());
         quote! {
+            impl #type_name {
+                pub const PARAM_NAMES: &'static [&'static str] = &[#(#input_type_names,)* #return_type];
+                #[inline(always)] pub fn param_types() -> [TypeId; #arg_count] { [#(#input_type_exprs),*] }
+            }
             impl PluginFunction for #type_name {
                 #[inline(always)]
                 fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                    debug_assert_eq!(args.len(), #arg_count, "wrong arg count: {} != {}", args.len(), #arg_count);
                     #(#unpack_statements)*
                     #return_expr
                 }
 
                 #[inline(always)] fn is_method_call(&self) -> bool { #is_method_call }
                 #[inline(always)] fn is_variadic(&self) -> bool { false }
-                #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(#type_name()) }
-                #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                    new_vec![#(#input_type_names,)* #return_type].into_boxed_slice()
-                }
-                #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                    new_vec![#(#input_type_exprs),*].into_boxed_slice()
-                }
             }
         }
     }

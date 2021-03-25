@@ -12,10 +12,11 @@ use crate::stdlib::{
     iter::empty,
     num::NonZeroUsize,
     ops::{Add, AddAssign, Deref, DerefMut},
-    string::{String, ToString},
+    string::String,
     vec::Vec,
 };
 use crate::token::Token;
+use crate::utils::StringInterner;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, EvalAltResult, ImmutableString,
     NativeCallContext, Position, Shared, StaticVec,
@@ -54,27 +55,27 @@ pub struct FuncInfo {
     /// Function access mode.
     pub access: FnAccess,
     /// Function name.
-    pub name: String,
+    pub name: ImmutableString,
     /// Number of parameters.
     pub params: usize,
     /// Parameter types (if applicable).
     pub param_types: StaticVec<TypeId>,
     /// Parameter names (if available).
+    #[cfg(feature = "metadata")]
     pub param_names: StaticVec<ImmutableString>,
 }
 
 impl FuncInfo {
     /// Generate a signature of the function.
+    /// Available under the `metadata` feature only.
+    #[cfg(feature = "metadata")]
     pub fn gen_signature(&self) -> String {
         let mut sig = format!("{}(", self.name);
 
         if !self.param_names.is_empty() {
-            let mut params: Vec<_> = self
-                .param_names
-                .iter()
-                .map(ImmutableString::to_string)
-                .collect();
-            let return_type = params.pop().unwrap_or_else(|| "()".to_string());
+            let mut params: crate::stdlib::vec::Vec<String> =
+                self.param_names.iter().map(|s| s.as_str().into()).collect();
+            let return_type = params.pop().unwrap_or_else(|| "()".into());
             sig.push_str(&params.join(", "));
             if return_type != "()" {
                 sig.push_str(") -> ");
@@ -114,7 +115,7 @@ impl FuncInfo {
 #[inline(always)]
 fn calc_native_fn_hash<'a>(
     modules: impl Iterator<Item = &'a str>,
-    fn_name: &str,
+    fn_name: impl AsRef<str>,
     params: &[TypeId],
 ) -> u64 {
     let hash_script = calc_fn_hash(modules, fn_name, params.len());
@@ -147,6 +148,8 @@ pub struct Module {
     indexed: bool,
     /// Does the [`Module`] contain indexed functions that have been exposed to the global namespace?
     contains_indexed_global_functions: bool,
+    /// Interned strings
+    interned_strings: StringInterner,
 }
 
 impl Default for Module {
@@ -163,6 +166,7 @@ impl Default for Module {
             all_type_iterators: Default::default(),
             indexed: false,
             contains_indexed_global_functions: false,
+            interned_strings: Default::default(),
         }
     }
 }
@@ -172,11 +176,10 @@ impl fmt::Debug for Module {
         write!(
             f,
             "Module({}\n{}{}{})",
-            if let Some(ref id) = self.id {
-                format!("id: {:?},", id)
-            } else {
-                "".to_string()
-            },
+            self.id
+                .as_ref()
+                .map(|id| format!("id: {:?},", id))
+                .unwrap_or_default(),
             if !self.modules.is_empty() {
                 format!(
                     "    modules: {}\n",
@@ -187,7 +190,7 @@ impl fmt::Debug for Module {
                         .join(", ")
                 )
             } else {
-                "".to_string()
+                Default::default()
             },
             if !self.variables.is_empty() {
                 format!(
@@ -199,19 +202,19 @@ impl fmt::Debug for Module {
                         .join(", ")
                 )
             } else {
-                "".to_string()
+                Default::default()
             },
             if !self.functions.is_empty() {
                 format!(
                     "    functions: {}\n",
                     self.functions
                         .values()
-                        .map(|f| f.func.to_string())
+                        .map(|f| crate::stdlib::string::ToString::to_string(&f.func))
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
             } else {
-                "".to_string()
+                Default::default()
             }
         )
     }
@@ -360,6 +363,8 @@ impl Module {
     }
 
     /// Generate signatures for all the non-private functions in the [`Module`].
+    /// Available under the `metadata` feature only.
+    #[cfg(feature = "metadata")]
     #[inline(always)]
     pub fn gen_fn_signatures(&self) -> impl Iterator<Item = String> + '_ {
         self.functions
@@ -466,16 +471,17 @@ impl Module {
         // None + function name + number of arguments.
         let num_params = fn_def.params.len();
         let hash_script = crate::calc_fn_hash(empty(), &fn_def.name, num_params);
-        let mut param_names: StaticVec<_> = fn_def.params.iter().cloned().collect();
+        let mut param_names = fn_def.params.clone();
         param_names.push("Dynamic".into());
         self.functions.insert(
             hash_script,
             Box::new(FuncInfo {
-                name: fn_def.name.to_string(),
+                name: fn_def.name.clone(),
                 namespace: FnNamespace::Internal,
                 access: fn_def.access,
                 params: num_params,
                 param_types: Default::default(),
+                #[cfg(feature = "metadata")]
                 param_names,
                 func: fn_def.into(),
             }),
@@ -599,6 +605,7 @@ impl Module {
     }
 
     /// Update the metadata (parameter names/types and return type) of a registered function.
+    /// Available under the `metadata` feature only.
     ///
     /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
     ///
@@ -610,10 +617,16 @@ impl Module {
     ///
     /// The _last entry_ in the list should be the _return type_ of the function.
     /// In other words, the number of entries should be one larger than the number of parameters.
+    #[cfg(feature = "metadata")]
     #[inline(always)]
     pub fn update_fn_metadata(&mut self, hash_fn: u64, arg_names: &[&str]) -> &mut Self {
+        let param_names = arg_names
+            .iter()
+            .map(|&name| self.interned_strings.get(name))
+            .collect();
+
         if let Some(f) = self.functions.get_mut(&hash_fn) {
-            f.param_names = arg_names.iter().map(|&n| n.into()).collect();
+            f.param_names = param_names;
         }
         self
     }
@@ -625,9 +638,9 @@ impl Module {
     pub fn update_fn_namespace(&mut self, hash_fn: u64, namespace: FnNamespace) -> &mut Self {
         if let Some(f) = self.functions.get_mut(&hash_fn) {
             f.namespace = namespace;
+            self.indexed = false;
+            self.contains_indexed_global_functions = false;
         }
-        self.indexed = false;
-        self.contains_indexed_global_functions = false;
         self
     }
 
@@ -641,14 +654,13 @@ impl Module {
     #[inline]
     pub fn set_fn(
         &mut self,
-        name: impl Into<String>,
+        name: impl AsRef<str> + Into<ImmutableString>,
         namespace: FnNamespace,
         access: FnAccess,
-        arg_names: Option<&[&str]>,
+        _arg_names: Option<&[&str]>,
         arg_types: &[TypeId],
         func: CallableFunction,
     ) -> u64 {
-        let name = name.into();
         let is_method = func.is_method();
 
         let param_types = arg_types
@@ -675,6 +687,15 @@ impl Module {
 
         let hash_fn = calc_native_fn_hash(empty(), &name, &param_types);
 
+        let name = self.interned_strings.get(name);
+
+        #[cfg(feature = "metadata")]
+        let param_names = _arg_names
+            .iter()
+            .flat_map(|p| p.iter())
+            .map(|&arg| self.interned_strings.get(arg))
+            .collect();
+
         self.functions.insert(
             hash_fn,
             Box::new(FuncInfo {
@@ -683,11 +704,8 @@ impl Module {
                 access,
                 params: param_types.len(),
                 param_types,
-                param_names: if let Some(p) = arg_names {
-                    p.iter().map(|&v| v.into()).collect()
-                } else {
-                    Default::default()
-                },
+                #[cfg(feature = "metadata")]
+                param_names,
                 func: func.into(),
             }),
         );
@@ -765,16 +783,21 @@ impl Module {
     /// assert!(module.contains_fn(hash));
     /// ```
     #[inline(always)]
-    pub fn set_raw_fn<T: Variant + Clone>(
+    pub fn set_raw_fn<N, T, F>(
         &mut self,
-        name: impl Into<String>,
+        name: N,
         namespace: FnNamespace,
         access: FnAccess,
         arg_types: &[TypeId],
-        func: impl Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
+        func: F,
+    ) -> u64
+    where
+        N: AsRef<str> + Into<ImmutableString>,
+        T: Variant + Clone,
+        F: Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
             + SendSync
             + 'static,
-    ) -> u64 {
+    {
         let f =
             move |ctx: NativeCallContext, args: &mut FnCallArgs| func(ctx, args).map(Dynamic::from);
 
@@ -812,8 +835,9 @@ impl Module {
     /// assert!(module.contains_fn(hash));
     /// ```
     #[inline(always)]
-    pub fn set_native_fn<ARGS, T, F>(&mut self, name: impl Into<String>, func: F) -> u64
+    pub fn set_native_fn<ARGS, N, T, F>(&mut self, name: N, func: F) -> u64
     where
+        N: AsRef<str> + Into<ImmutableString>,
         T: Variant + Clone,
         F: RegisterNativeFunction<ARGS, Result<T, Box<EvalAltResult>>>,
     {
@@ -847,7 +871,7 @@ impl Module {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn set_getter_fn<ARGS, A, T, F>(&mut self, name: impl Into<String>, func: F) -> u64
+    pub fn set_getter_fn<ARGS, A, T, F>(&mut self, name: &str, func: F) -> u64
     where
         A: Variant + Clone,
         T: Variant + Clone,
@@ -855,7 +879,7 @@ impl Module {
         F: Fn(&mut A) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     {
         self.set_fn(
-            crate::engine::make_getter(&name.into()),
+            &crate::engine::make_getter(name),
             FnNamespace::Global,
             FnAccess::Public,
             None,
@@ -888,7 +912,7 @@ impl Module {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn set_setter_fn<ARGS, A, B, F>(&mut self, name: impl Into<String>, func: F) -> u64
+    pub fn set_setter_fn<ARGS, A, B, F>(&mut self, name: &str, func: F) -> u64
     where
         A: Variant + Clone,
         B: Variant + Clone,
@@ -896,7 +920,7 @@ impl Module {
         F: Fn(&mut A, B) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     {
         self.set_fn(
-            crate::engine::make_setter(&name.into()),
+            &crate::engine::make_setter(name),
             FnNamespace::Global,
             FnAccess::Public,
             None,
@@ -1061,11 +1085,16 @@ impl Module {
     /// ```
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
-    pub fn set_indexer_get_set_fn<A: Variant + Clone, B: Variant + Clone, T: Variant + Clone>(
+    pub fn set_indexer_get_set_fn<A, B, T>(
         &mut self,
         get_fn: impl Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
         set_fn: impl Fn(&mut A, B, T) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
-    ) -> (u64, u64) {
+    ) -> (u64, u64)
+    where
+        A: Variant + Clone,
+        B: Variant + Clone,
+        T: Variant + Clone,
+    {
         (
             self.set_indexer_get_fn(get_fn),
             self.set_indexer_set_fn(set_fn),
