@@ -587,20 +587,14 @@ impl ExportedFn {
         let name: syn::Ident =
             syn::Ident::new(&format!("rhai_fn_{}", self.name()), self.name().span());
         let impl_block = self.generate_impl("Token");
-        let callable_block = self.generate_callable("Token");
-        let param_names_block = self.generate_param_names("Token");
-        let input_types_block = self.generate_input_types("Token");
         let dyn_result_fn_block = self.generate_dynamic_fn();
         let vis = self.visibility;
         quote! {
             #[automatically_derived]
             #vis mod #name {
                 use super::*;
-                struct Token();
+                pub struct Token();
                 #impl_block
-                #callable_block
-                #param_names_block
-                #input_types_block
                 #dyn_result_fn_block
             }
         }
@@ -613,7 +607,7 @@ impl ExportedFn {
         dynamic_signature.ident =
             syn::Ident::new("dynamic_result_fn", proc_macro2::Span::call_site());
         dynamic_signature.output = syn::parse2::<syn::ReturnType>(quote! {
-            -> Result<Dynamic, Box<EvalAltResult>>
+            -> RhaiResult
         })
         .unwrap();
         let arguments: Vec<syn::Ident> = dynamic_signature
@@ -645,48 +639,6 @@ impl ExportedFn {
                 pub #dynamic_signature {
                     Ok(Dynamic::from(#name(#(#arguments),*)))
                 }
-            }
-        }
-    }
-
-    pub fn generate_callable(&self, on_type_name: &str) -> proc_macro2::TokenStream {
-        let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
-        let callable_fn_name: syn::Ident = syn::Ident::new(
-            &format!("{}_callable", on_type_name.to_lowercase()),
-            self.name().span(),
-        );
-        quote! {
-            #[inline(always)]
-            pub fn #callable_fn_name() -> CallableFunction {
-                #token_name().into()
-            }
-        }
-    }
-
-    pub fn generate_param_names(&self, on_type_name: &str) -> proc_macro2::TokenStream {
-        let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
-        let param_names_fn_name: syn::Ident = syn::Ident::new(
-            &format!("{}_param_names", on_type_name.to_lowercase()),
-            self.name().span(),
-        );
-        quote! {
-            #[inline(always)]
-            pub fn #param_names_fn_name() -> Box<[&'static str]> {
-                #token_name().param_names()
-            }
-        }
-    }
-
-    pub fn generate_input_types(&self, on_type_name: &str) -> proc_macro2::TokenStream {
-        let token_name: syn::Ident = syn::Ident::new(on_type_name, self.name().span());
-        let input_types_fn_name: syn::Ident = syn::Ident::new(
-            &format!("{}_input_types", on_type_name.to_lowercase()),
-            self.name().span(),
-        );
-        quote! {
-            #[inline(always)]
-            pub fn #input_types_fn_name() -> Box<[TypeId]> {
-                #token_name().input_types()
             }
         }
     }
@@ -866,23 +818,19 @@ impl ExportedFn {
 
         let type_name = syn::Ident::new(on_type_name, proc_macro2::Span::call_site());
         quote! {
+            impl #type_name {
+                pub const PARAM_NAMES: &'static [&'static str] = &[#(#input_type_names,)* #return_type];
+                #[inline(always)] pub fn param_types() -> [TypeId; #arg_count] { [#(#input_type_exprs),*] }
+            }
             impl PluginFunction for #type_name {
                 #[inline(always)]
                 fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                    debug_assert_eq!(args.len(), #arg_count, "wrong arg count: {} != {}", args.len(), #arg_count);
                     #(#unpack_statements)*
                     #return_expr
                 }
 
                 #[inline(always)] fn is_method_call(&self) -> bool { #is_method_call }
                 #[inline(always)] fn is_variadic(&self) -> bool { false }
-                #[inline(always)] fn clone_boxed(&self) -> Box<dyn PluginFunction> { Box::new(#type_name()) }
-                #[inline(always)] fn param_names(&self) -> Box<[&'static str]> {
-                    new_vec![#(#input_type_names,)* #return_type].into_boxed_slice()
-                }
-                #[inline(always)] fn input_types(&self) -> Box<[TypeId]> {
-                    new_vec![#(#input_type_exprs),*].into_boxed_slice()
-                }
             }
         }
     }

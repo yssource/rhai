@@ -16,6 +16,8 @@ an object map is small.
 `HashMap` and `BTreeMap` have almost identical public API's so this change is unlikely to break
 existing code.
 
+All function signature/metadata methods are now grouped under the umbrella `metadata` feature.
+
 
 Breaking changes
 ----------------

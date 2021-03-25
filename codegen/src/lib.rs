@@ -332,9 +332,9 @@ pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream
             let gen_mod_path = crate::register::generated_module_path(&rust_mod_path);
             proc_macro::TokenStream::from(quote! {
                 #module_expr.set_fn(#export_name, FnNamespace::Internal, FnAccess::Public,
-                                    Some(#gen_mod_path::token_param_names().as_ref()),
-                                    #gen_mod_path::token_input_types().as_ref(),
-                                    #gen_mod_path::token_callable());
+                                    Some(#gen_mod_path::Token::PARAM_NAMES),
+                                    &#gen_mod_path::Token::param_types(),
+                                    #gen_mod_path::Token().into());
             })
         }
         Err(e) => e.to_compile_error().into(),
@@ -373,9 +373,9 @@ pub fn set_exported_global_fn(args: proc_macro::TokenStream) -> proc_macro::Toke
             let gen_mod_path = crate::register::generated_module_path(&rust_mod_path);
             proc_macro::TokenStream::from(quote! {
                 #module_expr.set_fn(#export_name, FnNamespace::Global, FnAccess::Public,
-                                    Some(#gen_mod_path::token_param_names().as_ref()),
-                                    #gen_mod_path::token_input_types().as_ref(),
-                                    #gen_mod_path::token_callable());
+                                    Some(#gen_mod_path::Token::PARAM_NAMES),
+                                    &#gen_mod_path::Token::param_types(),
+                                    #gen_mod_path::Token().into());
             })
         }
         Err(e) => e.to_compile_error().into(),
