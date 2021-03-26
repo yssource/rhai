@@ -650,6 +650,7 @@ impl ExportedFn {
 
         let mut unpack_statements: Vec<syn::Stmt> = Vec::new();
         let mut unpack_exprs: Vec<syn::Expr> = Vec::new();
+        #[cfg(feature = "metadata")]
         let mut input_type_names: Vec<String> = Vec::new();
         let mut input_type_exprs: Vec<syn::Expr> = Vec::new();
 
@@ -671,6 +672,7 @@ impl ExportedFn {
             let var = syn::Ident::new("arg0", proc_macro2::Span::call_site());
             match first_arg {
                 syn::FnArg::Typed(syn::PatType { pat, ty, .. }) => {
+                    #[cfg(feature = "metadata")]
                     let arg_name = format!("{}: {}", pat.to_token_stream(), print_type(ty));
                     let arg_type = match flatten_type_groups(ty.as_ref()) {
                         syn::Type::Reference(syn::TypeReference { ref elem, .. }) => elem.as_ref(),
@@ -699,6 +701,7 @@ impl ExportedFn {
                         .unwrap(),
                     );
                     }
+                    #[cfg(feature = "metadata")]
                     input_type_names.push(arg_name);
                     input_type_exprs.push(
                         syn::parse2::<syn::Expr>(quote_spanned!(arg_type.span() =>
@@ -726,6 +729,7 @@ impl ExportedFn {
             let is_ref;
             match arg {
                 syn::FnArg::Typed(syn::PatType { pat, ty, .. }) => {
+                    #[cfg(feature = "metadata")]
                     let arg_name = format!("{}: {}", pat.to_token_stream(), print_type(ty));
                     let arg_type = ty.as_ref();
                     let downcast_span = match flatten_type_groups(arg_type) {
@@ -765,6 +769,7 @@ impl ExportedFn {
                         })
                         .unwrap(),
                     );
+                    #[cfg(feature = "metadata")]
                     input_type_names.push(arg_name);
                     if !is_string {
                         input_type_exprs.push(
@@ -817,9 +822,17 @@ impl ExportedFn {
         };
 
         let type_name = syn::Ident::new(on_type_name, proc_macro2::Span::call_site());
+
+        #[cfg(feature = "metadata")]
+        let param_names = quote! {
+            pub const PARAM_NAMES: &'static [&'static str] = &[#(#input_type_names,)* #return_type];
+        };
+        #[cfg(not(feature = "metadata"))]
+        let param_names = quote! {};
+
         quote! {
             impl #type_name {
-                pub const PARAM_NAMES: &'static [&'static str] = &[#(#input_type_names,)* #return_type];
+                #param_names
                 #[inline(always)] pub fn param_types() -> [TypeId; #arg_count] { [#(#input_type_exprs),*] }
             }
             impl PluginFunction for #type_name {

@@ -4,6 +4,7 @@ use crate::ast::{FnAccess, Ident};
 use crate::dynamic::Variant;
 use crate::fn_native::{shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::fn_register::RegisterNativeFunction;
+use crate::plugin::PluginFunction;
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
@@ -644,6 +645,24 @@ impl Module {
         self
     }
 
+    /// Remap type ID.
+    #[inline(always)]
+    fn map_type(map: bool, type_id: TypeId) -> TypeId {
+        if !map {
+            return type_id;
+        }
+        if type_id == TypeId::of::<&str>() {
+            // Map &str to ImmutableString
+            return TypeId::of::<ImmutableString>();
+        }
+        if type_id == TypeId::of::<String>() {
+            // Map String to ImmutableString
+            return TypeId::of::<ImmutableString>();
+        }
+
+        type_id
+    }
+
     /// Set a Rust function into the [`Module`], returning a hash key.
     ///
     /// If there is an existing Rust function of the same hash, it is replaced.
@@ -663,31 +682,12 @@ impl Module {
     ) -> u64 {
         let is_method = func.is_method();
 
-        let param_types = arg_types
+        let param_types: StaticVec<_> = arg_types
             .iter()
             .cloned()
             .enumerate()
-            .map(|(i, type_id)| {
-                if !is_method || i > 0 {
-                    if type_id == TypeId::of::<&str>() {
-                        // Map &str to ImmutableString
-                        TypeId::of::<ImmutableString>()
-                    } else if type_id == TypeId::of::<String>() {
-                        // Map String to ImmutableString
-                        TypeId::of::<ImmutableString>()
-                    } else {
-                        type_id
-                    }
-                } else {
-                    // Do not map &mut parameter
-                    type_id
-                }
-            })
-            .collect::<StaticVec<_>>();
-
-        let hash_fn = calc_native_fn_hash(empty(), &name, &param_types);
-
-        let name = self.interned_strings.get(name);
+            .map(|(i, type_id)| Self::map_type(!is_method || i > 0, type_id))
+            .collect();
 
         #[cfg(feature = "metadata")]
         let param_names = _arg_names
@@ -696,10 +696,67 @@ impl Module {
             .map(|&arg| self.interned_strings.get(arg))
             .collect();
 
+        let hash_fn = calc_native_fn_hash(empty(), &name, &param_types);
+
         self.functions.insert(
             hash_fn,
             Box::new(FuncInfo {
-                name,
+                name: self.interned_strings.get(name),
+                namespace,
+                access,
+                params: param_types.len(),
+                param_types,
+                #[cfg(feature = "metadata")]
+                param_names,
+                func,
+            }),
+        );
+
+        self.indexed = false;
+        self.contains_indexed_global_functions = false;
+
+        hash_fn
+    }
+
+    /// Set a plugin function into the [`Module`], returning a hash key.
+    ///
+    /// If there is an existing Rust function of the same hash, it is replaced.
+    ///
+    /// # WARNING - Low Level API
+    ///
+    /// This function is very low level. It is intended for plugins system use only.
+    #[inline(always)]
+    pub fn set_plugin_fn(
+        &mut self,
+        name: impl AsRef<str> + Into<ImmutableString>,
+        namespace: FnNamespace,
+        access: FnAccess,
+        _arg_names: Option<&[&str]>,
+        arg_types: &[TypeId],
+        func: impl PluginFunction + 'static,
+    ) -> u64 {
+        let is_method = func.is_method_call();
+
+        let param_types: StaticVec<_> = arg_types
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(i, type_id)| Self::map_type(!is_method || i > 0, type_id))
+            .collect();
+
+        #[cfg(feature = "metadata")]
+        let param_names = _arg_names
+            .iter()
+            .flat_map(|p| p.iter())
+            .map(|&arg| self.interned_strings.get(arg))
+            .collect();
+
+        let hash_fn = calc_native_fn_hash(empty(), &name, &param_types);
+
+        self.functions.insert(
+            hash_fn,
+            Box::new(FuncInfo {
+                name: self.interned_strings.get(name),
                 namespace,
                 access,
                 params: param_types.len(),

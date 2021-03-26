@@ -154,11 +154,18 @@ pub fn generate_body(
                 },
                 fn_literal.span(),
             );
+
+            #[cfg(feature = "metadata")]
+            let param_names = quote! {
+                Some(#fn_token_name::PARAM_NAMES)
+            };
+            #[cfg(not(feature = "metadata"))]
+            let param_names = quote! { None };
+
             set_fn_statements.push(
                 syn::parse2::<syn::Stmt>(quote! {
-                    m.set_fn(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
-                                Some(#fn_token_name::PARAM_NAMES), &[#(#fn_input_types),*],
-                                #fn_token_name().into());
+                    m.set_plugin_fn(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
+                                    #param_names, &[#(#fn_input_types),*], #fn_token_name());
                 })
                 .unwrap(),
             );
