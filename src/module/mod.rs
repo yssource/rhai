@@ -718,61 +718,6 @@ impl Module {
         hash_fn
     }
 
-    /// Set a plugin function into the [`Module`], returning a hash key.
-    ///
-    /// If there is an existing Rust function of the same hash, it is replaced.
-    ///
-    /// # WARNING - Low Level API
-    ///
-    /// This function is very low level. It is intended for plugins system use only.
-    #[inline(always)]
-    pub fn set_plugin_fn(
-        &mut self,
-        name: impl AsRef<str> + Into<ImmutableString>,
-        namespace: FnNamespace,
-        access: FnAccess,
-        _arg_names: Option<&[&str]>,
-        arg_types: &[TypeId],
-        func: impl PluginFunction + SendSync + 'static,
-    ) -> u64 {
-        let is_method = func.is_method_call();
-
-        let param_types: StaticVec<_> = arg_types
-            .iter()
-            .cloned()
-            .enumerate()
-            .map(|(i, type_id)| Self::map_type(!is_method || i > 0, type_id))
-            .collect();
-
-        #[cfg(feature = "metadata")]
-        let param_names = _arg_names
-            .iter()
-            .flat_map(|p| p.iter())
-            .map(|&arg| self.interned_strings.get(arg))
-            .collect();
-
-        let hash_fn = calc_native_fn_hash(empty(), &name, &param_types);
-
-        self.functions.insert(
-            hash_fn,
-            Box::new(FuncInfo {
-                name: self.interned_strings.get(name),
-                namespace,
-                access,
-                params: param_types.len(),
-                param_types,
-                #[cfg(feature = "metadata")]
-                param_names,
-                func: func.into(),
-            }),
-        );
-
-        self.indexed = false;
-        self.contains_indexed_global_functions = false;
-
-        hash_fn
-    }
-
     /// Set a Rust function taking a reference to the scripting [`Engine`][crate::Engine],
     /// the current set of functions, plus a list of mutable [`Dynamic`] references
     /// into the [`Module`], returning a hash key.

@@ -297,9 +297,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
+                    m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
                              Some(get_mystic_number_token::PARAM_NAMES), &[],
-                             get_mystic_number_token());
+                             get_mystic_number_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -351,9 +351,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("add_one_to", FnNamespace::Global, FnAccess::Public,
+                    m.set_fn("add_one_to", FnNamespace::Global, FnAccess::Public,
                              Some(add_one_to_token::PARAM_NAMES), &[TypeId::of::<INT>()],
-                             add_one_to_token());
+                             add_one_to_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -405,9 +405,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("add_one_to", FnNamespace::Internal, FnAccess::Public, Some(add_one_to_token::PARAM_NAMES),
+                    m.set_fn("add_one_to", FnNamespace::Internal, FnAccess::Public, Some(add_one_to_token::PARAM_NAMES),
                              &[TypeId::of::<INT>()],
-                             add_one_to_token());
+                             add_one_to_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -470,12 +470,12 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("add_n", FnNamespace::Internal, FnAccess::Public, Some(add_one_to_token::PARAM_NAMES),
+                    m.set_fn("add_n", FnNamespace::Internal, FnAccess::Public, Some(add_one_to_token::PARAM_NAMES),
                              &[TypeId::of::<INT>()],
-                             add_one_to_token());
-                    m.set_plugin_fn("add_n", FnNamespace::Internal, FnAccess::Public, Some(add_n_to_token::PARAM_NAMES),
+                             add_one_to_token().into());
+                    m.set_fn("add_n", FnNamespace::Internal, FnAccess::Public, Some(add_n_to_token::PARAM_NAMES),
                              &[TypeId::of::<INT>(), TypeId::of::<INT>()],
-                             add_n_to_token());
+                             add_n_to_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -545,9 +545,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("add_together", FnNamespace::Internal, FnAccess::Public, Some(add_together_token::PARAM_NAMES),
+                    m.set_fn("add_together", FnNamespace::Internal, FnAccess::Public, Some(add_together_token::PARAM_NAMES),
                              &[TypeId::of::<INT>(), TypeId::of::<INT>()],
-                             add_together_token());
+                             add_together_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -601,15 +601,15 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("add", FnNamespace::Internal, FnAccess::Public, Some(add_together_token::PARAM_NAMES),
+                    m.set_fn("add", FnNamespace::Internal, FnAccess::Public, Some(add_together_token::PARAM_NAMES),
                              &[TypeId::of::<INT>(), TypeId::of::<INT>()],
-                             add_together_token());
-                    m.set_plugin_fn("+", FnNamespace::Internal, FnAccess::Public, Some(add_together_token::PARAM_NAMES),
+                             add_together_token().into());
+                    m.set_fn("+", FnNamespace::Internal, FnAccess::Public, Some(add_together_token::PARAM_NAMES),
                              &[TypeId::of::<INT>(), TypeId::of::<INT>()],
-                             add_together_token());
-                    m.set_plugin_fn("add_together", FnNamespace::Internal, FnAccess::Public, Some(add_together_token::PARAM_NAMES),
+                             add_together_token().into());
+                    m.set_fn("add_together", FnNamespace::Internal, FnAccess::Public, Some(add_together_token::PARAM_NAMES),
                              &[TypeId::of::<INT>(), TypeId::of::<INT>()],
-                             add_together_token());
+                             add_together_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -844,9 +844,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
+                    m.set_fn("get_mystic_number", FnNamespace::Internal, FnAccess::Public,
                              Some(get_mystic_number_token::PARAM_NAMES), &[],
-                             get_mystic_number_token());
+                             get_mystic_number_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -928,9 +928,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("print_out_to", FnNamespace::Internal, FnAccess::Public, Some(print_out_to_token::PARAM_NAMES),
+                    m.set_fn("print_out_to", FnNamespace::Internal, FnAccess::Public, Some(print_out_to_token::PARAM_NAMES),
                              &[TypeId::of::<ImmutableString>()],
-                             print_out_to_token());
+                             print_out_to_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -982,9 +982,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("print_out_to", FnNamespace::Internal, FnAccess::Public, Some(print_out_to_token::PARAM_NAMES),
+                    m.set_fn("print_out_to", FnNamespace::Internal, FnAccess::Public, Some(print_out_to_token::PARAM_NAMES),
                              &[TypeId::of::<ImmutableString>()],
-                             print_out_to_token());
+                             print_out_to_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1037,9 +1037,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("foo", FnNamespace::Internal, FnAccess::Public, Some(foo_token::PARAM_NAMES),
+                    m.set_fn("foo", FnNamespace::Internal, FnAccess::Public, Some(foo_token::PARAM_NAMES),
                              &[TypeId::of::<FLOAT>(), TypeId::of::<INT>()],
-                             foo_token());
+                             foo_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1092,9 +1092,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(increment_token::PARAM_NAMES),
+                    m.set_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(increment_token::PARAM_NAMES),
                              &[TypeId::of::<FLOAT>()],
-                             increment_token());
+                             increment_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1154,9 +1154,9 @@ mod generate_tests {
                     }
                     #[allow(unused_mut)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                        m.set_plugin_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(increment_token::PARAM_NAMES),
+                        m.set_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(increment_token::PARAM_NAMES),
                                  &[TypeId::of::<FLOAT>()],
-                                 increment_token());
+                                 increment_token().into());
                         if flatten {} else {}
                     }
                     #[allow(non_camel_case_types)]
@@ -1237,9 +1237,9 @@ mod generate_tests {
                     }
                     #[allow(unused_mut)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                        m.set_plugin_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(increment_token::PARAM_NAMES),
+                        m.set_fn("increment", FnNamespace::Internal, FnAccess::Public, Some(increment_token::PARAM_NAMES),
                                  &[TypeId::of::<FLOAT>()],
-                                 increment_token());
+                                 increment_token().into());
                         if flatten {} else {}
                     }
                     #[allow(non_camel_case_types)]
@@ -1319,9 +1319,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("get$square", FnNamespace::Global, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
+                    m.set_fn("get$square", FnNamespace::Global, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
                              &[TypeId::of::<u64>()],
-                             int_foo_token());
+                             int_foo_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1379,12 +1379,12 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("square", FnNamespace::Internal, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
+                    m.set_fn("square", FnNamespace::Internal, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
                              &[TypeId::of::<u64>()],
-                             int_foo_token());
-                    m.set_plugin_fn("get$square", FnNamespace::Global, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
+                             int_foo_token().into());
+                    m.set_fn("get$square", FnNamespace::Global, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
                              &[TypeId::of::<u64>()],
-                             int_foo_token());
+                             int_foo_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1442,9 +1442,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("set$squared", FnNamespace::Global, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
+                    m.set_fn("set$squared", FnNamespace::Global, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
                              &[TypeId::of::<u64>(), TypeId::of::<u64>()],
-                             int_foo_token());
+                             int_foo_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1503,12 +1503,12 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("set_sq", FnNamespace::Internal, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
+                    m.set_fn("set_sq", FnNamespace::Internal, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
                              &[TypeId::of::<u64>(), TypeId::of::<u64>()],
-                             int_foo_token());
-                    m.set_plugin_fn("set$squared", FnNamespace::Global, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
+                             int_foo_token().into());
+                    m.set_fn("set$squared", FnNamespace::Global, FnAccess::Public, Some(int_foo_token::PARAM_NAMES),
                              &[TypeId::of::<u64>(), TypeId::of::<u64>()],
-                             int_foo_token());
+                             int_foo_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1567,9 +1567,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("index$get$", FnNamespace::Global, FnAccess::Public, Some(get_by_index_token::PARAM_NAMES),
+                    m.set_fn("index$get$", FnNamespace::Global, FnAccess::Public, Some(get_by_index_token::PARAM_NAMES),
                              &[TypeId::of::<MyCollection>(), TypeId::of::<u64>()],
-                             get_by_index_token());
+                             get_by_index_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1628,12 +1628,12 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("get", FnNamespace::Internal, FnAccess::Public, Some(get_by_index_token::PARAM_NAMES),
+                    m.set_fn("get", FnNamespace::Internal, FnAccess::Public, Some(get_by_index_token::PARAM_NAMES),
                              &[TypeId::of::<MyCollection>(), TypeId::of::<u64>()],
-                             get_by_index_token());
-                    m.set_plugin_fn("index$get$", FnNamespace::Global, FnAccess::Public, Some(get_by_index_token::PARAM_NAMES),
+                             get_by_index_token().into());
+                    m.set_fn("index$get$", FnNamespace::Global, FnAccess::Public, Some(get_by_index_token::PARAM_NAMES),
                              &[TypeId::of::<MyCollection>(), TypeId::of::<u64>()],
-                             get_by_index_token());
+                             get_by_index_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1692,9 +1692,9 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("index$set$", FnNamespace::Global, FnAccess::Public, Some(set_by_index_token::PARAM_NAMES),
+                    m.set_fn("index$set$", FnNamespace::Global, FnAccess::Public, Some(set_by_index_token::PARAM_NAMES),
                              &[TypeId::of::<MyCollection>(), TypeId::of::<u64>(), TypeId::of::<FLOAT>()],
-                             set_by_index_token());
+                             set_by_index_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]
@@ -1754,12 +1754,12 @@ mod generate_tests {
                 }
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
-                    m.set_plugin_fn("set", FnNamespace::Internal, FnAccess::Public, Some(set_by_index_token::PARAM_NAMES),
+                    m.set_fn("set", FnNamespace::Internal, FnAccess::Public, Some(set_by_index_token::PARAM_NAMES),
                              &[TypeId::of::<MyCollection>(), TypeId::of::<u64>(), TypeId::of::<FLOAT>()],
-                             set_by_index_token());
-                    m.set_plugin_fn("index$set$", FnNamespace::Global, FnAccess::Public, Some(set_by_index_token::PARAM_NAMES),
+                             set_by_index_token().into());
+                    m.set_fn("index$set$", FnNamespace::Global, FnAccess::Public, Some(set_by_index_token::PARAM_NAMES),
                              &[TypeId::of::<MyCollection>(), TypeId::of::<u64>(), TypeId::of::<FLOAT>()],
-                             set_by_index_token());
+                             set_by_index_token().into());
                     if flatten {} else {}
                 }
                 #[allow(non_camel_case_types)]

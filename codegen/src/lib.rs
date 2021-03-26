@@ -339,10 +339,10 @@ pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream
             let param_names = quote! { None };
 
             proc_macro::TokenStream::from(quote! {
-                #module_expr.set_plugin_fn(#export_name, FnNamespace::Internal, FnAccess::Public,
-                                           #param_names,
-                                           &#gen_mod_path::Token::param_types(),
-                                           #gen_mod_path::Token());
+                #module_expr.set_fn(#export_name, FnNamespace::Internal, FnAccess::Public,
+                                    #param_names,
+                                    &#gen_mod_path::Token::param_types(),
+                                    #gen_mod_path::Token().into());
             })
         }
         Err(e) => e.to_compile_error().into(),
@@ -388,10 +388,10 @@ pub fn set_exported_global_fn(args: proc_macro::TokenStream) -> proc_macro::Toke
             let param_names = quote! { None };
 
             proc_macro::TokenStream::from(quote! {
-                #module_expr.set_plugin_fn(#export_name, FnNamespace::Global, FnAccess::Public,
-                                           #param_names,
-                                           &#gen_mod_path::Token::param_types(),
-                                           #gen_mod_path::Token());
+                #module_expr.set_fn(#export_name, FnNamespace::Global, FnAccess::Public,
+                                    #param_names,
+                                    &#gen_mod_path::Token::param_types(),
+                                    #gen_mod_path::Token().into());
             })
         }
         Err(e) => e.to_compile_error().into(),

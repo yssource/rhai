@@ -164,8 +164,8 @@ pub fn generate_body(
 
             set_fn_statements.push(
                 syn::parse2::<syn::Stmt>(quote! {
-                    m.set_plugin_fn(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
-                                    #param_names, &[#(#fn_input_types),*], #fn_token_name());
+                    m.set_fn(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
+                             #param_names, &[#(#fn_input_types),*], #fn_token_name().into());
                 })
                 .unwrap(),
             );
