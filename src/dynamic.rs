@@ -426,33 +426,35 @@ impl Hash for Dynamic {
 #[inline(always)]
 pub(crate) fn map_std_type_name(name: &str) -> &str {
     if name == type_name::<String>() {
-        "string"
-    } else if name == type_name::<ImmutableString>() {
-        "string"
-    } else if name == type_name::<&str>() {
-        "string"
-    } else if name == type_name::<FnPtr>() {
-        "Fn"
-    } else {
-        #[cfg(feature = "decimal")]
-        if name == type_name::<Decimal>() {
-            return "decimal";
-        }
-        #[cfg(not(feature = "no_index"))]
-        if name == type_name::<Array>() {
-            return "array";
-        }
-        #[cfg(not(feature = "no_object"))]
-        if name == type_name::<Map>() {
-            return "map";
-        }
-        #[cfg(not(feature = "no_std"))]
-        if name == type_name::<Instant>() {
-            return "timestamp";
-        }
-
-        name
+        return "string";
     }
+    if name == type_name::<ImmutableString>() {
+        return "string";
+    }
+    if name == type_name::<&str>() {
+        return "string";
+    }
+    if name == type_name::<FnPtr>() {
+        return "Fn";
+    }
+    #[cfg(feature = "decimal")]
+    if name == type_name::<Decimal>() {
+        return "decimal";
+    }
+    #[cfg(not(feature = "no_index"))]
+    if name == type_name::<Array>() {
+        return "array";
+    }
+    #[cfg(not(feature = "no_object"))]
+    if name == type_name::<Map>() {
+        return "map";
+    }
+    #[cfg(not(feature = "no_std"))]
+    if name == type_name::<Instant>() {
+        return "timestamp";
+    }
+
+    name
 }
 
 impl fmt::Display for Dynamic {
@@ -905,7 +907,7 @@ impl Dynamic {
             value = match unsafe_try_cast::<_, Map>(value) {
                 Ok(map) => return (map).into(),
                 Err(val) => val,
-            }
+            };
         }
 
         value = match unsafe_try_cast::<_, FnPtr>(value) {
@@ -918,7 +920,7 @@ impl Dynamic {
             value = match unsafe_try_cast::<_, Instant>(value) {
                 Ok(timestamp) => return (timestamp).into(),
                 Err(val) => val,
-            }
+            };
         }
 
         Self(Union::Variant(

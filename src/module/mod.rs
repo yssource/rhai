@@ -733,7 +733,7 @@ impl Module {
         access: FnAccess,
         _arg_names: Option<&[&str]>,
         arg_types: &[TypeId],
-        func: impl PluginFunction + 'static,
+        func: impl PluginFunction + SendSync + 'static,
     ) -> u64 {
         let is_method = func.is_method_call();
 
