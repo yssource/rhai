@@ -4,7 +4,6 @@ use crate::ast::{FnAccess, Ident};
 use crate::dynamic::Variant;
 use crate::fn_native::{shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::fn_register::RegisterNativeFunction;
-use crate::plugin::PluginFunction;
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
