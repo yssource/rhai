@@ -43,24 +43,24 @@ fn test_max_operations_functions() -> Result<(), Box<EvalAltResult>> {
 
     engine.eval::<()>(
         r#"
-                print("Test1");
-                let x = 0;
+            print("Test1");
+            let x = 0;
 
-                while x < 28 {
-                    print(x);
-                    x += 1;
-                }
-            "#,
+            while x < 28 {
+                print(x);
+                x += 1;
+            }
+        "#,
     )?;
 
     #[cfg(not(feature = "no_function"))]
     engine.eval::<()>(
         r#"
-                print("Test2");
-                fn inc(x) { x + 1 }
-                let x = 0;
-                while x < 20 { x = inc(x); }
-            "#,
+            print("Test2");
+            fn inc(x) { x + 1 }
+            let x = 0;
+            while x < 20 { x = inc(x); }
+        "#,
     )?;
 
     #[cfg(not(feature = "no_function"))]
@@ -76,7 +76,7 @@ fn test_max_operations_functions() -> Result<(), Box<EvalAltResult>> {
                         print(x);
                         x = inc(x);
                     }
-            "#,
+                "#,
             )
             .expect_err("should error"),
         EvalAltResult::ErrorTooManyOperations(_)
@@ -103,7 +103,7 @@ fn test_max_operations_eval() -> Result<(), Box<EvalAltResult>> {
                 r#"
                     let script = "for x in range(0, 500) {}";
                     eval(script);
-            "#
+                "#
             )
             .expect_err("should error"),
         EvalAltResult::ErrorInFunctionCall(_, _, err, _) if matches!(*err, EvalAltResult::ErrorTooManyOperations(_))

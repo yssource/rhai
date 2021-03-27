@@ -67,7 +67,7 @@ fn test_expressions_eval() -> Result<(), Box<EvalAltResult>> {
     let result: bool = engine.eval_expression_with_scope(
         &mut scope,
         r#"
-                agent.age > 10 && agent.gender == "male"
+            agent.age > 10 && agent.gender == "male"
         "#,
     )?;
 

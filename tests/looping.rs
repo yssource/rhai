@@ -21,7 +21,7 @@ fn test_loop() -> Result<(), Box<EvalAltResult>> {
 				}
 
 				return x;
-		"
+		    "
         )?,
         21
     );
