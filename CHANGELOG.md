@@ -32,6 +32,8 @@ Breaking changes
 * `protected`, `super` are now reserved keywords.
 * The `Module::set_fn_XXX` API now take `&str` as the function name instead of `Into<String>`.
 * The _reflections_ API such as `Engine::gen_fn_signatures`, `Module::update_fn_metadata` etc. are put under the `metadata` feature gate.
+* The shebang `#!` is now a reserved symbol.
+* Shebangs at the very beginning of script files are skipped when loading them.
 
 Enhancements
 ------------
@@ -39,6 +41,7 @@ Enhancements
 * Replaced all `HashMap` usage with `BTreeMap` for better performance because collections in Rhai are tiny.
 * `Engine::register_result_fn` no longer requires the successful return type to be `Dynamic`.  It can now be any clonable type.
 * `#[rhai_fn(return_raw)]` can now return `Result<T, Box<EvalAltResult>>` where `T` is any clonable type instead of `Result<Dynamic, Box<EvalAltResult>>`.
+* Rhai scripts can now start with a shebang `#!`.
 
 
 Version 0.19.14

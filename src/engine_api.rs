@@ -1185,6 +1185,15 @@ impl Engine {
             )
         })?;
 
+        if contents.starts_with("#!") {
+            // Remove shebang
+            if let Some(n) = contents.find('\n') {
+                contents.drain(0..n).count();
+            } else {
+                contents.clear();
+            }
+        };
+
         Ok(contents)
     }
     /// Compile a script file into an [`AST`], which can be used later for evaluation.
