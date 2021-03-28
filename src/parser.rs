@@ -346,16 +346,18 @@ fn parse_fn_call(
                 calc_fn_hash(empty(), &id, 0)
             };
 
+            let hash = if is_valid_identifier(id.chars()) {
+                FnCallHash::from_script(hash)
+            } else {
+                FnCallHash::from_native(hash)
+            };
+
             return Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
-                    name: id.to_string().into(),
+                    name: state.get_interned_string(id),
                     capture,
                     namespace,
-                    hash: if is_valid_identifier(id.chars()) {
-                        FnCallHash::from_script(hash)
-                    } else {
-                        FnCallHash::from_native(hash)
-                    },
+                    hash,
                     args,
                     ..Default::default()
                 }),
@@ -389,16 +391,18 @@ fn parse_fn_call(
                     calc_fn_hash(empty(), &id, args.len())
                 };
 
+                let hash = if is_valid_identifier(id.chars()) {
+                    FnCallHash::from_script(hash)
+                } else {
+                    FnCallHash::from_native(hash)
+                };
+
                 return Ok(Expr::FnCall(
                     Box::new(FnCallExpr {
-                        name: id.to_string().into(),
+                        name: state.get_interned_string(id),
                         capture,
                         namespace,
-                        hash: if is_valid_identifier(id.chars()) {
-                            FnCallHash::from_script(hash)
-                        } else {
-                            FnCallHash::from_native(hash)
-                        },
+                        hash,
                         args,
                         ..Default::default()
                     }),
@@ -1276,14 +1280,13 @@ fn parse_unary(
 
                 // Call negative function
                 expr => {
-                    let op = "-";
                     let mut args = StaticVec::new();
                     args.push(expr);
 
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
-                            name: op.into(),
-                            hash: FnCallHash::from_native(calc_fn_hash(empty(), op, 1)),
+                            name: state.get_interned_string("-"),
+                            hash: FnCallHash::from_native(calc_fn_hash(empty(), "-", 1)),
                             args,
                             ..Default::default()
                         }),
@@ -1303,14 +1306,13 @@ fn parse_unary(
 
                 // Call plus function
                 expr => {
-                    let op = "+";
                     let mut args = StaticVec::new();
                     args.push(expr);
 
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
-                            name: op.into(),
-                            hash: FnCallHash::from_native(calc_fn_hash(empty(), op, 1)),
+                            name: state.get_interned_string("+"),
+                            hash: FnCallHash::from_native(calc_fn_hash(empty(), "+", 1)),
                             args,
                             ..Default::default()
                         }),
@@ -1326,12 +1328,10 @@ fn parse_unary(
             let expr = parse_unary(input, state, lib, settings.level_up())?;
             args.push(expr);
 
-            let op = "!";
-
             Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
-                    name: op.into(),
-                    hash: FnCallHash::from_native(calc_fn_hash(empty(), op, 1)),
+                    name: state.get_interned_string("!"),
+                    hash: FnCallHash::from_native(calc_fn_hash(empty(), "!", 1)),
                     args,
                     ..Default::default()
                 }),
@@ -1673,7 +1673,7 @@ fn parse_binary_op(
         let hash = calc_fn_hash(empty(), &op, 2);
 
         let op_base = FnCallExpr {
-            name: op,
+            name: state.get_interned_string(op.as_ref()),
             hash: FnCallHash::from_native(hash),
             capture: false,
             ..Default::default()
@@ -1741,7 +1741,7 @@ fn parse_binary_op(
                     Box::new(FnCallExpr {
                         hash: FnCallHash::from_script(hash),
                         args,
-                        name: OP_CONTAINS.into(),
+                        name: state.get_interned_string(OP_CONTAINS),
                         ..op_base
                     }),
                     pos,
@@ -2739,7 +2739,7 @@ fn parse_fn(
         .collect();
 
     Ok(ScriptFnDef {
-        name: name.into(),
+        name: state.get_interned_string(&name),
         access,
         params,
         #[cfg(not(feature = "no_closure"))]
@@ -2755,7 +2755,12 @@ fn parse_fn(
 /// Creates a curried expression from a list of external variables
 #[cfg(not(feature = "no_function"))]
 #[cfg(not(feature = "no_closure"))]
-fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Position) -> Expr {
+fn make_curry_from_externals(
+    state: &mut ParseState,
+    fn_expr: Expr,
+    externals: StaticVec<Ident>,
+    pos: Position,
+) -> Expr {
     // If there are no captured variables, no need to curry
     if externals.is_empty() {
         return fn_expr;
@@ -2770,12 +2775,14 @@ fn make_curry_from_externals(fn_expr: Expr, externals: StaticVec<Ident>, pos: Po
         args.push(Expr::Variable(Box::new((None, None, x.clone()))));
     });
 
-    let curry_func = crate::engine::KEYWORD_FN_PTR_CURRY;
-
     let expr = Expr::FnCall(
         Box::new(FnCallExpr {
-            name: curry_func.into(),
-            hash: FnCallHash::from_native(calc_fn_hash(empty(), curry_func, num_externals + 1)),
+            name: state.get_interned_string(crate::engine::KEYWORD_FN_PTR_CURRY),
+            hash: FnCallHash::from_native(calc_fn_hash(
+                empty(),
+                crate::engine::KEYWORD_FN_PTR_CURRY,
+                num_externals + 1,
+            )),
             args,
             ..Default::default()
         }),
@@ -2880,7 +2887,8 @@ fn parse_anon_fn(
     body.hash(hasher);
     let hash = hasher.finish();
 
-    let fn_name: ImmutableString = format!("{}{:016x}", crate::engine::FN_ANONYMOUS, hash).into();
+    let fn_name =
+        state.get_interned_string(&(format!("{}{:016x}", crate::engine::FN_ANONYMOUS, hash)));
 
     // Define the function
     let script = ScriptFnDef {
@@ -2899,7 +2907,7 @@ fn parse_anon_fn(
     let expr = Expr::FnPointer(fn_name, settings.pos);
 
     #[cfg(not(feature = "no_closure"))]
-    let expr = make_curry_from_externals(expr, externals, settings.pos);
+    let expr = make_curry_from_externals(state, expr, externals, settings.pos);
 
     Ok((expr, script))
 }

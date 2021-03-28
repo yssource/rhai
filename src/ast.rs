@@ -4,7 +4,6 @@ use crate::dynamic::{AccessMode, Union};
 use crate::fn_native::shared_make_mut;
 use crate::module::NamespaceRef;
 use crate::stdlib::{
-    borrow::Cow,
     boxed::Box,
     collections::{BTreeMap, BTreeSet},
     fmt,
@@ -1398,16 +1397,14 @@ pub struct FnCallExpr {
     pub hash: FnCallHash,
     /// Does this function call capture the parent scope?
     pub capture: bool,
-    /// List of function call arguments.
+    /// List of function call argument expressions.
     pub args: StaticVec<Expr>,
     /// List of function call arguments that are constants.
     pub constant_args: StaticVec<(Dynamic, Position)>,
     /// Namespace of the function, if any. Boxed because it occurs rarely.
     pub namespace: Option<NamespaceRef>,
     /// Function name.
-    /// Use [`Cow<'static, str>`][Cow] because a lot of operators (e.g. `==`, `>=`) are implemented as
-    /// function calls and the function names are predictable, so no need to allocate a new [`String`].
-    pub name: Cow<'static, str>,
+    pub name: ImmutableString,
 }
 
 impl FnCallExpr {
