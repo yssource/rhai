@@ -740,11 +740,14 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         Expr::FnCall(x, pos)
                 if x.namespace.is_none() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Simple // simple optimizations
-                && x.args.len() == 2 // binary call
+                && x.num_args() == 2 // binary call
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
                 //&& !is_valid_identifier(x.name.chars()) // cannot be scripted
         => {
-            let mut arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap()).collect();
+            let mut arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap())
+                                                .chain(x.constant_args.iter().map(|(v, _)| v).cloned())
+                                                .collect();
+
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
@@ -764,6 +767,15 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             }
 
             x.args.iter_mut().for_each(|a| optimize_expr(a, state));
+
+            // Move constant arguments to the right
+            while x.args.last().map(Expr::is_constant).unwrap_or(false) {
+                let arg = x.args.pop().unwrap();
+                let arg_pos = arg.position();
+                x.constant_args.insert(0, (arg.get_constant_value().unwrap(), arg_pos));
+            }
+
+            x.args.shrink_to_fit();
         }
 
         // Eagerly call functions
@@ -774,12 +786,14 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         => {
             // First search for script-defined functions (can override built-in)
             #[cfg(not(feature = "no_function"))]
-            let has_script_fn = state.lib.iter().any(|&m| m.get_script_fn(x.name.as_ref(), x.args.len()).is_some());
+            let has_script_fn = state.lib.iter().any(|&m| m.get_script_fn(x.name.as_ref(), x.num_args()).is_some());
             #[cfg(feature = "no_function")]
             let has_script_fn = false;
 
             if !has_script_fn {
-                let mut arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap()).collect();
+                let mut arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap())
+                                                    .chain(x.constant_args.iter().map(|(v, _)| v).cloned())
+                                                    .collect();
 
                 // Save the typename of the first argument if it is `type_of()`
                 // This is to avoid `call_args` being passed into the closure
@@ -810,7 +824,18 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         }
 
         // id(args ..) -> optimize function call arguments
-        Expr::FnCall(x, _) => x.args.iter_mut().for_each(|a| optimize_expr(a, state)),
+        Expr::FnCall(x, _) => {
+            x.args.iter_mut().for_each(|a| optimize_expr(a, state));
+
+            // Move constant arguments to the right
+            while x.args.last().map(Expr::is_constant).unwrap_or(false) {
+                let arg = x.args.pop().unwrap();
+                let arg_pos = arg.position();
+                x.constant_args.insert(0, (arg.get_constant_value().unwrap(), arg_pos));
+            }
+
+            x.args.shrink_to_fit();
+        }
 
         // constant-name
         Expr::Variable(x) if x.1.is_none() && state.find_constant(&x.2.name).is_some() => {

@@ -1400,12 +1400,27 @@ pub struct FnCallExpr {
     pub capture: bool,
     /// List of function call arguments.
     pub args: StaticVec<Expr>,
+    /// List of function call arguments that are constants.
+    pub constant_args: StaticVec<(Dynamic, Position)>,
     /// Namespace of the function, if any. Boxed because it occurs rarely.
     pub namespace: Option<NamespaceRef>,
     /// Function name.
     /// Use [`Cow<'static, str>`][Cow] because a lot of operators (e.g. `==`, `>=`) are implemented as
     /// function calls and the function names are predictable, so no need to allocate a new [`String`].
     pub name: Cow<'static, str>,
+}
+
+impl FnCallExpr {
+    /// Are there no arguments to this function call?
+    #[inline(always)]
+    pub fn is_args_empty(&self) -> bool {
+        self.args.is_empty() && self.constant_args.is_empty()
+    }
+    /// Get the number of arguments to this function call.
+    #[inline(always)]
+    pub fn num_args(&self) -> usize {
+        self.args.len() + self.constant_args.len()
+    }
 }
 
 /// A type that wraps a [`FLOAT`] and implements [`Hash`].

@@ -1531,8 +1531,8 @@ fn make_dot_expr(
             Expr::FnCall(mut func, func_pos) => {
                 // Recalculate hash
                 func.hash = FnCallHash::from_script_and_native(
-                    calc_fn_hash(empty(), &func.name, func.args.len()),
-                    calc_fn_hash(empty(), &func.name, func.args.len() + 1),
+                    calc_fn_hash(empty(), &func.name, func.num_args()),
+                    calc_fn_hash(empty(), &func.name, func.num_args() + 1),
                 );
 
                 let rhs = Expr::Dot(
@@ -1563,7 +1563,7 @@ fn make_dot_expr(
         }
         // lhs.Fn() or lhs.eval()
         (_, Expr::FnCall(x, pos))
-            if x.args.len() == 0
+            if x.is_args_empty()
                 && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL]
                     .contains(&x.name.as_ref()) =>
         {
@@ -1587,8 +1587,8 @@ fn make_dot_expr(
         (lhs, Expr::FnCall(mut func, func_pos)) => {
             // Recalculate hash
             func.hash = FnCallHash::from_script_and_native(
-                calc_fn_hash(empty(), &func.name, func.args.len()),
-                calc_fn_hash(empty(), &func.name, func.args.len() + 1),
+                calc_fn_hash(empty(), &func.name, func.num_args()),
+                calc_fn_hash(empty(), &func.name, func.num_args() + 1),
             );
             let rhs = Expr::FnCall(func, func_pos);
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)

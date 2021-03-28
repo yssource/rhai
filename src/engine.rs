@@ -1440,15 +1440,20 @@ impl Engine {
             Expr::FnCall(x, _) if parent_chain_type == ChainType::Dot && x.namespace.is_none() => {
                 let mut arg_positions: StaticVec<_> = Default::default();
 
-                let arg_values = x
+                let mut arg_values = x
                     .args
                     .iter()
+                    .inspect(|arg_expr| arg_positions.push(arg_expr.position()))
                     .map(|arg_expr| {
-                        arg_positions.push(arg_expr.position());
                         self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
                             .map(Dynamic::flatten)
                     })
                     .collect::<Result<StaticVec<_>, _>>()?;
+
+                x.constant_args
+                    .iter()
+                    .inspect(|(_, pos)| arg_positions.push(*pos))
+                    .for_each(|(v, _)| arg_values.push(v.clone()));
 
                 idx_values.push((arg_values, arg_positions).into());
             }
@@ -1475,15 +1480,20 @@ impl Engine {
                     {
                         let mut arg_positions: StaticVec<_> = Default::default();
 
-                        let arg_values = x
+                        let mut arg_values = x
                             .args
                             .iter()
+                            .inspect(|arg_expr| arg_positions.push(arg_expr.position()))
                             .map(|arg_expr| {
-                                arg_positions.push(arg_expr.position());
                                 self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
                                     .map(Dynamic::flatten)
                             })
                             .collect::<Result<StaticVec<_>, _>>()?;
+
+                        x.constant_args
+                            .iter()
+                            .inspect(|(_, pos)| arg_positions.push(*pos))
+                            .for_each(|(v, _)| arg_values.push(v.clone()));
 
                         (arg_values, arg_positions).into()
                     }
@@ -1700,10 +1710,12 @@ impl Engine {
                     capture,
                     hash,
                     args,
+                    constant_args: c_args,
                     ..
                 } = x.as_ref();
                 self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args, *hash, *pos, *capture, level,
+                    scope, mods, state, lib, this_ptr, name, args, c_args, *hash, *pos, *capture,
+                    level,
                 )
             }
 
@@ -1714,12 +1726,14 @@ impl Engine {
                     namespace,
                     hash,
                     args,
+                    constant_args: c_args,
                     ..
                 } = x.as_ref();
                 let namespace = namespace.as_ref();
                 let hash = hash.native_hash();
                 self.make_qualified_function_call(
-                    scope, mods, state, lib, this_ptr, namespace, name, args, hash, *pos, level,
+                    scope, mods, state, lib, this_ptr, namespace, name, args, c_args, hash, *pos,
+                    level,
                 )
             }
 
