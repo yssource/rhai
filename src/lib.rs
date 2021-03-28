@@ -135,6 +135,22 @@ pub use syntax::Expression;
 pub use token::Position;
 pub use utils::ImmutableString;
 
+/// A trait to enable registering Rust functions.
+/// This trait is  no longer needed and will be removed in the future.
+#[deprecated(
+    since = "0.19.15",
+    note = "this trait is no longer needed and will be removed in the future"
+)]
+pub trait RegisterFn {}
+
+/// A trait to enable registering Rust functions.
+/// This trait is  no longer needed and will be removed in the future.
+#[deprecated(
+    since = "0.19.15",
+    note = "this trait is no longer needed and will be removed in the future"
+)]
+pub trait RegisterResultFn {}
+
 /// Alias to [`Rc`][std::rc::Rc] or [`Arc`][std::sync::Arc] depending on the `sync` feature flag.
 pub use fn_native::Shared;
 
@@ -208,9 +224,9 @@ pub use engine::Limits;
 pub use module::NamespaceRef;
 
 /// Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec), which is a
-/// specialized [`Vec`] backed by a small, inline, fixed-size array when there are <= 4 items stored.
+/// specialized [`Vec`] backed by a small, inline, fixed-size array when there are ≤ 4 items stored.
 ///
-/// # Background
+/// # History
 ///
 /// And Saint Attila raised the `SmallVec` up on high, saying, "O Lord, bless this Thy `SmallVec`
 /// that, with it, Thou mayest blow Thine allocation costs to tiny bits in Thy mercy."
@@ -235,17 +251,17 @@ pub use module::NamespaceRef;
 /// in that matter) contain fewer than 5 arguments, the exception being closures that capture a
 /// large number of external variables.
 ///
-/// In addition, most scripts blocks either contain many statements, or just a few lines;
+/// In addition, most script blocks either contain many statements, or just a few lines;
 /// most scripts load fewer than 5 external modules; most module paths contain fewer than 5 levels
 /// (e.g. `std::collections::map::HashMap` is 4 levels, and that's already quite long).
 #[cfg(not(feature = "internals"))]
 type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 
 /// _(INTERNALS)_ Alias to [`smallvec`](https://crates.io/crates/smallvec), which is a specialized
-/// [`Vec`] backed by a small, inline, fixed-size array when there are <= 4 items stored.
+/// [`Vec`] backed by a small, inline, fixed-size array when there are ≤ 4 items stored.
 /// Exported under the `internals` feature only.
 ///
-/// # Background
+/// # History
 ///
 /// And Saint Attila raised the `SmallVec` up on high, saying, "O Lord, bless this Thy `SmallVec`
 /// that, with it, Thou mayest blow Thine allocation costs to tiny bits in Thy mercy."
@@ -270,7 +286,7 @@ type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 /// in that matter) contain fewer than 5 arguments, the exception being closures that capture a
 /// large number of external variables.
 ///
-/// In addition, most scripts blocks either contain many statements, or just a few lines;
+/// In addition, most script blocks either contain many statements, or just a few lines;
 /// most scripts load fewer than 5 external modules; most module paths contain fewer than 5 levels
 /// (e.g. `std::collections::map::HashMap` is 4 levels, and that's already quite long).
 #[cfg(feature = "internals")]
