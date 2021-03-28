@@ -324,7 +324,7 @@ fn test_closures_external() -> Result<(), Box<EvalAltResult>> {
         r#"
             let test = "hello";
             |x| test + x
-    "#,
+        "#,
     )?;
 
     // Save the function pointer together with captured variables

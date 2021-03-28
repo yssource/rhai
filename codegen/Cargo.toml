@@ -11,6 +11,10 @@ license = "MIT OR Apache-2.0"
 [lib]
 proc-macro = true
 
+[features]
+default = []
+metadata = []
+
 [dev-dependencies]
 rhai = { path = "..", version = "^0.19.15" }
 trybuild = "1"

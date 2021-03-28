@@ -23,7 +23,7 @@ fn test_timestamp() -> Result<(), Box<EvalAltResult>> {
                 let x = 10_000;
                 while x > 0 { x -= 1; }
                 elapsed(time)
-    "#
+            "#
         )? < 10.0
     );
 
@@ -35,7 +35,7 @@ fn test_timestamp() -> Result<(), Box<EvalAltResult>> {
                 let x = 10_000;
                 while x > 0 { x -= 1; }
                 elapsed(time)
-    "#
+            "#
         )? < 10
     );
 
@@ -62,7 +62,7 @@ fn test_timestamp_op() -> Result<(), Box<EvalAltResult>> {
                 let time1 = timestamp();
                 let time2 = time1 + 123.45;
                 time2 - time1
-    "#
+            "#
         )? - 123.45)
             .abs()
             < 0.001
@@ -75,7 +75,7 @@ fn test_timestamp_op() -> Result<(), Box<EvalAltResult>> {
                 let time1 = timestamp();
                 let time2 = time1 - 123.45;
                 time1 - time2
-    "#
+            "#
         )? - 123.45)
             .abs()
             < 0.001
@@ -88,7 +88,7 @@ fn test_timestamp_op() -> Result<(), Box<EvalAltResult>> {
                 let time1 = timestamp();
                 let time2 = time1 + 42;
                 time2 - time1
-    "#
+            "#
         )?,
         42
     );
@@ -100,7 +100,7 @@ fn test_timestamp_op() -> Result<(), Box<EvalAltResult>> {
                 let time1 = timestamp();
                 let time2 = time1 - 42;
                 time1 - time2
-    "#
+            "#
         )?,
         42
     );

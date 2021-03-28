@@ -20,7 +20,7 @@ fn test_if() -> Result<(), Box<EvalAltResult>> {
                 else if false { 77 }
                 else if false { 88 }
                 else { 44 }
-        "
+            "
         )?,
         44
     );
@@ -38,7 +38,7 @@ fn test_if_expr() -> Result<(), Box<EvalAltResult>> {
                 let x = 42;
                 let y = 1 + if x > 40 { 100 } else { 0 } / x;
                 y
-        "
+            "
         )?,
         3
     );

@@ -8,7 +8,6 @@ mod serialize;
 mod str;
 
 #[cfg(feature = "metadata")]
-#[cfg(feature = "serde")]
 mod metadata;
 
 pub use de::from_dynamic;

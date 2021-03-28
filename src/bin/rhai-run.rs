@@ -58,13 +58,20 @@ fn main() {
             exit(1);
         }
 
-        if let Err(err) = engine.consume(&contents) {
+        let contents = if contents.starts_with("#!") {
+            // Skip shebang
+            &contents[contents.find('\n').unwrap_or(0)..]
+        } else {
+            &contents[..]
+        };
+
+        if let Err(err) = engine.consume(contents) {
             eprintln!("{:=<1$}", "", filename.len());
             eprintln!("{}", filename);
             eprintln!("{:=<1$}", "", filename.len());
             eprintln!("");
 
-            eprint_error(&contents, *err);
+            eprint_error(contents, *err);
         }
     }
 }

@@ -17,7 +17,7 @@ fn test_while() -> Result<(), Box<EvalAltResult>> {
                 }
                 
                 x
-        ",
+            ",
         )?,
         6
     );
@@ -42,7 +42,7 @@ fn test_do() -> Result<(), Box<EvalAltResult>> {
                 } while x < 10;
                 
                 x
-        ",
+            ",
         )?,
         6
     );

@@ -330,9 +330,17 @@ pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream
     match crate::register::parse_register_macro(args) {
         Ok((module_expr, export_name, rust_mod_path)) => {
             let gen_mod_path = crate::register::generated_module_path(&rust_mod_path);
+
+            #[cfg(feature = "metadata")]
+            let param_names = quote! {
+                Some(#gen_mod_path::Token::PARAM_NAMES)
+            };
+            #[cfg(not(feature = "metadata"))]
+            let param_names = quote! { None };
+
             proc_macro::TokenStream::from(quote! {
                 #module_expr.set_fn(#export_name, FnNamespace::Internal, FnAccess::Public,
-                                    Some(#gen_mod_path::Token::PARAM_NAMES),
+                                    #param_names,
                                     &#gen_mod_path::Token::param_types(),
                                     #gen_mod_path::Token().into());
             })
@@ -371,9 +379,17 @@ pub fn set_exported_global_fn(args: proc_macro::TokenStream) -> proc_macro::Toke
     match crate::register::parse_register_macro(args) {
         Ok((module_expr, export_name, rust_mod_path)) => {
             let gen_mod_path = crate::register::generated_module_path(&rust_mod_path);
+
+            #[cfg(feature = "metadata")]
+            let param_names = quote! {
+                Some(#gen_mod_path::Token::PARAM_NAMES)
+            };
+            #[cfg(not(feature = "metadata"))]
+            let param_names = quote! { None };
+
             proc_macro::TokenStream::from(quote! {
                 #module_expr.set_fn(#export_name, FnNamespace::Global, FnAccess::Public,
-                                    Some(#gen_mod_path::Token::PARAM_NAMES),
+                                    #param_names,
                                     &#gen_mod_path::Token::param_types(),
                                     #gen_mod_path::Token().into());
             })

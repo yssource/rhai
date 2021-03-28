@@ -587,11 +587,13 @@ impl Token {
             #[cfg(feature = "no_module")]
             "import" | "export" | "as" => Reserved(syntax.into()),
 
-            "===" | "!==" | "->" | "<-" | ":=" | "~" | "::<" | "(*" | "*)" | "#" | "public"
-            | "protected" | "super" | "new" | "use" | "module" | "package" | "var" | "static"
-            | "begin" | "end" | "shared" | "with" | "each" | "then" | "goto" | "unless"
-            | "exit" | "match" | "case" | "default" | "void" | "null" | "nil" | "spawn"
-            | "thread" | "go" | "sync" | "async" | "await" | "yield" => Reserved(syntax.into()),
+            "===" | "!==" | "->" | "<-" | ":=" | "~" | "::<" | "(*" | "*)" | "#" | "#!"
+            | "public" | "protected" | "super" | "new" | "use" | "module" | "package" | "var"
+            | "static" | "begin" | "end" | "shared" | "with" | "each" | "then" | "goto"
+            | "unless" | "exit" | "match" | "case" | "default" | "void" | "null" | "nil"
+            | "spawn" | "thread" | "go" | "sync" | "async" | "await" | "yield" => {
+                Reserved(syntax.into())
+            }
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
             | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_THIS | KEYWORD_IS_DEF_VAR => {
@@ -1323,6 +1325,9 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
                 return Some((Token::MapStart, start_pos));
             }
+            // Shebang
+            ('#', '!') => return Some((Token::Reserved("#!".into()), start_pos)),
+
             ('#', _) => return Some((Token::Reserved("#".into()), start_pos)),
 
             // Operators
