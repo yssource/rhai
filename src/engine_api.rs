@@ -8,7 +8,6 @@ use crate::optimize::OptimizationLevel;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
-    format,
     string::String,
 };
 use crate::{
@@ -61,7 +60,7 @@ impl Engine {
         #[cfg(feature = "metadata")]
         let mut param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
-            .map(|ty| format!("_: {}", self.map_type_name(ty)))
+            .map(|ty| crate::stdlib::format!("_: {}", self.map_type_name(ty)))
             .collect();
 
         #[cfg(feature = "metadata")]
@@ -121,7 +120,7 @@ impl Engine {
         #[cfg(feature = "metadata")]
         let param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
-            .map(|ty| format!("_: {}", self.map_type_name(ty)))
+            .map(|ty| crate::stdlib::format!("_: {}", self.map_type_name(ty)))
             .chain(crate::stdlib::iter::once(
                 self.map_type_name(F::return_type_name()).into(),
             ))
@@ -1167,7 +1166,7 @@ impl Engine {
 
         let mut f = crate::stdlib::fs::File::open(path.clone()).map_err(|err| {
             EvalAltResult::ErrorSystem(
-                format!("Cannot open script file '{}'", path.to_string_lossy()),
+                crate::stdlib::format!("Cannot open script file '{}'", path.to_string_lossy()),
                 err.into(),
             )
         })?;
@@ -1176,7 +1175,7 @@ impl Engine {
 
         f.read_to_string(&mut contents).map_err(|err| {
             EvalAltResult::ErrorSystem(
-                format!("Cannot read script file '{}'", path.to_string_lossy()),
+                crate::stdlib::format!("Cannot read script file '{}'", path.to_string_lossy()),
                 err.into(),
             )
         })?;
@@ -1991,7 +1990,10 @@ impl Engine {
         signatures.extend(self.global_namespace.gen_fn_signatures());
 
         self.global_sub_modules.iter().for_each(|(name, m)| {
-            signatures.extend(m.gen_fn_signatures().map(|f| format!("{}::{}", name, f)))
+            signatures.extend(
+                m.gen_fn_signatures()
+                    .map(|f| crate::stdlib::format!("{}::{}", name, f)),
+            )
         });
 
         if include_packages {

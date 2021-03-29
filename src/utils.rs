@@ -590,6 +590,7 @@ impl PartialOrd<ImmutableString> for String {
     }
 }
 
+#[cfg(feature = "smartstring")]
 impl From<ImmutableString> for Identifier {
     #[inline(always)]
     fn from(value: ImmutableString) -> Self {
@@ -597,6 +598,7 @@ impl From<ImmutableString> for Identifier {
     }
 }
 
+#[cfg(feature = "smartstring")]
 impl From<Identifier> for ImmutableString {
     #[inline(always)]
     fn from(value: Identifier) -> Self {
@@ -627,7 +629,15 @@ pub struct StringInterner(BTreeSet<Identifier>);
 impl StringInterner {
     /// Get an interned string, creating one if it is not yet interned.
     #[inline(always)]
-    pub fn get(&mut self, text: impl AsRef<str>) -> Identifier {
-        text.as_ref().into()
+    pub fn get(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
+        #[cfg(feature = "smartstring")]
+        return text.as_ref().into();
+
+        #[cfg(not(feature = "smartstring"))]
+        return self.0.get(text.as_ref()).cloned().unwrap_or_else(|| {
+            let s: Identifier = text.into();
+            self.0.insert(s.clone());
+            s
+        });
     }
 }

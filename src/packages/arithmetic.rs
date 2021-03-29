@@ -7,6 +7,10 @@ use crate::{def_package, EvalAltResult, Position, INT};
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
 
+#[cfg(feature = "no_std")]
+#[cfg(not(feature = "no_float"))]
+use num_traits::Float;
+
 #[inline(always)]
 pub fn make_err(msg: impl Into<String>) -> Box<EvalAltResult> {
     EvalAltResult::ErrorArithmetic(msg.into(), Position::NONE).into()

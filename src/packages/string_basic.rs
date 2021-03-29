@@ -55,6 +55,10 @@ mod print_debug_functions {
 
     #[cfg(not(feature = "no_float"))]
     pub mod float_functions {
+        #[cfg(feature = "no_std")]
+        #[cfg(not(feature = "no_float"))]
+        use num_traits::Float;
+
         #[rhai_fn(name = "print", name = "to_string")]
         pub fn print_f64(number: f64) -> ImmutableString {
             let abs = number.abs();

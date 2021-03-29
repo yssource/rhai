@@ -166,7 +166,7 @@ impl<'e> ParseState<'e> {
 
     /// Get an interned string, creating one if it is not yet interned.
     #[inline(always)]
-    pub fn get_interned_string(&mut self, text: impl AsRef<str>) -> Identifier {
+    pub fn get_interned_string(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
         self.interned_strings.get(text)
     }
 }

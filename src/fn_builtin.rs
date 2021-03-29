@@ -41,6 +41,10 @@ pub fn get_builtin_binary_op_fn(
     x: &Dynamic,
     y: &Dynamic,
 ) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult> {
+    #[cfg(feature = "no_std")]
+    #[cfg(not(feature = "no_float"))]
+    use num_traits::Float;
+
     let type1 = x.type_id();
     let type2 = y.type_id();
 
@@ -411,6 +415,10 @@ pub fn get_builtin_op_assignment_fn(
     x: &Dynamic,
     y: &Dynamic,
 ) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult> {
+    #[cfg(feature = "no_std")]
+    #[cfg(not(feature = "no_float"))]
+    use num_traits::Float;
+
     let type1 = x.type_id();
     let type2 = y.type_id();
 

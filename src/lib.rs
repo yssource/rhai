@@ -135,6 +135,15 @@ pub use syntax::Expression;
 pub use token::Position;
 pub use utils::ImmutableString;
 
+/// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
+/// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
+#[cfg(feature = "smartstring")]
+pub type Identifier = smartstring::SmartString<smartstring::Compact>;
+
+/// An identifier in Rhai.
+#[cfg(not(feature = "smartstring"))]
+pub type Identifier = ImmutableString;
+
 /// A trait to enable registering Rust functions.
 /// This trait is  no longer needed and will be removed in the future.
 #[deprecated(
@@ -291,8 +300,6 @@ type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 /// (e.g. `std::collections::map::HashMap` is 4 levels, and that's already quite long).
 #[cfg(feature = "internals")]
 pub type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
-
-pub type Identifier = smartstring::SmartString<smartstring::Compact>;
 
 // Compiler guards against mutually-exclusive feature flags
 

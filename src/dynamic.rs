@@ -8,7 +8,7 @@ use crate::stdlib::{
     fmt,
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut},
-    string::{String, ToString},
+    string::String,
 };
 use crate::{FnPtr, ImmutableString, INT};
 
@@ -1673,9 +1673,10 @@ impl From<&ImmutableString> for Dynamic {
         value.clone().into()
     }
 }
-impl<C: smartstring::SmartStringMode> From<&smartstring::SmartString<C>> for Dynamic {
+#[cfg(feature = "smartstring")]
+impl From<&crate::Identifier> for Dynamic {
     #[inline(always)]
-    fn from(value: &smartstring::SmartString<C>) -> Self {
+    fn from(value: &crate::Identifier) -> Self {
         value.to_string().into()
     }
 }
