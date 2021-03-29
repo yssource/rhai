@@ -85,6 +85,13 @@ pub fn get_builtin_binary_op_fn(
                 Ok(x.$func(y).into())
             })
         };
+        ($xx:ident . $func:ident ( $yy:ident . $yyy:ident () )) => {
+            return Some(|_, args| {
+                let x = &*args[0].read_lock::<$xx>().unwrap();
+                let y = &*args[1].read_lock::<$yy>().unwrap();
+                Ok(x.$func(y.$yyy()).into())
+            })
+        };
         ($func:ident ( $op:tt )) => {
             return Some(|_, args| {
                 let (x, y) = $func(args);
@@ -284,7 +291,7 @@ pub fn get_builtin_binary_op_fn(
         use crate::Map;
 
         match op {
-            OP_CONTAINS => impl_op!(Map.contains_key(ImmutableString)),
+            OP_CONTAINS => impl_op!(Map.contains_key(ImmutableString.as_str())),
             _ => return None,
         }
     }

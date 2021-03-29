@@ -1548,7 +1548,7 @@ pub enum Expr {
     Array(Box<StaticVec<Expr>>, Position),
     /// #{ name:expr, ... }
     Map(
-        Box<(StaticVec<(Ident, Expr)>, BTreeMap<ImmutableString, Dynamic>)>,
+        Box<(StaticVec<(Ident, Expr)>, BTreeMap<Identifier, Dynamic>)>,
         Position,
     ),
     /// ()

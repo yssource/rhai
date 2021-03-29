@@ -1712,7 +1712,7 @@ impl<T: Variant + Clone> crate::stdlib::iter::FromIterator<T> for Dynamic {
 }
 #[cfg(not(feature = "no_object"))]
 #[cfg(not(feature = "no_std"))]
-impl<K: Into<ImmutableString>, T: Variant + Clone> From<crate::stdlib::collections::HashMap<K, T>>
+impl<K: Into<crate::Identifier>, T: Variant + Clone> From<crate::stdlib::collections::HashMap<K, T>>
     for Dynamic
 {
     #[inline(always)]
@@ -1729,8 +1729,8 @@ impl<K: Into<ImmutableString>, T: Variant + Clone> From<crate::stdlib::collectio
     }
 }
 #[cfg(not(feature = "no_object"))]
-impl<K: Into<ImmutableString>, T: Variant + Clone> From<crate::stdlib::collections::BTreeMap<K, T>>
-    for Dynamic
+impl<K: Into<crate::Identifier>, T: Variant + Clone>
+    From<crate::stdlib::collections::BTreeMap<K, T>> for Dynamic
 {
     #[inline(always)]
     fn from(value: crate::stdlib::collections::BTreeMap<K, T>) -> Self {

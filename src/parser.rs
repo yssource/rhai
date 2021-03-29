@@ -24,8 +24,8 @@ use crate::syntax::{CustomSyntax, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
 use crate::utils::{get_hasher, IdentifierBuilder};
 use crate::{
-    calc_fn_hash, Dynamic, Engine, Identifier, ImmutableString, LexError, ParseError,
-    ParseErrorType, Position, Scope, Shared, StaticVec, AST,
+    calc_fn_hash, Dynamic, Engine, Identifier, LexError, ParseError, ParseErrorType, Position,
+    Scope, Shared, StaticVec, AST,
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -685,7 +685,7 @@ fn parse_map_literal(
     settings.pos = eat_token(input, Token::MapStart);
 
     let mut map: StaticVec<(Ident, Expr)> = Default::default();
-    let mut template: BTreeMap<ImmutableString, Dynamic> = Default::default();
+    let mut template: BTreeMap<Identifier, Dynamic> = Default::default();
 
     loop {
         const MISSING_RBRACE: &str = "to end this object map literal";

@@ -189,7 +189,7 @@ pub type Array = stdlib::vec::Vec<Dynamic>;
 ///
 /// Not available under `no_object`.
 #[cfg(not(feature = "no_object"))]
-pub type Map = stdlib::collections::BTreeMap<ImmutableString, Dynamic>;
+pub type Map = stdlib::collections::BTreeMap<Identifier, Dynamic>;
 
 #[cfg(not(feature = "no_module"))]
 pub use module::ModuleResolver;

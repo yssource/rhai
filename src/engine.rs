@@ -1573,12 +1573,12 @@ impl Engine {
                     self.make_type_mismatch_err::<ImmutableString>(idx.type_name(), idx_pos)
                 })?;
 
-                if _create && !map.contains_key(index) {
-                    map.insert(index.clone(), Default::default());
+                if _create && !map.contains_key(index.as_str()) {
+                    map.insert(index.clone().into(), Default::default());
                 }
 
                 Ok(map
-                    .get_mut(index)
+                    .get_mut(index.as_str())
                     .map(Target::from)
                     .unwrap_or_else(|| Target::from(())))
             }
