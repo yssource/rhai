@@ -15,7 +15,7 @@ use crate::stdlib::{
     str::FromStr,
     string::{String, ToString},
 };
-use crate::Shared;
+use crate::{Identifier, Shared};
 
 /// A hasher that only takes one single [`u64`] and returns it as a hash key.
 ///
@@ -590,6 +590,20 @@ impl PartialOrd<ImmutableString> for String {
     }
 }
 
+impl From<ImmutableString> for Identifier {
+    #[inline(always)]
+    fn from(value: ImmutableString) -> Self {
+        value.into_owned().into()
+    }
+}
+
+impl From<Identifier> for ImmutableString {
+    #[inline(always)]
+    fn from(value: Identifier) -> Self {
+        value.to_string().into()
+    }
+}
+
 impl ImmutableString {
     /// Consume the [`ImmutableString`] and convert it into a [`String`].
     /// If there are other references to the same string, a cloned copy is returned.
@@ -608,16 +622,12 @@ impl ImmutableString {
 
 /// A collection of interned strings.
 #[derive(Debug, Clone, Default, Hash)]
-pub struct StringInterner(BTreeSet<ImmutableString>);
+pub struct StringInterner(BTreeSet<Identifier>);
 
 impl StringInterner {
     /// Get an interned string, creating one if it is not yet interned.
     #[inline(always)]
-    pub fn get(&mut self, text: impl AsRef<str> + Into<ImmutableString>) -> ImmutableString {
-        self.0.get(text.as_ref()).cloned().unwrap_or_else(|| {
-            let s = text.into();
-            self.0.insert(s.clone());
-            s
-        })
+    pub fn get(&mut self, text: impl AsRef<str>) -> Identifier {
+        text.as_ref().into()
     }
 }

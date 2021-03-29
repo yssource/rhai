@@ -1667,6 +1667,18 @@ impl<S: Into<ImmutableString>> From<S> for Dynamic {
         Self(Union::Str(value.into(), AccessMode::ReadWrite))
     }
 }
+impl From<&ImmutableString> for Dynamic {
+    #[inline(always)]
+    fn from(value: &ImmutableString) -> Self {
+        value.clone().into()
+    }
+}
+impl<C: smartstring::SmartStringMode> From<&smartstring::SmartString<C>> for Dynamic {
+    #[inline(always)]
+    fn from(value: &smartstring::SmartString<C>) -> Self {
+        value.to_string().into()
+    }
+}
 #[cfg(not(feature = "no_index"))]
 impl<T: Variant + Clone> From<crate::stdlib::vec::Vec<T>> for Dynamic {
     #[inline(always)]

@@ -34,6 +34,7 @@ Breaking changes
 * The _reflections_ API such as `Engine::gen_fn_signatures`, `Module::update_fn_metadata` etc. are put under the `metadata` feature gate.
 * The shebang `#!` is now a reserved symbol.
 * Shebangs at the very beginning of script files are skipped when loading them.
+* [`smartstring`](https://crates.io/crates/smartstring) is used for identifiers.
 
 Enhancements
 ------------

@@ -292,6 +292,8 @@ type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 #[cfg(feature = "internals")]
 pub type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 
+pub type Identifier = smartstring::SmartString<smartstring::Compact>;
+
 // Compiler guards against mutually-exclusive feature flags
 
 #[cfg(feature = "no_float")]

@@ -1,6 +1,6 @@
 //! Module implementing the [`AST`] optimizer.
 
-use crate::ast::{Expr, Ident, Stmt, StmtBlock};
+use crate::ast::{Expr, Stmt, StmtBlock};
 use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
@@ -214,17 +214,17 @@ fn optimize_stmt_block(
         statements.iter_mut().for_each(|stmt| {
             match stmt {
                 // Add constant literals into the state
-                Stmt::Const(value_expr, Ident { name, .. }, _, _) => {
+                Stmt::Const(value_expr, x, _, _) => {
                     optimize_expr(value_expr, state);
 
                     if value_expr.is_constant() {
-                        state.push_var(name, AccessMode::ReadOnly, value_expr.clone());
+                        state.push_var(&x.name, AccessMode::ReadOnly, value_expr.clone());
                     }
                 }
                 // Add variables into the state
-                Stmt::Let(value_expr, Ident { name, pos, .. }, _, _) => {
+                Stmt::Let(value_expr, x, _, _) => {
                     optimize_expr(value_expr, state);
-                    state.push_var(name, AccessMode::ReadWrite, Expr::Unit(*pos));
+                    state.push_var(&x.name, AccessMode::ReadWrite, Expr::Unit(x.pos));
                 }
                 // Optimize the statement
                 _ => optimize_stmt(stmt, state, preserve_result),
@@ -649,7 +649,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                *expr = mem::take(&mut m.0).into_iter().find(|(x, _)| x.name == *s)
+                *expr = mem::take(&mut m.0).into_iter().find(|(x, _)| x.name.as_str() == s.as_str())
                             .map(|(_, mut expr)| { expr.set_position(*pos); expr })
                             .unwrap_or_else(|| Expr::Unit(*pos));
             }

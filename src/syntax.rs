@@ -6,7 +6,8 @@ use crate::fn_native::SendSync;
 use crate::stdlib::{boxed::Box, format, string::ToString};
 use crate::token::{is_valid_identifier, Token};
 use crate::{
-    Engine, ImmutableString, LexError, ParseError, Position, RhaiResult, Shared, StaticVec,
+    Engine, Identifier, ImmutableString, LexError, ParseError, Position, RhaiResult, Shared,
+    StaticVec,
 };
 
 pub const MARKER_EXPR: &str = "$expr$";
@@ -103,7 +104,7 @@ impl Engine {
     ///
     /// If `new_vars` is negative, then it is expected that only the top `new_vars` variables in the
     /// current [`Scope`][crate::Scope] will be _popped_.  Do not randomly remove variables.
-    pub fn register_custom_syntax<S: AsRef<str> + Into<ImmutableString>>(
+    pub fn register_custom_syntax<S: AsRef<str> + Into<Identifier>>(
         &mut self,
         keywords: &[S],
         new_vars: isize,
@@ -221,7 +222,7 @@ impl Engine {
     /// Otherwise, custom keywords won't be recognized.
     pub fn register_custom_syntax_raw(
         &mut self,
-        key: impl Into<ImmutableString>,
+        key: impl Into<Identifier>,
         parse: impl Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError>
             + SendSync
             + 'static,

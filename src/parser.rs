@@ -24,8 +24,8 @@ use crate::syntax::{CustomSyntax, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
 use crate::utils::{get_hasher, StringInterner};
 use crate::{
-    calc_fn_hash, Dynamic, Engine, ImmutableString, LexError, ParseError, ParseErrorType, Position,
-    Scope, Shared, StaticVec, AST,
+    calc_fn_hash, Dynamic, Engine, Identifier, ImmutableString, LexError, ParseError,
+    ParseErrorType, Position, Scope, Shared, StaticVec, AST,
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -46,12 +46,12 @@ struct ParseState<'e> {
     /// Interned strings.
     interned_strings: StringInterner,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
-    stack: Vec<(ImmutableString, AccessMode)>,
+    stack: Vec<(Identifier, AccessMode)>,
     /// Size of the local variables stack upon entry of the current block scope.
     entry_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
-    external_vars: BTreeMap<ImmutableString, Position>,
+    external_vars: BTreeMap<Identifier, Position>,
     /// An indicator that disables variable capturing into externals one single time
     /// up until the nearest consumed Identifier token.
     /// If set to false the next call to `access_var` will not capture the variable.
@@ -60,7 +60,7 @@ struct ParseState<'e> {
     allow_capture: bool,
     /// Encapsulates a local stack with imported [module][crate::Module] names.
     #[cfg(not(feature = "no_module"))]
-    modules: StaticVec<ImmutableString>,
+    modules: StaticVec<Identifier>,
     /// Maximum levels of expression nesting.
     #[cfg(not(feature = "unchecked"))]
     max_expr_depth: Option<NonZeroUsize>,
@@ -166,10 +166,7 @@ impl<'e> ParseState<'e> {
 
     /// Get an interned string, creating one if it is not yet interned.
     #[inline(always)]
-    pub fn get_interned_string(
-        &mut self,
-        text: impl AsRef<str> + Into<ImmutableString>,
-    ) -> ImmutableString {
+    pub fn get_interned_string(&mut self, text: impl AsRef<str>) -> Identifier {
         self.interned_strings.get(text)
     }
 }
@@ -310,7 +307,7 @@ fn parse_fn_call(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    id: ImmutableString,
+    id: Identifier,
     capture: bool,
     mut namespace: Option<NamespaceRef>,
     settings: ParseSettings,
@@ -668,6 +665,8 @@ fn parse_array_literal(
         };
     }
 
+    arr.shrink_to_fit();
+
     Ok(Expr::Array(Box::new(arr), settings.pos))
 }
 
@@ -707,7 +706,7 @@ fn parse_map_literal(
 
         let (name, pos) = match input.next().unwrap() {
             (Token::Identifier(s), pos) | (Token::StringConstant(s), pos) => {
-                if map.iter().any(|(p, _)| p.name == &s) {
+                if map.iter().any(|(p, _)| p.name == s) {
                     return Err(PERR::DuplicatedProperty(s).into_err(pos));
                 }
                 (s, pos)
@@ -757,7 +756,7 @@ fn parse_map_literal(
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
         let name = state.get_interned_string(name);
-        template.insert(name.clone(), Default::default());
+        template.insert(name.clone().into(), Default::default());
         map.push((Ident { name, pos }, expr));
 
         match input.peek().unwrap() {
@@ -781,6 +780,8 @@ fn parse_map_literal(
             }
         }
     }
+
+    map.shrink_to_fit();
 
     Ok(Expr::Map(Box::new((map, template)), settings.pos))
 }
@@ -935,7 +936,7 @@ fn parse_primary(
             Token::IntegerConstant(x) => Expr::IntegerConstant(x, settings.pos),
             Token::CharConstant(c) => Expr::CharConstant(c, settings.pos),
             Token::StringConstant(s) => {
-                Expr::StringConstant(state.get_interned_string(s), settings.pos)
+                Expr::StringConstant(state.get_interned_string(s).into(), settings.pos)
             }
             Token::True => Expr::BoolConstant(true, settings.pos),
             Token::False => Expr::BoolConstant(false, settings.pos),
@@ -1830,7 +1831,7 @@ fn parse_custom_syntax(
             MARKER_IDENT => match input.next().unwrap() {
                 (Token::Identifier(s), pos) => {
                     let name = state.get_interned_string(s);
-                    segments.push(name.clone());
+                    segments.push(name.clone().into());
                     tokens.push(state.get_interned_string(MARKER_IDENT));
                     let var_name_def = Ident { name, pos };
                     keywords.push(Expr::Variable(Box::new((None, None, var_name_def))));
@@ -1843,14 +1844,14 @@ fn parse_custom_syntax(
             MARKER_EXPR => {
                 keywords.push(parse_expr(input, state, lib, settings)?);
                 let keyword = state.get_interned_string(MARKER_EXPR);
-                segments.push(keyword.clone());
+                segments.push(keyword.clone().into());
                 tokens.push(keyword);
             }
             MARKER_BLOCK => match parse_block(input, state, lib, settings)? {
                 block @ Stmt::Block(_, _) => {
                     keywords.push(Expr::Stmt(Box::new(block.into())));
                     let keyword = state.get_interned_string(MARKER_BLOCK);
-                    segments.push(keyword.clone());
+                    segments.push(keyword.clone().into());
                     tokens.push(keyword);
                 }
                 stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
@@ -1859,7 +1860,7 @@ fn parse_custom_syntax(
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                 (t, _) if t.syntax().as_ref() == s => {
                     segments.push(required_token.clone());
-                    tokens.push(required_token.clone());
+                    tokens.push(required_token.clone().into());
                 }
                 (_, pos) => {
                     return Err(PERR::MissingToken(
@@ -1901,7 +1902,7 @@ fn parse_expr(
 
         match token {
             Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key) => {
-                match state.engine.custom_syntax.get_key_value(key) {
+                match state.engine.custom_syntax.get_key_value(key.as_str()) {
                     Some((key, syntax)) => {
                         input.next().unwrap();
                         return parse_custom_syntax(
@@ -2119,16 +2120,20 @@ fn parse_for(
     ensure_not_statement_expr(input, "a boolean")?;
     let expr = parse_expr(input, state, lib, settings.level_up())?;
 
-    let loop_var = state.get_interned_string(name.clone());
+    let loop_var = state.get_interned_string(name);
     let prev_stack_len = state.stack.len();
-    state.stack.push((loop_var, AccessMode::ReadWrite));
+    state.stack.push((loop_var.clone(), AccessMode::ReadWrite));
 
     settings.is_breakable = true;
     let body = parse_block(input, state, lib, settings.level_up())?;
 
     state.stack.truncate(prev_stack_len);
 
-    Ok(Stmt::For(expr, Box::new((name, body.into())), settings.pos))
+    Ok(Stmt::For(
+        expr,
+        Box::new((loop_var, body.into())),
+        settings.pos,
+    ))
 }
 
 /// Parse a variable definition statement.
@@ -2174,9 +2179,9 @@ fn parse_let(
 
     match var_type {
         // let name = expr
-        AccessMode::ReadWrite => Ok(Stmt::Let(expr, var_def, export, settings.pos)),
+        AccessMode::ReadWrite => Ok(Stmt::Let(expr, var_def.into(), export, settings.pos)),
         // const name = { expr:constant }
-        AccessMode::ReadOnly => Ok(Stmt::Const(expr, var_def, export, settings.pos)),
+        AccessMode::ReadOnly => Ok(Stmt::Const(expr, var_def.into(), export, settings.pos)),
     }
 }
 
@@ -2217,10 +2222,13 @@ fn parse_import(
 
     Ok(Stmt::Import(
         expr,
-        Some(Ident {
-            name,
-            pos: name_pos,
-        }),
+        Some(
+            Ident {
+                name,
+                pos: name_pos,
+            }
+            .into(),
+        ),
         settings.pos,
     ))
 }
@@ -2511,7 +2519,7 @@ fn parse_stmt(
 
                     if lib.contains_key(&hash) {
                         return Err(PERR::FnDuplicatedDefinition(
-                            func.name.into_owned(),
+                            func.name.to_string(),
                             func.params.len(),
                         )
                         .into_err(pos));
@@ -2904,7 +2912,7 @@ fn parse_anon_fn(
         comments: Default::default(),
     };
 
-    let expr = Expr::FnPointer(fn_name, settings.pos);
+    let expr = Expr::FnPointer(fn_name.into(), settings.pos);
 
     #[cfg(not(feature = "no_closure"))]
     let expr = make_curry_from_externals(state, expr, externals, settings.pos);
