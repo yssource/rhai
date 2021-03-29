@@ -5,7 +5,7 @@ use crate::fn_native::shared_make_mut;
 use crate::module::NamespaceRef;
 use crate::stdlib::{
     boxed::Box,
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fmt,
     hash::Hash,
     num::NonZeroUsize,
@@ -58,7 +58,7 @@ pub struct ScriptFnDef {
     pub params: StaticVec<Identifier>,
     /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
-    pub externals: BTreeSet<Identifier>,
+    pub externals: crate::stdlib::collections::BTreeSet<Identifier>,
     /// Function doc-comments (if any).
     pub comments: StaticVec<String>,
 }
@@ -901,7 +901,7 @@ pub enum Stmt {
     Export(Vec<(Ident, Option<Ident>)>, Position),
     /// Convert a variable to shared.
     #[cfg(not(feature = "no_closure"))]
-    Share(Ident),
+    Share(Box<Ident>),
 }
 
 impl Default for Stmt {
@@ -1864,8 +1864,8 @@ mod tests {
         assert_eq!(size_of::<Position>(), 4);
         assert_eq!(size_of::<ast::Expr>(), 16);
         assert_eq!(size_of::<Option<ast::Expr>>(), 16);
-        assert_eq!(size_of::<ast::Stmt>(), 40);
-        assert_eq!(size_of::<Option<ast::Stmt>>(), 40);
+        assert_eq!(size_of::<ast::Stmt>(), 32);
+        assert_eq!(size_of::<Option<ast::Stmt>>(), 32);
         assert_eq!(size_of::<FnPtr>(), 80);
         assert_eq!(size_of::<Scope>(), 288);
         assert_eq!(size_of::<LexError>(), 56);

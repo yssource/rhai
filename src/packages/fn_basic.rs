@@ -1,5 +1,5 @@
 use crate::plugin::*;
-use crate::{def_package, FnPtr, Identifier, ImmutableString, NativeCallContext};
+use crate::{def_package, FnPtr, ImmutableString, NativeCallContext};
 
 def_package!(crate:BasicFnPackage:"Basic Fn functions.", lib, {
     combine_with_exported_module!(lib, "FnPtr", fn_ptr_functions);
@@ -34,7 +34,7 @@ mod fn_ptr_functions {
 #[cfg(not(feature = "no_index"))]
 #[cfg(not(feature = "no_object"))]
 fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
-    use crate::{ast::ScriptFnDef, stdlib::collections::BTreeSet, Array, Map};
+    use crate::{ast::ScriptFnDef, stdlib::collections::BTreeSet, Array, Identifier, Map};
 
     // Create a metadata record for a function.
     fn make_metadata(

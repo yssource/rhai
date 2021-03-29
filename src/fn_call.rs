@@ -96,6 +96,7 @@ impl Drop for ArgBackup<'_> {
     }
 }
 
+#[cfg(not(feature = "no_closure"))]
 #[inline(always)]
 pub fn ensure_no_data_race(
     fn_name: &str,

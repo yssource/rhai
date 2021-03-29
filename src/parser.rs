@@ -2800,7 +2800,7 @@ fn make_curry_from_externals(
     // Convert the entire expression into a statement block, then insert the relevant
     // [`Share`][Stmt::Share] statements.
     let mut statements: StaticVec<_> = Default::default();
-    statements.extend(externals.into_iter().map(Stmt::Share));
+    statements.extend(externals.into_iter().map(|v| Stmt::Share(Box::new(v))));
     statements.push(Stmt::Expr(expr));
     Expr::Stmt(Box::new(StmtBlock { statements, pos }))
 }
