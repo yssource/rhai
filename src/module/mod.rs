@@ -16,7 +16,7 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::token::Token;
-use crate::utils::StringInterner;
+use crate::utils::IdentifierBuilder;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, EvalAltResult, Identifier,
     ImmutableString, NativeCallContext, Position, Shared, StaticVec,
@@ -149,7 +149,7 @@ pub struct Module {
     /// Does the [`Module`] contain indexed functions that have been exposed to the global namespace?
     contains_indexed_global_functions: bool,
     /// Interned strings
-    interned_strings: StringInterner,
+    identifiers: IdentifierBuilder,
 }
 
 impl Default for Module {
@@ -166,7 +166,7 @@ impl Default for Module {
             all_type_iterators: Default::default(),
             indexed: false,
             contains_indexed_global_functions: false,
-            interned_strings: Default::default(),
+            identifiers: Default::default(),
         }
     }
 }
@@ -700,7 +700,7 @@ impl Module {
         self.functions.insert(
             hash_fn,
             Box::new(FuncInfo {
-                name: self.interned_strings.get(name),
+                name: self.identifiers.get(name),
                 namespace,
                 access,
                 params: param_types.len(),

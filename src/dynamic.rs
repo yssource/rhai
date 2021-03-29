@@ -1673,11 +1673,11 @@ impl From<&ImmutableString> for Dynamic {
         value.clone().into()
     }
 }
-#[cfg(feature = "smartstring")]
+#[cfg(not(feature = "no_smartstring"))]
 impl From<&crate::Identifier> for Dynamic {
     #[inline(always)]
     fn from(value: &crate::Identifier) -> Self {
-        value.to_string().into()
+        crate::stdlib::string::ToString::to_string(value).into()
     }
 }
 #[cfg(not(feature = "no_index"))]

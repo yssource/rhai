@@ -6,7 +6,6 @@ use crate::stdlib::{
     borrow::Borrow,
     boxed::Box,
     cmp::Ordering,
-    collections::BTreeSet,
     fmt,
     fmt::{Debug, Display},
     hash::{BuildHasher, Hash, Hasher},
@@ -590,7 +589,7 @@ impl PartialOrd<ImmutableString> for String {
     }
 }
 
-#[cfg(feature = "smartstring")]
+#[cfg(not(feature = "no_smartstring"))]
 impl From<ImmutableString> for Identifier {
     #[inline(always)]
     fn from(value: ImmutableString) -> Self {
@@ -598,7 +597,7 @@ impl From<ImmutableString> for Identifier {
     }
 }
 
-#[cfg(feature = "smartstring")]
+#[cfg(not(feature = "no_smartstring"))]
 impl From<Identifier> for ImmutableString {
     #[inline(always)]
     fn from(value: Identifier) -> Self {
@@ -622,18 +621,27 @@ impl ImmutableString {
     }
 }
 
-/// A collection of interned strings.
+/// A factory of identifiers from text strings.
+///
+/// When [`SmartString`](https://crates.io/crates/smartstring) is used as [`Identifier`],
+/// this just returns one because most identifiers in Rhai are short and ASCII-based.
+///
+/// When [`ImmutableString`] is used as [`Identifier`], this type acts as an interner which keeps a
+/// collection of strings and returns shared instances, only creating a new string when it is not
+/// yet interned.
 #[derive(Debug, Clone, Default, Hash)]
-pub struct StringInterner(BTreeSet<Identifier>);
+pub struct IdentifierBuilder(
+    #[cfg(feature = "no_smartstring")] crate::stdlib::collections::BTreeSet<Identifier>,
+);
 
-impl StringInterner {
-    /// Get an interned string, creating one if it is not yet interned.
+impl IdentifierBuilder {
+    /// Get an identifier from a text string.
     #[inline(always)]
     pub fn get(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
-        #[cfg(feature = "smartstring")]
+        #[cfg(not(feature = "no_smartstring"))]
         return text.as_ref().into();
 
-        #[cfg(not(feature = "smartstring"))]
+        #[cfg(feature = "no_smartstring")]
         return self.0.get(text.as_ref()).cloned().unwrap_or_else(|| {
             let s: Identifier = text.into();
             self.0.insert(s.clone());

@@ -137,11 +137,11 @@ pub use utils::ImmutableString;
 
 /// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
 /// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
-#[cfg(feature = "smartstring")]
+#[cfg(not(feature = "no_smartstring"))]
 pub type Identifier = smartstring::SmartString<smartstring::Compact>;
 
 /// An identifier in Rhai.
-#[cfg(not(feature = "smartstring"))]
+#[cfg(feature = "no_smartstring")]
 pub type Identifier = ImmutableString;
 
 /// A trait to enable registering Rust functions.

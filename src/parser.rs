@@ -22,7 +22,7 @@ use crate::stdlib::{
 };
 use crate::syntax::{CustomSyntax, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
-use crate::utils::{get_hasher, StringInterner};
+use crate::utils::{get_hasher, IdentifierBuilder};
 use crate::{
     calc_fn_hash, Dynamic, Engine, Identifier, ImmutableString, LexError, ParseError,
     ParseErrorType, Position, Scope, Shared, StaticVec, AST,
@@ -44,7 +44,7 @@ struct ParseState<'e> {
     /// Reference to the scripting [`Engine`].
     engine: &'e Engine,
     /// Interned strings.
-    interned_strings: StringInterner,
+    interned_strings: IdentifierBuilder,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
     stack: Vec<(Identifier, AccessMode)>,
     /// Size of the local variables stack upon entry of the current block scope.
@@ -166,7 +166,7 @@ impl<'e> ParseState<'e> {
 
     /// Get an interned string, creating one if it is not yet interned.
     #[inline(always)]
-    pub fn get_interned_string(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
+    pub fn get_identifier(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
         self.interned_strings.get(text)
     }
 }
@@ -228,9 +228,9 @@ impl Expr {
         match self {
             Self::Variable(x) if x.1.is_none() => {
                 let ident = x.2;
-                let getter = state.get_interned_string(crate::engine::make_getter(&ident.name));
+                let getter = state.get_identifier(crate::engine::make_getter(&ident.name));
                 let hash_get = calc_fn_hash(empty(), &getter, 1);
-                let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
+                let setter = state.get_identifier(crate::engine::make_setter(&ident.name));
                 let hash_set = calc_fn_hash(empty(), &setter, 2);
 
                 Self::Property(Box::new((
@@ -351,7 +351,7 @@ fn parse_fn_call(
 
             return Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
-                    name: state.get_interned_string(id),
+                    name: state.get_identifier(id),
                     capture,
                     namespace,
                     hash,
@@ -396,7 +396,7 @@ fn parse_fn_call(
 
                 return Ok(Expr::FnCall(
                     Box::new(FnCallExpr {
-                        name: state.get_interned_string(id),
+                        name: state.get_identifier(id),
                         capture,
                         namespace,
                         hash,
@@ -755,7 +755,7 @@ fn parse_map_literal(
         }
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
-        let name = state.get_interned_string(name);
+        let name = state.get_identifier(name);
         template.insert(name.clone().into(), Default::default());
         map.push((Ident { name, pos }, expr));
 
@@ -936,7 +936,7 @@ fn parse_primary(
             Token::IntegerConstant(x) => Expr::IntegerConstant(x, settings.pos),
             Token::CharConstant(c) => Expr::CharConstant(c, settings.pos),
             Token::StringConstant(s) => {
-                Expr::StringConstant(state.get_interned_string(s).into(), settings.pos)
+                Expr::StringConstant(state.get_identifier(s).into(), settings.pos)
             }
             Token::True => Expr::BoolConstant(true, settings.pos),
             Token::False => Expr::BoolConstant(false, settings.pos),
@@ -1034,7 +1034,7 @@ fn parse_primary(
                         state.allow_capture = true;
                     }
                     let var_name_def = Ident {
-                        name: state.get_interned_string(s),
+                        name: state.get_identifier(s),
                         pos: settings.pos,
                     };
                     Expr::Variable(Box::new((None, None, var_name_def)))
@@ -1048,7 +1048,7 @@ fn parse_primary(
                         state.allow_capture = true;
                     }
                     let var_name_def = Ident {
-                        name: state.get_interned_string(s),
+                        name: state.get_identifier(s),
                         pos: settings.pos,
                     };
                     Expr::Variable(Box::new((None, None, var_name_def)))
@@ -1057,7 +1057,7 @@ fn parse_primary(
                 _ => {
                     let index = state.access_var(&s, settings.pos);
                     let var_name_def = Ident {
-                        name: state.get_interned_string(s),
+                        name: state.get_identifier(s),
                         pos: settings.pos,
                     };
                     Expr::Variable(Box::new((index, None, var_name_def)))
@@ -1076,7 +1076,7 @@ fn parse_primary(
                 // Function call is allowed to have reserved keyword
                 Token::LeftParen | Token::Bang if is_keyword_function(&s) => {
                     let var_name_def = Ident {
-                        name: state.get_interned_string(s),
+                        name: state.get_identifier(s),
                         pos: settings.pos,
                     };
                     Expr::Variable(Box::new((None, None, var_name_def)))
@@ -1084,7 +1084,7 @@ fn parse_primary(
                 // Access to `this` as a variable is OK within a function scope
                 _ if s == KEYWORD_THIS && settings.is_function_scope => {
                     let var_name_def = Ident {
-                        name: state.get_interned_string(s),
+                        name: state.get_identifier(s),
                         pos: settings.pos,
                     };
                     Expr::Variable(Box::new((None, None, var_name_def)))
@@ -1177,7 +1177,7 @@ fn parse_primary(
                     }
 
                     let var_name_def = Ident {
-                        name: state.get_interned_string(id2),
+                        name: state.get_identifier(id2),
                         pos: pos2,
                     };
                     Expr::Variable(Box::new((index, namespace, var_name_def)))
@@ -1286,7 +1286,7 @@ fn parse_unary(
 
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
-                            name: state.get_interned_string("-"),
+                            name: state.get_identifier("-"),
                             hash: FnCallHash::from_native(calc_fn_hash(empty(), "-", 1)),
                             args,
                             ..Default::default()
@@ -1312,7 +1312,7 @@ fn parse_unary(
 
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
-                            name: state.get_interned_string("+"),
+                            name: state.get_identifier("+"),
                             hash: FnCallHash::from_native(calc_fn_hash(empty(), "+", 1)),
                             args,
                             ..Default::default()
@@ -1331,7 +1331,7 @@ fn parse_unary(
 
             Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
-                    name: state.get_interned_string("!"),
+                    name: state.get_identifier("!"),
                     hash: FnCallHash::from_native(calc_fn_hash(empty(), "!", 1)),
                     args,
                     ..Default::default()
@@ -1500,9 +1500,9 @@ fn make_dot_expr(
         // lhs.id
         (lhs, Expr::Variable(x)) if x.1.is_none() => {
             let ident = x.2;
-            let getter = state.get_interned_string(crate::engine::make_getter(&ident.name));
+            let getter = state.get_identifier(crate::engine::make_getter(&ident.name));
             let hash_get = calc_fn_hash(empty(), &getter, 1);
-            let setter = state.get_interned_string(crate::engine::make_setter(&ident.name));
+            let setter = state.get_identifier(crate::engine::make_setter(&ident.name));
             let hash_set = calc_fn_hash(empty(), &setter, 2);
 
             let rhs = Expr::Property(Box::new(((getter, hash_get), (setter, hash_set), ident)));
@@ -1674,7 +1674,7 @@ fn parse_binary_op(
         let hash = calc_fn_hash(empty(), &op, 2);
 
         let op_base = FnCallExpr {
-            name: state.get_interned_string(op.as_ref()),
+            name: state.get_identifier(op.as_ref()),
             hash: FnCallHash::from_native(hash),
             capture: false,
             ..Default::default()
@@ -1742,7 +1742,7 @@ fn parse_binary_op(
                     Box::new(FnCallExpr {
                         hash: FnCallHash::from_script(hash),
                         args,
-                        name: state.get_interned_string(OP_CONTAINS),
+                        name: state.get_identifier(OP_CONTAINS),
                         ..op_base
                     }),
                     pos,
@@ -1830,9 +1830,9 @@ fn parse_custom_syntax(
         match required_token.as_str() {
             MARKER_IDENT => match input.next().unwrap() {
                 (Token::Identifier(s), pos) => {
-                    let name = state.get_interned_string(s);
+                    let name = state.get_identifier(s);
                     segments.push(name.clone().into());
-                    tokens.push(state.get_interned_string(MARKER_IDENT));
+                    tokens.push(state.get_identifier(MARKER_IDENT));
                     let var_name_def = Ident { name, pos };
                     keywords.push(Expr::Variable(Box::new((None, None, var_name_def))));
                 }
@@ -1843,14 +1843,14 @@ fn parse_custom_syntax(
             },
             MARKER_EXPR => {
                 keywords.push(parse_expr(input, state, lib, settings)?);
-                let keyword = state.get_interned_string(MARKER_EXPR);
+                let keyword = state.get_identifier(MARKER_EXPR);
                 segments.push(keyword.clone().into());
                 tokens.push(keyword);
             }
             MARKER_BLOCK => match parse_block(input, state, lib, settings)? {
                 block @ Stmt::Block(_, _) => {
                     keywords.push(Expr::Stmt(Box::new(block.into())));
-                    let keyword = state.get_interned_string(MARKER_BLOCK);
+                    let keyword = state.get_identifier(MARKER_BLOCK);
                     segments.push(keyword.clone().into());
                     tokens.push(keyword);
                 }
@@ -2120,7 +2120,7 @@ fn parse_for(
     ensure_not_statement_expr(input, "a boolean")?;
     let expr = parse_expr(input, state, lib, settings.level_up())?;
 
-    let loop_var = state.get_interned_string(name);
+    let loop_var = state.get_identifier(name);
     let prev_stack_len = state.stack.len();
     state.stack.push((loop_var.clone(), AccessMode::ReadWrite));
 
@@ -2161,7 +2161,7 @@ fn parse_let(
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
-    let name = state.get_interned_string(name);
+    let name = state.get_identifier(name);
     let var_def = Ident {
         name: name.clone(),
         pos,
@@ -2217,7 +2217,7 @@ fn parse_import(
         (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
     };
 
-    let name = state.get_interned_string(name);
+    let name = state.get_identifier(name);
     state.modules.push(name.clone());
 
     Ok(Stmt::Import(
@@ -2277,7 +2277,7 @@ fn parse_export(
         let rename = if match_token(input, Token::As).0 {
             match input.next().unwrap() {
                 (Token::Identifier(s), pos) => Some(Ident {
-                    name: state.get_interned_string(s),
+                    name: state.get_identifier(s),
                     pos,
                 }),
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
@@ -2292,7 +2292,7 @@ fn parse_export(
 
         exports.push((
             Ident {
-                name: state.get_interned_string(id),
+                name: state.get_identifier(id),
                 pos: id_pos,
             },
             rename,
@@ -2630,7 +2630,7 @@ fn parse_try_catch(
     let var_def = if match_token(input, Token::LeftParen).0 {
         let id = match input.next().unwrap() {
             (Token::Identifier(s), pos) => Ident {
-                name: state.get_interned_string(s),
+                name: state.get_identifier(s),
                 pos,
             },
             (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
@@ -2700,7 +2700,7 @@ fn parse_fn(
                     if params.iter().any(|(p, _)| p == &s) {
                         return Err(PERR::FnDuplicatedParam(name, s).into_err(pos));
                     }
-                    let s = state.get_interned_string(s);
+                    let s = state.get_identifier(s);
                     state.stack.push((s.clone(), AccessMode::ReadWrite));
                     params.push((s, pos))
                 }
@@ -2747,7 +2747,7 @@ fn parse_fn(
         .collect();
 
     Ok(ScriptFnDef {
-        name: state.get_interned_string(&name),
+        name: state.get_identifier(&name),
         access,
         params,
         #[cfg(not(feature = "no_closure"))]
@@ -2785,7 +2785,7 @@ fn make_curry_from_externals(
 
     let expr = Expr::FnCall(
         Box::new(FnCallExpr {
-            name: state.get_interned_string(crate::engine::KEYWORD_FN_PTR_CURRY),
+            name: state.get_identifier(crate::engine::KEYWORD_FN_PTR_CURRY),
             hash: FnCallHash::from_native(calc_fn_hash(
                 empty(),
                 crate::engine::KEYWORD_FN_PTR_CURRY,
@@ -2827,7 +2827,7 @@ fn parse_anon_fn(
                         if params.iter().any(|(p, _)| p == &s) {
                             return Err(PERR::FnDuplicatedParam("".to_string(), s).into_err(pos));
                         }
-                        let s = state.get_interned_string(s);
+                        let s = state.get_identifier(s);
                         state.stack.push((s.clone(), AccessMode::ReadWrite));
                         params.push((s, pos))
                     }
@@ -2895,8 +2895,7 @@ fn parse_anon_fn(
     body.hash(hasher);
     let hash = hasher.finish();
 
-    let fn_name =
-        state.get_interned_string(&(format!("{}{:016x}", crate::engine::FN_ANONYMOUS, hash)));
+    let fn_name = state.get_identifier(&(format!("{}{:016x}", crate::engine::FN_ANONYMOUS, hash)));
 
     // Define the function
     let script = ScriptFnDef {
