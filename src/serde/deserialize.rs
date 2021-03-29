@@ -143,8 +143,8 @@ impl<'d> Visitor<'d> for DynamicVisitor {
     fn visit_map<M: MapAccess<'d>>(self, mut map: M) -> Result<Self::Value, M::Error> {
         let mut m: Map = Default::default();
 
-        while let Some((k, v)) = map.next_entry()? {
-            m.insert(k, v);
+        while let Some((k, v)) = map.next_entry::<&str, _>()? {
+            m.insert(k.into(), v);
         }
 
         Ok(m.into())

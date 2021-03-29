@@ -622,7 +622,7 @@ impl Module {
     pub fn update_fn_metadata(&mut self, hash_fn: u64, arg_names: &[&str]) -> &mut Self {
         let param_names = arg_names
             .iter()
-            .map(|&name| self.interned_strings.get(name))
+            .map(|&name| self.identifiers.get(name))
             .collect();
 
         if let Some(f) = self.functions.get_mut(&hash_fn) {
@@ -692,7 +692,7 @@ impl Module {
         let param_names = _arg_names
             .iter()
             .flat_map(|p| p.iter())
-            .map(|&arg| self.interned_strings.get(arg))
+            .map(|&arg| self.identifiers.get(arg))
             .collect();
 
         let hash_fn = calc_native_fn_hash(empty(), &name, &param_types);
