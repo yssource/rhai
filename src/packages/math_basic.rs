@@ -9,10 +9,6 @@ use crate::FLOAT;
 #[cfg(not(feature = "no_float"))]
 use crate::result::EvalAltResult;
 
-#[cfg(feature = "no_std")]
-#[cfg(not(feature = "no_float"))]
-use num_traits::float::Float;
-
 #[cfg(not(feature = "no_float"))]
 use crate::stdlib::format;
 

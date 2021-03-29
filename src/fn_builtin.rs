@@ -11,10 +11,6 @@ use crate::FLOAT;
 #[cfg(feature = "decimal")]
 use rust_decimal::Decimal;
 
-#[cfg(feature = "no_std")]
-#[cfg(not(feature = "no_float"))]
-use num_traits::float::Float;
-
 /// Is the type a numeric type?
 #[inline(always)]
 fn is_numeric(type_id: TypeId) -> bool {

@@ -8,7 +8,7 @@ use crate::stdlib::{
     fmt,
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut},
-    string::String,
+    string::{String, ToString},
 };
 use crate::{FnPtr, ImmutableString, INT};
 
