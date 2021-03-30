@@ -6,7 +6,6 @@ use crate::stdlib::{
     borrow::Borrow,
     boxed::Box,
     cmp::Ordering,
-    collections::BTreeSet,
     fmt,
     fmt::{Debug, Display},
     hash::{BuildHasher, Hash, Hasher},
@@ -15,7 +14,7 @@ use crate::stdlib::{
     str::FromStr,
     string::{String, ToString},
 };
-use crate::Shared;
+use crate::{Identifier, Shared};
 
 /// A hasher that only takes one single [`u64`] and returns it as a hash key.
 ///
@@ -590,6 +589,22 @@ impl PartialOrd<ImmutableString> for String {
     }
 }
 
+#[cfg(not(feature = "no_smartstring"))]
+impl From<ImmutableString> for Identifier {
+    #[inline(always)]
+    fn from(value: ImmutableString) -> Self {
+        value.into_owned().into()
+    }
+}
+
+#[cfg(not(feature = "no_smartstring"))]
+impl From<Identifier> for ImmutableString {
+    #[inline(always)]
+    fn from(value: Identifier) -> Self {
+        value.to_string().into()
+    }
+}
+
 impl ImmutableString {
     /// Consume the [`ImmutableString`] and convert it into a [`String`].
     /// If there are other references to the same string, a cloned copy is returned.
@@ -606,18 +621,31 @@ impl ImmutableString {
     }
 }
 
-/// A collection of interned strings.
+/// A factory of identifiers from text strings.
+///
+/// When [`SmartString`](https://crates.io/crates/smartstring) is used as [`Identifier`],
+/// this just returns one because most identifiers in Rhai are short and ASCII-based.
+///
+/// When [`ImmutableString`] is used as [`Identifier`], this type acts as an interner which keeps a
+/// collection of strings and returns shared instances, only creating a new string when it is not
+/// yet interned.
 #[derive(Debug, Clone, Default, Hash)]
-pub struct StringInterner(BTreeSet<ImmutableString>);
+pub struct IdentifierBuilder(
+    #[cfg(feature = "no_smartstring")] crate::stdlib::collections::BTreeSet<Identifier>,
+);
 
-impl StringInterner {
-    /// Get an interned string, creating one if it is not yet interned.
+impl IdentifierBuilder {
+    /// Get an identifier from a text string.
     #[inline(always)]
-    pub fn get(&mut self, text: impl AsRef<str> + Into<ImmutableString>) -> ImmutableString {
-        self.0.get(text.as_ref()).cloned().unwrap_or_else(|| {
-            let s = text.into();
+    pub fn get(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
+        #[cfg(not(feature = "no_smartstring"))]
+        return text.as_ref().into();
+
+        #[cfg(feature = "no_smartstring")]
+        return self.0.get(text.as_ref()).cloned().unwrap_or_else(|| {
+            let s: Identifier = text.into();
             self.0.insert(s.clone());
             s
-        })
+        });
     }
 }

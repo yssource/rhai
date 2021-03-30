@@ -25,8 +25,8 @@ use crate::stdlib::{
 use crate::syntax::CustomSyntax;
 use crate::utils::get_hasher;
 use crate::{
-    Dynamic, EvalAltResult, FnPtr, ImmutableString, Module, Position, RhaiResult, Scope, Shared,
-    StaticVec,
+    Dynamic, EvalAltResult, FnPtr, Identifier, ImmutableString, Module, Position, RhaiResult,
+    Scope, Shared, StaticVec,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -50,7 +50,7 @@ pub type Precedence = NonZeroU8;
 // the module name will live beyond the AST of the eval script text.
 // The best we can do is a shared reference.
 #[derive(Debug, Clone, Default)]
-pub struct Imports(StaticVec<ImmutableString>, StaticVec<Shared<Module>>);
+pub struct Imports(StaticVec<Identifier>, StaticVec<Shared<Module>>);
 
 impl Imports {
     /// Get the length of this stack of imported [modules][Module].
@@ -79,7 +79,7 @@ impl Imports {
     }
     /// Push an imported [modules][Module] onto the stack.
     #[inline(always)]
-    pub fn push(&mut self, name: impl Into<ImmutableString>, module: impl Into<Shared<Module>>) {
+    pub fn push(&mut self, name: impl Into<Identifier>, module: impl Into<Shared<Module>>) {
         self.0.push(name.into());
         self.1.push(module.into());
     }
@@ -102,18 +102,18 @@ impl Imports {
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     #[inline(always)]
-    pub(crate) fn iter_raw(&self) -> impl Iterator<Item = (&ImmutableString, &Shared<Module>)> {
+    pub(crate) fn iter_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.0.iter().rev().zip(self.1.iter().rev())
     }
     /// Get an iterator to this stack of imported [modules][Module] in forward order.
     #[allow(dead_code)]
     #[inline(always)]
-    pub(crate) fn scan_raw(&self) -> impl Iterator<Item = (&ImmutableString, &Shared<Module>)> {
+    pub(crate) fn scan_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.0.iter().zip(self.1.iter())
     }
     /// Get a consuming iterator to this stack of imported [modules][Module] in reverse order.
     #[inline(always)]
-    pub fn into_iter(self) -> impl Iterator<Item = (ImmutableString, Shared<Module>)> {
+    pub fn into_iter(self) -> impl Iterator<Item = (Identifier, Shared<Module>)> {
         self.0.into_iter().rev().zip(self.1.into_iter().rev())
     }
     /// Does the specified function hash key exist in this stack of imported [modules][Module]?
@@ -124,7 +124,7 @@ impl Imports {
     }
     /// Get specified function via its hash key.
     #[inline(always)]
-    pub fn get_fn(&self, hash: u64) -> Option<(&CallableFunction, Option<&ImmutableString>)> {
+    pub fn get_fn(&self, hash: u64) -> Option<(&CallableFunction, Option<&Identifier>)> {
         self.1
             .iter()
             .rev()
@@ -491,7 +491,7 @@ pub struct FnResolutionCacheEntry {
     /// Function.
     pub func: CallableFunction,
     /// Optional source.
-    pub source: Option<ImmutableString>,
+    pub source: Option<Identifier>,
 }
 
 /// A function resolution cache.
@@ -506,7 +506,7 @@ pub type FnResolutionCache = BTreeMap<u64, Option<FnResolutionCacheEntry>>;
 #[derive(Debug, Clone, Default)]
 pub struct State {
     /// Source of the current context.
-    pub source: Option<ImmutableString>,
+    pub source: Option<Identifier>,
     /// Normally, access to variables are parsed with a relative offset into the scope to avoid a lookup.
     /// In some situation, e.g. after running an `eval` statement, subsequent offsets become mis-aligned.
     /// When that happens, this flag is turned on to force a scope lookup by name.
@@ -703,7 +703,7 @@ pub struct Engine {
     /// A collection of all modules loaded into the global namespace of the Engine.
     pub(crate) global_modules: StaticVec<Shared<Module>>,
     /// A collection of all sub-modules directly loaded into the Engine.
-    pub(crate) global_sub_modules: BTreeMap<ImmutableString, Shared<Module>>,
+    pub(crate) global_sub_modules: BTreeMap<Identifier, Shared<Module>>,
 
     /// A module resolution service.
     #[cfg(not(feature = "no_module"))]
@@ -717,7 +717,7 @@ pub struct Engine {
     /// A map containing custom keywords and precedence to recognize.
     pub(crate) custom_keywords: BTreeMap<String, Option<Precedence>>,
     /// Custom syntax.
-    pub(crate) custom_syntax: BTreeMap<ImmutableString, CustomSyntax>,
+    pub(crate) custom_syntax: BTreeMap<Identifier, CustomSyntax>,
     /// Callback closure for resolving variable access.
     pub(crate) resolve_var: Option<OnVarCallback>,
 
@@ -1183,7 +1183,7 @@ impl Engine {
                     // {xxx:map}.id op= ???
                     Expr::Property(x) if target_val.is::<Map>() && new_val.is_some() => {
                         let Ident { name, pos, .. } = &x.2;
-                        let index = name.clone().into();
+                        let index = name.into();
                         let val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, true, is_ref, false, level,
                         )?;
@@ -1196,7 +1196,7 @@ impl Engine {
                     // {xxx:map}.id
                     Expr::Property(x) if target_val.is::<Map>() => {
                         let Ident { name, pos, .. } = &x.2;
-                        let index = name.clone().into();
+                        let index = name.into();
                         let val = self.get_indexed_mut(
                             mods, state, lib, target_val, index, *pos, false, is_ref, false, level,
                         )?;
@@ -1231,7 +1231,7 @@ impl Engine {
                         let mut val = match &x.lhs {
                             Expr::Property(p) => {
                                 let Ident { name, pos, .. } = &p.2;
-                                let index = name.clone().into();
+                                let index = name.into();
                                 self.get_indexed_mut(
                                     mods, state, lib, target_val, index, *pos, false, is_ref, true,
                                     level,
@@ -1440,15 +1440,20 @@ impl Engine {
             Expr::FnCall(x, _) if parent_chain_type == ChainType::Dot && x.namespace.is_none() => {
                 let mut arg_positions: StaticVec<_> = Default::default();
 
-                let arg_values = x
+                let mut arg_values = x
                     .args
                     .iter()
+                    .inspect(|arg_expr| arg_positions.push(arg_expr.position()))
                     .map(|arg_expr| {
-                        arg_positions.push(arg_expr.position());
                         self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
                             .map(Dynamic::flatten)
                     })
                     .collect::<Result<StaticVec<_>, _>>()?;
+
+                x.constant_args
+                    .iter()
+                    .inspect(|(_, pos)| arg_positions.push(*pos))
+                    .for_each(|(v, _)| arg_values.push(v.clone()));
 
                 idx_values.push((arg_values, arg_positions).into());
             }
@@ -1475,15 +1480,20 @@ impl Engine {
                     {
                         let mut arg_positions: StaticVec<_> = Default::default();
 
-                        let arg_values = x
+                        let mut arg_values = x
                             .args
                             .iter()
+                            .inspect(|arg_expr| arg_positions.push(arg_expr.position()))
                             .map(|arg_expr| {
-                                arg_positions.push(arg_expr.position());
                                 self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
                                     .map(Dynamic::flatten)
                             })
                             .collect::<Result<StaticVec<_>, _>>()?;
+
+                        x.constant_args
+                            .iter()
+                            .inspect(|(_, pos)| arg_positions.push(*pos))
+                            .for_each(|(v, _)| arg_values.push(v.clone()));
 
                         (arg_values, arg_positions).into()
                     }
@@ -1563,12 +1573,12 @@ impl Engine {
                     self.make_type_mismatch_err::<ImmutableString>(idx.type_name(), idx_pos)
                 })?;
 
-                if _create && !map.contains_key(index) {
-                    map.insert(index.clone(), Default::default());
+                if _create && !map.contains_key(index.as_str()) {
+                    map.insert(index.clone().into(), Default::default());
                 }
 
                 Ok(map
-                    .get_mut(index)
+                    .get_mut(index.as_str())
                     .map(Target::from)
                     .unwrap_or_else(|| Target::from(())))
             }
@@ -1686,7 +1696,7 @@ impl Engine {
             Expr::Map(x, _) => {
                 let mut map = x.1.clone();
                 for (Ident { name: key, .. }, expr) in &x.0 {
-                    *map.get_mut(key).unwrap() = self
+                    *map.get_mut(key.as_str()).unwrap() = self
                         .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                         .flatten();
                 }
@@ -1700,10 +1710,12 @@ impl Engine {
                     capture,
                     hash,
                     args,
+                    constant_args: c_args,
                     ..
                 } = x.as_ref();
                 self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args, *hash, *pos, *capture, level,
+                    scope, mods, state, lib, this_ptr, name, args, c_args, *hash, *pos, *capture,
+                    level,
                 )
             }
 
@@ -1714,12 +1726,14 @@ impl Engine {
                     namespace,
                     hash,
                     args,
+                    constant_args: c_args,
                     ..
                 } = x.as_ref();
                 let namespace = namespace.as_ref();
                 let hash = hash.native_hash();
                 self.make_qualified_function_call(
-                    scope, mods, state, lib, this_ptr, namespace, name, args, hash, *pos, level,
+                    scope, mods, state, lib, this_ptr, namespace, name, args, c_args, hash, *pos,
+                    level,
                 )
             }
 
@@ -2195,7 +2209,7 @@ impl Engine {
                 if let Some(func) = func {
                     // Add the loop variable
                     let var_name: Cow<'_, str> = if state.is_global() {
-                        name.clone().into()
+                        name.to_string().into()
                     } else {
                         unsafe_cast_var_name_to_lifetime(name).into()
                     };
@@ -2286,7 +2300,7 @@ impl Engine {
                                 err_map.insert("message".into(), err.to_string().into());
 
                                 if let Some(ref source) = state.source {
-                                    err_map.insert("source".into(), source.clone().into());
+                                    err_map.insert("source".into(), source.into());
                                 }
 
                                 if err_pos.is_none() {
@@ -2368,8 +2382,8 @@ impl Engine {
             }
 
             // Let/const statement
-            Stmt::Let(expr, Ident { name, .. }, export, _)
-            | Stmt::Const(expr, Ident { name, .. }, export, _) => {
+            Stmt::Let(expr, x, export, _) | Stmt::Const(expr, x, export, _) => {
+                let name = &x.name;
                 let entry_type = match stmt {
                     Stmt::Let(_, _, _, _) => AccessMode::ReadWrite,
                     Stmt::Const(_, _, _, _) => AccessMode::ReadOnly,

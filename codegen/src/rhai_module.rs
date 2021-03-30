@@ -52,7 +52,8 @@ pub fn generate_body(
             .collect();
         add_mod_blocks.push(
             syn::parse2::<syn::ExprBlock>(quote! {
-                #(#cfg_attrs)* {
+                {
+                    #(#cfg_attrs)*
                     m.set_sub_module(#exported_name, self::#module_name::rhai_module_generate());
                 }
             })
@@ -60,7 +61,8 @@ pub fn generate_body(
         );
         set_flattened_mod_blocks.push(
             syn::parse2::<syn::ExprBlock>(quote! {
-                #(#cfg_attrs)* {
+                {
+                    #(#cfg_attrs)*
                     self::#module_name::rhai_generate_into_module(m, flatten);
                 }
             })

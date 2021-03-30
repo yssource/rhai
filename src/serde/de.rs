@@ -1,6 +1,6 @@
 //! Implement deserialization support of [`Dynamic`][crate::Dynamic] for [`serde`].
 
-use super::str::ImmutableStringDeserializer;
+use super::str::StringSliceDeserializer;
 use crate::dynamic::Union;
 use crate::stdlib::{any::type_name, boxed::Box, fmt, string::ToString};
 use crate::{Dynamic, EvalAltResult, ImmutableString, LexError, Position};
@@ -418,7 +418,12 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         #[cfg(not(feature = "no_object"))]
         return self.value.downcast_ref::<Map>().map_or_else(
             || self.type_error(),
-            |map| _visitor.visit_map(IterateMap::new(map.keys(), map.values())),
+            |map| {
+                _visitor.visit_map(IterateMap::new(
+                    map.keys().map(|key| key.as_str()),
+                    map.values(),
+                ))
+            },
         );
 
         #[cfg(feature = "no_object")]
@@ -512,7 +517,7 @@ impl<'a: 'de, 'de, ITER: Iterator<Item = &'a Dynamic>> SeqAccess<'de> for Iterat
 /// `MapAccess` implementation for maps.
 struct IterateMap<'a, KEYS, VALUES>
 where
-    KEYS: Iterator<Item = &'a ImmutableString>,
+    KEYS: Iterator<Item = &'a str>,
     VALUES: Iterator<Item = &'a Dynamic>,
 {
     // Iterator for a stream of [`Dynamic`][crate::Dynamic] keys.
@@ -524,7 +529,7 @@ where
 #[cfg(not(feature = "no_object"))]
 impl<'a, KEYS, VALUES> IterateMap<'a, KEYS, VALUES>
 where
-    KEYS: Iterator<Item = &'a ImmutableString>,
+    KEYS: Iterator<Item = &'a str>,
     VALUES: Iterator<Item = &'a Dynamic>,
 {
     pub fn new(keys: KEYS, values: VALUES) -> Self {
@@ -534,7 +539,7 @@ where
 
 impl<'a: 'de, 'de, KEYS, VALUES> MapAccess<'de> for IterateMap<'a, KEYS, VALUES>
 where
-    KEYS: Iterator<Item = &'a ImmutableString>,
+    KEYS: Iterator<Item = &'a str>,
     VALUES: Iterator<Item = &'a Dynamic>,
 {
     type Error = Box<EvalAltResult>;
@@ -543,11 +548,11 @@ where
         &mut self,
         seed: K,
     ) -> Result<Option<K::Value>, Box<EvalAltResult>> {
-        // Deserialize each `ImmutableString` key coming out of the keys iterator.
+        // Deserialize each `Identifier` key coming out of the keys iterator.
         match self.keys.next() {
             None => Ok(None),
             Some(item) => seed
-                .deserialize(&mut ImmutableStringDeserializer::from_str(item))
+                .deserialize(&mut StringSliceDeserializer::from_str(item))
                 .map(Some),
         }
     }

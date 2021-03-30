@@ -8,11 +8,10 @@ use crate::optimize::OptimizationLevel;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
-    format,
     string::String,
 };
 use crate::{
-    scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, ImmutableString, Module,
+    scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Identifier, Module,
     NativeCallContext, ParseError, Position, RhaiResult, Shared, AST,
 };
 
@@ -53,7 +52,7 @@ impl Engine {
     #[inline]
     pub fn register_fn<N, A, F>(&mut self, name: N, func: F) -> &mut Self
     where
-        N: AsRef<str> + Into<ImmutableString>,
+        N: AsRef<str> + Into<Identifier>,
         F: RegisterNativeFunction<A, ()>,
     {
         let param_types = F::param_types();
@@ -61,7 +60,7 @@ impl Engine {
         #[cfg(feature = "metadata")]
         let mut param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
-            .map(|ty| format!("_: {}", self.map_type_name(ty)))
+            .map(|ty| crate::stdlib::format!("_: {}", self.map_type_name(ty)))
             .collect();
 
         #[cfg(feature = "metadata")]
@@ -113,7 +112,7 @@ impl Engine {
     #[inline]
     pub fn register_result_fn<N, A, F, R>(&mut self, name: N, func: F) -> &mut Self
     where
-        N: AsRef<str> + Into<ImmutableString>,
+        N: AsRef<str> + Into<Identifier>,
         F: RegisterNativeFunction<A, Result<R, Box<EvalAltResult>>>,
     {
         let param_types = F::param_types();
@@ -121,7 +120,7 @@ impl Engine {
         #[cfg(feature = "metadata")]
         let param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
-            .map(|ty| format!("_: {}", self.map_type_name(ty)))
+            .map(|ty| crate::stdlib::format!("_: {}", self.map_type_name(ty)))
             .chain(crate::stdlib::iter::once(
                 self.map_type_name(F::return_type_name()).into(),
             ))
@@ -170,7 +169,7 @@ impl Engine {
             + 'static,
     ) -> &mut Self
     where
-        N: AsRef<str> + Into<ImmutableString>,
+        N: AsRef<str> + Into<Identifier>,
         T: Variant + Clone,
     {
         self.global_namespace.set_raw_fn(
@@ -901,12 +900,12 @@ impl Engine {
     #[cfg(not(feature = "no_module"))]
     pub fn register_static_module(
         &mut self,
-        name: impl AsRef<str> + Into<ImmutableString>,
+        name: impl AsRef<str> + Into<Identifier>,
         module: Shared<Module>,
     ) -> &mut Self {
         fn register_static_module_raw(
-            root: &mut crate::stdlib::collections::BTreeMap<crate::ImmutableString, Shared<Module>>,
-            name: impl AsRef<str> + Into<ImmutableString>,
+            root: &mut crate::stdlib::collections::BTreeMap<Identifier, Shared<Module>>,
+            name: impl AsRef<str> + Into<Identifier>,
             module: Shared<Module>,
         ) {
             let separator = crate::token::Token::DoubleColon.syntax();
@@ -952,7 +951,7 @@ impl Engine {
     #[deprecated(since = "0.19.9", note = "use `register_static_module` instead")]
     pub fn register_module(
         &mut self,
-        name: impl AsRef<str> + Into<ImmutableString>,
+        name: impl AsRef<str> + Into<Identifier>,
         module: impl Into<Shared<Module>>,
     ) -> &mut Self {
         self.register_static_module(name, module.into())
@@ -1045,14 +1044,14 @@ impl Engine {
         fn collect_imports(
             ast: &AST,
             resolver: &StaticModuleResolver,
-            imports: &mut BTreeSet<ImmutableString>,
+            imports: &mut BTreeSet<Identifier>,
         ) {
             ast.walk(&mut |path| match path.last().unwrap() {
                 // Collect all `import` statements with a string constant path
                 ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
-                    if !resolver.contains_path(s) && !imports.contains(s) =>
+                    if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>
                 {
-                    imports.insert(s.clone());
+                    imports.insert(s.clone().into());
                     true
                 }
                 _ => true,
@@ -1167,7 +1166,7 @@ impl Engine {
 
         let mut f = crate::stdlib::fs::File::open(path.clone()).map_err(|err| {
             EvalAltResult::ErrorSystem(
-                format!("Cannot open script file '{}'", path.to_string_lossy()),
+                crate::stdlib::format!("Cannot open script file '{}'", path.to_string_lossy()),
                 err.into(),
             )
         })?;
@@ -1176,7 +1175,7 @@ impl Engine {
 
         f.read_to_string(&mut contents).map_err(|err| {
             EvalAltResult::ErrorSystem(
-                format!("Cannot read script file '{}'", path.to_string_lossy()),
+                crate::stdlib::format!("Cannot read script file '{}'", path.to_string_lossy()),
                 err.into(),
             )
         })?;
@@ -1991,7 +1990,10 @@ impl Engine {
         signatures.extend(self.global_namespace.gen_fn_signatures());
 
         self.global_sub_modules.iter().for_each(|(name, m)| {
-            signatures.extend(m.gen_fn_signatures().map(|f| format!("{}::{}", name, f)))
+            signatures.extend(
+                m.gen_fn_signatures()
+                    .map(|f| crate::stdlib::format!("{}::{}", name, f)),
+            )
         });
 
         if include_packages {

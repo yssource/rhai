@@ -11,10 +11,6 @@ use crate::FLOAT;
 #[cfg(feature = "decimal")]
 use rust_decimal::Decimal;
 
-#[cfg(feature = "no_std")]
-#[cfg(not(feature = "no_float"))]
-use num_traits::float::Float;
-
 /// Is the type a numeric type?
 #[inline(always)]
 fn is_numeric(type_id: TypeId) -> bool {
@@ -45,6 +41,10 @@ pub fn get_builtin_binary_op_fn(
     x: &Dynamic,
     y: &Dynamic,
 ) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult> {
+    #[cfg(feature = "no_std")]
+    #[cfg(not(feature = "no_float"))]
+    use num_traits::Float;
+
     let type1 = x.type_id();
     let type2 = y.type_id();
 
@@ -83,6 +83,13 @@ pub fn get_builtin_binary_op_fn(
                 let x = &*args[0].read_lock::<$xx>().unwrap();
                 let y = &*args[1].read_lock::<$yy>().unwrap();
                 Ok(x.$func(y).into())
+            })
+        };
+        ($xx:ident . $func:ident ( $yy:ident . $yyy:ident () )) => {
+            return Some(|_, args| {
+                let x = &*args[0].read_lock::<$xx>().unwrap();
+                let y = &*args[1].read_lock::<$yy>().unwrap();
+                Ok(x.$func(y.$yyy()).into())
             })
         };
         ($func:ident ( $op:tt )) => {
@@ -284,7 +291,7 @@ pub fn get_builtin_binary_op_fn(
         use crate::Map;
 
         match op {
-            OP_CONTAINS => impl_op!(Map.contains_key(ImmutableString)),
+            OP_CONTAINS => impl_op!(Map.contains_key(ImmutableString.as_str())),
             _ => return None,
         }
     }
@@ -415,6 +422,10 @@ pub fn get_builtin_op_assignment_fn(
     x: &Dynamic,
     y: &Dynamic,
 ) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult> {
+    #[cfg(feature = "no_std")]
+    #[cfg(not(feature = "no_float"))]
+    use num_traits::Float;
+
     let type1 = x.type_id();
     let type2 = y.type_id();
 

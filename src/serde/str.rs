@@ -1,17 +1,17 @@
 //! Implement deserialization support of [`ImmutableString`][crate::ImmutableString] for [`serde`].
 
 use crate::stdlib::{any::type_name, boxed::Box};
-use crate::{EvalAltResult, ImmutableString, Position};
+use crate::{EvalAltResult, Position};
 use serde::de::{Deserializer, Visitor};
 
 /// Deserializer for `ImmutableString`.
-pub struct ImmutableStringDeserializer<'a> {
-    value: &'a ImmutableString,
+pub struct StringSliceDeserializer<'a> {
+    value: &'a str,
 }
 
-impl<'a> ImmutableStringDeserializer<'a> {
-    /// Create an `ImmutableStringDeserializer` from an `ImmutableString` reference.
-    pub fn from_str(value: &'a ImmutableString) -> Self {
+impl<'a> StringSliceDeserializer<'a> {
+    /// Create an `ImmutableStringDeserializer` from an `&str` reference.
+    pub fn from_str(value: &'a str) -> Self {
         Self { value }
     }
     /// Shortcut for a type conversion error.
@@ -25,7 +25,7 @@ impl<'a> ImmutableStringDeserializer<'a> {
     }
 }
 
-impl<'de> Deserializer<'de> for &mut ImmutableStringDeserializer<'de> {
+impl<'de> Deserializer<'de> for &mut StringSliceDeserializer<'de> {
     type Error = Box<EvalAltResult>;
 
     fn deserialize_any<V: Visitor<'de>>(self, v: V) -> Result<V::Value, Box<EvalAltResult>> {
@@ -69,7 +69,7 @@ impl<'de> Deserializer<'de> for &mut ImmutableStringDeserializer<'de> {
     }
     fn deserialize_str<V: Visitor<'de>>(self, v: V) -> Result<V::Value, Box<EvalAltResult>> {
         // Only allow deserialization into a string.
-        v.visit_borrowed_str(self.value.as_str())
+        v.visit_borrowed_str(self.value)
     }
     fn deserialize_string<V: Visitor<'de>>(
         self,

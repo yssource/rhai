@@ -16,10 +16,10 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::token::Token;
-use crate::utils::StringInterner;
+use crate::utils::IdentifierBuilder;
 use crate::{
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, EvalAltResult, ImmutableString,
-    NativeCallContext, Position, Shared, StaticVec,
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, EvalAltResult, Identifier,
+    ImmutableString, NativeCallContext, Position, Shared, StaticVec,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -55,14 +55,14 @@ pub struct FuncInfo {
     /// Function access mode.
     pub access: FnAccess,
     /// Function name.
-    pub name: ImmutableString,
+    pub name: Identifier,
     /// Number of parameters.
     pub params: usize,
     /// Parameter types (if applicable).
     pub param_types: StaticVec<TypeId>,
     /// Parameter names (if available).
     #[cfg(feature = "metadata")]
-    pub param_names: StaticVec<ImmutableString>,
+    pub param_names: StaticVec<Identifier>,
 }
 
 impl FuncInfo {
@@ -128,11 +128,11 @@ fn calc_native_fn_hash<'a>(
 #[derive(Clone)]
 pub struct Module {
     /// ID identifying the module.
-    id: Option<ImmutableString>,
+    id: Option<Identifier>,
     /// Sub-modules.
-    modules: BTreeMap<ImmutableString, Shared<Module>>,
+    modules: BTreeMap<Identifier, Shared<Module>>,
     /// [`Module`] variables.
-    variables: BTreeMap<ImmutableString, Dynamic>,
+    variables: BTreeMap<Identifier, Dynamic>,
     /// Flattened collection of all [`Module`] variables, including those in sub-modules.
     all_variables: BTreeMap<u64, Dynamic>,
     /// External Rust functions.
@@ -149,7 +149,7 @@ pub struct Module {
     /// Does the [`Module`] contain indexed functions that have been exposed to the global namespace?
     contains_indexed_global_functions: bool,
     /// Interned strings
-    interned_strings: StringInterner,
+    identifiers: IdentifierBuilder,
 }
 
 impl Default for Module {
@@ -166,7 +166,7 @@ impl Default for Module {
             all_type_iterators: Default::default(),
             indexed: false,
             contains_indexed_global_functions: false,
-            interned_strings: Default::default(),
+            identifiers: Default::default(),
         }
     }
 }
@@ -288,7 +288,7 @@ impl Module {
         self.id_raw().map(|s| s.as_str())
     }
 
-    /// Get the ID of the [`Module`] as an [`ImmutableString`], if any.
+    /// Get the ID of the [`Module`] as an [`Identifier`], if any.
     ///
     /// # Example
     ///
@@ -300,7 +300,7 @@ impl Module {
     /// assert_eq!(module.id_raw().map(|s| s.as_str()), Some("hello"));
     /// ```
     #[inline(always)]
-    pub fn id_raw(&self) -> Option<&ImmutableString> {
+    pub fn id_raw(&self) -> Option<&Identifier> {
         self.id.as_ref()
     }
 
@@ -316,7 +316,7 @@ impl Module {
     /// assert_eq!(module.id(), Some("hello"));
     /// ```
     #[inline(always)]
-    pub fn set_id<S: Into<ImmutableString>>(&mut self, id: Option<S>) {
+    pub fn set_id<S: Into<Identifier>>(&mut self, id: Option<S>) {
         self.id = id.map(|s| s.into());
     }
 
@@ -440,7 +440,7 @@ impl Module {
     #[inline(always)]
     pub fn set_var(
         &mut self,
-        name: impl Into<ImmutableString>,
+        name: impl Into<Identifier>,
         value: impl Variant + Clone,
     ) -> &mut Self {
         self.variables.insert(name.into(), Dynamic::from(value));
@@ -514,7 +514,7 @@ impl Module {
     /// Thus the [`Module`] is automatically set to be non-indexed.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    pub(crate) fn sub_modules_mut(&mut self) -> &mut BTreeMap<ImmutableString, Shared<Module>> {
+    pub(crate) fn sub_modules_mut(&mut self) -> &mut BTreeMap<Identifier, Shared<Module>> {
         // We must assume that the user has changed the sub-modules
         // (otherwise why take a mutable reference?)
         self.all_functions.clear();
@@ -577,7 +577,7 @@ impl Module {
     #[inline(always)]
     pub fn set_sub_module(
         &mut self,
-        name: impl Into<ImmutableString>,
+        name: impl Into<Identifier>,
         sub_module: impl Into<Shared<Module>>,
     ) -> &mut Self {
         self.modules.insert(name.into(), sub_module.into());
@@ -622,7 +622,7 @@ impl Module {
     pub fn update_fn_metadata(&mut self, hash_fn: u64, arg_names: &[&str]) -> &mut Self {
         let param_names = arg_names
             .iter()
-            .map(|&name| self.interned_strings.get(name))
+            .map(|&name| self.identifiers.get(name))
             .collect();
 
         if let Some(f) = self.functions.get_mut(&hash_fn) {
@@ -672,7 +672,7 @@ impl Module {
     #[inline]
     pub fn set_fn(
         &mut self,
-        name: impl AsRef<str> + Into<ImmutableString>,
+        name: impl AsRef<str> + Into<Identifier>,
         namespace: FnNamespace,
         access: FnAccess,
         _arg_names: Option<&[&str]>,
@@ -692,7 +692,7 @@ impl Module {
         let param_names = _arg_names
             .iter()
             .flat_map(|p| p.iter())
-            .map(|&arg| self.interned_strings.get(arg))
+            .map(|&arg| self.identifiers.get(arg))
             .collect();
 
         let hash_fn = calc_native_fn_hash(empty(), &name, &param_types);
@@ -700,7 +700,7 @@ impl Module {
         self.functions.insert(
             hash_fn,
             Box::new(FuncInfo {
-                name: self.interned_strings.get(name),
+                name: self.identifiers.get(name),
                 namespace,
                 access,
                 params: param_types.len(),
@@ -793,7 +793,7 @@ impl Module {
         func: F,
     ) -> u64
     where
-        N: AsRef<str> + Into<ImmutableString>,
+        N: AsRef<str> + Into<Identifier>,
         T: Variant + Clone,
         F: Fn(NativeCallContext, &mut FnCallArgs) -> Result<T, Box<EvalAltResult>>
             + SendSync
@@ -838,7 +838,7 @@ impl Module {
     #[inline(always)]
     pub fn set_native_fn<ARGS, N, T, F>(&mut self, name: N, func: F) -> u64
     where
-        N: AsRef<str> + Into<ImmutableString>,
+        N: AsRef<str> + Into<Identifier>,
         T: Variant + Clone,
         F: RegisterNativeFunction<ARGS, Result<T, Box<EvalAltResult>>>,
     {

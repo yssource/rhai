@@ -4,9 +4,8 @@ use crate::dynamic::{AccessMode, Union};
 use crate::fn_native::shared_make_mut;
 use crate::module::NamespaceRef;
 use crate::stdlib::{
-    borrow::Cow,
     boxed::Box,
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fmt,
     hash::Hash,
     num::NonZeroUsize,
@@ -17,7 +16,8 @@ use crate::stdlib::{
 };
 use crate::token::Token;
 use crate::{
-    Dynamic, FnNamespace, FnPtr, ImmutableString, Module, Position, Shared, StaticVec, INT,
+    Dynamic, FnNamespace, FnPtr, Identifier, ImmutableString, Module, Position, Shared, StaticVec,
+    INT,
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -51,14 +51,14 @@ pub struct ScriptFnDef {
     #[cfg(not(feature = "no_module"))]
     pub mods: crate::engine::Imports,
     /// Function name.
-    pub name: ImmutableString,
+    pub name: Identifier,
     /// Function access mode.
     pub access: FnAccess,
     /// Names of function parameters.
-    pub params: StaticVec<ImmutableString>,
+    pub params: StaticVec<Identifier>,
     /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
-    pub externals: BTreeSet<ImmutableString>,
+    pub externals: crate::stdlib::collections::BTreeSet<Identifier>,
     /// Function doc-comments (if any).
     pub comments: StaticVec<String>,
 }
@@ -145,7 +145,7 @@ impl<'a> Into<ScriptFnMetadata<'a>> for &'a ScriptFnDef {
 #[derive(Debug, Clone)]
 pub struct AST {
     /// Source of the [`AST`].
-    source: Option<ImmutableString>,
+    source: Option<Identifier>,
     /// Global statements.
     body: StmtBlock,
     /// Script-defined functions.
@@ -191,7 +191,7 @@ impl AST {
     pub fn new_with_source(
         statements: impl IntoIterator<Item = Stmt>,
         functions: impl Into<Shared<Module>>,
-        source: impl Into<ImmutableString>,
+        source: impl Into<Identifier>,
     ) -> Self {
         Self {
             source: Some(source.into()),
@@ -211,12 +211,12 @@ impl AST {
     }
     /// Clone the source, if any.
     #[inline(always)]
-    pub(crate) fn clone_source(&self) -> Option<ImmutableString> {
+    pub(crate) fn clone_source(&self) -> Option<Identifier> {
         self.source.clone()
     }
     /// Set the source.
     #[inline(always)]
-    pub fn set_source(&mut self, source: impl Into<ImmutableString>) -> &mut Self {
+    pub fn set_source(&mut self, source: impl Into<Identifier>) -> &mut Self {
         self.source = Some(source.into());
 
         if let Some(module) = Shared::get_mut(&mut self.functions) {
@@ -757,7 +757,7 @@ impl AsRef<Module> for AST {
     }
 }
 
-/// _(INTERNALS)_ An identifier containing an [immutable string][ImmutableString] name and a [position][Position].
+/// _(INTERNALS)_ An identifier containing a name and a [position][Position].
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -766,7 +766,7 @@ impl AsRef<Module> for AST {
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Ident {
     /// Identifier name.
-    pub name: ImmutableString,
+    pub name: Identifier,
     /// Declaration position.
     pub pos: Position,
 }
@@ -870,11 +870,11 @@ pub enum Stmt {
     /// `do` `{` stmt `}` `while`|`until` expr
     Do(Box<StmtBlock>, Expr, bool, Position),
     /// `for` id `in` expr `{` stmt `}`
-    For(Expr, Box<(String, StmtBlock)>, Position),
+    For(Expr, Box<(Identifier, StmtBlock)>, Position),
     /// \[`export`\] `let` id `=` expr
-    Let(Expr, Ident, bool, Position),
+    Let(Expr, Box<Ident>, bool, Position),
     /// \[`export`\] `const` id `=` expr
-    Const(Expr, Ident, bool, Position),
+    Const(Expr, Box<Ident>, bool, Position),
     /// expr op`=` expr
     Assignment(Box<(Expr, Expr, Option<OpAssignment>)>, Position),
     /// `{` stmt`;` ... `}`
@@ -895,13 +895,13 @@ pub enum Stmt {
     Return(ReturnType, Option<Expr>, Position),
     /// `import` expr `as` var
     #[cfg(not(feature = "no_module"))]
-    Import(Expr, Option<Ident>, Position),
+    Import(Expr, Option<Box<Ident>>, Position),
     /// `export` var `as` var `,` ...
     #[cfg(not(feature = "no_module"))]
     Export(Vec<(Ident, Option<Ident>)>, Position),
     /// Convert a variable to shared.
     #[cfg(not(feature = "no_closure"))]
-    Share(Ident),
+    Share(Box<Ident>),
 }
 
 impl Default for Stmt {
@@ -1257,7 +1257,7 @@ pub struct CustomExpr {
     /// List of keywords.
     pub keywords: StaticVec<Expr>,
     /// List of tokens actually parsed.
-    pub tokens: Vec<ImmutableString>,
+    pub tokens: Vec<Identifier>,
     /// Delta number of variables in the scope.
     pub scope_delta: isize,
 }
@@ -1398,14 +1398,27 @@ pub struct FnCallExpr {
     pub hash: FnCallHash,
     /// Does this function call capture the parent scope?
     pub capture: bool,
-    /// List of function call arguments.
+    /// List of function call argument expressions.
     pub args: StaticVec<Expr>,
+    /// List of function call arguments that are constants.
+    pub constant_args: smallvec::SmallVec<[(Dynamic, Position); 2]>,
     /// Namespace of the function, if any. Boxed because it occurs rarely.
     pub namespace: Option<NamespaceRef>,
     /// Function name.
-    /// Use [`Cow<'static, str>`][Cow] because a lot of operators (e.g. `==`, `>=`) are implemented as
-    /// function calls and the function names are predictable, so no need to allocate a new [`String`].
-    pub name: Cow<'static, str>,
+    pub name: Identifier,
+}
+
+impl FnCallExpr {
+    /// Are there no arguments to this function call?
+    #[inline(always)]
+    pub fn is_args_empty(&self) -> bool {
+        self.args.is_empty() && self.constant_args.is_empty()
+    }
+    /// Get the number of arguments to this function call.
+    #[inline(always)]
+    pub fn num_args(&self) -> usize {
+        self.args.len() + self.constant_args.len()
+    }
 }
 
 /// A type that wraps a [`FLOAT`] and implements [`Hash`].
@@ -1468,6 +1481,7 @@ impl fmt::Display for FloatWrapper {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(feature = "no_std")]
+        #[cfg(not(feature = "no_float"))]
         use num_traits::Float;
 
         let abs = self.0.abs();
@@ -1534,7 +1548,7 @@ pub enum Expr {
     Array(Box<StaticVec<Expr>>, Position),
     /// #{ name:expr, ... }
     Map(
-        Box<(StaticVec<(Ident, Expr)>, BTreeMap<ImmutableString, Dynamic>)>,
+        Box<(StaticVec<(Ident, Expr)>, BTreeMap<Identifier, Dynamic>)>,
         Position,
     ),
     /// ()
@@ -1542,7 +1556,7 @@ pub enum Expr {
     /// Variable access - (optional index, optional (hash, modules), variable name)
     Variable(Box<(Option<NonZeroUsize>, Option<(u64, NamespaceRef)>, Ident)>),
     /// Property access - ((getter, hash), (setter, hash), prop)
-    Property(Box<((ImmutableString, u64), (ImmutableString, u64), Ident)>),
+    Property(Box<((Identifier, u64), (Identifier, u64), Ident)>),
     /// { [statement][Stmt] ... }
     Stmt(Box<StmtBlock>),
     /// func `(` expr `,` ... `)`
@@ -1597,7 +1611,7 @@ impl Expr {
             Self::Map(x, _) if self.is_constant() => {
                 let mut map = x.1.clone();
                 x.0.iter().for_each(|(k, v)| {
-                    *map.get_mut(&k.name).unwrap() = v.get_constant_value().unwrap()
+                    *map.get_mut(k.name.as_str()).unwrap() = v.get_constant_value().unwrap()
                 });
                 Dynamic(Union::Map(Box::new(map), AccessMode::ReadOnly))
             }
@@ -1854,8 +1868,8 @@ mod tests {
         assert_eq!(size_of::<Position>(), 4);
         assert_eq!(size_of::<ast::Expr>(), 16);
         assert_eq!(size_of::<Option<ast::Expr>>(), 16);
-        assert_eq!(size_of::<ast::Stmt>(), 40);
-        assert_eq!(size_of::<Option<ast::Stmt>>(), 40);
+        assert_eq!(size_of::<ast::Stmt>(), 32);
+        assert_eq!(size_of::<Option<ast::Stmt>>(), 32);
         assert_eq!(size_of::<FnPtr>(), 80);
         assert_eq!(size_of::<Scope>(), 288);
         assert_eq!(size_of::<LexError>(), 56);

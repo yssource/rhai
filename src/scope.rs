@@ -2,7 +2,7 @@
 
 use crate::dynamic::{AccessMode, Variant};
 use crate::stdlib::{borrow::Cow, boxed::Box, iter, vec::Vec};
-use crate::{Dynamic, ImmutableString, StaticVec};
+use crate::{Dynamic, Identifier, StaticVec};
 
 /// Keep a number of entries inline (since [`Dynamic`] is usually small enough).
 const SCOPE_SIZE: usize = 16;
@@ -54,7 +54,7 @@ pub struct Scope<'a> {
     /// Current value of the entry.
     values: smallvec::SmallVec<[Dynamic; SCOPE_SIZE]>,
     /// (Name, aliases) of the entry.
-    names: Vec<(Cow<'a, str>, Option<Box<StaticVec<ImmutableString>>>)>,
+    names: Vec<(Cow<'a, str>, Option<Box<StaticVec<Identifier>>>)>,
 }
 
 impl Default for Scope<'_> {
@@ -414,7 +414,7 @@ impl<'a> Scope<'a> {
     pub(crate) fn add_entry_alias(
         &mut self,
         index: usize,
-        alias: impl Into<ImmutableString> + PartialEq<ImmutableString>,
+        alias: impl Into<Identifier> + PartialEq<Identifier>,
     ) -> &mut Self {
         let entry = self.names.get_mut(index).expect("invalid index in Scope");
         if entry.1.is_none() {
@@ -449,7 +449,7 @@ impl<'a> Scope<'a> {
     #[allow(dead_code)]
     pub(crate) fn into_iter(
         self,
-    ) -> impl Iterator<Item = (Cow<'a, str>, Dynamic, Vec<ImmutableString>)> {
+    ) -> impl Iterator<Item = (Cow<'a, str>, Dynamic, Vec<Identifier>)> {
         self.names
             .into_iter()
             .zip(self.values.into_iter())

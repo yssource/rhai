@@ -16,7 +16,14 @@ an object map is small.
 `HashMap` and `BTreeMap` have almost identical public API's so this change is unlikely to break
 existing code.
 
-Im addition, all function signature/metadata methods are now grouped under the umbrella `metadata` feature.
+[`SmartString`](https://crates.io/crates/smartstring) is used to store identifiers (which tends to
+be short, fewer than 23 characters, and ASCII-based) because they can usually be stored inline.
+`Map` keys now also use [`SmartString`](https://crates.io/crates/smartstring).
+
+In addition, there is now support for line continuation in strings (put `\` at the end of line) as
+well as multi-line literal strings (wrapped by back-ticks: <code>\`...\`</code>).
+
+Finally, all function signature/metadata methods are now grouped under the umbrella `metadata` feature.
 This avoids spending precious resources maintaining metadata for functions for the vast majority of
 use cases where such information is not required.
 
@@ -24,7 +31,6 @@ use cases where such information is not required.
 Breaking changes
 ----------------
 
-* `Map` is now an alias to `BTreeMap` instead of `HashMap` because most object maps hold few properties.
 * The traits `RegisterFn` and `RegisterResultFn` are removed.  `Engine::register_fn` and `Engine::register_result_fn` are now implemented directly on `Engine`.
 * `FnPtr::call_dynamic` now takes `&NativeCallContext` instead of consuming it.
 * All `Module::set_fn_XXX` methods are removed, in favor of `Module::set_native_fn`.
@@ -34,6 +40,14 @@ Breaking changes
 * The _reflections_ API such as `Engine::gen_fn_signatures`, `Module::update_fn_metadata` etc. are put under the `metadata` feature gate.
 * The shebang `#!` is now a reserved symbol.
 * Shebangs at the very beginning of script files are skipped when loading them.
+* [`smartstring`](https://crates.io/crates/smartstring) is used for identifiers by default. Currently, a PR branch is pulled because it breaks on `no-std` builds. The official crate will be used once `smartstring` is fixed to support `no-std`.
+* `Map` is now an alias to `BTreeMap<SmartString, Dynamic>` instead of `HashMap` because most object maps hold few properties.
+
+New features
+------------
+
+* Line continuation (via `\`) and multi-line literal strings (wrapped with <code>\`</code>) support are added.
+* Rhai scripts can now start with a shebang `#!` which is ignored.
 
 Enhancements
 ------------
@@ -41,7 +55,6 @@ Enhancements
 * Replaced all `HashMap` usage with `BTreeMap` for better performance because collections in Rhai are tiny.
 * `Engine::register_result_fn` no longer requires the successful return type to be `Dynamic`.  It can now be any clonable type.
 * `#[rhai_fn(return_raw)]` can now return `Result<T, Box<EvalAltResult>>` where `T` is any clonable type instead of `Result<Dynamic, Box<EvalAltResult>>`.
-* Rhai scripts can now start with a shebang `#!`.
 
 
 Version 0.19.14

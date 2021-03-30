@@ -1667,6 +1667,19 @@ impl<S: Into<ImmutableString>> From<S> for Dynamic {
         Self(Union::Str(value.into(), AccessMode::ReadWrite))
     }
 }
+impl From<&ImmutableString> for Dynamic {
+    #[inline(always)]
+    fn from(value: &ImmutableString) -> Self {
+        value.clone().into()
+    }
+}
+#[cfg(not(feature = "no_smartstring"))]
+impl From<&crate::Identifier> for Dynamic {
+    #[inline(always)]
+    fn from(value: &crate::Identifier) -> Self {
+        crate::stdlib::string::ToString::to_string(value).into()
+    }
+}
 #[cfg(not(feature = "no_index"))]
 impl<T: Variant + Clone> From<crate::stdlib::vec::Vec<T>> for Dynamic {
     #[inline(always)]
@@ -1699,7 +1712,7 @@ impl<T: Variant + Clone> crate::stdlib::iter::FromIterator<T> for Dynamic {
 }
 #[cfg(not(feature = "no_object"))]
 #[cfg(not(feature = "no_std"))]
-impl<K: Into<ImmutableString>, T: Variant + Clone> From<crate::stdlib::collections::HashMap<K, T>>
+impl<K: Into<crate::Identifier>, T: Variant + Clone> From<crate::stdlib::collections::HashMap<K, T>>
     for Dynamic
 {
     #[inline(always)]
@@ -1716,8 +1729,8 @@ impl<K: Into<ImmutableString>, T: Variant + Clone> From<crate::stdlib::collectio
     }
 }
 #[cfg(not(feature = "no_object"))]
-impl<K: Into<ImmutableString>, T: Variant + Clone> From<crate::stdlib::collections::BTreeMap<K, T>>
-    for Dynamic
+impl<K: Into<crate::Identifier>, T: Variant + Clone>
+    From<crate::stdlib::collections::BTreeMap<K, T>> for Dynamic
 {
     #[inline(always)]
     fn from(value: crate::stdlib::collections::BTreeMap<K, T>) -> Self {

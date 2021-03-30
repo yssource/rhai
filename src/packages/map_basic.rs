@@ -15,7 +15,7 @@ def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
 mod map_functions {
     #[rhai_fn(name = "has", pure)]
     pub fn contains(map: &mut Map, prop: ImmutableString) -> bool {
-        map.contains_key(&prop)
+        map.contains_key(prop.as_str())
     }
     #[rhai_fn(pure)]
     pub fn len(map: &mut Map) -> INT {
@@ -25,7 +25,7 @@ mod map_functions {
         map.clear();
     }
     pub fn remove(map: &mut Map, name: ImmutableString) -> Dynamic {
-        map.remove(&name).unwrap_or_else(|| ().into())
+        map.remove(name.as_str()).unwrap_or_else(|| ().into())
     }
     #[rhai_fn(name = "mixin", name = "+=")]
     pub fn mixin(map: &mut Map, map2: Map) {

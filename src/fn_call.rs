@@ -96,6 +96,7 @@ impl Drop for ArgBackup<'_> {
     }
 }
 
+#[cfg(not(feature = "no_closure"))]
 #[inline(always)]
 pub fn ensure_no_data_race(
     fn_name: &str,
@@ -1058,33 +1059,39 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         fn_name: &str,
         args_expr: &[Expr],
+        constant_args: &[(Dynamic, Position)],
         mut hash: FnCallHash,
         pos: Position,
         capture_scope: bool,
         level: usize,
     ) -> RhaiResult {
-        let args_expr = args_expr.as_ref();
-
         // Handle call() - Redirect function call
         let redirected;
-        let mut args_expr = args_expr.as_ref();
+        let mut args_expr = args_expr;
+        let mut constant_args = constant_args;
+        let mut total_args = args_expr.len() + constant_args.len();
         let mut curry = StaticVec::new();
         let mut name = fn_name;
 
         match name {
             // Handle call()
-            KEYWORD_FN_PTR_CALL if args_expr.len() >= 1 => {
-                let fn_ptr =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+            KEYWORD_FN_PTR_CALL if total_args >= 1 => {
+                let (arg, arg_pos) = args_expr.get(0).map_or_else(
+                    || Ok(constant_args[0].clone()),
+                    |arg| {
+                        self.eval_expr(scope, mods, state, lib, this_ptr, arg, level)
+                            .map(|v| (v, arg.position()))
+                    },
+                )?;
 
-                if !fn_ptr.is::<FnPtr>() {
+                if !arg.is::<FnPtr>() {
                     return Err(self.make_type_mismatch_err::<FnPtr>(
-                        self.map_type_name(fn_ptr.type_name()),
-                        args_expr[0].position(),
+                        self.map_type_name(arg.type_name()),
+                        arg_pos,
                     ));
                 }
 
-                let fn_ptr = fn_ptr.cast::<FnPtr>();
+                let fn_ptr = arg.cast::<FnPtr>();
                 curry.extend(fn_ptr.curry().iter().cloned());
 
                 // Redirect function name
@@ -1092,10 +1099,15 @@ impl Engine {
                 name = &redirected;
 
                 // Skip the first argument
-                args_expr = &args_expr.as_ref()[1..];
+                if !args_expr.is_empty() {
+                    args_expr = &args_expr[1..];
+                } else {
+                    constant_args = &constant_args[1..];
+                }
+                total_args -= 1;
 
                 // Recalculate hash
-                let args_len = args_expr.len() + curry.len();
+                let args_len = total_args + curry.len();
                 hash = if !hash.is_native_only() {
                     FnCallHash::from_script(calc_fn_hash(empty(), name, args_len))
                 } else {
@@ -1103,66 +1115,95 @@ impl Engine {
                 };
             }
             // Handle Fn()
-            KEYWORD_FN_PTR if args_expr.len() == 1 => {
+            KEYWORD_FN_PTR if total_args == 1 => {
+                let (arg, arg_pos) = args_expr.get(0).map_or_else(
+                    || Ok(constant_args[0].clone()),
+                    |arg| {
+                        self.eval_expr(scope, mods, state, lib, this_ptr, arg, level)
+                            .map(|v| (v, arg.position()))
+                    },
+                )?;
+
                 // Fn - only in function call style
-                return self
-                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
+                return arg
                     .take_immutable_string()
-                    .map_err(|typ| {
-                        self.make_type_mismatch_err::<ImmutableString>(typ, args_expr[0].position())
-                    })
+                    .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))
                     .and_then(|s| FnPtr::try_from(s))
                     .map(Into::<Dynamic>::into)
-                    .map_err(|err| err.fill_position(args_expr[0].position()));
+                    .map_err(|err| err.fill_position(arg_pos));
             }
 
             // Handle curry()
-            KEYWORD_FN_PTR_CURRY if args_expr.len() > 1 => {
-                let fn_ptr =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
+            KEYWORD_FN_PTR_CURRY if total_args > 1 => {
+                let (arg, arg_pos) = args_expr.get(0).map_or_else(
+                    || Ok(constant_args[0].clone()),
+                    |arg| {
+                        self.eval_expr(scope, mods, state, lib, this_ptr, arg, level)
+                            .map(|v| (v, arg.position()))
+                    },
+                )?;
 
-                if !fn_ptr.is::<FnPtr>() {
+                if !arg.is::<FnPtr>() {
                     return Err(self.make_type_mismatch_err::<FnPtr>(
-                        self.map_type_name(fn_ptr.type_name()),
-                        args_expr[0].position(),
+                        self.map_type_name(arg.type_name()),
+                        arg_pos,
                     ));
                 }
 
-                let (name, mut fn_curry) = fn_ptr.cast::<FnPtr>().take_data();
+                let (name, mut fn_curry) = arg.cast::<FnPtr>().take_data();
 
                 // Append the new curried arguments to the existing list.
-
-                args_expr.iter().skip(1).try_for_each(|expr| {
-                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                        .map(|value| fn_curry.push(value))
-                })?;
+                if !args_expr.is_empty() {
+                    args_expr.iter().skip(1).try_for_each(|expr| {
+                        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                            .map(|value| fn_curry.push(value))
+                    })?;
+                    fn_curry.extend(constant_args.iter().map(|(v, _)| v.clone()));
+                } else {
+                    fn_curry.extend(constant_args.iter().skip(1).map(|(v, _)| v.clone()));
+                }
 
                 return Ok(FnPtr::new_unchecked(name, fn_curry).into());
             }
 
             // Handle is_shared()
             #[cfg(not(feature = "no_closure"))]
-            crate::engine::KEYWORD_IS_SHARED if args_expr.len() == 1 => {
-                let value =
-                    self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?;
-                return Ok(value.is_shared().into());
+            crate::engine::KEYWORD_IS_SHARED if total_args == 1 => {
+                let arg = args_expr.get(0).map_or_else(
+                    || Ok(constant_args[0].0.clone()),
+                    |arg| self.eval_expr(scope, mods, state, lib, this_ptr, arg, level),
+                )?;
+                return Ok(arg.is_shared().into());
             }
 
             // Handle is_def_fn()
             #[cfg(not(feature = "no_function"))]
-            crate::engine::KEYWORD_IS_DEF_FN if args_expr.len() == 2 => {
-                let fn_name = self
-                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
+            crate::engine::KEYWORD_IS_DEF_FN if total_args == 2 => {
+                let (arg, arg_pos) = if !args_expr.is_empty() {
+                    (
+                        self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?,
+                        args_expr[0].position(),
+                    )
+                } else {
+                    constant_args[0].clone()
+                };
+
+                let fn_name = arg
                     .take_immutable_string()
-                    .map_err(|err| {
-                        self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
-                    })?;
-                let num_params = self
-                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[1], level)?
+                    .map_err(|err| self.make_type_mismatch_err::<ImmutableString>(err, arg_pos))?;
+
+                let (arg, arg_pos) = if args_expr.len() > 1 {
+                    (
+                        self.eval_expr(scope, mods, state, lib, this_ptr, &args_expr[1], level)?,
+                        args_expr[1].position(),
+                    )
+                } else {
+                    constant_args[if args_expr.is_empty() { 1 } else { 0 }].clone()
+                };
+
+                let num_params = arg
                     .as_int()
-                    .map_err(|err| {
-                        self.make_type_mismatch_err::<crate::INT>(err, args_expr[0].position())
-                    })?;
+                    .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, arg_pos))?;
 
                 return Ok(if num_params < 0 {
                     Dynamic::FALSE
@@ -1174,29 +1215,34 @@ impl Engine {
             }
 
             // Handle is_def_var()
-            KEYWORD_IS_DEF_VAR if args_expr.len() == 1 => {
-                let var_name = self
-                    .eval_expr(scope, mods, state, lib, this_ptr, &args_expr[0], level)?
+            KEYWORD_IS_DEF_VAR if total_args == 1 => {
+                let (arg, arg_pos) = args_expr.get(0).map_or_else(
+                    || Ok(constant_args[0].clone()),
+                    |arg| {
+                        self.eval_expr(scope, mods, state, lib, this_ptr, arg, level)
+                            .map(|v| (v, arg.position()))
+                    },
+                )?;
+                let var_name = arg
                     .take_immutable_string()
-                    .map_err(|err| {
-                        self.make_type_mismatch_err::<ImmutableString>(err, args_expr[0].position())
-                    })?;
+                    .map_err(|err| self.make_type_mismatch_err::<ImmutableString>(err, arg_pos))?;
                 return Ok(scope.contains(&var_name).into());
             }
 
             // Handle eval()
-            KEYWORD_EVAL if args_expr.len() == 1 => {
-                let script_expr = &args_expr[0];
-                let script_pos = script_expr.position();
-
+            KEYWORD_EVAL if total_args == 1 => {
                 // eval - only in function call style
                 let prev_len = scope.len();
-                let script = self
-                    .eval_expr(scope, mods, state, lib, this_ptr, script_expr, level)?
-                    .take_immutable_string()
-                    .map_err(|typ| {
-                        self.make_type_mismatch_err::<ImmutableString>(typ, script_pos)
-                    })?;
+                let (script, script_pos) = args_expr.get(0).map_or_else(
+                    || Ok(constant_args[0].clone()),
+                    |script_expr| {
+                        self.eval_expr(scope, mods, state, lib, this_ptr, script_expr, level)
+                            .map(|v| (v, script_expr.position()))
+                    },
+                )?;
+                let script = script.take_immutable_string().map_err(|typ| {
+                    self.make_type_mismatch_err::<ImmutableString>(typ, script_pos)
+                })?;
                 let result = self.eval_script_expr_in_place(
                     scope,
                     mods,
@@ -1240,14 +1286,17 @@ impl Engine {
             None
         };
 
-        if args_expr.is_empty() && curry.is_empty() {
+        if args_expr.is_empty() && constant_args.is_empty() && curry.is_empty() {
             // No arguments
             args = Default::default();
         } else {
             // If the first argument is a variable, and there is no curried arguments,
             // convert to method-call style in order to leverage potential &mut first argument and
             // avoid cloning the value
-            if curry.is_empty() && args_expr[0].get_variable_access(false).is_some() {
+            if curry.is_empty()
+                && !args_expr.is_empty()
+                && args_expr[0].get_variable_access(false).is_some()
+            {
                 // func(x, ...) -> x.func(...)
                 arg_values = args_expr
                     .iter()
@@ -1256,6 +1305,7 @@ impl Engine {
                         self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
                             .map(Dynamic::flatten)
                     })
+                    .chain(constant_args.iter().map(|(v, _)| Ok(v.clone())))
                     .collect::<Result<_, _>>()?;
 
                 let (mut target, pos) =
@@ -1285,6 +1335,7 @@ impl Engine {
                         self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
                             .map(Dynamic::flatten)
                     })
+                    .chain(constant_args.iter().map(|(v, _)| Ok(v.clone())))
                     .collect::<Result<_, _>>()?;
 
                 args = curry.iter_mut().chain(arg_values.iter_mut()).collect();
@@ -1310,25 +1361,24 @@ impl Engine {
         namespace: Option<&NamespaceRef>,
         fn_name: &str,
         args_expr: &[Expr],
+        constant_args: &[(Dynamic, Position)],
         hash: u64,
         pos: Position,
         level: usize,
     ) -> RhaiResult {
-        let args_expr = args_expr.as_ref();
-
         let namespace = namespace.unwrap();
         let mut arg_values: StaticVec<_>;
         let mut first_arg_value = None;
         let mut args: StaticVec<_>;
 
-        if args_expr.is_empty() {
+        if args_expr.is_empty() && constant_args.is_empty() {
             // No arguments
             args = Default::default();
         } else {
             // See if the first argument is a variable (not namespace-qualified).
             // If so, convert to method-call style in order to leverage potential
             // &mut first argument and avoid cloning the value
-            if args_expr[0].get_variable_access(true).is_some() {
+            if !args_expr.is_empty() && args_expr[0].get_variable_access(true).is_some() {
                 // func(x, ...) -> x.func(...)
                 arg_values = args_expr
                     .iter()
@@ -1342,6 +1392,7 @@ impl Engine {
                                 .map(Dynamic::flatten)
                         }
                     })
+                    .chain(constant_args.iter().map(|(v, _)| Ok(v.clone())))
                     .collect::<Result<_, _>>()?;
 
                 // Get target reference to first argument
@@ -1368,6 +1419,7 @@ impl Engine {
                         self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
                             .map(Dynamic::flatten)
                     })
+                    .chain(constant_args.iter().map(|(v, _)| Ok(v.clone())))
                     .collect::<Result<_, _>>()?;
 
                 args = arg_values.iter_mut().collect();

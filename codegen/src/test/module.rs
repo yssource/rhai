@@ -1276,11 +1276,13 @@ mod generate_tests {
                 #[allow(unused_mut)]
                 pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
                     if flatten {
-                        #[cfg(not(feature = "no_float"))] {
+                        {
+                            #[cfg(not(feature = "no_float"))]
                             self::it_is::rhai_generate_into_module(m, flatten);
                         }
                     } else {
-                        #[cfg(not(feature = "no_float"))] {
+                        {
+                            #[cfg(not(feature = "no_float"))]
                             m.set_sub_module("it_is", self::it_is::rhai_module_generate());
                         }
                     }

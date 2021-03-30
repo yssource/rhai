@@ -55,11 +55,12 @@ mod print_debug_functions {
 
     #[cfg(not(feature = "no_float"))]
     pub mod float_functions {
+        #[cfg(feature = "no_std")]
+        #[cfg(not(feature = "no_float"))]
+        use num_traits::Float;
+
         #[rhai_fn(name = "print", name = "to_string")]
         pub fn print_f64(number: f64) -> ImmutableString {
-            #[cfg(feature = "no_std")]
-            use num_traits::Float;
-
             let abs = number.abs();
             if abs > 10000000000000.0 || abs < 0.0000000000001 {
                 format!("{:e}", number).into()
@@ -69,9 +70,6 @@ mod print_debug_functions {
         }
         #[rhai_fn(name = "print", name = "to_string")]
         pub fn print_f32(number: f32) -> ImmutableString {
-            #[cfg(feature = "no_std")]
-            use num_traits::Float;
-
             let abs = number.abs();
             if abs > 10000000000000.0 || abs < 0.0000000000001 {
                 format!("{:e}", number).into()

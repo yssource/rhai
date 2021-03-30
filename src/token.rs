@@ -842,7 +842,7 @@ pub trait InputStream {
     fn peek_next(&mut self) -> Option<char>;
 }
 
-/// _(INTERNALS)_ Parse a string literal wrapped by `enclosing_char`.
+/// _(INTERNALS)_ Parse a string literal ended by `termination_char`.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile API
@@ -852,12 +852,15 @@ pub fn parse_string_literal(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
     pos: &mut Position,
-    enclosing_char: char,
+    termination_char: char,
+    continuation: bool,
+    verbatim: bool,
 ) -> Result<String, (LexError, Position)> {
     let mut result: smallvec::SmallVec<[char; 16]> = Default::default();
     let mut escape: smallvec::SmallVec<[char; 12]> = Default::default();
 
     let start = *pos;
+    let mut skip_whitespace_until = 0;
 
     loop {
         let next_char = stream.get_next().ok_or((LERR::UnterminatedString, start))?;
@@ -871,8 +874,10 @@ pub fn parse_string_literal(
         }
 
         match next_char {
+            // \r - ignore if followed by \n
+            '\r' if stream.peek_next().unwrap_or('\0') == '\n' => {}
             // \...
-            '\\' if escape.is_empty() => {
+            '\\' if escape.is_empty() && !verbatim => {
                 escape.push('\\');
             }
             // \\
@@ -937,18 +942,37 @@ pub fn parse_string_literal(
                 })?);
             }
 
-            // \{enclosing_char} - escaped
-            ch if enclosing_char == ch && !escape.is_empty() => {
+            // \{termination_char} - escaped
+            _ if termination_char == next_char && !escape.is_empty() => {
                 escape.clear();
-                result.push(ch)
+                result.push(next_char)
             }
 
             // Close wrapper
-            ch if enclosing_char == ch && escape.is_empty() => break,
+            _ if termination_char == next_char && escape.is_empty() => break,
+
+            // Line continuation
+            '\n' if continuation && !escape.is_empty() => {
+                escape.clear();
+                pos.new_line();
+                skip_whitespace_until = start.position().unwrap() + 1;
+            }
+
+            // New-line cannot be escaped
+            // Cannot have new-lines inside non-multi-line string literals
+            '\n' if !escape.is_empty() || !verbatim => {
+                pos.rewind();
+                return Err((LERR::UnterminatedString, start));
+            }
+
+            '\n' => {
+                pos.new_line();
+                result.push(next_char);
+            }
 
             // Unknown escape sequence
-            ch if !escape.is_empty() => {
-                escape.push(ch);
+            _ if !escape.is_empty() => {
+                escape.push(next_char);
 
                 return Err((
                     LERR::MalformedEscapeSequence(escape.into_iter().collect()),
@@ -956,16 +980,14 @@ pub fn parse_string_literal(
                 ));
             }
 
-            // Cannot have new-lines inside string literals
-            '\n' => {
-                pos.rewind();
-                return Err((LERR::UnterminatedString, start));
-            }
+            // Whitespace to skip
+            _ if next_char.is_whitespace() && pos.position().unwrap() < skip_whitespace_until => {}
 
             // All other characters
-            ch => {
+            _ => {
                 escape.clear();
-                result.push(ch);
+                result.push(next_char);
+                skip_whitespace_until = 0;
             }
         }
     }
@@ -1272,12 +1294,15 @@ fn get_next_token_inner(
                 return get_identifier(stream, pos, start_pos, c);
             }
 
-            // " - string literal
-            ('"', _) => {
-                return parse_string_literal(stream, state, pos, '"').map_or_else(
-                    |err| Some((Token::LexError(err.0), err.1)),
-                    |out| Some((Token::StringConstant(out), start_pos)),
-                )
+            // " or ` - string literal
+            ('"', _) | ('`', _) => {
+                let multi_line = c == '`';
+
+                return parse_string_literal(stream, state, pos, c, !multi_line, multi_line)
+                    .map_or_else(
+                        |err| Some((Token::LexError(err.0), err.1)),
+                        |out| Some((Token::StringConstant(out), start_pos)),
+                    );
             }
 
             // ' - character literal
@@ -1288,19 +1313,21 @@ fn get_next_token_inner(
                 ))
             }
             ('\'', _) => {
-                return Some(parse_string_literal(stream, state, pos, '\'').map_or_else(
-                    |err| (Token::LexError(err.0), err.1),
-                    |result| {
-                        let mut chars = result.chars();
-                        let first = chars.next().unwrap();
+                return Some(
+                    parse_string_literal(stream, state, pos, c, false, false).map_or_else(
+                        |err| (Token::LexError(err.0), err.1),
+                        |result| {
+                            let mut chars = result.chars();
+                            let first = chars.next().unwrap();
 
-                        if chars.next().is_some() {
-                            (Token::LexError(LERR::MalformedChar(result)), start_pos)
-                        } else {
-                            (Token::CharConstant(first), start_pos)
-                        }
-                    },
-                ))
+                            if chars.next().is_some() {
+                                (Token::LexError(LERR::MalformedChar(result)), start_pos)
+                            } else {
+                                (Token::CharConstant(first), start_pos)
+                            }
+                        },
+                    ),
+                )
             }
 
             // Braces

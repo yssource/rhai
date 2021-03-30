@@ -1,6 +1,6 @@
 //! Module implementing the [`AST`] optimizer.
 
-use crate::ast::{Expr, Ident, Stmt, StmtBlock};
+use crate::ast::{Expr, Stmt, StmtBlock};
 use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
@@ -214,17 +214,17 @@ fn optimize_stmt_block(
         statements.iter_mut().for_each(|stmt| {
             match stmt {
                 // Add constant literals into the state
-                Stmt::Const(value_expr, Ident { name, .. }, _, _) => {
+                Stmt::Const(value_expr, x, _, _) => {
                     optimize_expr(value_expr, state);
 
                     if value_expr.is_constant() {
-                        state.push_var(name, AccessMode::ReadOnly, value_expr.clone());
+                        state.push_var(&x.name, AccessMode::ReadOnly, value_expr.clone());
                     }
                 }
                 // Add variables into the state
-                Stmt::Let(value_expr, Ident { name, pos, .. }, _, _) => {
+                Stmt::Let(value_expr, x, _, _) => {
                     optimize_expr(value_expr, state);
-                    state.push_var(name, AccessMode::ReadWrite, Expr::Unit(*pos));
+                    state.push_var(&x.name, AccessMode::ReadWrite, Expr::Unit(x.pos));
                 }
                 // Optimize the statement
                 _ => optimize_stmt(stmt, state, preserve_result),
@@ -649,7 +649,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                *expr = mem::take(&mut m.0).into_iter().find(|(x, _)| x.name == *s)
+                *expr = mem::take(&mut m.0).into_iter().find(|(x, _)| x.name.as_str() == s.as_str())
                             .map(|(_, mut expr)| { expr.set_position(*pos); expr })
                             .unwrap_or_else(|| Expr::Unit(*pos));
             }
@@ -740,11 +740,14 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         Expr::FnCall(x, pos)
                 if x.namespace.is_none() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Simple // simple optimizations
-                && x.args.len() == 2 // binary call
+                && x.num_args() == 2 // binary call
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
                 //&& !is_valid_identifier(x.name.chars()) // cannot be scripted
         => {
-            let mut arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap()).collect();
+            let mut arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap())
+                                                .chain(x.constant_args.iter().map(|(v, _)| v).cloned())
+                                                .collect();
+
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
@@ -764,6 +767,15 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             }
 
             x.args.iter_mut().for_each(|a| optimize_expr(a, state));
+
+            // Move constant arguments to the right
+            while x.args.last().map(Expr::is_constant).unwrap_or(false) {
+                let arg = x.args.pop().unwrap();
+                let arg_pos = arg.position();
+                x.constant_args.insert(0, (arg.get_constant_value().unwrap(), arg_pos));
+            }
+
+            x.args.shrink_to_fit();
         }
 
         // Eagerly call functions
@@ -774,12 +786,14 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         => {
             // First search for script-defined functions (can override built-in)
             #[cfg(not(feature = "no_function"))]
-            let has_script_fn = state.lib.iter().any(|&m| m.get_script_fn(x.name.as_ref(), x.args.len()).is_some());
+            let has_script_fn = state.lib.iter().any(|&m| m.get_script_fn(x.name.as_ref(), x.num_args()).is_some());
             #[cfg(feature = "no_function")]
             let has_script_fn = false;
 
             if !has_script_fn {
-                let mut arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap()).collect();
+                let mut arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap())
+                                                    .chain(x.constant_args.iter().map(|(v, _)| v).cloned())
+                                                    .collect();
 
                 // Save the typename of the first argument if it is `type_of()`
                 // This is to avoid `call_args` being passed into the closure
@@ -810,7 +824,18 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         }
 
         // id(args ..) -> optimize function call arguments
-        Expr::FnCall(x, _) => x.args.iter_mut().for_each(|a| optimize_expr(a, state)),
+        Expr::FnCall(x, _) => {
+            x.args.iter_mut().for_each(|a| optimize_expr(a, state));
+
+            // Move constant arguments to the right
+            while x.args.last().map(Expr::is_constant).unwrap_or(false) {
+                let arg = x.args.pop().unwrap();
+                let arg_pos = arg.position();
+                x.constant_args.insert(0, (arg.get_constant_value().unwrap(), arg_pos));
+            }
+
+            x.args.shrink_to_fit();
+        }
 
         // constant-name
         Expr::Variable(x) if x.1.is_none() && state.find_constant(&x.2.name).is_some() => {

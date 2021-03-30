@@ -135,6 +135,15 @@ pub use syntax::Expression;
 pub use token::Position;
 pub use utils::ImmutableString;
 
+/// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
+/// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
+#[cfg(not(feature = "no_smartstring"))]
+pub type Identifier = smartstring::SmartString<smartstring::Compact>;
+
+/// An identifier in Rhai.
+#[cfg(feature = "no_smartstring")]
+pub type Identifier = ImmutableString;
+
 /// A trait to enable registering Rust functions.
 /// This trait is  no longer needed and will be removed in the future.
 #[deprecated(
@@ -180,7 +189,7 @@ pub type Array = stdlib::vec::Vec<Dynamic>;
 ///
 /// Not available under `no_object`.
 #[cfg(not(feature = "no_object"))]
-pub type Map = stdlib::collections::BTreeMap<ImmutableString, Dynamic>;
+pub type Map = stdlib::collections::BTreeMap<Identifier, Dynamic>;
 
 #[cfg(not(feature = "no_module"))]
 pub use module::ModuleResolver;

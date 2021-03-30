@@ -54,7 +54,7 @@ impl Serialize for Dynamic {
             Union::Map(m, _) => {
                 let mut map = ser.serialize_map(Some(m.len()))?;
                 for (k, v) in m.iter() {
-                    map.serialize_entry(k, v)?;
+                    map.serialize_entry(k.as_str(), v)?;
                 }
                 map.end()
             }

@@ -550,7 +550,7 @@ impl SerializeMap for DynamicSerializer {
                 })?;
             let _value = _value.serialize(&mut *self)?;
             let map = self._value.downcast_mut::<Map>().unwrap();
-            map.insert(key, _value);
+            map.insert(key.into(), _value);
             Ok(())
         }
         #[cfg(feature = "no_object")]
@@ -575,7 +575,7 @@ impl SerializeMap for DynamicSerializer {
             })?;
             let _value = _value.serialize(&mut *self)?;
             let map = self._value.downcast_mut::<Map>().unwrap();
-            map.insert(_key, _value);
+            map.insert(_key.into(), _value);
             Ok(())
         }
         #[cfg(feature = "no_object")]
