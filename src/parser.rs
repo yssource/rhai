@@ -2481,7 +2481,7 @@ fn parse_stmt(
 
         // fn ...
         #[cfg(not(feature = "no_function"))]
-        Token::Fn if !settings.is_global => Err(PERR::FnWrongDefinition.into_err(settings.pos)),
+        Token::Fn if !settings.is_global => Err(PERR::WrongFnDefinition.into_err(settings.pos)),
 
         #[cfg(not(feature = "no_function"))]
         Token::Fn | Token::Private => {

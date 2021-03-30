@@ -875,7 +875,7 @@ pub fn parse_string_literal(
 
         match next_char {
             // \r - ignore if followed by \n
-            '\r' if stream.peek_next().unwrap_or('\0') == '\n' => {}
+            '\r' if stream.peek_next().map(|ch| ch == '\n').unwrap_or(false) => {}
             // \...
             '\\' if escape.is_empty() && !verbatim => {
                 escape.push('\\');
