@@ -183,7 +183,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             self.deserialize_int(v, visitor)
         } else {
             self.value
-                .downcast_ref::<i8>()
+                .downclone_cast::<i8>()
                 .map_or_else(|| self.type_error(), |&x| visitor.visit_i8(x))
         }
     }
@@ -193,7 +193,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             self.deserialize_int(v, visitor)
         } else {
             self.value
-                .downcast_ref::<i16>()
+                .downclone_cast::<i16>()
                 .map_or_else(|| self.type_error(), |&x| visitor.visit_i16(x))
         }
     }
@@ -205,7 +205,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             self.type_error()
         } else {
             self.value
-                .downcast_ref::<i32>()
+                .downclone_cast::<i32>()
                 .map_or_else(|| self.type_error(), |&x| visitor.visit_i32(x))
         }
     }
@@ -217,7 +217,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             self.type_error()
         } else {
             self.value
-                .downcast_ref::<i64>()
+                .downclone_cast::<i64>()
                 .map_or_else(|| self.type_error(), |&x| visitor.visit_i64(x))
         }
     }
@@ -229,7 +229,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             self.type_error()
         } else {
             self.value
-                .downcast_ref::<i128>()
+                .downclone_cast::<i128>()
                 .map_or_else(|| self.type_error(), |&x| visitor.visit_i128(x))
         }
     }
@@ -239,7 +239,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             self.deserialize_int(v, visitor)
         } else {
             self.value
-                .downcast_ref::<u8>()
+                .downclone_cast::<u8>()
                 .map_or_else(|| self.type_error(), |&x| visitor.visit_u8(x))
         }
     }
@@ -249,7 +249,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             self.deserialize_int(v, visitor)
         } else {
             self.value
-                .downcast_ref::<u16>()
+                .downclone_cast::<u16>()
                 .map_or_else(|| self.type_error(), |&x| visitor.visit_u16(x))
         }
     }
@@ -259,7 +259,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             self.deserialize_int(v, visitor)
         } else {
             self.value
-                .downcast_ref::<u32>()
+                .downclone_cast::<u32>()
                 .map_or_else(|| self.type_error(), |&x| visitor.visit_u32(x))
         }
     }
@@ -269,7 +269,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             self.deserialize_int(v, visitor)
         } else {
             self.value
-                .downcast_ref::<u64>()
+                .downclone_cast::<u64>()
                 .map_or_else(|| self.type_error(), |&x| visitor.visit_u64(x))
         }
     }
@@ -279,7 +279,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             self.deserialize_int(v, visitor)
         } else {
             self.value
-                .downcast_ref::<u128>()
+                .downclone_cast::<u128>()
                 .map_or_else(|| self.type_error(), |&x| visitor.visit_u128(x))
         }
     }
@@ -288,7 +288,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         #[cfg(not(feature = "no_float"))]
         return self
             .value
-            .downcast_ref::<f32>()
+            .downclone_cast::<f32>()
             .map_or_else(|| self.type_error(), |&x| _visitor.visit_f32(x));
 
         #[cfg(feature = "no_float")]
@@ -298,7 +298,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 
             return self
                 .value
-                .downcast_ref::<rust_decimal::Decimal>()
+                .downclone_cast::<rust_decimal::Decimal>()
                 .and_then(|&x| x.to_f32())
                 .map_or_else(|| self.type_error(), |v| _visitor.visit_f32(v));
         }
@@ -312,7 +312,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         #[cfg(not(feature = "no_float"))]
         return self
             .value
-            .downcast_ref::<f64>()
+            .downclone_cast::<f64>()
             .map_or_else(|| self.type_error(), |&x| _visitor.visit_f64(x));
 
         #[cfg(feature = "no_float")]
@@ -322,7 +322,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 
             return self
                 .value
-                .downcast_ref::<rust_decimal::Decimal>()
+                .downclone_cast::<rust_decimal::Decimal>()
                 .and_then(|&x| x.to_f64())
                 .map_or_else(|| self.type_error(), |v| _visitor.visit_f64(v));
         }
@@ -334,12 +334,12 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 
     fn deserialize_char<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         self.value
-            .downcast_ref::<char>()
+            .downclone_cast::<char>()
             .map_or_else(|| self.type_error(), |&x| visitor.visit_char(x))
     }
 
     fn deserialize_str<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
-        self.value.downcast_ref::<ImmutableString>().map_or_else(
+        self.value.downclone_cast::<ImmutableString>().map_or_else(
             || self.type_error(),
             |x| visitor.visit_borrowed_str(x.as_str()),
         )
@@ -366,7 +366,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 
     fn deserialize_unit<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         self.value
-            .downcast_ref::<()>()
+            .downclone_cast::<()>()
             .map_or_else(|| self.type_error(), |_| visitor.visit_unit())
     }
 
@@ -388,7 +388,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 
     fn deserialize_seq<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
-        return self.value.downcast_ref::<Array>().map_or_else(
+        return self.value.downclone_cast::<Array>().map_or_else(
             || self.type_error(),
             |arr| _visitor.visit_seq(IterateArray::new(arr.iter())),
         );
@@ -416,7 +416,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 
     fn deserialize_map<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
-        return self.value.downcast_ref::<Map>().map_or_else(
+        return self.value.downclone_cast::<Map>().map_or_else(
             || self.type_error(),
             |map| {
                 _visitor.visit_map(IterateMap::new(
@@ -449,7 +449,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             visitor.visit_enum(s.as_str().into_deserializer())
         } else {
             #[cfg(not(feature = "no_object"))]
-            if let Some(map) = self.value.downcast_ref::<Map>() {
+            if let Some(map) = self.value.downclone_cast::<Map>() {
                 let mut iter = map.iter();
                 let first = iter.next();
                 let second = iter.next();

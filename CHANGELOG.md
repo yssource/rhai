@@ -56,6 +56,7 @@ Enhancements
 * Replaced all `HashMap` usage with `BTreeMap` for better performance because collections in Rhai are tiny.
 * `Engine::register_result_fn` no longer requires the successful return type to be `Dynamic`.  It can now be any clonable type.
 * `#[rhai_fn(return_raw)]` can now return `Result<T, Box<EvalAltResult>>` where `T` is any clonable type instead of `Result<Dynamic, Box<EvalAltResult>>`.
+* `Dynamic::clone_cast` is added to simplify casting from a `&Dynamic`.
 
 
 Version 0.19.14
