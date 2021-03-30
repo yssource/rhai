@@ -813,7 +813,7 @@ fn parse_switch(
         }
     }
 
-    let mut table = BTreeMap::<u64, StmtBlock>::new();
+    let mut table = BTreeMap::<u64, Box<StmtBlock>>::new();
     let mut def_stmt = None;
 
     loop {
@@ -873,7 +873,7 @@ fn parse_switch(
         let need_comma = !stmt.is_self_terminated();
 
         def_stmt = if let Some(hash) = hash {
-            table.insert(hash, stmt.into());
+            table.insert(hash, Box::new(stmt.into()));
             None
         } else {
             Some(stmt.into())
@@ -1390,14 +1390,14 @@ fn make_assignment_stmt<'a>(
         }
         // var (non-indexed) = rhs
         Expr::Variable(x) if x.0.is_none() => {
-            Ok(Stmt::Assignment(Box::new((lhs, rhs, op_info)), op_pos))
+            Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
         }
         // var (indexed) = rhs
         Expr::Variable(x) => {
             let (index, _, Ident { name, pos, .. }) = x.as_ref();
             match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                 AccessMode::ReadWrite => {
-                    Ok(Stmt::Assignment(Box::new((lhs, rhs, op_info)), op_pos))
+                    Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
                 }
                 // Constant values cannot be assigned to
                 AccessMode::ReadOnly => {
@@ -1411,14 +1411,14 @@ fn make_assignment_stmt<'a>(
                 Position::NONE => match &x.lhs {
                     // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
                     Expr::Variable(x) if x.0.is_none() => {
-                        Ok(Stmt::Assignment(Box::new((lhs, rhs, op_info)), op_pos))
+                        Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
                     }
                     // var[???] (indexed) = rhs, var.??? (indexed) = rhs
                     Expr::Variable(x) => {
                         let (index, _, Ident { name, pos, .. }) = x.as_ref();
                         match state.stack[(state.stack.len() - index.unwrap().get())].1 {
                             AccessMode::ReadWrite => {
-                                Ok(Stmt::Assignment(Box::new((lhs, rhs, op_info)), op_pos))
+                                Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
                             }
                             // Constant values cannot be assigned to
                             AccessMode::ReadOnly => {
@@ -2091,9 +2091,9 @@ fn parse_for(
     settings.pos = eat_token(input, Token::For);
 
     // for name ...
-    let name = match input.next().unwrap() {
+    let (name, name_pos) = match input.next().unwrap() {
         // Variable name
-        (Token::Identifier(s), _) => s,
+        (Token::Identifier(s), pos) => (s, pos),
         // Reserved keyword
         (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
             return Err(PERR::Reserved(s).into_err(pos));
@@ -2131,7 +2131,13 @@ fn parse_for(
 
     Ok(Stmt::For(
         expr,
-        Box::new((loop_var, body.into())),
+        Box::new((
+            Ident {
+                name: loop_var,
+                pos: name_pos,
+            },
+            body.into(),
+        )),
         settings.pos,
     ))
 }
@@ -2766,7 +2772,7 @@ fn parse_fn(
 fn make_curry_from_externals(
     state: &mut ParseState,
     fn_expr: Expr,
-    externals: StaticVec<Ident>,
+    externals: StaticVec<Identifier>,
     pos: Position,
 ) -> Expr {
     // If there are no captured variables, no need to curry
@@ -2780,7 +2786,11 @@ fn make_curry_from_externals(
     args.push(fn_expr);
 
     externals.iter().for_each(|x| {
-        args.push(Expr::Variable(Box::new((None, None, x.clone()))));
+        let var_def = Ident {
+            name: x.clone(),
+            pos: Position::NONE,
+        };
+        args.push(Expr::Variable(Box::new((None, None, var_def))));
     });
 
     let expr = Expr::FnCall(
@@ -2800,7 +2810,7 @@ fn make_curry_from_externals(
     // Convert the entire expression into a statement block, then insert the relevant
     // [`Share`][Stmt::Share] statements.
     let mut statements: StaticVec<_> = Default::default();
-    statements.extend(externals.into_iter().map(|v| Stmt::Share(Box::new(v))));
+    statements.extend(externals.into_iter().map(Stmt::Share));
     statements.push(Stmt::Expr(expr));
     Expr::Stmt(Box::new(StmtBlock { statements, pos }))
 }
@@ -2863,16 +2873,13 @@ fn parse_anon_fn(
 
     // External variables may need to be processed in a consistent order,
     // so extract them into a list.
-    let externals: StaticVec<Ident> = {
+    let externals: StaticVec<Identifier> = {
         #[cfg(not(feature = "no_closure"))]
         {
             state
                 .external_vars
                 .iter()
-                .map(|(name, &pos)| Ident {
-                    name: name.clone(),
-                    pos,
-                })
+                .map(|(name, _)| name.clone())
                 .collect()
         }
         #[cfg(feature = "no_closure")]
@@ -2882,7 +2889,7 @@ fn parse_anon_fn(
     let params: StaticVec<_> = if cfg!(not(feature = "no_closure")) {
         externals
             .iter()
-            .map(|k| k.name.clone())
+            .cloned()
             .chain(params.into_iter().map(|(v, _)| v))
             .collect()
     } else {

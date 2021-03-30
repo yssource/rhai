@@ -385,10 +385,10 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
     match stmt {
         // expr op= expr
         Stmt::Assignment(x, _) => match x.0 {
-            Expr::Variable(_) => optimize_expr(&mut x.1, state),
+            Expr::Variable(_) => optimize_expr(&mut x.2, state),
             _ => {
                 optimize_expr(&mut x.0, state);
-                optimize_expr(&mut x.1, state);
+                optimize_expr(&mut x.2, state);
             }
         },
 

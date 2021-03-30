@@ -1957,7 +1957,7 @@ impl Engine {
 
             // var op= rhs
             Stmt::Assignment(x, op_pos) if x.0.get_variable_access(false).is_some() => {
-                let (lhs_expr, rhs_expr, op_info) = x.as_ref();
+                let (lhs_expr, op_info, rhs_expr) = x.as_ref();
                 let rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
                     .flatten();
@@ -1998,7 +1998,7 @@ impl Engine {
 
             // lhs op= rhs
             Stmt::Assignment(x, op_pos) => {
-                let (lhs_expr, rhs_expr, op_info) = x.as_ref();
+                let (lhs_expr, op_info, rhs_expr) = x.as_ref();
                 let rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
                     .flatten();
@@ -2083,7 +2083,9 @@ impl Engine {
                     value.hash(hasher);
                     let hash = hasher.finish();
 
-                    table.get(&hash).map(|StmtBlock { statements, .. }| {
+                    table.get(&hash).map(|t| {
+                        let statements = &t.statements;
+
                         if !statements.is_empty() {
                             self.eval_stmt_block(
                                 scope, mods, state, lib, this_ptr, statements, true, level,
@@ -2178,7 +2180,7 @@ impl Engine {
 
             // For loop
             Stmt::For(expr, x, _) => {
-                let (name, StmtBlock { statements, pos }) = x.as_ref();
+                let (Ident { name, .. }, StmtBlock { statements, pos }) = x.as_ref();
                 let iter_obj = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten();
@@ -2479,8 +2481,8 @@ impl Engine {
 
             // Share statement
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(x) => {
-                if let Some((index, _)) = scope.get_index(&x.name) {
+            Stmt::Share(name) => {
+                if let Some((index, _)) = scope.get_index(name) {
                     let val = scope.get_mut_by_index(index);
 
                     if !val.is_shared() {
