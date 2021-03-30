@@ -715,13 +715,13 @@ fn parse_map_literal(
                 return Err(PERR::Reserved(s).into_err(pos));
             }
             (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-            (_, pos) if map.is_empty() => {
+            (Token::EOF, pos) => {
                 return Err(
                     PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
                         .into_err(pos),
                 );
             }
-            (Token::EOF, pos) => {
+            (_, pos) if map.is_empty() => {
                 return Err(
                     PERR::MissingToken(Token::RightBrace.into(), MISSING_RBRACE.into())
                         .into_err(pos),
