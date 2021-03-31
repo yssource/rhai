@@ -2,8 +2,8 @@
 
 print("hello");
 print("this\nis \\ nice");      // escape sequences
-print("40 hex is \x40");        // hex escape sequence
-print("unicode fun: \u2764");   // Unicode escape sequence
+print("0x40 hex is \x40");      // hex escape sequence
+print("Unicode fun: \u2764");   // Unicode escape sequence
 print("more fun: \U0001F603");  // Unicode escape sequence
 print("foo" + " " + "bar");     // string building using strings
 print("foo" < "bar");           // string comparison
@@ -15,3 +15,22 @@ print("length=" + s.len);       // should be 17
 
 s[s.len-3] = '?';               // change the string
 print("Question: " + s);        // should print 'Question: hello, world?'
+
+// Line continuation:
+let s = "This is a long \
+         string constructed using \
+         line continuation";
+
+print("One string: " + s);
+
+// Multi-line literal string:
+let s = `
+          \U0001F603 This is a multi-line
+                "string" with \t\x20\r\n
+made using multi-line literal
+      string syntax.
+`;
+
+print(s);
+
+print(">>> END <<<");

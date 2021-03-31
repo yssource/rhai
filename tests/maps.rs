@@ -94,9 +94,9 @@ fn test_map_assign() -> Result<(), Box<EvalAltResult>> {
 
     let x = engine.eval::<Map>(r#"let x = #{a: 1, b: true, "c$": "hello"}; x"#)?;
 
-    assert_eq!(x["a"].clone().cast::<INT>(), 1);
-    assert_eq!(x["b"].clone().cast::<bool>(), true);
-    assert_eq!(x["c$"].clone().cast::<String>(), "hello");
+    assert_eq!(x["a"].clone_cast::<INT>(), 1);
+    assert_eq!(x["b"].clone_cast::<bool>(), true);
+    assert_eq!(x["c$"].clone_cast::<String>(), "hello");
 
     Ok(())
 }
@@ -107,9 +107,9 @@ fn test_map_return() -> Result<(), Box<EvalAltResult>> {
 
     let x = engine.eval::<Map>(r#"#{a: 1, b: true, "c$": "hello"}"#)?;
 
-    assert_eq!(x["a"].clone().cast::<INT>(), 1);
-    assert_eq!(x["b"].clone().cast::<bool>(), true);
-    assert_eq!(x["c$"].clone().cast::<String>(), "hello");
+    assert_eq!(x["a"].clone_cast::<INT>(), 1);
+    assert_eq!(x["b"].clone_cast::<bool>(), true);
+    assert_eq!(x["c$"].clone_cast::<String>(), "hello");
 
     Ok(())
 }
@@ -152,11 +152,11 @@ fn test_map_json() -> Result<(), Box<EvalAltResult>> {
 
     assert!(!map.contains_key("x"));
 
-    assert_eq!(map["a"].clone().cast::<INT>(), 1);
-    assert_eq!(map["b"].clone().cast::<bool>(), true);
-    assert_eq!(map["c"].clone().cast::<INT>(), 42);
-    assert_eq!(map["$d e f!"].clone().cast::<String>(), "hello");
-    assert_eq!(map["z"].clone().cast::<()>(), ());
+    assert_eq!(map["a"].clone_cast::<INT>(), 1);
+    assert_eq!(map["b"].clone_cast::<bool>(), true);
+    assert_eq!(map["c"].clone_cast::<INT>(), 42);
+    assert_eq!(map["$d e f!"].clone_cast::<String>(), "hello");
+    assert_eq!(map["z"].clone_cast::<()>(), ());
 
     #[cfg(not(feature = "no_index"))]
     {

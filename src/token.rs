@@ -875,7 +875,7 @@ pub fn parse_string_literal(
 
         match next_char {
             // \r - ignore if followed by \n
-            '\r' if stream.peek_next().unwrap_or('\0') == '\n' => {}
+            '\r' if stream.peek_next().map(|ch| ch == '\n').unwrap_or(false) => {}
             // \...
             '\\' if escape.is_empty() && !verbatim => {
                 escape.push('\\');
@@ -1294,15 +1294,36 @@ fn get_next_token_inner(
                 return get_identifier(stream, pos, start_pos, c);
             }
 
-            // " or ` - string literal
-            ('"', _) | ('`', _) => {
-                let multi_line = c == '`';
+            // " - string literal
+            ('"', _) => {
+                return parse_string_literal(stream, state, pos, c, true, false).map_or_else(
+                    |err| Some((Token::LexError(err.0), err.1)),
+                    |out| Some((Token::StringConstant(out), start_pos)),
+                );
+            }
+            // ` - string literal
+            ('`', _) => {
+                // Start from the next line if ` at the end of line
+                match stream.peek_next() {
+                    // `\r - start from next line
+                    Some('\r') => {
+                        eat_next(stream, pos);
+                        // `\r\n
+                        if stream.peek_next().map(|ch| ch == '\n').unwrap_or(false) {
+                            eat_next(stream, pos);
+                        }
+                    }
+                    // `\n - start from next line
+                    Some('\n') => {
+                        eat_next(stream, pos);
+                    }
+                    _ => (),
+                }
 
-                return parse_string_literal(stream, state, pos, c, !multi_line, multi_line)
-                    .map_or_else(
-                        |err| Some((Token::LexError(err.0), err.1)),
-                        |out| Some((Token::StringConstant(out), start_pos)),
-                    );
+                return parse_string_literal(stream, state, pos, c, false, true).map_or_else(
+                    |err| Some((Token::LexError(err.0), err.1)),
+                    |out| Some((Token::StringConstant(out), start_pos)),
+                );
             }
 
             // ' - character literal

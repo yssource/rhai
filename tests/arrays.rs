@@ -59,6 +59,11 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
         5
     );
 
+    let mut a = Array::new();
+    a.push((42 as INT).into());
+
+    assert_eq!(a[0].clone_cast::<INT>(), 42);
+
     Ok(())
 }
 

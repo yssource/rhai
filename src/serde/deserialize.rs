@@ -2,13 +2,19 @@
 
 use crate::stdlib::{fmt, string::ToString};
 use crate::{Dynamic, ImmutableString, INT};
-use serde::de::{Deserialize, Deserializer, Error, MapAccess, SeqAccess, Visitor};
+use serde::de::{Deserialize, Deserializer, Error, Visitor};
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
 
+#[cfg(not(feature = "no_index"))]
+use serde::de::SeqAccess;
+
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
+
+#[cfg(not(feature = "no_object"))]
+use serde::de::MapAccess;
 
 struct DynamicVisitor;
 

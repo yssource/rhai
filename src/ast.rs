@@ -864,19 +864,23 @@ pub enum Stmt {
     /// `if` expr `{` stmt `}` `else` `{` stmt `}`
     If(Expr, Box<(StmtBlock, StmtBlock)>, Position),
     /// `switch` expr `{` literal or _ `=>` stmt `,` ... `}`
-    Switch(Expr, Box<(BTreeMap<u64, StmtBlock>, StmtBlock)>, Position),
+    Switch(
+        Expr,
+        Box<(BTreeMap<u64, Box<StmtBlock>>, StmtBlock)>,
+        Position,
+    ),
     /// `while` expr `{` stmt `}`
     While(Expr, Box<StmtBlock>, Position),
     /// `do` `{` stmt `}` `while`|`until` expr
     Do(Box<StmtBlock>, Expr, bool, Position),
     /// `for` id `in` expr `{` stmt `}`
-    For(Expr, Box<(Identifier, StmtBlock)>, Position),
+    For(Expr, Box<(Ident, StmtBlock)>, Position),
     /// \[`export`\] `let` id `=` expr
     Let(Expr, Box<Ident>, bool, Position),
     /// \[`export`\] `const` id `=` expr
     Const(Expr, Box<Ident>, bool, Position),
     /// expr op`=` expr
-    Assignment(Box<(Expr, Expr, Option<OpAssignment>)>, Position),
+    Assignment(Box<(Expr, Option<OpAssignment>, Expr)>, Position),
     /// `{` stmt`;` ... `}`
     Block(Vec<Stmt>, Position),
     /// `try` `{` stmt; ... `}` `catch` `(` var `)` `{` stmt; ... `}`
@@ -901,7 +905,7 @@ pub enum Stmt {
     Export(Vec<(Ident, Option<Ident>)>, Position),
     /// Convert a variable to shared.
     #[cfg(not(feature = "no_closure"))]
-    Share(Box<Ident>),
+    Share(Identifier),
 }
 
 impl Default for Stmt {
@@ -967,7 +971,7 @@ impl Stmt {
             Self::Export(_, pos) => *pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(x) => x.pos,
+            Self::Share(_) => Position::NONE,
         }
     }
     /// Override the [position][Position] of this statement.
@@ -998,7 +1002,7 @@ impl Stmt {
             Self::Export(_, pos) => *pos = new_pos,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(x) => x.pos = new_pos,
+            Self::Share(_) => (),
         }
 
         self
@@ -1203,7 +1207,7 @@ impl Stmt {
                 if !x.0.walk(path, on_node) {
                     return false;
                 }
-                if !x.1.walk(path, on_node) {
+                if !x.2.walk(path, on_node) {
                     return false;
                 }
             }

@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::ast::{Expr, FnCallExpr, FnCallHash, Ident, OpAssignment, ReturnType, Stmt, StmtBlock};
+use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt, StmtBlock};
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_native::{
     CallableFunction, IteratorFn, OnDebugCallback, OnPrintCallback, OnProgressCallback,
@@ -25,8 +25,8 @@ use crate::stdlib::{
 use crate::syntax::CustomSyntax;
 use crate::utils::get_hasher;
 use crate::{
-    Dynamic, EvalAltResult, FnPtr, Identifier, ImmutableString, Module, Position, RhaiResult,
-    Scope, Shared, StaticVec,
+    Dynamic, EvalAltResult, FnPtr, Identifier, Module, Position, RhaiResult, Scope, Shared,
+    StaticVec,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -34,6 +34,9 @@ use crate::{calc_fn_hash, stdlib::iter::empty, Array};
 
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
+
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+use crate::ast::FnCallHash;
 
 pub type Precedence = NonZeroU8;
 
@@ -394,7 +397,6 @@ impl<'a> Target<'a> {
         }
     }
     /// Update the value of the `Target`.
-    #[cfg(any(not(feature = "no_object"), not(feature = "no_index")))]
     pub fn set_value(
         &mut self,
         new_val: Dynamic,
@@ -408,7 +410,7 @@ impl<'a> Target<'a> {
             Self::Value(_) => panic!("cannot update a value"),
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(s, index, _) => {
-                let s = &mut *s.write_lock::<ImmutableString>().unwrap();
+                let s = &mut *s.write_lock::<crate::ImmutableString>().unwrap();
 
                 // Replace the character at the specified index position
                 let new_ch = new_val.as_char().map_err(|err| {
@@ -589,7 +591,7 @@ pub struct Limits {
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     pub max_modules: usize,
-    /// Maximum length of a [string][ImmutableString].
+    /// Maximum length of a [string][crate::ImmutableString].
     pub max_string_size: Option<NonZeroUsize>,
     /// Maximum length of an [array][Array].
     ///
@@ -1569,8 +1571,8 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(map, _)) => {
                 // val_map[idx]
-                let index = &*idx.read_lock::<ImmutableString>().ok_or_else(|| {
-                    self.make_type_mismatch_err::<ImmutableString>(idx.type_name(), idx_pos)
+                let index = &*idx.read_lock::<crate::ImmutableString>().ok_or_else(|| {
+                    self.make_type_mismatch_err::<crate::ImmutableString>(idx.type_name(), idx_pos)
                 })?;
 
                 if _create && !map.contains_key(index.as_str()) {
@@ -1957,7 +1959,7 @@ impl Engine {
 
             // var op= rhs
             Stmt::Assignment(x, op_pos) if x.0.get_variable_access(false).is_some() => {
-                let (lhs_expr, rhs_expr, op_info) = x.as_ref();
+                let (lhs_expr, op_info, rhs_expr) = x.as_ref();
                 let rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
                     .flatten();
@@ -1998,7 +2000,7 @@ impl Engine {
 
             // lhs op= rhs
             Stmt::Assignment(x, op_pos) => {
-                let (lhs_expr, rhs_expr, op_info) = x.as_ref();
+                let (lhs_expr, op_info, rhs_expr) = x.as_ref();
                 let rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
                     .flatten();
@@ -2083,7 +2085,9 @@ impl Engine {
                     value.hash(hasher);
                     let hash = hasher.finish();
 
-                    table.get(&hash).map(|StmtBlock { statements, .. }| {
+                    table.get(&hash).map(|t| {
+                        let statements = &t.statements;
+
                         if !statements.is_empty() {
                             self.eval_stmt_block(
                                 scope, mods, state, lib, this_ptr, statements, true, level,
@@ -2178,7 +2182,7 @@ impl Engine {
 
             // For loop
             Stmt::For(expr, x, _) => {
-                let (name, StmtBlock { statements, pos }) = x.as_ref();
+                let (Ident { name, .. }, StmtBlock { statements, pos }) = x.as_ref();
                 let iter_obj = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten();
@@ -2425,7 +2429,7 @@ impl Engine {
 
                 if let Some(path) = self
                     .eval_expr(scope, mods, state, lib, this_ptr, &expr, level)?
-                    .try_cast::<ImmutableString>()
+                    .try_cast::<crate::ImmutableString>()
                 {
                     use crate::ModuleResolver;
 
@@ -2458,7 +2462,7 @@ impl Engine {
 
                     Ok(Dynamic::UNIT)
                 } else {
-                    Err(self.make_type_mismatch_err::<ImmutableString>("", expr.position()))
+                    Err(self.make_type_mismatch_err::<crate::ImmutableString>("", expr.position()))
                 }
             }
 
@@ -2479,8 +2483,8 @@ impl Engine {
 
             // Share statement
             #[cfg(not(feature = "no_closure"))]
-            Stmt::Share(x) => {
-                if let Some((index, _)) = scope.get_index(&x.name) {
+            Stmt::Share(name) => {
+                if let Some((index, _)) = scope.get_index(name) {
                     let val = scope.get_mut_by_index(index);
 
                     if !val.is_shared() {
@@ -2513,17 +2517,17 @@ impl Engine {
         }
 
         // If no data size limits, just return
-        let mut has_limit = self.limits.max_string_size.is_some();
+        let mut _has_limit = self.limits.max_string_size.is_some();
         #[cfg(not(feature = "no_index"))]
         {
-            has_limit = has_limit || self.limits.max_array_size.is_some();
+            _has_limit = _has_limit || self.limits.max_array_size.is_some();
         }
         #[cfg(not(feature = "no_object"))]
         {
-            has_limit = has_limit || self.limits.max_map_size.is_some();
+            _has_limit = _has_limit || self.limits.max_map_size.is_some();
         }
 
-        if !has_limit {
+        if !_has_limit {
             return result;
         }
 

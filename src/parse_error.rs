@@ -132,7 +132,7 @@ pub enum ParseErrorType {
     /// Defining a function `fn` in an appropriate place (e.g. inside another function).
     ///
     /// Never appears under the `no_function` feature.
-    FnWrongDefinition,
+    WrongFnDefinition,
     /// Defining a function with a name that conflicts with an existing function.
     /// Wrapped values are the function name and number of parameters.
     ///
@@ -199,7 +199,7 @@ impl ParseErrorType {
             Self::VariableExpected => "Expecting name of a variable",
             Self::Reserved(_) => "Invalid use of reserved keyword",
             Self::ExprExpected(_) => "Expecting an expression",
-            Self::FnWrongDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
+            Self::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
             Self::FnDuplicatedDefinition(_, _) => "Function already exists",
             Self::FnMissingName => "Expecting function name in function declaration",
             Self::FnMissingParams(_) => "Expecting parameters in function declaration",

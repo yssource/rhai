@@ -28,6 +28,11 @@ This avoids spending precious resources maintaining metadata for functions for t
 use cases where such information is not required.
 
 
+Bug fixes
+---------
+
+* The feature flags `no_index + no_object` now compile without errors.
+
 Breaking changes
 ----------------
 
@@ -42,6 +47,7 @@ Breaking changes
 * Shebangs at the very beginning of script files are skipped when loading them.
 * [`smartstring`](https://crates.io/crates/smartstring) is used for identifiers by default. Currently, a PR branch is pulled because it breaks on `no-std` builds. The official crate will be used once `smartstring` is fixed to support `no-std`.
 * `Map` is now an alias to `BTreeMap<SmartString, Dynamic>` instead of `HashMap` because most object maps hold few properties.
+* `EvalAltResult::FnWrongDefinition` is renamed `WrongFnDefinition` for consistency.
 
 New features
 ------------
@@ -55,6 +61,7 @@ Enhancements
 * Replaced all `HashMap` usage with `BTreeMap` for better performance because collections in Rhai are tiny.
 * `Engine::register_result_fn` no longer requires the successful return type to be `Dynamic`.  It can now be any clonable type.
 * `#[rhai_fn(return_raw)]` can now return `Result<T, Box<EvalAltResult>>` where `T` is any clonable type instead of `Result<Dynamic, Box<EvalAltResult>>`.
+* `Dynamic::clone_cast` is added to simplify casting from a `&Dynamic`.
 
 
 Version 0.19.14

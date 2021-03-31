@@ -768,7 +768,7 @@ impl Module {
     ///                     // Get the second parameter by 'consuming' it
     ///                     let double = std::mem::take(args[1]).cast::<bool>();
     ///                     // Since it is a primary type, it can also be cheaply copied
-    ///                     let double = args[1].clone().cast::<bool>();
+    ///                     let double = args[1].clone_cast::<bool>();
     ///                     // Get a mutable reference to the first argument.
     ///                     let mut x = args[0].write_lock::<i64>().unwrap();
     ///

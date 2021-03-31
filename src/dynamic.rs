@@ -1131,6 +1131,37 @@ impl Dynamic {
             )
         })
     }
+    /// Clone the [`Dynamic`] value and convert it into a specific type.
+    ///
+    /// Casting to a [`Dynamic`] just returns as is, but if it contains a shared value,
+    /// it is cloned into a [`Dynamic`] with a normal value.
+    ///
+    /// Returns [`None`] if types mismatched.
+    ///
+    /// # Panics or Deadlocks
+    ///
+    /// Panics if the cast fails (e.g. the type of the actual value is not the
+    /// same as the specified type).
+    ///
+    /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
+    /// Otherwise, this call panics if the data is currently borrowed for write.
+    ///
+    /// These normally shouldn't occur since most operations in Rhai is single-threaded.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::Dynamic;
+    ///
+    /// let x = Dynamic::from(42_u32);
+    /// let y = &x;
+    ///
+    /// assert_eq!(y.clone_cast::<u32>(), 42);
+    /// ```
+    #[inline(always)]
+    pub fn clone_cast<T: Variant + Clone>(&self) -> T {
+        self.read_lock::<T>().unwrap().clone()
+    }
     /// Flatten the [`Dynamic`] and clone it.
     ///
     /// If the [`Dynamic`] is not a shared value, it returns a cloned copy.

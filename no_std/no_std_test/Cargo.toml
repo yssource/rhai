@@ -12,7 +12,7 @@ homepage = "https://github.com/rhaiscript/rhai/tree/no_std/no_std_test"
 repository = "https://github.com/rhaiscript/rhai"
 
 [dependencies]
-rhai = { path = "../../", features = [ "no_std" ] }
+rhai = { path = "../../", features = [ "no_std" ], default_features = false }
 wee_alloc = { version = "0.4.5", default_features = false }
 
 [profile.dev]
@@ -36,3 +36,7 @@ inherits = "release"
 [profile.macos]
 inherits = "release"
 lto = "fat"
+
+[patch.crates-io]
+# Patch smartstring wth a PR fix because it doesn't properly handle no-std builds.
+smartstring = { git = "https://github.com/okready/smartstring", branch = "fix-no_std-builds" }
