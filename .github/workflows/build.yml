@@ -111,11 +111,9 @@ jobs:
     continue-on-error: ${{matrix.experimental}}
     strategy:
       matrix:
-        flags:
-          - "--features metadata"
         include:
-          - {toolchain: nightly, os: ubuntu-latest, experimental: false, flags: ""}
-          - {toolchain: nightly, os: windows-latest, experimental: false, flags: ""}
+          - {toolchain: nightly, os: ubuntu-latest, experimental: false, flags: "--features metadata"}
+          - {toolchain: nightly, os: windows-latest, experimental: false, flags: "--features metadata"}
     steps:
     - name: Checkout
       uses: actions/checkout@v2
