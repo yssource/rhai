@@ -3,7 +3,10 @@
 use crate::dynamic::{Union, Variant};
 use crate::stdlib::string::ToString;
 use crate::{Dynamic, ImmutableString};
-use serde::ser::{Serialize, SerializeMap, Serializer};
+use serde::ser::{Serialize, Serializer};
+
+#[cfg(not(feature = "no_object"))]
+use serde::ser::SerializeMap;
 
 impl Serialize for Dynamic {
     fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {

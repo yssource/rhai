@@ -13,8 +13,8 @@ use crate::stdlib::{
 };
 use crate::token::is_valid_identifier;
 use crate::{
-    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, Identifier, ImmutableString, Module,
-    Position, RhaiResult, StaticVec,
+    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ImmutableString, Module, Position,
+    RhaiResult, StaticVec,
 };
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
@@ -144,7 +144,9 @@ impl<'a> NativeCallContext<'a> {
     #[cfg(not(feature = "no_module"))]
     #[allow(dead_code)]
     #[inline(always)]
-    pub(crate) fn iter_imports_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
+    pub(crate) fn iter_imports_raw(
+        &self,
+    ) -> impl Iterator<Item = (&crate::Identifier, &Shared<Module>)> {
         self.mods.iter().flat_map(|&m| m.iter_raw())
     }
     /// _(INTERNALS)_ The current set of modules imported via `import` statements.

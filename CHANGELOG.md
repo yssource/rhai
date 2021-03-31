@@ -28,6 +28,11 @@ This avoids spending precious resources maintaining metadata for functions for t
 use cases where such information is not required.
 
 
+Bug fixes
+---------
+
+* The feature flags `no_index + no_object` now compile without errors.
+
 Breaking changes
 ----------------
 

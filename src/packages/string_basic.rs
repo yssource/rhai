@@ -2,7 +2,7 @@
 
 use crate::plugin::*;
 use crate::stdlib::{format, string::ToString};
-use crate::{def_package, FnPtr, ImmutableString};
+use crate::{def_package, FnPtr};
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
@@ -10,6 +10,7 @@ use crate::Array;
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
 
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 const FUNC_TO_DEBUG: &'static str = "to_debug";
 
 def_package!(crate:BasicStringPackage:"Basic string utilities, including printing.", lib, {
@@ -20,9 +21,15 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 #[inline(always)]
-fn print_with_func(fn_name: &str, ctx: &NativeCallContext, value: &mut Dynamic) -> ImmutableString {
+fn print_with_func(
+    fn_name: &str,
+    ctx: &NativeCallContext,
+    value: &mut Dynamic,
+) -> crate::ImmutableString {
     match ctx.call_fn_dynamic_raw(fn_name, true, &mut [value]) {
-        Ok(result) if result.is::<ImmutableString>() => result.take_immutable_string().unwrap(),
+        Ok(result) if result.is::<crate::ImmutableString>() => {
+            result.take_immutable_string().unwrap()
+        }
         Ok(result) => ctx.engine().map_type_name(result.type_name()).into(),
         Err(_) => ctx.engine().map_type_name(value.type_name()).into(),
     }

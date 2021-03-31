@@ -35,6 +35,7 @@ jobs:
           - "--features no_closure"
           - "--features unicode-xid-ident"
           - "--features sync,no_function,no_float,no_optimize,no_module,no_closure,metadata,serde,unchecked"
+          - "--features no_function,no_float,no_index,no_object,no_optimize,no_module,no_closure,unchecked"
         toolchain: [stable]
         experimental: [false]
         include:
