@@ -1,6 +1,10 @@
 Rhai Release Notes
 ==================
 
+Version 0.19.16
+===============
+
+
 Version 0.19.15
 ===============
 
@@ -16,12 +20,12 @@ an object map is small.
 `HashMap` and `BTreeMap` have almost identical public API's so this change is unlikely to break
 existing code.
 
-[`SmartString`](https://crates.io/crates/smartstring) is used to store identifiers (which tends to
+[`SmartString`](https://crates.io/crates/smartstring) is used to store identifiers (which tend to
 be short, fewer than 23 characters, and ASCII-based) because they can usually be stored inline.
 `Map` keys now also use [`SmartString`](https://crates.io/crates/smartstring).
 
 In addition, there is now support for line continuation in strings (put `\` at the end of line) as
-well as multi-line literal strings (wrapped by back-ticks: <code>\`...\`</code>).
+well as multi-line literal strings (wrapped by back-ticks: `` `...` ``).
 
 Finally, all function signature/metadata methods are now grouped under the umbrella `metadata` feature.
 This avoids spending precious resources maintaining metadata for functions for the vast majority of
@@ -45,7 +49,7 @@ Breaking changes
 * The _reflections_ API such as `Engine::gen_fn_signatures`, `Module::update_fn_metadata` etc. are put under the `metadata` feature gate.
 * The shebang `#!` is now a reserved symbol.
 * Shebangs at the very beginning of script files are skipped when loading them.
-* [`smartstring`](https://crates.io/crates/smartstring) is used for identifiers by default. Currently, a PR branch is pulled because it breaks on `no-std` builds. The official crate will be used once `smartstring` is fixed to support `no-std`.
+* [`SmartString`](https://crates.io/crates/smartstring) is used for identifiers by default. Currently, a PR branch is pulled for `no-std` builds. The official crate will be used once `SmartString` is fixed to support `no-std`.
 * `Map` is now an alias to `BTreeMap<SmartString, Dynamic>` instead of `HashMap` because most object maps hold few properties.
 * `EvalAltResult::FnWrongDefinition` is renamed `WrongFnDefinition` for consistency.
 
