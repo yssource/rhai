@@ -712,12 +712,12 @@ pub struct Engine {
     pub(crate) module_resolver: Box<dyn crate::ModuleResolver>,
 
     /// A map mapping type names to pretty-print names.
-    pub(crate) type_names: BTreeMap<String, String>,
+    pub(crate) type_names: BTreeMap<Identifier, Identifier>,
 
     /// A set of symbols to disable.
-    pub(crate) disabled_symbols: BTreeSet<String>,
+    pub(crate) disabled_symbols: BTreeSet<Identifier>,
     /// A map containing custom keywords and precedence to recognize.
-    pub(crate) custom_keywords: BTreeMap<String, Option<Precedence>>,
+    pub(crate) custom_keywords: BTreeMap<Identifier, Option<Precedence>>,
     /// Custom syntax.
     pub(crate) custom_syntax: BTreeMap<Identifier, CustomSyntax>,
     /// Callback closure for resolving variable access.
@@ -2653,7 +2653,7 @@ impl Engine {
     pub fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
             .get(name)
-            .map(String::as_str)
+            .map(|s| s.as_str())
             .unwrap_or_else(|| map_std_type_name(name))
     }
 

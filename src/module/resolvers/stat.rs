@@ -1,5 +1,5 @@
 use crate::stdlib::{boxed::Box, collections::BTreeMap, ops::AddAssign, string::String};
-use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
+use crate::{Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Shared};
 
 /// A static [module][Module] resolution service that serves [modules][Module] added into it.
 ///
@@ -19,7 +19,7 @@ use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 /// engine.set_module_resolver(resolver);
 /// ```
 #[derive(Debug, Clone, Default)]
-pub struct StaticModuleResolver(BTreeMap<String, Shared<Module>>);
+pub struct StaticModuleResolver(BTreeMap<Identifier, Shared<Module>>);
 
 impl StaticModuleResolver {
     /// Create a new [`StaticModuleResolver`].
@@ -44,7 +44,7 @@ impl StaticModuleResolver {
     }
     /// Add a [module][Module] keyed by its path.
     #[inline(always)]
-    pub fn insert(&mut self, path: impl Into<String>, mut module: Module) {
+    pub fn insert(&mut self, path: impl Into<Identifier>, mut module: Module) {
         module.build_index();
         self.0.insert(path.into(), module.into());
     }
@@ -70,13 +70,13 @@ impl StaticModuleResolver {
     }
     /// Get a mutable iterator of all the modules.
     #[inline(always)]
-    pub fn into_iter(self) -> impl Iterator<Item = (String, Shared<Module>)> {
+    pub fn into_iter(self) -> impl Iterator<Item = (Identifier, Shared<Module>)> {
         self.0.into_iter()
     }
     /// Get an iterator of all the [module][Module] paths.
     #[inline(always)]
     pub fn paths(&self) -> impl Iterator<Item = &str> {
-        self.0.keys().map(String::as_str)
+        self.0.keys().map(|s| s.as_str())
     }
     /// Get an iterator of all the [modules][Module].
     #[inline(always)]

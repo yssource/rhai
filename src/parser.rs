@@ -1621,7 +1621,7 @@ fn parse_binary_op(
             Token::Custom(c) => state
                 .engine
                 .custom_keywords
-                .get(c)
+                .get(c.as_str())
                 .cloned()
                 .ok_or_else(|| PERR::Reserved(c.clone()).into_err(*current_pos))?,
             Token::Reserved(c) if !is_valid_identifier(c.chars()) => {
@@ -1646,7 +1646,7 @@ fn parse_binary_op(
             Token::Custom(c) => state
                 .engine
                 .custom_keywords
-                .get(c)
+                .get(c.as_str())
                 .cloned()
                 .ok_or_else(|| PERR::Reserved(c.clone()).into_err(*next_pos))?,
             Token::Reserved(c) if !is_valid_identifier(c.chars()) => {
@@ -1753,7 +1753,7 @@ fn parse_binary_op(
                 if state
                     .engine
                     .custom_keywords
-                    .get(&s)
+                    .get(s.as_str())
                     .map_or(false, Option::is_some) =>
             {
                 let hash = calc_fn_hash(empty(), &s, 2);

@@ -3,9 +3,8 @@ use crate::stdlib::{
     collections::BTreeMap,
     io::Error as IoError,
     path::{Path, PathBuf},
-    string::String,
 };
-use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
+use crate::{Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Shared};
 
 pub const RHAI_SCRIPT_EXTENSION: &str = "rhai";
 
@@ -42,7 +41,7 @@ pub const RHAI_SCRIPT_EXTENSION: &str = "rhai";
 #[derive(Debug)]
 pub struct FileModuleResolver {
     base_path: Option<PathBuf>,
-    extension: String,
+    extension: Identifier,
     cache_enabled: bool,
 
     #[cfg(not(feature = "sync"))]
@@ -118,7 +117,7 @@ impl FileModuleResolver {
     /// engine.set_module_resolver(resolver);
     /// ```
     #[inline(always)]
-    pub fn new_with_extension(extension: impl Into<String>) -> Self {
+    pub fn new_with_extension(extension: impl Into<Identifier>) -> Self {
         Self {
             base_path: None,
             extension: extension.into(),
@@ -145,7 +144,7 @@ impl FileModuleResolver {
     #[inline(always)]
     pub fn new_with_path_and_extension(
         path: impl Into<PathBuf>,
-        extension: impl Into<String>,
+        extension: impl Into<Identifier>,
     ) -> Self {
         Self {
             base_path: Some(path.into()),
@@ -175,7 +174,7 @@ impl FileModuleResolver {
 
     /// Set the script file extension.
     #[inline(always)]
-    pub fn set_extension(&mut self, extension: impl Into<String>) -> &mut Self {
+    pub fn set_extension(&mut self, extension: impl Into<Identifier>) -> &mut Self {
         self.extension = extension.into();
         self
     }
@@ -256,7 +255,7 @@ impl FileModuleResolver {
             file_path = path.into();
         }
 
-        file_path.set_extension(&self.extension); // Force extension
+        file_path.set_extension(self.extension.as_str()); // Force extension
         file_path
     }
 }

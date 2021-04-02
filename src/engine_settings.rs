@@ -1,9 +1,9 @@
 //! Configuration settings for [`Engine`].
 
-use crate::engine::Precedence;
 use crate::stdlib::{format, string::String};
 use crate::token::Token;
 use crate::Engine;
+use crate::{engine::Precedence, Identifier};
 
 #[cfg(not(feature = "unchecked"))]
 use crate::stdlib::num::{NonZeroU64, NonZeroUsize};
@@ -236,7 +236,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn disable_symbol(&mut self, symbol: impl Into<String>) -> &mut Self {
+    pub fn disable_symbol(&mut self, symbol: impl Into<Identifier>) -> &mut Self {
         self.disabled_symbols.insert(symbol.into());
         self
     }
@@ -270,7 +270,7 @@ impl Engine {
     /// ```
     pub fn register_custom_operator(
         &mut self,
-        keyword: impl AsRef<str> + Into<String>,
+        keyword: impl AsRef<str> + Into<Identifier>,
         precedence: u8,
     ) -> Result<&mut Self, String> {
         let precedence = Precedence::new(precedence);

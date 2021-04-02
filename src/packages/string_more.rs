@@ -6,6 +6,8 @@ use crate::stdlib::{
 };
 use crate::{def_package, Dynamic, ImmutableString, StaticVec, INT};
 
+use super::string_basic::{print_with_func, FUNC_TO_STRING};
+
 def_package!(crate:MoreStringPackage:"Additional string utilities, including string building.", lib, {
     combine_with_exported_module!(lib, "string", string_functions);
 
@@ -21,22 +23,30 @@ mod string_functions {
     use crate::ImmutableString;
 
     #[rhai_fn(name = "+", name = "append")]
-    pub fn add_append(string: &str, item: Dynamic) -> ImmutableString {
-        format!("{}{}", string, item).into()
+    pub fn add_append(ctx: NativeCallContext, string: &str, mut item: Dynamic) -> ImmutableString {
+        let s = print_with_func(FUNC_TO_STRING, &ctx, &mut item);
+        format!("{}{}", string, s).into()
     }
     #[rhai_fn(name = "+", pure)]
-    pub fn add_prepend(item: &mut Dynamic, string: &str) -> ImmutableString {
-        format!("{}{}", item, string).into()
+    pub fn add_prepend(
+        ctx: NativeCallContext,
+        item: &mut Dynamic,
+        string: &str,
+    ) -> ImmutableString {
+        let s = print_with_func(FUNC_TO_STRING, &ctx, item);
+        format!("{}{}", s, string).into()
     }
 
     #[rhai_fn(name = "+")]
-    pub fn add_append_unit(string: ImmutableString, _x: ()) -> ImmutableString {
+    pub fn add_append_unit(string: ImmutableString, _item: ()) -> ImmutableString {
         string
     }
     #[rhai_fn(name = "+")]
-    pub fn add_prepend_unit(_x: (), string: ImmutableString) -> ImmutableString {
+    pub fn add_prepend_unit(_item: (), string: ImmutableString) -> ImmutableString {
         string
     }
+    #[rhai_fn(name = "+=")]
+    pub fn add_append_assign_unit(_string: &mut ImmutableString, _item: ()) {}
 
     #[rhai_fn(name = "len", get = "len")]
     pub fn len(string: &str) -> INT {

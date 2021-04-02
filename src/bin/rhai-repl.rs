@@ -141,9 +141,12 @@ fn main() {
     engine.set_optimization_level(rhai::OptimizationLevel::None);
 
     // Set a file module resolver without caching
-    let mut resolver = FileModuleResolver::new();
-    resolver.enable_cache(false);
-    engine.set_module_resolver(resolver);
+    #[cfg(not(feature = "no_module"))]
+    {
+        let mut resolver = FileModuleResolver::new();
+        resolver.enable_cache(false);
+        engine.set_module_resolver(resolver);
+    }
 
     // Make Engine immutable
     let engine = engine;
