@@ -4,6 +4,18 @@ Rhai Release Notes
 Version 0.19.16
 ===============
 
+Breaking changes
+----------------
+
+* `ModuleResolver` trait methods take an additional parameter `source_path` that contains the path of the current environment. This is to facilitate loading other script files always from the current directory.
+* `FileModuleResolver` now resolves relative paths under the source path if there is no base path set.
+* `FileModuleResolver::base_path` now returns `Option<&str>` which is `None` if there is no base path set.
+
+New features
+------------
+
+* `FileModuleResolver` resolves relative paths under the parent path (i.e. the path holding the script that does the loading). This allows seamless cross-loading of scripts from a directory hierarchy instead of having all relative paths load from the current working directory.
+
 
 Version 0.19.15
 ===============

@@ -317,10 +317,10 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn register_get<T: Variant + Clone, U: Variant + Clone>(
+    pub fn register_get<T: Variant + Clone, V: Variant + Clone>(
         &mut self,
         name: &str,
-        get_fn: impl Fn(&mut T) -> U + SendSync + 'static,
+        get_fn: impl Fn(&mut T) -> V + SendSync + 'static,
     ) -> &mut Self {
         use crate::engine::make_getter;
         self.register_fn(&make_getter(name), get_fn)
@@ -364,10 +364,10 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn register_get_result<T: Variant + Clone, U: Variant + Clone>(
+    pub fn register_get_result<T: Variant + Clone, V: Variant + Clone>(
         &mut self,
         name: &str,
-        get_fn: impl Fn(&mut T) -> Result<U, Box<EvalAltResult>> + SendSync + 'static,
+        get_fn: impl Fn(&mut T) -> Result<V, Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
         use crate::engine::make_getter;
         self.register_result_fn(&make_getter(name), get_fn)
@@ -410,10 +410,10 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn register_set<T: Variant + Clone, U: Variant + Clone>(
+    pub fn register_set<T: Variant + Clone, V: Variant + Clone>(
         &mut self,
         name: &str,
-        set_fn: impl Fn(&mut T, U) + SendSync + 'static,
+        set_fn: impl Fn(&mut T, V) + SendSync + 'static,
     ) -> &mut Self {
         use crate::engine::make_setter;
         self.register_fn(&make_setter(name), set_fn)
@@ -459,13 +459,13 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn register_set_result<T: Variant + Clone, U: Variant + Clone>(
+    pub fn register_set_result<T: Variant + Clone, V: Variant + Clone>(
         &mut self,
         name: &str,
-        set_fn: impl Fn(&mut T, U) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
+        set_fn: impl Fn(&mut T, V) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
         use crate::engine::make_setter;
-        self.register_result_fn(&make_setter(name), move |obj: &mut T, value: U| {
+        self.register_result_fn(&make_setter(name), move |obj: &mut T, value: V| {
             set_fn(obj, value)
         })
     }
@@ -510,11 +510,11 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn register_get_set<T: Variant + Clone, U: Variant + Clone>(
+    pub fn register_get_set<T: Variant + Clone, V: Variant + Clone>(
         &mut self,
         name: &str,
-        get_fn: impl Fn(&mut T) -> U + SendSync + 'static,
-        set_fn: impl Fn(&mut T, U) + SendSync + 'static,
+        get_fn: impl Fn(&mut T) -> V + SendSync + 'static,
+        set_fn: impl Fn(&mut T, V) + SendSync + 'static,
     ) -> &mut Self {
         self.register_get(name, get_fn).register_set(name, set_fn)
     }
@@ -562,9 +562,9 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
-    pub fn register_indexer_get<T: Variant + Clone, X: Variant + Clone, U: Variant + Clone>(
+    pub fn register_indexer_get<T: Variant + Clone, X: Variant + Clone, V: Variant + Clone>(
         &mut self,
-        get_fn: impl Fn(&mut T, X) -> U + SendSync + 'static,
+        get_fn: impl Fn(&mut T, X) -> V + SendSync + 'static,
     ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
@@ -631,10 +631,10 @@ impl Engine {
     pub fn register_indexer_get_result<
         T: Variant + Clone,
         X: Variant + Clone,
-        U: Variant + Clone,
+        V: Variant + Clone,
     >(
         &mut self,
-        get_fn: impl Fn(&mut T, X) -> Result<U, Box<EvalAltResult>> + SendSync + 'static,
+        get_fn: impl Fn(&mut T, X) -> Result<V, Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
@@ -696,9 +696,9 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
-    pub fn register_indexer_set<T: Variant + Clone, X: Variant + Clone, U: Variant + Clone>(
+    pub fn register_indexer_set<T: Variant + Clone, X: Variant + Clone, V: Variant + Clone>(
         &mut self,
-        set_fn: impl Fn(&mut T, X, U) + SendSync + 'static,
+        set_fn: impl Fn(&mut T, X, V) + SendSync + 'static,
     ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
@@ -766,10 +766,10 @@ impl Engine {
     pub fn register_indexer_set_result<
         T: Variant + Clone,
         X: Variant + Clone,
-        U: Variant + Clone,
+        V: Variant + Clone,
     >(
         &mut self,
-        set_fn: impl Fn(&mut T, X, U) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
+        set_fn: impl Fn(&mut T, X, V) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
@@ -787,7 +787,7 @@ impl Engine {
 
         self.register_result_fn(
             crate::engine::FN_IDX_SET,
-            move |obj: &mut T, index: X, value: U| set_fn(obj, index, value),
+            move |obj: &mut T, index: X, value: V| set_fn(obj, index, value),
         )
     }
     /// Short-hand for register both index getter and setter functions for a custom type with the [`Engine`].
@@ -834,10 +834,10 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
-    pub fn register_indexer_get_set<T: Variant + Clone, X: Variant + Clone, U: Variant + Clone>(
+    pub fn register_indexer_get_set<T: Variant + Clone, X: Variant + Clone, V: Variant + Clone>(
         &mut self,
-        get_fn: impl Fn(&mut T, X) -> U + SendSync + 'static,
-        set_fn: impl Fn(&mut T, X, U) -> () + SendSync + 'static,
+        get_fn: impl Fn(&mut T, X) -> V + SendSync + 'static,
+        set_fn: impl Fn(&mut T, X, V) -> () + SendSync + 'static,
     ) -> &mut Self {
         self.register_indexer_get(get_fn)
             .register_indexer_set(set_fn)
@@ -1070,7 +1070,7 @@ impl Engine {
 
                 match self
                     .module_resolver
-                    .resolve_ast(self, &path, Position::NONE)
+                    .resolve_ast(self, None, &path, Position::NONE)
                 {
                     Some(Ok(module_ast)) => {
                         collect_imports(&module_ast, &mut resolver, &mut imports)
@@ -1081,6 +1081,7 @@ impl Engine {
 
                 let module = shared_take_or_clone(self.module_resolver.resolve(
                     self,
+                    None,
                     &path,
                     Position::NONE,
                 )?);
@@ -1977,7 +1978,7 @@ impl Engine {
         crate::optimize::optimize_into_ast(self, scope, stmt.into_vec(), lib, optimization_level)
     }
     /// Generate a list of all registered functions.
-    /// Available under the `metadata` feature only.
+    /// Exported under the `metadata` feature only.
     ///
     /// Functions from the following sources are included, in order:
     /// 1) Functions registered into the global namespace

@@ -25,6 +25,7 @@ pub trait ModuleResolver: SendSync {
     fn resolve(
         &self,
         engine: &Engine,
+        source_path: Option<&str>,
         path: &str,
         pos: Position,
     ) -> Result<Shared<Module>, Box<EvalAltResult>>;
@@ -42,6 +43,7 @@ pub trait ModuleResolver: SendSync {
     fn resolve_ast(
         &self,
         engine: &Engine,
+        source_path: Option<&str>,
         path: &str,
         pos: Position,
     ) -> Option<Result<AST, Box<EvalAltResult>>> {

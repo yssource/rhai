@@ -67,7 +67,7 @@ pub struct FuncInfo {
 
 impl FuncInfo {
     /// Generate a signature of the function.
-    /// Available under the `metadata` feature only.
+    /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     pub fn gen_signature(&self) -> String {
         let mut sig = format!("{}(", self.name);
@@ -363,7 +363,7 @@ impl Module {
     }
 
     /// Generate signatures for all the non-private functions in the [`Module`].
-    /// Available under the `metadata` feature only.
+    /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     #[inline(always)]
     pub fn gen_fn_signatures(&self) -> impl Iterator<Item = String> + '_ {
@@ -605,7 +605,7 @@ impl Module {
     }
 
     /// Update the metadata (parameter names/types and return type) of a registered function.
-    /// Available under the `metadata` feature only.
+    /// Exported under the `metadata` feature only.
     ///
     /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
     ///

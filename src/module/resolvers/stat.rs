@@ -115,6 +115,7 @@ impl ModuleResolver for StaticModuleResolver {
     fn resolve(
         &self,
         _: &Engine,
+        _: Option<&str>,
         path: &str,
         pos: Position,
     ) -> Result<Shared<Module>, Box<EvalAltResult>> {

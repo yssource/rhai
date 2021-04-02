@@ -645,7 +645,7 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
         self.mods.iter()
     }
     /// _(INTERNALS)_ The current set of modules imported via `import` statements.
-    /// Available under the `internals` feature only.
+    /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
@@ -658,7 +658,7 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
         self.lib.iter().cloned()
     }
     /// _(INTERNALS)_ The current set of namespaces containing definitions of all script-defined functions.
-    /// Available under the `internals` feature only.
+    /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]
     pub fn namespaces(&self) -> &[&Module] {
@@ -2433,19 +2433,22 @@ impl Engine {
                 {
                     use crate::ModuleResolver;
 
+                    let source = state.source.as_ref().map(|s| s.as_str());
                     let expr_pos = expr.position();
 
                     let module = state
                         .resolver
                         .as_ref()
-                        .and_then(|r| match r.resolve(self, &path, expr_pos) {
+                        .and_then(|r| match r.resolve(self, source, &path, expr_pos) {
                             Ok(m) => return Some(Ok(m)),
                             Err(err) => match *err {
                                 EvalAltResult::ErrorModuleNotFound(_, _) => None,
                                 _ => return Some(Err(err)),
                             },
                         })
-                        .unwrap_or_else(|| self.module_resolver.resolve(self, &path, expr_pos))?;
+                        .unwrap_or_else(|| {
+                            self.module_resolver.resolve(self, source, &path, expr_pos)
+                        })?;
 
                     if let Some(name) = export.as_ref().map(|x| x.name.clone()) {
                         if !module.is_indexed() {

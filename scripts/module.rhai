@@ -1,3 +1,3 @@
-import "scripts/loop";
+import "loop";
 
 print("Module test!");

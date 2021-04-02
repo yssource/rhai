@@ -3,6 +3,7 @@ Rhai - Embedded Scripting for Rust
 
 ![GitHub last commit](https://img.shields.io/github/last-commit/rhaiscript/rhai?logo=github)
 [![Build Status](https://github.com/rhaiscript/rhai/workflows/Build/badge.svg)](https://github.com/rhaiscript/rhai/actions)
+[![stars](https://img.shields.io/github/stars/rhaiscript/rhai?logo=github)](https://github.com/rhaiscript/rhai)
 [![license](https://img.shields.io/crates/l/rhai)](https://github.com/license/rhaiscript/rhai)
 [![crates.io](https://img.shields.io/crates/v/rhai?logo=rust)](https://crates.io/crates/rhai/)
 [![crates.io](https://img.shields.io/crates/d/rhai?logo=rust)](https://crates.io/crates/rhai/)
@@ -35,7 +36,7 @@ Standard features
 * Built-in support for most common [data types](https://rhai.rs/book/language/values-and-types.html) including booleans, [integers](https://rhai.rs/book/language/numbers.html), [floating-point numbers](https://rhai.rs/book/language/numbers.html) (including [`Decimal`](https://crates.io/crates/rust_decimal)), [strings](https://rhai.rs/book/language/strings-chars.html), [Unicode characters](https://rhai.rs/book/language/strings-chars.html), [arrays](https://rhai.rs/book/language/arrays.html) and [object maps](https://rhai.rs/book/language/object-maps.html).
 * Easily [call a script-defined function](https://rhai.rs/book/engine/call-fn.html) from Rust.
 * Relatively little `unsafe` code (yes there are some for performance reasons).
-* Few dependencies (currently only [`smallvec`](https://crates.io/crates/smallvec), [`num-traits`](https://crates.io/crates/num-traits), [`ahash`](https://crates.io/crates/ahash)) and [`smartstring`](https://crates.io/crates/smartstring)).
+* Few dependencies - currently only [`smallvec`](https://crates.io/crates/smallvec), [`num-traits`](https://crates.io/crates/num-traits), [`ahash`](https://crates.io/crates/ahash) and [`smartstring`](https://crates.io/crates/smartstring).
 * Re-entrant scripting engine can be made `Send + Sync` (via the `sync` feature).
 * Compile once to [AST](https://rhai.rs/book/engine/compile.html) form for repeated evaluations.
 * Scripts are [optimized](https://rhai.rs/book/engine/optimize.html) (useful for template-based machine-generated scripts).
