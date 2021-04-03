@@ -222,6 +222,41 @@ fn test_string_substring() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[cfg(not(feature = "no_object"))]
+#[test]
+fn test_string_format() -> Result<(), Box<EvalAltResult>> {
+    #[derive(Debug, Clone)]
+    struct TestStruct {
+        field: i64,
+    }
+
+    let mut engine = Engine::new();
+
+    engine
+        .register_type_with_name::<TestStruct>("TestStruct")
+        .register_fn("new_ts", || TestStruct { field: 42 })
+        .register_fn("to_string", |ts: TestStruct| format!("TS={}", ts.field))
+        .register_fn("to_debug", |ts: TestStruct| {
+            format!("!!!TS={}!!!", ts.field)
+        });
+
+    assert_eq!(
+        engine.eval::<String>(r#"let x = new_ts(); "foo" + x"#)?,
+        "fooTS=42"
+    );
+    assert_eq!(
+        engine.eval::<String>(r#"let x = new_ts(); x + "foo""#)?,
+        "TS=42foo"
+    );
+    #[cfg(not(feature = "no_index"))]
+    assert_eq!(
+        engine.eval::<String>(r#"let x = [new_ts()]; "foo" + x"#)?,
+        "foo[!!!TS=42!!!]"
+    );
+
+    Ok(())
+}
+
 #[test]
 fn test_string_fn() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();

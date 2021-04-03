@@ -3,9 +3,10 @@ use crate::stdlib::{
     collections::BTreeMap,
     io::Error as IoError,
     path::{Path, PathBuf},
-    string::String,
 };
-use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
+use crate::{Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Shared};
+
+pub const RHAI_SCRIPT_EXTENSION: &str = "rhai";
 
 /// A [module][Module] resolution service that loads [module][Module] script files from the file system.
 ///
@@ -39,8 +40,8 @@ use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
 /// ```
 #[derive(Debug)]
 pub struct FileModuleResolver {
-    base_path: PathBuf,
-    extension: String,
+    base_path: Option<PathBuf>,
+    extension: Identifier,
     cache_enabled: bool,
 
     #[cfg(not(feature = "sync"))]
@@ -52,11 +53,33 @@ pub struct FileModuleResolver {
 impl Default for FileModuleResolver {
     #[inline(always)]
     fn default() -> Self {
-        Self::new_with_path(PathBuf::default())
+        Self::new()
     }
 }
 
 impl FileModuleResolver {
+    /// Create a new [`FileModuleResolver`] with the current directory as base path.
+    ///
+    /// The default extension is `.rhai`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::Engine;
+    /// use rhai::module_resolvers::FileModuleResolver;
+    ///
+    /// // Create a new 'FileModuleResolver' loading scripts from the current directory
+    /// // with file extension '.rhai' (the default).
+    /// let resolver = FileModuleResolver::new();
+    ///
+    /// let mut engine = Engine::new();
+    /// engine.set_module_resolver(resolver);
+    /// ```
+    #[inline(always)]
+    pub fn new() -> Self {
+        Self::new_with_extension(RHAI_SCRIPT_EXTENSION)
+    }
+
     /// Create a new [`FileModuleResolver`] with a specific base path.
     ///
     /// The default extension is `.rhai`.
@@ -76,7 +99,31 @@ impl FileModuleResolver {
     /// ```
     #[inline(always)]
     pub fn new_with_path(path: impl Into<PathBuf>) -> Self {
-        Self::new_with_path_and_extension(path, "rhai")
+        Self::new_with_path_and_extension(path, RHAI_SCRIPT_EXTENSION)
+    }
+
+    /// Create a new [`FileModuleResolver`] with a file extension.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::Engine;
+    /// use rhai::module_resolvers::FileModuleResolver;
+    ///
+    /// // Create a new 'FileModuleResolver' loading scripts with file extension '.rhai' (the default).
+    /// let resolver = FileModuleResolver::new_with_extension("rhai");
+    ///
+    /// let mut engine = Engine::new();
+    /// engine.set_module_resolver(resolver);
+    /// ```
+    #[inline(always)]
+    pub fn new_with_extension(extension: impl Into<Identifier>) -> Self {
+        Self {
+            base_path: None,
+            extension: extension.into(),
+            cache_enabled: true,
+            cache: Default::default(),
+        }
     }
 
     /// Create a new [`FileModuleResolver`] with a specific base path and file extension.
@@ -97,47 +144,25 @@ impl FileModuleResolver {
     #[inline(always)]
     pub fn new_with_path_and_extension(
         path: impl Into<PathBuf>,
-        extension: impl Into<String>,
+        extension: impl Into<Identifier>,
     ) -> Self {
         Self {
-            base_path: path.into(),
+            base_path: Some(path.into()),
             extension: extension.into(),
             cache_enabled: true,
             cache: Default::default(),
         }
     }
 
-    /// Create a new [`FileModuleResolver`] with the current directory as base path.
-    ///
-    /// The default extension is `.rhai`.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use rhai::Engine;
-    /// use rhai::module_resolvers::FileModuleResolver;
-    ///
-    /// // Create a new 'FileModuleResolver' loading scripts from the current directory
-    /// // with file extension '.rhai' (the default).
-    /// let resolver = FileModuleResolver::new();
-    ///
-    /// let mut engine = Engine::new();
-    /// engine.set_module_resolver(resolver);
-    /// ```
-    #[inline(always)]
-    pub fn new() -> Self {
-        Default::default()
-    }
-
     /// Get the base path for script files.
     #[inline(always)]
-    pub fn base_path(&self) -> &Path {
-        self.base_path.as_ref()
+    pub fn base_path(&self) -> Option<&Path> {
+        self.base_path.as_ref().map(PathBuf::as_ref)
     }
     /// Set the base path for script files.
     #[inline(always)]
     pub fn set_base_path(&mut self, path: impl Into<PathBuf>) -> &mut Self {
-        self.base_path = path.into();
+        self.base_path = Some(path.into());
         self
     }
 
@@ -149,7 +174,7 @@ impl FileModuleResolver {
 
     /// Set the script file extension.
     #[inline(always)]
-    pub fn set_extension(&mut self, extension: impl Into<String>) -> &mut Self {
+    pub fn set_extension(&mut self, extension: impl Into<Identifier>) -> &mut Self {
         self.extension = extension.into();
         self
     }
@@ -168,12 +193,12 @@ impl FileModuleResolver {
 
     /// Is a particular path cached?
     #[inline(always)]
-    pub fn is_cached(&self, path: &str) -> bool {
+    pub fn is_cached(&self, path: &str, source_path: Option<&str>) -> bool {
         if !self.cache_enabled {
             return false;
         }
 
-        let file_path = self.get_file_path(path);
+        let file_path = self.get_file_path(path, source_path);
 
         #[cfg(not(feature = "sync"))]
         return self.cache.borrow_mut().contains_key(&file_path);
@@ -192,8 +217,12 @@ impl FileModuleResolver {
     ///
     /// The next time this path is resolved, the script file will be loaded once again.
     #[inline(always)]
-    pub fn clear_cache_for_path(&mut self, path: &str) -> Option<Shared<Module>> {
-        let file_path = self.get_file_path(path);
+    pub fn clear_cache_for_path(
+        &mut self,
+        path: &str,
+        source_path: Option<&str>,
+    ) -> Option<Shared<Module>> {
+        let file_path = self.get_file_path(path, source_path);
 
         #[cfg(not(feature = "sync"))]
         return self
@@ -210,10 +239,23 @@ impl FileModuleResolver {
             .map(|(_, v)| v);
     }
     /// Construct a full file path.
-    fn get_file_path(&self, path: &str) -> PathBuf {
-        let mut file_path = self.base_path.clone();
-        file_path.push(path);
-        file_path.set_extension(&self.extension); // Force extension
+    fn get_file_path(&self, path: &str, source_path: Option<&str>) -> PathBuf {
+        let path = Path::new(path);
+
+        let mut file_path;
+
+        if path.is_relative() {
+            file_path = self
+                .base_path
+                .clone()
+                .or_else(|| source_path.map(|p| p.into()))
+                .unwrap_or_default();
+            file_path.push(path);
+        } else {
+            file_path = path.into();
+        }
+
+        file_path.set_extension(self.extension.as_str()); // Force extension
         file_path
     }
 }
@@ -222,11 +264,16 @@ impl ModuleResolver for FileModuleResolver {
     fn resolve(
         &self,
         engine: &Engine,
+        source_path: Option<&str>,
         path: &str,
         pos: Position,
     ) -> Result<Shared<Module>, Box<EvalAltResult>> {
+        // Load relative paths from source if there is no base path specified
+        let source_path =
+            source_path.and_then(|p| Path::new(p).parent().map(|p| p.to_string_lossy()));
+
         // Construct the script file path
-        let file_path = self.get_file_path(path);
+        let file_path = self.get_file_path(path, source_path.as_ref().map(|p| p.as_ref()));
 
         // See if it is cached
         if self.is_cache_enabled() {
@@ -276,11 +323,12 @@ impl ModuleResolver for FileModuleResolver {
     fn resolve_ast(
         &self,
         engine: &Engine,
+        source_path: Option<&str>,
         path: &str,
         pos: Position,
     ) -> Option<Result<crate::AST, Box<EvalAltResult>>> {
         // Construct the script file path
-        let file_path = self.get_file_path(path);
+        let file_path = self.get_file_path(path, source_path);
 
         // Load the script file and compile it
         match engine.compile_file(file_path).map_err(|err| match *err {

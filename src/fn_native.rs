@@ -100,7 +100,7 @@ impl<'a> NativeCallContext<'a> {
         }
     }
     /// _(INTERNALS)_ Create a new [`NativeCallContext`].
-    /// Available under the `internals` feature only.
+    /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
@@ -150,7 +150,7 @@ impl<'a> NativeCallContext<'a> {
         self.mods.iter().flat_map(|&m| m.iter_raw())
     }
     /// _(INTERNALS)_ The current set of modules imported via `import` statements.
-    /// Available under the `internals` feature only.
+    /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
@@ -163,7 +163,7 @@ impl<'a> NativeCallContext<'a> {
         self.lib.iter().cloned()
     }
     /// _(INTERNALS)_ The current set of namespaces containing definitions of all script-defined functions.
-    /// Available under the `internals` feature only.
+    /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]
     pub fn namespaces(&self) -> &[&Module] {

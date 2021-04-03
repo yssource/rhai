@@ -4,6 +4,7 @@ use std::{
     env,
     fs::File,
     io::{stdin, stdout, Read, Write},
+    path::Path,
     process::exit,
 };
 
@@ -64,28 +65,39 @@ fn main() {
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_std"))]
     {
-        // Set a file module resolver without caching
-        let mut resolver = rhai::module_resolvers::FileModuleResolver::new();
-        resolver.enable_cache(false);
-        engine.set_module_resolver(resolver);
-
         // Load init scripts
         let mut contents = String::new();
         let mut has_init_scripts = false;
 
         for filename in env::args().skip(1) {
+            let filename = match Path::new(&filename).canonicalize() {
+                Err(err) => {
+                    eprintln!("Error script file path: {}\n{}", filename, err);
+                    exit(1);
+                }
+                Ok(f) => f,
+            };
+
             contents.clear();
 
             let mut f = match File::open(&filename) {
                 Err(err) => {
-                    eprintln!("Error reading script file: {}\n{}", filename, err);
+                    eprintln!(
+                        "Error reading script file: {}\n{}",
+                        filename.to_string_lossy(),
+                        err
+                    );
                     exit(1);
                 }
                 Ok(f) => f,
             };
 
             if let Err(err) = f.read_to_string(&mut contents) {
-                println!("Error reading script file: {}\n{}", filename, err);
+                println!(
+                    "Error reading script file: {}\n{}",
+                    filename.to_string_lossy(),
+                    err
+                );
                 exit(1);
             }
 
@@ -93,10 +105,12 @@ fn main() {
                 .compile(&contents)
                 .map_err(|err| err.into())
                 .and_then(|mut ast| {
-                    ast.set_source(&filename);
+                    ast.set_source(filename.to_string_lossy());
                     Module::eval_ast_as_new(Default::default(), &ast, &engine)
                 }) {
                 Err(err) => {
+                    let filename = filename.to_string_lossy();
+
                     eprintln!("{:=<1$}", "", filename.len());
                     eprintln!("{}", filename);
                     eprintln!("{:=<1$}", "", filename.len());
@@ -112,7 +126,7 @@ fn main() {
 
             has_init_scripts = true;
 
-            println!("Script '{}' loaded.", filename);
+            println!("Script '{}' loaded.", filename.to_string_lossy());
         }
 
         if has_init_scripts {
@@ -124,17 +138,26 @@ fn main() {
     #[cfg(not(feature = "no_optimize"))]
     engine.set_optimization_level(rhai::OptimizationLevel::None);
 
+    // Set a file module resolver without caching
+    #[cfg(not(feature = "no_module"))]
+    {
+        let mut resolver = rhai::module_resolvers::FileModuleResolver::new();
+        resolver.enable_cache(false);
+        engine.set_module_resolver(resolver);
+    }
+
+    // Make Engine immutable
+    let engine = engine;
+
+    // Create scope
     let mut scope = Scope::new();
 
+    // REPL loop
     let mut input = String::new();
     let mut main_ast: AST = Default::default();
     let mut ast_u: AST = Default::default();
     let mut ast: AST = Default::default();
 
-    // Make Engine immutable
-    let engine = engine;
-
-    // REPL loop
     'main_loop: loop {
         print!("rhai-repl> ");
         stdout().flush().expect("couldn't flush stdout");

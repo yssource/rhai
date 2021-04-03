@@ -111,11 +111,12 @@ impl ModuleResolver for ModuleResolversCollection {
     fn resolve(
         &self,
         engine: &Engine,
+        source_path: Option<&str>,
         path: &str,
         pos: Position,
     ) -> Result<Shared<Module>, Box<EvalAltResult>> {
         for resolver in self.0.iter() {
-            match resolver.resolve(engine, path, pos) {
+            match resolver.resolve(engine, source_path, path, pos) {
                 Ok(module) => return Ok(module),
                 Err(err) => match *err {
                     EvalAltResult::ErrorModuleNotFound(_, _) => continue,

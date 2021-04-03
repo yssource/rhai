@@ -645,7 +645,7 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
         self.mods.iter()
     }
     /// _(INTERNALS)_ The current set of modules imported via `import` statements.
-    /// Available under the `internals` feature only.
+    /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
@@ -658,7 +658,7 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
         self.lib.iter().cloned()
     }
     /// _(INTERNALS)_ The current set of namespaces containing definitions of all script-defined functions.
-    /// Available under the `internals` feature only.
+    /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]
     pub fn namespaces(&self) -> &[&Module] {
@@ -712,12 +712,12 @@ pub struct Engine {
     pub(crate) module_resolver: Box<dyn crate::ModuleResolver>,
 
     /// A map mapping type names to pretty-print names.
-    pub(crate) type_names: BTreeMap<String, String>,
+    pub(crate) type_names: BTreeMap<Identifier, Identifier>,
 
     /// A set of symbols to disable.
-    pub(crate) disabled_symbols: BTreeSet<String>,
+    pub(crate) disabled_symbols: BTreeSet<Identifier>,
     /// A map containing custom keywords and precedence to recognize.
-    pub(crate) custom_keywords: BTreeMap<String, Option<Precedence>>,
+    pub(crate) custom_keywords: BTreeMap<Identifier, Option<Precedence>>,
     /// Custom syntax.
     pub(crate) custom_syntax: BTreeMap<Identifier, CustomSyntax>,
     /// Callback closure for resolving variable access.
@@ -1205,12 +1205,28 @@ impl Engine {
 
                         Ok((val.take_or_clone(), false))
                     }
-                    // xxx.id = ???
+                    // xxx.id op= ???
                     Expr::Property(x) if new_val.is_some() => {
-                        let (_, (setter, hash_set), Ident { pos, .. }) = x.as_ref();
+                        let ((getter, hash_get), (setter, hash_set), Ident { pos, .. }) =
+                            x.as_ref();
+                        let ((mut new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
+
+                        if op_info.is_some() {
+                            let hash = FnCallHash::from_native(*hash_get);
+                            let mut args = [target.as_mut()];
+                            let (mut orig_val, _) = self.exec_fn_call(
+                                mods, state, lib, getter, hash, &mut args, is_ref, true, *pos,
+                                None, level,
+                            )?;
+                            let obj_ptr = (&mut orig_val).into();
+                            self.eval_op_assignment(
+                                mods, state, lib, op_info, op_pos, obj_ptr, new_val, new_pos,
+                            )?;
+                            new_val = orig_val;
+                        }
+
                         let hash = FnCallHash::from_native(*hash_set);
-                        let mut new_val = new_val;
-                        let mut args = [target_val, &mut (new_val.as_mut().unwrap().0).0];
+                        let mut args = [target.as_mut(), &mut new_val];
                         self.exec_fn_call(
                             mods, state, lib, setter, hash, &mut args, is_ref, true, *pos, None,
                             level,
@@ -2433,19 +2449,22 @@ impl Engine {
                 {
                     use crate::ModuleResolver;
 
+                    let source = state.source.as_ref().map(|s| s.as_str());
                     let expr_pos = expr.position();
 
                     let module = state
                         .resolver
                         .as_ref()
-                        .and_then(|r| match r.resolve(self, &path, expr_pos) {
+                        .and_then(|r| match r.resolve(self, source, &path, expr_pos) {
                             Ok(m) => return Some(Ok(m)),
                             Err(err) => match *err {
                                 EvalAltResult::ErrorModuleNotFound(_, _) => None,
                                 _ => return Some(Err(err)),
                             },
                         })
-                        .unwrap_or_else(|| self.module_resolver.resolve(self, &path, expr_pos))?;
+                        .unwrap_or_else(|| {
+                            self.module_resolver.resolve(self, source, &path, expr_pos)
+                        })?;
 
                     if let Some(name) = export.as_ref().map(|x| x.name.clone()) {
                         if !module.is_indexed() {
@@ -2650,7 +2669,7 @@ impl Engine {
     pub fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
             .get(name)
-            .map(String::as_str)
+            .map(|s| s.as_str())
             .unwrap_or_else(|| map_std_type_name(name))
     }
 

@@ -212,7 +212,7 @@ impl From<&crate::Module> for ModuleMetadata {
 impl Engine {
     /// _(METADATA)_ Generate a list of all functions (including those defined in an
     /// [`AST`][crate::AST]) in JSON format.
-    /// Available under the `metadata` feature only.
+    /// Exported under the `metadata` feature only.
     ///
     /// Functions from the following sources are included:
     /// 1) Functions defined in an [`AST`][crate::AST]
@@ -221,9 +221,10 @@ impl Engine {
     /// 4) Functions in global modules (optional)
     pub fn gen_fn_metadata_with_ast_to_json(
         &self,
-        _ast: &AST,
+        ast: &AST,
         include_global: bool,
     ) -> serde_json::Result<String> {
+        let _ast = ast;
         let mut global: ModuleMetadata = Default::default();
 
         if include_global {

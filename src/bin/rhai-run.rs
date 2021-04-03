@@ -3,7 +3,7 @@ use rhai::{Engine, EvalAltResult, Position};
 #[cfg(not(feature = "no_optimize"))]
 use rhai::OptimizationLevel;
 
-use std::{env, fs::File, io::Read, process::exit};
+use std::{env, fs::File, io::Read, path::Path, process::exit};
 
 fn eprint_error(input: &str, mut err: EvalAltResult) {
     fn eprint_line(lines: &[&str], pos: Position, err_msg: &str) {
@@ -38,6 +38,14 @@ fn main() {
     let mut contents = String::new();
 
     for filename in env::args().skip(1) {
+        let filename = match Path::new(&filename).canonicalize() {
+            Err(err) => {
+                eprintln!("Error script file path: {}\n{}", filename, err);
+                exit(1);
+            }
+            Ok(f) => f,
+        };
+
         let mut engine = Engine::new();
 
         #[cfg(not(feature = "no_optimize"))]
@@ -45,7 +53,11 @@ fn main() {
 
         let mut f = match File::open(&filename) {
             Err(err) => {
-                eprintln!("Error reading script file: {}\n{}", filename, err);
+                eprintln!(
+                    "Error reading script file: {}\n{}",
+                    filename.to_string_lossy(),
+                    err
+                );
                 exit(1);
             }
             Ok(f) => f,
@@ -54,7 +66,11 @@ fn main() {
         contents.clear();
 
         if let Err(err) = f.read_to_string(&mut contents) {
-            eprintln!("Error reading script file: {}\n{}", filename, err);
+            eprintln!(
+                "Error reading script file: {}\n{}",
+                filename.to_string_lossy(),
+                err
+            );
             exit(1);
         }
 
@@ -65,7 +81,16 @@ fn main() {
             &contents[..]
         };
 
-        if let Err(err) = engine.consume(contents) {
+        if let Err(err) = engine
+            .compile(contents)
+            .map_err(|err| Box::new(err.into()) as Box<EvalAltResult>)
+            .and_then(|mut ast| {
+                ast.set_source(filename.to_string_lossy());
+                engine.consume_ast(&ast)
+            })
+        {
+            let filename = filename.to_string_lossy();
+
             eprintln!("{:=<1$}", "", filename.len());
             eprintln!("{}", filename);
             eprintln!("{:=<1$}", "", filename.len());

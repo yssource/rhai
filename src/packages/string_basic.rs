@@ -10,8 +10,8 @@ use crate::Array;
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
 
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-const FUNC_TO_DEBUG: &'static str = "to_debug";
+pub const FUNC_TO_STRING: &'static str = "to_string";
+pub const FUNC_TO_DEBUG: &'static str = "to_debug";
 
 def_package!(crate:BasicStringPackage:"Basic string utilities, including printing.", lib, {
     combine_with_exported_module!(lib, "print_debug", print_debug_functions);
@@ -19,9 +19,8 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
 
 // Register print and debug
 
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 #[inline(always)]
-fn print_with_func(
+pub fn print_with_func(
     fn_name: &str,
     ctx: &NativeCallContext,
     value: &mut Dynamic,
@@ -39,17 +38,25 @@ fn print_with_func(
 mod print_debug_functions {
     use crate::ImmutableString;
 
-    #[rhai_fn(name = "print", name = "to_string", pure)]
-    pub fn print_generic(item: &mut Dynamic) -> ImmutableString {
-        item.to_string().into()
+    #[rhai_fn(name = "print", pure)]
+    pub fn print_generic(ctx: NativeCallContext, item: &mut Dynamic) -> ImmutableString {
+        print_with_func(FUNC_TO_STRING, &ctx, item)
     }
-    #[rhai_fn(name = "debug", name = "to_debug", pure)]
-    pub fn debug_generic(item: &mut Dynamic) -> ImmutableString {
-        format!("{:?}", item).into()
+    #[rhai_fn(name = "to_string", pure)]
+    pub fn to_string_generic(ctx: NativeCallContext, item: &mut Dynamic) -> ImmutableString {
+        ctx.engine().map_type_name(&item.to_string()).into()
+    }
+    #[rhai_fn(name = "debug", pure)]
+    pub fn debug_generic(ctx: NativeCallContext, item: &mut Dynamic) -> ImmutableString {
+        print_with_func(FUNC_TO_DEBUG, &ctx, item)
+    }
+    #[rhai_fn(name = "to_debug", pure)]
+    pub fn to_debug_generic(ctx: NativeCallContext, item: &mut Dynamic) -> ImmutableString {
+        ctx.engine().map_type_name(&format!("{:?}", item)).into()
     }
     #[rhai_fn(name = "print", name = "debug")]
     pub fn print_empty_string() -> ImmutableString {
-        "".to_string().into()
+        Default::default()
     }
     #[rhai_fn(name = "print", name = "to_string")]
     pub fn print_string(s: ImmutableString) -> ImmutableString {

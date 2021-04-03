@@ -1828,7 +1828,7 @@ impl<'a> Iterator for TokenIterator<'a> {
             None => return None,
             // Reserved keyword/symbol
             Some((Token::Reserved(s), pos)) => (match
-                (s.as_str(), self.engine.custom_keywords.contains_key(&s))
+                (s.as_str(), self.engine.custom_keywords.contains_key(s.as_str()))
             {
                 ("===", false) => Token::LexError(LERR::ImproperSymbol(s,
                     "'===' is not a valid operator. This is not JavaScript! Should it be '=='?".to_string(),
@@ -1869,7 +1869,7 @@ impl<'a> Iterator for TokenIterator<'a> {
                 (_, false) => Token::Reserved(s),
             }, pos),
             // Custom keyword
-            Some((Token::Identifier(s), pos)) if self.engine.custom_keywords.contains_key(&s) => {
+            Some((Token::Identifier(s), pos)) if self.engine.custom_keywords.contains_key(s.as_str()) => {
                 (Token::Custom(s), pos)
             }
             // Custom standard keyword/symbol - must be disabled

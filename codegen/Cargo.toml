@@ -16,7 +16,7 @@ default = []
 metadata = []
 
 [dev-dependencies]
-rhai = { path = "..", version = "^0.19.15" }
+rhai = { path = "..", version = "0.19" }
 trybuild = "1"
 
 [dependencies]
