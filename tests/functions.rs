@@ -1,6 +1,7 @@
 #![cfg(not(feature = "no_function"))]
 use rhai::{Engine, EvalAltResult, FnNamespace, Module, ParseErrorType, Shared, INT};
 
+#[cfg(not(feature = "sync"))]
 #[test]
 fn test_functions_trait_object() -> Result<(), Box<EvalAltResult>> {
     trait TestTrait {

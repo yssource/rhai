@@ -222,6 +222,7 @@ fn test_string_substring() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[cfg(not(feature = "no_object"))]
 #[test]
 fn test_string_format() -> Result<(), Box<EvalAltResult>> {
     #[derive(Debug, Clone)]

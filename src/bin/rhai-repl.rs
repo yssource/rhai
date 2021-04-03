@@ -1,6 +1,4 @@
-use rhai::{
-    module_resolvers::FileModuleResolver, Dynamic, Engine, EvalAltResult, Module, Scope, AST,
-};
+use rhai::{Dynamic, Engine, EvalAltResult, Module, Scope, AST};
 
 use std::{
     env,
@@ -143,7 +141,7 @@ fn main() {
     // Set a file module resolver without caching
     #[cfg(not(feature = "no_module"))]
     {
-        let mut resolver = FileModuleResolver::new();
+        let mut resolver = rhai::module_resolvers::FileModuleResolver::new();
         resolver.enable_cache(false);
         engine.set_module_resolver(resolver);
     }
