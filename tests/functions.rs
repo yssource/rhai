@@ -2,7 +2,6 @@
 use rhai::{Engine, EvalAltResult, FnNamespace, Module, ParseErrorType, Shared, INT};
 
 #[cfg(not(feature = "no_object"))]
-#[cfg(not(feature = "sync"))]
 #[test]
 fn test_functions_trait_object() -> Result<(), Box<EvalAltResult>> {
     trait TestTrait {
@@ -18,7 +17,11 @@ fn test_functions_trait_object() -> Result<(), Box<EvalAltResult>> {
         }
     }
 
+    #[cfg(not(feature = "sync"))]
     type MySharedTestTrait = Shared<dyn TestTrait>;
+
+    #[cfg(feature = "sync")]
+    type MySharedTestTrait = Shared<dyn TestTrait + Send + Sync>;
 
     let mut engine = Engine::new();
 
