@@ -1,4 +1,4 @@
-use crate::stdlib::{boxed::Box, collections::BTreeMap, ops::AddAssign, string::String};
+use crate::stdlib::{boxed::Box, collections::BTreeMap, ops::AddAssign};
 use crate::{Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Shared};
 
 /// A static [module][Module] resolution service that serves [modules][Module] added into it.

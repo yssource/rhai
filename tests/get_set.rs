@@ -128,3 +128,36 @@ fn test_get_set_chain() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_get_set_op_assignment() -> Result<(), Box<EvalAltResult>> {
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    struct Num(INT);
+
+    impl Num {
+        fn get(&mut self) -> INT {
+            self.0
+        }
+        fn set(&mut self, x: INT) {
+            self.0 = x;
+        }
+    }
+
+    let mut engine = Engine::new();
+
+    engine
+        .register_type::<Num>()
+        .register_fn("new_ts", || Num(40))
+        .register_get_set("v", Num::get, Num::set);
+
+    assert_eq!(
+        engine.eval::<Num>("let a = new_ts(); a.v = a.v + 2; a")?,
+        Num(42)
+    );
+    assert_eq!(
+        engine.eval::<Num>("let a = new_ts(); a.v += 2; a")?,
+        Num(42)
+    );
+
+    Ok(())
+}

@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 0.19.16
 ===============
 
+Bug fixes
+---------
+
+* Property setter op-assignments now work properly.
+
 Breaking changes
 ----------------
 

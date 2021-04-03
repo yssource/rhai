@@ -1205,12 +1205,28 @@ impl Engine {
 
                         Ok((val.take_or_clone(), false))
                     }
-                    // xxx.id = ???
+                    // xxx.id op= ???
                     Expr::Property(x) if new_val.is_some() => {
-                        let (_, (setter, hash_set), Ident { pos, .. }) = x.as_ref();
+                        let ((getter, hash_get), (setter, hash_set), Ident { pos, .. }) =
+                            x.as_ref();
+                        let ((mut new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
+
+                        if op_info.is_some() {
+                            let hash = FnCallHash::from_native(*hash_get);
+                            let mut args = [target.as_mut()];
+                            let (mut orig_val, _) = self.exec_fn_call(
+                                mods, state, lib, getter, hash, &mut args, is_ref, true, *pos,
+                                None, level,
+                            )?;
+                            let obj_ptr = (&mut orig_val).into();
+                            self.eval_op_assignment(
+                                mods, state, lib, op_info, op_pos, obj_ptr, new_val, new_pos,
+                            )?;
+                            new_val = orig_val;
+                        }
+
                         let hash = FnCallHash::from_native(*hash_set);
-                        let mut new_val = new_val;
-                        let mut args = [target_val, &mut (new_val.as_mut().unwrap().0).0];
+                        let mut args = [target.as_mut(), &mut new_val];
                         self.exec_fn_call(
                             mods, state, lib, setter, hash, &mut args, is_ref, true, *pos, None,
                             level,
