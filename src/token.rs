@@ -11,10 +11,11 @@ use crate::stdlib::{
     iter::{FusedIterator, Peekable},
     num::NonZeroUsize,
     ops::{Add, AddAssign},
+    rc::Rc,
     str::{Chars, FromStr},
     string::{String, ToString},
 };
-use crate::{Engine, LexError, Shared, StaticVec, INT};
+use crate::{Engine, LexError, StaticVec, INT};
 
 #[cfg(not(feature = "no_float"))]
 use crate::ast::FloatWrapper;
@@ -24,6 +25,17 @@ use rust_decimal::Decimal;
 
 #[cfg(not(feature = "no_function"))]
 use crate::engine::KEYWORD_IS_DEF_FN;
+
+/// A type containing commands to control the tokenizer.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Copy, Default)]
+pub struct TokenizeControlBlock {
+    /// Is the current tokenizer position within an interpolated text string?
+    /// This flag allows switching the tokenizer back to _text_ parsing after an interpolation stream.
+    pub is_within_text: bool,
+}
+
+/// A shared object that allows control of the tokenizer from outside.
+pub type TokenizerControl = Rc<Cell<TokenizeControlBlock>>;
 
 type LERR = LexError;
 
@@ -848,6 +860,9 @@ pub trait InputStream {
 
 /// _(INTERNALS)_ Parse a string literal ended by `termination_char`.
 /// Exported under the `internals` feature only.
+///
+/// Returns the parsed string and a boolean indicating whether the string is
+/// terminated by an interpolation `${`.
 ///
 /// # Volatile API
 ///
@@ -1840,8 +1855,8 @@ pub struct TokenIterator<'a> {
     state: TokenizeState,
     /// Current position.
     pos: Position,
-    /// Buffer containing the next character to read, if any.
-    buffer: Shared<Cell<Option<char>>>,
+    /// External buffer containing the next character to read, if any.
+    tokenizer_control: TokenizerControl,
     /// Input character stream.
     stream: MultiInputsStream<'a>,
     /// A processor function that maps a token to another.
@@ -1852,9 +1867,16 @@ impl<'a> Iterator for TokenIterator<'a> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(ch) = self.buffer.take() {
-            self.stream.unget(ch);
+        let mut control = self.tokenizer_control.get();
+
+        if control.is_within_text {
+            // Push a back-tick into the stream
+            self.stream.unget('`');
+            // Rewind the current position by one character
             self.pos.rewind();
+            // Reset it
+            control.is_within_text = false;
+            self.tokenizer_control.set(control);
         }
 
         let (token, pos) = match get_next_token(&mut self.stream, &mut self.state, &mut self.pos) {
@@ -1945,7 +1967,7 @@ impl Engine {
     pub fn lex<'a>(
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
-    ) -> (TokenIterator<'a>, Shared<Cell<Option<char>>>) {
+    ) -> (TokenIterator<'a>, ExternalBuffer) {
         self.lex_raw(input, None)
     }
     /// _(INTERNALS)_ Tokenize an input text stream with a mapping function.
@@ -1956,7 +1978,7 @@ impl Engine {
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
         map: fn(Token) -> Token,
-    ) -> (TokenIterator<'a>, Shared<Cell<Option<char>>>) {
+    ) -> (TokenIterator<'a>, ExternalBuffer) {
         self.lex_raw(input, Some(map))
     }
     /// Tokenize an input text stream with an optional mapping function.
@@ -1965,8 +1987,8 @@ impl Engine {
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
         map: Option<fn(Token) -> Token>,
-    ) -> (TokenIterator<'a>, Shared<Cell<Option<char>>>) {
-        let buffer: Shared<Cell<Option<char>>> = Cell::new(None).into();
+    ) -> (TokenIterator<'a>, TokenizerControl) {
+        let buffer: TokenizerControl = Default::default();
         let buffer2 = buffer.clone();
 
         (
@@ -1984,7 +2006,7 @@ impl Engine {
                     disable_doc_comments: self.disable_doc_comments,
                 },
                 pos: Position::new(1, 0),
-                buffer,
+                tokenizer_control: buffer,
                 stream: MultiInputsStream {
                     buf: None,
                     streams: input.into_iter().map(|s| s.chars().peekable()).collect(),

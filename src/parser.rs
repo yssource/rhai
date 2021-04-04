@@ -11,7 +11,6 @@ use crate::optimize::optimize_into_ast;
 use crate::optimize::OptimizationLevel;
 use crate::stdlib::{
     boxed::Box,
-    cell::Cell,
     collections::BTreeMap,
     format,
     hash::{Hash, Hasher},
@@ -22,7 +21,9 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::syntax::{CustomSyntax, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
-use crate::token::{is_keyword_function, is_valid_identifier, Token, TokenStream};
+use crate::token::{
+    is_keyword_function, is_valid_identifier, Token, TokenStream, TokenizerControl,
+};
 use crate::utils::{get_hasher, IdentifierBuilder};
 use crate::{
     calc_fn_hash, Dynamic, Engine, Identifier, LexError, ParseError, ParseErrorType, Position,
@@ -45,7 +46,7 @@ pub struct ParseState<'e> {
     /// Reference to the scripting [`Engine`].
     engine: &'e Engine,
     /// Input stream buffer containing the next character to read.
-    buffer: Shared<Cell<Option<char>>>,
+    tokenizer_control: TokenizerControl,
     /// Interned strings.
     interned_strings: IdentifierBuilder,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
@@ -76,22 +77,15 @@ pub struct ParseState<'e> {
 impl<'e> ParseState<'e> {
     /// Create a new [`ParseState`].
     #[inline(always)]
-    pub fn new(
-        engine: &'e Engine,
-        buffer: Shared<Cell<Option<char>>>,
-        #[cfg(not(feature = "unchecked"))] max_expr_depth: Option<NonZeroUsize>,
-        #[cfg(not(feature = "unchecked"))]
-        #[cfg(not(feature = "no_function"))]
-        max_function_expr_depth: Option<NonZeroUsize>,
-    ) -> Self {
+    pub fn new(engine: &'e Engine, tokenizer_control: TokenizerControl) -> Self {
         Self {
             engine,
-            buffer,
+            tokenizer_control,
             #[cfg(not(feature = "unchecked"))]
-            max_expr_depth,
+            max_expr_depth: NonZeroUsize::new(engine.max_expr_depth()),
             #[cfg(not(feature = "unchecked"))]
             #[cfg(not(feature = "no_function"))]
-            max_function_expr_depth,
+            max_function_expr_depth: NonZeroUsize::new(engine.max_function_expr_depth()),
             #[cfg(not(feature = "no_closure"))]
             external_vars: Default::default(),
             #[cfg(not(feature = "no_closure"))]
@@ -982,14 +976,8 @@ fn parse_primary(
         // | ...
         #[cfg(not(feature = "no_function"))]
         Token::Pipe | Token::Or if settings.allow_anonymous_fn => {
-            let mut new_state = ParseState::new(
-                state.engine,
-                state.buffer.clone(),
-                #[cfg(not(feature = "unchecked"))]
-                state.max_function_expr_depth,
-                #[cfg(not(feature = "unchecked"))]
-                state.max_function_expr_depth,
-            );
+            let mut new_state = ParseState::new(state.engine, state.tokenizer_control.clone());
+            new_state.max_expr_depth = new_state.max_function_expr_depth;
 
             let settings = ParseSettings {
                 allow_if_expr: true,
@@ -1034,7 +1022,9 @@ fn parse_primary(
                 segments.push(expr);
 
                 // Make sure to parse the following as text
-                state.buffer.set(Some('`'));
+                let mut control = state.tokenizer_control.get();
+                control.is_within_text = true;
+                state.tokenizer_control.set(control);
 
                 match input.next().unwrap() {
                     (Token::StringConstant(s), pos) => {
@@ -2540,14 +2530,9 @@ fn parse_stmt(
 
             match input.next().unwrap() {
                 (Token::Fn, pos) => {
-                    let mut new_state = ParseState::new(
-                        state.engine,
-                        state.buffer.clone(),
-                        #[cfg(not(feature = "unchecked"))]
-                        state.max_function_expr_depth,
-                        #[cfg(not(feature = "unchecked"))]
-                        state.max_function_expr_depth,
-                    );
+                    let mut new_state =
+                        ParseState::new(state.engine, state.tokenizer_control.clone());
+                    new_state.max_expr_depth = new_state.max_function_expr_depth;
 
                     let settings = ParseSettings {
                         allow_if_expr: true,
