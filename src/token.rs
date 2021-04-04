@@ -27,16 +27,16 @@ use rust_decimal::Decimal;
 #[cfg(not(feature = "no_function"))]
 use crate::engine::KEYWORD_IS_DEF_FN;
 
-/// A type containing commands to control the tokenizer.
+/// _(INTERNALS)_ A type containing commands to control the tokenizer.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Copy, Default)]
-pub struct TokenizeControlBlock {
+pub struct TokenizerControlBlock {
     /// Is the current tokenizer position within an interpolated text string?
     /// This flag allows switching the tokenizer back to _text_ parsing after an interpolation stream.
     pub is_within_text: bool,
 }
 
-/// A shared object that allows control of the tokenizer from outside.
-pub type TokenizerControl = Rc<Cell<TokenizeControlBlock>>;
+/// _(INTERNALS)_ A shared object that allows control of the tokenizer from outside.
+pub type TokenizerControl = Rc<Cell<TokenizerControlBlock>>;
 
 type LERR = LexError;
 
@@ -1989,7 +1989,7 @@ impl Engine {
     pub fn lex<'a>(
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
-    ) -> (TokenIterator<'a>, ExternalBuffer) {
+    ) -> (TokenIterator<'a>, TokenizerControl) {
         self.lex_raw(input, None)
     }
     /// _(INTERNALS)_ Tokenize an input text stream with a mapping function.
@@ -2000,7 +2000,7 @@ impl Engine {
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
         map: fn(Token) -> Token,
-    ) -> (TokenIterator<'a>, ExternalBuffer) {
+    ) -> (TokenIterator<'a>, TokenizerControl) {
         self.lex_raw(input, Some(map))
     }
     /// Tokenize an input text stream with an optional mapping function.

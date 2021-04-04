@@ -977,7 +977,11 @@ fn parse_primary(
         #[cfg(not(feature = "no_function"))]
         Token::Pipe | Token::Or if settings.allow_anonymous_fn => {
             let mut new_state = ParseState::new(state.engine, state.tokenizer_control.clone());
-            new_state.max_expr_depth = new_state.max_function_expr_depth;
+
+            #[cfg(not(feature = "unchecked"))]
+            {
+                new_state.max_expr_depth = new_state.max_function_expr_depth;
+            }
 
             let settings = ParseSettings {
                 allow_if_expr: true,
@@ -2532,7 +2536,11 @@ fn parse_stmt(
                 (Token::Fn, pos) => {
                     let mut new_state =
                         ParseState::new(state.engine, state.tokenizer_control.clone());
-                    new_state.max_expr_depth = new_state.max_function_expr_depth;
+
+                    #[cfg(not(feature = "unchecked"))]
+                    {
+                        new_state.max_expr_depth = new_state.max_function_expr_depth;
+                    }
 
                     let settings = ParseSettings {
                         allow_if_expr: true,
