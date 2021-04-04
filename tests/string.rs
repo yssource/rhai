@@ -310,3 +310,62 @@ fn test_string_split() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_string_interpolated() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<String>(
+            r"
+                let x = 40;
+                `hello ${x+2} worlds!`
+            "
+        )?,
+        "hello 42 worlds!"
+    );
+
+    assert_eq!(
+        engine.eval::<String>(
+            r"
+                const x = 42;
+                `hello ${x} worlds!`
+            "
+        )?,
+        "hello 42 worlds!"
+    );
+
+    assert_eq!(engine.eval::<String>("`hello ${}world!`")?, "hello world!");
+
+    assert_eq!(
+        engine.eval::<String>(
+            r"
+                const x = 42;
+                `${x} worlds!`
+            "
+        )?,
+        "42 worlds!"
+    );
+
+    assert_eq!(
+        engine.eval::<String>(
+            r"
+                const x = 42;
+                `hello ${x}`
+            "
+        )?,
+        "hello 42"
+    );
+
+    assert_eq!(
+        engine.eval::<String>(
+            r"
+                const x = 20;
+                `hello ${let y = x + 1; `${y * 2}`} worlds!`
+            "
+        )?,
+        "hello 42 worlds!"
+    );
+
+    Ok(())
+}

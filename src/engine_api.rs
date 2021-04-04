@@ -5,9 +5,11 @@ use crate::engine::{EvalContext, Imports, State};
 use crate::fn_native::{FnCallArgs, SendSync};
 use crate::fn_register::RegisterNativeFunction;
 use crate::optimize::OptimizationLevel;
+use crate::parser::ParseState;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
+    num::NonZeroUsize,
     string::String,
 };
 use crate::{
@@ -1156,8 +1158,22 @@ impl Engine {
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let stream = self.lex_raw(scripts, None);
-        self.parse(&mut stream.peekable(), scope, optimization_level)
+        let (stream, buffer) = self.lex_raw(scripts, None);
+        let mut state = ParseState::new(
+            self,
+            buffer,
+            #[cfg(not(feature = "unchecked"))]
+            NonZeroUsize::new(self.max_expr_depth()),
+            #[cfg(not(feature = "unchecked"))]
+            #[cfg(not(feature = "no_function"))]
+            NonZeroUsize::new(self.max_function_expr_depth()),
+        );
+        self.parse(
+            &mut stream.peekable(),
+            &mut state,
+            scope,
+            optimization_level,
+        )
     }
     /// Read the contents of a file into a string.
     #[cfg(not(feature = "no_std"))]
@@ -1331,7 +1347,7 @@ impl Engine {
             .into());
         };
 
-        let stream = self.lex_raw(
+        let (stream, buffer) = self.lex_raw(
             &scripts,
             Some(if has_null {
                 |token| match token {
@@ -1344,8 +1360,22 @@ impl Engine {
             }),
         );
 
-        let ast =
-            self.parse_global_expr(&mut stream.peekable(), &scope, OptimizationLevel::None)?;
+        let mut state = ParseState::new(
+            self,
+            buffer,
+            #[cfg(not(feature = "unchecked"))]
+            NonZeroUsize::new(self.max_expr_depth()),
+            #[cfg(not(feature = "unchecked"))]
+            #[cfg(not(feature = "no_function"))]
+            NonZeroUsize::new(self.max_function_expr_depth()),
+        );
+
+        let ast = self.parse_global_expr(
+            &mut stream.peekable(),
+            &mut state,
+            &scope,
+            OptimizationLevel::None,
+        )?;
 
         // Handle null - map to ()
         if has_null {
@@ -1424,10 +1454,19 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
-        let stream = self.lex_raw(&scripts, None);
+        let (stream, buffer) = self.lex_raw(&scripts, None);
 
         let mut peekable = stream.peekable();
-        self.parse_global_expr(&mut peekable, scope, self.optimization_level)
+        let mut state = ParseState::new(
+            self,
+            buffer,
+            #[cfg(not(feature = "unchecked"))]
+            NonZeroUsize::new(self.max_expr_depth()),
+            #[cfg(not(feature = "unchecked"))]
+            #[cfg(not(feature = "no_function"))]
+            NonZeroUsize::new(self.max_function_expr_depth()),
+        );
+        self.parse_global_expr(&mut peekable, &mut state, scope, self.optimization_level)
     }
     /// Evaluate a script file.
     ///
@@ -1585,10 +1624,24 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = self.lex_raw(&scripts, None);
+        let (stream, buffer) = self.lex_raw(&scripts, None);
+        let mut state = ParseState::new(
+            self,
+            buffer,
+            #[cfg(not(feature = "unchecked"))]
+            NonZeroUsize::new(self.max_expr_depth()),
+            #[cfg(not(feature = "unchecked"))]
+            #[cfg(not(feature = "no_function"))]
+            NonZeroUsize::new(self.max_function_expr_depth()),
+        );
 
         // No need to optimize a lone expression
-        let ast = self.parse_global_expr(&mut stream.peekable(), scope, OptimizationLevel::None)?;
+        let ast = self.parse_global_expr(
+            &mut stream.peekable(),
+            &mut state,
+            scope,
+            OptimizationLevel::None,
+        )?;
 
         self.eval_ast_with_scope(scope, &ast)
     }
@@ -1726,8 +1779,24 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
-        let stream = self.lex_raw(&scripts, None);
-        let ast = self.parse(&mut stream.peekable(), scope, self.optimization_level)?;
+        let (stream, buffer) = self.lex_raw(&scripts, None);
+        let mut state = ParseState::new(
+            self,
+            buffer,
+            #[cfg(not(feature = "unchecked"))]
+            NonZeroUsize::new(self.max_expr_depth()),
+            #[cfg(not(feature = "unchecked"))]
+            #[cfg(not(feature = "no_function"))]
+            NonZeroUsize::new(self.max_function_expr_depth()),
+        );
+
+        let ast = self.parse(
+            &mut stream.peekable(),
+            &mut state,
+            scope,
+            self.optimization_level,
+        )?;
+
         self.consume_ast_with_scope(scope, &ast)
     }
     /// Evaluate an AST, but throw away the result and only return error (if any).

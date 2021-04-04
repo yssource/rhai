@@ -8,6 +8,7 @@ use crate::stdlib::{
     collections::BTreeMap,
     fmt,
     hash::Hash,
+    iter::empty,
     num::NonZeroUsize,
     ops::{Add, AddAssign},
     string::String,
@@ -15,6 +16,7 @@ use crate::stdlib::{
     vec::Vec,
 };
 use crate::token::Token;
+use crate::utils::calc_fn_hash;
 use crate::{
     Dynamic, FnNamespace, FnPtr, Identifier, ImmutableString, Module, Position, Shared, StaticVec,
     INT,
@@ -844,10 +846,11 @@ impl StmtBlock {
 impl fmt::Debug for StmtBlock {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.statements, f)?;
         if !self.pos.is_none() {
-            write!(f, "{} @ ", self.pos)?;
+            write!(f, " @ {:?}", self.pos)?;
         }
-        fmt::Debug::fmt(&self.statements, f)
+        Ok(())
     }
 }
 
@@ -1293,6 +1296,18 @@ pub struct OpAssignment {
     pub op: &'static str,
 }
 
+impl OpAssignment {
+    pub fn new(op: &'static str) -> Self {
+        let op2 = &op[..op.len() - 1]; // extract operator without =
+
+        Self {
+            hash_op_assign: calc_fn_hash(empty(), op, 2),
+            hash_op: calc_fn_hash(empty(), op2, 2),
+            op,
+        }
+    }
+}
+
 /// _(INTERNALS)_ An set of function call hashes.
 /// Exported under the `internals` feature only.
 ///
@@ -1548,6 +1563,8 @@ pub enum Expr {
     StringConstant(ImmutableString, Position),
     /// [`FnPtr`] constant.
     FnPointer(ImmutableString, Position),
+    /// An interpolated [string][ImmutableString].
+    InterpolatedString(Box<StaticVec<Expr>>),
     /// [ expr, ... ]
     Array(Box<StaticVec<Expr>>, Position),
     /// #{ name:expr, ... }
@@ -1608,7 +1625,7 @@ impl Expr {
             Self::Array(x, _) if self.is_constant() => {
                 let mut arr = Array::with_capacity(x.len());
                 arr.extend(x.iter().map(|v| v.get_constant_value().unwrap()));
-                Dynamic(Union::Array(Box::new(arr), AccessMode::ReadOnly))
+                arr.into()
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -1617,7 +1634,7 @@ impl Expr {
                 x.0.iter().for_each(|(k, v)| {
                     *map.get_mut(k.name.as_str()).unwrap() = v.get_constant_value().unwrap()
                 });
-                Dynamic(Union::Map(Box::new(map), AccessMode::ReadOnly))
+                map.into()
             }
 
             _ => return None,
@@ -1643,6 +1660,7 @@ impl Expr {
             Self::IntegerConstant(_, pos) => *pos,
             Self::CharConstant(_, pos) => *pos,
             Self::StringConstant(_, pos) => *pos,
+            Self::InterpolatedString(x) => x.first().unwrap().position(),
             Self::FnPointer(_, pos) => *pos,
             Self::Array(_, pos) => *pos,
             Self::Map(_, pos) => *pos,
@@ -1672,6 +1690,9 @@ impl Expr {
             Self::IntegerConstant(_, pos) => *pos = new_pos,
             Self::CharConstant(_, pos) => *pos = new_pos,
             Self::StringConstant(_, pos) => *pos = new_pos,
+            Self::InterpolatedString(x) => {
+                x.first_mut().unwrap().set_position(new_pos);
+            }
             Self::FnPointer(_, pos) => *pos = new_pos,
             Self::Array(_, pos) => *pos = new_pos,
             Self::Map(_, pos) => *pos = new_pos,
@@ -1693,7 +1714,7 @@ impl Expr {
     #[inline]
     pub fn is_pure(&self) -> bool {
         match self {
-            Self::Array(x, _) => x.iter().all(Self::is_pure),
+            Self::InterpolatedString(x) | Self::Array(x, _) => x.iter().all(Self::is_pure),
 
             Self::Map(x, _) => x.0.iter().map(|(_, v)| v).all(Self::is_pure),
 
@@ -1731,10 +1752,8 @@ impl Expr {
             | Self::FnPointer(_, _)
             | Self::Unit(_) => true,
 
-            // An array literal is constant if all items are constant
-            Self::Array(x, _) => x.iter().all(Self::is_constant),
+            Self::InterpolatedString(x) | Self::Array(x, _) => x.iter().all(Self::is_constant),
 
-            // An map literal is constant if all items are constant
             Self::Map(x, _) => x.0.iter().map(|(_, expr)| expr).all(Self::is_constant),
 
             _ => false,
@@ -1763,6 +1782,7 @@ impl Expr {
             | Self::Unit(_) => false,
 
             Self::StringConstant(_, _)
+            | Self::InterpolatedString(_)
             | Self::FnCall(_, _)
             | Self::Stmt(_)
             | Self::Dot(_, _)
@@ -1814,7 +1834,7 @@ impl Expr {
                     }
                 }
             }
-            Self::Array(x, _) => {
+            Self::InterpolatedString(x) | Self::Array(x, _) => {
                 for e in x.as_ref() {
                     if !e.walk(path, on_node) {
                         return false;

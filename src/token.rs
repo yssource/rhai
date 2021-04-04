@@ -1,11 +1,14 @@
 //! Main module defining the lexer and parser.
 
+use std::iter::FusedIterator;
+
 use crate::engine::{
     Precedence, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
 use crate::stdlib::{
     borrow::Cow,
+    cell::Cell,
     char, fmt, format,
     iter::Peekable,
     num::NonZeroUsize,
@@ -13,7 +16,7 @@ use crate::stdlib::{
     str::{Chars, FromStr},
     string::{String, ToString},
 };
-use crate::{Engine, LexError, StaticVec, INT};
+use crate::{Engine, LexError, Shared, StaticVec, INT};
 
 #[cfg(not(feature = "no_float"))]
 use crate::ast::FloatWrapper;
@@ -209,6 +212,8 @@ pub enum Token {
     CharConstant(char),
     /// A string constant.
     StringConstant(String),
+    /// An interpolated string.
+    InterpolatedString(String),
     /// `{`
     LeftBrace,
     /// `}`
@@ -485,6 +490,7 @@ impl Token {
             #[cfg(feature = "decimal")]
             DecimalConstant(d) => d.to_string().into(),
             StringConstant(_) => "string".into(),
+            InterpolatedString(_) => "string".into(),
             CharConstant(c) => c.to_string().into(),
             Identifier(s) => s.clone().into(),
             Reserved(s) => s.clone().into(),
@@ -855,17 +861,29 @@ pub fn parse_string_literal(
     termination_char: char,
     continuation: bool,
     verbatim: bool,
-) -> Result<String, (LexError, Position)> {
+    allow_interpolation: bool,
+) -> Result<(String, bool), (LexError, Position)> {
     let mut result: smallvec::SmallVec<[char; 16]> = Default::default();
     let mut escape: smallvec::SmallVec<[char; 12]> = Default::default();
 
     let start = *pos;
     let mut skip_whitespace_until = 0;
+    let mut interpolated = false;
 
     loop {
         let next_char = stream.get_next().ok_or((LERR::UnterminatedString, start))?;
 
         pos.advance();
+
+        // String interpolation?
+        if allow_interpolation
+            && next_char == '$'
+            && escape.is_empty()
+            && stream.peek_next().map(|ch| ch == '{').unwrap_or(false)
+        {
+            interpolated = true;
+            break;
+        }
 
         if let Some(max) = state.max_string_size {
             if result.len() > max.get() {
@@ -1000,7 +1018,7 @@ pub fn parse_string_literal(
         }
     }
 
-    Ok(s)
+    Ok((s, interpolated))
 }
 
 /// Consume the next character.
@@ -1296,10 +1314,11 @@ fn get_next_token_inner(
 
             // " - string literal
             ('"', _) => {
-                return parse_string_literal(stream, state, pos, c, true, false).map_or_else(
-                    |err| Some((Token::LexError(err.0), err.1)),
-                    |out| Some((Token::StringConstant(out), start_pos)),
-                );
+                return parse_string_literal(stream, state, pos, c, true, false, false)
+                    .map_or_else(
+                        |err| Some((Token::LexError(err.0), err.1)),
+                        |(result, _)| Some((Token::StringConstant(result), start_pos)),
+                    );
             }
             // ` - string literal
             ('`', _) => {
@@ -1320,9 +1339,15 @@ fn get_next_token_inner(
                     _ => (),
                 }
 
-                return parse_string_literal(stream, state, pos, c, false, true).map_or_else(
+                return parse_string_literal(stream, state, pos, c, false, true, true).map_or_else(
                     |err| Some((Token::LexError(err.0), err.1)),
-                    |out| Some((Token::StringConstant(out), start_pos)),
+                    |(result, interpolated)| {
+                        if interpolated {
+                            Some((Token::InterpolatedString(result), start_pos))
+                        } else {
+                            Some((Token::StringConstant(result), start_pos))
+                        }
+                    },
                 );
             }
 
@@ -1335,9 +1360,9 @@ fn get_next_token_inner(
             }
             ('\'', _) => {
                 return Some(
-                    parse_string_literal(stream, state, pos, c, false, false).map_or_else(
+                    parse_string_literal(stream, state, pos, c, false, false, false).map_or_else(
                         |err| (Token::LexError(err.0), err.1),
-                        |result| {
+                        |(result, _)| {
                             let mut chars = result.chars();
                             let first = chars.next().unwrap();
 
@@ -1765,6 +1790,10 @@ pub struct MultiInputsStream<'a> {
 impl InputStream for MultiInputsStream<'_> {
     #[inline(always)]
     fn unget(&mut self, ch: char) {
+        if self.buf.is_some() {
+            panic!("cannot unget two characters in a row");
+        }
+
         self.buf = Some(ch);
     }
     fn get_next(&mut self) -> Option<char> {
@@ -1813,6 +1842,8 @@ pub struct TokenIterator<'a> {
     state: TokenizeState,
     /// Current position.
     pos: Position,
+    /// Buffer containing the next character to read, if any.
+    buffer: Shared<Cell<Option<char>>>,
     /// Input character stream.
     stream: MultiInputsStream<'a>,
     /// A processor function that maps a token to another.
@@ -1823,6 +1854,11 @@ impl<'a> Iterator for TokenIterator<'a> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
+        if let Some(ch) = self.buffer.take() {
+            self.stream.unget(ch);
+            self.pos.rewind();
+        }
+
         let (token, pos) = match get_next_token(&mut self.stream, &mut self.state, &mut self.pos) {
             // {EOF}
             None => return None,
@@ -1901,12 +1937,17 @@ impl<'a> Iterator for TokenIterator<'a> {
     }
 }
 
+impl FusedIterator for TokenIterator<'_> {}
+
 impl Engine {
     /// _(INTERNALS)_ Tokenize an input text stream.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]
-    pub fn lex<'a>(&'a self, input: impl IntoIterator<Item = &'a &'a str>) -> TokenIterator<'a> {
+    pub fn lex<'a>(
+        &'a self,
+        input: impl IntoIterator<Item = &'a &'a str>,
+    ) -> (TokenIterator<'a>, Shared<Cell<Option<char>>>) {
         self.lex_raw(input, None)
     }
     /// _(INTERNALS)_ Tokenize an input text stream with a mapping function.
@@ -1917,7 +1958,7 @@ impl Engine {
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
         map: fn(Token) -> Token,
-    ) -> TokenIterator<'a> {
+    ) -> (TokenIterator<'a>, Shared<Cell<Option<char>>>) {
         self.lex_raw(input, Some(map))
     }
     /// Tokenize an input text stream with an optional mapping function.
@@ -1926,27 +1967,34 @@ impl Engine {
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
         map: Option<fn(Token) -> Token>,
-    ) -> TokenIterator<'a> {
-        TokenIterator {
-            engine: self,
-            state: TokenizeState {
-                #[cfg(not(feature = "unchecked"))]
-                max_string_size: self.limits.max_string_size,
-                #[cfg(feature = "unchecked")]
-                max_string_size: None,
-                non_unary: false,
-                comment_level: 0,
-                end_with_none: false,
-                include_comments: false,
-                disable_doc_comments: self.disable_doc_comments,
+    ) -> (TokenIterator<'a>, Shared<Cell<Option<char>>>) {
+        let buffer: Shared<Cell<Option<char>>> = Cell::new(None).into();
+        let buffer2 = buffer.clone();
+
+        (
+            TokenIterator {
+                engine: self,
+                state: TokenizeState {
+                    #[cfg(not(feature = "unchecked"))]
+                    max_string_size: self.limits.max_string_size,
+                    #[cfg(feature = "unchecked")]
+                    max_string_size: None,
+                    non_unary: false,
+                    comment_level: 0,
+                    end_with_none: false,
+                    include_comments: false,
+                    disable_doc_comments: self.disable_doc_comments,
+                },
+                pos: Position::new(1, 0),
+                buffer,
+                stream: MultiInputsStream {
+                    buf: None,
+                    streams: input.into_iter().map(|s| s.chars().peekable()).collect(),
+                    index: 0,
+                },
+                map,
             },
-            pos: Position::new(1, 0),
-            stream: MultiInputsStream {
-                buf: None,
-                streams: input.into_iter().map(|s| s.chars().peekable()).collect(),
-                index: 0,
-            },
-            map,
-        }
+            buffer2,
+        )
     }
 }

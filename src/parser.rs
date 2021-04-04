@@ -11,6 +11,7 @@ use crate::optimize::optimize_into_ast;
 use crate::optimize::OptimizationLevel;
 use crate::stdlib::{
     boxed::Box,
+    cell::Cell,
     collections::BTreeMap,
     format,
     hash::{Hash, Hasher},
@@ -40,9 +41,11 @@ type FunctionsLib = BTreeMap<u64, Shared<ScriptFnDef>>;
 
 /// A type that encapsulates the current state of the parser.
 #[derive(Debug)]
-struct ParseState<'e> {
+pub struct ParseState<'e> {
     /// Reference to the scripting [`Engine`].
     engine: &'e Engine,
+    /// Input stream buffer containing the next character to read.
+    buffer: Shared<Cell<Option<char>>>,
     /// Interned strings.
     interned_strings: IdentifierBuilder,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
@@ -75,6 +78,7 @@ impl<'e> ParseState<'e> {
     #[inline(always)]
     pub fn new(
         engine: &'e Engine,
+        buffer: Shared<Cell<Option<char>>>,
         #[cfg(not(feature = "unchecked"))] max_expr_depth: Option<NonZeroUsize>,
         #[cfg(not(feature = "unchecked"))]
         #[cfg(not(feature = "no_function"))]
@@ -82,6 +86,7 @@ impl<'e> ParseState<'e> {
     ) -> Self {
         Self {
             engine,
+            buffer,
             #[cfg(not(feature = "unchecked"))]
             max_expr_depth,
             #[cfg(not(feature = "unchecked"))]
@@ -458,7 +463,7 @@ fn parse_index_chain(
             .into_err(*pos))
         }
         Expr::IntegerConstant(_, pos) => match lhs {
-            Expr::Array(_, _) | Expr::StringConstant(_, _) => (),
+            Expr::Array(_, _) | Expr::StringConstant(_, _) | Expr::InterpolatedString(_) => (),
 
             Expr::Map(_, _) => {
                 return Err(PERR::MalformedIndexExpr(
@@ -490,14 +495,14 @@ fn parse_index_chain(
         },
 
         // lhs[string]
-        Expr::StringConstant(_, pos) => match lhs {
+        Expr::StringConstant(_, _) | Expr::InterpolatedString(_) => match lhs {
             Expr::Map(_, _) => (),
 
-            Expr::Array(_, _) | Expr::StringConstant(_, _) => {
+            Expr::Array(_, _) | Expr::StringConstant(_, _) | Expr::InterpolatedString(_) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Array or string expects numeric index, not a string".into(),
                 )
-                .into_err(*pos))
+                .into_err(idx_expr.position()))
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -979,6 +984,7 @@ fn parse_primary(
         Token::Pipe | Token::Or if settings.allow_anonymous_fn => {
             let mut new_state = ParseState::new(
                 state.engine,
+                state.buffer.clone(),
                 #[cfg(not(feature = "unchecked"))]
                 state.max_function_expr_depth,
                 #[cfg(not(feature = "unchecked"))]
@@ -1010,6 +1016,50 @@ fn parse_primary(
             expr
         }
 
+        // Interpolated string
+        Token::InterpolatedString(_) => {
+            let mut segments: StaticVec<Expr> = Default::default();
+
+            if let (Token::InterpolatedString(s), pos) = input.next().unwrap() {
+                segments.push(Expr::StringConstant(s.into(), pos));
+            } else {
+                unreachable!();
+            }
+
+            loop {
+                let expr = match parse_block(input, state, lib, settings.level_up())? {
+                    block @ Stmt::Block(_, _) => Expr::Stmt(Box::new(block.into())),
+                    stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
+                };
+                segments.push(expr);
+
+                // Make sure to parse the following as text
+                state.buffer.set(Some('`'));
+
+                match input.next().unwrap() {
+                    (Token::StringConstant(s), pos) => {
+                        if !s.is_empty() {
+                            segments.push(Expr::StringConstant(s.into(), pos));
+                        }
+                        // End the interpolated string if it is terminated by a back-tick.
+                        break;
+                    }
+                    (Token::InterpolatedString(s), pos) => {
+                        if !s.is_empty() {
+                            segments.push(Expr::StringConstant(s.into(), pos));
+                        }
+                    }
+                    (token, _) => unreachable!(
+                        "expected a string within an interpolated string literal, but gets {:?}",
+                        token
+                    ),
+                }
+            }
+
+            println!("Interpolated string: {:?}", segments);
+            Expr::InterpolatedString(Box::new(segments))
+        }
+
         // Array literal
         #[cfg(not(feature = "no_index"))]
         Token::LeftBracket => parse_array_literal(input, state, lib, settings.level_up())?,
@@ -1020,8 +1070,8 @@ fn parse_primary(
 
         // Identifier
         Token::Identifier(_) => {
-            let s = match input.next().unwrap().0 {
-                Token::Identifier(s) => s,
+            let s = match input.next().unwrap() {
+                (Token::Identifier(s), _) => s,
                 _ => unreachable!(),
             };
 
@@ -1067,8 +1117,8 @@ fn parse_primary(
 
         // Reserved keyword or symbol
         Token::Reserved(_) => {
-            let s = match input.next().unwrap().0 {
-                Token::Reserved(s) => s,
+            let s = match input.next().unwrap() {
+                (Token::Reserved(s), _) => s,
                 _ => unreachable!(),
             };
 
@@ -1101,14 +1151,10 @@ fn parse_primary(
             }
         }
 
-        Token::LexError(_) => {
-            let err = match input.next().unwrap().0 {
-                Token::LexError(err) => err,
-                _ => unreachable!(),
-            };
-
-            return Err(err.into_err(settings.pos));
-        }
+        Token::LexError(_) => match input.next().unwrap() {
+            (Token::LexError(err), _) => return Err(err.into_err(settings.pos)),
+            _ => unreachable!(),
+        },
 
         _ => {
             return Err(LexError::UnexpectedInput(token.syntax().to_string()).into_err(settings.pos))
@@ -1374,13 +1420,7 @@ fn make_assignment_stmt<'a>(
     let op_info = if op.is_empty() {
         None
     } else {
-        let op2 = &op[..op.len() - 1]; // extract operator without =
-
-        Some(OpAssignment {
-            hash_op_assign: calc_fn_hash(empty(), &op, 2),
-            hash_op: calc_fn_hash(empty(), op2, 2),
-            op,
-        })
+        Some(OpAssignment::new(op))
     };
 
     match &lhs {
@@ -1460,7 +1500,7 @@ fn parse_op_assignment_stmt(
     settings.pos = *token_pos;
 
     let op = match token {
-        Token::Equals => "".into(),
+        Token::Equals => "",
 
         Token::PlusAssign
         | Token::MinusAssign
@@ -1797,9 +1837,10 @@ fn parse_custom_syntax(
             // Add enough empty variable names to the stack.
             // Empty variable names act as a barrier so earlier variables will not be matched.
             // Variable searches stop at the first empty variable name.
+            let empty = state.get_identifier("");
             state.stack.resize(
                 state.stack.len() + delta as usize,
-                ("".into(), AccessMode::ReadWrite),
+                (empty, AccessMode::ReadWrite),
             );
         }
         delta if delta < 0 && state.stack.len() <= delta.abs() as usize => state.stack.clear(),
@@ -2502,6 +2543,7 @@ fn parse_stmt(
                 (Token::Fn, pos) => {
                     let mut new_state = ParseState::new(
                         state.engine,
+                        state.buffer.clone(),
                         #[cfg(not(feature = "unchecked"))]
                         state.max_function_expr_depth,
                         #[cfg(not(feature = "unchecked"))]
@@ -2930,18 +2972,11 @@ impl Engine {
     pub(crate) fn parse_global_expr(
         &self,
         input: &mut TokenStream,
+        state: &mut ParseState,
         scope: &Scope,
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
         let mut functions = Default::default();
-        let mut state = ParseState::new(
-            self,
-            #[cfg(not(feature = "unchecked"))]
-            NonZeroUsize::new(self.max_expr_depth()),
-            #[cfg(not(feature = "unchecked"))]
-            #[cfg(not(feature = "no_function"))]
-            NonZeroUsize::new(self.max_function_expr_depth()),
-        );
 
         let settings = ParseSettings {
             allow_if_expr: false,
@@ -2954,7 +2989,7 @@ impl Engine {
             level: 0,
             pos: Position::NONE,
         };
-        let expr = parse_expr(input, &mut state, &mut functions, settings)?;
+        let expr = parse_expr(input, state, &mut functions, settings)?;
 
         assert!(functions.is_empty());
 
@@ -2978,17 +3013,10 @@ impl Engine {
     fn parse_global_level(
         &self,
         input: &mut TokenStream,
+        state: &mut ParseState,
     ) -> Result<(Vec<Stmt>, Vec<Shared<ScriptFnDef>>), ParseError> {
         let mut statements = Vec::with_capacity(16);
         let mut functions = BTreeMap::new();
-        let mut state = ParseState::new(
-            self,
-            #[cfg(not(feature = "unchecked"))]
-            NonZeroUsize::new(self.max_expr_depth()),
-            #[cfg(not(feature = "unchecked"))]
-            #[cfg(not(feature = "no_function"))]
-            NonZeroUsize::new(self.max_function_expr_depth()),
-        );
 
         while !input.peek().unwrap().0.is_eof() {
             let settings = ParseSettings {
@@ -3003,7 +3031,7 @@ impl Engine {
                 pos: Position::NONE,
             };
 
-            let stmt = parse_stmt(input, &mut state, &mut functions, settings)?;
+            let stmt = parse_stmt(input, state, &mut functions, settings)?;
 
             if stmt.is_noop() {
                 continue;
@@ -3046,10 +3074,11 @@ impl Engine {
     pub(crate) fn parse(
         &self,
         input: &mut TokenStream,
+        state: &mut ParseState,
         scope: &Scope,
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let (statements, lib) = self.parse_global_level(input)?;
+        let (statements, lib) = self.parse_global_level(input, state)?;
 
         Ok(
             // Optimize AST
