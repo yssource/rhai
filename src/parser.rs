@@ -1056,7 +1056,6 @@ fn parse_primary(
                 }
             }
 
-            println!("Interpolated string: {:?}", segments);
             Expr::InterpolatedString(Box::new(segments))
         }
 

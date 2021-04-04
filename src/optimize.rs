@@ -616,7 +616,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             if let Stmt::Expr(e) = mem::take(&mut x.statements[0]) {
                 *expr = e;
             } else {
-                unreachable!();                
+                unreachable!();
             }
         }
         // { stmt; ... } - do not count promotion as dirty because it gets turned back into an array

@@ -140,6 +140,7 @@ fn main() {
 
     // Set a file module resolver without caching
     #[cfg(not(feature = "no_module"))]
+    #[cfg(not(feature = "no_std"))]
     {
         let mut resolver = rhai::module_resolvers::FileModuleResolver::new();
         resolver.enable_cache(false);

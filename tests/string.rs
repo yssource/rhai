@@ -367,5 +367,21 @@ fn test_string_interpolated() -> Result<(), Box<EvalAltResult>> {
         "hello 42 worlds!"
     );
 
+    assert_eq!(
+        engine.eval::<String>(
+            r#"
+                let x = 42;
+                let y = 123;
+                
+                `
+Undeniable logic:
+1) Hello, ${let w = `${x} world`; if x > 1 { w += "s" } w}!
+2) If ${y} > ${x} then it is ${y > x}!
+`
+            "#
+        )?,
+        "Undeniable logic:\n1) Hello, 42 worlds!\n2) If 123 > 42 then it is true!\n",
+    );
+
     Ok(())
 }

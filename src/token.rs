@@ -1,7 +1,5 @@
 //! Main module defining the lexer and parser.
 
-use std::iter::FusedIterator;
-
 use crate::engine::{
     Precedence, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
@@ -10,7 +8,7 @@ use crate::stdlib::{
     borrow::Cow,
     cell::Cell,
     char, fmt, format,
-    iter::Peekable,
+    iter::{FusedIterator, Peekable},
     num::NonZeroUsize,
     ops::{Add, AddAssign},
     str::{Chars, FromStr},

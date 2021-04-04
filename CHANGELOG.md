@@ -1,6 +1,8 @@
 Rhai Release Notes
 ==================
 
+This version adds string interpolation.
+
 Version 0.19.16
 ===============
 

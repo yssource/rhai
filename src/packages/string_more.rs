@@ -36,14 +36,6 @@ mod string_functions {
             format!("{}{}", string, s).into()
         }
     }
-    #[rhai_fn(name = "+=")]
-    pub fn append(ctx: NativeCallContext, string: &mut ImmutableString, mut item: Dynamic) {
-        let s = print_with_func(FUNC_TO_STRING, &ctx, &mut item);
-
-        if !s.is_empty() {
-            string.make_mut().push_str(&s);
-        }
-    }
     #[rhai_fn(name = "+", pure)]
     pub fn add_prepend(
         ctx: NativeCallContext,
@@ -59,16 +51,13 @@ mod string_functions {
             s.into()
         }
     }
-    #[rhai_fn(name = "+=")]
-    pub fn prepend(ctx: NativeCallContext, item: &mut Dynamic, string: &str) {
-        let mut s = print_with_func(FUNC_TO_STRING, &ctx, item);
 
-        if !string.is_empty() {
-            s.make_mut().push_str(string);
-        }
+    #[rhai_fn(name = "+", name = "append")]
+    pub fn add_append_str(string1: ImmutableString, string2: ImmutableString) -> ImmutableString {
+        string1 + string2
     }
 
-    #[rhai_fn(name = "+")]
+    #[rhai_fn(name = "+", name = "append")]
     pub fn add_append_unit(string: ImmutableString, _item: ()) -> ImmutableString {
         string
     }
@@ -76,8 +65,6 @@ mod string_functions {
     pub fn add_prepend_unit(_item: (), string: ImmutableString) -> ImmutableString {
         string
     }
-    #[rhai_fn(name = "+=")]
-    pub fn add_append_assign_unit(_string: &mut ImmutableString, _item: ()) {}
 
     #[rhai_fn(name = "len", get = "len")]
     pub fn len(string: &str) -> INT {
