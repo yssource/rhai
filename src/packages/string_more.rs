@@ -56,6 +56,10 @@ mod string_functions {
     pub fn add_append_str(string1: ImmutableString, string2: ImmutableString) -> ImmutableString {
         string1 + string2
     }
+    #[rhai_fn(name = "+", name = "append")]
+    pub fn add_append_char(string: ImmutableString, ch: char) -> ImmutableString {
+        string + ch
+    }
 
     #[rhai_fn(name = "+", name = "append")]
     pub fn add_append_unit(string: ImmutableString, _item: ()) -> ImmutableString {
