@@ -41,7 +41,7 @@ pub trait FuncArgs {
     ///
     /// let ast = engine.compile(r#"
     ///         fn hello(x, y, z) {
-    ///             if x { "hello " + y } else { y + z }
+    ///             if x { `hello ${y}` } else { y + z }
     ///         }
     /// "#)?;
     ///

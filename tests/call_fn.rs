@@ -81,7 +81,7 @@ fn test_call_fn_args() -> Result<(), Box<EvalAltResult>> {
     let ast = engine.compile(
         r#"
             fn hello(x, y, z) {
-                if x { "hello " + y } else { y + z }
+                if x { `hello ${y}` } else { y + z }
             }
         "#,
     )?;

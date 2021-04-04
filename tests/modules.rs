@@ -315,7 +315,7 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
         
             // Final variable values become constant module variable values
             foo = calc(foo);
-            hello = "hello, " + foo + " worlds!";
+            hello = `hello, ${foo} worlds!`;
 
             export
                 x as abc,

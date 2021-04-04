@@ -93,8 +93,8 @@ fn bench_parse_primes(bench: &mut Bencher) {
                 }
             }
             
-            print("Total " + total_primes_found + " primes.");
-            print("Run time = " + now.elapsed + " seconds.");
+            print(`Total ${total_primes_found} primes.`);
+            print(`Run time = ${now.elapsed} seconds.`);
         "#;
 
     let mut engine = Engine::new();

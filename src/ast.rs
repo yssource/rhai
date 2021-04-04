@@ -384,7 +384,7 @@ impl AST {
     ///             "#)?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { "hello" + n }
+    ///                 fn foo(n) { `hello${n}` }
     ///                 foo("!")
     ///             "#)?;
     ///
@@ -395,7 +395,7 @@ impl AST {
     ///
     /// // 'ast' is essentially:
     /// //
-    /// //    fn foo(n) { "hello" + n } // <- definition of first 'foo' is overwritten
+    /// //    fn foo(n) { `hello${n}` } // <- definition of first 'foo' is overwritten
     /// //    foo(1)                    // <- notice this will be "hello1" instead of 43,
     /// //                              //    but it is no longer the return value
     /// //    foo("!")                  // returns "hello!"
@@ -436,7 +436,7 @@ impl AST {
     ///                 "#)?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { "hello" + n }
+    ///                 fn foo(n) { `hello${n}` }
     ///                 foo("!")
     ///             "#)?;
     ///
@@ -447,7 +447,7 @@ impl AST {
     ///
     /// // 'ast1' is essentially:
     /// //
-    /// //    fn foo(n) { "hello" + n } // <- definition of first 'foo' is overwritten
+    /// //    fn foo(n) { `hello${n}` } // <- definition of first 'foo' is overwritten
     /// //    foo(1)                    // <- notice this will be "hello1" instead of 43,
     /// //                              //    but it is no longer the return value
     /// //    foo("!")                  // returns "hello!"
@@ -490,7 +490,7 @@ impl AST {
     ///             "#)?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { "hello" + n }
+    ///                 fn foo(n) { `hello${n}` }
     ///                 fn error() { 0 }
     ///                 foo("!")
     ///             "#)?;
@@ -574,7 +574,7 @@ impl AST {
     ///                 "#)?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { "hello" + n }
+    ///                 fn foo(n) { `hello${n}` }
     ///                 fn error() { 0 }
     ///                 foo("!")
     ///             "#)?;
