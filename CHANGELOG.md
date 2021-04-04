@@ -1,6 +1,8 @@
 Rhai Release Notes
 ==================
 
+This version adds string interpolation.
+
 Version 0.19.16
 ===============
 
@@ -19,6 +21,7 @@ Breaking changes
 New features
 ------------
 
+* String interpolation support is added via the `` `... ${`` ... ``} ...` `` syntax.
 * `FileModuleResolver` resolves relative paths under the parent path (i.e. the path holding the script that does the loading). This allows seamless cross-loading of scripts from a directory hierarchy instead of having all relative paths load from the current working directory.
 
 

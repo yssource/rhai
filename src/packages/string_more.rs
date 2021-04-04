@@ -23,9 +23,18 @@ mod string_functions {
     use crate::ImmutableString;
 
     #[rhai_fn(name = "+", name = "append")]
-    pub fn add_append(ctx: NativeCallContext, string: &str, mut item: Dynamic) -> ImmutableString {
+    pub fn add_append(
+        ctx: NativeCallContext,
+        string: ImmutableString,
+        mut item: Dynamic,
+    ) -> ImmutableString {
         let s = print_with_func(FUNC_TO_STRING, &ctx, &mut item);
-        format!("{}{}", string, s).into()
+
+        if s.is_empty() {
+            string
+        } else {
+            format!("{}{}", string, s).into()
+        }
     }
     #[rhai_fn(name = "+", pure)]
     pub fn add_prepend(
@@ -33,11 +42,22 @@ mod string_functions {
         item: &mut Dynamic,
         string: &str,
     ) -> ImmutableString {
-        let s = print_with_func(FUNC_TO_STRING, &ctx, item);
-        format!("{}{}", s, string).into()
+        let mut s = print_with_func(FUNC_TO_STRING, &ctx, item);
+
+        if string.is_empty() {
+            s
+        } else {
+            s.make_mut().push_str(string);
+            s.into()
+        }
     }
 
-    #[rhai_fn(name = "+")]
+    #[rhai_fn(name = "+", name = "append")]
+    pub fn add_append_str(string1: ImmutableString, string2: ImmutableString) -> ImmutableString {
+        string1 + string2
+    }
+
+    #[rhai_fn(name = "+", name = "append")]
     pub fn add_append_unit(string: ImmutableString, _item: ()) -> ImmutableString {
         string
     }
@@ -45,8 +65,6 @@ mod string_functions {
     pub fn add_prepend_unit(_item: (), string: ImmutableString) -> ImmutableString {
         string
     }
-    #[rhai_fn(name = "+=")]
-    pub fn add_append_assign_unit(_string: &mut ImmutableString, _item: ()) {}
 
     #[rhai_fn(name = "len", get = "len")]
     pub fn len(string: &str) -> INT {
@@ -137,13 +155,18 @@ mod string_functions {
             .unwrap_or(-1 as INT)
     }
 
-    pub fn sub_string(string: &str, start: INT, len: INT) -> ImmutableString {
+    pub fn sub_string(
+        ctx: NativeCallContext,
+        string: &str,
+        start: INT,
+        len: INT,
+    ) -> ImmutableString {
         let offset = if string.is_empty() || len <= 0 {
-            return "".to_string().into();
+            return ctx.engine().empty_string.clone().into();
         } else if start < 0 {
             0
         } else if start as usize >= string.chars().count() {
-            return "".to_string().into();
+            return ctx.engine().empty_string.clone().into();
         } else {
             start as usize
         };
@@ -165,9 +188,13 @@ mod string_functions {
             .into()
     }
     #[rhai_fn(name = "sub_string")]
-    pub fn sub_string_starting_from(string: &str, start: INT) -> ImmutableString {
+    pub fn sub_string_starting_from(
+        ctx: NativeCallContext,
+        string: &str,
+        start: INT,
+    ) -> ImmutableString {
         let len = string.len() as INT;
-        sub_string(string, start, len)
+        sub_string(ctx, string, start, len)
     }
 
     #[rhai_fn(name = "crop")]
@@ -341,9 +368,9 @@ mod string_functions {
             string.chars().map(Into::<Dynamic>::into).collect()
         }
         #[rhai_fn(name = "split")]
-        pub fn split_at(string: ImmutableString, start: INT) -> Array {
+        pub fn split_at(ctx: NativeCallContext, string: ImmutableString, start: INT) -> Array {
             if start <= 0 {
-                vec!["".into(), string.into()]
+                vec![ctx.engine().empty_string.clone().into(), string.into()]
             } else {
                 let prefix: String = string.chars().take(start as usize).collect();
                 let prefix_len = prefix.len();

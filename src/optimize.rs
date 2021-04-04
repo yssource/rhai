@@ -609,6 +609,16 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
     match expr {
         // {}
         Expr::Stmt(x) if x.statements.is_empty() => { state.set_dirty(); *expr = Expr::Unit(x.pos) }
+        // { Stmt(Expr) }
+        Expr::Stmt(x) if x.statements.len() == 1 && x.statements[0].is_pure() && matches!(x.statements[0], Stmt::Expr(_)) =>
+        {
+            state.set_dirty();
+            if let Stmt::Expr(e) = mem::take(&mut x.statements[0]) {
+                *expr = e;
+            } else {
+                unreachable!();
+            }
+        }
         // { stmt; ... } - do not count promotion as dirty because it gets turned back into an array
         Expr::Stmt(x) => x.statements = optimize_stmt_block(mem::take(&mut x.statements).into_vec(), state, true, true, false).into(),
         // lhs.rhs
@@ -664,6 +674,59 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             // lhs[rhs]
             (lhs, rhs) => { optimize_expr(lhs, state); optimize_expr(rhs, state); }
         },
+        // ``
+        Expr::InterpolatedString(x) if x.is_empty() => {
+            state.set_dirty();
+            *expr = Expr::StringConstant(state.engine.empty_string.clone(), Position::NONE);
+        }
+        // `...`
+        Expr::InterpolatedString(x) if x.len() == 1 && matches!(x[0], Expr::StringConstant(_, _)) => {
+            state.set_dirty();
+            *expr = mem::take(&mut x[0]);
+        }
+        // `... ${ ... } ...`
+        Expr::InterpolatedString(x) => {
+            x.iter_mut().for_each(|expr| optimize_expr(expr, state));
+
+            let mut n= 0;
+
+            // Merge consecutive strings
+            while n < x.len()-1 {
+                match (mem::take(&mut x[n]), mem::take(&mut x[n+1])) {
+                    (Expr::StringConstant(mut s1, pos), Expr::StringConstant(s2, _)) => {
+                        s1 += s2;
+                        x[n] = Expr::StringConstant(s1, pos);
+                        x.remove(n+1);
+                        state.set_dirty();
+                    }
+                    (expr1, Expr::Unit(_))  => {
+                        x[n] = expr1;
+                        x.remove(n+1);
+                        state.set_dirty();
+                    }
+                    (Expr::Unit(_), expr2) => {
+                        x[n+1] = expr2;
+                        x.remove(n);
+                        state.set_dirty();
+                    }
+                    (expr1, Expr::StringConstant(s, _)) if s.is_empty() => {
+                        x[n] = expr1;
+                        x.remove(n+1);
+                        state.set_dirty();
+                    }
+                    (Expr::StringConstant(s, _), expr2) if s.is_empty()=> {
+                        x[n+1] = expr2;
+                        x.remove(n);
+                        state.set_dirty();
+                    }
+                    (expr1, expr2) => {
+                        x[n] = expr1;
+                        x[n+1] = expr2;
+                        n += 1;
+                    }
+                }
+            }
+        }
         // [ constant .. ]
         #[cfg(not(feature = "no_index"))]
         Expr::Array(_, _) if expr.is_constant() => {

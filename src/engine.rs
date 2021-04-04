@@ -25,8 +25,8 @@ use crate::stdlib::{
 use crate::syntax::CustomSyntax;
 use crate::utils::get_hasher;
 use crate::{
-    Dynamic, EvalAltResult, FnPtr, Identifier, Module, Position, RhaiResult, Scope, Shared,
-    StaticVec,
+    Dynamic, EvalAltResult, FnPtr, Identifier, ImmutableString, Module, Position, RhaiResult,
+    Scope, Shared, StaticVec,
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -199,6 +199,9 @@ pub const FN_ANONYMOUS: &str = "anon$";
 
 /// Standard equality comparison operator.
 pub const OP_EQUALS: &str = "==";
+
+/// Standard concatenation operator.
+pub const OP_CONCAT: &str = "+=";
 
 /// Standard method function for containment testing.
 ///
@@ -410,7 +413,7 @@ impl<'a> Target<'a> {
             Self::Value(_) => panic!("cannot update a value"),
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(s, index, _) => {
-                let s = &mut *s.write_lock::<crate::ImmutableString>().unwrap();
+                let s = &mut *s.write_lock::<ImmutableString>().unwrap();
 
                 // Replace the character at the specified index position
                 let new_ch = new_val.as_char().map_err(|err| {
@@ -591,7 +594,7 @@ pub struct Limits {
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     pub max_modules: usize,
-    /// Maximum length of a [string][crate::ImmutableString].
+    /// Maximum length of a [string][ImmutableString].
     pub max_string_size: Option<NonZeroUsize>,
     /// Maximum length of an [array][Array].
     ///
@@ -714,6 +717,9 @@ pub struct Engine {
     /// A map mapping type names to pretty-print names.
     pub(crate) type_names: BTreeMap<Identifier, Identifier>,
 
+    /// An empty [`ImmutableString`] for cloning purposes.
+    pub(crate) empty_string: ImmutableString,
+
     /// A set of symbols to disable.
     pub(crate) disabled_symbols: BTreeSet<Identifier>,
     /// A map containing custom keywords and precedence to recognize.
@@ -815,6 +821,7 @@ impl Engine {
             module_resolver: Box::new(crate::module::resolvers::DummyModuleResolver::new()),
 
             type_names: Default::default(),
+            empty_string: Default::default(),
             disabled_symbols: Default::default(),
             custom_keywords: Default::default(),
             custom_syntax: Default::default(),
@@ -875,6 +882,7 @@ impl Engine {
             module_resolver: Box::new(crate::module::resolvers::DummyModuleResolver::new()),
 
             type_names: Default::default(),
+            empty_string: Default::default(),
             disabled_symbols: Default::default(),
             custom_keywords: Default::default(),
             custom_syntax: Default::default(),
@@ -1587,8 +1595,8 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(map, _)) => {
                 // val_map[idx]
-                let index = &*idx.read_lock::<crate::ImmutableString>().ok_or_else(|| {
-                    self.make_type_mismatch_err::<crate::ImmutableString>(idx.type_name(), idx_pos)
+                let index = &*idx.read_lock::<ImmutableString>().ok_or_else(|| {
+                    self.make_type_mismatch_err::<ImmutableString>(idx.type_name(), idx_pos)
                 })?;
 
                 if _create && !map.contains_key(index.as_str()) {
@@ -1698,6 +1706,34 @@ impl Engine {
                 self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
             }
 
+            // `... ${...} ...`
+            Expr::InterpolatedString(x) => {
+                let mut pos = expr.position();
+                let mut result: Dynamic = self.empty_string.clone().into();
+
+                for expr in x.iter() {
+                    let item = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+                    self.eval_op_assignment(
+                        mods,
+                        state,
+                        lib,
+                        Some(OpAssignment::new(OP_CONCAT)),
+                        pos,
+                        (&mut result).into(),
+                        item,
+                        expr.position(),
+                    )?;
+                    pos = expr.position();
+                }
+
+                assert!(
+                    result.is::<ImmutableString>(),
+                    "interpolated string must be a string"
+                );
+
+                Ok(result)
+            }
+
             #[cfg(not(feature = "no_index"))]
             Expr::Array(x, _) => {
                 let mut arr = Array::with_capacity(x.len());
@@ -1707,7 +1743,7 @@ impl Engine {
                             .flatten(),
                     );
                 }
-                Ok(Dynamic(Union::Array(Box::new(arr), AccessMode::ReadWrite)))
+                Ok(arr.into())
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -1718,7 +1754,7 @@ impl Engine {
                         .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                         .flatten();
                 }
-                Ok(Dynamic(Union::Map(Box::new(map), AccessMode::ReadWrite)))
+                Ok(map.into())
             }
 
             // Normal function call
@@ -2445,7 +2481,7 @@ impl Engine {
 
                 if let Some(path) = self
                     .eval_expr(scope, mods, state, lib, this_ptr, &expr, level)?
-                    .try_cast::<crate::ImmutableString>()
+                    .try_cast::<ImmutableString>()
                 {
                     use crate::ModuleResolver;
 
@@ -2481,7 +2517,7 @@ impl Engine {
 
                     Ok(Dynamic::UNIT)
                 } else {
-                    Err(self.make_type_mismatch_err::<crate::ImmutableString>("", expr.position()))
+                    Err(self.make_type_mismatch_err::<ImmutableString>("", expr.position()))
                 }
             }
 
