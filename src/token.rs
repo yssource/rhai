@@ -9,6 +9,7 @@ use crate::stdlib::{
     cell::Cell,
     char, fmt, format,
     iter::{FusedIterator, Peekable},
+    mem,
     num::NonZeroUsize,
     ops::{Add, AddAssign},
     rc::Rc,
@@ -839,6 +840,8 @@ pub struct TokenizeState {
     pub include_comments: bool,
     /// Disable doc-comments?
     pub disable_doc_comments: bool,
+    /// Is the current tokenizer position within the text stream of an interpolated string?
+    pub is_within_text_terminated_by: Option<char>,
 }
 
 /// _(INTERNALS)_ Trait that encapsulates a peekable character input stream.
@@ -874,6 +877,7 @@ pub fn parse_string_literal(
     termination_char: char,
     continuation: bool,
     verbatim: bool,
+    skip_first_new_line: bool,
     allow_interpolation: bool,
 ) -> Result<(String, bool), (LexError, Position)> {
     let mut result: smallvec::SmallVec<[char; 16]> = Default::default();
@@ -882,6 +886,25 @@ pub fn parse_string_literal(
     let start = *pos;
     let mut skip_whitespace_until = 0;
     let mut interpolated = false;
+
+    if skip_first_new_line {
+        // Start from the next line if at the end of line
+        match stream.peek_next() {
+            // `\r - start from next line
+            Some('\r') => {
+                eat_next(stream, pos);
+                // `\r\n
+                if stream.peek_next().map(|ch| ch == '\n').unwrap_or(false) {
+                    eat_next(stream, pos);
+                }
+            }
+            // `\n - start from next line
+            Some('\n') => {
+                eat_next(stream, pos);
+            }
+            _ => (),
+        }
+    }
 
     loop {
         let next_char = stream.get_next().ok_or((LERR::UnterminatedString, start))?;
@@ -1163,6 +1186,22 @@ fn get_next_token_inner(
         }
     }
 
+    // Within text?
+    if let Some(ch) = mem::take(&mut state.is_within_text_terminated_by) {
+        let start_pos = *pos;
+
+        return parse_string_literal(stream, state, pos, ch, false, true, true, true).map_or_else(
+            |(err, err_pos)| Some((Token::LexError(err), err_pos)),
+            |(result, interpolated)| {
+                if interpolated {
+                    Some((Token::InterpolatedString(result), start_pos))
+                } else {
+                    Some((Token::StringConstant(result), start_pos))
+                }
+            },
+        );
+    }
+
     let mut negated = false;
 
     while let Some(c) = stream.get_next() {
@@ -1327,41 +1366,25 @@ fn get_next_token_inner(
 
             // " - string literal
             ('"', _) => {
-                return parse_string_literal(stream, state, pos, c, true, false, false)
+                return parse_string_literal(stream, state, pos, c, true, false, false, false)
                     .map_or_else(
-                        |err| Some((Token::LexError(err.0), err.1)),
+                        |(err, err_pos)| Some((Token::LexError(err), err_pos)),
                         |(result, _)| Some((Token::StringConstant(result), start_pos)),
                     );
             }
             // ` - string literal
             ('`', _) => {
-                // Start from the next line if ` at the end of line
-                match stream.peek_next() {
-                    // `\r - start from next line
-                    Some('\r') => {
-                        eat_next(stream, pos);
-                        // `\r\n
-                        if stream.peek_next().map(|ch| ch == '\n').unwrap_or(false) {
-                            eat_next(stream, pos);
-                        }
-                    }
-                    // `\n - start from next line
-                    Some('\n') => {
-                        eat_next(stream, pos);
-                    }
-                    _ => (),
-                }
-
-                return parse_string_literal(stream, state, pos, c, false, true, true).map_or_else(
-                    |err| Some((Token::LexError(err.0), err.1)),
-                    |(result, interpolated)| {
-                        if interpolated {
-                            Some((Token::InterpolatedString(result), start_pos))
-                        } else {
-                            Some((Token::StringConstant(result), start_pos))
-                        }
-                    },
-                );
+                return parse_string_literal(stream, state, pos, c, false, true, true, true)
+                    .map_or_else(
+                        |(err, err_pos)| Some((Token::LexError(err), err_pos)),
+                        |(result, interpolated)| {
+                            if interpolated {
+                                Some((Token::InterpolatedString(result), start_pos))
+                            } else {
+                                Some((Token::StringConstant(result), start_pos))
+                            }
+                        },
+                    );
             }
 
             // ' - character literal
@@ -1373,19 +1396,20 @@ fn get_next_token_inner(
             }
             ('\'', _) => {
                 return Some(
-                    parse_string_literal(stream, state, pos, c, false, false, false).map_or_else(
-                        |err| (Token::LexError(err.0), err.1),
-                        |(result, _)| {
-                            let mut chars = result.chars();
-                            let first = chars.next().unwrap();
+                    parse_string_literal(stream, state, pos, c, false, false, false, false)
+                        .map_or_else(
+                            |(err, err_pos)| (Token::LexError(err), err_pos),
+                            |(result, _)| {
+                                let mut chars = result.chars();
+                                let first = chars.next().unwrap();
 
-                            if chars.next().is_some() {
-                                (Token::LexError(LERR::MalformedChar(result)), start_pos)
-                            } else {
-                                (Token::CharConstant(first), start_pos)
-                            }
-                        },
-                    ),
+                                if chars.next().is_some() {
+                                    (Token::LexError(LERR::MalformedChar(result)), start_pos)
+                                } else {
+                                    (Token::CharConstant(first), start_pos)
+                                }
+                            },
+                        ),
                 )
             }
 
@@ -1870,10 +1894,8 @@ impl<'a> Iterator for TokenIterator<'a> {
         let mut control = self.tokenizer_control.get();
 
         if control.is_within_text {
-            // Push a back-tick into the stream
-            self.stream.unget('`');
-            // Rewind the current position by one character
-            self.pos.rewind();
+            // Switch to text mode terminated by back-tick
+            self.state.is_within_text_terminated_by = Some('`');
             // Reset it
             control.is_within_text = false;
             self.tokenizer_control.set(control);
@@ -2004,6 +2026,7 @@ impl Engine {
                     end_with_none: false,
                     include_comments: false,
                     disable_doc_comments: self.disable_doc_comments,
+                    is_within_text_terminated_by: None,
                 },
                 pos: Position::new(1, 0),
                 tokenizer_control: buffer,
