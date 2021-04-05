@@ -710,6 +710,7 @@ fn parse_map_literal(
                 }
                 (s, pos)
             }
+            (Token::InterpolatedString(_), pos) => return Err(PERR::PropertyExpected.into_err(pos)),
             (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                 return Err(PERR::Reserved(s).into_err(pos));
             }
