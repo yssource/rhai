@@ -546,19 +546,21 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         Stmt::Import(expr, _, _) => optimize_expr(expr, state),
         // { block }
         Stmt::Block(statements, pos) => {
-            let block = mem::take(statements);
-            *stmt = match optimize_stmt_block(block, state, preserve_result, true, false) {
-                statements if statements.is_empty() => {
+            let mut block =
+                optimize_stmt_block(mem::take(statements), state, preserve_result, true, false);
+
+            match block.as_mut_slice() {
+                [] => {
                     state.set_dirty();
-                    Stmt::Noop(*pos)
+                    *stmt = Stmt::Noop(*pos);
                 }
                 // Only one statement - promote
-                mut statements if statements.len() == 1 => {
+                [s] => {
                     state.set_dirty();
-                    statements.pop().unwrap()
+                    *stmt = mem::take(s);
                 }
-                statements => Stmt::Block(statements, *pos),
-            };
+                _ => *stmt = Stmt::Block(block, *pos),
+            }
         }
         // try { pure try_block } catch ( var ) { catch_block } -> try_block
         Stmt::TryCatch(x, _, _) if x.0.statements.iter().all(Stmt::is_pure) => {
@@ -609,18 +611,16 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
     match expr {
         // {}
         Expr::Stmt(x) if x.statements.is_empty() => { state.set_dirty(); *expr = Expr::Unit(x.pos) }
-        // { Stmt(Expr) }
-        Expr::Stmt(x) if x.statements.len() == 1 && x.statements[0].is_pure() && matches!(x.statements[0], Stmt::Expr(_)) =>
-        {
-            state.set_dirty();
-            if let Stmt::Expr(e) = mem::take(&mut x.statements[0]) {
-                *expr = e;
-            } else {
-                unreachable!();
+        // { stmt; ... } - do not count promotion as dirty because it gets turned back into an array
+        Expr::Stmt(x) => {
+            x.statements = optimize_stmt_block(mem::take(&mut x.statements).into_vec(), state, true, true, false).into();
+
+            // { Stmt(Expr) } - promote
+            match x.statements.as_mut() {
+                [ Stmt::Expr(e) ] => { state.set_dirty(); *expr = mem::take(e); }
+                _ => ()
             }
         }
-        // { stmt; ... } - do not count promotion as dirty because it gets turned back into an array
-        Expr::Stmt(x) => x.statements = optimize_stmt_block(mem::take(&mut x.statements).into_vec(), state, true, true, false).into(),
         // lhs.rhs
         #[cfg(not(feature = "no_object"))]
         Expr::Dot(x, _) => match (&mut x.lhs, &mut x.rhs) {
