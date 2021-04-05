@@ -1293,10 +1293,7 @@ impl Engine {
             // If the first argument is a variable, and there is no curried arguments,
             // convert to method-call style in order to leverage potential &mut first argument and
             // avoid cloning the value
-            if curry.is_empty()
-                && !args_expr.is_empty()
-                && args_expr[0].get_variable_access(false).is_some()
-            {
+            if curry.is_empty() && !args_expr.is_empty() && args_expr[0].is_variable_access(false) {
                 // func(x, ...) -> x.func(...)
                 arg_values = args_expr
                     .iter()
@@ -1378,7 +1375,7 @@ impl Engine {
             // See if the first argument is a variable (not namespace-qualified).
             // If so, convert to method-call style in order to leverage potential
             // &mut first argument and avoid cloning the value
-            if !args_expr.is_empty() && args_expr[0].get_variable_access(true).is_some() {
+            if !args_expr.is_empty() && args_expr[0].is_variable_access(true) {
                 // func(x, ...) -> x.func(...)
                 arg_values = args_expr
                     .iter()

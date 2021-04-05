@@ -959,14 +959,14 @@ impl Engine {
         expr: &Expr,
     ) -> Result<(Target<'s>, Position), Box<EvalAltResult>> {
         match expr {
-            Expr::Variable(Some(_), _) => {
+            Expr::Variable(Some(_), _, _) => {
                 self.search_scope_only(scope, mods, state, lib, this_ptr, expr)
             }
-            Expr::Variable(None, v) => match v.as_ref() {
+            Expr::Variable(None, var_pos, v) => match v.as_ref() {
                 // Normal variable access
                 (_, None, _) => self.search_scope_only(scope, mods, state, lib, this_ptr, expr),
                 // Qualified variable
-                (_, Some((hash_var, modules)), Ident { name, pos, .. }) => {
+                (_, Some((hash_var, modules)), var_name) => {
                     let module = self.search_imports(mods, state, modules).ok_or_else(|| {
                         EvalAltResult::ErrorModuleNotFound(
                             modules[0].name.to_string(),
@@ -976,17 +976,17 @@ impl Engine {
                     let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
                         match *err {
                             EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
-                                *err_name = format!("{}{}", modules, name);
+                                *err_name = format!("{}{}", modules, var_name);
                             }
                             _ => (),
                         }
-                        err.fill_position(*pos)
+                        err.fill_position(*var_pos)
                     })?;
 
                     // Module variables are constant
                     let mut target = target.clone();
                     target.set_access_mode(AccessMode::ReadOnly);
-                    Ok((target.into(), *pos))
+                    Ok((target.into(), *var_pos))
                 }
             },
             _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
@@ -1003,28 +1003,21 @@ impl Engine {
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
     ) -> Result<(Target<'s>, Position), Box<EvalAltResult>> {
-        let (short_index, (index, _, Ident { name, pos, .. })) = match expr {
-            Expr::Variable(i, v) => (i, v.as_ref()),
+        // Make sure that the pointer indirection is taken only when absolutely necessary.
+
+        let (index, var_pos) = match expr {
+            // Check if the variable is `this`
+            Expr::Variable(None, pos, v) if v.0.is_none() && v.2 == KEYWORD_THIS => {
+                return if let Some(val) = this_ptr {
+                    Ok(((*val).into(), *pos))
+                } else {
+                    EvalAltResult::ErrorUnboundThis(*pos).into()
+                }
+            }
+            _ if state.always_search => (0, expr.position()),
+            Expr::Variable(Some(i), pos, _) => (i.get() as usize, *pos),
+            Expr::Variable(None, pos, v) => (v.0.map(NonZeroUsize::get).unwrap_or(0), *pos),
             _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
-        };
-
-        // Check if the variable is `this`
-        if *name == KEYWORD_THIS {
-            return if let Some(val) = this_ptr {
-                Ok(((*val).into(), *pos))
-            } else {
-                EvalAltResult::ErrorUnboundThis(*pos).into()
-            };
-        }
-
-        // Check if it is directly indexed
-        let index = if state.always_search {
-            0
-        } else {
-            short_index.map_or_else(
-                || index.map(NonZeroUsize::get).unwrap_or(0),
-                |x| x.get() as usize,
-            )
         };
 
         // Check the variable resolver, if any
@@ -1039,10 +1032,11 @@ impl Engine {
                 level: 0,
             };
             if let Some(mut result) =
-                resolve_var(name, index, &context).map_err(|err| err.fill_position(*pos))?
+                resolve_var(expr.get_variable_name(true).unwrap(), index, &context)
+                    .map_err(|err| err.fill_position(var_pos))?
             {
                 result.set_access_mode(AccessMode::ReadOnly);
-                return Ok((result.into(), *pos));
+                return Ok((result.into(), var_pos));
             }
         }
 
@@ -1050,15 +1044,16 @@ impl Engine {
             scope.len() - index
         } else {
             // Find the variable in the scope
+            let var_name = expr.get_variable_name(true).unwrap();
             scope
-                .get_index(name)
-                .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos))?
+                .get_index(var_name)
+                .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(var_name.to_string(), var_pos))?
                 .0
         };
 
         let val = scope.get_mut_by_index(index);
 
-        Ok((val.into(), *pos))
+        Ok((val.into(), var_pos))
     }
 
     /// Chain-evaluate a dot/index chain.
@@ -1410,13 +1405,7 @@ impl Engine {
 
         match lhs {
             // id.??? or id[???]
-            Expr::Variable(_, x) => {
-                let Ident {
-                    name: var_name,
-                    pos: var_pos,
-                    ..
-                } = &x.2;
-
+            Expr::Variable(_, var_pos, x) => {
                 self.inc_operations(state, *var_pos)?;
 
                 let (target, pos) =
@@ -1424,8 +1413,7 @@ impl Engine {
 
                 // Constants cannot be modified
                 if target.as_ref().is_read_only() && new_val.is_some() {
-                    return EvalAltResult::ErrorAssignmentToConstant(var_name.to_string(), pos)
-                        .into();
+                    return EvalAltResult::ErrorAssignmentToConstant(x.2.to_string(), pos).into();
                 }
 
                 let obj_ptr = &mut target.into();
@@ -1688,11 +1676,11 @@ impl Engine {
             Expr::CharConstant(x, _) => Ok((*x).into()),
             Expr::FnPointer(x, _) => Ok(FnPtr::new_unchecked(x.clone(), Default::default()).into()),
 
-            Expr::Variable(None, x) if x.0.is_none() && (x.2).name == KEYWORD_THIS => this_ptr
+            Expr::Variable(None, var_pos, x) if x.0.is_none() && x.2 == KEYWORD_THIS => this_ptr
                 .as_deref()
                 .cloned()
-                .ok_or_else(|| EvalAltResult::ErrorUnboundThis((x.2).pos).into()),
-            Expr::Variable(_, _) => self
+                .ok_or_else(|| EvalAltResult::ErrorUnboundThis(*var_pos).into()),
+            Expr::Variable(_, _, _) => self
                 .search_namespace(scope, mods, state, lib, this_ptr, expr)
                 .map(|(val, _)| val.take_or_clone()),
 
@@ -2019,7 +2007,7 @@ impl Engine {
                 .flatten()),
 
             // var op= rhs
-            Stmt::Assignment(x, op_pos) if x.0.get_variable_access(false).is_some() => {
+            Stmt::Assignment(x, op_pos) if x.0.is_variable_access(false) => {
                 let (lhs_expr, op_info, rhs_expr) = x.as_ref();
                 let rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
@@ -2029,7 +2017,7 @@ impl Engine {
 
                 if !lhs_ptr.is_ref() {
                     return EvalAltResult::ErrorAssignmentToConstant(
-                        lhs_expr.get_variable_access(false).unwrap().to_string(),
+                        lhs_expr.get_variable_name(false).unwrap().to_string(),
                         pos,
                     )
                     .into();
@@ -2040,7 +2028,7 @@ impl Engine {
                 if lhs_ptr.as_ref().is_read_only() {
                     // Assignment to constant variable
                     EvalAltResult::ErrorAssignmentToConstant(
-                        lhs_expr.get_variable_access(false).unwrap().to_string(),
+                        lhs_expr.get_variable_name(false).unwrap().to_string(),
                         pos,
                     )
                     .into()
@@ -2070,7 +2058,7 @@ impl Engine {
                 // Must be either `var[index] op= val` or `var.prop op= val`
                 match lhs_expr {
                     // name op= rhs (handled above)
-                    Expr::Variable(_, _) => {
+                    Expr::Variable(_, _, _) => {
                         unreachable!("Expr::Variable case should already been handled")
                     }
                     // idx_lhs[idx_expr] op= rhs

@@ -385,7 +385,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
     match stmt {
         // expr op= expr
         Stmt::Assignment(x, _) => match x.0 {
-            Expr::Variable(_, _) => optimize_expr(&mut x.2, state),
+            Expr::Variable(_, _, _) => optimize_expr(&mut x.2, state),
             _ => {
                 optimize_expr(&mut x.0, state);
                 optimize_expr(&mut x.2, state);
@@ -635,7 +635,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                             .unwrap_or_else(|| Expr::Unit(*pos));
             }
             // var.rhs
-            (Expr::Variable(_, _), rhs) => optimize_expr(rhs, state),
+            (Expr::Variable(_, _, _), rhs) => optimize_expr(rhs, state),
             // lhs.rhs
             (lhs, rhs) => { optimize_expr(lhs, state); optimize_expr(rhs, state); }
         }
@@ -670,7 +670,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                 *expr = Expr::CharConstant(s.chars().nth(*i as usize).unwrap(), *pos);
             }
             // var[rhs]
-            (Expr::Variable(_, _), rhs) => optimize_expr(rhs, state),
+            (Expr::Variable(_, _, _), rhs) => optimize_expr(rhs, state),
             // lhs[rhs]
             (lhs, rhs) => { optimize_expr(lhs, state); optimize_expr(rhs, state); }
         },
@@ -901,12 +901,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         }
 
         // constant-name
-        Expr::Variable(_, x) if x.1.is_none() && state.find_constant(&x.2.name).is_some() => {
+        Expr::Variable(_, pos, x) if x.1.is_none() && state.find_constant(&x.2).is_some() => {
             state.set_dirty();
 
             // Replace constant with value
-            let mut result = state.find_constant(&x.2.name).unwrap().clone();
-            result.set_position(x.2.pos);
+            let mut result = state.find_constant(&x.2).unwrap().clone();
+            result.set_position(*pos);
             *expr = result;
         }
 

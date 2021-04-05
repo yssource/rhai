@@ -1574,14 +1574,19 @@ pub enum Expr {
     ),
     /// ()
     Unit(Position),
-    /// Variable access - optional short index, (optional index, optional (hash, modules), variable name)
+    /// Variable access - optional short index, position, (optional index, optional (hash, modules), variable name)
     ///
     /// The short index is [`u8`] which is used when the index is <= 255, which should be the vast
     /// majority of cases (unless there are more than 255 variables defined!).
     /// This is to avoid reading a pointer redirection during each variable access.
     Variable(
         Option<NonZeroU8>,
-        Box<(Option<NonZeroUsize>, Option<(u64, NamespaceRef)>, Ident)>,
+        Position,
+        Box<(
+            Option<NonZeroUsize>,
+            Option<(u64, NamespaceRef)>,
+            Identifier,
+        )>,
     ),
     /// Property access - ((getter, hash), (setter, hash), prop)
     Property(Box<((Identifier, u64), (Identifier, u64), Ident)>),
@@ -1647,11 +1652,19 @@ impl Expr {
             _ => return None,
         })
     }
+    /// Is the expression a simple variable access?
+    #[inline(always)]
+    pub(crate) fn is_variable_access(&self, non_qualified: bool) -> bool {
+        match self {
+            Self::Variable(_, _, x) => !non_qualified || x.1.is_none(),
+            _ => false,
+        }
+    }
     /// Return the variable name if the expression a simple variable access.
     #[inline(always)]
-    pub(crate) fn get_variable_access(&self, non_qualified: bool) -> Option<&str> {
+    pub(crate) fn get_variable_name(&self, non_qualified: bool) -> Option<&str> {
         match self {
-            Self::Variable(_, x) if !non_qualified || x.1.is_none() => Some((x.2).name.as_str()),
+            Self::Variable(_, _, x) if !non_qualified || x.1.is_none() => Some(x.2.as_str()),
             _ => None,
         }
     }
@@ -1673,7 +1686,7 @@ impl Expr {
             Self::Map(_, pos) => *pos,
             Self::Property(x) => (x.2).pos,
             Self::Stmt(x) => x.pos,
-            Self::Variable(_, x) => (x.2).pos,
+            Self::Variable(_, pos, _) => *pos,
             Self::FnCall(_, pos) => *pos,
 
             Self::And(x, _) | Self::Or(x, _) => x.lhs.position(),
@@ -1703,7 +1716,7 @@ impl Expr {
             Self::FnPointer(_, pos) => *pos = new_pos,
             Self::Array(_, pos) => *pos = new_pos,
             Self::Map(_, pos) => *pos = new_pos,
-            Self::Variable(_, x) => (x.2).pos = new_pos,
+            Self::Variable(_, pos, _) => *pos = new_pos,
             Self::Property(x) => (x.2).pos = new_pos,
             Self::Stmt(x) => x.pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
@@ -1731,7 +1744,7 @@ impl Expr {
 
             Self::Stmt(x) => x.statements.iter().all(Stmt::is_pure),
 
-            Self::Variable(_, _) => true,
+            Self::Variable(_, _, _) => true,
 
             _ => self.is_constant(),
         }
@@ -1801,7 +1814,7 @@ impl Expr {
                 _ => false,
             },
 
-            Self::Variable(_, _) => match token {
+            Self::Variable(_, _, _) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
                 Token::LeftParen => true,
