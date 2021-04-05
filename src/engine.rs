@@ -1562,7 +1562,7 @@ impl Engine {
         state: &mut State,
         _lib: &[&Module],
         target: &'t mut Dynamic,
-        mut idx: Dynamic,
+        mut _idx: Dynamic,
         idx_pos: Position,
         _create: bool,
         _is_ref: bool,
@@ -1575,7 +1575,7 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(arr, _)) => {
                 // val_array[idx]
-                let index = idx
+                let index = _idx
                     .as_int()
                     .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
 
@@ -1595,8 +1595,8 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(map, _)) => {
                 // val_map[idx]
-                let index = &*idx.read_lock::<ImmutableString>().ok_or_else(|| {
-                    self.make_type_mismatch_err::<ImmutableString>(idx.type_name(), idx_pos)
+                let index = &*_idx.read_lock::<ImmutableString>().ok_or_else(|| {
+                    self.make_type_mismatch_err::<ImmutableString>(_idx.type_name(), idx_pos)
                 })?;
 
                 if _create && !map.contains_key(index.as_str()) {
@@ -1613,7 +1613,7 @@ impl Engine {
             Dynamic(Union::Str(s, _)) => {
                 // val_string[idx]
                 let chars_len = s.chars().count();
-                let index = idx
+                let index = _idx
                     .as_int()
                     .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
 
@@ -1631,7 +1631,7 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             _ if _indexers => {
                 let type_name = target.type_name();
-                let args = &mut [target, &mut idx];
+                let args = &mut [target, &mut _idx];
                 let hash_get = FnCallHash::from_native(calc_fn_hash(empty(), FN_IDX_GET, 2));
                 self.exec_fn_call(
                     _mods, state, _lib, FN_IDX_GET, hash_get, args, _is_ref, true, idx_pos, None,

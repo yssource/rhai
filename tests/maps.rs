@@ -38,8 +38,14 @@ fn test_map_indexing() -> Result<(), Box<EvalAltResult>> {
 
     engine.eval::<()>("let y = #{a: 1, b: 2, c: 3}; y.z")?;
 
+    #[cfg(not(feature = "no_index"))]
     assert_eq!(
-        engine.eval::<INT>(r#"let y = #{`a\nb`: 1}; y["a\\nb"]"#)?,
+        engine.eval::<INT>(
+            r#"
+                let y = #{`a
+b`: 1}; y["a\nb"]
+            "#
+        )?,
         1
     );
 
