@@ -750,7 +750,7 @@ impl Engine {
                 // Method call of script function - map first argument to `this`
                 let (first, rest) = args.split_first_mut().unwrap();
 
-                let orig_source = mem::take(&mut state.source);
+                let orig_source = state.source.take();
                 state.source = source;
 
                 let level = _level + 1;
@@ -780,7 +780,7 @@ impl Engine {
                     backup.as_mut().unwrap().change_first_arg_to_copy(args);
                 }
 
-                let orig_source = mem::take(&mut state.source);
+                let orig_source = state.source.take();
                 state.source = source;
 
                 let level = _level + 1;

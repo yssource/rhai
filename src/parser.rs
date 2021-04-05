@@ -15,7 +15,7 @@ use crate::stdlib::{
     format,
     hash::{Hash, Hasher},
     iter::empty,
-    num::NonZeroUsize,
+    num::{NonZeroU8, NonZeroUsize},
     string::{String, ToString},
     vec,
     vec::Vec,
@@ -225,7 +225,7 @@ impl Expr {
     #[inline(always)]
     fn into_property(self, state: &mut ParseState) -> Self {
         match self {
-            Self::Variable(x) if x.1.is_none() => {
+            Self::Variable(_, x) if x.1.is_none() => {
                 let ident = x.2;
                 let getter = state.get_identifier(crate::engine::make_getter(&ident.name));
                 let hash_get = calc_fn_hash(empty(), &getter, 1);
@@ -1081,7 +1081,7 @@ fn parse_primary(
                         name: state.get_identifier(s),
                         pos: settings.pos,
                     };
-                    Expr::Variable(Box::new((None, None, var_name_def)))
+                    Expr::Variable(None, Box::new((None, None, var_name_def)))
                 }
                 // Namespace qualification
                 #[cfg(not(feature = "no_module"))]
@@ -1095,7 +1095,7 @@ fn parse_primary(
                         name: state.get_identifier(s),
                         pos: settings.pos,
                     };
-                    Expr::Variable(Box::new((None, None, var_name_def)))
+                    Expr::Variable(None, Box::new((None, None, var_name_def)))
                 }
                 // Normal variable access
                 _ => {
@@ -1104,7 +1104,14 @@ fn parse_primary(
                         name: state.get_identifier(s),
                         pos: settings.pos,
                     };
-                    Expr::Variable(Box::new((index, None, var_name_def)))
+                    let short_index = index.and_then(|x| {
+                        if x.get() <= u8::MAX as usize {
+                            NonZeroU8::new(x.get() as u8)
+                        } else {
+                            None
+                        }
+                    });
+                    Expr::Variable(short_index, Box::new((index, None, var_name_def)))
                 }
             }
         }
@@ -1123,7 +1130,7 @@ fn parse_primary(
                         name: state.get_identifier(s),
                         pos: settings.pos,
                     };
-                    Expr::Variable(Box::new((None, None, var_name_def)))
+                    Expr::Variable(None, Box::new((None, None, var_name_def)))
                 }
                 // Access to `this` as a variable is OK within a function scope
                 _ if s == KEYWORD_THIS && settings.is_function_scope => {
@@ -1131,7 +1138,7 @@ fn parse_primary(
                         name: state.get_identifier(s),
                         pos: settings.pos,
                     };
-                    Expr::Variable(Box::new((None, None, var_name_def)))
+                    Expr::Variable(None, Box::new((None, None, var_name_def)))
                 }
                 // Cannot access to `this` as a variable not in a function scope
                 _ if s == KEYWORD_THIS => {
@@ -1168,7 +1175,7 @@ fn parse_primary(
 
         root_expr = match (root_expr, tail_token) {
             // Qualified function call with !
-            (Expr::Variable(x), Token::Bang) if x.1.is_some() => {
+            (Expr::Variable(_, x), Token::Bang) if x.1.is_some() => {
                 return Err(if !match_token(input, Token::LeftParen).0 {
                     LexError::UnexpectedInput(Token::Bang.syntax().to_string()).into_err(tail_pos)
                 } else {
@@ -1180,7 +1187,7 @@ fn parse_primary(
                 });
             }
             // Function call with !
-            (Expr::Variable(x), Token::Bang) => {
+            (Expr::Variable(_, x), Token::Bang) => {
                 let (matched, pos) = match_token(input, Token::LeftParen);
                 if !matched {
                     return Err(PERR::MissingToken(
@@ -1196,31 +1203,30 @@ fn parse_primary(
                 parse_fn_call(input, state, lib, name, true, ns, settings.level_up())?
             }
             // Function call
-            (Expr::Variable(x), Token::LeftParen) => {
+            (Expr::Variable(_, x), Token::LeftParen) => {
                 let (_, namespace, Ident { name, pos, .. }) = *x;
                 settings.pos = pos;
                 let ns = namespace.map(|(_, ns)| ns);
                 parse_fn_call(input, state, lib, name, false, ns, settings.level_up())?
             }
             // module access
-            (Expr::Variable(x), Token::DoubleColon) => match input.next().unwrap() {
+            (Expr::Variable(_, x), Token::DoubleColon) => match input.next().unwrap() {
                 (Token::Identifier(id2), pos2) => {
-                    let (index, mut namespace, var_name_def) = *x;
+                    let (_, mut namespace, var_name_def) = *x;
 
                     if let Some((_, ref mut namespace)) = namespace {
                         namespace.push(var_name_def);
                     } else {
                         let mut ns: NamespaceRef = Default::default();
                         ns.push(var_name_def);
-                        let index = 42; // Dummy
-                        namespace = Some((index, ns));
+                        namespace = Some((42, ns));
                     }
 
                     let var_name_def = Ident {
                         name: state.get_identifier(id2),
                         pos: pos2,
                     };
-                    Expr::Variable(Box::new((index, namespace, var_name_def)))
+                    Expr::Variable(None, Box::new((None, namespace, var_name_def)))
                 }
                 (Token::Reserved(id2), pos2) if is_valid_identifier(id2.chars()) => {
                     return Err(PERR::Reserved(id2).into_err(pos2));
@@ -1263,9 +1269,9 @@ fn parse_primary(
 
     // Cache the hash key for namespace-qualified variables
     match &mut root_expr {
-        Expr::Variable(x) if x.1.is_some() => Some(x),
+        Expr::Variable(_, x) if x.1.is_some() => Some(x),
         Expr::Index(x, _) | Expr::Dot(x, _) => match &mut x.lhs {
-            Expr::Variable(x) if x.1.is_some() => Some(x),
+            Expr::Variable(_, x) if x.1.is_some() => Some(x),
             _ => None,
         },
         _ => None,
@@ -1423,13 +1429,14 @@ fn make_assignment_stmt<'a>(
             Err(PERR::AssignmentToConstant("".into()).into_err(lhs.position()))
         }
         // var (non-indexed) = rhs
-        Expr::Variable(x) if x.0.is_none() => {
+        Expr::Variable(None, x) if x.0.is_none() => {
             Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
         }
         // var (indexed) = rhs
-        Expr::Variable(x) => {
+        Expr::Variable(i, x) => {
             let (index, _, Ident { name, pos, .. }) = x.as_ref();
-            match state.stack[(state.stack.len() - index.unwrap().get())].1 {
+            let index = i.map_or_else(|| index.unwrap().get(), |n| n.get() as usize);
+            match state.stack[state.stack.len() - index].1 {
                 AccessMode::ReadWrite => {
                     Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
                 }
@@ -1444,13 +1451,14 @@ fn make_assignment_stmt<'a>(
             match check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _))) {
                 Position::NONE => match &x.lhs {
                     // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
-                    Expr::Variable(x) if x.0.is_none() => {
+                    Expr::Variable(None, x) if x.0.is_none() => {
                         Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
                     }
                     // var[???] (indexed) = rhs, var.??? (indexed) = rhs
-                    Expr::Variable(x) => {
+                    Expr::Variable(i, x) => {
                         let (index, _, Ident { name, pos, .. }) = x.as_ref();
-                        match state.stack[(state.stack.len() - index.unwrap().get())].1 {
+                        let index = i.map_or_else(|| index.unwrap().get(), |n| n.get() as usize);
+                        match state.stack[state.stack.len() - index].1 {
                             AccessMode::ReadWrite => {
                                 Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
                             }
@@ -1532,7 +1540,7 @@ fn make_dot_expr(
             Expr::Index(x, pos)
         }
         // lhs.id
-        (lhs, Expr::Variable(x)) if x.1.is_none() => {
+        (lhs, Expr::Variable(_, x)) if x.1.is_none() => {
             let ident = x.2;
             let getter = state.get_identifier(crate::engine::make_getter(&ident.name));
             let hash_get = calc_fn_hash(empty(), &getter, 1);
@@ -1544,7 +1552,7 @@ fn make_dot_expr(
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
         }
         // lhs.module::id - syntax error
-        (_, Expr::Variable(x)) if x.1.is_some() => {
+        (_, Expr::Variable(_, x)) if x.1.is_some() => {
             return Err(PERR::PropertyExpected.into_err(x.1.unwrap().1[0].pos))
         }
         // lhs.prop
@@ -1553,7 +1561,7 @@ fn make_dot_expr(
         }
         // lhs.dot_lhs.dot_rhs
         (lhs, Expr::Dot(x, pos)) => match x.lhs {
-            Expr::Variable(_) | Expr::Property(_) => {
+            Expr::Variable(_, _) | Expr::Property(_) => {
                 let rhs = Expr::Dot(
                     Box::new(BinaryExpr {
                         lhs: x.lhs.into_property(state),
@@ -1869,7 +1877,7 @@ fn parse_custom_syntax(
                     segments.push(name.clone().into());
                     tokens.push(state.get_identifier(MARKER_IDENT));
                     let var_name_def = Ident { name, pos };
-                    keywords.push(Expr::Variable(Box::new((None, None, var_name_def))));
+                    keywords.push(Expr::Variable(None, Box::new((None, None, var_name_def))));
                 }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
@@ -2825,7 +2833,7 @@ fn make_curry_from_externals(
             name: x.clone(),
             pos: Position::NONE,
         };
-        args.push(Expr::Variable(Box::new((None, None, var_def))));
+        args.push(Expr::Variable(None, Box::new((None, None, var_def))));
     });
 
     let expr = Expr::FnCall(

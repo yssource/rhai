@@ -959,7 +959,12 @@ impl Engine {
         expr: &Expr,
     ) -> Result<(Target<'s>, Position), Box<EvalAltResult>> {
         match expr {
-            Expr::Variable(v) => match v.as_ref() {
+            Expr::Variable(Some(_), _) => {
+                self.search_scope_only(scope, mods, state, lib, this_ptr, expr)
+            }
+            Expr::Variable(None, v) => match v.as_ref() {
+                // Normal variable access
+                (_, None, _) => self.search_scope_only(scope, mods, state, lib, this_ptr, expr),
                 // Qualified variable
                 (_, Some((hash_var, modules)), Ident { name, pos, .. }) => {
                     let module = self.search_imports(mods, state, modules).ok_or_else(|| {
@@ -983,8 +988,6 @@ impl Engine {
                     target.set_access_mode(AccessMode::ReadOnly);
                     Ok((target.into(), *pos))
                 }
-                // Normal variable access
-                _ => self.search_scope_only(scope, mods, state, lib, this_ptr, expr),
             },
             _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
         }
@@ -1000,8 +1003,8 @@ impl Engine {
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
     ) -> Result<(Target<'s>, Position), Box<EvalAltResult>> {
-        let (index, _, Ident { name, pos, .. }) = match expr {
-            Expr::Variable(v) => v.as_ref(),
+        let (short_index, (index, _, Ident { name, pos, .. })) = match expr {
+            Expr::Variable(i, v) => (i, v.as_ref()),
             _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
         };
 
@@ -1015,11 +1018,17 @@ impl Engine {
         }
 
         // Check if it is directly indexed
-        let index = if state.always_search { &None } else { index };
+        let index = if state.always_search {
+            0
+        } else {
+            short_index.map_or_else(
+                || index.map(NonZeroUsize::get).unwrap_or(0),
+                |x| x.get() as usize,
+            )
+        };
 
         // Check the variable resolver, if any
         if let Some(ref resolve_var) = self.resolve_var {
-            let index = index.map(NonZeroUsize::get).unwrap_or(0);
             let context = EvalContext {
                 engine: self,
                 scope,
@@ -1037,8 +1046,8 @@ impl Engine {
             }
         }
 
-        let index = if let Some(index) = index {
-            scope.len() - index.get()
+        let index = if index > 0 {
+            scope.len() - index
         } else {
             // Find the variable in the scope
             scope
@@ -1401,7 +1410,7 @@ impl Engine {
 
         match lhs {
             // id.??? or id[???]
-            Expr::Variable(x) => {
+            Expr::Variable(_, x) => {
                 let Ident {
                     name: var_name,
                     pos: var_pos,
@@ -1679,11 +1688,11 @@ impl Engine {
             Expr::CharConstant(x, _) => Ok((*x).into()),
             Expr::FnPointer(x, _) => Ok(FnPtr::new_unchecked(x.clone(), Default::default()).into()),
 
-            Expr::Variable(x) if (x.2).name == KEYWORD_THIS => this_ptr
+            Expr::Variable(None, x) if x.0.is_none() && (x.2).name == KEYWORD_THIS => this_ptr
                 .as_deref()
                 .cloned()
                 .ok_or_else(|| EvalAltResult::ErrorUnboundThis((x.2).pos).into()),
-            Expr::Variable(_) => self
+            Expr::Variable(_, _) => self
                 .search_namespace(scope, mods, state, lib, this_ptr, expr)
                 .map(|(val, _)| val.take_or_clone()),
 
@@ -2061,7 +2070,7 @@ impl Engine {
                 // Must be either `var[index] op= val` or `var.prop op= val`
                 match lhs_expr {
                     // name op= rhs (handled above)
-                    Expr::Variable(_) => {
+                    Expr::Variable(_, _) => {
                         unreachable!("Expr::Variable case should already been handled")
                     }
                     // idx_lhs[idx_expr] op= rhs

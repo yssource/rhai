@@ -9,7 +9,6 @@ use crate::stdlib::{
     cell::Cell,
     char, fmt, format,
     iter::{FusedIterator, Peekable},
-    mem,
     num::NonZeroUsize,
     ops::{Add, AddAssign},
     rc::Rc,
@@ -828,7 +827,7 @@ impl From<Token> for String {
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct TokenizeState {
-    /// Maximum length of a string (0 = unlimited).
+    /// Maximum length of a string.
     pub max_string_size: Option<NonZeroUsize>,
     /// Can the next token be a unary operator?
     pub non_unary: bool,
@@ -1187,7 +1186,7 @@ fn get_next_token_inner(
     }
 
     // Within text?
-    if let Some(ch) = mem::take(&mut state.is_within_text_terminated_by) {
+    if let Some(ch) = state.is_within_text_terminated_by.take() {
         let start_pos = *pos;
 
         return parse_string_literal(stream, state, pos, ch, false, true, true, true).map_or_else(
@@ -1316,42 +1315,42 @@ fn get_next_token_inner(
                 }
 
                 // Parse number
-                if let Some(radix) = radix_base {
-                    let out: String = result.iter().skip(2).filter(|&&c| c != NUM_SEP).collect();
+                return Some((
+                    if let Some(radix) = radix_base {
+                        let out: String =
+                            result.iter().skip(2).filter(|&&c| c != NUM_SEP).collect();
 
-                    return Some((
                         INT::from_str_radix(&out, radix)
                             .map(Token::IntegerConstant)
                             .unwrap_or_else(|_| {
                                 Token::LexError(LERR::MalformedNumber(result.into_iter().collect()))
-                            }),
-                        start_pos,
-                    ));
-                } else {
-                    let out: String = result.iter().filter(|&&c| c != NUM_SEP).collect();
-                    let num = INT::from_str(&out).map(Token::IntegerConstant);
+                            })
+                    } else {
+                        let out: String = result.iter().filter(|&&c| c != NUM_SEP).collect();
+                        let num = INT::from_str(&out).map(Token::IntegerConstant);
 
-                    // If integer parsing is unnecessary, try float instead
-                    #[cfg(not(feature = "no_float"))]
-                    let num =
-                        num.or_else(|_| FloatWrapper::from_str(&out).map(Token::FloatConstant));
+                        // If integer parsing is unnecessary, try float instead
+                        #[cfg(not(feature = "no_float"))]
+                        let num =
+                            num.or_else(|_| FloatWrapper::from_str(&out).map(Token::FloatConstant));
 
-                    // Then try decimal
-                    #[cfg(feature = "decimal")]
-                    let num = num.or_else(|_| Decimal::from_str(&out).map(Token::DecimalConstant));
+                        // Then try decimal
+                        #[cfg(feature = "decimal")]
+                        let num =
+                            num.or_else(|_| Decimal::from_str(&out).map(Token::DecimalConstant));
 
-                    // Then try decimal in scientific notation
-                    #[cfg(feature = "decimal")]
-                    let num =
-                        num.or_else(|_| Decimal::from_scientific(&out).map(Token::DecimalConstant));
+                        // Then try decimal in scientific notation
+                        #[cfg(feature = "decimal")]
+                        let num = num.or_else(|_| {
+                            Decimal::from_scientific(&out).map(Token::DecimalConstant)
+                        });
 
-                    return Some((
                         num.unwrap_or_else(|_| {
                             Token::LexError(LERR::MalformedNumber(result.into_iter().collect()))
-                        }),
-                        start_pos,
-                    ));
-                }
+                        })
+                    },
+                    start_pos,
+                ));
             }
 
             // letter or underscore ...
