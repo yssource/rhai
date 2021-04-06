@@ -52,7 +52,7 @@ pub type Precedence = NonZeroU8;
 // We cannot use Cow<str> here because `eval` may load a [module][Module] and
 // the module name will live beyond the AST of the eval script text.
 // The best we can do is a shared reference.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct Imports(StaticVec<Identifier>, StaticVec<Shared<Module>>);
 
 impl Imports {
@@ -144,6 +144,20 @@ impl Imports {
     #[inline(always)]
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.1.iter().rev().find_map(|m| m.get_qualified_iter(id))
+    }
+}
+
+impl fmt::Debug for Imports {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Imports")?;
+
+        if self.is_empty() {
+            f.debug_map().finish()
+        } else {
+            f.debug_map()
+                .entries(self.0.iter().zip(self.1.iter()))
+                .finish()
+        }
     }
 }
 

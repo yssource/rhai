@@ -17,8 +17,8 @@ use crate::stdlib::{
 };
 use crate::utils::get_hasher;
 use crate::{
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, Module, Position, Scope,
-    StaticVec, AST,
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, ImmutableString, Module,
+    Position, Scope, StaticVec, AST,
 };
 
 /// Level of optimization performed.
@@ -799,15 +799,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             if x.namespace.is_none() // Non-qualified
             && state.optimization_level == OptimizationLevel::Simple // simple optimizations
             && x.num_args() == 1
-            && matches!(x.args[0], Expr::StringConstant(_, _))
+            && x.constant_args.len() == 1
+            && x.constant_args[0].0.is::<ImmutableString>()
             && x.name == KEYWORD_FN_PTR
         => {
-            if let Expr::StringConstant(s, _) = mem::take(&mut x.args[0]) {
-                state.set_dirty();
-                *expr = Expr::FnPointer(s, *pos);
-            } else {
-                unreachable!();
-            }
+            state.set_dirty();
+            *expr = Expr::FnPointer(mem::take(&mut x.constant_args[0].0).take_immutable_string().unwrap(), *pos);
         }
 
         // Do not call some special keywords

@@ -18,7 +18,7 @@ use crate::stdlib::{
 use crate::{Engine, LexError, StaticVec, INT};
 
 #[cfg(not(feature = "no_float"))]
-use crate::ast::FloatWrapper;
+use crate::{ast::FloatWrapper, FLOAT};
 
 #[cfg(feature = "decimal")]
 use rust_decimal::Decimal;
@@ -210,7 +210,7 @@ pub enum Token {
     ///
     /// Reserved under the `no_float` feature.
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(FloatWrapper),
+    FloatConstant(FloatWrapper<FLOAT>),
     /// A [`Decimal`] constant.
     ///
     /// Requires the `decimal` feature.

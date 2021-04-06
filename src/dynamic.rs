@@ -159,7 +159,7 @@ pub enum Union {
     Int(INT, AccessMode),
     /// A floating-point value.
     #[cfg(not(feature = "no_float"))]
-    Float(FloatWrapper, AccessMode),
+    Float(FloatWrapper<FLOAT>, AccessMode),
     /// A fixed-precision decimal value.
     #[cfg(feature = "decimal")]
     Decimal(Box<Decimal>, AccessMode),
@@ -682,16 +682,22 @@ impl Dynamic {
     pub const NEGATIVE_ONE: Dynamic = Self(Union::Int(-1, AccessMode::ReadWrite));
     /// A [`Dynamic`] containing the floating-point zero.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_ZERO: Dynamic =
-        Self(Union::Float(FloatWrapper::new(0.0), AccessMode::ReadWrite));
+    pub const FLOAT_ZERO: Dynamic = Self(Union::Float(
+        FloatWrapper::const_new(0.0),
+        AccessMode::ReadWrite,
+    ));
     /// A [`Dynamic`] containing the floating-point one.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_ONE: Dynamic =
-        Self(Union::Float(FloatWrapper::new(1.0), AccessMode::ReadWrite));
+    pub const FLOAT_ONE: Dynamic = Self(Union::Float(
+        FloatWrapper::const_new(1.0),
+        AccessMode::ReadWrite,
+    ));
     /// A [`Dynamic`] containing the floating-point negative one.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_NEGATIVE_ONE: Dynamic =
-        Self(Union::Float(FloatWrapper::new(-1.0), AccessMode::ReadWrite));
+    pub const FLOAT_NEGATIVE_ONE: Dynamic = Self(Union::Float(
+        FloatWrapper::const_new(-1.0),
+        AccessMode::ReadWrite,
+    ));
 
     /// Get the [`AccessMode`] for this [`Dynamic`].
     pub(crate) fn access_mode(&self) -> AccessMode {
@@ -1670,9 +1676,9 @@ impl From<FLOAT> for Dynamic {
     }
 }
 #[cfg(not(feature = "no_float"))]
-impl From<FloatWrapper> for Dynamic {
+impl From<FloatWrapper<FLOAT>> for Dynamic {
     #[inline(always)]
-    fn from(value: FloatWrapper) -> Self {
+    fn from(value: FloatWrapper<FLOAT>) -> Self {
         Self(Union::Float(value, AccessMode::ReadWrite))
     }
 }

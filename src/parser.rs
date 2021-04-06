@@ -1271,16 +1271,16 @@ fn parse_primary(
     }
 
     // Cache the hash key for namespace-qualified variables
-    match &mut root_expr {
-        Expr::Variable(_, _, x) if x.1.is_some() => Some(x),
-        Expr::Index(x, _) | Expr::Dot(x, _) => match &mut x.lhs {
+    match root_expr {
+        Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x),
+        Expr::Index(ref mut x, _) | Expr::Dot(ref mut x, _) => match &mut x.lhs {
             Expr::Variable(_, _, x) if x.1.is_some() => Some(x),
             _ => None,
         },
         _ => None,
     }
     .map(|x| match x.as_mut() {
-        (_, Some((ref mut hash, ref mut namespace)), name) => {
+        (_, Some((hash, namespace)), name) => {
             *hash = calc_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0);
 
             #[cfg(not(feature = "no_module"))]
