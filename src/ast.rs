@@ -1549,6 +1549,7 @@ impl<F: Float> FloatWrapper<F> {
     }
 }
 
+#[cfg(not(feature = "no_float"))]
 impl FloatWrapper<FLOAT> {
     #[inline(always)]
     pub(crate) const fn const_new(value: FLOAT) -> Self {

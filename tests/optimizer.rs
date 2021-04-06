@@ -48,6 +48,7 @@ fn test_optimizer_run() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[cfg(not(feature = "no_module"))]
 #[test]
 fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
