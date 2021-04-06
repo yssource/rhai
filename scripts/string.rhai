@@ -11,17 +11,18 @@ print("foo" >= "bar");          // string comparison
 print("the answer is " + 42);   // string building using non-string types
 
 let s = "\u2764 hello, world! \U0001F603"; // string variable
-print("length=" + s.len);       // should be 17
+print(`length=${s.len}`);       // should be 17
 
 s[s.len-3] = '?';               // change the string
-print("Question: " + s);        // should print 'Question: hello, world?'
+print(`Question: ${s}`);        // should print 'Question: hello, world?'
 
 // Line continuation:
 let s = "This is a long \
          string constructed using \
          line continuation";
 
-print("One string: " + s);
+// String interpolation
+print(`One string: ${s}`);
 
 // Multi-line literal string:
 let s = `

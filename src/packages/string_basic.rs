@@ -73,31 +73,23 @@ mod print_debug_functions {
         #[cfg(not(feature = "no_float"))]
         use num_traits::Float;
 
+        use crate::ast::FloatWrapper;
+
         #[rhai_fn(name = "print", name = "to_string")]
         pub fn print_f64(number: f64) -> ImmutableString {
-            let abs = number.abs();
-            if abs > 10000000000000.0 || abs < 0.0000000000001 {
-                format!("{:e}", number).into()
-            } else {
-                number.to_string().into()
-            }
+            FloatWrapper::new(number).to_string().into()
         }
         #[rhai_fn(name = "print", name = "to_string")]
         pub fn print_f32(number: f32) -> ImmutableString {
-            let abs = number.abs();
-            if abs > 10000000000000.0 || abs < 0.0000000000001 {
-                format!("{:e}", number).into()
-            } else {
-                number.to_string().into()
-            }
+            FloatWrapper::new(number).to_string().into()
         }
         #[rhai_fn(name = "debug", name = "to_debug")]
         pub fn debug_f64(number: f64) -> ImmutableString {
-            number.to_string().into()
+            format!("{:?}", FloatWrapper::new(number)).into()
         }
         #[rhai_fn(name = "debug", name = "to_debug")]
         pub fn debug_f32(number: f32) -> ImmutableString {
-            number.to_string().into()
+            format!("{:?}", FloatWrapper::new(number)).into()
         }
     }
 

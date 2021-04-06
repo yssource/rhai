@@ -11,19 +11,31 @@ use crate::stdlib::{
     iter::{FusedIterator, Peekable},
     num::NonZeroUsize,
     ops::{Add, AddAssign},
+    rc::Rc,
     str::{Chars, FromStr},
     string::{String, ToString},
 };
-use crate::{Engine, LexError, Shared, StaticVec, INT};
+use crate::{Engine, LexError, StaticVec, INT};
 
 #[cfg(not(feature = "no_float"))]
-use crate::ast::FloatWrapper;
+use crate::{ast::FloatWrapper, FLOAT};
 
 #[cfg(feature = "decimal")]
 use rust_decimal::Decimal;
 
 #[cfg(not(feature = "no_function"))]
 use crate::engine::KEYWORD_IS_DEF_FN;
+
+/// _(INTERNALS)_ A type containing commands to control the tokenizer.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Copy, Default)]
+pub struct TokenizerControlBlock {
+    /// Is the current tokenizer position within an interpolated text string?
+    /// This flag allows switching the tokenizer back to _text_ parsing after an interpolation stream.
+    pub is_within_text: bool,
+}
+
+/// _(INTERNALS)_ A shared object that allows control of the tokenizer from outside.
+pub type TokenizerControl = Rc<Cell<TokenizerControlBlock>>;
 
 type LERR = LexError;
 
@@ -198,7 +210,7 @@ pub enum Token {
     ///
     /// Reserved under the `no_float` feature.
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(FloatWrapper),
+    FloatConstant(FloatWrapper<FLOAT>),
     /// A [`Decimal`] constant.
     ///
     /// Requires the `decimal` feature.
@@ -815,7 +827,7 @@ impl From<Token> for String {
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct TokenizeState {
-    /// Maximum length of a string (0 = unlimited).
+    /// Maximum length of a string.
     pub max_string_size: Option<NonZeroUsize>,
     /// Can the next token be a unary operator?
     pub non_unary: bool,
@@ -827,6 +839,8 @@ pub struct TokenizeState {
     pub include_comments: bool,
     /// Disable doc-comments?
     pub disable_doc_comments: bool,
+    /// Is the current tokenizer position within the text stream of an interpolated string?
+    pub is_within_text_terminated_by: Option<char>,
 }
 
 /// _(INTERNALS)_ Trait that encapsulates a peekable character input stream.
@@ -849,6 +863,9 @@ pub trait InputStream {
 /// _(INTERNALS)_ Parse a string literal ended by `termination_char`.
 /// Exported under the `internals` feature only.
 ///
+/// Returns the parsed string and a boolean indicating whether the string is
+/// terminated by an interpolation `${`.
+///
 /// # Volatile API
 ///
 /// This function is volatile and may change.
@@ -859,6 +876,7 @@ pub fn parse_string_literal(
     termination_char: char,
     continuation: bool,
     verbatim: bool,
+    skip_first_new_line: bool,
     allow_interpolation: bool,
 ) -> Result<(String, bool), (LexError, Position)> {
     let mut result: smallvec::SmallVec<[char; 16]> = Default::default();
@@ -867,6 +885,25 @@ pub fn parse_string_literal(
     let start = *pos;
     let mut skip_whitespace_until = 0;
     let mut interpolated = false;
+
+    if skip_first_new_line {
+        // Start from the next line if at the end of line
+        match stream.peek_next() {
+            // `\r - start from next line
+            Some('\r') => {
+                eat_next(stream, pos);
+                // `\r\n
+                if stream.peek_next().map(|ch| ch == '\n').unwrap_or(false) {
+                    eat_next(stream, pos);
+                }
+            }
+            // `\n - start from next line
+            Some('\n') => {
+                eat_next(stream, pos);
+            }
+            _ => (),
+        }
+    }
 
     loop {
         let next_char = stream.get_next().ok_or((LERR::UnterminatedString, start))?;
@@ -1148,6 +1185,22 @@ fn get_next_token_inner(
         }
     }
 
+    // Within text?
+    if let Some(ch) = state.is_within_text_terminated_by.take() {
+        let start_pos = *pos;
+
+        return parse_string_literal(stream, state, pos, ch, false, true, true, true).map_or_else(
+            |(err, err_pos)| Some((Token::LexError(err), err_pos)),
+            |(result, interpolated)| {
+                if interpolated {
+                    Some((Token::InterpolatedString(result), start_pos))
+                } else {
+                    Some((Token::StringConstant(result), start_pos))
+                }
+            },
+        );
+    }
+
     let mut negated = false;
 
     while let Some(c) = stream.get_next() {
@@ -1262,42 +1315,42 @@ fn get_next_token_inner(
                 }
 
                 // Parse number
-                if let Some(radix) = radix_base {
-                    let out: String = result.iter().skip(2).filter(|&&c| c != NUM_SEP).collect();
+                return Some((
+                    if let Some(radix) = radix_base {
+                        let out: String =
+                            result.iter().skip(2).filter(|&&c| c != NUM_SEP).collect();
 
-                    return Some((
                         INT::from_str_radix(&out, radix)
                             .map(Token::IntegerConstant)
                             .unwrap_or_else(|_| {
                                 Token::LexError(LERR::MalformedNumber(result.into_iter().collect()))
-                            }),
-                        start_pos,
-                    ));
-                } else {
-                    let out: String = result.iter().filter(|&&c| c != NUM_SEP).collect();
-                    let num = INT::from_str(&out).map(Token::IntegerConstant);
+                            })
+                    } else {
+                        let out: String = result.iter().filter(|&&c| c != NUM_SEP).collect();
+                        let num = INT::from_str(&out).map(Token::IntegerConstant);
 
-                    // If integer parsing is unnecessary, try float instead
-                    #[cfg(not(feature = "no_float"))]
-                    let num =
-                        num.or_else(|_| FloatWrapper::from_str(&out).map(Token::FloatConstant));
+                        // If integer parsing is unnecessary, try float instead
+                        #[cfg(not(feature = "no_float"))]
+                        let num =
+                            num.or_else(|_| FloatWrapper::from_str(&out).map(Token::FloatConstant));
 
-                    // Then try decimal
-                    #[cfg(feature = "decimal")]
-                    let num = num.or_else(|_| Decimal::from_str(&out).map(Token::DecimalConstant));
+                        // Then try decimal
+                        #[cfg(feature = "decimal")]
+                        let num =
+                            num.or_else(|_| Decimal::from_str(&out).map(Token::DecimalConstant));
 
-                    // Then try decimal in scientific notation
-                    #[cfg(feature = "decimal")]
-                    let num =
-                        num.or_else(|_| Decimal::from_scientific(&out).map(Token::DecimalConstant));
+                        // Then try decimal in scientific notation
+                        #[cfg(feature = "decimal")]
+                        let num = num.or_else(|_| {
+                            Decimal::from_scientific(&out).map(Token::DecimalConstant)
+                        });
 
-                    return Some((
                         num.unwrap_or_else(|_| {
                             Token::LexError(LERR::MalformedNumber(result.into_iter().collect()))
-                        }),
-                        start_pos,
-                    ));
-                }
+                        })
+                    },
+                    start_pos,
+                ));
             }
 
             // letter or underscore ...
@@ -1312,41 +1365,25 @@ fn get_next_token_inner(
 
             // " - string literal
             ('"', _) => {
-                return parse_string_literal(stream, state, pos, c, true, false, false)
+                return parse_string_literal(stream, state, pos, c, true, false, false, false)
                     .map_or_else(
-                        |err| Some((Token::LexError(err.0), err.1)),
+                        |(err, err_pos)| Some((Token::LexError(err), err_pos)),
                         |(result, _)| Some((Token::StringConstant(result), start_pos)),
                     );
             }
             // ` - string literal
             ('`', _) => {
-                // Start from the next line if ` at the end of line
-                match stream.peek_next() {
-                    // `\r - start from next line
-                    Some('\r') => {
-                        eat_next(stream, pos);
-                        // `\r\n
-                        if stream.peek_next().map(|ch| ch == '\n').unwrap_or(false) {
-                            eat_next(stream, pos);
-                        }
-                    }
-                    // `\n - start from next line
-                    Some('\n') => {
-                        eat_next(stream, pos);
-                    }
-                    _ => (),
-                }
-
-                return parse_string_literal(stream, state, pos, c, false, true, true).map_or_else(
-                    |err| Some((Token::LexError(err.0), err.1)),
-                    |(result, interpolated)| {
-                        if interpolated {
-                            Some((Token::InterpolatedString(result), start_pos))
-                        } else {
-                            Some((Token::StringConstant(result), start_pos))
-                        }
-                    },
-                );
+                return parse_string_literal(stream, state, pos, c, false, true, true, true)
+                    .map_or_else(
+                        |(err, err_pos)| Some((Token::LexError(err), err_pos)),
+                        |(result, interpolated)| {
+                            if interpolated {
+                                Some((Token::InterpolatedString(result), start_pos))
+                            } else {
+                                Some((Token::StringConstant(result), start_pos))
+                            }
+                        },
+                    );
             }
 
             // ' - character literal
@@ -1358,19 +1395,20 @@ fn get_next_token_inner(
             }
             ('\'', _) => {
                 return Some(
-                    parse_string_literal(stream, state, pos, c, false, false, false).map_or_else(
-                        |err| (Token::LexError(err.0), err.1),
-                        |(result, _)| {
-                            let mut chars = result.chars();
-                            let first = chars.next().unwrap();
+                    parse_string_literal(stream, state, pos, c, false, false, false, false)
+                        .map_or_else(
+                            |(err, err_pos)| (Token::LexError(err), err_pos),
+                            |(result, _)| {
+                                let mut chars = result.chars();
+                                let first = chars.next().unwrap();
 
-                            if chars.next().is_some() {
-                                (Token::LexError(LERR::MalformedChar(result)), start_pos)
-                            } else {
-                                (Token::CharConstant(first), start_pos)
-                            }
-                        },
-                    ),
+                                if chars.next().is_some() {
+                                    (Token::LexError(LERR::MalformedChar(result)), start_pos)
+                                } else {
+                                    (Token::CharConstant(first), start_pos)
+                                }
+                            },
+                        ),
                 )
             }
 
@@ -1840,8 +1878,8 @@ pub struct TokenIterator<'a> {
     state: TokenizeState,
     /// Current position.
     pos: Position,
-    /// Buffer containing the next character to read, if any.
-    buffer: Shared<Cell<Option<char>>>,
+    /// External buffer containing the next character to read, if any.
+    tokenizer_control: TokenizerControl,
     /// Input character stream.
     stream: MultiInputsStream<'a>,
     /// A processor function that maps a token to another.
@@ -1852,9 +1890,14 @@ impl<'a> Iterator for TokenIterator<'a> {
     type Item = (Token, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(ch) = self.buffer.take() {
-            self.stream.unget(ch);
-            self.pos.rewind();
+        let mut control = self.tokenizer_control.get();
+
+        if control.is_within_text {
+            // Switch to text mode terminated by back-tick
+            self.state.is_within_text_terminated_by = Some('`');
+            // Reset it
+            control.is_within_text = false;
+            self.tokenizer_control.set(control);
         }
 
         let (token, pos) = match get_next_token(&mut self.stream, &mut self.state, &mut self.pos) {
@@ -1945,7 +1988,7 @@ impl Engine {
     pub fn lex<'a>(
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
-    ) -> (TokenIterator<'a>, Shared<Cell<Option<char>>>) {
+    ) -> (TokenIterator<'a>, TokenizerControl) {
         self.lex_raw(input, None)
     }
     /// _(INTERNALS)_ Tokenize an input text stream with a mapping function.
@@ -1956,7 +1999,7 @@ impl Engine {
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
         map: fn(Token) -> Token,
-    ) -> (TokenIterator<'a>, Shared<Cell<Option<char>>>) {
+    ) -> (TokenIterator<'a>, TokenizerControl) {
         self.lex_raw(input, Some(map))
     }
     /// Tokenize an input text stream with an optional mapping function.
@@ -1965,8 +2008,8 @@ impl Engine {
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
         map: Option<fn(Token) -> Token>,
-    ) -> (TokenIterator<'a>, Shared<Cell<Option<char>>>) {
-        let buffer: Shared<Cell<Option<char>>> = Cell::new(None).into();
+    ) -> (TokenIterator<'a>, TokenizerControl) {
+        let buffer: TokenizerControl = Default::default();
         let buffer2 = buffer.clone();
 
         (
@@ -1982,9 +2025,10 @@ impl Engine {
                     end_with_none: false,
                     include_comments: false,
                     disable_doc_comments: self.disable_doc_comments,
+                    is_within_text_terminated_by: None,
                 },
                 pos: Position::new(1, 0),
-                buffer,
+                tokenizer_control: buffer,
                 stream: MultiInputsStream {
                     buf: None,
                     streams: input.into_iter().map(|s| s.chars().peekable()).collect(),

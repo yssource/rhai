@@ -7,8 +7,8 @@ use crate::fn_register::RegisterNativeFunction;
 use crate::stdlib::{
     any::TypeId,
     boxed::Box,
-    collections::BTreeMap,
-    fmt, format,
+    collections::{BTreeMap, BTreeSet},
+    fmt,
     iter::empty,
     num::NonZeroUsize,
     ops::{Add, AddAssign, Deref, DerefMut},
@@ -173,50 +173,36 @@ impl Default for Module {
 
 impl fmt::Debug for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Module({}\n{}{}{})",
-            self.id
-                .as_ref()
-                .map(|id| format!("id: {:?},", id))
-                .unwrap_or_default(),
-            if !self.modules.is_empty() {
-                format!(
-                    "    modules: {}\n",
-                    self.modules
-                        .keys()
-                        .map(|m| m.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            } else {
-                Default::default()
-            },
-            if !self.variables.is_empty() {
-                format!(
-                    "    vars: {}\n",
-                    self.variables
-                        .iter()
-                        .map(|(k, v)| format!("{}={:?}", k, v))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            } else {
-                Default::default()
-            },
-            if !self.functions.is_empty() {
-                format!(
-                    "    functions: {}\n",
-                    self.functions
-                        .values()
-                        .map(|f| crate::stdlib::string::ToString::to_string(&f.func))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            } else {
-                Default::default()
-            }
-        )
+        let mut d = f.debug_struct("Module");
+
+        if let Some(ref id) = self.id {
+            d.field("id", id);
+        }
+
+        if !self.modules.is_empty() {
+            d.field(
+                "modules",
+                &self
+                    .modules
+                    .keys()
+                    .map(|m| m.as_str())
+                    .collect::<BTreeSet<_>>(),
+            );
+        }
+        if !self.variables.is_empty() {
+            d.field("vars", &self.variables);
+        }
+        if !self.functions.is_empty() {
+            d.field(
+                "functions",
+                &self
+                    .functions
+                    .values()
+                    .map(|f| crate::stdlib::string::ToString::to_string(&f.func))
+                    .collect::<BTreeSet<_>>(),
+            );
+        }
+        d.finish()
     }
 }
 

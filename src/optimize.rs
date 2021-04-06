@@ -2,7 +2,7 @@
 
 use crate::ast::{Expr, Stmt, StmtBlock};
 use crate::dynamic::AccessMode;
-use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
+use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
 use crate::parser::map_dynamic_to_expr;
 use crate::stdlib::{
@@ -17,8 +17,8 @@ use crate::stdlib::{
 };
 use crate::utils::get_hasher;
 use crate::{
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, Module, Position, Scope,
-    StaticVec, AST,
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, ImmutableString, Module,
+    Position, Scope, StaticVec, AST,
 };
 
 /// Level of optimization performed.
@@ -385,7 +385,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
     match stmt {
         // expr op= expr
         Stmt::Assignment(x, _) => match x.0 {
-            Expr::Variable(_) => optimize_expr(&mut x.2, state),
+            Expr::Variable(_, _, _) => optimize_expr(&mut x.2, state),
             _ => {
                 optimize_expr(&mut x.0, state);
                 optimize_expr(&mut x.2, state);
@@ -546,19 +546,21 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         Stmt::Import(expr, _, _) => optimize_expr(expr, state),
         // { block }
         Stmt::Block(statements, pos) => {
-            let block = mem::take(statements);
-            *stmt = match optimize_stmt_block(block, state, preserve_result, true, false) {
-                statements if statements.is_empty() => {
+            let mut block =
+                optimize_stmt_block(mem::take(statements), state, preserve_result, true, false);
+
+            match block.as_mut_slice() {
+                [] => {
                     state.set_dirty();
-                    Stmt::Noop(*pos)
+                    *stmt = Stmt::Noop(*pos);
                 }
                 // Only one statement - promote
-                mut statements if statements.len() == 1 => {
+                [s] => {
                     state.set_dirty();
-                    statements.pop().unwrap()
+                    *stmt = mem::take(s);
                 }
-                statements => Stmt::Block(statements, *pos),
-            };
+                _ => *stmt = Stmt::Block(block, *pos),
+            }
         }
         // try { pure try_block } catch ( var ) { catch_block } -> try_block
         Stmt::TryCatch(x, _, _) if x.0.statements.iter().all(Stmt::is_pure) => {
@@ -609,18 +611,16 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
     match expr {
         // {}
         Expr::Stmt(x) if x.statements.is_empty() => { state.set_dirty(); *expr = Expr::Unit(x.pos) }
-        // { Stmt(Expr) }
-        Expr::Stmt(x) if x.statements.len() == 1 && x.statements[0].is_pure() && matches!(x.statements[0], Stmt::Expr(_)) =>
-        {
-            state.set_dirty();
-            if let Stmt::Expr(e) = mem::take(&mut x.statements[0]) {
-                *expr = e;
-            } else {
-                unreachable!();
+        // { stmt; ... } - do not count promotion as dirty because it gets turned back into an array
+        Expr::Stmt(x) => {
+            x.statements = optimize_stmt_block(mem::take(&mut x.statements).into_vec(), state, true, true, false).into();
+
+            // { Stmt(Expr) } - promote
+            match x.statements.as_mut() {
+                [ Stmt::Expr(e) ] => { state.set_dirty(); *expr = mem::take(e); }
+                _ => ()
             }
         }
-        // { stmt; ... } - do not count promotion as dirty because it gets turned back into an array
-        Expr::Stmt(x) => x.statements = optimize_stmt_block(mem::take(&mut x.statements).into_vec(), state, true, true, false).into(),
         // lhs.rhs
         #[cfg(not(feature = "no_object"))]
         Expr::Dot(x, _) => match (&mut x.lhs, &mut x.rhs) {
@@ -635,7 +635,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                             .unwrap_or_else(|| Expr::Unit(*pos));
             }
             // var.rhs
-            (Expr::Variable(_), rhs) => optimize_expr(rhs, state),
+            (Expr::Variable(_, _, _), rhs) => optimize_expr(rhs, state),
             // lhs.rhs
             (lhs, rhs) => { optimize_expr(lhs, state); optimize_expr(rhs, state); }
         }
@@ -670,7 +670,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                 *expr = Expr::CharConstant(s.chars().nth(*i as usize).unwrap(), *pos);
             }
             // var[rhs]
-            (Expr::Variable(_), rhs) => optimize_expr(rhs, state),
+            (Expr::Variable(_, _, _), rhs) => optimize_expr(rhs, state),
             // lhs[rhs]
             (lhs, rhs) => { optimize_expr(lhs, state); optimize_expr(rhs, state); }
         },
@@ -794,6 +794,19 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         Expr::FnCall(x, _) if x.name == KEYWORD_EVAL => {
             state.propagate_constants = false;
         }
+        // Fn
+        Expr::FnCall(x, pos)
+            if x.namespace.is_none() // Non-qualified
+            && state.optimization_level == OptimizationLevel::Simple // simple optimizations
+            && x.num_args() == 1
+            && x.constant_args.len() == 1
+            && x.constant_args[0].0.is::<ImmutableString>()
+            && x.name == KEYWORD_FN_PTR
+        => {
+            state.set_dirty();
+            *expr = Expr::FnPointer(mem::take(&mut x.constant_args[0].0).take_immutable_string().unwrap(), *pos);
+        }
+
         // Do not call some special keywords
         Expr::FnCall(x, _) if DONT_EVAL_KEYWORDS.contains(&x.name.as_ref()) => {
             x.args.iter_mut().for_each(|a| optimize_expr(a, state));
@@ -901,12 +914,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         }
 
         // constant-name
-        Expr::Variable(x) if x.1.is_none() && state.find_constant(&x.2.name).is_some() => {
+        Expr::Variable(_, pos, x) if x.1.is_none() && state.find_constant(&x.2).is_some() => {
             state.set_dirty();
 
             // Replace constant with value
-            let mut result = state.find_constant(&x.2.name).unwrap().clone();
-            result.set_position(x.2.pos);
+            let mut result = state.find_constant(&x.2).unwrap().clone();
+            result.set_position(*pos);
             *expr = result;
         }
 

@@ -327,6 +327,16 @@ fn test_string_interpolated() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<String>(
+            r#"
+                let x = 40;
+                "hello ${x+2} worlds!"
+            "#
+        )?,
+        "hello ${x+2} worlds!"
+    );
+
+    assert_eq!(
+        engine.eval::<String>(
             r"
                 const x = 42;
                 `hello ${x} worlds!`

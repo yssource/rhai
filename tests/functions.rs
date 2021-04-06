@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, FnNamespace, Module, ParseErrorType, Shared, INT};
+use rhai::{Engine, EvalAltResult, FnNamespace, Module, Shared, INT};
 
 #[cfg(not(feature = "no_object"))]
 #[test]

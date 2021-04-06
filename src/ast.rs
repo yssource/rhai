@@ -9,7 +9,7 @@ use crate::stdlib::{
     fmt,
     hash::Hash,
     iter::empty,
-    num::NonZeroUsize,
+    num::{NonZeroU8, NonZeroUsize},
     ops::{Add, AddAssign},
     string::String,
     vec,
@@ -24,6 +24,9 @@ use crate::{
 
 #[cfg(not(feature = "no_float"))]
 use crate::{stdlib::str::FromStr, FLOAT};
+
+#[cfg(not(feature = "no_float"))]
+use num_traits::Float;
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
@@ -384,7 +387,7 @@ impl AST {
     ///             "#)?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { "hello" + n }
+    ///                 fn foo(n) { `hello${n}` }
     ///                 foo("!")
     ///             "#)?;
     ///
@@ -395,7 +398,7 @@ impl AST {
     ///
     /// // 'ast' is essentially:
     /// //
-    /// //    fn foo(n) { "hello" + n } // <- definition of first 'foo' is overwritten
+    /// //    fn foo(n) { `hello${n}` } // <- definition of first 'foo' is overwritten
     /// //    foo(1)                    // <- notice this will be "hello1" instead of 43,
     /// //                              //    but it is no longer the return value
     /// //    foo("!")                  // returns "hello!"
@@ -436,7 +439,7 @@ impl AST {
     ///                 "#)?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { "hello" + n }
+    ///                 fn foo(n) { `hello${n}` }
     ///                 foo("!")
     ///             "#)?;
     ///
@@ -447,7 +450,7 @@ impl AST {
     ///
     /// // 'ast1' is essentially:
     /// //
-    /// //    fn foo(n) { "hello" + n } // <- definition of first 'foo' is overwritten
+    /// //    fn foo(n) { `hello${n}` } // <- definition of first 'foo' is overwritten
     /// //    foo(1)                    // <- notice this will be "hello1" instead of 43,
     /// //                              //    but it is no longer the return value
     /// //    foo("!")                  // returns "hello!"
@@ -490,7 +493,7 @@ impl AST {
     ///             "#)?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { "hello" + n }
+    ///                 fn foo(n) { `hello${n}` }
     ///                 fn error() { 0 }
     ///                 foo("!")
     ///             "#)?;
@@ -574,7 +577,7 @@ impl AST {
     ///                 "#)?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { "hello" + n }
+    ///                 fn foo(n) { `hello${n}` }
     ///                 fn error() { 0 }
     ///                 foo("!")
     ///             "#)?;
@@ -776,7 +779,7 @@ pub struct Ident {
 impl fmt::Debug for Ident {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Ident({:?} @ {:?})", self.name, self.pos)
+        write!(f, "{:?} @ {:?}", self.name, self.pos)
     }
 }
 
@@ -1440,13 +1443,13 @@ impl FnCallExpr {
     }
 }
 
-/// A type that wraps a [`FLOAT`] and implements [`Hash`].
+/// A type that wraps a floating-point number and implements [`Hash`].
 #[cfg(not(feature = "no_float"))]
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
-pub struct FloatWrapper(FLOAT);
+pub struct FloatWrapper<F>(F);
 
 #[cfg(not(feature = "no_float"))]
-impl Hash for FloatWrapper {
+impl Hash for FloatWrapper<FLOAT> {
     #[inline(always)]
     fn hash<H: crate::stdlib::hash::Hasher>(&self, state: &mut H) {
         self.0.to_ne_bytes().hash(state);
@@ -1454,24 +1457,24 @@ impl Hash for FloatWrapper {
 }
 
 #[cfg(not(feature = "no_float"))]
-impl AsRef<FLOAT> for FloatWrapper {
+impl<F: Float> AsRef<F> for FloatWrapper<F> {
     #[inline(always)]
-    fn as_ref(&self) -> &FLOAT {
+    fn as_ref(&self) -> &F {
         &self.0
     }
 }
 
 #[cfg(not(feature = "no_float"))]
-impl AsMut<FLOAT> for FloatWrapper {
+impl<F: Float> AsMut<F> for FloatWrapper<F> {
     #[inline(always)]
-    fn as_mut(&mut self) -> &mut FLOAT {
+    fn as_mut(&mut self) -> &mut F {
         &mut self.0
     }
 }
 
 #[cfg(not(feature = "no_float"))]
-impl crate::stdlib::ops::Deref for FloatWrapper {
-    type Target = FLOAT;
+impl<F: Float> crate::stdlib::ops::Deref for FloatWrapper<F> {
+    type Target = F;
 
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
@@ -1480,7 +1483,7 @@ impl crate::stdlib::ops::Deref for FloatWrapper {
 }
 
 #[cfg(not(feature = "no_float"))]
-impl crate::stdlib::ops::DerefMut for FloatWrapper {
+impl<F: Float> crate::stdlib::ops::DerefMut for FloatWrapper<F> {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
@@ -1488,52 +1491,68 @@ impl crate::stdlib::ops::DerefMut for FloatWrapper {
 }
 
 #[cfg(not(feature = "no_float"))]
-impl fmt::Debug for FloatWrapper {
+impl<F: Float + fmt::Display> fmt::Debug for FloatWrapper<F> {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self, f)
+        fmt::Display::fmt(&self.0, f)
     }
 }
 
 #[cfg(not(feature = "no_float"))]
-impl fmt::Display for FloatWrapper {
+impl<F: Float + fmt::Display + fmt::LowerExp + From<f32>> fmt::Display for FloatWrapper<F> {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        #[cfg(feature = "no_std")]
-        #[cfg(not(feature = "no_float"))]
-        use num_traits::Float;
-
         let abs = self.0.abs();
-        if abs > 10000000000000.0 || abs < 0.0000000000001 {
+        if abs > Self::MAX_NATURAL_FLOAT_FOR_DISPLAY.into()
+            || abs < Self::MIN_NATURAL_FLOAT_FOR_DISPLAY.into()
+        {
             write!(f, "{:e}", self.0)
         } else {
-            self.0.fmt(f)
+            fmt::Display::fmt(&self.0, f)?;
+            if abs.fract().is_zero() {
+                f.write_str(".0")?;
+            }
+            Ok(())
         }
     }
 }
 
 #[cfg(not(feature = "no_float"))]
-impl From<FLOAT> for FloatWrapper {
+impl<F: Float> From<F> for FloatWrapper<F> {
     #[inline(always)]
-    fn from(value: FLOAT) -> Self {
+    fn from(value: F) -> Self {
         Self::new(value)
     }
 }
 
 #[cfg(not(feature = "no_float"))]
-impl FromStr for FloatWrapper {
-    type Err = <FLOAT as FromStr>::Err;
+impl<F: Float + FromStr> FromStr for FloatWrapper<F> {
+    type Err = <F as FromStr>::Err;
 
     #[inline(always)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        FLOAT::from_str(s).map(Into::<Self>::into)
+        F::from_str(s).map(Into::<Self>::into)
     }
 }
 
 #[cfg(not(feature = "no_float"))]
-impl FloatWrapper {
+impl<F: Float> FloatWrapper<F> {
+    /// Maximum floating-point number for natural display before switching to scientific notation.
+    pub const MAX_NATURAL_FLOAT_FOR_DISPLAY: f32 = 10000000000000.0;
+
+    /// Minimum floating-point number for natural display before switching to scientific notation.
+    pub const MIN_NATURAL_FLOAT_FOR_DISPLAY: f32 = 0.0000000000001;
+
     #[inline(always)]
-    pub const fn new(value: FLOAT) -> Self {
+    pub fn new(value: F) -> Self {
+        Self(value)
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+impl FloatWrapper<FLOAT> {
+    #[inline(always)]
+    pub(crate) const fn const_new(value: FLOAT) -> Self {
         Self(value)
     }
 }
@@ -1544,7 +1563,7 @@ impl FloatWrapper {
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Hash)]
+#[derive(Clone, Hash)]
 pub enum Expr {
     /// Dynamic constant.
     /// Used to hold either an [`Array`] or [`Map`][crate::Map] literal for quick cloning.
@@ -1556,7 +1575,7 @@ pub enum Expr {
     IntegerConstant(INT, Position),
     /// Floating-point constant.
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(FloatWrapper, Position),
+    FloatConstant(FloatWrapper<FLOAT>, Position),
     /// Character constant.
     CharConstant(char, Position),
     /// [String][ImmutableString] constant.
@@ -1574,8 +1593,20 @@ pub enum Expr {
     ),
     /// ()
     Unit(Position),
-    /// Variable access - (optional index, optional (hash, modules), variable name)
-    Variable(Box<(Option<NonZeroUsize>, Option<(u64, NamespaceRef)>, Ident)>),
+    /// Variable access - optional short index, position, (optional index, optional (hash, modules), variable name)
+    ///
+    /// The short index is [`u8`] which is used when the index is <= 255, which should be the vast
+    /// majority of cases (unless there are more than 255 variables defined!).
+    /// This is to avoid reading a pointer redirection during each variable access.
+    Variable(
+        Option<NonZeroU8>,
+        Position,
+        Box<(
+            Option<NonZeroUsize>,
+            Option<(u64, NamespaceRef)>,
+            Identifier,
+        )>,
+    ),
     /// Property access - ((getter, hash), (setter, hash), prop)
     Property(Box<((Identifier, u64), (Identifier, u64), Ident)>),
     /// { [statement][Stmt] ... }
@@ -1598,6 +1629,80 @@ impl Default for Expr {
     #[inline(always)]
     fn default() -> Self {
         Self::Unit(Position::NONE)
+    }
+}
+
+impl fmt::Debug for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DynamicConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
+            Self::BoolConstant(value, pos) => write!(f, "{} @ {:?}", value, pos),
+            Self::IntegerConstant(value, pos) => write!(f, "{} @ {:?}", value, pos),
+            #[cfg(not(feature = "no_float"))]
+            Self::FloatConstant(value, pos) => write!(f, "{} @ {:?}", value, pos),
+            Self::CharConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
+            Self::StringConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
+            Self::FnPointer(value, pos) => write!(f, "Fn({:?}) @ {:?}", value, pos),
+            Self::Unit(pos) => write!(f, "() @ {:?}", pos),
+            Self::InterpolatedString(x) => {
+                f.write_str("InterpolatedString")?;
+                f.debug_list().entries(x.iter()).finish()
+            }
+            Self::Array(x, pos) => {
+                f.write_str("Array")?;
+                f.debug_list().entries(x.iter()).finish()?;
+                write!(f, " @ {:?}", pos)
+            }
+            Self::Map(x, pos) => {
+                f.write_str("Map")?;
+                f.debug_map()
+                    .entries(x.0.iter().map(|(k, v)| (k, v)))
+                    .finish()?;
+                write!(f, " @ {:?}", pos)
+            }
+            Self::Variable(i, pos, x) => {
+                f.write_str("Variable(")?;
+                match x.1 {
+                    Some((_, ref namespace)) => write!(f, "{}::", namespace)?,
+                    _ => (),
+                }
+                write!(f, "{}", x.2)?;
+                match i.map_or_else(|| x.0, |n| NonZeroUsize::new(n.get() as usize)) {
+                    Some(n) => write!(f, " [{}]", n)?,
+                    _ => (),
+                }
+                write!(f, ") @ {:?}", pos)
+            }
+            Self::Property(x) => write!(f, "Property({:?} @ {:?})", x.2.name, x.2.pos),
+            Self::Stmt(x) => {
+                f.write_str("Stmt")?;
+                f.debug_list().entries(x.statements.iter()).finish()?;
+                write!(f, " @ {:?}", x.pos)
+            }
+            Self::FnCall(x, pos) => {
+                f.debug_tuple("FnCall").field(x).finish()?;
+                write!(f, " @ {:?}", pos)
+            }
+            Self::Dot(x, pos) | Self::Index(x, pos) | Self::And(x, pos) | Self::Or(x, pos) => {
+                let op = match self {
+                    Self::Dot(_, _) => "Dot",
+                    Self::Index(_, _) => "Index",
+                    Self::And(_, _) => "And",
+                    Self::Or(_, _) => "Or",
+                    _ => unreachable!(),
+                };
+
+                f.debug_struct(op)
+                    .field("lhs", &x.lhs)
+                    .field("rhs", &x.rhs)
+                    .finish()?;
+                write!(f, " @ {:?}", pos)
+            }
+            Self::Custom(x, pos) => {
+                f.debug_tuple("Custom").field(x).finish()?;
+                write!(f, " @ {:?}", pos)
+            }
+        }
     }
 }
 
@@ -1640,11 +1745,19 @@ impl Expr {
             _ => return None,
         })
     }
+    /// Is the expression a simple variable access?
+    #[inline(always)]
+    pub(crate) fn is_variable_access(&self, non_qualified: bool) -> bool {
+        match self {
+            Self::Variable(_, _, x) => !non_qualified || x.1.is_none(),
+            _ => false,
+        }
+    }
     /// Return the variable name if the expression a simple variable access.
     #[inline(always)]
-    pub(crate) fn get_variable_access(&self, non_qualified: bool) -> Option<&str> {
+    pub(crate) fn get_variable_name(&self, non_qualified: bool) -> Option<&str> {
         match self {
-            Self::Variable(x) if !non_qualified || x.1.is_none() => Some((x.2).name.as_str()),
+            Self::Variable(_, _, x) if !non_qualified || x.1.is_none() => Some(x.2.as_str()),
             _ => None,
         }
     }
@@ -1666,7 +1779,7 @@ impl Expr {
             Self::Map(_, pos) => *pos,
             Self::Property(x) => (x.2).pos,
             Self::Stmt(x) => x.pos,
-            Self::Variable(x) => (x.2).pos,
+            Self::Variable(_, pos, _) => *pos,
             Self::FnCall(_, pos) => *pos,
 
             Self::And(x, _) | Self::Or(x, _) => x.lhs.position(),
@@ -1696,7 +1809,7 @@ impl Expr {
             Self::FnPointer(_, pos) => *pos = new_pos,
             Self::Array(_, pos) => *pos = new_pos,
             Self::Map(_, pos) => *pos = new_pos,
-            Self::Variable(x) => (x.2).pos = new_pos,
+            Self::Variable(_, pos, _) => *pos = new_pos,
             Self::Property(x) => (x.2).pos = new_pos,
             Self::Stmt(x) => x.pos = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
@@ -1724,7 +1837,7 @@ impl Expr {
 
             Self::Stmt(x) => x.statements.iter().all(Stmt::is_pure),
 
-            Self::Variable(_) => true,
+            Self::Variable(_, _, _) => true,
 
             _ => self.is_constant(),
         }
@@ -1794,7 +1907,7 @@ impl Expr {
                 _ => false,
             },
 
-            Self::Variable(_) => match token {
+            Self::Variable(_, _, _) => match token {
                 #[cfg(not(feature = "no_index"))]
                 Token::LeftBracket => true,
                 Token::LeftParen => true,
@@ -1894,7 +2007,7 @@ mod tests {
         assert_eq!(size_of::<Option<ast::Expr>>(), 16);
         assert_eq!(size_of::<ast::Stmt>(), 32);
         assert_eq!(size_of::<Option<ast::Stmt>>(), 32);
-        assert_eq!(size_of::<FnPtr>(), 80);
+        assert_eq!(size_of::<FnPtr>(), 96);
         assert_eq!(size_of::<Scope>(), 288);
         assert_eq!(size_of::<LexError>(), 56);
         assert_eq!(size_of::<ParseError>(), 16);

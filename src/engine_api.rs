@@ -9,7 +9,6 @@ use crate::parser::ParseState;
 use crate::stdlib::{
     any::{type_name, TypeId},
     boxed::Box,
-    num::NonZeroUsize,
     string::String,
 };
 use crate::{
@@ -1158,16 +1157,8 @@ impl Engine {
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let (stream, buffer) = self.lex_raw(scripts, None);
-        let mut state = ParseState::new(
-            self,
-            buffer,
-            #[cfg(not(feature = "unchecked"))]
-            NonZeroUsize::new(self.max_expr_depth()),
-            #[cfg(not(feature = "unchecked"))]
-            #[cfg(not(feature = "no_function"))]
-            NonZeroUsize::new(self.max_function_expr_depth()),
-        );
+        let (stream, tokenizer_control) = self.lex_raw(scripts, None);
+        let mut state = ParseState::new(self, tokenizer_control);
         self.parse(
             &mut stream.peekable(),
             &mut state,
@@ -1347,7 +1338,7 @@ impl Engine {
             .into());
         };
 
-        let (stream, buffer) = self.lex_raw(
+        let (stream, tokenizer_control) = self.lex_raw(
             &scripts,
             Some(if has_null {
                 |token| match token {
@@ -1360,15 +1351,7 @@ impl Engine {
             }),
         );
 
-        let mut state = ParseState::new(
-            self,
-            buffer,
-            #[cfg(not(feature = "unchecked"))]
-            NonZeroUsize::new(self.max_expr_depth()),
-            #[cfg(not(feature = "unchecked"))]
-            #[cfg(not(feature = "no_function"))]
-            NonZeroUsize::new(self.max_function_expr_depth()),
-        );
+        let mut state = ParseState::new(self, tokenizer_control);
 
         let ast = self.parse_global_expr(
             &mut stream.peekable(),
@@ -1454,18 +1437,10 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
-        let (stream, buffer) = self.lex_raw(&scripts, None);
+        let (stream, tokenizer_control) = self.lex_raw(&scripts, None);
 
         let mut peekable = stream.peekable();
-        let mut state = ParseState::new(
-            self,
-            buffer,
-            #[cfg(not(feature = "unchecked"))]
-            NonZeroUsize::new(self.max_expr_depth()),
-            #[cfg(not(feature = "unchecked"))]
-            #[cfg(not(feature = "no_function"))]
-            NonZeroUsize::new(self.max_function_expr_depth()),
-        );
+        let mut state = ParseState::new(self, tokenizer_control);
         self.parse_global_expr(&mut peekable, &mut state, scope, self.optimization_level)
     }
     /// Evaluate a script file.
@@ -1624,16 +1599,8 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
-        let (stream, buffer) = self.lex_raw(&scripts, None);
-        let mut state = ParseState::new(
-            self,
-            buffer,
-            #[cfg(not(feature = "unchecked"))]
-            NonZeroUsize::new(self.max_expr_depth()),
-            #[cfg(not(feature = "unchecked"))]
-            #[cfg(not(feature = "no_function"))]
-            NonZeroUsize::new(self.max_function_expr_depth()),
-        );
+        let (stream, tokenizer_control) = self.lex_raw(&scripts, None);
+        let mut state = ParseState::new(self, tokenizer_control);
 
         // No need to optimize a lone expression
         let ast = self.parse_global_expr(
@@ -1779,16 +1746,8 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
-        let (stream, buffer) = self.lex_raw(&scripts, None);
-        let mut state = ParseState::new(
-            self,
-            buffer,
-            #[cfg(not(feature = "unchecked"))]
-            NonZeroUsize::new(self.max_expr_depth()),
-            #[cfg(not(feature = "unchecked"))]
-            #[cfg(not(feature = "no_function"))]
-            NonZeroUsize::new(self.max_function_expr_depth()),
-        );
+        let (stream, tokenizer_control) = self.lex_raw(&scripts, None);
+        let mut state = ParseState::new(self, tokenizer_control);
 
         let ast = self.parse(
             &mut stream.peekable(),

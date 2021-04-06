@@ -211,7 +211,10 @@ pub use dynamic::Variant;
 // Expose internal data structures.
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
-pub use token::{get_next_token, parse_string_literal, InputStream, Token, TokenizeState};
+pub use token::{
+    get_next_token, parse_string_literal, InputStream, Token, TokenizeState, TokenizerControl,
+    TokenizerControlBlock,
+};
 
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]

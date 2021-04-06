@@ -1,7 +1,7 @@
 Rhai Release Notes
 ==================
 
-This version adds string interpolation.
+This version adds string interpolation with `` `... ${`` ... ``} ...` `` syntax.
 
 Version 0.19.16
 ===============

@@ -21,9 +21,9 @@ for n in range(0, 5) {
 	result = fib(target);
 }
 
-print("Finished. Run time = " + now.elapsed + " seconds.");
+print(`Finished. Run time = ${now.elapsed} seconds.`);
 
-print("Fibonacci number #" + target + " = " + result);
+print(`Fibonacci number #${target} = ${result}`);
 
 if result != 317_811 {
     print("The answer is WRONG! Should be 317,811!");

@@ -40,9 +40,9 @@ fn main() {
 
                     loop {
                         let x = get();
-                        print("Script Read: " + x);
+                        print(`Script Read: ${x}`);
                         x += 1;
-                        print("Script Write: " + x);
+                        print(`Script Write: ${x}`);
                         put(x);
                     }
                 "#,

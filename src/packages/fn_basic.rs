@@ -9,7 +9,7 @@ def_package!(crate:BasicFnPackage:"Basic Fn functions.", lib, {
 mod fn_ptr_functions {
     #[rhai_fn(name = "name", get = "name", pure)]
     pub fn name(f: &mut FnPtr) -> ImmutableString {
-        f.get_fn_name().clone()
+        f.get_fn_name().as_str().into()
     }
 
     #[cfg(not(feature = "no_function"))]

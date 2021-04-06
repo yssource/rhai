@@ -48,6 +48,7 @@ fn test_optimizer_run() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[cfg(not(feature = "no_module"))]
 #[test]
 fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
@@ -55,24 +56,33 @@ fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
 
     let ast = engine.compile("{ const DECISION = false; if DECISION { 42 } else { 123 } }")?;
 
-    assert!(format!("{:?}", ast).starts_with(
-        r#"AST { source: None, body: [Expr(IntegerConstant(123, 1:53))], functions: Module("#
-    ));
+    assert_eq!(
+        format!("{:?}", ast),
+        "AST { source: None, body: [Expr(123 @ 1:53)], functions: Module, resolver: None }"
+    );
 
     let ast = engine.compile("const DECISION = false; if DECISION { 42 } else { 123 }")?;
 
-    assert!(format!("{:?}", ast).starts_with(r#"AST { source: None, body: [Const(BoolConstant(false, 1:18), Ident("DECISION" @ 1:7), false, 1:1), Expr(IntegerConstant(123, 1:51))], functions: Module("#));
+    assert_eq!(
+        format!("{:?}", ast),
+        r#"AST { source: None, body: [Const(false @ 1:18, "DECISION" @ 1:7, false, 1:1), Expr(123 @ 1:51)], functions: Module, resolver: None }"#
+    );
 
     let ast = engine.compile("if 1 == 2 { 42 }")?;
 
-    assert!(format!("{:?}", ast).starts_with("AST { source: None, body: [], functions: Module("));
+    assert_eq!(
+        format!("{:?}", ast),
+        "AST { source: None, body: [], functions: Module, resolver: None }"
+    );
 
     engine.set_optimization_level(OptimizationLevel::Full);
 
     let ast = engine.compile("abs(-42)")?;
 
-    assert!(format!("{:?}", ast)
-        .starts_with(r"AST { source: None, body: [Expr(IntegerConstant(42, 1:1))]"));
+    assert_eq!(
+        format!("{:?}", ast),
+        "AST { source: None, body: [Expr(42 @ 1:1)], functions: Module, resolver: None }"
+    );
 
     Ok(())
 }

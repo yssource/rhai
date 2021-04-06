@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use rhai::Array;
 #[cfg(not(feature = "no_object"))]
 use rhai::Map;
+#[cfg(not(feature = "no_float"))]
+use rhai::FLOAT;
 #[cfg(feature = "decimal")]
 use rust_decimal::Decimal;
 
@@ -358,7 +360,7 @@ fn test_serde_de_primary_types() -> Result<(), Box<EvalAltResult>> {
 
     #[cfg(not(feature = "no_float"))]
     {
-        assert_eq!(123.456, from_dynamic::<f64>(&123.456_f64.into())?);
+        assert_eq!(123.456, from_dynamic::<FLOAT>(&123.456.into())?);
         assert_eq!(123.456, from_dynamic::<f32>(&Dynamic::from(123.456_f32))?);
     }
 
@@ -447,8 +449,8 @@ fn test_serde_de_struct() -> Result<(), Box<EvalAltResult>> {
 fn test_serde_de_script() -> Result<(), Box<EvalAltResult>> {
     #[derive(Debug, Deserialize)]
     struct Point {
-        x: f64,
-        y: f64,
+        x: FLOAT,
+        y: FLOAT,
     }
 
     #[derive(Debug, Deserialize)]

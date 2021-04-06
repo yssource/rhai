@@ -45,7 +45,7 @@ impl Expression<'_> {
     /// If this expression is a variable name, return it.  Otherwise [`None`].
     #[inline(always)]
     pub fn get_variable_name(&self) -> Option<&str> {
-        self.0.get_variable_access(true)
+        self.0.get_variable_name(true)
     }
     /// Get the expression.
     #[inline(always)]
