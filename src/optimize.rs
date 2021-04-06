@@ -2,7 +2,7 @@
 
 use crate::ast::{Expr, Stmt, StmtBlock};
 use crate::dynamic::AccessMode;
-use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_PRINT, KEYWORD_TYPE_OF};
+use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
 use crate::parser::map_dynamic_to_expr;
 use crate::stdlib::{
@@ -794,6 +794,22 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         Expr::FnCall(x, _) if x.name == KEYWORD_EVAL => {
             state.propagate_constants = false;
         }
+        // Fn
+        Expr::FnCall(x, pos)
+            if x.namespace.is_none() // Non-qualified
+            && state.optimization_level == OptimizationLevel::Simple // simple optimizations
+            && x.num_args() == 1
+            && matches!(x.args[0], Expr::StringConstant(_, _))
+            && x.name == KEYWORD_FN_PTR
+        => {
+            if let Expr::StringConstant(s, _) = mem::take(&mut x.args[0]) {
+                state.set_dirty();
+                *expr = Expr::FnPointer(s, *pos);
+            } else {
+                unreachable!();
+            }
+        }
+
         // Do not call some special keywords
         Expr::FnCall(x, _) if DONT_EVAL_KEYWORDS.contains(&x.name.as_ref()) => {
             x.args.iter_mut().for_each(|a| optimize_expr(a, state));

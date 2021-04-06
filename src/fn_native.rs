@@ -13,8 +13,8 @@ use crate::stdlib::{
 };
 use crate::token::is_valid_identifier;
 use crate::{
-    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, ImmutableString, Module, Position,
-    RhaiResult, StaticVec,
+    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, Identifier, ImmutableString, Module,
+    Position, RhaiResult, StaticVec,
 };
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
@@ -252,20 +252,17 @@ pub type FnCallArgs<'a> = [&'a mut Dynamic];
 /// A general function pointer, which may carry additional (i.e. curried) argument values
 /// to be passed onto a function during a call.
 #[derive(Debug, Clone)]
-pub struct FnPtr(ImmutableString, StaticVec<Dynamic>);
+pub struct FnPtr(Identifier, StaticVec<Dynamic>);
 
 impl FnPtr {
     /// Create a new function pointer.
     #[inline(always)]
-    pub fn new(name: impl Into<ImmutableString>) -> Result<Self, Box<EvalAltResult>> {
+    pub fn new(name: impl Into<Identifier>) -> Result<Self, Box<EvalAltResult>> {
         name.into().try_into()
     }
     /// Create a new function pointer without checking its parameters.
     #[inline(always)]
-    pub(crate) fn new_unchecked(
-        name: impl Into<ImmutableString>,
-        curry: StaticVec<Dynamic>,
-    ) -> Self {
+    pub(crate) fn new_unchecked(name: impl Into<Identifier>, curry: StaticVec<Dynamic>) -> Self {
         Self(name.into(), curry)
     }
     /// Get the name of the function.
@@ -275,12 +272,12 @@ impl FnPtr {
     }
     /// Get the name of the function.
     #[inline(always)]
-    pub(crate) fn get_fn_name(&self) -> &ImmutableString {
+    pub(crate) fn get_fn_name(&self) -> &Identifier {
         &self.0
     }
     /// Get the underlying data of the function pointer.
     #[inline(always)]
-    pub(crate) fn take_data(self) -> (ImmutableString, StaticVec<Dynamic>) {
+    pub(crate) fn take_data(self) -> (Identifier, StaticVec<Dynamic>) {
         (self.0, self.1)
     }
     /// Get the curried arguments.
@@ -362,11 +359,11 @@ impl fmt::Display for FnPtr {
     }
 }
 
-impl TryFrom<ImmutableString> for FnPtr {
+impl TryFrom<Identifier> for FnPtr {
     type Error = Box<EvalAltResult>;
 
     #[inline(always)]
-    fn try_from(value: ImmutableString) -> Result<Self, Self::Error> {
+    fn try_from(value: Identifier) -> Result<Self, Self::Error> {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, Default::default()))
         } else {
@@ -375,12 +372,22 @@ impl TryFrom<ImmutableString> for FnPtr {
     }
 }
 
+impl TryFrom<ImmutableString> for FnPtr {
+    type Error = Box<EvalAltResult>;
+
+    #[inline(always)]
+    fn try_from(value: ImmutableString) -> Result<Self, Self::Error> {
+        let s: Identifier = value.into();
+        Self::try_from(s)
+    }
+}
+
 impl TryFrom<String> for FnPtr {
     type Error = Box<EvalAltResult>;
 
     #[inline(always)]
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let s: ImmutableString = value.into();
+        let s: Identifier = value.into();
         Self::try_from(s)
     }
 }
@@ -390,7 +397,7 @@ impl TryFrom<&str> for FnPtr {
 
     #[inline(always)]
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let s: ImmutableString = value.into();
+        let s: Identifier = value.into();
         Self::try_from(s)
     }
 }
