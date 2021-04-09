@@ -27,6 +27,7 @@ fn test_comments() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[cfg(not(feature = "no_function"))]
+#[cfg(feature = "metadata")]
 #[test]
 fn test_comments_doc() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();

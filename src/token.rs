@@ -838,6 +838,8 @@ pub struct TokenizeState {
     /// Include comments?
     pub include_comments: bool,
     /// Disable doc-comments?
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(feature = "metadata")]
     pub disable_doc_comments: bool,
     /// Is the current tokenizer position within the text stream of an interpolated string?
     pub is_within_text_terminated_by: Option<char>,
@@ -1155,6 +1157,8 @@ fn is_numeric_digit(c: char) -> bool {
 }
 
 /// Test if the comment block is a doc-comment.
+#[cfg(not(feature = "no_function"))]
+#[cfg(feature = "metadata")]
 #[inline(always)]
 pub fn is_doc_comment(comment: &str) -> bool {
     (comment.starts_with("///") && !comment.starts_with("////"))
@@ -1178,10 +1182,22 @@ fn get_next_token_inner(
 
         state.comment_level = scan_block_comment(stream, state.comment_level, pos, &mut comment);
 
-        if state.include_comments
-            || (!state.disable_doc_comments && is_doc_comment(comment.as_ref().unwrap()))
-        {
+        let include_comments = state.include_comments;
+
+        #[cfg(not(feature = "no_function"))]
+        #[cfg(feature = "metadata")]
+        let include_comments =
+            if !state.disable_doc_comments && is_doc_comment(comment.as_ref().unwrap()) {
+                true
+            } else {
+                include_comments
+            };
+
+        if include_comments {
             return Some((Token::Comment(comment.unwrap()), start_pos));
+        } else if state.comment_level > 0 {
+            // Reached EOF without ending comment block
+            return None;
         }
     }
 
@@ -1496,6 +1512,8 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
 
                 let mut comment = match stream.peek_next() {
+                    #[cfg(not(feature = "no_function"))]
+                    #[cfg(feature = "metadata")]
                     Some('/') if !state.disable_doc_comments => {
                         eat_next(stream, pos);
 
@@ -1529,6 +1547,8 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
 
                 let mut comment = match stream.peek_next() {
+                    #[cfg(not(feature = "no_function"))]
+                    #[cfg(feature = "metadata")]
                     Some('*') if !state.disable_doc_comments => {
                         eat_next(stream, pos);
 
@@ -2024,6 +2044,8 @@ impl Engine {
                     comment_level: 0,
                     end_with_none: false,
                     include_comments: false,
+                    #[cfg(not(feature = "no_function"))]
+                    #[cfg(feature = "metadata")]
                     disable_doc_comments: self.disable_doc_comments,
                     is_within_text_terminated_by: None,
                 },

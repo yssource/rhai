@@ -758,6 +758,8 @@ pub struct Engine {
     pub(crate) limits: Limits,
 
     /// Disable doc-comments?
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(feature = "metadata")]
     pub(crate) disable_doc_comments: bool,
 }
 
@@ -874,6 +876,8 @@ impl Engine {
                 max_map_size: None,
             },
 
+            #[cfg(not(feature = "no_function"))]
+            #[cfg(feature = "metadata")]
             disable_doc_comments: false,
         };
 
@@ -930,6 +934,8 @@ impl Engine {
                 max_map_size: None,
             },
 
+            #[cfg(not(feature = "no_function"))]
+            #[cfg(feature = "metadata")]
             disable_doc_comments: false,
         }
     }
