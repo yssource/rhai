@@ -17,6 +17,7 @@ Breaking changes
 * `ModuleResolver` trait methods take an additional parameter `source_path` that contains the path of the current environment. This is to facilitate loading other script files always from the current directory.
 * `FileModuleResolver` now resolves relative paths under the source path if there is no base path set.
 * `FileModuleResolver::base_path` now returns `Option<&str>` which is `None` if there is no base path set.
+* Doc-comments now require the `metadata` feature.
 
 New features
 ------------

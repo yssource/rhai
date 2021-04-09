@@ -16,7 +16,7 @@ use crate::stdlib::{
     hash::{Hash, Hasher},
     iter::empty,
     num::{NonZeroU8, NonZeroUsize},
-    string::{String, ToString},
+    string::ToString,
     vec,
     vec::Vec,
 };
@@ -2483,10 +2483,10 @@ fn parse_stmt(
 ) -> Result<Stmt, ParseError> {
     use AccessMode::{ReadOnly, ReadWrite};
 
-    let mut _comments: StaticVec<String> = Default::default();
-
     #[cfg(not(feature = "no_function"))]
-    {
+    #[cfg(feature = "metadata")]
+    let comments = {
+        let mut comments: StaticVec<crate::stdlib::string::String> = Default::default();
         let mut comments_pos = Position::NONE;
 
         // Handle doc-comments.
@@ -2505,7 +2505,7 @@ fn parse_stmt(
 
             match input.next().unwrap().0 {
                 Token::Comment(comment) => {
-                    _comments.push(comment);
+                    comments.push(comment);
 
                     match input.peek().unwrap() {
                         (Token::Fn, _) | (Token::Private, _) => break,
@@ -2516,7 +2516,9 @@ fn parse_stmt(
                 _ => unreachable!(),
             }
         }
-    }
+
+        comments
+    };
 
     let (token, token_pos) = match input.peek().unwrap() {
         (Token::EOF, pos) => return Ok(Stmt::Noop(*pos)),
@@ -2572,7 +2574,17 @@ fn parse_stmt(
                         pos: pos,
                     };
 
-                    let func = parse_fn(input, &mut new_state, lib, access, settings, _comments)?;
+                    let func = parse_fn(
+                        input,
+                        &mut new_state,
+                        lib,
+                        access,
+                        settings,
+                        #[cfg(not(feature = "no_function"))]
+                        #[cfg(feature = "metadata")]
+                        comments,
+                    )?;
+
                     let hash = calc_fn_hash(empty(), &func.name, func.params.len());
 
                     if lib.contains_key(&hash) {
@@ -2727,7 +2739,9 @@ fn parse_fn(
     lib: &mut FunctionsLib,
     access: FnAccess,
     mut settings: ParseSettings,
-    comments: StaticVec<String>,
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(feature = "metadata")]
+    comments: StaticVec<crate::stdlib::string::String>,
 ) -> Result<ScriptFnDef, ParseError> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2814,6 +2828,8 @@ fn parse_fn(
         lib: None,
         #[cfg(not(feature = "no_module"))]
         mods: Default::default(),
+        #[cfg(not(feature = "no_function"))]
+        #[cfg(feature = "metadata")]
         comments,
     })
 }
@@ -2967,6 +2983,8 @@ fn parse_anon_fn(
         lib: None,
         #[cfg(not(feature = "no_module"))]
         mods: Default::default(),
+        #[cfg(not(feature = "no_function"))]
+        #[cfg(feature = "metadata")]
         comments: Default::default(),
     };
 
