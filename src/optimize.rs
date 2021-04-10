@@ -1002,6 +1002,8 @@ pub fn optimize_into_ast(
                     lib: None,
                     #[cfg(not(feature = "no_module"))]
                     mods: Default::default(),
+                    #[cfg(not(feature = "no_function"))]
+                    #[cfg(feature = "metadata")]
                     comments: Default::default(),
                 })
                 .for_each(|fn_def| {

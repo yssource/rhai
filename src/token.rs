@@ -838,6 +838,8 @@ pub struct TokenizeState {
     /// Include comments?
     pub include_comments: bool,
     /// Disable doc-comments?
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(feature = "metadata")]
     pub disable_doc_comments: bool,
     /// Is the current tokenizer position within the text stream of an interpolated string?
     pub is_within_text_terminated_by: Option<char>,
@@ -876,39 +878,31 @@ pub fn parse_string_literal(
     termination_char: char,
     continuation: bool,
     verbatim: bool,
-    skip_first_new_line: bool,
     allow_interpolation: bool,
 ) -> Result<(String, bool), (LexError, Position)> {
-    let mut result: smallvec::SmallVec<[char; 16]> = Default::default();
-    let mut escape: smallvec::SmallVec<[char; 12]> = Default::default();
+    let mut result = String::with_capacity(12);
+    let mut escape = String::with_capacity(12);
 
     let start = *pos;
     let mut skip_whitespace_until = 0;
     let mut interpolated = false;
 
-    if skip_first_new_line {
-        // Start from the next line if at the end of line
-        match stream.peek_next() {
-            // `\r - start from next line
-            Some('\r') => {
-                eat_next(stream, pos);
-                // `\r\n
-                if stream.peek_next().map(|ch| ch == '\n').unwrap_or(false) {
-                    eat_next(stream, pos);
-                }
-            }
-            // `\n - start from next line
-            Some('\n') => {
-                eat_next(stream, pos);
-            }
-            _ => (),
-        }
-    }
+    state.is_within_text_terminated_by = Some(termination_char);
 
     loop {
-        let next_char = stream.get_next().ok_or((LERR::UnterminatedString, start))?;
-
-        pos.advance();
+        let next_char = match stream.get_next() {
+            Some(ch) => {
+                pos.advance();
+                ch
+            }
+            None => {
+                if !continuation || escape != "\\" {
+                    result += &escape;
+                }
+                pos.advance();
+                break;
+            }
+        };
 
         // String interpolation?
         if allow_interpolation
@@ -917,6 +911,7 @@ pub fn parse_string_literal(
             && stream.peek_next().map(|ch| ch == '{').unwrap_or(false)
         {
             interpolated = true;
+            state.is_within_text_terminated_by = None;
             break;
         }
 
@@ -968,31 +963,23 @@ pub fn parse_string_literal(
                 };
 
                 for _ in 0..len {
-                    let c = stream.get_next().ok_or_else(|| {
-                        (
-                            LERR::MalformedEscapeSequence(seq.iter().cloned().collect()),
-                            *pos,
-                        )
-                    })?;
+                    let c = stream
+                        .get_next()
+                        .ok_or_else(|| (LERR::MalformedEscapeSequence(seq.to_string()), *pos))?;
 
                     seq.push(c);
                     pos.advance();
 
                     out_val *= 16;
-                    out_val += c.to_digit(16).ok_or_else(|| {
-                        (
-                            LERR::MalformedEscapeSequence(seq.iter().cloned().collect()),
-                            *pos,
-                        )
-                    })?;
+                    out_val += c
+                        .to_digit(16)
+                        .ok_or_else(|| (LERR::MalformedEscapeSequence(seq.to_string()), *pos))?;
                 }
 
-                result.push(char::from_u32(out_val).ok_or_else(|| {
-                    (
-                        LERR::MalformedEscapeSequence(seq.into_iter().collect()),
-                        *pos,
-                    )
-                })?);
+                result.push(
+                    char::from_u32(out_val)
+                        .ok_or_else(|| (LERR::MalformedEscapeSequence(seq), *pos))?,
+                );
             }
 
             // \{termination_char} - escaped
@@ -1002,7 +989,10 @@ pub fn parse_string_literal(
             }
 
             // Close wrapper
-            _ if termination_char == next_char && escape.is_empty() => break,
+            _ if termination_char == next_char && escape.is_empty() => {
+                state.is_within_text_terminated_by = None;
+                break;
+            }
 
             // Line continuation
             '\n' if continuation && !escape.is_empty() => {
@@ -1015,7 +1005,7 @@ pub fn parse_string_literal(
             // Cannot have new-lines inside non-multi-line string literals
             '\n' if !escape.is_empty() || !verbatim => {
                 pos.rewind();
-                return Err((LERR::UnterminatedString, start));
+                return Err((LERR::UnterminatedString, *pos));
             }
 
             '\n' => {
@@ -1027,10 +1017,7 @@ pub fn parse_string_literal(
             _ if !escape.is_empty() => {
                 escape.push(next_char);
 
-                return Err((
-                    LERR::MalformedEscapeSequence(escape.into_iter().collect()),
-                    *pos,
-                ));
+                return Err((LERR::MalformedEscapeSequence(escape), *pos));
             }
 
             // Whitespace to skip
@@ -1045,15 +1032,13 @@ pub fn parse_string_literal(
         }
     }
 
-    let s = result.iter().collect::<String>();
-
     if let Some(max) = state.max_string_size {
-        if s.len() > max.get() {
+        if result.len() > max.get() {
             return Err((LexError::StringTooLong(max.get()), *pos));
         }
     }
 
-    Ok((s, interpolated))
+    Ok((result, interpolated))
 }
 
 /// Consume the next character.
@@ -1155,6 +1140,8 @@ fn is_numeric_digit(c: char) -> bool {
 }
 
 /// Test if the comment block is a doc-comment.
+#[cfg(not(feature = "no_function"))]
+#[cfg(feature = "metadata")]
 #[inline(always)]
 pub fn is_doc_comment(comment: &str) -> bool {
     (comment.starts_with("///") && !comment.starts_with("////"))
@@ -1178,10 +1165,22 @@ fn get_next_token_inner(
 
         state.comment_level = scan_block_comment(stream, state.comment_level, pos, &mut comment);
 
-        if state.include_comments
-            || (!state.disable_doc_comments && is_doc_comment(comment.as_ref().unwrap()))
-        {
+        let include_comments = state.include_comments;
+
+        #[cfg(not(feature = "no_function"))]
+        #[cfg(feature = "metadata")]
+        let include_comments =
+            if !state.disable_doc_comments && is_doc_comment(comment.as_ref().unwrap()) {
+                true
+            } else {
+                include_comments
+            };
+
+        if include_comments {
             return Some((Token::Comment(comment.unwrap()), start_pos));
+        } else if state.comment_level > 0 {
+            // Reached EOF without ending comment block
+            return None;
         }
     }
 
@@ -1189,7 +1188,7 @@ fn get_next_token_inner(
     if let Some(ch) = state.is_within_text_terminated_by.take() {
         let start_pos = *pos;
 
-        return parse_string_literal(stream, state, pos, ch, false, true, true, true).map_or_else(
+        return parse_string_literal(stream, state, pos, ch, false, true, true).map_or_else(
             |(err, err_pos)| Some((Token::LexError(err), err_pos)),
             |(result, interpolated)| {
                 if interpolated {
@@ -1365,7 +1364,7 @@ fn get_next_token_inner(
 
             // " - string literal
             ('"', _) => {
-                return parse_string_literal(stream, state, pos, c, true, false, false, false)
+                return parse_string_literal(stream, state, pos, c, true, false, false)
                     .map_or_else(
                         |(err, err_pos)| Some((Token::LexError(err), err_pos)),
                         |(result, _)| Some((Token::StringConstant(result), start_pos)),
@@ -1373,17 +1372,35 @@ fn get_next_token_inner(
             }
             // ` - string literal
             ('`', _) => {
-                return parse_string_literal(stream, state, pos, c, false, true, true, true)
-                    .map_or_else(
-                        |(err, err_pos)| Some((Token::LexError(err), err_pos)),
-                        |(result, interpolated)| {
-                            if interpolated {
-                                Some((Token::InterpolatedString(result), start_pos))
-                            } else {
-                                Some((Token::StringConstant(result), start_pos))
-                            }
-                        },
-                    );
+                // Start from the next line if at the end of line
+                match stream.peek_next() {
+                    // `\r - start from next line
+                    Some('\r') => {
+                        eat_next(stream, pos);
+                        pos.new_line();
+                        // `\r\n
+                        if stream.peek_next().map(|ch| ch == '\n').unwrap_or(false) {
+                            eat_next(stream, pos);
+                        }
+                    }
+                    // `\n - start from next line
+                    Some('\n') => {
+                        eat_next(stream, pos);
+                        pos.new_line();
+                    }
+                    _ => (),
+                }
+
+                return parse_string_literal(stream, state, pos, c, false, true, true).map_or_else(
+                    |(err, err_pos)| Some((Token::LexError(err), err_pos)),
+                    |(result, interpolated)| {
+                        if interpolated {
+                            Some((Token::InterpolatedString(result), start_pos))
+                        } else {
+                            Some((Token::StringConstant(result), start_pos))
+                        }
+                    },
+                );
             }
 
             // ' - character literal
@@ -1395,20 +1412,19 @@ fn get_next_token_inner(
             }
             ('\'', _) => {
                 return Some(
-                    parse_string_literal(stream, state, pos, c, false, false, false, false)
-                        .map_or_else(
-                            |(err, err_pos)| (Token::LexError(err), err_pos),
-                            |(result, _)| {
-                                let mut chars = result.chars();
-                                let first = chars.next().unwrap();
+                    parse_string_literal(stream, state, pos, c, false, false, false).map_or_else(
+                        |(err, err_pos)| (Token::LexError(err), err_pos),
+                        |(result, _)| {
+                            let mut chars = result.chars();
+                            let first = chars.next().unwrap();
 
-                                if chars.next().is_some() {
-                                    (Token::LexError(LERR::MalformedChar(result)), start_pos)
-                                } else {
-                                    (Token::CharConstant(first), start_pos)
-                                }
-                            },
-                        ),
+                            if chars.next().is_some() {
+                                (Token::LexError(LERR::MalformedChar(result)), start_pos)
+                            } else {
+                                (Token::CharConstant(first), start_pos)
+                            }
+                        },
+                    ),
                 )
             }
 
@@ -1496,6 +1512,8 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
 
                 let mut comment = match stream.peek_next() {
+                    #[cfg(not(feature = "no_function"))]
+                    #[cfg(feature = "metadata")]
                     Some('/') if !state.disable_doc_comments => {
                         eat_next(stream, pos);
 
@@ -1529,6 +1547,8 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
 
                 let mut comment = match stream.peek_next() {
+                    #[cfg(not(feature = "no_function"))]
+                    #[cfg(feature = "metadata")]
                     Some('*') if !state.disable_doc_comments => {
                         eat_next(stream, pos);
 
@@ -1903,6 +1923,10 @@ impl<'a> Iterator for TokenIterator<'a> {
         let (token, pos) = match get_next_token(&mut self.stream, &mut self.state, &mut self.pos) {
             // {EOF}
             None => return None,
+            // Unterminated string at EOF
+            Some((Token::StringConstant(_), _)) if self.state.is_within_text_terminated_by.is_some() => {
+                return Some((Token::LexError(LERR::UnterminatedString), self.pos));
+            }
             // Reserved keyword/symbol
             Some((Token::Reserved(s), pos)) => (match
                 (s.as_str(), self.engine.custom_keywords.contains_key(s.as_str()))
@@ -2024,6 +2048,8 @@ impl Engine {
                     comment_level: 0,
                     end_with_none: false,
                     include_comments: false,
+                    #[cfg(not(feature = "no_function"))]
+                    #[cfg(feature = "metadata")]
                     disable_doc_comments: self.disable_doc_comments,
                     is_within_text_terminated_by: None,
                 },

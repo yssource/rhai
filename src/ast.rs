@@ -11,7 +11,6 @@ use crate::stdlib::{
     iter::empty,
     num::{NonZeroU8, NonZeroUsize},
     ops::{Add, AddAssign},
-    string::String,
     vec,
     vec::Vec,
 };
@@ -65,7 +64,9 @@ pub struct ScriptFnDef {
     #[cfg(not(feature = "no_closure"))]
     pub externals: crate::stdlib::collections::BTreeSet<Identifier>,
     /// Function doc-comments (if any).
-    pub comments: StaticVec<String>,
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(feature = "metadata")]
+    pub comments: StaticVec<crate::stdlib::string::String>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -103,6 +104,8 @@ pub struct ScriptFnMetadata<'a> {
     ///
     /// Leading white-spaces are stripped, and each string slice always starts with the corresponding
     /// doc-comment leader: `///` or `/**`.
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(feature = "metadata")]
     pub comments: Vec<&'a str>,
     /// Function access mode.
     pub access: FnAccess,
@@ -134,6 +137,8 @@ impl<'a> Into<ScriptFnMetadata<'a>> for &'a ScriptFnDef {
     #[inline(always)]
     fn into(self) -> ScriptFnMetadata<'a> {
         ScriptFnMetadata {
+            #[cfg(not(feature = "no_function"))]
+            #[cfg(feature = "metadata")]
             comments: self.comments.iter().map(|s| s.as_str()).collect(),
             access: self.access,
             name: &self.name,
