@@ -654,6 +654,17 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                 result.set_position(*pos);
                 *expr = result;
             }
+            // array[-int]
+            (Expr::Array(a, pos), Expr::IntegerConstant(i, _))
+                if *i < 0 && i.checked_abs().map(|n| n as usize <= a.len()).unwrap_or(false) && a.iter().all(Expr::is_pure) =>
+            {
+                // Array literal where everything is pure - promote the indexed item.
+                // All other items can be thrown away.
+                state.set_dirty();
+                let mut result = a.remove(a.len() - i.abs() as usize);
+                result.set_position(*pos);
+                *expr = result;
+            }
             // map[string]
             (Expr::Map(m, pos), Expr::StringConstant(s, _)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
                 // Map literal where everything is pure - promote the indexed item.
@@ -668,6 +679,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                 // String literal indexing - get the character
                 state.set_dirty();
                 *expr = Expr::CharConstant(s.chars().nth(*i as usize).unwrap(), *pos);
+            }
+            // string[-int]
+            (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _)) if *i < 0 && i.checked_abs().map(|n| n as usize <= s.chars().count()).unwrap_or(false) => {
+                // String literal indexing - get the character
+                state.set_dirty();
+                *expr = Expr::CharConstant(s.chars().rev().nth(i.abs() as usize - 1).unwrap(), *pos);
             }
             // var[rhs]
             (Expr::Variable(_, _, _), rhs) => optimize_expr(rhs, state),

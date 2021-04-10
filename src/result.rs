@@ -104,14 +104,8 @@ impl EvalAltResult {
             Self::ErrorIndexingType(_, _) => {
                 "Indexing can only be performed on an array, an object map, a string, or a type with an indexer function defined"
             }
-            Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
-                "Array access expects non-negative index"
-            }
             Self::ErrorArrayBounds(0, _, _) => "Empty array has nothing to access",
             Self::ErrorArrayBounds(_, _, _) => "Array index out of bounds",
-            Self::ErrorStringBounds(_, index, _) if *index < 0 => {
-                "Indexing a string expects a non-negative index"
-            }
             Self::ErrorStringBounds(0, _, _) => "Empty string has nothing to index",
             Self::ErrorStringBounds(_, _, _) => "String index out of bounds",
             Self::ErrorFor(_) => "For loop expects an array, object map, or range",
@@ -210,32 +204,30 @@ impl fmt::Display for EvalAltResult {
             Self::LoopBreak(_, _) => f.write_str(desc)?,
             Self::Return(_, _) => f.write_str(desc)?,
 
-            Self::ErrorArrayBounds(_, index, _) if *index < 0 => {
-                write!(f, "{}: {} < 0", desc, index)?
+            Self::ErrorArrayBounds(0, index, _) => {
+                write!(f, "Array index {} out of bounds: array is empty", index)?
             }
-            Self::ErrorArrayBounds(0, _, _) => f.write_str(desc)?,
             Self::ErrorArrayBounds(1, index, _) => write!(
                 f,
-                "Array index {} is out of bounds: only one element in the array",
+                "Array index {} out of bounds: only 1 element in the array",
                 index
             )?,
             Self::ErrorArrayBounds(max, index, _) => write!(
                 f,
-                "Array index {} is out of bounds: only {} elements in the array",
+                "Array index {} out of bounds: only {} elements in the array",
                 index, max
             )?,
-            Self::ErrorStringBounds(_, index, _) if *index < 0 => {
-                write!(f, "{}: {} < 0", desc, index)?
+            Self::ErrorStringBounds(0, index, _) => {
+                write!(f, "String index {} out of bounds: string is empty", index)?
             }
-            Self::ErrorStringBounds(0, _, _) => f.write_str(desc)?,
             Self::ErrorStringBounds(1, index, _) => write!(
                 f,
-                "String index {} is out of bounds: only one character in the string",
+                "String index {} out of bounds: only 1 character in the string",
                 index
             )?,
             Self::ErrorStringBounds(max, index, _) => write!(
                 f,
-                "String index {} is out of bounds: only {} characters in the string",
+                "String index {} out of bounds: only {} characters in the string",
                 index, max
             )?,
             Self::ErrorDataTooLarge(typ, _) => write!(f, "{} exceeds maximum limit", typ)?,

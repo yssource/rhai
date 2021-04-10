@@ -12,6 +12,8 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<char>(r#"let y = [1, [ 42, 88, "93" ], 3]; y[1][2][1]"#)?,
         '3'
     );
+    assert_eq!(engine.eval::<INT>("let y = [1, 2, 3]; y[0]")?, 1);
+    assert_eq!(engine.eval::<INT>("let y = [1, 2, 3]; y[-1]")?, 3);
     assert!(engine.eval::<bool>("let y = [1, 2, 3]; 2 in y")?);
     assert_eq!(engine.eval::<INT>("let y = [1, 2, 3]; y += 4; y[3]")?, 4);
 
