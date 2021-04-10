@@ -1598,15 +1598,29 @@ impl Engine {
 
                 let arr_len = arr.len();
 
-                if index >= 0 {
-                    arr.get_mut(index as usize)
-                        .map(Target::from)
-                        .ok_or_else(|| {
-                            EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into()
-                        })
+                let arr_idx = if index < 0 {
+                    // Count from end if negative
+                    arr_len
+                        - index
+                            .checked_abs()
+                            .ok_or_else(|| {
+                                Box::new(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos))
+                            })
+                            .and_then(|n| {
+                                if n as usize > arr_len {
+                                    Err(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos)
+                                        .into())
+                                } else {
+                                    Ok(n as usize)
+                                }
+                            })?
                 } else {
-                    EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into()
-                }
+                    index as usize
+                };
+
+                arr.get_mut(arr_idx)
+                    .map(Target::from)
+                    .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into())
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -1634,15 +1648,27 @@ impl Engine {
                     .as_int()
                     .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
 
-                if index >= 0 {
+                let (ch, offset) = if index >= 0 {
                     let offset = index as usize;
-                    let ch = s.chars().nth(offset).ok_or_else(|| {
-                        EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos)
-                    })?;
-                    Ok(Target::StringChar(target, offset, ch.into()))
+                    (
+                        s.chars().nth(offset).ok_or_else(|| {
+                            EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos)
+                        })?,
+                        offset,
+                    )
+                } else if let Some(index) = index.checked_abs() {
+                    let offset = index as usize;
+                    (
+                        s.chars().rev().nth(offset - 1).ok_or_else(|| {
+                            EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos)
+                        })?,
+                        offset,
+                    )
                 } else {
-                    EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos).into()
-                }
+                    return EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos).into();
+                };
+
+                Ok(Target::StringChar(target, offset, ch.into()))
             }
 
             #[cfg(not(feature = "no_index"))]

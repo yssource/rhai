@@ -46,7 +46,11 @@ fn test_string() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<String>("to_string(42)")?, "42");
 
     #[cfg(not(feature = "no_index"))]
-    assert_eq!(engine.eval::<char>(r#"let y = "hello"; y[1]"#)?, 'e');
+    {
+        assert_eq!(engine.eval::<char>(r#"let y = "hello"; y[1]"#)?, 'e');
+        assert_eq!(engine.eval::<char>(r#"let y = "hello"; y[-1]"#)?, 'o');
+        assert_eq!(engine.eval::<char>(r#"let y = "hello"; y[-4]"#)?, 'e');
+    }
 
     #[cfg(not(feature = "no_object"))]
     assert_eq!(engine.eval::<INT>(r#"let y = "hello"; y.len"#)?, 5);
@@ -109,9 +113,7 @@ fn test_string_substring() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(
-        engine.eval::<String>(
-            r#"let x = "\u2764\u2764\u2764 hello! \u2764\u2764\u2764"; x.sub_string(-1, 2)"#
-        )?,
+        engine.eval::<String>(r#"let x = "hello! \u2764\u2764\u2764"; x.sub_string(-2, 2)"#)?,
         "❤❤"
     );
 
@@ -200,9 +202,9 @@ fn test_string_substring() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r#"let x = "\u2764\u2764\u2764 hello! \u2764\u2764\u2764"; x.index_of('\u2764', -1)"#
+            r#"let x = "\u2764\u2764\u2764 hello! \u2764\u2764\u2764"; x.index_of('\u2764', -6)"#
         )?,
-        0
+        11
     );
 
     assert_eq!(

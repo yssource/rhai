@@ -451,14 +451,6 @@ fn parse_index_chain(
 
     // Check type of indexing - must be integer or string
     match &idx_expr {
-        // lhs[int]
-        Expr::IntegerConstant(x, pos) if *x < 0 => {
-            return Err(PERR::MalformedIndexExpr(format!(
-                "Array access expects non-negative index: {} < 0",
-                *x
-            ))
-            .into_err(*pos))
-        }
         Expr::IntegerConstant(_, pos) => match lhs {
             Expr::Array(_, _) | Expr::StringConstant(_, _) | Expr::InterpolatedString(_) => (),
 

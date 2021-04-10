@@ -34,7 +34,15 @@ mod array_functions {
     }
     pub fn insert(array: &mut Array, position: INT, item: Dynamic) {
         if position <= 0 {
-            array.insert(0, item);
+            if let Some(n) = position.checked_abs() {
+                if n as usize > array.len() {
+                    array.insert(0, item);
+                } else {
+                    array.insert(array.len() - n as usize, item);
+                }
+            } else {
+                array.insert(0, item);
+            }
         } else if (position as usize) >= array.len() {
             push(array, item);
         } else {
@@ -104,9 +112,13 @@ mod array_functions {
     }
     pub fn splice(array: &mut Array, start: INT, len: INT, replace: Array) {
         let start = if start < 0 {
-            0
+            let arr_len = array.len();
+            start
+                .checked_abs()
+                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
         } else if start as usize >= array.len() {
-            array.len() - 1
+            array.extend(replace.into_iter());
+            return;
         } else {
             start as usize
         };
@@ -123,9 +135,12 @@ mod array_functions {
     }
     pub fn extract(array: &mut Array, start: INT, len: INT) -> Array {
         let start = if start < 0 {
-            0
+            let arr_len = array.len();
+            start
+                .checked_abs()
+                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
         } else if start as usize >= array.len() {
-            array.len() - 1
+            return Default::default();
         } else {
             start as usize
         };
@@ -143,9 +158,12 @@ mod array_functions {
     #[rhai_fn(name = "extract")]
     pub fn extract_tail(array: &mut Array, start: INT) -> Array {
         let start = if start < 0 {
-            0
+            let arr_len = array.len();
+            start
+                .checked_abs()
+                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
         } else if start as usize >= array.len() {
-            array.len() - 1
+            return Default::default();
         } else {
             start as usize
         };
@@ -155,7 +173,17 @@ mod array_functions {
     #[rhai_fn(name = "split")]
     pub fn split_at(array: &mut Array, start: INT) -> Array {
         if start <= 0 {
-            mem::take(array)
+            if let Some(n) = start.checked_abs() {
+                if n as usize > array.len() {
+                    mem::take(array)
+                } else {
+                    let mut result: Array = Default::default();
+                    result.extend(array.drain(array.len() - n as usize..));
+                    result
+                }
+            } else {
+                mem::take(array)
+            }
         } else if start as usize >= array.len() {
             Default::default()
         } else {
@@ -270,7 +298,27 @@ mod array_functions {
         array: &mut Array,
         value: Dynamic,
     ) -> Result<INT, Box<EvalAltResult>> {
-        for (i, item) in array.iter_mut().enumerate() {
+        index_of_starting_from(ctx, array, value, 0)
+    }
+    #[rhai_fn(name = "index_of", return_raw, pure)]
+    pub fn index_of_starting_from(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        value: Dynamic,
+        start: INT,
+    ) -> Result<INT, Box<EvalAltResult>> {
+        let start = if start < 0 {
+            let arr_len = array.len();
+            start
+                .checked_abs()
+                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+        } else if start as usize >= array.len() {
+            return Ok(-1);
+        } else {
+            start as usize
+        };
+
+        for (i, item) in array.iter_mut().enumerate().skip(start) {
             if ctx
                 .call_fn_dynamic_raw(OP_EQUALS, true, &mut [item, &mut value.clone()])
                 .or_else(|err| match *err {
@@ -301,7 +349,27 @@ mod array_functions {
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<INT, Box<EvalAltResult>> {
-        for (i, item) in array.iter().enumerate() {
+        index_of_filter_starting_from(ctx, array, filter, 0)
+    }
+    #[rhai_fn(name = "index_of", return_raw, pure)]
+    pub fn index_of_filter_starting_from(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter: FnPtr,
+        start: INT,
+    ) -> Result<INT, Box<EvalAltResult>> {
+        let start = if start < 0 {
+            let arr_len = array.len();
+            start
+                .checked_abs()
+                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+        } else if start as usize >= array.len() {
+            return Ok(-1);
+        } else {
+            start as usize
+        };
+
+        for (i, item) in array.iter().enumerate().skip(start) {
             if filter
                 .call_dynamic(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
@@ -567,18 +635,17 @@ mod array_functions {
     ) -> Result<Array, Box<EvalAltResult>> {
         let mut drained = Array::with_capacity(array.len());
 
-        let mut i = array.len();
+        let mut i = 0;
+        let mut x = 0;
 
-        while i > 0 {
-            i -= 1;
-
+        while x < array.len() {
             if filter
-                .call_dynamic(&ctx, None, [array[i].clone()])
+                .call_dynamic(&ctx, None, [array[x].clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(&ctx, None, [array[i].clone(), (i as INT).into()])
+                        filter.call_dynamic(&ctx, None, [array[x].clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -593,8 +660,12 @@ mod array_functions {
                 .as_bool()
                 .unwrap_or(false)
             {
-                drained.push(array.remove(i));
+                drained.push(array.remove(x));
+            } else {
+                x += 1;
             }
+
+            i += 1;
         }
 
         Ok(drained)
@@ -602,9 +673,12 @@ mod array_functions {
     #[rhai_fn(name = "drain")]
     pub fn drain_range(array: &mut Array, start: INT, len: INT) -> Array {
         let start = if start < 0 {
-            0
+            let arr_len = array.len();
+            start
+                .checked_abs()
+                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
         } else if start as usize >= array.len() {
-            array.len() - 1
+            return Default::default();
         } else {
             start as usize
         };
@@ -617,7 +691,7 @@ mod array_functions {
             len as usize
         };
 
-        array.drain(start..start + len - 1).collect()
+        array.drain(start..start + len).collect()
     }
     #[rhai_fn(return_raw)]
     pub fn retain(
@@ -627,18 +701,17 @@ mod array_functions {
     ) -> Result<Array, Box<EvalAltResult>> {
         let mut drained = Array::new();
 
-        let mut i = array.len();
+        let mut i = 0;
+        let mut x = 0;
 
-        while i > 0 {
-            i -= 1;
-
+        while x < array.len() {
             if !filter
-                .call_dynamic(&ctx, None, [array[i].clone()])
+                .call_dynamic(&ctx, None, [array[x].clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(&ctx, None, [array[i].clone(), (i as INT).into()])
+                        filter.call_dynamic(&ctx, None, [array[x].clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -653,8 +726,12 @@ mod array_functions {
                 .as_bool()
                 .unwrap_or(false)
             {
-                drained.push(array.remove(i));
+                drained.push(array.remove(x));
+            } else {
+                x += 1;
             }
+
+            i += 1;
         }
 
         Ok(drained)
@@ -662,9 +739,12 @@ mod array_functions {
     #[rhai_fn(name = "retain")]
     pub fn retain_range(array: &mut Array, start: INT, len: INT) -> Array {
         let start = if start < 0 {
-            0
+            let arr_len = array.len();
+            start
+                .checked_abs()
+                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
         } else if start as usize >= array.len() {
-            array.len() - 1
+            return mem::take(array);
         } else {
             start as usize
         };
@@ -677,8 +757,8 @@ mod array_functions {
             len as usize
         };
 
-        let mut drained = array.drain(start + len..).collect::<Array>();
-        drained.extend(array.drain(..start));
+        let mut drained = array.drain(..start).collect::<Array>();
+        drained.extend(array.drain(len..));
 
         drained
     }

@@ -109,6 +109,22 @@ mod string_functions {
     #[rhai_fn(name = "index_of")]
     pub fn index_of_char_starting_from(string: &str, character: char, start: INT) -> INT {
         let start = if start < 0 {
+            if let Some(n) = start.checked_abs() {
+                let chars = string.chars().collect::<Vec<_>>();
+                let num_chars = chars.len();
+                if n as usize > num_chars {
+                    0
+                } else {
+                    chars
+                        .into_iter()
+                        .take(num_chars - n as usize)
+                        .collect::<String>()
+                        .len()
+                }
+            } else {
+                0
+            }
+        } else if start == 0 {
             0
         } else if start as usize >= string.chars().count() {
             return -1 as INT;
@@ -135,6 +151,22 @@ mod string_functions {
     #[rhai_fn(name = "index_of")]
     pub fn index_of_string_starting_from(string: &str, find_string: &str, start: INT) -> INT {
         let start = if start < 0 {
+            if let Some(n) = start.checked_abs() {
+                let chars = string.chars().collect::<Vec<_>>();
+                let num_chars = chars.len();
+                if n as usize > num_chars {
+                    0
+                } else {
+                    chars
+                        .into_iter()
+                        .take(num_chars - n as usize)
+                        .collect::<String>()
+                        .len()
+                }
+            } else {
+                0
+            }
+        } else if start == 0 {
             0
         } else if start as usize >= string.chars().count() {
             return -1 as INT;
@@ -165,17 +197,30 @@ mod string_functions {
         start: INT,
         len: INT,
     ) -> ImmutableString {
+        let mut chars = StaticVec::with_capacity(string.len());
+
         let offset = if string.is_empty() || len <= 0 {
             return ctx.engine().empty_string.clone().into();
         } else if start < 0 {
-            0
+            if let Some(n) = start.checked_abs() {
+                chars.extend(string.chars());
+                if n as usize > chars.len() {
+                    0
+                } else {
+                    chars.len() - n as usize
+                }
+            } else {
+                0
+            }
         } else if start as usize >= string.chars().count() {
             return ctx.engine().empty_string.clone().into();
         } else {
             start as usize
         };
 
-        let chars: StaticVec<_> = string.chars().collect();
+        if chars.is_empty() {
+            chars.extend(string.chars());
+        }
 
         let len = if offset + len as usize > chars.len() {
             chars.len() - offset
@@ -203,11 +248,22 @@ mod string_functions {
 
     #[rhai_fn(name = "crop")]
     pub fn crop(string: &mut ImmutableString, start: INT, len: INT) {
+        let mut chars = StaticVec::with_capacity(string.len());
+
         let offset = if string.is_empty() || len <= 0 {
             string.make_mut().clear();
             return;
         } else if start < 0 {
-            0
+            if let Some(n) = start.checked_abs() {
+                chars.extend(string.chars());
+                if n as usize > chars.len() {
+                    0
+                } else {
+                    chars.len() - n as usize
+                }
+            } else {
+                0
+            }
         } else if start as usize >= string.chars().count() {
             string.make_mut().clear();
             return;
@@ -215,7 +271,9 @@ mod string_functions {
             start as usize
         };
 
-        let chars: StaticVec<_> = string.chars().collect();
+        if chars.is_empty() {
+            chars.extend(string.chars());
+        }
 
         let len = if offset + len as usize > chars.len() {
             chars.len() - offset
@@ -374,7 +432,18 @@ mod string_functions {
         #[rhai_fn(name = "split")]
         pub fn split_at(ctx: NativeCallContext, string: ImmutableString, start: INT) -> Array {
             if start <= 0 {
-                vec![ctx.engine().empty_string.clone().into(), string.into()]
+                if let Some(n) = start.checked_abs() {
+                    let num_chars = string.chars().count();
+                    if n as usize > num_chars {
+                        vec![ctx.engine().empty_string.clone().into(), string.into()]
+                    } else {
+                        let prefix: String = string.chars().take(num_chars - n as usize).collect();
+                        let prefix_len = prefix.len();
+                        vec![prefix.into(), string[prefix_len..].into()]
+                    }
+                } else {
+                    vec![ctx.engine().empty_string.clone().into(), string.into()]
+                }
             } else {
                 let prefix: String = string.chars().take(start as usize).collect();
                 let prefix_len = prefix.len();

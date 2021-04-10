@@ -1,29 +1,39 @@
 Rhai Release Notes
 ==================
 
-This version adds string interpolation with `` `... ${`` ... ``} ...` `` syntax.
-
 Version 0.19.16
 ===============
+
+This version adds string interpolation with `` `... ${`` ... ``} ...` `` syntax.
+
+Negative indices for arrays and strings are allowed and now count from the end (-1 = last item/character).
 
 Bug fixes
 ---------
 
 * Property setter op-assignments now work properly.
+* Off-by-one bug in `Array::drain` method with range is fixed.
 
 Breaking changes
 ----------------
 
+* Negative index to an array or string yields the appropriate element/character counting from the _end_.
 * `ModuleResolver` trait methods take an additional parameter `source_path` that contains the path of the current environment. This is to facilitate loading other script files always from the current directory.
 * `FileModuleResolver` now resolves relative paths under the source path if there is no base path set.
 * `FileModuleResolver::base_path` now returns `Option<&str>` which is `None` if there is no base path set.
 * Doc-comments now require the `metadata` feature.
+
+Enhancements
+------------
+
+* `Array::drain` and `Array::retain` methods with predicate now scan the array in forward order instead of in reverse.
 
 New features
 ------------
 
 * String interpolation support is added via the `` `... ${`` ... ``} ...` `` syntax.
 * `FileModuleResolver` resolves relative paths under the parent path (i.e. the path holding the script that does the loading). This allows seamless cross-loading of scripts from a directory hierarchy instead of having all relative paths load from the current working directory.
+* Negative index to an array or string yields the appropriate element/character counting from the _end_.
 
 
 Version 0.19.15
