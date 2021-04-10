@@ -895,8 +895,13 @@ pub fn parse_string_literal(
                 pos.advance();
                 ch
             }
+            None if !continuation && !verbatim => {
+                pos.advance();
+                state.is_within_text_terminated_by = None;
+                return Err((LERR::UnterminatedString, *pos));
+            }
             None => {
-                if !continuation || escape != "\\" {
+                if verbatim || escape != "\\" {
                     result += &escape;
                 }
                 pos.advance();
@@ -1005,6 +1010,7 @@ pub fn parse_string_literal(
             // Cannot have new-lines inside non-multi-line string literals
             '\n' if !escape.is_empty() || !verbatim => {
                 pos.rewind();
+                state.is_within_text_terminated_by = None;
                 return Err((LERR::UnterminatedString, *pos));
             }
 
