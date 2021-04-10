@@ -1039,6 +1039,9 @@ fn parse_primary(
                             segments.push(Expr::StringConstant(s.into(), pos));
                         }
                     }
+                    (Token::LexError(err @ LexError::UnterminatedString), pos) => {
+                        return Err(err.into_err(pos))
+                    }
                     (token, _) => unreachable!(
                         "expected a string within an interpolated string literal, but gets {:?}",
                         token

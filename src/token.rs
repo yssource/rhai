@@ -871,6 +871,18 @@ pub trait InputStream {
 /// # Volatile API
 ///
 /// This function is volatile and may change.
+///
+/// # Returns
+///
+/// |Type                             |Return Value                |`state.is_within_text_terminated_by`|
+/// |---------------------------------|----------------------------|------------------------------------|
+/// |`"hello"`                        |`StringConstant("hello")`   |`None`                              |
+/// |`"hello`_{LF}_ or _{EOF}_        |`LexError`                  |`None`                              |
+/// |`"hello\`_{EOF}_ or _{LF}{EOF}_  |`StringConstant("hello")`   |`Some('"')`                         |
+/// |`` `hello``_{EOF}_               |`StringConstant("hello")`   |``Some('`')``                       |
+/// |`` `hello``_{LF}{EOF}_           |`StringConstant("hello\n")` |``Some('`')``                       |
+/// |`` `hello ${``                   |`InterpolatedString("hello ")`<br/>next token is `{`|`None`      |
+/// |`` } hello` ``                   |`StringConstant(" hello")`  |``Some('`')``                       |
 pub fn parse_string_literal(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
