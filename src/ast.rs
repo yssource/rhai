@@ -1496,10 +1496,10 @@ impl<F: Float> crate::stdlib::ops::DerefMut for FloatWrapper<F> {
 }
 
 #[cfg(not(feature = "no_float"))]
-impl<F: Float + fmt::Display> fmt::Debug for FloatWrapper<F> {
+impl<F: Float + fmt::Debug> fmt::Debug for FloatWrapper<F> {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
+        fmt::Debug::fmt(&self.0, f)
     }
 }
 
@@ -1641,10 +1641,10 @@ impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::DynamicConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
-            Self::BoolConstant(value, pos) => write!(f, "{} @ {:?}", value, pos),
-            Self::IntegerConstant(value, pos) => write!(f, "{} @ {:?}", value, pos),
+            Self::BoolConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
+            Self::IntegerConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
             #[cfg(not(feature = "no_float"))]
-            Self::FloatConstant(value, pos) => write!(f, "{} @ {:?}", value, pos),
+            Self::FloatConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
             Self::CharConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
             Self::StringConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
             Self::FnPointer(value, pos) => write!(f, "Fn({:?}) @ {:?}", value, pos),
