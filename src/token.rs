@@ -910,7 +910,7 @@ pub fn parse_string_literal(
             None if !continuation && !verbatim => {
                 pos.advance();
                 state.is_within_text_terminated_by = None;
-                return Err((LERR::UnterminatedString, *pos));
+                return Err((LERR::UnterminatedString, start));
             }
             None => {
                 if verbatim || escape != "\\" {
@@ -1019,11 +1019,11 @@ pub fn parse_string_literal(
             }
 
             // New-line cannot be escaped
-            // Cannot have new-lines inside non-multi-line string literals
-            '\n' if !escape.is_empty() || !verbatim => {
+            // Cannot have new-lines inside non-verbatim strings
+            '\n' if !verbatim || !escape.is_empty() => {
                 pos.rewind();
                 state.is_within_text_terminated_by = None;
-                return Err((LERR::UnterminatedString, *pos));
+                return Err((LERR::UnterminatedString, start));
             }
 
             '\n' => {
@@ -1942,8 +1942,9 @@ impl<'a> Iterator for TokenIterator<'a> {
             // {EOF}
             None => return None,
             // Unterminated string at EOF
-            Some((Token::StringConstant(_), _)) if self.state.is_within_text_terminated_by.is_some() => {
-                return Some((Token::LexError(LERR::UnterminatedString), self.pos));
+            Some((Token::StringConstant(_), pos)) if self.state.is_within_text_terminated_by.is_some() => {
+                self.state.is_within_text_terminated_by = None;
+                return Some((Token::LexError(LERR::UnterminatedString), pos));
             }
             // Reserved keyword/symbol
             Some((Token::Reserved(s), pos)) => (match
