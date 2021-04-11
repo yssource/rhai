@@ -833,8 +833,6 @@ pub struct TokenizeState {
     pub non_unary: bool,
     /// Is the tokenizer currently inside a block comment?
     pub comment_level: usize,
-    /// Return [`None`] at the end of the stream instead of [`Some(Token::EOF)`][Token::EOF]?
-    pub end_with_none: bool,
     /// Include comments?
     pub include_comments: bool,
     /// Disable doc-comments?
@@ -882,7 +880,8 @@ pub trait InputStream {
 /// |`` `hello``_{EOF}_               |`StringConstant("hello")`   |``Some('`')``                       |
 /// |`` `hello``_{LF}{EOF}_           |`StringConstant("hello\n")` |``Some('`')``                       |
 /// |`` `hello ${``                   |`InterpolatedString("hello ")`<br/>next token is `{`|`None`      |
-/// |`` } hello` ``                   |`StringConstant(" hello")`  |``Some('`')``                       |
+/// |`` } hello` ``                   |`StringConstant(" hello")`  |`None`                              |
+/// |`} hello`_{EOF}_                 |`StringConstant(" hello")`  |``Some('`')``                       |
 pub fn parse_string_literal(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
@@ -902,22 +901,31 @@ pub fn parse_string_literal(
     state.is_within_text_terminated_by = Some(termination_char);
 
     loop {
+        assert!(
+            !verbatim || escape.is_empty(),
+            "verbatim strings should not have any escapes"
+        );
+
         let next_char = match stream.get_next() {
             Some(ch) => {
                 pos.advance();
                 ch
             }
-            None if !continuation && !verbatim => {
+            None if verbatim => {
+                assert_eq!(escape, "", "verbatim strings should not have any escapes");
+                pos.advance();
+                break;
+            }
+            None if continuation && !escape.is_empty() => {
+                assert_eq!(escape, "\\", "unexpected escape {} at end of line", escape);
+                pos.advance();
+                break;
+            }
+            None => {
+                result += &escape;
                 pos.advance();
                 state.is_within_text_terminated_by = None;
                 return Err((LERR::UnterminatedString, start));
-            }
-            None => {
-                if verbatim || escape != "\\" {
-                    result += &escape;
-                }
-                pos.advance();
-                break;
             }
         };
 
@@ -942,7 +950,7 @@ pub fn parse_string_literal(
             // \r - ignore if followed by \n
             '\r' if stream.peek_next().map(|ch| ch == '\n').unwrap_or(false) => {}
             // \...
-            '\\' if escape.is_empty() && !verbatim => {
+            '\\' if !verbatim && escape.is_empty() => {
                 escape.push('\\');
             }
             // \\
@@ -1011,24 +1019,26 @@ pub fn parse_string_literal(
                 break;
             }
 
+            // Verbatim
+            '\n' if verbatim => {
+                assert_eq!(escape, "", "verbatim strings should not have any escapes");
+                pos.new_line();
+                result.push(next_char);
+            }
+
             // Line continuation
             '\n' if continuation && !escape.is_empty() => {
+                assert_eq!(escape, "\\", "unexpected escape {} at end of line", escape);
                 escape.clear();
                 pos.new_line();
                 skip_whitespace_until = start.position().unwrap() + 1;
             }
 
-            // New-line cannot be escaped
-            // Cannot have new-lines inside non-verbatim strings
-            '\n' if !verbatim || !escape.is_empty() => {
+            // Unterminated string
+            '\n' => {
                 pos.rewind();
                 state.is_within_text_terminated_by = None;
                 return Err((LERR::UnterminatedString, start));
-            }
-
-            '\n' => {
-                pos.new_line();
-                result.push(next_char);
             }
 
             // Unknown escape sequence
@@ -1746,11 +1756,7 @@ fn get_next_token_inner(
 
     pos.advance();
 
-    if state.end_with_none {
-        None
-    } else {
-        Some((Token::EOF, *pos))
-    }
+    Some((Token::EOF, *pos))
 }
 
 /// Get the next identifier.
@@ -1941,7 +1947,7 @@ impl<'a> Iterator for TokenIterator<'a> {
         let (token, pos) = match get_next_token(&mut self.stream, &mut self.state, &mut self.pos) {
             // {EOF}
             None => return None,
-            // Unterminated string at EOF
+            // {EOF} after unterminated string
             Some((Token::StringConstant(_), pos)) if self.state.is_within_text_terminated_by.is_some() => {
                 self.state.is_within_text_terminated_by = None;
                 return Some((Token::LexError(LERR::UnterminatedString), pos));
@@ -2065,7 +2071,6 @@ impl Engine {
                     max_string_size: None,
                     non_unary: false,
                     comment_level: 0,
-                    end_with_none: false,
                     include_comments: false,
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
