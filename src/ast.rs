@@ -1283,7 +1283,7 @@ pub struct CustomExpr {
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Hash)]
+#[derive(Clone, Hash)]
 pub struct BinaryExpr {
     /// LHS expression.
     pub lhs: Expr,
@@ -1419,7 +1419,7 @@ impl FnCallHash {
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Default, Hash)]
+#[derive(Clone, Default, Hash)]
 pub struct FnCallExpr {
     /// Pre-calculated hash.
     pub hash: FnCallHash,
@@ -1668,12 +1668,12 @@ impl fmt::Debug for Expr {
             Self::Variable(i, pos, x) => {
                 f.write_str("Variable(")?;
                 match x.1 {
-                    Some((_, ref namespace)) => write!(f, "{}::", namespace)?,
+                    Some((_, ref namespace)) => write!(f, "{}", namespace)?,
                     _ => (),
                 }
                 write!(f, "{}", x.2)?;
                 match i.map_or_else(|| x.0, |n| NonZeroUsize::new(n.get() as usize)) {
-                    Some(n) => write!(f, " [{}]", n)?,
+                    Some(n) => write!(f, ", {}", n)?,
                     _ => (),
                 }
                 write!(f, ") @ {:?}", pos)
@@ -1685,11 +1685,24 @@ impl fmt::Debug for Expr {
                 write!(f, " @ {:?}", x.pos)
             }
             Self::FnCall(x, pos) => {
-                f.debug_tuple("FnCall").field(x).finish()?;
+                let mut ff = f.debug_struct("FnCall");
+                if let Some(ref ns) = x.namespace {
+                    ff.field("namespace", ns);
+                }
+                ff.field("name", &x.name)
+                    .field("hash", &x.hash)
+                    .field("args", &x.args);
+                if !x.constant_args.is_empty() {
+                    ff.field("constant_args", &x.constant_args);
+                }
+                if x.capture {
+                    ff.field("capture", &x.capture);
+                }
+                ff.finish()?;
                 write!(f, " @ {:?}", pos)
             }
             Self::Dot(x, pos) | Self::Index(x, pos) | Self::And(x, pos) | Self::Or(x, pos) => {
-                let op = match self {
+                let op_name = match self {
                     Self::Dot(_, _) => "Dot",
                     Self::Index(_, _) => "Index",
                     Self::And(_, _) => "And",
@@ -1697,7 +1710,7 @@ impl fmt::Debug for Expr {
                     _ => unreachable!(),
                 };
 
-                f.debug_struct(op)
+                f.debug_struct(op_name)
                     .field("lhs", &x.lhs)
                     .field("rhs", &x.rhs)
                     .finish()?;
