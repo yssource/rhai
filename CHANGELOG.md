@@ -1,10 +1,16 @@
 Rhai Release Notes
 ==================
 
-Version 0.19.16
-===============
+Version 0.20.1
+==============
+
+
+Version 0.20.0
+==============
 
 This version adds string interpolation with `` `... ${`` ... ``} ...` `` syntax.
+
+`switch` statement cases can now have conditions.
 
 Negative indices for arrays and strings are allowed and now count from the end (-1 = last item/character).
 
