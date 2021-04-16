@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, Scope, INT};
+use rhai::{Engine, EvalAltResult, ParseErrorType, Scope, INT};
 
 #[test]
 fn test_switch() -> Result<(), Box<EvalAltResult>> {
@@ -63,6 +63,93 @@ fn test_switch() -> Result<(), Box<EvalAltResult>> {
         )?,
         3
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_switch_errors() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert!(matches!(
+        *engine
+            .compile("switch x { 1 => 123, 1 => 42 }")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::DuplicatedSwitchCase
+    ));
+    assert!(matches!(
+        *engine
+            .compile("switch x { _ => 123, 1 => 42 }")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::WrongSwitchDefaultCase
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn test_switch_condition() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+    let mut scope = Scope::new();
+    scope.push("x", 42 as INT);
+
+    assert_eq!(
+        engine.eval_with_scope::<INT>(
+            &mut scope,
+            r"
+                switch x / 2 {
+                    21 if x > 40 => 1,
+                    0 if x < 100 => 2,
+                    1 => 3,
+                    _ => 9
+                }
+            "
+        )?,
+        1
+    );
+
+    assert_eq!(
+        engine.eval_with_scope::<INT>(
+            &mut scope,
+            r"
+                switch x / 2 {
+                    21 if x < 40 => 1,
+                    0 if x < 100 => 2,
+                    1 => 3,
+                    _ => 9
+                }
+            "
+        )?,
+        9
+    );
+
+    assert!(matches!(
+        *engine
+            .compile(
+                r"
+                    switch x {
+                        21 if x < 40 => 1,
+                        21 if x == 10 => 10,
+                        0 if x < 100 => 2,
+                        1 => 3,
+                        _ => 9
+                    }
+                "
+            )
+            .expect_err("should error")
+            .0,
+        ParseErrorType::DuplicatedSwitchCase
+    ));
+
+    assert!(matches!(
+        *engine
+            .compile("switch x { 1 => 123, _ if true => 42 }")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::WrongSwitchCaseCondition
+    ));
 
     Ok(())
 }

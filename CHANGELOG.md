@@ -18,6 +18,7 @@ Breaking changes
 ----------------
 
 * Negative index to an array or string yields the appropriate element/character counting from the _end_.
+* The default `_` case of a `switch` statement now must be the last case, together with two new error variants: `EvalAltResult::WrongSwitchDefaultCase` and `EvalAltResult::WrongSwitchCaseCondition`.
 * `ModuleResolver` trait methods take an additional parameter `source_path` that contains the path of the current environment. This is to facilitate loading other script files always from the current directory.
 * `FileModuleResolver` now resolves relative paths under the source path if there is no base path set.
 * `FileModuleResolver::base_path` now returns `Option<&str>` which is `None` if there is no base path set.
@@ -34,6 +35,7 @@ New features
 * String interpolation support is added via the `` `... ${`` ... ``} ...` `` syntax.
 * `FileModuleResolver` resolves relative paths under the parent path (i.e. the path holding the script that does the loading). This allows seamless cross-loading of scripts from a directory hierarchy instead of having all relative paths load from the current working directory.
 * Negative index to an array or string yields the appropriate element/character counting from the _end_.
+* `switch` statement cases can now have an optional `if` clause.
 
 
 Version 0.19.15

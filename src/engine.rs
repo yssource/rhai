@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt, StmtBlock};
+use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_native::{
     CallableFunction, IteratorFn, OnDebugCallback, OnPrintCallback, OnProgressCallback,
@@ -1733,8 +1733,7 @@ impl Engine {
             // Statement block
             Expr::Stmt(x) if x.is_empty() => Ok(Dynamic::UNIT),
             Expr::Stmt(x) => {
-                let statements = &x.statements;
-                self.eval_stmt_block(scope, mods, state, lib, this_ptr, statements, true, level)
+                self.eval_stmt_block(scope, mods, state, lib, this_ptr, x, true, level)
             }
 
             // lhs[idx_expr]
@@ -2134,40 +2133,29 @@ impl Engine {
             }
 
             // If statement
-            Stmt::If(expr, x, _) => {
-                let (
-                    StmtBlock {
-                        statements: if_stmt,
-                        ..
-                    },
-                    StmtBlock {
-                        statements: else_stmt,
-                        ..
-                    },
-                ) = x.as_ref();
-                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))
-                    .and_then(|guard_val| {
-                        if guard_val {
-                            if !if_stmt.is_empty() {
-                                self.eval_stmt_block(
-                                    scope, mods, state, lib, this_ptr, if_stmt, true, level,
-                                )
-                            } else {
-                                Ok(Dynamic::UNIT)
-                            }
+            Stmt::If(expr, x, _) => self
+                .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                .as_bool()
+                .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))
+                .and_then(|guard_val| {
+                    if guard_val {
+                        if !x.0.is_empty() {
+                            self.eval_stmt_block(
+                                scope, mods, state, lib, this_ptr, &x.0, true, level,
+                            )
                         } else {
-                            if !else_stmt.is_empty() {
-                                self.eval_stmt_block(
-                                    scope, mods, state, lib, this_ptr, else_stmt, true, level,
-                                )
-                            } else {
-                                Ok(Dynamic::UNIT)
-                            }
+                            Ok(Dynamic::UNIT)
                         }
-                    })
-            }
+                    } else {
+                        if !x.1.is_empty() {
+                            self.eval_stmt_block(
+                                scope, mods, state, lib, this_ptr, &x.1, true, level,
+                            )
+                        } else {
+                            Ok(Dynamic::UNIT)
+                        }
+                    }
+                }),
 
             // Switch statement
             Stmt::Switch(match_expr, x, _) => {
@@ -2180,16 +2168,33 @@ impl Engine {
                     value.hash(hasher);
                     let hash = hasher.finish();
 
-                    table.get(&hash).map(|t| {
-                        let statements = &t.statements;
+                    table.get(&hash).and_then(|t| {
+                        if let Some(condition) = &t.0 {
+                            match self
+                                .eval_expr(scope, mods, state, lib, this_ptr, &condition, level)
+                                .and_then(|v| {
+                                    v.as_bool().map_err(|err| {
+                                        self.make_type_mismatch_err::<bool>(
+                                            err,
+                                            condition.position(),
+                                        )
+                                    })
+                                }) {
+                                Ok(true) => (),
+                                Ok(false) => return None,
+                                Err(err) => return Some(Err(err)),
+                            }
+                        }
 
-                        if !statements.is_empty() {
+                        let statements = &t.1;
+
+                        Some(if !statements.is_empty() {
                             self.eval_stmt_block(
                                 scope, mods, state, lib, this_ptr, statements, true, level,
                             )
                         } else {
                             Ok(Dynamic::UNIT)
-                        }
+                        })
                     })
                 } else {
                     // Non-hashable values never match any specific clause
@@ -2197,7 +2202,6 @@ impl Engine {
                 }
                 .unwrap_or_else(|| {
                     // Default match clause
-                    let def_stmt = &def_stmt.statements;
                     if !def_stmt.is_empty() {
                         self.eval_stmt_block(
                             scope, mods, state, lib, this_ptr, def_stmt, true, level,
@@ -2209,75 +2213,65 @@ impl Engine {
             }
 
             // While loop
-            Stmt::While(expr, body, _) => {
-                let body = &body.statements;
-                loop {
-                    let condition = if !expr.is_unit() {
-                        self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                            .as_bool()
-                            .map_err(|err| {
-                                self.make_type_mismatch_err::<bool>(err, expr.position())
-                            })?
-                    } else {
-                        true
-                    };
+            Stmt::While(expr, body, _) => loop {
+                let condition = if !expr.is_unit() {
+                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                        .as_bool()
+                        .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?
+                } else {
+                    true
+                };
 
-                    if !condition {
-                        return Ok(Dynamic::UNIT);
-                    }
-                    if body.is_empty() {
-                        continue;
-                    }
+                if !condition {
+                    return Ok(Dynamic::UNIT);
+                }
+                if body.is_empty() {
+                    continue;
+                }
 
+                match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level) {
+                    Ok(_) => (),
+                    Err(err) => match *err {
+                        EvalAltResult::LoopBreak(false, _) => (),
+                        EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
+                        _ => return Err(err),
+                    },
+                }
+            },
+
+            // Do loop
+            Stmt::Do(body, expr, is_while, _) => loop {
+                if !body.is_empty() {
                     match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
-                            EvalAltResult::LoopBreak(false, _) => (),
+                            EvalAltResult::LoopBreak(false, _) => continue,
                             EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
                             _ => return Err(err),
                         },
                     }
                 }
-            }
 
-            // Do loop
-            Stmt::Do(body, expr, is_while, _) => {
-                let body = &body.statements;
-
-                loop {
-                    if !body.is_empty() {
-                        match self
-                            .eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
-                        {
-                            Ok(_) => (),
-                            Err(err) => match *err {
-                                EvalAltResult::LoopBreak(false, _) => continue,
-                                EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
-                                _ => return Err(err),
-                            },
-                        }
+                if self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .as_bool()
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?
+                {
+                    if !*is_while {
+                        return Ok(Dynamic::UNIT);
                     }
-
-                    if self
-                        .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                        .as_bool()
-                        .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?
-                    {
-                        if !*is_while {
-                            return Ok(Dynamic::UNIT);
-                        }
-                    } else {
-                        if *is_while {
-                            return Ok(Dynamic::UNIT);
-                        }
+                } else {
+                    if *is_while {
+                        return Ok(Dynamic::UNIT);
                     }
                 }
-            }
+            },
 
             // For loop
             Stmt::For(expr, x, _) => {
-                let (Ident { name, .. }, StmtBlock { statements, pos }) = x.as_ref();
+                let (Ident { name, .. }, statements) = x.as_ref();
+                let pos = statements.position();
                 let iter_obj = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten();
@@ -2326,7 +2320,7 @@ impl Engine {
                             *loop_var = value;
                         }
 
-                        self.inc_operations(state, *pos)?;
+                        self.inc_operations(state, pos)?;
 
                         if statements.is_empty() {
                             continue;
@@ -2360,20 +2354,10 @@ impl Engine {
 
             // Try/Catch statement
             Stmt::TryCatch(x, _, _) => {
-                let (
-                    StmtBlock {
-                        statements: try_body,
-                        ..
-                    },
-                    err_var,
-                    StmtBlock {
-                        statements: catch_body,
-                        ..
-                    },
-                ) = x.as_ref();
+                let (try_stmt, err_var, catch_stmt) = x.as_ref();
 
                 let result = self
-                    .eval_stmt_block(scope, mods, state, lib, this_ptr, try_body, true, level)
+                    .eval_stmt_block(scope, mods, state, lib, this_ptr, try_stmt, true, level)
                     .map(|_| Dynamic::UNIT);
 
                 match result {
@@ -2433,7 +2417,7 @@ impl Engine {
                         }
 
                         let result = self.eval_stmt_block(
-                            scope, mods, state, lib, this_ptr, catch_body, true, level,
+                            scope, mods, state, lib, this_ptr, catch_stmt, true, level,
                         );
 
                         state.scope_level -= 1;

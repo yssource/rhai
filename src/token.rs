@@ -866,14 +866,10 @@ pub trait InputStream {
 /// Returns the parsed string and a boolean indicating whether the string is
 /// terminated by an interpolation `${`.
 ///
-/// # Volatile API
-///
-/// This function is volatile and may change.
-///
 /// # Returns
 ///
 /// |Type                             |Return Value                |`state.is_within_text_terminated_by`|
-/// |---------------------------------|----------------------------|------------------------------------|
+/// |---------------------------------|:--------------------------:|:----------------------------------:|
 /// |`"hello"`                        |`StringConstant("hello")`   |`None`                              |
 /// |`"hello`_{LF}_ or _{EOF}_        |`LexError`                  |`None`                              |
 /// |`"hello\`_{EOF}_ or _{LF}{EOF}_  |`StringConstant("hello")`   |`Some('"')`                         |
@@ -882,6 +878,22 @@ pub trait InputStream {
 /// |`` `hello ${``                   |`InterpolatedString("hello ")`<br/>next token is `{`|`None`      |
 /// |`` } hello` ``                   |`StringConstant(" hello")`  |`None`                              |
 /// |`} hello`_{EOF}_                 |`StringConstant(" hello")`  |``Some('`')``                       |
+///
+/// This function does not throw a `LexError` for the following conditions:
+///
+/// * Unterminated literal string at _{EOF}_
+///
+/// * Unterminated normal string with continuation at _{EOF}_
+///
+/// This is to facilitate using this function to parse a script line-by-line, where the end of the
+/// line (i.e. _{EOF}_) is not necessarily the end of the script.
+///
+/// Any time a [`StringConstant`][`Token::StringConstant`] is returned with
+/// `state.is_within_text_terminated_by` set to `Some(_)` is one of the above conditions.
+///
+/// # Volatile API
+///
+/// This function is volatile and may change.
 pub fn parse_string_literal(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
@@ -1947,7 +1959,11 @@ impl<'a> Iterator for TokenIterator<'a> {
         let (token, pos) = match get_next_token(&mut self.stream, &mut self.state, &mut self.pos) {
             // {EOF}
             None => return None,
-            // {EOF} after unterminated string
+            // {EOF} after unterminated string.
+            // The only case where `TokenizeState.is_within_text_terminated_by` is set is when
+            // a verbatim string or a string with continuation encounters {EOF}.
+            // This is necessary to handle such cases for line-by-line parsing, but for an entire
+            // script it is a syntax error.
             Some((Token::StringConstant(_), pos)) if self.state.is_within_text_terminated_by.is_some() => {
                 self.state.is_within_text_terminated_by = None;
                 return Some((Token::LexError(LERR::UnterminatedString), pos));
