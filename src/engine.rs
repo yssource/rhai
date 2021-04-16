@@ -1733,8 +1733,7 @@ impl Engine {
             // Statement block
             Expr::Stmt(x) if x.is_empty() => Ok(Dynamic::UNIT),
             Expr::Stmt(x) => {
-                let statements = &x.statements;
-                self.eval_stmt_block(scope, mods, state, lib, this_ptr, statements, true, level)
+                self.eval_stmt_block(scope, mods, state, lib, this_ptr, &x.0, true, level)
             }
 
             // lhs[idx_expr]
@@ -2135,16 +2134,7 @@ impl Engine {
 
             // If statement
             Stmt::If(expr, x, _) => {
-                let (
-                    StmtBlock {
-                        statements: if_stmt,
-                        ..
-                    },
-                    StmtBlock {
-                        statements: else_stmt,
-                        ..
-                    },
-                ) = x.as_ref();
+                let (StmtBlock(if_stmt, _), StmtBlock(else_stmt, _)) = x.as_ref();
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
                     .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))
@@ -2180,16 +2170,33 @@ impl Engine {
                     value.hash(hasher);
                     let hash = hasher.finish();
 
-                    table.get(&hash).map(|t| {
-                        let statements = &t.statements;
+                    table.get(&hash).and_then(|t| {
+                        if let Some(condition) = &t.0 {
+                            match self
+                                .eval_expr(scope, mods, state, lib, this_ptr, &condition, level)
+                                .and_then(|v| {
+                                    v.as_bool().map_err(|err| {
+                                        self.make_type_mismatch_err::<bool>(
+                                            err,
+                                            condition.position(),
+                                        )
+                                    })
+                                }) {
+                                Ok(true) => (),
+                                Ok(false) => return None,
+                                Err(err) => return Some(Err(err)),
+                            }
+                        }
 
-                        if !statements.is_empty() {
+                        let statements = &(t.1).0;
+
+                        Some(if !statements.is_empty() {
                             self.eval_stmt_block(
                                 scope, mods, state, lib, this_ptr, statements, true, level,
                             )
                         } else {
                             Ok(Dynamic::UNIT)
-                        }
+                        })
                     })
                 } else {
                     // Non-hashable values never match any specific clause
@@ -2197,7 +2204,7 @@ impl Engine {
                 }
                 .unwrap_or_else(|| {
                     // Default match clause
-                    let def_stmt = &def_stmt.statements;
+                    let def_stmt = &def_stmt.0;
                     if !def_stmt.is_empty() {
                         self.eval_stmt_block(
                             scope, mods, state, lib, this_ptr, def_stmt, true, level,
@@ -2210,7 +2217,7 @@ impl Engine {
 
             // While loop
             Stmt::While(expr, body, _) => {
-                let body = &body.statements;
+                let body = &body.0;
                 loop {
                     let condition = if !expr.is_unit() {
                         self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
@@ -2243,7 +2250,7 @@ impl Engine {
 
             // Do loop
             Stmt::Do(body, expr, is_while, _) => {
-                let body = &body.statements;
+                let body = &body.0;
 
                 loop {
                     if !body.is_empty() {
@@ -2277,7 +2284,7 @@ impl Engine {
 
             // For loop
             Stmt::For(expr, x, _) => {
-                let (Ident { name, .. }, StmtBlock { statements, pos }) = x.as_ref();
+                let (Ident { name, .. }, StmtBlock(statements, pos)) = x.as_ref();
                 let iter_obj = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten();
@@ -2360,17 +2367,7 @@ impl Engine {
 
             // Try/Catch statement
             Stmt::TryCatch(x, _, _) => {
-                let (
-                    StmtBlock {
-                        statements: try_body,
-                        ..
-                    },
-                    err_var,
-                    StmtBlock {
-                        statements: catch_body,
-                        ..
-                    },
-                ) = x.as_ref();
+                let (StmtBlock(try_body, _), err_var, StmtBlock(catch_body, _)) = x.as_ref();
 
                 let result = self
                     .eval_stmt_block(scope, mods, state, lib, this_ptr, try_body, true, level)

@@ -35,6 +35,7 @@ New features
 * String interpolation support is added via the `` `... ${`` ... ``} ...` `` syntax.
 * `FileModuleResolver` resolves relative paths under the parent path (i.e. the path holding the script that does the loading). This allows seamless cross-loading of scripts from a directory hierarchy instead of having all relative paths load from the current working directory.
 * Negative index to an array or string yields the appropriate element/character counting from the _end_.
+* `switch` statement cases can now have an optional `if` clause.
 
 
 Version 0.19.15

@@ -187,10 +187,7 @@ impl AST {
     ) -> Self {
         Self {
             source: None,
-            body: StmtBlock {
-                statements: statements.into_iter().collect(),
-                pos: Position::NONE,
-            },
+            body: StmtBlock(statements.into_iter().collect(), Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -205,10 +202,7 @@ impl AST {
     ) -> Self {
         Self {
             source: Some(source.into()),
-            body: StmtBlock {
-                statements: statements.into_iter().collect(),
-                pos: Position::NONE,
-            },
+            body: StmtBlock(statements.into_iter().collect(), Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -245,7 +239,7 @@ impl AST {
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
     pub(crate) fn statements(&self) -> &[Stmt] {
-        &self.body.statements
+        &self.body.0
     }
     /// _(INTERNALS)_ Get the statements.
     /// Exported under the `internals` feature only.
@@ -259,7 +253,7 @@ impl AST {
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
     pub(crate) fn statements_mut(&mut self) -> &mut StaticVec<Stmt> {
-        &mut self.body.statements
+        &mut self.body.0
     }
     /// Get the internal shared [`Module`] containing all script-defined functions.
     #[cfg(not(feature = "internals"))]
@@ -535,8 +529,7 @@ impl AST {
         let merged = match (body.is_empty(), other.body.is_empty()) {
             (false, false) => {
                 let mut body = body.clone();
-                body.statements
-                    .extend(other.body.statements.iter().cloned());
+                body.0.extend(other.body.0.iter().cloned());
                 body
             }
             (false, true) => body.clone(),
@@ -550,9 +543,9 @@ impl AST {
         functions.merge_filtered(&other.functions, &filter);
 
         if let Some(source) = source {
-            Self::new_with_source(merged.statements, functions, source)
+            Self::new_with_source(merged.0, functions, source)
         } else {
-            Self::new(merged.statements, functions)
+            Self::new(merged.0, functions)
         }
     }
     /// Combine one [`AST`] with another.  The second [`AST`] is consumed.
@@ -612,9 +605,7 @@ impl AST {
         other: Self,
         filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> &mut Self {
-        self.body
-            .statements
-            .extend(other.body.statements.into_iter());
+        self.body.0.extend(other.body.0.into_iter());
 
         if !other.functions.is_empty() {
             shared_make_mut(&mut self.functions).merge_filtered(&other.functions, &filter);
@@ -705,7 +696,7 @@ impl AST {
             }
         }
         #[cfg(not(feature = "no_function"))]
-        for stmt in self.iter_fn_def().flat_map(|f| f.body.statements.iter()) {
+        for stmt in self.iter_fn_def().flat_map(|f| f.body.0.iter()) {
             if !stmt.walk(path, on_node) {
                 return false;
             }
@@ -833,30 +824,27 @@ impl<'a> From<&'a Expr> for ASTNode<'a> {
 ///
 /// This type is volatile and may change.
 #[derive(Clone, Hash, Default)]
-pub struct StmtBlock {
-    pub statements: StaticVec<Stmt>,
-    pub pos: Position,
-}
+pub struct StmtBlock(pub StaticVec<Stmt>, pub Position);
 
 impl StmtBlock {
     /// Is this statements block empty?
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
-        self.statements.is_empty()
+        self.0.is_empty()
     }
     /// Number of statements in this statements block.
     #[inline(always)]
     pub fn len(&self) -> usize {
-        self.statements.len()
+        self.0.len()
     }
 }
 
 impl fmt::Debug for StmtBlock {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.statements, f)?;
-        if !self.pos.is_none() {
-            write!(f, " @ {:?}", self.pos)?;
+        fmt::Debug::fmt(&self.0, f)?;
+        if !self.1.is_none() {
+            write!(f, " @ {:?}", self.1)?;
         }
         Ok(())
     }
@@ -874,10 +862,10 @@ pub enum Stmt {
     Noop(Position),
     /// `if` expr `{` stmt `}` `else` `{` stmt `}`
     If(Expr, Box<(StmtBlock, StmtBlock)>, Position),
-    /// `switch` expr `{` literal or _ `=>` stmt `,` ... `}`
+    /// `switch` expr `if` condition `{` literal or _ `=>` stmt `,` ... `}`
     Switch(
         Expr,
-        Box<(BTreeMap<u64, Box<StmtBlock>>, StmtBlock)>,
+        Box<(BTreeMap<u64, Box<(Option<Expr>, StmtBlock)>>, StmtBlock)>,
         Position,
     ),
     /// `while` expr `{` stmt `}`
@@ -930,18 +918,11 @@ impl From<Stmt> for StmtBlock {
     #[inline(always)]
     fn from(stmt: Stmt) -> Self {
         match stmt {
-            Stmt::Block(block, pos) => Self {
-                statements: block.into(),
-                pos,
-            },
-            Stmt::Noop(pos) => Self {
-                statements: Default::default(),
-                pos,
-            },
+            Stmt::Block(block, pos) => Self(block.into(), pos),
+            Stmt::Noop(pos) => Self(Default::default(), pos),
             _ => {
                 let pos = stmt.position();
-                let statements = vec![stmt].into();
-                Self { statements, pos }
+                Self(vec![stmt].into(), pos)
             }
         }
     }
@@ -1081,28 +1062,26 @@ impl Stmt {
             Self::Expr(expr) => expr.is_pure(),
             Self::If(condition, x, _) => {
                 condition.is_pure()
-                    && x.0.statements.iter().all(Stmt::is_pure)
-                    && x.1.statements.iter().all(Stmt::is_pure)
+                    && (x.0).0.iter().all(Stmt::is_pure)
+                    && (x.1).0.iter().all(Stmt::is_pure)
             }
             Self::Switch(expr, x, _) => {
                 expr.is_pure()
-                    && x.0
-                        .values()
-                        .flat_map(|block| block.statements.iter())
-                        .all(Stmt::is_pure)
-                    && x.1.statements.iter().all(Stmt::is_pure)
+                    && x.0.values().all(|block| {
+                        block.0.as_ref().map(Expr::is_pure).unwrap_or(true)
+                            && (block.1).0.iter().all(Stmt::is_pure)
+                    })
+                    && (x.1).0.iter().all(Stmt::is_pure)
             }
             Self::While(condition, block, _) | Self::Do(block, condition, _, _) => {
-                condition.is_pure() && block.statements.iter().all(Stmt::is_pure)
+                condition.is_pure() && block.0.iter().all(Stmt::is_pure)
             }
-            Self::For(iterable, x, _) => {
-                iterable.is_pure() && x.1.statements.iter().all(Stmt::is_pure)
-            }
+            Self::For(iterable, x, _) => iterable.is_pure() && (x.1).0.iter().all(Stmt::is_pure),
             Self::Let(_, _, _, _) | Self::Const(_, _, _, _) | Self::Assignment(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::Return(_, _, _) => false,
             Self::TryCatch(x, _, _) => {
-                x.0.statements.iter().all(Stmt::is_pure) && x.2.statements.iter().all(Stmt::is_pure)
+                (x.0).0.iter().all(Stmt::is_pure) && (x.2).0.iter().all(Stmt::is_pure)
             }
 
             #[cfg(not(feature = "no_module"))]
@@ -1168,12 +1147,12 @@ impl Stmt {
                 if !e.walk(path, on_node) {
                     return false;
                 }
-                for s in &x.0.statements {
+                for s in &(x.0).0 {
                     if !s.walk(path, on_node) {
                         return false;
                     }
                 }
-                for s in &x.1.statements {
+                for s in &(x.1).0 {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -1183,12 +1162,17 @@ impl Stmt {
                 if !e.walk(path, on_node) {
                     return false;
                 }
-                for s in x.0.values().flat_map(|block| block.statements.iter()) {
-                    if !s.walk(path, on_node) {
+                for b in x.0.values() {
+                    if !b.0.as_ref().map(|e| e.walk(path, on_node)).unwrap_or(true) {
                         return false;
                     }
+                    for s in &(b.1).0 {
+                        if !s.walk(path, on_node) {
+                            return false;
+                        }
+                    }
                 }
-                for s in &x.1.statements {
+                for s in &(x.1).0 {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -1198,7 +1182,7 @@ impl Stmt {
                 if !e.walk(path, on_node) {
                     return false;
                 }
-                for s in &s.statements {
+                for s in &s.0 {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -1208,7 +1192,7 @@ impl Stmt {
                 if !e.walk(path, on_node) {
                     return false;
                 }
-                for s in &x.1.statements {
+                for s in &(x.1).0 {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -1230,12 +1214,12 @@ impl Stmt {
                 }
             }
             Self::TryCatch(x, _, _) => {
-                for s in &x.0.statements {
+                for s in &(x.0).0 {
                     if !s.walk(path, on_node) {
                         return false;
                     }
                 }
-                for s in &x.2.statements {
+                for s in &(x.2).0 {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -1681,8 +1665,8 @@ impl fmt::Debug for Expr {
             Self::Property(x) => write!(f, "Property({:?} @ {:?})", x.2.name, x.2.pos),
             Self::Stmt(x) => {
                 f.write_str("Stmt")?;
-                f.debug_list().entries(x.statements.iter()).finish()?;
-                write!(f, " @ {:?}", x.pos)
+                f.debug_list().entries(x.0.iter()).finish()?;
+                write!(f, " @ {:?}", x.1)
             }
             Self::FnCall(x, pos) => {
                 let mut ff = f.debug_struct("FnCall");
@@ -1796,7 +1780,7 @@ impl Expr {
             Self::Array(_, pos) => *pos,
             Self::Map(_, pos) => *pos,
             Self::Property(x) => (x.2).pos,
-            Self::Stmt(x) => x.pos,
+            Self::Stmt(x) => x.1,
             Self::Variable(_, pos, _) => *pos,
             Self::FnCall(_, pos) => *pos,
 
@@ -1829,7 +1813,7 @@ impl Expr {
             Self::Map(_, pos) => *pos = new_pos,
             Self::Variable(_, pos, _) => *pos = new_pos,
             Self::Property(x) => (x.2).pos = new_pos,
-            Self::Stmt(x) => x.pos = new_pos,
+            Self::Stmt(x) => x.1 = new_pos,
             Self::FnCall(_, pos) => *pos = new_pos,
             Self::And(_, pos) | Self::Or(_, pos) => *pos = new_pos,
             Self::Unit(pos) => *pos = new_pos,
@@ -1853,7 +1837,7 @@ impl Expr {
                 x.lhs.is_pure() && x.rhs.is_pure()
             }
 
-            Self::Stmt(x) => x.statements.iter().all(Stmt::is_pure),
+            Self::Stmt(x) => x.0.iter().all(Stmt::is_pure),
 
             Self::Variable(_, _, _) => true,
 
@@ -1959,7 +1943,7 @@ impl Expr {
 
         match self {
             Self::Stmt(x) => {
-                for s in &x.statements {
+                for s in &x.0 {
                     if !s.walk(path, on_node) {
                         return false;
                     }

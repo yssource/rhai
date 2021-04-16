@@ -67,6 +67,45 @@ fn test_switch() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[test]
+fn test_switch_condition() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+    let mut scope = Scope::new();
+    scope.push("x", 42 as INT);
+
+    assert_eq!(
+        engine.eval_with_scope::<INT>(
+            &mut scope,
+            r"
+                switch x / 2 {
+                    21 if x > 40 => 1,
+                    0 if x < 100 => 2,
+                    1 => 3,
+                    _ => 9
+                }
+            "
+        )?,
+        1
+    );
+
+    assert_eq!(
+        engine.eval_with_scope::<INT>(
+            &mut scope,
+            r"
+                switch x / 2 {
+                    21 if x < 40 => 1,
+                    0 if x < 100 => 2,
+                    1 => 3,
+                    _ => 9
+                }
+            "
+        )?,
+        9
+    );
+
+    Ok(())
+}
+
 #[cfg(not(feature = "no_index"))]
 #[cfg(not(feature = "no_object"))]
 mod test_switch_enum {

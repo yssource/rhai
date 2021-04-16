@@ -808,14 +808,14 @@ fn parse_switch(
         }
     }
 
-    let mut table = BTreeMap::<u64, Box<StmtBlock>>::new();
+    let mut table = BTreeMap::<u64, Box<(Option<Expr>, StmtBlock)>>::new();
     let mut def_pos = Position::NONE;
     let mut def_stmt = None;
 
     loop {
         const MISSING_RBRACE: &str = "to end this switch block";
 
-        let expr = match input.peek().unwrap() {
+        let (expr, condition) = match input.peek().unwrap() {
             (Token::RightBrace, _) => {
                 eat_token(input, Token::RightBrace);
                 break;
@@ -829,11 +829,21 @@ fn parse_switch(
             (Token::Underscore, pos) if def_stmt.is_none() => {
                 def_pos = *pos;
                 eat_token(input, Token::Underscore);
-                None
+                (None, None)
             }
             (Token::Underscore, pos) => return Err(PERR::DuplicatedSwitchCase.into_err(*pos)),
             _ if def_stmt.is_some() => return Err(PERR::WrongSwitchDefaultCase.into_err(def_pos)),
-            _ => Some(parse_expr(input, state, lib, settings.level_up())?),
+
+            _ => {
+                let case_expr = Some(parse_expr(input, state, lib, settings.level_up())?);
+
+                let condition = if match_token(input, Token::If).0 {
+                    Some(parse_expr(input, state, lib, settings.level_up())?)
+                } else {
+                    None
+                };
+                (case_expr, condition)
+            }
         };
 
         let hash = if let Some(expr) = expr {
@@ -871,7 +881,7 @@ fn parse_switch(
         let need_comma = !stmt.is_self_terminated();
 
         def_stmt = if let Some(hash) = hash {
-            table.insert(hash, Box::new(stmt.into()));
+            table.insert(hash, Box::new((condition, stmt.into())));
             None
         } else {
             Some(stmt.into())
@@ -2878,7 +2888,7 @@ fn make_curry_from_externals(
     let mut statements: StaticVec<_> = Default::default();
     statements.extend(externals.into_iter().map(Stmt::Share));
     statements.push(Stmt::Expr(expr));
-    Expr::Stmt(Box::new(StmtBlock { statements, pos }))
+    Expr::Stmt(Box::new(StmtBlock(statements, pos)))
 }
 
 /// Parse an anonymous function definition.
