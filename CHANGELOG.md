@@ -18,6 +18,7 @@ Breaking changes
 ----------------
 
 * Negative index to an array or string yields the appropriate element/character counting from the _end_.
+* The default `_` case of a `switch` statement now must be the last case, together with a new error variant `EvalAltResult::WrongSwitchDefaultCase`.
 * `ModuleResolver` trait methods take an additional parameter `source_path` that contains the path of the current environment. This is to facilitate loading other script files always from the current directory.
 * `FileModuleResolver` now resolves relative paths under the source path if there is no base path set.
 * `FileModuleResolver::base_path` now returns `Option<&str>` which is `None` if there is no base path set.

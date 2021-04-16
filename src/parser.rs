@@ -809,6 +809,7 @@ fn parse_switch(
     }
 
     let mut table = BTreeMap::<u64, Box<StmtBlock>>::new();
+    let mut def_pos = Position::NONE;
     let mut def_stmt = None;
 
     loop {
@@ -825,11 +826,13 @@ fn parse_switch(
                         .into_err(*pos),
                 )
             }
-            (Token::Underscore, _) if def_stmt.is_none() => {
+            (Token::Underscore, pos) if def_stmt.is_none() => {
+                def_pos = *pos;
                 eat_token(input, Token::Underscore);
                 None
             }
             (Token::Underscore, pos) => return Err(PERR::DuplicatedSwitchCase.into_err(*pos)),
+            _ if def_stmt.is_some() => return Err(PERR::WrongSwitchDefaultCase.into_err(def_pos)),
             _ => Some(parse_expr(input, state, lib, settings.level_up())?),
         };
 
