@@ -829,6 +829,13 @@ fn parse_switch(
             (Token::Underscore, pos) if def_stmt.is_none() => {
                 def_pos = *pos;
                 eat_token(input, Token::Underscore);
+
+                let (if_clause, if_pos) = match_token(input, Token::If);
+
+                if if_clause {
+                    return Err(PERR::WrongSwitchCaseCondition.into_err(if_pos));
+                }
+
                 (None, None)
             }
             (Token::Underscore, pos) => return Err(PERR::DuplicatedSwitchCase.into_err(*pos)),

@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, Scope, INT};
+use rhai::{Engine, EvalAltResult, ParseErrorType, Scope, INT};
 
 #[test]
 fn test_switch() -> Result<(), Box<EvalAltResult>> {
@@ -68,6 +68,28 @@ fn test_switch() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
+fn test_switch_errors() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert!(matches!(
+        *engine
+            .compile("switch x { 1 => 123, 1 => 42 }")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::DuplicatedSwitchCase
+    ));
+    assert!(matches!(
+        *engine
+            .compile("switch x { _ => 123, 1 => 42 }")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::WrongSwitchDefaultCase
+    ));
+
+    Ok(())
+}
+
+#[test]
 fn test_switch_condition() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
     let mut scope = Scope::new();
@@ -102,6 +124,32 @@ fn test_switch_condition() -> Result<(), Box<EvalAltResult>> {
         )?,
         9
     );
+
+    assert!(matches!(
+        *engine
+            .compile(
+                r"
+                    switch x {
+                        21 if x < 40 => 1,
+                        21 if x == 10 => 10,
+                        0 if x < 100 => 2,
+                        1 => 3,
+                        _ => 9
+                    }
+                "
+            )
+            .expect_err("should error")
+            .0,
+        ParseErrorType::DuplicatedSwitchCase
+    ));
+
+    assert!(matches!(
+        *engine
+            .compile("switch x { 1 => 123, _ if true => 42 }")
+            .expect_err("should error")
+            .0,
+        ParseErrorType::WrongSwitchCaseCondition
+    ));
 
     Ok(())
 }

@@ -117,6 +117,8 @@ pub enum ParseErrorType {
     DuplicatedSwitchCase,
     /// The default case of a `switch` statement is not the last.
     WrongSwitchDefaultCase,
+    /// The case condition of a `switch` statement is not appropriate.
+    WrongSwitchCaseCondition,
     /// Missing a property name for custom types and maps.
     ///
     /// Never appears under the `no_object` feature.
@@ -198,6 +200,7 @@ impl ParseErrorType {
             Self::DuplicatedProperty(_) => "Duplicated property in object map literal",
             Self::DuplicatedSwitchCase => "Duplicated switch case",
             Self::WrongSwitchDefaultCase => "Default switch case is not the last",
+            Self::WrongSwitchCaseCondition => "Default switch case cannot have condition",
             Self::PropertyExpected => "Expecting name of a property",
             Self::VariableExpected => "Expecting name of a variable",
             Self::Reserved(_) => "Invalid use of reserved keyword",
