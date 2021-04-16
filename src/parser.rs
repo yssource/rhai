@@ -2888,7 +2888,7 @@ fn make_curry_from_externals(
     let mut statements: StaticVec<_> = Default::default();
     statements.extend(externals.into_iter().map(Stmt::Share));
     statements.push(Stmt::Expr(expr));
-    Expr::Stmt(Box::new(StmtBlock(statements, pos)))
+    Expr::Stmt(Box::new(StmtBlock::new(statements, pos)))
 }
 
 /// Parse an anonymous function definition.

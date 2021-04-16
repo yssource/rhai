@@ -10,7 +10,7 @@ use crate::stdlib::{
     hash::Hash,
     iter::empty,
     num::{NonZeroU8, NonZeroUsize},
-    ops::{Add, AddAssign},
+    ops::{Add, AddAssign, Deref, DerefMut},
     vec,
     vec::Vec,
 };
@@ -247,7 +247,7 @@ impl AST {
     #[deprecated = "this method is volatile and may change"]
     #[inline(always)]
     pub fn statements(&self) -> &[Stmt] {
-        &self.body.statements
+        &self.body.0
     }
     /// Get a mutable reference to the statements.
     #[cfg(not(feature = "no_optimize"))]
@@ -718,7 +718,7 @@ impl AST {
             }
         }
         #[cfg(not(feature = "no_function"))]
-        for stmt in self.iter_fn_def().flat_map(|f| f.body.statements.iter()) {
+        for stmt in self.iter_fn_def().flat_map(|f| f.body.0.iter()) {
             if !stmt.walk(path, on_node) {
                 return false;
             }
@@ -824,9 +824,13 @@ impl<'a> From<&'a Expr> for ASTNode<'a> {
 ///
 /// This type is volatile and may change.
 #[derive(Clone, Hash, Default)]
-pub struct StmtBlock(pub StaticVec<Stmt>, pub Position);
+pub struct StmtBlock(StaticVec<Stmt>, Position);
 
 impl StmtBlock {
+    /// Create a new [`StmtBlock`].
+    pub fn new(statements: impl Into<StaticVec<Stmt>>, pos: Position) -> Self {
+        Self(statements.into(), pos)
+    }
     /// Is this statements block empty?
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
@@ -836,6 +840,28 @@ impl StmtBlock {
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+    /// Get the position of this statements block.
+    pub fn position(&self) -> Position {
+        self.1
+    }
+    /// Get the statements of this statements block.
+    pub fn statements(&mut self) -> &mut StaticVec<Stmt> {
+        &mut self.0
+    }
+}
+
+impl Deref for StmtBlock {
+    type Target = StaticVec<Stmt>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for StmtBlock {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -847,6 +873,13 @@ impl fmt::Debug for StmtBlock {
             write!(f, " @ {:?}", self.1)?;
         }
         Ok(())
+    }
+}
+
+impl From<StmtBlock> for Stmt {
+    fn from(block: StmtBlock) -> Self {
+        let block_pos = block.position();
+        Self::Block(block.0.into_vec(), block_pos)
     }
 }
 

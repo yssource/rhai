@@ -540,7 +540,7 @@ impl Engine {
         }
 
         // Evaluate the function
-        let body = &fn_def.body.0;
+        let body = &fn_def.body;
 
         let result = self
             .eval_stmt_block(scope, mods, state, unified_lib, this_ptr, body, true, level)
