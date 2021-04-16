@@ -1240,7 +1240,7 @@ fn get_next_token_inner(
         );
     }
 
-    let mut negated = false;
+    let mut negated_pos = Position::NONE;
 
     while let Some(c) = stream.get_next() {
         pos.advance();
@@ -1349,9 +1349,12 @@ fn get_next_token_inner(
                     }
                 }
 
-                if negated {
+                let num_pos = if !negated_pos.is_none() {
                     result.insert(0, '-');
-                }
+                    negated_pos
+                } else {
+                    start_pos
+                };
 
                 // Parse number
                 return Some((
@@ -1388,7 +1391,7 @@ fn get_next_token_inner(
                             Token::LexError(LERR::MalformedNumber(result.into_iter().collect()))
                         })
                     },
-                    start_pos,
+                    num_pos,
                 ));
             }
 
@@ -1507,7 +1510,7 @@ fn get_next_token_inner(
             ('+', _) if !state.non_unary => return Some((Token::UnaryPlus, start_pos)),
             ('+', _) => return Some((Token::Plus, start_pos)),
 
-            ('-', '0'..='9') if !state.non_unary => negated = true,
+            ('-', '0'..='9') if !state.non_unary => negated_pos = start_pos,
             ('-', '0'..='9') => return Some((Token::Minus, start_pos)),
             ('-', '=') => {
                 eat_next(stream, pos);

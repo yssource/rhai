@@ -1328,7 +1328,7 @@ fn parse_unary(
 
             match parse_unary(input, state, lib, settings.level_up())? {
                 // Negative integer
-                Expr::IntegerConstant(num, pos) => num
+                Expr::IntegerConstant(num, _) => num
                     .checked_neg()
                     .map(|i| Expr::IntegerConstant(i, pos))
                     .or_else(|| {
@@ -1341,7 +1341,7 @@ fn parse_unary(
 
                 // Negative float
                 #[cfg(not(feature = "no_float"))]
-                Expr::FloatConstant(x, pos) => Ok(Expr::FloatConstant((-(*x)).into(), pos)),
+                Expr::FloatConstant(x, _) => Ok(Expr::FloatConstant((-(*x)).into(), pos)),
 
                 // Call negative function
                 expr => {
