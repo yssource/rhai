@@ -16,7 +16,7 @@ use std::{
     any::TypeId,
     collections::{BTreeMap, BTreeSet},
     fmt,
-    iter::empty,
+    iter::{empty, once},
     num::NonZeroUsize,
     ops::{Add, AddAssign, Deref, DerefMut},
 };
@@ -166,7 +166,7 @@ impl Default for Module {
             all_functions: Default::default(),
             type_iterators: Default::default(),
             all_type_iterators: Default::default(),
-            indexed: false,
+            indexed: true,
             contains_indexed_global_functions: false,
             identifiers: Default::default(),
         }
@@ -316,7 +316,7 @@ impl Module {
         self.internal
     }
 
-    /// Set the interal status of the [`Module`].
+    /// Set the internal status of the [`Module`].
     #[inline(always)]
     pub(crate) fn set_internal(&mut self, value: bool) -> &mut Self {
         self.internal = value;
@@ -446,8 +446,14 @@ impl Module {
         name: impl Into<Identifier>,
         value: impl Variant + Clone,
     ) -> &mut Self {
-        self.variables.insert(name.into(), Dynamic::from(value));
-        self.indexed = false;
+        let ident = name.into();
+        let value = Dynamic::from(value);
+
+        if self.indexed {
+            let hash_var = crate::calc_fn_hash(once(""), &ident, 0);
+            self.all_variables.insert(hash_var, value.clone());
+        }
+        self.variables.insert(ident, value);
         self
     }
 
@@ -1417,10 +1423,10 @@ impl Module {
             match aliases.len() {
                 0 => (),
                 1 => {
-                    module.variables.insert(aliases.pop().unwrap(), value);
+                    module.set_var(aliases.pop().unwrap(), value);
                 }
                 _ => aliases.into_iter().for_each(|alias| {
-                    module.variables.insert(alias, value.clone());
+                    module.set_var(alias, value.clone());
                 }),
             }
         });
@@ -1538,7 +1544,7 @@ impl Module {
             let mut functions = Default::default();
             let mut type_iterators = Default::default();
 
-            path.push("root");
+            path.push("");
 
             self.contains_indexed_global_functions = index_module(
                 self,
@@ -1571,10 +1577,12 @@ impl Module {
 
     /// Set a type iterator into the [`Module`].
     #[inline(always)]
-    pub fn set_iter(&mut self, typ: TypeId, func: IteratorFn) -> &mut Self {
-        self.type_iterators.insert(typ, func);
-        self.indexed = false;
-        self.contains_indexed_global_functions = false;
+    pub fn set_iter(&mut self, type_id: TypeId, func: IteratorFn) -> &mut Self {
+        if self.indexed {
+            self.all_type_iterators.insert(type_id, func.clone());
+            self.contains_indexed_global_functions = true;
+        }
+        self.type_iterators.insert(type_id, func);
         self
     }
 

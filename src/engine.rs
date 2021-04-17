@@ -2538,7 +2538,6 @@ impl Engine {
                         if let Some(global) = global {
                             let global = Shared::get_mut(global).unwrap();
                             global.set_var(name.clone(), value.clone());
-                            global.build_index();
                         }
                     }
 
