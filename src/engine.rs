@@ -52,7 +52,10 @@ pub type Precedence = NonZeroU8;
 // the module name will live beyond the AST of the eval script text.
 // The best we can do is a shared reference.
 #[derive(Clone, Default)]
-pub struct Imports(StaticVec<Identifier>, StaticVec<Shared<Module>>);
+pub struct Imports(
+    smallvec::SmallVec<[Identifier; 8]>,
+    smallvec::SmallVec<[Shared<Module>; 8]>,
+);
 
 impl Imports {
     /// Get the length of this stack of imported [modules][Module].
@@ -69,6 +72,12 @@ impl Imports {
     #[inline(always)]
     pub fn get(&self, index: usize) -> Option<Shared<Module>> {
         self.1.get(index).cloned()
+    }
+    /// Get the imported [modules][Module] at a particular index.
+    #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
+    pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut Shared<Module>> {
+        self.1.get_mut(index)
     }
     /// Get the index of an imported [modules][Module] by name.
     #[inline(always)]
@@ -199,6 +208,8 @@ pub const KEYWORD_IS_DEF_VAR: &str = "is_def_var";
 #[cfg(not(feature = "no_function"))]
 pub const KEYWORD_IS_DEF_FN: &str = "is_def_fn";
 pub const KEYWORD_THIS: &str = "this";
+#[cfg(not(feature = "no_function"))]
+pub const KEYWORD_GLOBAL: &str = "global";
 #[cfg(not(feature = "no_object"))]
 pub const FN_GET: &str = "get$";
 #[cfg(not(feature = "no_object"))]
@@ -2504,6 +2515,14 @@ impl Engine {
                     .flatten();
 
                 let (var_name, _alias): (Cow<'_, str>, _) = if state.is_global() {
+                    #[cfg(not(feature = "no_function"))]
+                    if entry_type == AccessMode::ReadOnly {
+                        let global = mods.get_mut(mods.find(KEYWORD_GLOBAL).unwrap()).unwrap();
+                        let global = Shared::get_mut(global).unwrap();
+                        global.set_var(name.clone(), value.clone());
+                        global.build_index();
+                    }
+
                     (
                         name.to_string().into(),
                         if *export { Some(name.clone()) } else { None },
