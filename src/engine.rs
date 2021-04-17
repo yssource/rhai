@@ -2517,7 +2517,15 @@ impl Engine {
                 let (var_name, _alias): (Cow<'_, str>, _) = if state.is_global() {
                     #[cfg(not(feature = "no_function"))]
                     if entry_type == AccessMode::ReadOnly {
-                        let global = mods.get_mut(mods.find(KEYWORD_GLOBAL).unwrap()).unwrap();
+                        let index = if let Some(index) = mods.find(KEYWORD_GLOBAL) {
+                            index
+                        } else {
+                            // Create automatic global module
+                            mods.push(crate::engine::KEYWORD_GLOBAL, Module::new());
+                            mods.len() - 1
+                        };
+
+                        let global = mods.get_mut(index).unwrap();
                         let global = Shared::get_mut(global).unwrap();
                         global.set_var(name.clone(), value.clone());
                         global.build_index();

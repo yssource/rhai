@@ -826,10 +826,6 @@ impl Engine {
         lib: &[&Module],
         level: usize,
     ) -> RhaiResult {
-        // Create the global module
-        #[cfg(not(feature = "no_function"))]
-        mods.push(crate::engine::KEYWORD_GLOBAL, Module::new());
-
         self.eval_stmt_block(scope, mods, state, lib, &mut None, statements, false, level)
             .or_else(|err| match *err {
                 EvalAltResult::Return(out, _) => Ok(out),
