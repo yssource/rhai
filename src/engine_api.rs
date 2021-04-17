@@ -1696,6 +1696,11 @@ impl Engine {
         }
 
         let statements = ast.statements();
+
+        if statements.is_empty() {
+            return Ok(Dynamic::UNIT);
+        }
+
         let lib = &[ast.lib()];
         self.eval_global_statements(scope, mods, &mut state, statements, lib, level)
     }
@@ -1771,9 +1776,12 @@ impl Engine {
         {
             state.resolver = ast.resolver();
         }
+
         let statements = ast.statements();
-        let lib = &[ast.lib()];
-        self.eval_global_statements(scope, mods, &mut state, statements, lib, 0)?;
+        if !statements.is_empty() {
+            let lib = &[ast.lib()];
+            self.eval_global_statements(scope, mods, &mut state, statements, lib, 0)?;
+        }
         Ok(())
     }
     /// Call a script function defined in an [`AST`] with multiple arguments.
@@ -1931,21 +1939,21 @@ impl Engine {
         let state = &mut Default::default();
         let mods = &mut Default::default();
         let lib = &[ast.lib()];
+        let statements = ast.statements();
+        let name = name.as_ref();
 
-        if eval_ast {
-            self.eval_global_statements(scope, mods, state, ast.statements(), lib, 0)?;
+        if eval_ast && !statements.is_empty() {
+            self.eval_global_statements(scope, mods, state, statements, lib, 0)?;
         }
 
         let fn_def = ast
             .lib()
-            .get_script_fn(name.as_ref(), args.len())
-            .ok_or_else(|| {
-                EvalAltResult::ErrorFunctionNotFound(name.as_ref().into(), Position::NONE)
-            })?;
+            .get_script_fn(name, args.len())
+            .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::NONE))?;
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
-        crate::fn_call::ensure_no_data_race(name.as_ref(), args, false)?;
+        crate::fn_call::ensure_no_data_race(name, args, false)?;
 
         self.call_script_fn(
             scope,
