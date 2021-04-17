@@ -52,10 +52,7 @@ pub type Precedence = NonZeroU8;
 // the module name will live beyond the AST of the eval script text.
 // The best we can do is a shared reference.
 #[derive(Clone, Default)]
-pub struct Imports(
-    smallvec::SmallVec<[Identifier; 8]>,
-    smallvec::SmallVec<[Shared<Module>; 8]>,
-);
+pub struct Imports(StaticVec<Identifier>, StaticVec<Shared<Module>>);
 
 impl Imports {
     /// Get the length of this stack of imported [modules][Module].
@@ -74,7 +71,7 @@ impl Imports {
         self.1.get(index).cloned()
     }
     /// Get the imported [modules][Module] at a particular index.
-    #[cfg(not(feature = "no_function"))]
+    #[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut Shared<Module>> {
         self.1.get_mut(index)
@@ -907,6 +904,7 @@ impl Engine {
             disable_doc_comments: false,
         };
 
+        engine.global_namespace.set_internal(true);
         engine.register_global_module(StandardPackage::new().as_shared_module());
 
         engine
@@ -917,7 +915,7 @@ impl Engine {
     /// Use [`register_global_module`][Engine::register_global_module] to add packages of functions.
     #[inline(always)]
     pub fn new_raw() -> Self {
-        Self {
+        let mut engine = Self {
             global_namespace: Default::default(),
             global_modules: Default::default(),
             global_sub_modules: Default::default(),
@@ -963,7 +961,11 @@ impl Engine {
             #[cfg(not(feature = "no_function"))]
             #[cfg(feature = "metadata")]
             disable_doc_comments: false,
-        }
+        };
+
+        engine.global_namespace.set_internal(true);
+
+        engine
     }
 
     /// Search for a module within an imports stack.
@@ -2516,19 +2518,28 @@ impl Engine {
 
                 let (var_name, _alias): (Cow<'_, str>, _) = if state.is_global() {
                     #[cfg(not(feature = "no_function"))]
-                    if entry_type == AccessMode::ReadOnly {
-                        let index = if let Some(index) = mods.find(KEYWORD_GLOBAL) {
-                            index
+                    if entry_type == AccessMode::ReadOnly && lib.iter().any(|&m| !m.is_empty()) {
+                        let global = if let Some(index) = mods.find(KEYWORD_GLOBAL) {
+                            let global = mods.get_mut(index).unwrap();
+
+                            if !global.is_internal() {
+                                None
+                            } else {
+                                Some(global)
+                            }
                         } else {
                             // Create automatic global module
-                            mods.push(crate::engine::KEYWORD_GLOBAL, Module::new());
-                            mods.len() - 1
+                            let mut global = Module::new();
+                            global.set_internal(true);
+                            mods.push(crate::engine::KEYWORD_GLOBAL, global);
+                            Some(mods.get_mut(mods.len() - 1).unwrap())
                         };
 
-                        let global = mods.get_mut(index).unwrap();
-                        let global = Shared::get_mut(global).unwrap();
-                        global.set_var(name.clone(), value.clone());
-                        global.build_index();
+                        if let Some(global) = global {
+                            let global = Shared::get_mut(global).unwrap();
+                            global.set_var(name.clone(), value.clone());
+                            global.build_index();
+                        }
                     }
 
                     (
