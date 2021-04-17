@@ -62,7 +62,22 @@ fn test_functions_namespaces() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<INT>("test()")?, 42);
 
     #[cfg(not(feature = "no_function"))]
-    assert_eq!(engine.eval::<INT>("fn test() { 123 } test()")?, 123);
+    {
+        assert_eq!(engine.eval::<INT>("fn test() { 123 } test()")?, 123);
+
+        assert_eq!(
+            engine.eval::<INT>(
+                r"
+                    const ANSWER = 42;
+
+                    fn foo() { global::ANSWER }
+                    
+                    foo()
+                "
+            )?,
+            42
+        );
+    }
 
     Ok(())
 }

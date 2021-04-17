@@ -4,11 +4,23 @@ Rhai Release Notes
 Version 0.20.1
 ==============
 
+This version enables functions to access constants declared at global level via the special `global` module.
+
 Breaking changes
 ----------------
 
 * `Dynamic::is_shared` and `Dynamic::is_locked` are removed under the `no_closure` feature. They used to always return `false`.
 * `Engine::call_fn` now evaluates the `AST` before calling the function.
+
+Enhancements
+------------
+
+* The crate [`no-std-compat`](https://crates.io/crates/no_std_compat) is used to compile for `no-std`. This removes the need to use a special `crate::stdlib` namespace for `std` imports.
+
+New features
+------------
+
+* A module called `global` is automatically created to hold global-level constants, which can then be accessed from functions.
 
 
 Version 0.20.0

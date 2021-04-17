@@ -70,6 +70,12 @@ impl Imports {
     pub fn get(&self, index: usize) -> Option<Shared<Module>> {
         self.1.get(index).cloned()
     }
+    /// Get the imported [modules][Module] at a particular index.
+    #[allow(dead_code)]
+    #[inline(always)]
+    pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut Shared<Module>> {
+        self.1.get_mut(index)
+    }
     /// Get the index of an imported [modules][Module] by name.
     #[inline(always)]
     pub fn find(&self, name: &str) -> Option<usize> {
@@ -199,6 +205,8 @@ pub const KEYWORD_IS_DEF_VAR: &str = "is_def_var";
 #[cfg(not(feature = "no_function"))]
 pub const KEYWORD_IS_DEF_FN: &str = "is_def_fn";
 pub const KEYWORD_THIS: &str = "this";
+#[cfg(not(feature = "no_function"))]
+pub const KEYWORD_GLOBAL: &str = "global";
 #[cfg(not(feature = "no_object"))]
 pub const FN_GET: &str = "get$";
 #[cfg(not(feature = "no_object"))]
@@ -896,6 +904,7 @@ impl Engine {
             disable_doc_comments: false,
         };
 
+        engine.global_namespace.set_internal(true);
         engine.register_global_module(StandardPackage::new().as_shared_module());
 
         engine
@@ -906,7 +915,7 @@ impl Engine {
     /// Use [`register_global_module`][Engine::register_global_module] to add packages of functions.
     #[inline(always)]
     pub fn new_raw() -> Self {
-        Self {
+        let mut engine = Self {
             global_namespace: Default::default(),
             global_modules: Default::default(),
             global_sub_modules: Default::default(),
@@ -952,7 +961,11 @@ impl Engine {
             #[cfg(not(feature = "no_function"))]
             #[cfg(feature = "metadata")]
             disable_doc_comments: false,
-        }
+        };
+
+        engine.global_namespace.set_internal(true);
+
+        engine
     }
 
     /// Search for a module within an imports stack.
@@ -2504,6 +2517,31 @@ impl Engine {
                     .flatten();
 
                 let (var_name, _alias): (Cow<'_, str>, _) = if state.is_global() {
+                    #[cfg(not(feature = "no_function"))]
+                    if entry_type == AccessMode::ReadOnly && lib.iter().any(|&m| !m.is_empty()) {
+                        let global = if let Some(index) = mods.find(KEYWORD_GLOBAL) {
+                            let global = mods.get_mut(index).unwrap();
+
+                            if !global.is_internal() {
+                                None
+                            } else {
+                                Some(global)
+                            }
+                        } else {
+                            // Create automatic global module
+                            let mut global = Module::new();
+                            global.set_internal(true);
+                            mods.push(crate::engine::KEYWORD_GLOBAL, global);
+                            Some(mods.get_mut(mods.len() - 1).unwrap())
+                        };
+
+                        if let Some(global) = global {
+                            let global = Shared::get_mut(global).unwrap();
+                            global.set_var(name.clone(), value.clone());
+                            global.build_index();
+                        }
+                    }
+
                     (
                         name.to_string().into(),
                         if *export { Some(name.clone()) } else { None },

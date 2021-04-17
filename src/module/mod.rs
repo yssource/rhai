@@ -128,6 +128,8 @@ fn calc_native_fn_hash<'a>(
 pub struct Module {
     /// ID identifying the module.
     id: Option<Identifier>,
+    /// Is this module internal?
+    internal: bool,
     /// Sub-modules.
     modules: BTreeMap<Identifier, Shared<Module>>,
     /// [`Module`] variables.
@@ -156,6 +158,7 @@ impl Default for Module {
     fn default() -> Self {
         Self {
             id: None,
+            internal: false,
             modules: Default::default(),
             variables: Default::default(),
             all_variables: Default::default(),
@@ -301,8 +304,23 @@ impl Module {
     /// assert_eq!(module.id(), Some("hello"));
     /// ```
     #[inline(always)]
-    pub fn set_id<S: Into<Identifier>>(&mut self, id: Option<S>) {
+    pub fn set_id<S: Into<Identifier>>(&mut self, id: Option<S>) -> &mut Self {
         self.id = id.map(|s| s.into());
+        self
+    }
+
+    /// Is the [`Module`] internal?
+    #[allow(dead_code)]
+    #[inline(always)]
+    pub(crate) fn is_internal(&self) -> bool {
+        self.internal
+    }
+
+    /// Set the interal status of the [`Module`].
+    #[inline(always)]
+    pub(crate) fn set_internal(&mut self, value: bool) -> &mut Self {
+        self.internal = value;
+        self
     }
 
     /// Is the [`Module`] empty?
