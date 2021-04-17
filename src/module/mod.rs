@@ -310,17 +310,6 @@ impl Module {
     }
 
     /// Is the [`Module`] internal?
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use rhai::Module;
-    ///
-    /// let mut module = Module::new();
-    /// assert!(!module.is_internal());
-    /// module.set_internal(true);
-    /// assert!(module.is_internal());
-    /// ```
     #[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn is_internal(&self) -> bool {
@@ -328,17 +317,6 @@ impl Module {
     }
 
     /// Set the interal status of the [`Module`].
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use rhai::Module;
-    ///
-    /// let mut module = Module::new();
-    /// assert!(!module.is_internal());
-    /// module.set_internal(true);
-    /// assert!(module.is_internal());
-    /// ```
     #[inline(always)]
     pub(crate) fn set_internal(&mut self, value: bool) -> &mut Self {
         self.internal = value;
