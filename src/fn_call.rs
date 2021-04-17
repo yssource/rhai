@@ -913,15 +913,14 @@ impl Engine {
                 let new_hash = FnCallHash::from_script(calc_fn_hash(empty(), fn_name, args_len));
                 // Arguments are passed as-is, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
-                let mut arg_values = curry
+                let mut args = curry
                     .iter_mut()
                     .chain(call_args.iter_mut())
                     .collect::<StaticVec<_>>();
-                let args = arg_values.as_mut();
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, new_hash, args, false, false, pos, None, level,
+                    mods, state, lib, fn_name, new_hash, &mut args, false, false, pos, None, level,
                 )
             }
             KEYWORD_FN_PTR_CALL => {
@@ -952,15 +951,14 @@ impl Engine {
                 );
                 // Replace the first argument with the object pointer, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
-                let mut arg_values = once(obj)
+                let mut args = once(obj)
                     .chain(curry.iter_mut())
                     .chain(call_args.iter_mut())
                     .collect::<StaticVec<_>>();
-                let args = arg_values.as_mut();
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, new_hash, args, is_ref, true, pos, None, level,
+                    mods, state, lib, fn_name, new_hash, &mut args, is_ref, true, pos, None, level,
                 )
             }
             KEYWORD_FN_PTR_CURRY => {
@@ -1030,13 +1028,12 @@ impl Engine {
                 };
 
                 // Attached object pointer in front of the arguments
-                let mut arg_values = once(obj)
+                let mut args = once(obj)
                     .chain(call_args.iter_mut())
                     .collect::<StaticVec<_>>();
-                let args = arg_values.as_mut();
 
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, hash, args, is_ref, true, pos, None, level,
+                    mods, state, lib, fn_name, hash, &mut args, is_ref, true, pos, None, level,
                 )
             }
         }?;
@@ -1344,10 +1341,8 @@ impl Engine {
             }
         }
 
-        let args = args.as_mut();
-
         self.exec_fn_call(
-            mods, state, lib, name, hash, args, is_ref, false, pos, capture, level,
+            mods, state, lib, name, hash, &mut args, is_ref, false, pos, capture, level,
         )
         .map(|(v, _)| v)
     }
@@ -1468,7 +1463,6 @@ impl Engine {
                 if fn_def.body.is_empty() {
                     Ok(Dynamic::UNIT)
                 } else {
-                    let args = args.as_mut();
                     let new_scope = &mut Default::default();
 
                     let mut source = module.id_raw().cloned();
@@ -1477,7 +1471,7 @@ impl Engine {
                     let level = level + 1;
 
                     let result = self.call_script_fn(
-                        new_scope, mods, state, lib, &mut None, fn_def, args, pos, level,
+                        new_scope, mods, state, lib, &mut None, fn_def, &mut args, pos, level,
                     );
 
                     state.source = source;
@@ -1489,17 +1483,13 @@ impl Engine {
             Some(f) if f.is_plugin_fn() => f
                 .get_plugin_fn()
                 .clone()
-                .call(
-                    (self, fn_name, module.id(), &*mods, lib).into(),
-                    args.as_mut(),
-                )
+                .call((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
                 .map_err(|err| err.fill_position(pos)),
 
-            Some(f) if f.is_native() => f.get_native_fn()(
-                (self, fn_name, module.id(), &*mods, lib).into(),
-                args.as_mut(),
-            )
-            .map_err(|err| err.fill_position(pos)),
+            Some(f) if f.is_native() => {
+                f.get_native_fn()((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
+                    .map_err(|err| err.fill_position(pos))
+            }
 
             Some(f) => unreachable!("unknown function type: {:?}", f),
 

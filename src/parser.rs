@@ -381,7 +381,7 @@ fn parse_fn_call(
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
 
-                let hash = if let Some(modules) = namespace.as_mut() {
+                let hash = if let Some(ref mut modules) = namespace {
                     #[cfg(not(feature = "no_module"))]
                     modules.set_index(state.find_module(&modules[0].name));
 

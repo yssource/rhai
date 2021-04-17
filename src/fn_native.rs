@@ -348,7 +348,7 @@ impl FnPtr {
             arg_values.iter_mut().collect()
         };
 
-        ctx.call_fn_dynamic_raw(self.fn_name(), is_method, args.as_mut())
+        ctx.call_fn_dynamic_raw(self.fn_name(), is_method, &mut args)
     }
 }
 

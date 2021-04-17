@@ -947,7 +947,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                     ""
                 };
 
-                if let Some(result) = call_fn_with_constant_arguments(&state, x.name.as_ref(), arg_values.as_mut())
+                if let Some(result) = call_fn_with_constant_arguments(&state, x.name.as_ref(), &mut arg_values)
                                         .or_else(|| {
                                             if !arg_for_type_of.is_empty() {
                                                 // Handle `type_of()`
