@@ -10,16 +10,6 @@ use crate::fn_builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 use crate::fn_native::{FnAny, FnCallArgs};
 use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
-use crate::stdlib::{
-    any::{type_name, TypeId},
-    boxed::Box,
-    convert::TryFrom,
-    format,
-    iter::{empty, once},
-    mem,
-    string::{String, ToString},
-    vec::Vec,
-};
 use crate::{
     ast::{Expr, Stmt},
     fn_native::CallableFunction,
@@ -28,6 +18,14 @@ use crate::{
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, EvalAltResult, FnPtr,
     ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec,
+};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{
+    any::{type_name, TypeId},
+    convert::TryFrom,
+    iter::{empty, once},
+    mem,
 };
 
 #[cfg(not(feature = "no_object"))]
@@ -465,7 +463,7 @@ impl Engine {
     ) -> RhaiResult {
         #[inline(always)]
         fn make_error(
-            name: crate::stdlib::string::String,
+            name: std::string::String,
             fn_def: &crate::ast::ScriptFnDef,
             state: &State,
             err: Box<EvalAltResult>,
@@ -512,7 +510,7 @@ impl Engine {
                 .iter()
                 .zip(args.iter_mut().map(|v| mem::take(*v)))
                 .map(|(name, value)| {
-                    let var_name: crate::stdlib::borrow::Cow<'_, str> =
+                    let var_name: std::borrow::Cow<'_, str> =
                         crate::r#unsafe::unsafe_cast_var_name_to_lifetime(name).into();
                     (var_name, value)
                 }),

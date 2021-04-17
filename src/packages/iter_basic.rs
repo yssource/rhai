@@ -1,15 +1,17 @@
 use crate::dynamic::Variant;
-use crate::stdlib::{boxed::Box, ops::Range};
 use crate::{def_package, EvalAltResult, INT};
+use std::ops::Range;
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 #[cfg(not(feature = "unchecked"))]
-use crate::stdlib::string::ToString;
+use std::string::ToString;
 
 #[cfg(not(feature = "unchecked"))]
 use num_traits::{CheckedAdd as Add, CheckedSub as Sub};
 
 #[cfg(feature = "unchecked")]
-use crate::stdlib::ops::{Add, Sub};
+use std::ops::{Add, Sub};
 
 fn get_range<T: Variant + Clone>(from: T, to: T) -> Result<Range<T>, Box<EvalAltResult>> {
     Ok(from..to)
@@ -207,7 +209,7 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
             pub fn new(from: Decimal, to: Decimal, step: Decimal) -> Result<Self, Box<EvalAltResult>> {
                 #[cfg(not(feature = "unchecked"))]
                 if step.is_zero() {
-                    use crate::stdlib::string::ToString;
+                    use std::string::ToString;
 
                     return EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
                         Box::new(EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE)),
@@ -251,7 +253,7 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
             }
         }
 
-        impl crate::stdlib::iter::FusedIterator for StepDecimalRange {}
+        impl std::iter::FusedIterator for StepDecimalRange {}
 
         lib.set_iterator::<StepDecimalRange>();
 

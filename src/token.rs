@@ -4,18 +4,19 @@ use crate::engine::{
     Precedence, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
-use crate::stdlib::{
+use crate::{Engine, LexError, StaticVec, INT};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{
     borrow::Cow,
     cell::Cell,
-    char, fmt, format,
+    char, fmt,
     iter::{FusedIterator, Peekable},
     num::NonZeroUsize,
     ops::{Add, AddAssign},
     rc::Rc,
     str::{Chars, FromStr},
-    string::{String, ToString},
 };
-use crate::{Engine, LexError, StaticVec, INT};
 
 #[cfg(not(feature = "no_float"))]
 use crate::{ast::FloatWrapper, FLOAT};

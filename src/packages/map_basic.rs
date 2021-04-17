@@ -3,6 +3,8 @@
 use crate::engine::OP_EQUALS;
 use crate::plugin::*;
 use crate::{def_package, Dynamic, ImmutableString, Map, INT};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;

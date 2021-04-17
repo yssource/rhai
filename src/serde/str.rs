@@ -1,8 +1,10 @@
 //! Implement deserialization support of [`ImmutableString`][crate::ImmutableString] for [`serde`].
 
-use crate::stdlib::{any::type_name, boxed::Box};
 use crate::{EvalAltResult, Position};
 use serde::de::{Deserializer, Visitor};
+use std::any::type_name;
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 /// Deserializer for `ImmutableString`.
 pub struct StringSliceDeserializer<'a> {

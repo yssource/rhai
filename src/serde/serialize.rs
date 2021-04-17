@@ -1,9 +1,10 @@
 //! Implementations of [`serde::Serialize`].
 
 use crate::dynamic::{Union, Variant};
-use crate::stdlib::string::ToString;
 use crate::{Dynamic, ImmutableString};
 use serde::ser::{Serialize, Serializer};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_object"))]
 use serde::ser::SerializeMap;

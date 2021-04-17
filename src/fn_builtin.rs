@@ -2,8 +2,10 @@
 
 use crate::engine::OP_CONTAINS;
 use crate::fn_native::{FnCallArgs, NativeCallContext};
-use crate::stdlib::{any::TypeId, format, string::ToString};
 use crate::{Dynamic, ImmutableString, RhaiResult, INT};
+use std::any::TypeId;
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;

@@ -3,18 +3,18 @@
 use crate::ast::{FnAccess, FnCallHash};
 use crate::engine::Imports;
 use crate::plugin::PluginFunction;
-use crate::stdlib::{
-    boxed::Box,
-    convert::{TryFrom, TryInto},
-    fmt,
-    iter::{empty, once},
-    mem,
-    string::String,
-};
 use crate::token::is_valid_identifier;
 use crate::{
     calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, Identifier, ImmutableString, Module,
     Position, RhaiResult, StaticVec,
+};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{
+    convert::{TryFrom, TryInto},
+    fmt,
+    iter::{empty, once},
+    mem,
 };
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
@@ -33,19 +33,19 @@ impl<T> SendSync for T {}
 
 /// Immutable reference-counted container.
 #[cfg(not(feature = "sync"))]
-pub use crate::stdlib::rc::Rc as Shared;
+pub use std::rc::Rc as Shared;
 /// Immutable reference-counted container.
 #[cfg(feature = "sync")]
-pub use crate::stdlib::sync::Arc as Shared;
+pub use std::sync::Arc as Shared;
 
 /// Synchronized shared object.
 #[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "sync"))]
-pub use crate::stdlib::cell::RefCell as Locked;
+pub use std::cell::RefCell as Locked;
 /// Synchronized shared object.
 #[cfg(not(feature = "no_closure"))]
 #[cfg(feature = "sync")]
-pub use crate::stdlib::sync::RwLock as Locked;
+pub use std::sync::RwLock as Locked;
 
 /// Context of a native Rust function call.
 #[derive(Debug)]

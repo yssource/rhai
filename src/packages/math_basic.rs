@@ -2,15 +2,14 @@
 
 use crate::plugin::*;
 use crate::{def_package, Position, INT};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
 
 #[cfg(not(feature = "no_float"))]
 use crate::result::EvalAltResult;
-
-#[cfg(not(feature = "no_float"))]
-use crate::stdlib::format;
 
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]
@@ -194,16 +193,16 @@ mod float_functions {
     #[rhai_fn(name = "E")]
     pub fn e() -> FLOAT {
         #[cfg(not(feature = "f32_float"))]
-        return crate::stdlib::f64::consts::E;
+        return std::f64::consts::E;
         #[cfg(feature = "f32_float")]
-        return crate::stdlib::f32::consts::E;
+        return std::f32::consts::E;
     }
     #[rhai_fn(name = "PI")]
     pub fn pi() -> FLOAT {
         #[cfg(not(feature = "f32_float"))]
-        return crate::stdlib::f64::consts::PI;
+        return std::f64::consts::PI;
         #[cfg(feature = "f32_float")]
-        return crate::stdlib::f32::consts::PI;
+        return std::f32::consts::PI;
     }
     pub fn to_radians(x: FLOAT) -> FLOAT {
         x.to_radians()
@@ -304,11 +303,11 @@ mod float_functions {
 #[cfg(feature = "decimal")]
 #[export_module]
 mod decimal_functions {
-    use crate::stdlib::convert::TryFrom;
     use rust_decimal::{
         prelude::{FromStr, RoundingStrategy},
         Decimal,
     };
+    use std::convert::TryFrom;
 
     #[rhai_fn(name = "floor", get = "floor")]
     pub fn floor(x: Decimal) -> Decimal {

@@ -3,8 +3,10 @@
 
 use crate::engine::OP_EQUALS;
 use crate::plugin::*;
-use crate::stdlib::{any::TypeId, boxed::Box, cmp::Ordering, mem, string::ToString};
 use crate::{def_package, Array, Dynamic, EvalAltResult, FnPtr, NativeCallContext, Position, INT};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{any::TypeId, cmp::Ordering, mem};
 
 def_package!(crate:BasicArrayPackage:"Basic array utilities.", lib, {
     combine_with_exported_module!(lib, "array", array_functions);

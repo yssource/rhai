@@ -5,20 +5,18 @@ use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
 use crate::parser::map_dynamic_to_expr;
-use crate::stdlib::{
-    any::TypeId,
-    boxed::Box,
-    hash::{Hash, Hasher},
-    iter::empty,
-    mem,
-    string::{String, ToString},
-    vec,
-    vec::Vec,
-};
 use crate::utils::get_hasher;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, ImmutableString, Module,
     Position, Scope, StaticVec, AST,
+};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{
+    any::TypeId,
+    hash::{Hash, Hasher},
+    iter::empty,
+    mem,
 };
 
 /// Level of optimization performed.

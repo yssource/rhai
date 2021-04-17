@@ -10,27 +10,26 @@ use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
-use crate::stdlib::{
-    any::{type_name, TypeId},
-    borrow::Cow,
-    boxed::Box,
-    collections::{BTreeMap, BTreeSet},
-    fmt, format,
-    hash::{Hash, Hasher},
-    num::{NonZeroU8, NonZeroUsize},
-    ops::{Deref, DerefMut},
-    string::{String, ToString},
-    vec::Vec,
-};
 use crate::syntax::CustomSyntax;
 use crate::utils::get_hasher;
 use crate::{
     Dynamic, EvalAltResult, FnPtr, Identifier, ImmutableString, Module, Position, RhaiResult,
     Scope, Shared, StaticVec,
 };
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{
+    any::{type_name, TypeId},
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    hash::{Hash, Hasher},
+    num::{NonZeroU8, NonZeroUsize},
+    ops::{Deref, DerefMut},
+};
 
 #[cfg(not(feature = "no_index"))]
-use crate::{calc_fn_hash, stdlib::iter::empty, Array};
+use crate::{calc_fn_hash, Array};
 
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
@@ -616,7 +615,7 @@ pub struct Limits {
     #[cfg(not(feature = "no_function"))]
     pub max_function_expr_depth: Option<NonZeroUsize>,
     /// Maximum number of operations allowed to run.
-    pub max_operations: Option<crate::stdlib::num::NonZeroU64>,
+    pub max_operations: Option<std::num::NonZeroU64>,
     /// Maximum number of [modules][Module] allowed to load.
     ///
     /// Set to zero to effectively disable loading any [module][Module].
@@ -1174,8 +1173,11 @@ impl Engine {
                             let val_type_name = target.type_name();
                             let ((_, val_pos), _) = new_val;
 
-                            let hash_set =
-                                FnCallHash::from_native(calc_fn_hash(empty(), FN_IDX_SET, 3));
+                            let hash_set = FnCallHash::from_native(calc_fn_hash(
+                                std::iter::empty(),
+                                FN_IDX_SET,
+                                3,
+                            ));
                             let args = &mut [target, &mut idx_val2, &mut (new_val.0).0];
 
                             self.exec_fn_call(
@@ -1688,7 +1690,8 @@ impl Engine {
             _ if _indexers => {
                 let type_name = target.type_name();
                 let args = &mut [target, &mut _idx];
-                let hash_get = FnCallHash::from_native(calc_fn_hash(empty(), FN_IDX_GET, 2));
+                let hash_get =
+                    FnCallHash::from_native(calc_fn_hash(std::iter::empty(), FN_IDX_GET, 2));
                 self.exec_fn_call(
                     _mods, state, _lib, FN_IDX_GET, hash_get, args, _is_ref, true, idx_pos, None,
                     _level,
@@ -2594,7 +2597,7 @@ impl Engine {
 
                     if !val.is_shared() {
                         // Replace the variable with a shared value.
-                        *val = crate::stdlib::mem::take(val).into_shared();
+                        *val = std::mem::take(val).into_shared();
                     }
                 }
                 Ok(Dynamic::UNIT)

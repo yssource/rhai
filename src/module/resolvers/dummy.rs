@@ -1,5 +1,6 @@
-use crate::stdlib::boxed::Box;
 use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 /// Empty/disabled [module][Module] resolution service that acts as a dummy.
 ///

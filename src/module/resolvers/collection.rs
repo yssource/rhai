@@ -1,5 +1,7 @@
-use crate::stdlib::{boxed::Box, ops::AddAssign, vec::Vec};
 use crate::{Engine, EvalAltResult, Module, ModuleResolver, Position, Shared};
+use std::ops::AddAssign;
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 /// [Module] resolution service that holds a collection of module resolvers,
 /// to be searched in sequential order.

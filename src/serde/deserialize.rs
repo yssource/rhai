@@ -1,8 +1,10 @@
 //! Implementations of [`serde::Deserialize`].
 
-use crate::stdlib::{fmt, string::ToString};
 use crate::{Dynamic, ImmutableString, INT};
 use serde::de::{Deserialize, Deserializer, Error, Visitor};
+use std::fmt;
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
@@ -95,8 +97,8 @@ impl<'d> Visitor<'d> for DynamicVisitor {
     #[cfg(feature = "no_float")]
     #[cfg(feature = "decimal")]
     fn visit_f32<E: Error>(self, v: f32) -> Result<Self::Value, E> {
-        use crate::stdlib::convert::TryFrom;
         use rust_decimal::Decimal;
+        use std::convert::TryFrom;
 
         Decimal::try_from(v)
             .map(|v| v.into())
@@ -105,8 +107,8 @@ impl<'d> Visitor<'d> for DynamicVisitor {
     #[cfg(feature = "no_float")]
     #[cfg(feature = "decimal")]
     fn visit_f64<E: Error>(self, v: f64) -> Result<Self::Value, E> {
-        use crate::stdlib::convert::TryFrom;
         use rust_decimal::Decimal;
+        use std::convert::TryFrom;
 
         Decimal::try_from(v)
             .map(|v| v.into())

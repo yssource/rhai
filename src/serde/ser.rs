@@ -1,11 +1,13 @@
 //! Implement serialization support of [`Dynamic`][crate::Dynamic] for [`serde`].
 
-use crate::stdlib::{boxed::Box, fmt, string::ToString};
 use crate::{Dynamic, EvalAltResult, Position, RhaiResult};
 use serde::ser::{
     Error, SerializeMap, SerializeSeq, SerializeStruct, SerializeTuple, SerializeTupleStruct,
 };
 use serde::{Serialize, Serializer};
+use std::fmt;
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
@@ -220,8 +222,8 @@ impl Serializer for &mut DynamicSerializer {
         #[cfg(feature = "no_float")]
         #[cfg(feature = "decimal")]
         {
-            use crate::stdlib::convert::TryFrom;
             use rust_decimal::Decimal;
+            use std::convert::TryFrom;
 
             Decimal::try_from(v)
                 .map(|v| v.into())
@@ -236,8 +238,8 @@ impl Serializer for &mut DynamicSerializer {
         #[cfg(feature = "no_float")]
         #[cfg(feature = "decimal")]
         {
-            use crate::stdlib::convert::TryFrom;
             use rust_decimal::Decimal;
+            use std::convert::TryFrom;
 
             Decimal::try_from(v)
                 .map(|v| v.into())
@@ -539,7 +541,7 @@ impl SerializeMap for DynamicSerializer {
     ) -> Result<(), Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
         {
-            let key = crate::stdlib::mem::take(&mut self._key)
+            let key = std::mem::take(&mut self._key)
                 .take_immutable_string()
                 .map_err(|typ| {
                     EvalAltResult::ErrorMismatchDataType(

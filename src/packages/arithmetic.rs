@@ -1,8 +1,9 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::stdlib::{format, string::String};
 use crate::{def_package, EvalAltResult, Position, INT};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;

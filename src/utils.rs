@@ -1,20 +1,19 @@
 //! Module containing various utility types and functions.
 
 use crate::fn_native::{shared_make_mut, shared_take};
-use crate::stdlib::{
+use crate::{Identifier, Shared};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{
     any::TypeId,
     borrow::Borrow,
-    boxed::Box,
     cmp::Ordering,
     fmt,
-    fmt::{Debug, Display},
     hash::{BuildHasher, Hash, Hasher},
     iter::FromIterator,
     ops::{Add, AddAssign, Deref, Sub, SubAssign},
     str::FromStr,
-    string::{String, ToString},
 };
-use crate::{Identifier, Shared};
 
 /// A hasher that only takes one single [`u64`] and returns it as a hash key.
 ///
@@ -251,17 +250,17 @@ impl<'a> FromIterator<String> for ImmutableString {
     }
 }
 
-impl Display for ImmutableString {
+impl fmt::Display for ImmutableString {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Display::fmt(self.0.as_str(), f)
+        fmt::Display::fmt(self.0.as_str(), f)
     }
 }
 
-impl Debug for ImmutableString {
+impl fmt::Debug for ImmutableString {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Debug::fmt(self.0.as_str(), f)
+        fmt::Debug::fmt(self.0.as_str(), f)
     }
 }
 
@@ -631,7 +630,7 @@ impl ImmutableString {
 /// yet interned.
 #[derive(Debug, Clone, Default, Hash)]
 pub struct IdentifierBuilder(
-    #[cfg(feature = "no_smartstring")] crate::stdlib::collections::BTreeSet<Identifier>,
+    #[cfg(feature = "no_smartstring")] std::collections::BTreeSet<Identifier>,
 );
 
 impl IdentifierBuilder {

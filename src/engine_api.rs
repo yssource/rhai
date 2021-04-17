@@ -6,15 +6,13 @@ use crate::fn_native::{FnCallArgs, SendSync};
 use crate::fn_register::RegisterNativeFunction;
 use crate::optimize::OptimizationLevel;
 use crate::parser::ParseState;
-use crate::stdlib::{
-    any::{type_name, TypeId},
-    boxed::Box,
-    string::String,
-};
 use crate::{
     scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Identifier, Module,
     NativeCallContext, ParseError, Position, RhaiResult, Shared, AST,
 };
+use std::any::{type_name, TypeId};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
@@ -61,7 +59,7 @@ impl Engine {
         #[cfg(feature = "metadata")]
         let mut param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
-            .map(|ty| crate::stdlib::format!("_: {}", self.map_type_name(ty)))
+            .map(|ty| std::format!("_: {}", self.map_type_name(ty)))
             .collect();
 
         #[cfg(feature = "metadata")]
@@ -121,8 +119,8 @@ impl Engine {
         #[cfg(feature = "metadata")]
         let param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
-            .map(|ty| crate::stdlib::format!("_: {}", self.map_type_name(ty)))
-            .chain(crate::stdlib::iter::once(
+            .map(|ty| std::format!("_: {}", self.map_type_name(ty)))
+            .chain(std::iter::once(
                 self.map_type_name(F::return_type_name()).into(),
             ))
             .collect();
@@ -905,7 +903,7 @@ impl Engine {
         module: Shared<Module>,
     ) -> &mut Self {
         fn register_static_module_raw(
-            root: &mut crate::stdlib::collections::BTreeMap<Identifier, Shared<Module>>,
+            root: &mut std::collections::BTreeMap<Identifier, Shared<Module>>,
             name: impl AsRef<str> + Into<Identifier>,
             module: Shared<Module>,
         ) {
@@ -1039,8 +1037,8 @@ impl Engine {
             ast::{ASTNode, Expr, Stmt},
             fn_native::shared_take_or_clone,
             module::resolvers::StaticModuleResolver,
-            stdlib::collections::BTreeSet,
         };
+        use std::collections::BTreeSet;
 
         fn collect_imports(
             ast: &AST,
@@ -1169,12 +1167,12 @@ impl Engine {
     /// Read the contents of a file into a string.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-    fn read_file(path: crate::stdlib::path::PathBuf) -> Result<String, Box<EvalAltResult>> {
-        use crate::stdlib::io::Read;
+    fn read_file(path: std::path::PathBuf) -> Result<String, Box<EvalAltResult>> {
+        use std::io::Read;
 
-        let mut f = crate::stdlib::fs::File::open(path.clone()).map_err(|err| {
+        let mut f = std::fs::File::open(path.clone()).map_err(|err| {
             EvalAltResult::ErrorSystem(
-                crate::stdlib::format!("Cannot open script file '{}'", path.to_string_lossy()),
+                std::format!("Cannot open script file '{}'", path.to_string_lossy()),
                 err.into(),
             )
         })?;
@@ -1183,7 +1181,7 @@ impl Engine {
 
         f.read_to_string(&mut contents).map_err(|err| {
             EvalAltResult::ErrorSystem(
-                crate::stdlib::format!("Cannot read script file '{}'", path.to_string_lossy()),
+                std::format!("Cannot read script file '{}'", path.to_string_lossy()),
                 err.into(),
             )
         })?;
@@ -1224,10 +1222,7 @@ impl Engine {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
-    pub fn compile_file(
-        &self,
-        path: crate::stdlib::path::PathBuf,
-    ) -> Result<AST, Box<EvalAltResult>> {
+    pub fn compile_file(&self, path: std::path::PathBuf) -> Result<AST, Box<EvalAltResult>> {
         self.compile_file_with_scope(&Default::default(), path)
     }
     /// Compile a script file into an [`AST`] using own scope, which can be used later for evaluation.
@@ -1269,7 +1264,7 @@ impl Engine {
     pub fn compile_file_with_scope(
         &self,
         scope: &Scope,
-        path: crate::stdlib::path::PathBuf,
+        path: std::path::PathBuf,
     ) -> Result<AST, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| Ok(self.compile_with_scope(scope, &contents)?))
     }
@@ -1465,7 +1460,7 @@ impl Engine {
     #[inline(always)]
     pub fn eval_file<T: Variant + Clone>(
         &self,
-        path: crate::stdlib::path::PathBuf,
+        path: std::path::PathBuf,
     ) -> Result<T, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.eval::<T>(&contents))
     }
@@ -1496,7 +1491,7 @@ impl Engine {
     pub fn eval_file_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
-        path: crate::stdlib::path::PathBuf,
+        path: std::path::PathBuf,
     ) -> Result<T, Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.eval_with_scope::<T>(scope, &contents))
     }
@@ -1711,10 +1706,7 @@ impl Engine {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
-    pub fn consume_file(
-        &self,
-        path: crate::stdlib::path::PathBuf,
-    ) -> Result<(), Box<EvalAltResult>> {
+    pub fn consume_file(&self, path: std::path::PathBuf) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.consume(&contents))
     }
     /// Evaluate a file with own scope, but throw away the result and only return error (if any).
@@ -1727,7 +1719,7 @@ impl Engine {
     pub fn consume_file_with_scope(
         &self,
         scope: &mut Scope,
-        path: crate::stdlib::path::PathBuf,
+        path: std::path::PathBuf,
     ) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.consume_with_scope(scope, &contents))
     }
@@ -1999,7 +1991,7 @@ impl Engine {
         #[cfg(feature = "no_function")]
         let lib = Default::default();
 
-        let stmt = crate::stdlib::mem::take(ast.statements_mut());
+        let stmt = std::mem::take(ast.statements_mut());
         crate::optimize::optimize_into_ast(self, scope, stmt.into_vec(), lib, optimization_level)
     }
     /// Generate a list of all registered functions.
@@ -2010,15 +2002,15 @@ impl Engine {
     /// 2) Functions in registered sub-modules
     /// 3) Functions in packages (optional)
     #[cfg(feature = "metadata")]
-    pub fn gen_fn_signatures(&self, include_packages: bool) -> crate::stdlib::vec::Vec<String> {
-        let mut signatures: crate::stdlib::vec::Vec<_> = Default::default();
+    pub fn gen_fn_signatures(&self, include_packages: bool) -> std::vec::Vec<String> {
+        let mut signatures: std::vec::Vec<_> = Default::default();
 
         signatures.extend(self.global_namespace.gen_fn_signatures());
 
         self.global_sub_modules.iter().for_each(|(name, m)| {
             signatures.extend(
                 m.gen_fn_signatures()
-                    .map(|f| crate::stdlib::format!("{}::{}", name, f)),
+                    .map(|f| std::format!("{}::{}", name, f)),
             )
         });
 

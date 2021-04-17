@@ -2,14 +2,15 @@
 
 use super::{arithmetic::make_err as make_arithmetic_err, math_basic::MAX_INT};
 use crate::plugin::*;
-use crate::stdlib::boxed::Box;
 use crate::{def_package, Dynamic, EvalAltResult, INT};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
 
 #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-use crate::stdlib::time::{Duration, Instant};
+use std::time::{Duration, Instant};
 
 #[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
 use instant::{Duration, Instant};

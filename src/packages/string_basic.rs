@@ -1,8 +1,9 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::stdlib::{format, string::ToString};
 use crate::{def_package, FnPtr};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
@@ -69,10 +70,6 @@ mod print_debug_functions {
 
     #[cfg(not(feature = "no_float"))]
     pub mod float_functions {
-        #[cfg(feature = "no_std")]
-        #[cfg(not(feature = "no_float"))]
-        use num_traits::Float;
-
         use crate::ast::FloatWrapper;
 
         #[rhai_fn(name = "print", name = "to_string")]
@@ -106,7 +103,7 @@ mod print_debug_functions {
         )]
         pub fn format_array(ctx: NativeCallContext, array: &mut Array) -> ImmutableString {
             let len = array.len();
-            let mut result = crate::stdlib::string::String::with_capacity(len * 5 + 2);
+            let mut result = std::string::String::with_capacity(len * 5 + 2);
             result.push_str("[");
 
             array.iter_mut().enumerate().for_each(|(i, x)| {
@@ -133,7 +130,7 @@ mod print_debug_functions {
         )]
         pub fn format_map(ctx: NativeCallContext, map: &mut Map) -> ImmutableString {
             let len = map.len();
-            let mut result = crate::stdlib::string::String::with_capacity(len * 5 + 3);
+            let mut result = std::string::String::with_capacity(len * 5 + 3);
             result.push_str("#{");
 
             map.iter_mut().enumerate().for_each(|(i, (k, v))| {

@@ -1,10 +1,11 @@
-use crate::stdlib::{
-    boxed::Box,
+use crate::{Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Shared};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{
     collections::BTreeMap,
     io::Error as IoError,
     path::{Path, PathBuf},
 };
-use crate::{Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Shared};
 
 pub const RHAI_SCRIPT_EXTENSION: &str = "rhai";
 
@@ -45,9 +46,9 @@ pub struct FileModuleResolver {
     cache_enabled: bool,
 
     #[cfg(not(feature = "sync"))]
-    cache: crate::stdlib::cell::RefCell<BTreeMap<PathBuf, Shared<Module>>>,
+    cache: std::cell::RefCell<BTreeMap<PathBuf, Shared<Module>>>,
     #[cfg(feature = "sync")]
-    cache: crate::stdlib::sync::RwLock<BTreeMap<PathBuf, Shared<Module>>>,
+    cache: std::sync::RwLock<BTreeMap<PathBuf, Shared<Module>>>,
 }
 
 impl Default for FileModuleResolver {

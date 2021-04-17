@@ -1,9 +1,10 @@
 //! A helper module containing unsafe utility functions.
 
 use crate::dynamic::Variant;
-use crate::stdlib::{
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{
     any::{Any, TypeId},
-    boxed::Box,
     mem, ptr,
 };
 

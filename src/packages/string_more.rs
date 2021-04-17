@@ -1,10 +1,10 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::stdlib::{
-    any::TypeId, boxed::Box, format, mem, string::String, string::ToString, vec::Vec,
-};
 use crate::{def_package, Dynamic, ImmutableString, StaticVec, INT};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{any::TypeId, mem};
 
 use super::string_basic::{print_with_func, FUNC_TO_STRING};
 
@@ -422,7 +422,6 @@ mod string_functions {
 
     #[cfg(not(feature = "no_index"))]
     pub mod arrays {
-        use crate::stdlib::vec;
         use crate::{Array, ImmutableString};
 
         #[rhai_fn(name = "split")]

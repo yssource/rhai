@@ -1,8 +1,10 @@
 //! Module that defines the [`Scope`] type representing a function call-stack scope.
 
 use crate::dynamic::{AccessMode, Variant};
-use crate::stdlib::{borrow::Cow, boxed::Box, iter, vec::Vec};
 use crate::{Dynamic, Identifier, StaticVec};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{borrow::Cow, iter::Extend};
 
 /// Keep a number of entries inline (since [`Dynamic`] is usually small enough).
 const SCOPE_SIZE: usize = 16;
@@ -498,7 +500,7 @@ impl<'a> Scope<'a> {
     }
 }
 
-impl<'a, K: Into<Cow<'a, str>>> iter::Extend<(K, Dynamic)> for Scope<'a> {
+impl<'a, K: Into<Cow<'a, str>>> Extend<(K, Dynamic)> for Scope<'a> {
     #[inline(always)]
     fn extend<T: IntoIterator<Item = (K, Dynamic)>>(&mut self, iter: T) {
         iter.into_iter().for_each(|(name, value)| {
