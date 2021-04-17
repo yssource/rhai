@@ -2,10 +2,12 @@
 
 use super::str::StringSliceDeserializer;
 use crate::dynamic::Union;
-use crate::stdlib::{any::type_name, boxed::Box, fmt, string::ToString};
 use crate::{Dynamic, EvalAltResult, ImmutableString, LexError, Position};
 use serde::de::{DeserializeSeed, Error, IntoDeserializer, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{any::type_name, fmt};
 
 #[cfg(not(feature = "no_index"))]
 use crate::Array;

@@ -1,12 +1,13 @@
 //! Module containing error definitions for the parsing process.
 
-use crate::stdlib::{
-    boxed::Box,
-    error::Error,
-    fmt,
-    string::{String, ToString},
-};
 use crate::{EvalAltResult, Position};
+#[cfg(feature = "no_std")]
+use core_error::Error;
+#[cfg(not(feature = "no_std"))]
+use std::error::Error;
+use std::fmt;
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 /// _(INTERNALS)_ Error encountered when tokenizing the script text.
 /// Exported under the `internals` feature only.

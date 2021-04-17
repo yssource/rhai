@@ -2,6 +2,8 @@
 
 use crate::def_package;
 use crate::plugin::*;
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 #[cfg(any(
     not(feature = "no_float"),

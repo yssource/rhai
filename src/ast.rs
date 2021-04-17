@@ -3,26 +3,28 @@
 use crate::dynamic::{AccessMode, Union};
 use crate::fn_native::shared_make_mut;
 use crate::module::NamespaceRef;
-use crate::stdlib::{
-    boxed::Box,
-    collections::BTreeMap,
-    fmt,
-    hash::Hash,
-    iter::empty,
-    num::{NonZeroU8, NonZeroUsize},
-    ops::{Add, AddAssign, Deref, DerefMut},
-    vec,
-    vec::Vec,
-};
 use crate::token::Token;
 use crate::utils::calc_fn_hash;
 use crate::{
     Dynamic, FnNamespace, FnPtr, Identifier, ImmutableString, Module, Position, Shared, StaticVec,
     INT,
 };
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{
+    collections::BTreeMap,
+    fmt,
+    hash::Hash,
+    iter::empty,
+    num::{NonZeroU8, NonZeroUsize},
+    ops::{Add, AddAssign, Deref, DerefMut},
+};
 
 #[cfg(not(feature = "no_float"))]
-use crate::{stdlib::str::FromStr, FLOAT};
+use std::str::FromStr;
+
+#[cfg(not(feature = "no_float"))]
+use crate::FLOAT;
 
 #[cfg(not(feature = "no_float"))]
 use num_traits::Float;
@@ -62,11 +64,11 @@ pub struct ScriptFnDef {
     pub params: StaticVec<Identifier>,
     /// Access to external variables.
     #[cfg(not(feature = "no_closure"))]
-    pub externals: crate::stdlib::collections::BTreeSet<Identifier>,
+    pub externals: std::collections::BTreeSet<Identifier>,
     /// Function doc-comments (if any).
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
-    pub comments: StaticVec<crate::stdlib::string::String>,
+    pub comments: StaticVec<std::string::String>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -90,6 +92,7 @@ impl fmt::Display for ScriptFnDef {
 }
 
 /// A type containing the metadata of a script-defined function.
+///
 /// Not available under `no_function`.
 ///
 /// Created by [`AST::iter_functions`].
@@ -265,6 +268,7 @@ impl AST {
     }
     /// _(INTERNALS)_ Get the internal shared [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
+    ///
     /// Not available under `no_function`.
     #[cfg(feature = "internals")]
     #[deprecated = "this method is volatile and may change"]
@@ -282,6 +286,7 @@ impl AST {
     }
     /// _(INTERNALS)_ Get the internal [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
+    ///
     /// Not available under `no_function`.
     #[cfg(feature = "internals")]
     #[deprecated = "this method is volatile and may change"]
@@ -318,6 +323,7 @@ impl AST {
     }
     /// Clone the [`AST`]'s functions into a new [`AST`].
     /// No statements are cloned.
+    ///
     /// Not available under `no_function`.
     ///
     /// This operation is cheap because functions are shared.
@@ -328,6 +334,7 @@ impl AST {
     }
     /// Clone the [`AST`]'s functions into a new [`AST`] based on a filter predicate.
     /// No statements are cloned.
+    ///
     /// Not available under `no_function`.
     ///
     /// This operation is cheap because functions are shared.
@@ -650,7 +657,7 @@ impl AST {
     }
     /// Iterate through all function definitions.
     ///
-    /// Not available under [`no_function`].
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
@@ -1473,7 +1480,7 @@ pub struct FloatWrapper<F>(F);
 #[cfg(not(feature = "no_float"))]
 impl Hash for FloatWrapper<FLOAT> {
     #[inline(always)]
-    fn hash<H: crate::stdlib::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.to_ne_bytes().hash(state);
     }
 }
@@ -1495,7 +1502,7 @@ impl<F: Float> AsMut<F> for FloatWrapper<F> {
 }
 
 #[cfg(not(feature = "no_float"))]
-impl<F: Float> crate::stdlib::ops::Deref for FloatWrapper<F> {
+impl<F: Float> std::ops::Deref for FloatWrapper<F> {
     type Target = F;
 
     #[inline(always)]
@@ -1505,7 +1512,7 @@ impl<F: Float> crate::stdlib::ops::Deref for FloatWrapper<F> {
 }
 
 #[cfg(not(feature = "no_float"))]
-impl<F: Float> crate::stdlib::ops::DerefMut for FloatWrapper<F> {
+impl<F: Float> std::ops::DerefMut for FloatWrapper<F> {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
@@ -2032,8 +2039,8 @@ mod tests {
     /// This test is to make sure no code changes increase the sizes of critical data structures.
     #[test]
     fn check_struct_sizes() {
-        use crate::stdlib::mem::size_of;
         use crate::*;
+        use std::mem::size_of;
 
         assert_eq!(size_of::<Dynamic>(), 16);
         assert_eq!(size_of::<Option<Dynamic>>(), 16);

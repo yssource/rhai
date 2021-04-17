@@ -4,22 +4,21 @@ use crate::ast::{FnAccess, Ident};
 use crate::dynamic::Variant;
 use crate::fn_native::{shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::fn_register::RegisterNativeFunction;
-use crate::stdlib::{
-    any::TypeId,
-    boxed::Box,
-    collections::{BTreeMap, BTreeSet},
-    fmt,
-    iter::empty,
-    num::NonZeroUsize,
-    ops::{Add, AddAssign, Deref, DerefMut},
-    string::String,
-    vec::Vec,
-};
 use crate::token::Token;
 use crate::utils::IdentifierBuilder;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, EvalAltResult, Identifier,
     ImmutableString, NativeCallContext, Position, Shared, StaticVec,
+};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{
+    any::TypeId,
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    iter::empty,
+    num::NonZeroUsize,
+    ops::{Add, AddAssign, Deref, DerefMut},
 };
 
 #[cfg(not(feature = "no_index"))]
@@ -73,7 +72,7 @@ impl FuncInfo {
         let mut sig = format!("{}(", self.name);
 
         if !self.param_names.is_empty() {
-            let mut params: crate::stdlib::vec::Vec<String> =
+            let mut params: std::vec::Vec<String> =
                 self.param_names.iter().map(|s| s.as_str().into()).collect();
             let return_type = params.pop().unwrap_or_else(|| "()".into());
             sig.push_str(&params.join(", "));
@@ -198,7 +197,7 @@ impl fmt::Debug for Module {
                 &self
                     .functions
                     .values()
-                    .map(|f| crate::stdlib::string::ToString::to_string(&f.func))
+                    .map(|f| std::string::ToString::to_string(&f.func))
                     .collect::<BTreeSet<_>>(),
             );
         }
@@ -1231,7 +1230,7 @@ impl Module {
         &mut self,
         filter: impl Fn(FnNamespace, FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
-        self.functions = crate::stdlib::mem::take(&mut self.functions)
+        self.functions = std::mem::take(&mut self.functions)
             .into_iter()
             .filter(|(_, f)| {
                 if f.func.is_script() {

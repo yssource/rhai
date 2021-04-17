@@ -7,6 +7,8 @@ use super::pkg_core::CorePackage;
 use super::string_more::MoreStringPackage;
 #[cfg(not(feature = "no_std"))]
 use super::time_basic::BasicTimePackage;
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 use crate::def_package;
 

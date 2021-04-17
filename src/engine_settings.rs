@@ -1,15 +1,13 @@
 //! Configuration settings for [`Engine`].
 
-use crate::stdlib::{format, string::String};
 use crate::token::Token;
 use crate::Engine;
 use crate::{engine::Precedence, Identifier};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 #[cfg(not(feature = "unchecked"))]
-use crate::stdlib::num::{NonZeroU64, NonZeroUsize};
-
-#[cfg(not(feature = "no_module"))]
-use crate::stdlib::boxed::Box;
+use std::num::{NonZeroU64, NonZeroUsize};
 
 impl Engine {
     /// Control whether and how the [`Engine`] will optimize an [`AST`][crate::AST] after compilation.

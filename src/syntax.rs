@@ -3,12 +3,13 @@
 use crate::ast::Expr;
 use crate::engine::EvalContext;
 use crate::fn_native::SendSync;
-use crate::stdlib::{boxed::Box, format, string::ToString};
 use crate::token::{is_valid_identifier, Token};
 use crate::{
     Engine, Identifier, ImmutableString, LexError, ParseError, Position, RhaiResult, Shared,
     StaticVec,
 };
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 pub const MARKER_EXPR: &str = "$expr$";
 pub const MARKER_BLOCK: &str = "$block$";

@@ -10,16 +10,6 @@ use crate::fn_builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 use crate::fn_native::{FnAny, FnCallArgs};
 use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
-use crate::stdlib::{
-    any::{type_name, TypeId},
-    boxed::Box,
-    convert::TryFrom,
-    format,
-    iter::{empty, once},
-    mem,
-    string::{String, ToString},
-    vec::Vec,
-};
 use crate::{
     ast::{Expr, Stmt},
     fn_native::CallableFunction,
@@ -28,6 +18,14 @@ use crate::{
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, EvalAltResult, FnPtr,
     ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec,
+};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{
+    any::{type_name, TypeId},
+    convert::TryFrom,
+    iter::{empty, once},
+    mem,
 };
 
 #[cfg(not(feature = "no_object"))]
@@ -465,7 +463,7 @@ impl Engine {
     ) -> RhaiResult {
         #[inline(always)]
         fn make_error(
-            name: crate::stdlib::string::String,
+            name: std::string::String,
             fn_def: &crate::ast::ScriptFnDef,
             state: &State,
             err: Box<EvalAltResult>,
@@ -512,7 +510,7 @@ impl Engine {
                 .iter()
                 .zip(args.iter_mut().map(|v| mem::take(*v)))
                 .map(|(name, value)| {
-                    let var_name: crate::stdlib::borrow::Cow<'_, str> =
+                    let var_name: std::borrow::Cow<'_, str> =
                         crate::r#unsafe::unsafe_cast_var_name_to_lifetime(name).into();
                     (var_name, value)
                 }),
@@ -913,15 +911,14 @@ impl Engine {
                 let new_hash = FnCallHash::from_script(calc_fn_hash(empty(), fn_name, args_len));
                 // Arguments are passed as-is, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
-                let mut arg_values = curry
+                let mut args = curry
                     .iter_mut()
                     .chain(call_args.iter_mut())
                     .collect::<StaticVec<_>>();
-                let args = arg_values.as_mut();
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, new_hash, args, false, false, pos, None, level,
+                    mods, state, lib, fn_name, new_hash, &mut args, false, false, pos, None, level,
                 )
             }
             KEYWORD_FN_PTR_CALL => {
@@ -952,15 +949,14 @@ impl Engine {
                 );
                 // Replace the first argument with the object pointer, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
-                let mut arg_values = once(obj)
+                let mut args = once(obj)
                     .chain(curry.iter_mut())
                     .chain(call_args.iter_mut())
                     .collect::<StaticVec<_>>();
-                let args = arg_values.as_mut();
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, new_hash, args, is_ref, true, pos, None, level,
+                    mods, state, lib, fn_name, new_hash, &mut args, is_ref, true, pos, None, level,
                 )
             }
             KEYWORD_FN_PTR_CURRY => {
@@ -1030,13 +1026,12 @@ impl Engine {
                 };
 
                 // Attached object pointer in front of the arguments
-                let mut arg_values = once(obj)
+                let mut args = once(obj)
                     .chain(call_args.iter_mut())
                     .collect::<StaticVec<_>>();
-                let args = arg_values.as_mut();
 
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, hash, args, is_ref, true, pos, None, level,
+                    mods, state, lib, fn_name, hash, &mut args, is_ref, true, pos, None, level,
                 )
             }
         }?;
@@ -1314,7 +1309,12 @@ impl Engine {
 
                 self.inc_operations(state, pos)?;
 
-                args = if target.is_shared() || target.is_value() {
+                #[cfg(not(feature = "no_closure"))]
+                let target_is_shared = target.is_shared();
+                #[cfg(feature = "no_closure")]
+                let target_is_shared = false;
+
+                args = if target_is_shared || target.is_value() {
                     arg_values.insert(0, target.take_or_clone().flatten());
                     arg_values.iter_mut().collect()
                 } else {
@@ -1339,10 +1339,8 @@ impl Engine {
             }
         }
 
-        let args = args.as_mut();
-
         self.exec_fn_call(
-            mods, state, lib, name, hash, args, is_ref, false, pos, capture, level,
+            mods, state, lib, name, hash, &mut args, is_ref, false, pos, capture, level,
         )
         .map(|(v, _)| v)
     }
@@ -1398,7 +1396,12 @@ impl Engine {
 
                 self.inc_operations(state, pos)?;
 
-                if target.is_shared() || target.is_value() {
+                #[cfg(not(feature = "no_closure"))]
+                let target_is_shared = target.is_shared();
+                #[cfg(feature = "no_closure")]
+                let target_is_shared = false;
+
+                if target_is_shared || target.is_value() {
                     arg_values[0] = target.take_or_clone().flatten();
                     args = arg_values.iter_mut().collect();
                 } else {
@@ -1458,7 +1461,6 @@ impl Engine {
                 if fn_def.body.is_empty() {
                     Ok(Dynamic::UNIT)
                 } else {
-                    let args = args.as_mut();
                     let new_scope = &mut Default::default();
 
                     let mut source = module.id_raw().cloned();
@@ -1467,7 +1469,7 @@ impl Engine {
                     let level = level + 1;
 
                     let result = self.call_script_fn(
-                        new_scope, mods, state, lib, &mut None, fn_def, args, pos, level,
+                        new_scope, mods, state, lib, &mut None, fn_def, &mut args, pos, level,
                     );
 
                     state.source = source;
@@ -1479,17 +1481,13 @@ impl Engine {
             Some(f) if f.is_plugin_fn() => f
                 .get_plugin_fn()
                 .clone()
-                .call(
-                    (self, fn_name, module.id(), &*mods, lib).into(),
-                    args.as_mut(),
-                )
+                .call((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
                 .map_err(|err| err.fill_position(pos)),
 
-            Some(f) if f.is_native() => f.get_native_fn()(
-                (self, fn_name, module.id(), &*mods, lib).into(),
-                args.as_mut(),
-            )
-            .map_err(|err| err.fill_position(pos)),
+            Some(f) if f.is_native() => {
+                f.get_native_fn()((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
+                    .map_err(|err| err.fill_position(pos))
+            }
 
             Some(f) => unreachable!("unknown function type: {:?}", f),
 

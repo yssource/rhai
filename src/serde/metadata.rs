@@ -1,11 +1,8 @@
-use crate::stdlib::{
-    cmp::Ordering,
-    collections::BTreeMap,
-    string::{String, ToString},
-    vec::Vec,
-};
 use crate::{Engine, AST};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{cmp::Ordering, collections::BTreeMap};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

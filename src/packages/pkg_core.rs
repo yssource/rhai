@@ -3,6 +3,8 @@ use super::fn_basic::BasicFnPackage;
 use super::iter_basic::BasicIteratorPackage;
 use super::logic::LogicPackage;
 use super::string_basic::BasicStringPackage;
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 use crate::def_package;
 

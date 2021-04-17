@@ -4,8 +4,8 @@
 #![allow(non_snake_case)]
 
 use crate::dynamic::Variant;
-use crate::stdlib::vec::Vec;
 use crate::{Dynamic, StaticVec};
+use std::vec::Vec;
 
 /// Trait that parses arguments to a function call.
 ///

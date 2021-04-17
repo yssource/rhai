@@ -9,17 +9,6 @@ use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::module::NamespaceRef;
 use crate::optimize::optimize_into_ast;
 use crate::optimize::OptimizationLevel;
-use crate::stdlib::{
-    boxed::Box,
-    collections::BTreeMap,
-    format,
-    hash::{Hash, Hasher},
-    iter::empty,
-    num::{NonZeroU8, NonZeroUsize},
-    string::ToString,
-    vec,
-    vec::Vec,
-};
 use crate::syntax::{CustomSyntax, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
 use crate::token::{
     is_keyword_function, is_valid_identifier, Token, TokenStream, TokenizerControl,
@@ -28,6 +17,14 @@ use crate::utils::{get_hasher, IdentifierBuilder};
 use crate::{
     calc_fn_hash, Dynamic, Engine, Identifier, LexError, ParseError, ParseErrorType, Position,
     Scope, Shared, StaticVec, AST,
+};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{
+    collections::BTreeMap,
+    hash::{Hash, Hasher},
+    iter::empty,
+    num::{NonZeroU8, NonZeroUsize},
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -381,7 +378,7 @@ fn parse_fn_call(
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
 
-                let hash = if let Some(modules) = namespace.as_mut() {
+                let hash = if let Some(ref mut modules) = namespace {
                     #[cfg(not(feature = "no_module"))]
                     modules.set_index(state.find_module(&modules[0].name));
 
@@ -2501,7 +2498,7 @@ fn parse_stmt(
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     let comments = {
-        let mut comments: StaticVec<crate::stdlib::string::String> = Default::default();
+        let mut comments: StaticVec<std::string::String> = Default::default();
         let mut comments_pos = Position::NONE;
 
         // Handle doc-comments.
@@ -2756,7 +2753,7 @@ fn parse_fn(
     mut settings: ParseSettings,
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
-    comments: StaticVec<crate::stdlib::string::String>,
+    comments: StaticVec<std::string::String>,
 ) -> Result<ScriptFnDef, ParseError> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;

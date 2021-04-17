@@ -1,6 +1,7 @@
 use crate::fn_native::SendSync;
-use crate::stdlib::boxed::Box;
 use crate::{Engine, EvalAltResult, Module, Position, Shared, AST};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 mod dummy;
 pub use dummy::DummyModuleResolver;

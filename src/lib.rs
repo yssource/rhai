@@ -61,6 +61,12 @@
 #[cfg(feature = "no_std")]
 extern crate alloc;
 
+#[cfg(feature = "no_std")]
+extern crate no_std_compat as std;
+
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+
 // Internal modules
 
 mod ast;
@@ -82,13 +88,12 @@ mod parser;
 pub mod plugin;
 mod result;
 mod scope;
-mod stdlib;
 mod syntax;
 mod token;
 mod r#unsafe;
 mod utils;
 
-type RhaiResult = stdlib::result::Result<Dynamic, stdlib::boxed::Box<EvalAltResult>>;
+type RhaiResult = Result<Dynamic, Box<EvalAltResult>>;
 
 /// The system integer type. It is defined as [`i64`].
 ///
@@ -104,20 +109,18 @@ pub type INT = i64;
 pub type INT = i32;
 
 /// The system floating-point type. It is defined as [`f64`].
+/// Not available under `no_float`.
 ///
 /// If the `f32_float` feature is enabled, this will be [`i32`] instead.
-///
-/// Not available under `no_float`.
 #[cfg(not(feature = "no_float"))]
 #[cfg(not(feature = "f32_float"))]
 pub type FLOAT = f64;
 
 /// The system floating-point type.
 /// It is defined as [`f32`] since the `f32_float` feature is used.
+/// Not available under `no_float`.
 ///
 /// If the `f32_float` feature is not used, this will be `f64` instead.
-///
-/// Not available under `no_float`.
 #[cfg(not(feature = "no_float"))]
 #[cfg(feature = "f32_float")]
 pub type FLOAT = f32;
@@ -180,16 +183,14 @@ pub use fn_args::FuncArgs;
 pub use ast::ScriptFnMetadata;
 
 /// Variable-sized array of [`Dynamic`] values.
-///
 /// Not available under `no_index`.
 #[cfg(not(feature = "no_index"))]
-pub type Array = stdlib::vec::Vec<Dynamic>;
+pub type Array = Vec<Dynamic>;
 
 /// Hash map of [`Dynamic`] values with [`ImmutableString`] keys.
-///
 /// Not available under `no_object`.
 #[cfg(not(feature = "no_object"))]
-pub type Map = stdlib::collections::BTreeMap<Identifier, Dynamic>;
+pub type Map = std::collections::BTreeMap<Identifier, Dynamic>;
 
 #[cfg(not(feature = "no_module"))]
 pub use module::ModuleResolver;

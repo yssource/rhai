@@ -1,12 +1,13 @@
 //! Module containing error definitions for the evaluation process.
 
-use crate::stdlib::{
-    boxed::Box,
-    error::Error,
-    fmt,
-    string::{String, ToString},
-};
 use crate::{Dynamic, ImmutableString, ParseErrorType, Position, INT};
+#[cfg(feature = "no_std")]
+use core_error::Error;
+#[cfg(not(feature = "no_std"))]
+use std::error::Error;
+use std::fmt;
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 /// Evaluation result.
 ///
@@ -335,11 +336,7 @@ impl EvalAltResult {
     pub(crate) fn dump_fields(&self, map: &mut crate::Map) {
         map.insert(
             "error".into(),
-            crate::stdlib::format!("{:?}", self)
-                .split('(')
-                .next()
-                .unwrap()
-                .into(),
+            format!("{:?}", self).split('(').next().unwrap().into(),
         );
 
         match self {

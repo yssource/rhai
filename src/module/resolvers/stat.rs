@@ -1,5 +1,7 @@
-use crate::stdlib::{boxed::Box, collections::BTreeMap, ops::AddAssign};
 use crate::{Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Shared};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
+use std::{collections::BTreeMap, ops::AddAssign};
 
 /// A static [module][Module] resolution service that serves [modules][Module] added into it.
 ///
