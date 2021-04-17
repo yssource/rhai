@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 0.20.1
 ==============
 
+Breaking changes
+----------------
+
+* `Dynamic::is_shared` and `Dynamic::is_locked` are removed under the `no_closure` feature. They used to always return `false`.
+
 
 Version 0.20.0
 ==============

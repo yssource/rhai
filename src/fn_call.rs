@@ -1314,7 +1314,12 @@ impl Engine {
 
                 self.inc_operations(state, pos)?;
 
-                args = if target.is_shared() || target.is_value() {
+                #[cfg(not(feature = "no_closure"))]
+                let target_is_shared = target.is_shared();
+                #[cfg(feature = "no_closure")]
+                let target_is_shared = false;
+
+                args = if target_is_shared || target.is_value() {
                     arg_values.insert(0, target.take_or_clone().flatten());
                     arg_values.iter_mut().collect()
                 } else {
@@ -1398,7 +1403,12 @@ impl Engine {
 
                 self.inc_operations(state, pos)?;
 
-                if target.is_shared() || target.is_value() {
+                #[cfg(not(feature = "no_closure"))]
+                let target_is_shared = target.is_shared();
+                #[cfg(feature = "no_closure")]
+                let target_is_shared = false;
+
+                if target_is_shared || target.is_value() {
                     arg_values[0] = target.take_or_clone().flatten();
                     args = arg_values.iter_mut().collect();
                 } else {

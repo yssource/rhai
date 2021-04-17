@@ -90,6 +90,7 @@ impl fmt::Display for ScriptFnDef {
 }
 
 /// A type containing the metadata of a script-defined function.
+///
 /// Not available under `no_function`.
 ///
 /// Created by [`AST::iter_functions`].
@@ -265,6 +266,7 @@ impl AST {
     }
     /// _(INTERNALS)_ Get the internal shared [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
+    ///
     /// Not available under `no_function`.
     #[cfg(feature = "internals")]
     #[deprecated = "this method is volatile and may change"]
@@ -282,6 +284,7 @@ impl AST {
     }
     /// _(INTERNALS)_ Get the internal [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
+    ///
     /// Not available under `no_function`.
     #[cfg(feature = "internals")]
     #[deprecated = "this method is volatile and may change"]
@@ -318,6 +321,7 @@ impl AST {
     }
     /// Clone the [`AST`]'s functions into a new [`AST`].
     /// No statements are cloned.
+    ///
     /// Not available under `no_function`.
     ///
     /// This operation is cheap because functions are shared.
@@ -328,6 +332,7 @@ impl AST {
     }
     /// Clone the [`AST`]'s functions into a new [`AST`] based on a filter predicate.
     /// No statements are cloned.
+    ///
     /// Not available under `no_function`.
     ///
     /// This operation is cheap because functions are shared.
@@ -650,7 +655,7 @@ impl AST {
     }
     /// Iterate through all function definitions.
     ///
-    /// Not available under [`no_function`].
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]

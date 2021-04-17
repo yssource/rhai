@@ -104,20 +104,18 @@ pub type INT = i64;
 pub type INT = i32;
 
 /// The system floating-point type. It is defined as [`f64`].
+/// Not available under `no_float`.
 ///
 /// If the `f32_float` feature is enabled, this will be [`i32`] instead.
-///
-/// Not available under `no_float`.
 #[cfg(not(feature = "no_float"))]
 #[cfg(not(feature = "f32_float"))]
 pub type FLOAT = f64;
 
 /// The system floating-point type.
 /// It is defined as [`f32`] since the `f32_float` feature is used.
+/// Not available under `no_float`.
 ///
 /// If the `f32_float` feature is not used, this will be `f64` instead.
-///
-/// Not available under `no_float`.
 #[cfg(not(feature = "no_float"))]
 #[cfg(feature = "f32_float")]
 pub type FLOAT = f32;
@@ -180,13 +178,11 @@ pub use fn_args::FuncArgs;
 pub use ast::ScriptFnMetadata;
 
 /// Variable-sized array of [`Dynamic`] values.
-///
 /// Not available under `no_index`.
 #[cfg(not(feature = "no_index"))]
 pub type Array = stdlib::vec::Vec<Dynamic>;
 
 /// Hash map of [`Dynamic`] values with [`ImmutableString`] keys.
-///
 /// Not available under `no_object`.
 #[cfg(not(feature = "no_object"))]
 pub type Map = stdlib::collections::BTreeMap<Identifier, Dynamic>;

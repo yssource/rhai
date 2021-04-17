@@ -281,7 +281,8 @@ impl Dynamic {
     }
     /// Is the value held by this [`Dynamic`] shared?
     ///
-    /// Always [`false`] under the `no_closure` feature.
+    /// Not available under `no_closure`.
+    #[cfg(not(feature = "no_closure"))]
     #[inline(always)]
     pub fn is_shared(&self) -> bool {
         #[cfg(not(feature = "no_closure"))]
@@ -948,10 +949,6 @@ impl Dynamic {
     /// values.
     ///
     /// If the [`Dynamic`] value is already shared, this method returns itself.
-    ///
-    /// # Panics
-    ///
-    /// Panics under the `no_closure` feature.
     #[cfg(not(feature = "no_closure"))]
     #[inline(always)]
     pub fn into_shared(self) -> Self {
@@ -1122,12 +1119,15 @@ impl Dynamic {
     /// ```
     #[inline(always)]
     pub fn cast<T: Variant + Clone>(self) -> T {
+        #[cfg(not(feature = "no_closure"))]
         let self_type_name = if self.is_shared() {
             // Avoid panics/deadlocks with shared values
             "<shared>"
         } else {
             self.type_name()
         };
+        #[cfg(feature = "no_closure")]
+        let self_type_name = self.type_name();
 
         self.try_cast::<T>().unwrap_or_else(|| {
             panic!(
@@ -1259,11 +1259,14 @@ impl Dynamic {
     }
     /// Is the [`Dynamic`] a shared value that is locked?
     ///
+    /// Not available under `no_closure`.
+    ///
     /// ## Note
     ///
     /// Under the `sync` feature, shared values use [`RwLock`][std::sync::RwLock] and they are never locked.
     /// Access just waits until the [`RwLock`][std::sync::RwLock] is released.
     /// So this method always returns [`false`] under [`Sync`].
+    #[cfg(not(feature = "no_closure"))]
     #[inline(always)]
     pub fn is_locked(&self) -> bool {
         #[cfg(not(feature = "no_closure"))]

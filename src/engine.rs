@@ -344,7 +344,7 @@ impl<'a> Target<'a> {
         }
     }
     /// Is the `Target` a shared value?
-    #[allow(dead_code)]
+    #[cfg(not(feature = "no_closure"))]
     #[inline(always)]
     pub fn is_shared(&self) -> bool {
         match self {
@@ -1990,7 +1990,12 @@ impl Engine {
             let mut lock_guard;
             let lhs_ptr_inner;
 
-            if cfg!(not(feature = "no_closure")) && target.is_shared() {
+            #[cfg(not(feature = "no_closure"))]
+            let target_is_shared = target.is_shared();
+            #[cfg(feature = "no_closure")]
+            let target_is_shared = false;
+
+            if target_is_shared {
                 lock_guard = target.as_mut().write_lock::<Dynamic>().unwrap();
                 lhs_ptr_inner = lock_guard.deref_mut();
             } else {
@@ -2314,7 +2319,12 @@ impl Engine {
                         let loop_var = scope.get_mut_by_index(index);
                         let value = iter_value.flatten();
 
-                        if cfg!(not(feature = "no_closure")) && loop_var.is_shared() {
+                        #[cfg(not(feature = "no_closure"))]
+                        let loop_var_is_shared = loop_var.is_shared();
+                        #[cfg(feature = "no_closure")]
+                        let loop_var_is_shared = false;
+
+                        if loop_var_is_shared {
                             *loop_var.write_lock().unwrap() = value;
                         } else {
                             *loop_var = value;

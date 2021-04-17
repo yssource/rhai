@@ -205,12 +205,17 @@ fn main() {
                     .iter_raw()
                     .enumerate()
                     .for_each(|(i, (name, constant, value))| {
+                        #[cfg(not(feature = "no_closure"))]
+                        let value_is_shared = if value.is_shared() { " (shared" } else { "" };
+                        #[cfg(feature = "no_closure")]
+                        let value_is_shared = "";
+
                         println!(
                             "[{}] {}{}{} = {:?}",
                             i + 1,
                             if constant { "const " } else { "" },
                             name,
-                            if value.is_shared() { " (shared)" } else { "" },
+                            value_is_shared,
                             *value.read_lock::<Dynamic>().unwrap(),
                         )
                     });
