@@ -18,7 +18,7 @@ use crate::stdlib::{
     fmt, format,
     hash::{Hash, Hasher},
     num::{NonZeroU8, NonZeroUsize},
-    ops::DerefMut,
+    ops::{Deref, DerefMut},
     string::{String, ToString},
     vec::Vec,
 };
@@ -467,9 +467,11 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
     }
 }
 
-impl AsRef<Dynamic> for Target<'_> {
+impl Deref for Target<'_> {
+    type Target = Dynamic;
+
     #[inline(always)]
-    fn as_ref(&self) -> &Dynamic {
+    fn deref(&self) -> &Dynamic {
         match self {
             Self::Ref(r) => *r,
             #[cfg(not(feature = "no_closure"))]
@@ -482,9 +484,16 @@ impl AsRef<Dynamic> for Target<'_> {
     }
 }
 
-impl AsMut<Dynamic> for Target<'_> {
+impl AsRef<Dynamic> for Target<'_> {
     #[inline(always)]
-    fn as_mut(&mut self) -> &mut Dynamic {
+    fn as_ref(&self) -> &Dynamic {
+        self
+    }
+}
+
+impl DerefMut for Target<'_> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut Dynamic {
         match self {
             Self::Ref(r) => *r,
             #[cfg(not(feature = "no_closure"))]
@@ -494,6 +503,13 @@ impl AsMut<Dynamic> for Target<'_> {
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ref mut r) => r,
         }
+    }
+}
+
+impl AsMut<Dynamic> for Target<'_> {
+    #[inline(always)]
+    fn as_mut(&mut self) -> &mut Dynamic {
+        self
     }
 }
 
@@ -1105,8 +1121,6 @@ impl Engine {
         // Pop the last index value
         let idx_val = idx_values.pop().unwrap();
 
-        let target_val = target.as_mut();
-
         match chain_type {
             #[cfg(not(feature = "no_index"))]
             ChainType::Index => {
@@ -1118,8 +1132,7 @@ impl Engine {
                         let idx_pos = x.lhs.position();
                         let idx_val = idx_val.as_index_value();
                         let obj_ptr = &mut self.get_indexed_mut(
-                            mods, state, lib, target_val, idx_val, idx_pos, false, is_ref, true,
-                            level,
+                            mods, state, lib, target, idx_val, idx_pos, false, is_ref, true, level,
                         )?;
 
                         self.eval_dot_index_chain_helper(
@@ -1137,7 +1150,7 @@ impl Engine {
 
                         // `call_setter` is introduced to bypass double mutable borrowing of target
                         let _call_setter = match self.get_indexed_mut(
-                            mods, state, lib, target_val, idx_val, pos, true, is_ref, false, level,
+                            mods, state, lib, target, idx_val, pos, true, is_ref, false, level,
                         ) {
                             // Indexed value is a reference - update directly
                             Ok(obj_ptr) => {
@@ -1158,12 +1171,12 @@ impl Engine {
 
                         #[cfg(not(feature = "no_index"))]
                         if let Some(mut new_val) = _call_setter {
-                            let val_type_name = target_val.type_name();
+                            let val_type_name = target.type_name();
                             let ((_, val_pos), _) = new_val;
 
                             let hash_set =
                                 FnCallHash::from_native(calc_fn_hash(empty(), FN_IDX_SET, 3));
-                            let args = &mut [target_val, &mut idx_val2, &mut (new_val.0).0];
+                            let args = &mut [target, &mut idx_val2, &mut (new_val.0).0];
 
                             self.exec_fn_call(
                                 mods, state, lib, FN_IDX_SET, hash_set, args, is_ref, true,
@@ -1188,7 +1201,7 @@ impl Engine {
                     _ => {
                         let idx_val = idx_val.as_index_value();
                         self.get_indexed_mut(
-                            mods, state, lib, target_val, idx_val, pos, false, is_ref, true, level,
+                            mods, state, lib, target, idx_val, pos, false, is_ref, true, level,
                         )
                         .map(|v| (v.take_or_clone(), false))
                     }
@@ -1215,11 +1228,11 @@ impl Engine {
                         unreachable!("function call in dot chain should not be namespace-qualified")
                     }
                     // {xxx:map}.id op= ???
-                    Expr::Property(x) if target_val.is::<Map>() && new_val.is_some() => {
+                    Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
                         let Ident { name, pos, .. } = &x.2;
                         let index = name.into();
                         let val = self.get_indexed_mut(
-                            mods, state, lib, target_val, index, *pos, true, is_ref, false, level,
+                            mods, state, lib, target, index, *pos, true, is_ref, false, level,
                         )?;
                         let ((new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
                         self.eval_op_assignment(
@@ -1228,11 +1241,11 @@ impl Engine {
                         Ok((Dynamic::UNIT, true))
                     }
                     // {xxx:map}.id
-                    Expr::Property(x) if target_val.is::<Map>() => {
+                    Expr::Property(x) if target.is::<Map>() => {
                         let Ident { name, pos, .. } = &x.2;
                         let index = name.into();
                         let val = self.get_indexed_mut(
-                            mods, state, lib, target_val, index, *pos, false, is_ref, false, level,
+                            mods, state, lib, target, index, *pos, false, is_ref, false, level,
                         )?;
 
                         Ok((val.take_or_clone(), false))
@@ -1269,7 +1282,7 @@ impl Engine {
                     Expr::Property(x) => {
                         let ((getter, hash_get), _, Ident { pos, .. }) = x.as_ref();
                         let hash = FnCallHash::from_native(*hash_get);
-                        let mut args = [target_val];
+                        let mut args = [target.as_mut()];
                         self.exec_fn_call(
                             mods, state, lib, getter, hash, &mut args, is_ref, true, *pos, None,
                             level,
@@ -1277,13 +1290,13 @@ impl Engine {
                         .map(|(v, _)| (v, false))
                     }
                     // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
-                    Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target_val.is::<Map>() => {
+                    Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target.is::<Map>() => {
                         let mut val = match &x.lhs {
                             Expr::Property(p) => {
                                 let Ident { name, pos, .. } = &p.2;
                                 let index = name.into();
                                 self.get_indexed_mut(
-                                    mods, state, lib, target_val, index, *pos, false, is_ref, true,
+                                    mods, state, lib, target, index, *pos, false, is_ref, true,
                                     level,
                                 )?
                             }
@@ -1319,7 +1332,7 @@ impl Engine {
                                     p.as_ref();
                                 let hash_get = FnCallHash::from_native(*hash_get);
                                 let hash_set = FnCallHash::from_native(*hash_set);
-                                let arg_values = &mut [target_val, &mut Default::default()];
+                                let arg_values = &mut [target.as_mut(), &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self.exec_fn_call(
                                     mods, state, lib, getter, hash_get, args, is_ref, true, *pos,
@@ -1432,7 +1445,7 @@ impl Engine {
                     self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
 
                 // Constants cannot be modified
-                if target.as_ref().is_read_only() && new_val.is_some() {
+                if target.is_read_only() && new_val.is_some() {
                     return EvalAltResult::ErrorAssignmentToConstant(x.2.to_string(), pos).into();
                 }
 
@@ -1977,7 +1990,7 @@ impl Engine {
         mut new_value: Dynamic,
         new_value_pos: Position,
     ) -> Result<(), Box<EvalAltResult>> {
-        if target.as_ref().is_read_only() {
+        if target.is_read_only() {
             unreachable!("LHS should not be read-only");
         }
 
@@ -1996,10 +2009,10 @@ impl Engine {
             let target_is_shared = false;
 
             if target_is_shared {
-                lock_guard = target.as_mut().write_lock::<Dynamic>().unwrap();
-                lhs_ptr_inner = lock_guard.deref_mut();
+                lock_guard = target.write_lock::<Dynamic>().unwrap();
+                lhs_ptr_inner = &mut *lock_guard;
             } else {
-                lhs_ptr_inner = target.as_mut();
+                lhs_ptr_inner = &mut *target;
             }
 
             let hash = hash_op_assign;
@@ -2075,7 +2088,7 @@ impl Engine {
 
                 self.inc_operations(state, pos)?;
 
-                if lhs_ptr.as_ref().is_read_only() {
+                if lhs_ptr.is_read_only() {
                     // Assignment to constant variable
                     EvalAltResult::ErrorAssignmentToConstant(
                         lhs_expr.get_variable_name(false).unwrap().to_string(),
