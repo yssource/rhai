@@ -1787,12 +1787,10 @@ impl Engine {
     /// Call a script function defined in an [`AST`] with multiple arguments.
     /// Arguments are passed as a tuple.
     ///
-    /// ## Warning
-    ///
-    /// The [`AST`] is _not_ evaluated before calling the function.  The function is called as-is.
-    ///
-    /// If the [`AST`] needs to be evaluated before calling the function (usually to load external modules),
-    /// use [`call_fn_dynamic`][Engine::call_fn_dynamic].
+    /// The [`AST`] is evaluated before calling the function.
+    /// This allows a script to load the necessary modules.
+    /// This is usually desired. If not, a specialized [`AST`] can be prepared that contains only
+    /// function definitions without any body script via [`AST::clear_statements`].
     ///
     /// # Example
     ///
@@ -1838,9 +1836,9 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values: crate::StaticVec<_> = Default::default();
         args.parse(&mut arg_values);
-        let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
+        let mut args: crate::StaticVec<_> = arg_values.iter_mut().collect();
 
-        let result = self.call_fn_dynamic_raw(scope, ast, false, name, &mut None, args.as_mut())?;
+        let result = self.call_fn_dynamic_raw(scope, ast, true, name, &mut None, &mut args)?;
 
         let typ = self.map_type_name(result.type_name());
 
@@ -1856,8 +1854,7 @@ impl Engine {
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments
     /// and optionally a value for binding to the `this` pointer.
     ///
-    /// There is also an option to evaluate the [`AST`] (e.g. to configuration the environment)
-    /// before calling the function.
+    /// There is an option to evaluate the [`AST`] to load necessary modules before calling the function.
     ///
     /// # WARNING
     ///
@@ -1887,19 +1884,19 @@ impl Engine {
     /// scope.push("foo", 42_i64);
     ///
     /// // Call the script-defined function
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, false, "add", None, [ "abc".into(), 123_i64.into() ])?;
-    /// //                                                                  ^^^^ no 'this' pointer
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "add", None, [ "abc".into(), 123_i64.into() ])?;
+    /// //                                                                 ^^^^ no 'this' pointer
     /// assert_eq!(result.cast::<i64>(), 168);
     ///
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, false, "add1", None, [ "abc".into() ])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "add1", None, [ "abc".into() ])?;
     /// assert_eq!(result.cast::<i64>(), 46);
     ///
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, false, "bar", None, [])?;
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "bar", None, [])?;
     /// assert_eq!(result.cast::<i64>(), 21);
     ///
     /// let mut value: Dynamic = 1_i64.into();
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, false, "action", Some(&mut value), [ 41_i64.into() ])?;
-    /// //                                                                     ^^^^^^^^^^^^^^^^ binding the 'this' pointer
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "action", Some(&mut value), [ 41_i64.into() ])?;
+    /// //                                                                    ^^^^^^^^^^^^^^^^ binding the 'this' pointer
     /// assert_eq!(value.as_int().unwrap(), 42);
     /// # }
     /// # Ok(())
@@ -1918,7 +1915,7 @@ impl Engine {
     ) -> RhaiResult {
         let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
-        self.call_fn_dynamic_raw(scope, ast, eval_ast, name, &mut this_ptr, args.as_mut())
+        self.call_fn_dynamic_raw(scope, ast, eval_ast, name, &mut this_ptr, &mut args)
     }
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments.
     ///
