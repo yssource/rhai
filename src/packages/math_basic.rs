@@ -351,7 +351,7 @@ mod decimal_functions {
             }
         }
 
-        Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::RoundUp))
+        Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::AwayFromZero))
     }
     #[rhai_fn(return_raw)]
     pub fn round_down(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
@@ -367,7 +367,7 @@ mod decimal_functions {
             }
         }
 
-        Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::RoundDown))
+        Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::ToZero))
     }
     #[rhai_fn(return_raw)]
     pub fn round_half_up(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
@@ -383,7 +383,7 @@ mod decimal_functions {
             }
         }
 
-        Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::RoundHalfUp))
+        Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::MidpointAwayFromZero))
     }
     #[rhai_fn(return_raw)]
     pub fn round_half_down(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
@@ -399,7 +399,7 @@ mod decimal_functions {
             }
         }
 
-        Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::RoundHalfDown))
+        Ok(x.round_dp_with_strategy(dp as u32, RoundingStrategy::MidpointTowardZero))
     }
     #[rhai_fn(name = "int", get = "int")]
     pub fn int(x: Decimal) -> Decimal {
