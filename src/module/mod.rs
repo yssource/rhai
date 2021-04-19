@@ -346,12 +346,17 @@ impl Module {
 
     /// Is the [`Module`] indexed?
     ///
+    /// A module must be indexed before it can be used in an `import` statement.
+    ///
     /// # Example
     ///
     /// ```
     /// use rhai::Module;
     ///
     /// let mut module = Module::new();
+    /// assert!(module.is_indexed());
+    ///
+    /// module.set_native_fn("foo", |x: &mut i64, y: i64| { *x = y; Ok(()) });
     /// assert!(!module.is_indexed());
     ///
     /// # #[cfg(not(feature = "no_module"))]
@@ -1021,8 +1026,7 @@ impl Module {
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_indexer_set_fn(|x: &mut i64, y: ImmutableString, value: i64| {
-    ///     *x = y.len() as i64 + value;
-    ///     Ok(())
+    ///     *x = y.len() as i64 + value; Ok(())
     /// });
     /// assert!(module.contains_fn(hash));
     /// ```
@@ -1086,8 +1090,7 @@ impl Module {
     ///         Ok(*x + y.len() as i64)
     ///     },
     ///     |x: &mut i64, y: ImmutableString, value: i64| {
-    ///         *x = y.len() as i64 + value;
-    ///         Ok(())
+    ///         *x = y.len() as i64 + value; Ok(())
     ///     }
     /// );
     /// assert!(module.contains_fn(hash_get));
