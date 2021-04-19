@@ -188,11 +188,11 @@ pub enum Union {
 /// This data structure provides transparent interoperability between
 /// normal [`Dynamic`] and shared [`Dynamic`] values.
 #[derive(Debug)]
-pub struct DynamicReadLock<'d, T: Variant + Clone>(DynamicReadLockInner<'d, T>);
+pub struct DynamicReadLock<'d, T: Clone>(DynamicReadLockInner<'d, T>);
 
 /// Different types of read guards for [`DynamicReadLock`].
 #[derive(Debug)]
-enum DynamicReadLockInner<'d, T: Variant + Clone> {
+enum DynamicReadLockInner<'d, T: Clone> {
     /// A simple reference to a non-shared value.
     Reference(&'d T),
 
@@ -206,7 +206,7 @@ enum DynamicReadLockInner<'d, T: Variant + Clone> {
     Guard(std::sync::RwLockReadGuard<'d, Dynamic>),
 }
 
-impl<'d, T: Variant + Clone> Deref for DynamicReadLock<'d, T> {
+impl<'d, T: Any + Clone> Deref for DynamicReadLock<'d, T> {
     type Target = T;
 
     #[inline(always)]
@@ -225,11 +225,11 @@ impl<'d, T: Variant + Clone> Deref for DynamicReadLock<'d, T> {
 /// This data structure provides transparent interoperability between
 /// normal [`Dynamic`] and shared [`Dynamic`] values.
 #[derive(Debug)]
-pub struct DynamicWriteLock<'d, T: Variant + Clone>(DynamicWriteLockInner<'d, T>);
+pub struct DynamicWriteLock<'d, T: Clone>(DynamicWriteLockInner<'d, T>);
 
 /// Different types of write guards for [`DynamicReadLock`].
 #[derive(Debug)]
-enum DynamicWriteLockInner<'d, T: Variant + Clone> {
+enum DynamicWriteLockInner<'d, T: Clone> {
     /// A simple mutable reference to a non-shared value.
     Reference(&'d mut T),
 
@@ -243,7 +243,7 @@ enum DynamicWriteLockInner<'d, T: Variant + Clone> {
     Guard(std::sync::RwLockWriteGuard<'d, Dynamic>),
 }
 
-impl<'d, T: Variant + Clone> Deref for DynamicWriteLock<'d, T> {
+impl<'d, T: Any + Clone> Deref for DynamicWriteLock<'d, T> {
     type Target = T;
 
     #[inline(always)]
@@ -257,7 +257,7 @@ impl<'d, T: Variant + Clone> Deref for DynamicWriteLock<'d, T> {
     }
 }
 
-impl<'d, T: Variant + Clone> DerefMut for DynamicWriteLock<'d, T> {
+impl<'d, T: Any + Clone> DerefMut for DynamicWriteLock<'d, T> {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         match &mut self.0 {
@@ -298,7 +298,7 @@ impl Dynamic {
     /// If the [`Dynamic`] is a shared variant checking is performed on
     /// top of its internal value.
     #[inline(always)]
-    pub fn is<T: Variant + Clone>(&self) -> bool {
+    pub fn is<T: Any + Clone>(&self) -> bool {
         let mut target_type_id = TypeId::of::<T>();
 
         if target_type_id == TypeId::of::<String>() {
@@ -983,7 +983,7 @@ impl Dynamic {
     /// assert_eq!(x.try_cast::<u32>().unwrap(), 42);
     /// ```
     #[inline(always)]
-    pub fn try_cast<T: Variant>(self) -> Option<T> {
+    pub fn try_cast<T: Any>(self) -> Option<T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
         #[cfg(not(feature = "no_closure"))]
@@ -1118,7 +1118,7 @@ impl Dynamic {
     /// assert_eq!(x.cast::<u32>(), 42);
     /// ```
     #[inline(always)]
-    pub fn cast<T: Variant + Clone>(self) -> T {
+    pub fn cast<T: Any + Clone>(self) -> T {
         #[cfg(not(feature = "no_closure"))]
         let self_type_name = if self.is_shared() {
             // Avoid panics/deadlocks with shared values
@@ -1165,7 +1165,7 @@ impl Dynamic {
     /// assert_eq!(y.clone_cast::<u32>(), 42);
     /// ```
     #[inline(always)]
-    pub fn clone_cast<T: Variant + Clone>(&self) -> T {
+    pub fn clone_cast<T: Any + Clone>(&self) -> T {
         self.read_lock::<T>().unwrap().clone()
     }
     /// Flatten the [`Dynamic`] and clone it.
@@ -1293,7 +1293,7 @@ impl Dynamic {
     /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     #[inline(always)]
-    pub fn read_lock<T: Variant + Clone>(&self) -> Option<DynamicReadLock<T>> {
+    pub fn read_lock<T: Any + Clone>(&self) -> Option<DynamicReadLock<T>> {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell, _) => {
@@ -1326,7 +1326,7 @@ impl Dynamic {
     /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     #[inline(always)]
-    pub fn write_lock<T: Variant + Clone>(&mut self) -> Option<DynamicWriteLock<T>> {
+    pub fn write_lock<T: Any + Clone>(&mut self) -> Option<DynamicWriteLock<T>> {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell, _) => {
@@ -1354,7 +1354,7 @@ impl Dynamic {
     ///
     /// Returns [`None`] if the cast fails, or if the value is shared.
     #[inline(always)]
-    pub(crate) fn downcast_ref<T: Variant + Clone>(&self) -> Option<&T> {
+    pub(crate) fn downcast_ref<T: Any + Clone>(&self) -> Option<&T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
         if TypeId::of::<T>() == TypeId::of::<INT>() {
@@ -1450,7 +1450,7 @@ impl Dynamic {
     ///
     /// Returns [`None`] if the cast fails, or if the value is shared.
     #[inline(always)]
-    pub(crate) fn downcast_mut<T: Variant + Clone>(&mut self) -> Option<&mut T> {
+    pub(crate) fn downcast_mut<T: Any + Clone>(&mut self) -> Option<&mut T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
         if TypeId::of::<T>() == TypeId::of::<INT>() {

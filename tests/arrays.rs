@@ -157,47 +157,43 @@ fn test_arrays_map_reduce() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(
-        engine.eval::<INT>(
+        convert_to_vec::<INT>(engine.eval(
             r"
                 let x = [1, 2, 3];
-                let y = x.filter(|v| v > 2);
-                y[0]
+                x.filter(|v| v > 2)
             "
-        )?,
-        3
+        )?),
+        [3]
     );
 
     assert_eq!(
-        engine.eval::<INT>(
+        convert_to_vec::<INT>(engine.eval(
             r"
                 let x = [1, 2, 3];
-                let y = x.filter(|v, i| v > i);
-                y.len()
+                x.filter(|v, i| v > i)
             "
-        )?,
-        3
+        )?),
+        [1, 2, 3]
     );
 
     assert_eq!(
-        engine.eval::<INT>(
+        convert_to_vec::<INT>(engine.eval(
             r"
                 let x = [1, 2, 3];
-                let y = x.map(|v| v * 2);
-                y[2]
+                x.map(|v| v * 2)
             "
-        )?,
-        6
+        )?),
+        [2, 4, 6]
     );
 
     assert_eq!(
-        engine.eval::<INT>(
+        convert_to_vec::<INT>(engine.eval(
             r"
                 let x = [1, 2, 3];
-                let y = x.map(|v, i| v * i);
-                y[2]
+                x.map(|v, i| v * i)
             "
-        )?,
-        6
+        )?),
+        [0, 2, 6]
     );
 
     assert_eq!(

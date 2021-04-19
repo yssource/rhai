@@ -1,6 +1,5 @@
 //! A helper module containing unsafe utility functions.
 
-use crate::dynamic::Variant;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -27,7 +26,7 @@ pub fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Result<B, A> {
 
 /// Cast a Boxed type into another type.
 #[inline(always)]
-pub fn unsafe_cast_box<X: Variant, T: Variant>(item: Box<X>) -> Result<Box<T>, Box<X>> {
+pub fn unsafe_cast_box<X: Any, T: Any>(item: Box<X>) -> Result<Box<T>, Box<X>> {
     // Only allow casting to the exact same type
     if TypeId::of::<X>() == TypeId::of::<T>() {
         // SAFETY: just checked whether we are pointing to the correct type
