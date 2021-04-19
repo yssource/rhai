@@ -6,6 +6,11 @@ Version 0.20.1
 
 This version enables functions to access constants declared at global level via the special `global` module.
 
+Bug fixes
+---------
+
+* Fixed bug when position is zero in `insert` and `split_at` methods for arrays.
+
 Breaking changes
 ----------------
 

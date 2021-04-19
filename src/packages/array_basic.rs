@@ -35,7 +35,7 @@ mod array_functions {
         array
     }
     pub fn insert(array: &mut Array, position: INT, item: Dynamic) {
-        if position <= 0 {
+        if position < 0 {
             if let Some(n) = position.checked_abs() {
                 if n as usize > array.len() {
                     array.insert(0, item);
@@ -174,7 +174,7 @@ mod array_functions {
     }
     #[rhai_fn(name = "split")]
     pub fn split_at(array: &mut Array, start: INT) -> Array {
-        if start <= 0 {
+        if start < 0 {
             if let Some(n) = start.checked_abs() {
                 if n as usize > array.len() {
                     mem::take(array)
