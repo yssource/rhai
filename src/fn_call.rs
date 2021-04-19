@@ -867,13 +867,18 @@ impl Engine {
             return Err(ParseErrorType::WrongFnDefinition.into());
         }
 
+        let statements = ast.statements();
+        if statements.is_empty() {
+            return Ok(Dynamic::UNIT);
+        }
+
         // Evaluate the AST
         let mut new_state: State = Default::default();
         new_state.source = state.source.clone();
         new_state.operations = state.operations;
 
         let result =
-            self.eval_global_statements(scope, mods, &mut new_state, ast.statements(), lib, level);
+            self.eval_global_statements(scope, mods, &mut new_state, statements, lib, level);
 
         state.operations = new_state.operations;
 

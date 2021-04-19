@@ -88,7 +88,7 @@ default_features = false
 optional = true
 
 [dependencies.rust_decimal]
-version = "1.10"
+version = "1.11"
 default_features = false
 optional = true
 

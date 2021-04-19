@@ -1,8 +1,17 @@
 #![cfg(not(feature = "no_index"))]
 use rhai::{Array, Engine, EvalAltResult, INT};
 
+fn convert_to_vec<T: Clone + 'static>(array: Array) -> Vec<T> {
+    array.into_iter().map(|v| v.clone_cast::<T>()).collect()
+}
+
 #[test]
 fn test_arrays() -> Result<(), Box<EvalAltResult>> {
+    let mut a = Array::new();
+    a.push((42 as INT).into());
+
+    assert_eq!(a[0].clone_cast::<INT>(), 42);
+
     let engine = Engine::new();
 
     assert_eq!(engine.eval::<INT>("let x = [1, 2, 3]; x[1]")?, 2);
@@ -14,57 +23,77 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
     );
     assert_eq!(engine.eval::<INT>("let y = [1, 2, 3]; y[0]")?, 1);
     assert_eq!(engine.eval::<INT>("let y = [1, 2, 3]; y[-1]")?, 3);
+    assert_eq!(engine.eval::<INT>("let y = [1, 2, 3]; y[-3]")?, 1);
     assert!(engine.eval::<bool>("let y = [1, 2, 3]; 2 in y")?);
     assert_eq!(engine.eval::<INT>("let y = [1, 2, 3]; y += 4; y[3]")?, 4);
-
-    #[cfg(not(feature = "no_object"))]
-    assert_eq!(engine.eval::<INT>("let y = [1, 2, 3]; y.push(4); y[3]")?, 4);
-
-    #[cfg(not(feature = "no_object"))]
     assert_eq!(
-        engine.eval::<INT>(
-            r"
-                let x = [2, 9];
-                x.insert(-1, 1);
-                x.insert(999, 3);
-
-                let r = x.remove(2);
-
-                let y = [4, 5];
-                x.append(y);
-
-                x.len + r
-            "
-        )?,
-        14
+        convert_to_vec::<INT>(engine.eval("let y = [1, 2, 3]; y[1] += 4; y")?),
+        [1, 6, 3]
     );
+
+    #[cfg(not(feature = "no_object"))]
+    {
+        assert_eq!(
+            convert_to_vec::<INT>(engine.eval("let y = [1, 2, 3]; y.push(4); y")?),
+            [1, 2, 3, 4]
+        );
+        assert_eq!(
+            convert_to_vec::<INT>(engine.eval("let y = [1, 2, 3]; y.insert(0, 4); y")?),
+            [4, 1, 2, 3]
+        );
+        assert_eq!(
+            convert_to_vec::<INT>(engine.eval("let y = [1, 2, 3]; y.insert(999, 4); y")?),
+            [1, 2, 3, 4]
+        );
+        assert_eq!(
+            convert_to_vec::<INT>(engine.eval("let y = [1, 2, 3]; y.insert(-2, 4); y")?),
+            [1, 4, 2, 3]
+        );
+        assert_eq!(
+            convert_to_vec::<INT>(engine.eval("let y = [1, 2, 3]; y.insert(-999, 4); y")?),
+            [4, 1, 2, 3]
+        );
+
+        assert_eq!(
+            convert_to_vec::<INT>(engine.eval(
+                r"
+                    let x = [2, 9];
+                    x.insert(-1, 1);
+                    x.insert(999, 3);
+                    x.insert(-9, 99);
+
+                    let r = x.remove(2);
+
+                    let y = [4, 5];
+                    x.append(y);
+
+                    x 
+                "
+            )?),
+            [99, 2, 9, 3, 4, 5]
+        );
+    }
+
     assert_eq!(
-        engine.eval::<INT>(
+        convert_to_vec::<INT>(engine.eval(
             r"
                 let x = [1, 2, 3];
                 x += [4, 5];
-                len(x)
+                x
             "
-        )?,
-        5
+        )?),
+        [1, 2, 3, 4, 5]
     );
     assert_eq!(
-        engine
-            .eval::<Array>(
-                r"
-                    let x = [1, 2, 3];
-                    let y = [4, 5];
-                    x + y
-                "
-            )?
-            .len(),
-        5
+        convert_to_vec::<INT>(engine.eval(
+            r"
+                let x = [1, 2, 3];
+                let y = [4, 5];
+                x + y
+            "
+        )?),
+        [1, 2, 3, 4, 5]
     );
-
-    let mut a = Array::new();
-    a.push((42 as INT).into());
-
-    assert_eq!(a[0].clone_cast::<INT>(), 42);
 
     Ok(())
 }
@@ -128,47 +157,43 @@ fn test_arrays_map_reduce() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(
-        engine.eval::<INT>(
+        convert_to_vec::<INT>(engine.eval(
             r"
                 let x = [1, 2, 3];
-                let y = x.filter(|v| v > 2);
-                y[0]
+                x.filter(|v| v > 2)
             "
-        )?,
-        3
+        )?),
+        [3]
     );
 
     assert_eq!(
-        engine.eval::<INT>(
+        convert_to_vec::<INT>(engine.eval(
             r"
                 let x = [1, 2, 3];
-                let y = x.filter(|v, i| v > i);
-                y.len()
+                x.filter(|v, i| v > i)
             "
-        )?,
-        3
+        )?),
+        [1, 2, 3]
     );
 
     assert_eq!(
-        engine.eval::<INT>(
+        convert_to_vec::<INT>(engine.eval(
             r"
                 let x = [1, 2, 3];
-                let y = x.map(|v| v * 2);
-                y[2]
+                x.map(|v| v * 2)
             "
-        )?,
-        6
+        )?),
+        [2, 4, 6]
     );
 
     assert_eq!(
-        engine.eval::<INT>(
+        convert_to_vec::<INT>(engine.eval(
             r"
                 let x = [1, 2, 3];
-                let y = x.map(|v, i| v * i);
-                y[2]
+                x.map(|v, i| v * i)
             "
-        )?,
-        6
+        )?),
+        [0, 2, 6]
     );
 
     assert_eq!(
