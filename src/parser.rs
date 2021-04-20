@@ -1596,8 +1596,8 @@ fn make_dot_expr(
             Expr::FnCall(mut func, func_pos) => {
                 // Recalculate hash
                 func.hashes = FnCallHashes::from_script_and_native(
-                    calc_fn_hash(empty(), &func.name, func.num_args()),
-                    calc_fn_hash(empty(), &func.name, func.num_args() + 1),
+                    calc_fn_hash(empty(), &func.name, func.args_count()),
+                    calc_fn_hash(empty(), &func.name, func.args_count() + 1),
                 );
 
                 let rhs = Expr::Dot(
@@ -1623,7 +1623,7 @@ fn make_dot_expr(
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
         }
         // lhs.nnn::func(...)
-        (_, Expr::FnCall(x, _)) if x.namespace.is_some() => {
+        (_, Expr::FnCall(x, _)) if x.is_qualified() => {
             unreachable!("method call should not be namespace-qualified")
         }
         // lhs.Fn() or lhs.eval()
@@ -1652,8 +1652,8 @@ fn make_dot_expr(
         (lhs, Expr::FnCall(mut func, func_pos)) => {
             // Recalculate hash
             func.hashes = FnCallHashes::from_script_and_native(
-                calc_fn_hash(empty(), &func.name, func.num_args()),
-                calc_fn_hash(empty(), &func.name, func.num_args() + 1),
+                calc_fn_hash(empty(), &func.name, func.args_count()),
+                calc_fn_hash(empty(), &func.name, func.args_count() + 1),
             );
             let rhs = Expr::FnCall(func, func_pos);
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)

@@ -1444,21 +1444,26 @@ impl FnCallHashes {
 /// This type is volatile and may change.
 #[derive(Clone, Default, Hash)]
 pub struct FnCallExpr {
+    /// Namespace of the function, if any.
+    pub namespace: Option<NamespaceRef>,
     /// Pre-calculated hashes.
     pub hashes: FnCallHashes,
-    /// Does this function call capture the parent scope?
-    pub capture: bool,
     /// List of function call argument expressions.
     pub args: StaticVec<Expr>,
     /// List of function call arguments that are constants.
     pub constant_args: smallvec::SmallVec<[(Dynamic, Position); 2]>,
-    /// Namespace of the function, if any. Boxed because it occurs rarely.
-    pub namespace: Option<NamespaceRef>,
     /// Function name.
     pub name: Identifier,
+    /// Does this function call capture the parent scope?
+    pub capture: bool,
 }
 
 impl FnCallExpr {
+    /// Does this function call contain a qualified namespace?
+    #[inline(always)]
+    pub fn is_qualified(&self) -> bool {
+        self.namespace.is_some()
+    }
     /// Are there no arguments to this function call?
     #[inline(always)]
     pub fn is_args_empty(&self) -> bool {
@@ -1466,7 +1471,7 @@ impl FnCallExpr {
     }
     /// Get the number of arguments to this function call.
     #[inline(always)]
-    pub fn num_args(&self) -> usize {
+    pub fn args_count(&self) -> usize {
         self.args.len() + self.constant_args.len()
     }
 }
@@ -1609,7 +1614,7 @@ pub enum Expr {
     /// [String][ImmutableString] constant.
     StringConstant(ImmutableString, Position),
     /// [`FnPtr`] constant.
-    FnPointer(ImmutableString, Position),
+    FnPointer(Box<Identifier>, Position),
     /// An interpolated [string][ImmutableString].
     InterpolatedString(Box<StaticVec<Expr>>),
     /// [ expr, ... ]
@@ -1760,7 +1765,9 @@ impl Expr {
             Self::FloatConstant(x, _) => (*x).into(),
             Self::CharConstant(x, _) => (*x).into(),
             Self::StringConstant(x, _) => x.clone().into(),
-            Self::FnPointer(x, _) => FnPtr::new_unchecked(x.clone(), Default::default()).into(),
+            Self::FnPointer(x, _) => {
+                FnPtr::new_unchecked(x.as_ref().clone(), Default::default()).into()
+            }
             Self::BoolConstant(x, _) => (*x).into(),
             Self::Unit(_) => Dynamic::UNIT,
 

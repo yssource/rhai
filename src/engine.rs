@@ -1227,7 +1227,7 @@ impl Engine {
             ChainType::Dot => {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
-                    Expr::FnCall(x, pos) if x.namespace.is_none() && new_val.is_none() => {
+                    Expr::FnCall(x, pos) if !x.is_qualified() && new_val.is_none() => {
                         let FnCallExpr { name, hashes, .. } = x.as_ref();
                         let mut args = idx_val.as_fn_call_args();
                         self.make_method_call(
@@ -1316,7 +1316,7 @@ impl Engine {
                                 )?
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
-                            Expr::FnCall(x, pos) if x.namespace.is_none() => {
+                            Expr::FnCall(x, pos) if !x.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = x.as_ref();
                                 let mut args = idx_val.as_fn_call_args();
                                 let (val, _) = self.make_method_call(
@@ -1394,7 +1394,7 @@ impl Engine {
                                 Ok((result, may_be_changed))
                             }
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
-                            Expr::FnCall(f, pos) if f.namespace.is_none() => {
+                            Expr::FnCall(f, pos) if !f.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = f.as_ref();
                                 let mut args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self.make_method_call(
@@ -1508,7 +1508,7 @@ impl Engine {
         self.inc_operations(state, expr.position())?;
 
         match expr {
-            Expr::FnCall(x, _) if parent_chain_type == ChainType::Dot && x.namespace.is_none() => {
+            Expr::FnCall(x, _) if parent_chain_type == ChainType::Dot && !x.is_qualified() => {
                 let mut arg_positions: StaticVec<_> = Default::default();
 
                 let mut arg_values = x
@@ -1547,7 +1547,7 @@ impl Engine {
                     }
                     Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
                     Expr::FnCall(x, _)
-                        if parent_chain_type == ChainType::Dot && x.namespace.is_none() =>
+                        if parent_chain_type == ChainType::Dot && !x.is_qualified() =>
                     {
                         let mut arg_positions: StaticVec<_> = Default::default();
 
@@ -1749,7 +1749,9 @@ impl Engine {
             Expr::FloatConstant(x, _) => Ok((*x).into()),
             Expr::StringConstant(x, _) => Ok(x.clone().into()),
             Expr::CharConstant(x, _) => Ok((*x).into()),
-            Expr::FnPointer(x, _) => Ok(FnPtr::new_unchecked(x.clone(), Default::default()).into()),
+            Expr::FnPointer(x, _) => {
+                Ok(FnPtr::new_unchecked(x.as_ref().clone(), Default::default()).into())
+            }
 
             Expr::Variable(None, var_pos, x) if x.0.is_none() && x.2 == KEYWORD_THIS => this_ptr
                 .as_deref()
@@ -1829,7 +1831,7 @@ impl Engine {
             }
 
             // Normal function call
-            Expr::FnCall(x, pos) if x.namespace.is_none() => {
+            Expr::FnCall(x, pos) if !x.is_qualified() => {
                 let FnCallExpr {
                     name,
                     capture,
@@ -1845,7 +1847,7 @@ impl Engine {
             }
 
             // Namespace-qualified function call
-            Expr::FnCall(x, pos) if x.namespace.is_some() => {
+            Expr::FnCall(x, pos) if x.is_qualified() => {
                 let FnCallExpr {
                     name,
                     namespace,

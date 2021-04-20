@@ -862,15 +862,15 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         }
         // Fn
         Expr::FnCall(x, pos)
-            if x.namespace.is_none() // Non-qualified
+            if !x.is_qualified() // Non-qualified
             && state.optimization_level == OptimizationLevel::Simple // simple optimizations
-            && x.num_args() == 1
+            && x.args_count() == 1
             && x.constant_args.len() == 1
             && x.constant_args[0].0.is::<ImmutableString>()
             && x.name == KEYWORD_FN_PTR
         => {
             state.set_dirty();
-            *expr = Expr::FnPointer(mem::take(&mut x.constant_args[0].0).take_immutable_string().unwrap(), *pos);
+            *expr = Expr::FnPointer(Box::new(mem::take(&mut x.constant_args[0].0).as_str_ref().unwrap().into()), *pos);
         }
 
         // Do not call some special keywords
@@ -880,9 +880,9 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
 
         // Call built-in operators
         Expr::FnCall(x, pos)
-                if x.namespace.is_none() // Non-qualified
+                if !x.is_qualified() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Simple // simple optimizations
-                && x.num_args() == 2 // binary call
+                && x.args_count() == 2 // binary call
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
                 //&& !is_valid_identifier(x.name.chars()) // cannot be scripted
         => {
@@ -922,13 +922,13 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
 
         // Eagerly call functions
         Expr::FnCall(x, pos)
-                if x.namespace.is_none() // Non-qualified
+                if !x.is_qualified() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Full // full optimizations
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
         => {
             // First search for script-defined functions (can override built-in)
             #[cfg(not(feature = "no_function"))]
-            let has_script_fn = state.lib.iter().any(|&m| m.get_script_fn(x.name.as_ref(), x.num_args()).is_some());
+            let has_script_fn = state.lib.iter().any(|&m| m.get_script_fn(x.name.as_ref(), x.args_count()).is_some());
             #[cfg(feature = "no_function")]
             let has_script_fn = false;
 

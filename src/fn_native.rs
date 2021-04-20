@@ -262,7 +262,7 @@ impl FnPtr {
     }
     /// Create a new function pointer without checking its parameters.
     #[inline(always)]
-    pub(crate) fn new_unchecked(name: impl Into<Identifier>, curry: StaticVec<Dynamic>) -> Self {
+    pub(crate) fn new_unchecked(name: Identifier, curry: StaticVec<Dynamic>) -> Self {
         Self(name.into(), curry)
     }
     /// Get the name of the function.
