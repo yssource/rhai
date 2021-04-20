@@ -2417,7 +2417,23 @@ fn parse_block(
     #[cfg(not(feature = "no_module"))]
     let prev_mods_len = state.modules.len();
 
-    while !match_token(input, Token::RightBrace).0 {
+    loop {
+        // Terminated?
+        match input.peek().unwrap() {
+            (Token::RightBrace, _) => {
+                eat_token(input, Token::RightBrace);
+                break;
+            }
+            (Token::EOF, pos) => {
+                return Err(PERR::MissingToken(
+                    Token::RightBrace.into(),
+                    "to terminate this block".into(),
+                )
+                .into_err(*pos));
+            }
+            _ => (),
+        }
+
         // Parse statements inside the block
         settings.is_global = false;
 
@@ -2443,11 +2459,13 @@ fn parse_block(
                 eat_token(input, Token::SemiColon);
             }
             // { ... { stmt } ;
-            (Token::SemiColon, _) if !need_semicolon => (),
+            (Token::SemiColon, _) if !need_semicolon => {
+                eat_token(input, Token::SemiColon);
+            }
             // { ... { stmt } ???
             (_, _) if !need_semicolon => (),
             // { ... stmt <error>
-            (Token::LexError(err), pos) => return Err(err.clone().into_err(*pos)),
+            (Token::LexError(err), err_pos) => return Err(err.clone().into_err(*err_pos)),
             // { ... stmt ???
             (_, pos) => {
                 // Semicolons are not optional between statements
