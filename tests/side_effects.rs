@@ -49,7 +49,7 @@ fn test_side_effects_command() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval_with_scope::<INT>(
             &mut scope,
-            r"
+            "
                 // Drive the command object via the wrapper
                 Command.action(30);
                 Command.value

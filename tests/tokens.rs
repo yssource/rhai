@@ -49,7 +49,7 @@ fn test_tokens_custom_operator_identifiers() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_function"))]
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 fn foo(x, y) { y - x }
                 1 + 2 * 3 foo 4 - 5 / 6
             "
@@ -87,7 +87,7 @@ fn test_tokens_custom_operator_symbol() -> Result<(), Box<EvalAltResult>> {
 fn test_tokens_unicode_xid_ident() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
     let result = engine.eval::<INT>(
-        r"
+        "
             fn すべての答え() { 42 }
             すべての答え()
         ",
@@ -99,7 +99,7 @@ fn test_tokens_unicode_xid_ident() -> Result<(), Box<EvalAltResult>> {
     assert!(result.is_err());
 
     let result = engine.eval::<INT>(
-        r"
+        "
             fn _1() { 1 }
             _1()
         ",

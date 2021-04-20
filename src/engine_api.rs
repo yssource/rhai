@@ -1802,7 +1802,7 @@ impl Engine {
     ///
     /// let engine = Engine::new();
     ///
-    /// let ast = engine.compile(r"
+    /// let ast = engine.compile("
     ///     fn add(x, y) { len(x) + y + foo }
     ///     fn add1(x)   { len(x) + 1 + foo }
     ///     fn bar()     { foo/2 }
@@ -1873,7 +1873,7 @@ impl Engine {
     ///
     /// let engine = Engine::new();
     ///
-    /// let ast = engine.compile(r"
+    /// let ast = engine.compile("
     ///     fn add(x, y) { len(x) + y + foo }
     ///     fn add1(x)   { len(x) + 1 + foo }
     ///     fn bar()     { foo/2 }

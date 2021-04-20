@@ -56,7 +56,7 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
 
         assert_eq!(
             convert_to_vec::<INT>(engine.eval(
-                r"
+                "
                     let x = [2, 9];
                     x.insert(-1, 1);
                     x.insert(999, 3);
@@ -76,7 +76,7 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         convert_to_vec::<INT>(engine.eval(
-            r"
+            "
                 let x = [1, 2, 3];
                 x += [4, 5];
                 x
@@ -86,7 +86,7 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
     );
     assert_eq!(
         convert_to_vec::<INT>(engine.eval(
-            r"
+            "
                 let x = [1, 2, 3];
                 let y = [4, 5];
                 x + y
@@ -136,7 +136,7 @@ fn test_array_with_structs() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 let a = [new_ts()];
                 a[0].x = 100;
                 a[0].update();
@@ -158,7 +158,7 @@ fn test_arrays_map_reduce() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         convert_to_vec::<INT>(engine.eval(
-            r"
+            "
                 let x = [1, 2, 3];
                 x.filter(|v| v > 2)
             "
@@ -168,7 +168,7 @@ fn test_arrays_map_reduce() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         convert_to_vec::<INT>(engine.eval(
-            r"
+            "
                 let x = [1, 2, 3];
                 x.filter(|v, i| v > i)
             "
@@ -178,7 +178,7 @@ fn test_arrays_map_reduce() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         convert_to_vec::<INT>(engine.eval(
-            r"
+            "
                 let x = [1, 2, 3];
                 x.map(|v| v * 2)
             "
@@ -188,7 +188,7 @@ fn test_arrays_map_reduce() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         convert_to_vec::<INT>(engine.eval(
-            r"
+            "
                 let x = [1, 2, 3];
                 x.map(|v, i| v * i)
             "

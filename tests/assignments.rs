@@ -21,49 +21,38 @@ fn test_assignments_bad_lhs() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(
-        *engine.compile(r"(x+y) = 42;").expect_err("should error").0,
+        *engine.compile("(x+y) = 42;").expect_err("should error").0,
         ParseErrorType::AssignmentToInvalidLHS("".to_string())
     );
     assert_eq!(
-        *engine.compile(r"foo(x) = 42;").expect_err("should error").0,
+        *engine.compile("foo(x) = 42;").expect_err("should error").0,
         ParseErrorType::AssignmentToInvalidLHS("".to_string())
     );
     assert_eq!(
-        *engine.compile(r"true = 42;").expect_err("should error").0,
+        *engine.compile("true = 42;").expect_err("should error").0,
         ParseErrorType::AssignmentToConstant("".to_string())
     );
     assert_eq!(
-        *engine.compile(r"123 = 42;").expect_err("should error").0,
+        *engine.compile("123 = 42;").expect_err("should error").0,
         ParseErrorType::AssignmentToConstant("".to_string())
     );
 
     #[cfg(not(feature = "no_object"))]
     {
         assert_eq!(
+            *engine.compile("x.foo() = 42;").expect_err("should error").0,
+            ParseErrorType::AssignmentToInvalidLHS("".to_string())
+        );
+        assert_eq!(
             *engine
-                .compile(r"x.foo() = 42;")
+                .compile("x.foo().x.y = 42;")
                 .expect_err("should error")
                 .0,
             ParseErrorType::AssignmentToInvalidLHS("".to_string())
         );
         assert_eq!(
             *engine
-                .compile(r"x.foo().x.y = 42;")
-                .expect_err("should error")
-                .0,
-            ParseErrorType::AssignmentToInvalidLHS("".to_string())
-        );
-        assert_eq!(
-            *engine
-                .compile(r"x.y.z.foo() = 42;")
-                .expect_err("should error")
-                .0,
-            ParseErrorType::AssignmentToInvalidLHS("".to_string())
-        );
-        #[cfg(not(feature = "no_index"))]
-        assert_eq!(
-            *engine
-                .compile(r"x.foo()[0] = 42;")
+                .compile("x.y.z.foo() = 42;")
                 .expect_err("should error")
                 .0,
             ParseErrorType::AssignmentToInvalidLHS("".to_string())
@@ -71,7 +60,15 @@ fn test_assignments_bad_lhs() -> Result<(), Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
         assert_eq!(
             *engine
-                .compile(r"x[y].z.foo() = 42;")
+                .compile("x.foo()[0] = 42;")
+                .expect_err("should error")
+                .0,
+            ParseErrorType::AssignmentToInvalidLHS("".to_string())
+        );
+        #[cfg(not(feature = "no_index"))]
+        assert_eq!(
+            *engine
+                .compile("x[y].z.foo() = 42;")
                 .expect_err("should error")
                 .0,
             ParseErrorType::AssignmentToInvalidLHS("".to_string())

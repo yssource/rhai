@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<EvalAltResult>> {
         .register_fn("update", TestStruct::update);
 
     let result = engine.eval::<TestStruct>(
-        r"
+        "
             let x = new_ts();
             x.update();
             x

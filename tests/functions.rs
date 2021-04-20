@@ -67,7 +67,7 @@ fn test_functions_namespaces() -> Result<(), Box<EvalAltResult>> {
 
         assert_eq!(
             engine.eval::<INT>(
-                r"
+                "
                     const ANSWER = 42;
 
                     fn foo() { global::ANSWER }

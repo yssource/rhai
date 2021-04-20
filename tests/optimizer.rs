@@ -5,9 +5,9 @@ use rhai::{Engine, EvalAltResult, OptimizationLevel, INT};
 #[test]
 fn test_optimizer_run() -> Result<(), Box<EvalAltResult>> {
     fn run_test(engine: &mut Engine) -> Result<(), Box<EvalAltResult>> {
-        assert_eq!(engine.eval::<INT>(r"if true { 42 } else { 123 }")?, 42);
+        assert_eq!(engine.eval::<INT>("if true { 42 } else { 123 }")?, 42);
         assert_eq!(
-            engine.eval::<INT>(r"if 1 == 1 || 2 > 3 { 42 } else { 123 }")?,
+            engine.eval::<INT>("if 1 == 1 || 2 > 3 { 42 } else { 123 }")?,
             42
         );
         assert_eq!(
@@ -34,14 +34,14 @@ fn test_optimizer_run() -> Result<(), Box<EvalAltResult>> {
     engine.set_optimization_level(OptimizationLevel::Simple);
 
     assert_eq!(
-        engine.eval::<INT>(r"if 1 == 1 || 2 > 3 { 42 } else { 123 }")?,
+        engine.eval::<INT>("if 1 == 1 || 2 > 3 { 42 } else { 123 }")?,
         123
     );
 
     engine.set_optimization_level(OptimizationLevel::Full);
 
     assert_eq!(
-        engine.eval::<INT>(r"if 1 == 1 || 2 > 3 { 42 } else { 123 }")?,
+        engine.eval::<INT>("if 1 == 1 || 2 > 3 { 42 } else { 123 }")?,
         123
     );
 

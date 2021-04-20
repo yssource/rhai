@@ -59,7 +59,7 @@ fn test_constant_mut() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval_with_scope::<INT>(
             &mut scope,
-            r"
+            "
                 MY_NUMBER.update_value(42);
                 MY_NUMBER.value
             ",

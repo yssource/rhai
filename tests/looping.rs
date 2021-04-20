@@ -6,7 +6,7 @@ fn test_loop() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
 				let x = 0;
 				let i = 0;
 

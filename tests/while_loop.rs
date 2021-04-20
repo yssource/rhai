@@ -6,7 +6,7 @@ fn test_while() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 let x = 0;
 
                 while x < 10 {
@@ -31,7 +31,7 @@ fn test_do() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 let x = 0;
 
                 do {

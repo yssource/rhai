@@ -70,7 +70,7 @@ fn test_internal_fn_big() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 fn math_me(a, b, c, d, e, f) {
                     a - b * c + d * e - f
                 }
@@ -89,7 +89,7 @@ fn test_internal_fn_overloading() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 fn abc(x,y,z) { 2*x + 3*y + 4*z + 888 }
                 fn abc(x,y) { x + 2*y + 88 }
                 fn abc() { 42 }
@@ -104,7 +104,7 @@ fn test_internal_fn_overloading() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         *engine
             .compile(
-                r"
+                "
                     fn abc(x) { x + 42 }
                     fn abc(x) { x - 42 }
                 "

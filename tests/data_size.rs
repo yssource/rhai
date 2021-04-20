@@ -91,7 +91,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
     assert!(matches!(
         *engine
             .eval::<Array>(
-                r"
+                "
                     let x = [1,2,3,4,5,6];
                     let y = [7,8,9,10,11,12];
                     x + y
@@ -105,7 +105,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
     assert!(matches!(
         *engine
             .eval::<Array>(
-                r"
+                "
                     let x = [1,2,3,4,5,6];
                     x.pad(100, 42);
                     x
@@ -118,7 +118,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
     assert!(matches!(
         *engine
             .eval::<Array>(
-                r"
+                "
                     let x = [1,2,3];
                     [x, x, x, x]
                 "
@@ -131,7 +131,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
     assert!(matches!(
         *engine
             .eval::<Array>(
-                r"
+                "
                     let x = #{a:1, b:2, c:3};
                     [x, x, x, x]
                 "
@@ -143,7 +143,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
     assert!(matches!(
         *engine
             .eval::<Array>(
-                r"
+                "
                     let x = [1];
                     let y = [x, x];
                     let z = [y, y];
@@ -159,7 +159,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine
             .eval::<Array>(
-                r"
+                "
                     let x = [1,2,3,4,5,6];
                     let y = [7,8,9,10,11,12];
                     x + y
@@ -172,7 +172,7 @@ fn test_max_array_size() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine
             .eval::<Array>(
-                r"
+                "
                     let x = [1,2,3];
                     [x, x, x, x]
                 "
@@ -209,7 +209,7 @@ fn test_max_map_size() -> Result<(), Box<EvalAltResult>> {
     assert!(matches!(
         *engine
             .eval::<Map>(
-                r"
+                "
                     let x = #{a:1,b:2,c:3,d:4,e:5,f:6};
                     let y = #{g:7,h:8,i:9,j:10,k:11,l:12};
                     x + y
@@ -222,7 +222,7 @@ fn test_max_map_size() -> Result<(), Box<EvalAltResult>> {
     assert!(matches!(
         *engine
             .eval::<Map>(
-                r"
+                "
                     let x = #{a:1,b:2,c:3};
                     #{u:x, v:x, w:x, z:x}
                 "
@@ -235,7 +235,7 @@ fn test_max_map_size() -> Result<(), Box<EvalAltResult>> {
     assert!(matches!(
         *engine
             .eval::<Map>(
-                r"
+                "
                     let x = [1, 2, 3];
                     #{u:x, v:x, w:x, z:x}
                 "
@@ -249,7 +249,7 @@ fn test_max_map_size() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine
             .eval::<Map>(
-                r"
+                "
                     let x = #{a:1,b:2,c:3,d:4,e:5,f:6};
                     let y = #{g:7,h:8,i:9,j:10,k:11,l:12};
                     x + y
@@ -262,7 +262,7 @@ fn test_max_map_size() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine
             .eval::<Map>(
-                r"
+                "
                     let x = #{a:1,b:2,c:3};
                     #{u:x, v:x, w:x, z:x}
                 "
