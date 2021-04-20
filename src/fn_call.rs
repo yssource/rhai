@@ -463,7 +463,7 @@ impl Engine {
     ) -> RhaiResult {
         #[inline(always)]
         fn make_error(
-            name: std::string::String,
+            name: String,
             fn_def: &crate::ast::ScriptFnDef,
             state: &State,
             err: Box<EvalAltResult>,

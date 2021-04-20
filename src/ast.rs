@@ -68,7 +68,7 @@ pub struct ScriptFnDef {
     /// Function doc-comments (if any).
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
-    pub comments: StaticVec<std::string::String>,
+    pub comments: StaticVec<String>,
 }
 
 impl fmt::Display for ScriptFnDef {

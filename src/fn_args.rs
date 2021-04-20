@@ -5,7 +5,6 @@
 
 use crate::dynamic::Variant;
 use crate::{Dynamic, StaticVec};
-use std::vec::Vec;
 
 /// Trait that parses arguments to a function call.
 ///

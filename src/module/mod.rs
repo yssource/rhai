@@ -72,7 +72,7 @@ impl FuncInfo {
         let mut sig = format!("{}(", self.name);
 
         if !self.param_names.is_empty() {
-            let mut params: std::vec::Vec<String> =
+            let mut params: Vec<String> =
                 self.param_names.iter().map(|s| s.as_str().into()).collect();
             let return_type = params.pop().unwrap_or_else(|| "()".into());
             sig.push_str(&params.join(", "));
@@ -200,7 +200,7 @@ impl fmt::Debug for Module {
                 &self
                     .functions
                     .values()
-                    .map(|f| std::string::ToString::to_string(&f.func))
+                    .map(|f| f.func.to_string())
                     .collect::<BTreeSet<_>>(),
             );
         }

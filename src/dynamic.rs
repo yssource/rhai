@@ -1717,13 +1717,13 @@ impl From<&ImmutableString> for Dynamic {
 impl From<&crate::Identifier> for Dynamic {
     #[inline(always)]
     fn from(value: &crate::Identifier) -> Self {
-        std::string::ToString::to_string(value).into()
+        value.to_string().into()
     }
 }
 #[cfg(not(feature = "no_index"))]
-impl<T: Variant + Clone> From<std::vec::Vec<T>> for Dynamic {
+impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
     #[inline(always)]
-    fn from(value: std::vec::Vec<T>) -> Self {
+    fn from(value: Vec<T>) -> Self {
         Self(Union::Array(
             Box::new(value.into_iter().map(Dynamic::from).collect()),
             AccessMode::ReadWrite,

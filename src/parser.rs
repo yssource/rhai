@@ -2516,7 +2516,7 @@ fn parse_stmt(
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     let comments = {
-        let mut comments: StaticVec<std::string::String> = Default::default();
+        let mut comments: StaticVec<String> = Default::default();
         let mut comments_pos = Position::NONE;
 
         // Handle doc-comments.
@@ -2771,7 +2771,7 @@ fn parse_fn(
     mut settings: ParseSettings,
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
-    comments: StaticVec<std::string::String>,
+    comments: StaticVec<String>,
 ) -> Result<ScriptFnDef, ParseError> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;

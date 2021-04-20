@@ -59,7 +59,7 @@ impl Engine {
         #[cfg(feature = "metadata")]
         let mut param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
-            .map(|ty| std::format!("_: {}", self.map_type_name(ty)))
+            .map(|ty| format!("_: {}", self.map_type_name(ty)))
             .collect();
 
         #[cfg(feature = "metadata")]
@@ -119,7 +119,7 @@ impl Engine {
         #[cfg(feature = "metadata")]
         let param_type_names: crate::StaticVec<_> = F::param_names()
             .iter()
-            .map(|ty| std::format!("_: {}", self.map_type_name(ty)))
+            .map(|ty| format!("_: {}", self.map_type_name(ty)))
             .chain(std::iter::once(
                 self.map_type_name(F::return_type_name()).into(),
             ))
@@ -1172,7 +1172,7 @@ impl Engine {
 
         let mut f = std::fs::File::open(path.clone()).map_err(|err| {
             EvalAltResult::ErrorSystem(
-                std::format!("Cannot open script file '{}'", path.to_string_lossy()),
+                format!("Cannot open script file '{}'", path.to_string_lossy()),
                 err.into(),
             )
         })?;
@@ -1181,7 +1181,7 @@ impl Engine {
 
         f.read_to_string(&mut contents).map_err(|err| {
             EvalAltResult::ErrorSystem(
-                std::format!("Cannot read script file '{}'", path.to_string_lossy()),
+                format!("Cannot read script file '{}'", path.to_string_lossy()),
                 err.into(),
             )
         })?;
@@ -2010,16 +2010,13 @@ impl Engine {
     /// 2) Functions in registered sub-modules
     /// 3) Functions in packages (optional)
     #[cfg(feature = "metadata")]
-    pub fn gen_fn_signatures(&self, include_packages: bool) -> std::vec::Vec<String> {
-        let mut signatures: std::vec::Vec<_> = Default::default();
+    pub fn gen_fn_signatures(&self, include_packages: bool) -> Vec<String> {
+        let mut signatures: Vec<_> = Default::default();
 
         signatures.extend(self.global_namespace.gen_fn_signatures());
 
         self.global_sub_modules.iter().for_each(|(name, m)| {
-            signatures.extend(
-                m.gen_fn_signatures()
-                    .map(|f| std::format!("{}::{}", name, f)),
-            )
+            signatures.extend(m.gen_fn_signatures().map(|f| format!("{}::{}", name, f)))
         });
 
         if include_packages {
