@@ -1,7 +1,7 @@
 //! Main module defining the lexer and parser.
 
 use crate::ast::{
-    BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHash, Ident, OpAssignment, ReturnType,
+    BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ReturnType,
     ScriptFnDef, Stmt, StmtBlock,
 };
 use crate::dynamic::{AccessMode, Union};
@@ -342,10 +342,10 @@ fn parse_fn_call(
                 calc_fn_hash(empty(), &id, 0)
             };
 
-            let hash = if is_valid_identifier(id.chars()) {
-                FnCallHash::from_script(hash)
+            let hashes = if is_valid_identifier(id.chars()) {
+                FnCallHashes::from_script(hash)
             } else {
-                FnCallHash::from_native(hash)
+                FnCallHashes::from_native(hash)
             };
 
             return Ok(Expr::FnCall(
@@ -353,7 +353,7 @@ fn parse_fn_call(
                     name: state.get_identifier(id),
                     capture,
                     namespace,
-                    hash,
+                    hashes,
                     args,
                     ..Default::default()
                 }),
@@ -387,10 +387,10 @@ fn parse_fn_call(
                     calc_fn_hash(empty(), &id, args.len())
                 };
 
-                let hash = if is_valid_identifier(id.chars()) {
-                    FnCallHash::from_script(hash)
+                let hashes = if is_valid_identifier(id.chars()) {
+                    FnCallHashes::from_script(hash)
                 } else {
-                    FnCallHash::from_native(hash)
+                    FnCallHashes::from_native(hash)
                 };
 
                 return Ok(Expr::FnCall(
@@ -398,7 +398,7 @@ fn parse_fn_call(
                         name: state.get_identifier(id),
                         capture,
                         namespace,
-                        hash,
+                        hashes,
                         args,
                         ..Default::default()
                     }),
@@ -1348,7 +1348,7 @@ fn parse_unary(
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
                             name: state.get_identifier("-"),
-                            hash: FnCallHash::from_native(calc_fn_hash(empty(), "-", 1)),
+                            hashes: FnCallHashes::from_native(calc_fn_hash(empty(), "-", 1)),
                             args,
                             ..Default::default()
                         }),
@@ -1374,7 +1374,7 @@ fn parse_unary(
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
                             name: state.get_identifier("+"),
-                            hash: FnCallHash::from_native(calc_fn_hash(empty(), "+", 1)),
+                            hashes: FnCallHashes::from_native(calc_fn_hash(empty(), "+", 1)),
                             args,
                             ..Default::default()
                         }),
@@ -1393,7 +1393,7 @@ fn parse_unary(
             Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
                     name: state.get_identifier("!"),
-                    hash: FnCallHash::from_native(calc_fn_hash(empty(), "!", 1)),
+                    hashes: FnCallHashes::from_native(calc_fn_hash(empty(), "!", 1)),
                     args,
                     ..Default::default()
                 }),
@@ -1595,7 +1595,7 @@ fn make_dot_expr(
             }
             Expr::FnCall(mut func, func_pos) => {
                 // Recalculate hash
-                func.hash = FnCallHash::from_script_and_native(
+                func.hashes = FnCallHashes::from_script_and_native(
                     calc_fn_hash(empty(), &func.name, func.num_args()),
                     calc_fn_hash(empty(), &func.name, func.num_args() + 1),
                 );
@@ -1651,7 +1651,7 @@ fn make_dot_expr(
         // lhs.func(...)
         (lhs, Expr::FnCall(mut func, func_pos)) => {
             // Recalculate hash
-            func.hash = FnCallHash::from_script_and_native(
+            func.hashes = FnCallHashes::from_script_and_native(
                 calc_fn_hash(empty(), &func.name, func.num_args()),
                 calc_fn_hash(empty(), &func.name, func.num_args() + 1),
             );
@@ -1739,7 +1739,7 @@ fn parse_binary_op(
 
         let op_base = FnCallExpr {
             name: state.get_identifier(op.as_ref()),
-            hash: FnCallHash::from_native(hash),
+            hashes: FnCallHashes::from_native(hash),
             capture: false,
             ..Default::default()
         };
@@ -1804,7 +1804,7 @@ fn parse_binary_op(
                 let hash = calc_fn_hash(empty(), OP_CONTAINS, 2);
                 Expr::FnCall(
                     Box::new(FnCallExpr {
-                        hash: FnCallHash::from_script(hash),
+                        hashes: FnCallHashes::from_script(hash),
                         args,
                         name: state.get_identifier(OP_CONTAINS),
                         ..op_base
@@ -1824,10 +1824,10 @@ fn parse_binary_op(
 
                 Expr::FnCall(
                     Box::new(FnCallExpr {
-                        hash: if is_valid_identifier(s.chars()) {
-                            FnCallHash::from_script(hash)
+                        hashes: if is_valid_identifier(s.chars()) {
+                            FnCallHashes::from_script(hash)
                         } else {
-                            FnCallHash::from_native(hash)
+                            FnCallHashes::from_native(hash)
                         },
                         args,
                         ..op_base
@@ -2894,7 +2894,7 @@ fn make_curry_from_externals(
     let expr = Expr::FnCall(
         Box::new(FnCallExpr {
             name: state.get_identifier(crate::engine::KEYWORD_FN_PTR_CURRY),
-            hash: FnCallHash::from_native(calc_fn_hash(
+            hashes: FnCallHashes::from_native(calc_fn_hash(
                 empty(),
                 crate::engine::KEYWORD_FN_PTR_CURRY,
                 num_externals + 1,

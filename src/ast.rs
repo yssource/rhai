@@ -1369,14 +1369,14 @@ impl OpAssignment {
 ///
 /// This type is volatile and may change.
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Default)]
-pub struct FnCallHash {
+pub struct FnCallHashes {
     /// Pre-calculated hash for a script-defined function ([`None`] if native functions only).
     pub script: Option<u64>,
     /// Pre-calculated hash for a native Rust function with no parameter types.
     pub native: u64,
 }
 
-impl fmt::Debug for FnCallHash {
+impl fmt::Debug for FnCallHashes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(script) = self.script {
             if script == self.native {
@@ -1390,7 +1390,7 @@ impl fmt::Debug for FnCallHash {
     }
 }
 
-impl FnCallHash {
+impl FnCallHashes {
     /// Create a [`FnCallHash`] with only the native Rust hash.
     #[inline(always)]
     pub fn from_native(hash: u64) -> Self {
@@ -1444,8 +1444,8 @@ impl FnCallHash {
 /// This type is volatile and may change.
 #[derive(Clone, Default, Hash)]
 pub struct FnCallExpr {
-    /// Pre-calculated hash.
-    pub hash: FnCallHash,
+    /// Pre-calculated hashes.
+    pub hashes: FnCallHashes,
     /// Does this function call capture the parent scope?
     pub capture: bool,
     /// List of function call argument expressions.
@@ -1713,7 +1713,7 @@ impl fmt::Debug for Expr {
                     ff.field("namespace", ns);
                 }
                 ff.field("name", &x.name)
-                    .field("hash", &x.hash)
+                    .field("hash", &x.hashes)
                     .field("args", &x.args);
                 if !x.constant_args.is_empty() {
                     ff.field("constant_args", &x.constant_args);

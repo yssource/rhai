@@ -35,7 +35,7 @@ use crate::{calc_fn_hash, Array};
 use crate::Map;
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-use crate::ast::FnCallHash;
+use crate::ast::FnCallHashes;
 
 pub type Precedence = NonZeroU8;
 
@@ -1186,7 +1186,7 @@ impl Engine {
                             let val_type_name = target.type_name();
                             let ((_, val_pos), _) = new_val;
 
-                            let hash_set = FnCallHash::from_native(calc_fn_hash(
+                            let hash_set = FnCallHashes::from_native(calc_fn_hash(
                                 std::iter::empty(),
                                 FN_IDX_SET,
                                 3,
@@ -1228,10 +1228,10 @@ impl Engine {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x, pos) if x.namespace.is_none() && new_val.is_none() => {
-                        let FnCallExpr { name, hash, .. } = x.as_ref();
+                        let FnCallExpr { name, hashes, .. } = x.as_ref();
                         let mut args = idx_val.as_fn_call_args();
                         self.make_method_call(
-                            mods, state, lib, name, *hash, target, &mut args, *pos, level,
+                            mods, state, lib, name, *hashes, target, &mut args, *pos, level,
                         )
                     }
                     // xxx.fn_name(...) = ???
@@ -1272,7 +1272,7 @@ impl Engine {
                         let ((mut new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
 
                         if op_info.is_some() {
-                            let hash = FnCallHash::from_native(*hash_get);
+                            let hash = FnCallHashes::from_native(*hash_get);
                             let mut args = [target.as_mut()];
                             let (mut orig_val, _) = self.exec_fn_call(
                                 mods, state, lib, getter, hash, &mut args, is_ref, true, *pos,
@@ -1285,7 +1285,7 @@ impl Engine {
                             new_val = orig_val;
                         }
 
-                        let hash = FnCallHash::from_native(*hash_set);
+                        let hash = FnCallHashes::from_native(*hash_set);
                         let mut args = [target.as_mut(), &mut new_val];
                         self.exec_fn_call(
                             mods, state, lib, setter, hash, &mut args, is_ref, true, *pos, None,
@@ -1296,7 +1296,7 @@ impl Engine {
                     // xxx.id
                     Expr::Property(x) => {
                         let ((getter, hash_get), _, Ident { pos, .. }) = x.as_ref();
-                        let hash = FnCallHash::from_native(*hash_get);
+                        let hash = FnCallHashes::from_native(*hash_get);
                         let mut args = [target.as_mut()];
                         self.exec_fn_call(
                             mods, state, lib, getter, hash, &mut args, is_ref, true, *pos, None,
@@ -1317,10 +1317,10 @@ impl Engine {
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
                             Expr::FnCall(x, pos) if x.namespace.is_none() => {
-                                let FnCallExpr { name, hash, .. } = x.as_ref();
+                                let FnCallExpr { name, hashes, .. } = x.as_ref();
                                 let mut args = idx_val.as_fn_call_args();
                                 let (val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hash, target, &mut args, *pos, level,
+                                    mods, state, lib, name, *hashes, target, &mut args, *pos, level,
                                 )?;
                                 val.into()
                             }
@@ -1345,8 +1345,8 @@ impl Engine {
                             Expr::Property(p) => {
                                 let ((getter, hash_get), (setter, hash_set), Ident { pos, .. }) =
                                     p.as_ref();
-                                let hash_get = FnCallHash::from_native(*hash_get);
-                                let hash_set = FnCallHash::from_native(*hash_set);
+                                let hash_get = FnCallHashes::from_native(*hash_get);
+                                let hash_set = FnCallHashes::from_native(*hash_set);
                                 let arg_values = &mut [target.as_mut(), &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self.exec_fn_call(
@@ -1395,10 +1395,10 @@ impl Engine {
                             }
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
                             Expr::FnCall(f, pos) if f.namespace.is_none() => {
-                                let FnCallExpr { name, hash, .. } = f.as_ref();
+                                let FnCallExpr { name, hashes, .. } = f.as_ref();
                                 let mut args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hash, target, &mut args, *pos, level,
+                                    mods, state, lib, name, *hashes, target, &mut args, *pos, level,
                                 )?;
                                 let val = &mut val;
                                 let target = &mut val.into();
@@ -1704,7 +1704,7 @@ impl Engine {
                 let type_name = target.type_name();
                 let args = &mut [target, &mut _idx];
                 let hash_get =
-                    FnCallHash::from_native(calc_fn_hash(std::iter::empty(), FN_IDX_GET, 2));
+                    FnCallHashes::from_native(calc_fn_hash(std::iter::empty(), FN_IDX_GET, 2));
                 self.exec_fn_call(
                     _mods, state, _lib, FN_IDX_GET, hash_get, args, _is_ref, true, idx_pos, None,
                     _level,
@@ -1833,13 +1833,13 @@ impl Engine {
                 let FnCallExpr {
                     name,
                     capture,
-                    hash,
+                    hashes,
                     args,
                     constant_args: c_args,
                     ..
                 } = x.as_ref();
                 self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args, c_args, *hash, *pos, *capture,
+                    scope, mods, state, lib, this_ptr, name, args, c_args, *hashes, *pos, *capture,
                     level,
                 )
             }
@@ -1849,13 +1849,13 @@ impl Engine {
                 let FnCallExpr {
                     name,
                     namespace,
-                    hash,
+                    hashes,
                     args,
                     constant_args: c_args,
                     ..
                 } = x.as_ref();
                 let namespace = namespace.as_ref();
-                let hash = hash.native_hash();
+                let hash = hashes.native_hash();
                 self.make_qualified_function_call(
                     scope, mods, state, lib, this_ptr, namespace, name, args, c_args, hash, *pos,
                     level,

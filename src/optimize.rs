@@ -893,7 +893,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
-            if !has_native_fn(state, x.hash.native_hash(), arg_types.as_ref()) {
+            if !has_native_fn(state, x.hashes.native_hash(), arg_types.as_ref()) {
                 if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
                                         .and_then(|f| {
                                             let ctx = (state.engine, x.name.as_ref(), state.lib).into();
