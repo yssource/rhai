@@ -1,6 +1,5 @@
 //! Module defining the AST (abstract syntax tree).
 
-use crate::dynamic::{AccessMode, Union};
 use crate::fn_native::shared_make_mut;
 use crate::module::NamespaceRef;
 use crate::token::Token;
@@ -1761,10 +1760,7 @@ impl Expr {
             Self::FloatConstant(x, _) => (*x).into(),
             Self::CharConstant(x, _) => (*x).into(),
             Self::StringConstant(x, _) => x.clone().into(),
-            Self::FnPointer(x, _) => Dynamic(Union::FnPtr(
-                Box::new(FnPtr::new_unchecked(x.clone(), Default::default())),
-                AccessMode::ReadOnly,
-            )),
+            Self::FnPointer(x, _) => FnPtr::new_unchecked(x.clone(), Default::default()).into(),
             Self::BoolConstant(x, _) => (*x).into(),
             Self::Unit(_) => Dynamic::UNIT,
 
@@ -1772,7 +1768,7 @@ impl Expr {
             Self::Array(x, _) if self.is_constant() => {
                 let mut arr = Array::with_capacity(x.len());
                 arr.extend(x.iter().map(|v| v.get_constant_value().unwrap()));
-                arr.into()
+                Dynamic::from_array(arr)
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -1781,7 +1777,7 @@ impl Expr {
                 x.0.iter().for_each(|(k, v)| {
                     *map.get_mut(k.name.as_str()).unwrap() = v.get_constant_value().unwrap()
                 });
-                map.into()
+                Dynamic::from_map(map)
             }
 
             _ => return None,

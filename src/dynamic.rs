@@ -1721,6 +1721,14 @@ impl From<&crate::Identifier> for Dynamic {
     }
 }
 #[cfg(not(feature = "no_index"))]
+impl Dynamic {
+    /// Create a [`Dynamc`] from an [`Array`].
+    #[inline(always)]
+    pub(crate) fn from_array(array: Array) -> Self {
+        Self(Union::Array(Box::new(array), AccessMode::ReadWrite))
+    }
+}
+#[cfg(not(feature = "no_index"))]
 impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
     #[inline(always)]
     fn from(value: Vec<T>) -> Self {
@@ -1748,6 +1756,14 @@ impl<T: Variant + Clone> std::iter::FromIterator<T> for Dynamic {
             Box::new(iter.into_iter().map(Dynamic::from).collect()),
             AccessMode::ReadWrite,
         ))
+    }
+}
+#[cfg(not(feature = "no_object"))]
+impl Dynamic {
+    /// Create a [`Dynamc`] from a [`Map`].
+    #[inline(always)]
+    pub(crate) fn from_map(map: Map) -> Self {
+        Self(Union::Map(Box::new(map), AccessMode::ReadWrite))
     }
 }
 #[cfg(not(feature = "no_object"))]
