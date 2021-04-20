@@ -10,9 +10,10 @@ fn new_mat(x, y) {
 	matrix
 }
 
-fn mat_gen(n) {
-    let m = new_mat(n, n);
+fn mat_gen() {
+    const n = global::SIZE;
     const tmp = 1.0 / n / n;
+    let m = new_mat(n, n);
 
     for i in range(0, n) {
         for j in range(0, n) {
@@ -39,9 +40,7 @@ fn mat_mul(a, b) {
 			c[i][j] = 0.0;
 			
 			for z in range(0, a[i].len) {
-				let x = a[i][z];
-				let y = b2[j][z];
-				c[i][j] += x * y;
+				c[i][j] += a[i][z] * b2[j][z];
 			}
         }
     }
@@ -51,8 +50,8 @@ fn mat_mul(a, b) {
 
 const now = timestamp();
 
-const a = mat_gen(SIZE);
-const b = mat_gen(SIZE);
+const a = mat_gen();
+const b = mat_gen();
 const c = mat_mul(a, b);
 
 /*
