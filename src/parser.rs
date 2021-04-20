@@ -15,8 +15,8 @@ use crate::token::{
 };
 use crate::utils::{get_hasher, IdentifierBuilder};
 use crate::{
-    calc_fn_hash, Dynamic, Engine, Identifier, LexError, ParseError, ParseErrorType, Position,
-    Scope, Shared, StaticVec, AST,
+    calc_fn_hash, Dynamic, Engine, FnPtr, Identifier, LexError, ParseError, ParseErrorType,
+    Position, Scope, Shared, StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -3018,7 +3018,8 @@ fn parse_anon_fn(
         comments: Default::default(),
     };
 
-    let expr = Expr::FnPointer(fn_name.into(), settings.pos);
+    let fn_ptr = FnPtr::new_unchecked(fn_name.into(), Default::default());
+    let expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), settings.pos);
 
     #[cfg(not(feature = "no_closure"))]
     let expr = make_curry_from_externals(state, expr, externals, settings.pos);

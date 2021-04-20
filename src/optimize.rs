@@ -7,8 +7,8 @@ use crate::fn_builtin::get_builtin_binary_op_fn;
 use crate::parser::map_dynamic_to_expr;
 use crate::utils::get_hasher;
 use crate::{
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, ImmutableString, Module,
-    Position, Scope, StaticVec, AST,
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, ImmutableString,
+    Module, Position, Scope, StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -870,7 +870,8 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             && x.name == KEYWORD_FN_PTR
         => {
             state.set_dirty();
-            *expr = Expr::FnPointer(Box::new(mem::take(&mut x.constant_args[0].0).as_str_ref().unwrap().into()), *pos);
+            let fn_ptr = FnPtr::new_unchecked(mem::take(&mut x.constant_args[0].0).as_str_ref().unwrap().into(), Default::default());
+            *expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), *pos);
         }
 
         // Do not call some special keywords

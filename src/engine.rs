@@ -13,8 +13,8 @@ use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::syntax::CustomSyntax;
 use crate::utils::get_hasher;
 use crate::{
-    Dynamic, EvalAltResult, FnPtr, Identifier, ImmutableString, Module, Position, RhaiResult,
-    Scope, Shared, StaticVec,
+    Dynamic, EvalAltResult, Identifier, ImmutableString, Module, Position, RhaiResult, Scope,
+    Shared, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -1749,9 +1749,6 @@ impl Engine {
             Expr::FloatConstant(x, _) => Ok((*x).into()),
             Expr::StringConstant(x, _) => Ok(x.clone().into()),
             Expr::CharConstant(x, _) => Ok((*x).into()),
-            Expr::FnPointer(x, _) => {
-                Ok(FnPtr::new_unchecked(x.as_ref().clone(), Default::default()).into())
-            }
 
             Expr::Variable(None, var_pos, x) if x.0.is_none() && x.2 == KEYWORD_THIS => this_ptr
                 .as_deref()

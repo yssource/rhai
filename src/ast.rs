@@ -5,8 +5,7 @@ use crate::module::NamespaceRef;
 use crate::token::Token;
 use crate::utils::calc_fn_hash;
 use crate::{
-    Dynamic, FnNamespace, FnPtr, Identifier, ImmutableString, Module, Position, Shared, StaticVec,
-    INT,
+    Dynamic, FnNamespace, Identifier, ImmutableString, Module, Position, Shared, StaticVec, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -1613,8 +1612,6 @@ pub enum Expr {
     CharConstant(char, Position),
     /// [String][ImmutableString] constant.
     StringConstant(ImmutableString, Position),
-    /// [`FnPtr`] constant.
-    FnPointer(Box<Identifier>, Position),
     /// An interpolated [string][ImmutableString].
     InterpolatedString(Box<StaticVec<Expr>>),
     /// [ expr, ... ]
@@ -1675,7 +1672,6 @@ impl fmt::Debug for Expr {
             Self::FloatConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
             Self::CharConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
             Self::StringConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
-            Self::FnPointer(value, pos) => write!(f, "Fn({:?}) @ {:?}", value, pos),
             Self::Unit(pos) => write!(f, "() @ {:?}", pos),
             Self::InterpolatedString(x) => {
                 f.write_str("InterpolatedString")?;
@@ -1765,9 +1761,6 @@ impl Expr {
             Self::FloatConstant(x, _) => (*x).into(),
             Self::CharConstant(x, _) => (*x).into(),
             Self::StringConstant(x, _) => x.clone().into(),
-            Self::FnPointer(x, _) => {
-                FnPtr::new_unchecked(x.as_ref().clone(), Default::default()).into()
-            }
             Self::BoolConstant(x, _) => (*x).into(),
             Self::Unit(_) => Dynamic::UNIT,
 
@@ -1819,7 +1812,6 @@ impl Expr {
             Self::CharConstant(_, pos) => *pos,
             Self::StringConstant(_, pos) => *pos,
             Self::InterpolatedString(x) => x.first().unwrap().position(),
-            Self::FnPointer(_, pos) => *pos,
             Self::Array(_, pos) => *pos,
             Self::Map(_, pos) => *pos,
             Self::Property(x) => (x.2).pos,
@@ -1851,7 +1843,6 @@ impl Expr {
             Self::InterpolatedString(x) => {
                 x.first_mut().unwrap().set_position(new_pos);
             }
-            Self::FnPointer(_, pos) => *pos = new_pos,
             Self::Array(_, pos) => *pos = new_pos,
             Self::Map(_, pos) => *pos = new_pos,
             Self::Variable(_, pos, _) => *pos = new_pos,
@@ -1907,7 +1898,6 @@ impl Expr {
             | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::StringConstant(_, _)
-            | Self::FnPointer(_, _)
             | Self::Unit(_) => true,
 
             Self::InterpolatedString(x) | Self::Array(x, _) => x.iter().all(Self::is_constant),
@@ -1934,7 +1924,6 @@ impl Expr {
             | Self::BoolConstant(_, _)
             | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
-            | Self::FnPointer(_, _)
             | Self::And(_, _)
             | Self::Or(_, _)
             | Self::Unit(_) => false,

@@ -407,6 +407,13 @@ impl Hash for Dynamic {
                     value.hash(state);
                 })
             }
+            Union::FnPtr(f, _) if f.is_curried() => {
+                unimplemented!(
+                    "{} with curried arguments cannot be hashed",
+                    self.type_name()
+                )
+            }
+            Union::FnPtr(f, _) => f.fn_name().hash(state),
 
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(cell, _) => {
