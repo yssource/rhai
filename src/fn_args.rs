@@ -5,6 +5,8 @@
 
 use crate::dynamic::Variant;
 use crate::{Dynamic, StaticVec};
+#[cfg(feature = "no_std")]
+use std::prelude::v1::*;
 
 /// Trait that parses arguments to a function call.
 ///
