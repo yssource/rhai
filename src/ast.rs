@@ -918,6 +918,11 @@ pub enum Stmt {
     Const(Expr, Box<Ident>, bool, Position),
     /// expr op`=` expr
     Assignment(Box<(Expr, Option<OpAssignment>, Expr)>, Position),
+    /// func `(` expr `,` ... `)`
+    ///
+    /// Note - this is a duplicate of [`Expr::FnCall`] to cover the very common pattern of a single
+    ///        function call forming one statement.
+    FnCall(Box<FnCallExpr>, Position),
     /// `{` stmt`;` ... `}`
     Block(Vec<Stmt>, Position),
     /// `try` `{` stmt; ... `}` `catch` `(` var `)` `{` stmt; ... `}`
@@ -983,6 +988,7 @@ impl Stmt {
             | Self::Break(pos)
             | Self::Block(_, pos)
             | Self::Assignment(_, pos)
+            | Self::FnCall(_, pos)
             | Self::If(_, _, pos)
             | Self::Switch(_, _, pos)
             | Self::While(_, _, pos)
@@ -1012,6 +1018,7 @@ impl Stmt {
             | Self::Break(pos)
             | Self::Block(_, pos)
             | Self::Assignment(_, pos)
+            | Self::FnCall(_, pos)
             | Self::If(_, _, pos)
             | Self::Switch(_, _, pos)
             | Self::While(_, _, pos)
@@ -1040,7 +1047,11 @@ impl Stmt {
     /// Does this statement return a value?
     pub fn returns_value(&self) -> bool {
         match self {
-            Self::If(_, _, _) | Self::Switch(_, _, _) | Self::Block(_, _) | Self::Expr(_) => true,
+            Self::If(_, _, _)
+            | Self::Switch(_, _, _)
+            | Self::Block(_, _)
+            | Self::Expr(_)
+            | Self::FnCall(_, _) => true,
 
             Self::Noop(_)
             | Self::While(_, _, _)
@@ -1078,6 +1089,7 @@ impl Stmt {
             Self::Let(_, _, _, _)
             | Self::Const(_, _, _, _)
             | Self::Assignment(_, _)
+            | Self::FnCall(_, _)
             | Self::Expr(_)
             | Self::Do(_, _, _, _)
             | Self::Continue(_)
@@ -1115,7 +1127,10 @@ impl Stmt {
                 condition.is_pure() && block.0.iter().all(Stmt::is_pure)
             }
             Self::For(iterable, x, _) => iterable.is_pure() && (x.1).0.iter().all(Stmt::is_pure),
-            Self::Let(_, _, _, _) | Self::Const(_, _, _, _) | Self::Assignment(_, _) => false,
+            Self::Let(_, _, _, _)
+            | Self::Const(_, _, _, _)
+            | Self::Assignment(_, _)
+            | Self::FnCall(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::Return(_, _, _) => false,
             Self::TryCatch(x, _, _) => {
@@ -1242,6 +1257,13 @@ impl Stmt {
                 }
                 if !x.2.walk(path, on_node) {
                     return false;
+                }
+            }
+            Self::FnCall(x, _) => {
+                for s in &x.args {
+                    if !s.walk(path, on_node) {
+                        return false;
+                    }
                 }
             }
             Self::Block(x, _) => {
@@ -1441,7 +1463,7 @@ impl FnCallHashes {
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Clone, Default, Hash)]
+#[derive(Debug, Clone, Default, Hash)]
 pub struct FnCallExpr {
     /// Namespace of the function, if any.
     pub namespace: Option<NamespaceRef>,

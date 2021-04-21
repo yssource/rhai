@@ -1830,22 +1830,6 @@ impl Engine {
                 Ok(map.into())
             }
 
-            // Normal function call
-            Expr::FnCall(x, pos) if !x.is_qualified() => {
-                let FnCallExpr {
-                    name,
-                    capture,
-                    hashes,
-                    args,
-                    constant_args: c_args,
-                    ..
-                } = x.as_ref();
-                self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args, c_args, *hashes, *pos, *capture,
-                    level,
-                )
-            }
-
             // Namespace-qualified function call
             Expr::FnCall(x, pos) if x.is_qualified() => {
                 let FnCallExpr {
@@ -1860,6 +1844,22 @@ impl Engine {
                 let hash = hashes.native_hash();
                 self.make_qualified_function_call(
                     scope, mods, state, lib, this_ptr, namespace, name, args, c_args, hash, *pos,
+                    level,
+                )
+            }
+
+            // Normal function call
+            Expr::FnCall(x, pos) => {
+                let FnCallExpr {
+                    name,
+                    capture,
+                    hashes,
+                    args,
+                    constant_args: c_args,
+                    ..
+                } = x.as_ref();
+                self.make_function_call(
+                    scope, mods, state, lib, this_ptr, name, args, c_args, *hashes, *pos, *capture,
                     level,
                 )
             }
@@ -2389,6 +2389,40 @@ impl Engine {
 
             // Break statement
             Stmt::Break(pos) => EvalAltResult::LoopBreak(true, *pos).into(),
+
+            // Namespace-qualified function call
+            Stmt::FnCall(x, pos) if x.is_qualified() => {
+                let FnCallExpr {
+                    name,
+                    namespace,
+                    hashes,
+                    args,
+                    constant_args: c_args,
+                    ..
+                } = x.as_ref();
+                let namespace = namespace.as_ref();
+                let hash = hashes.native_hash();
+                self.make_qualified_function_call(
+                    scope, mods, state, lib, this_ptr, namespace, name, args, c_args, hash, *pos,
+                    level,
+                )
+            }
+
+            // Normal function call
+            Stmt::FnCall(x, pos) => {
+                let FnCallExpr {
+                    name,
+                    capture,
+                    hashes,
+                    args,
+                    constant_args: c_args,
+                    ..
+                } = x.as_ref();
+                self.make_function_call(
+                    scope, mods, state, lib, this_ptr, name, args, c_args, *hashes, *pos, *capture,
+                    level,
+                )
+            }
 
             // Try/Catch statement
             Stmt::TryCatch(x, _, _) => {

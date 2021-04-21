@@ -628,6 +628,17 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             let catch_block = mem::take(x.2.statements()).into_vec();
             *x.2.statements() = optimize_stmt_block(catch_block, state, false, true, false).into();
         }
+        // func(...)
+        Stmt::Expr(expr @ Expr::FnCall(_, _)) => {
+            optimize_expr(expr, state);
+            match expr {
+                Expr::FnCall(x, pos) => {
+                    state.set_dirty();
+                    *stmt = Stmt::FnCall(mem::take(x), *pos);
+                }
+                _ => (),
+            }
+        }
         // {}
         Stmt::Expr(Expr::Stmt(x)) if x.is_empty() => {
             state.set_dirty();
