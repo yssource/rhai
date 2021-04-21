@@ -55,8 +55,9 @@ fn print_help() {
 }
 
 fn main() {
-    println!("Rhai REPL tool");
-    println!("==============");
+    let title = format!("Rhai REPL tool (version {})", env!("CARGO_PKG_VERSION"));
+    println!("{}", title);
+    println!("{0:=<1$}", "", title.len());
     print_help();
 
     // Initialize scripting engine

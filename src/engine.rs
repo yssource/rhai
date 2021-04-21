@@ -574,6 +574,7 @@ impl State {
         self.scope_level == 0
     }
     /// Get a mutable reference to the current function resolution cache.
+    #[inline(always)]
     pub fn fn_resolution_cache_mut(&mut self) -> &mut FnResolutionCache {
         if self.fn_resolution_caches.0.is_empty() {
             self.fn_resolution_caches.0.push(BTreeMap::new());
@@ -582,6 +583,7 @@ impl State {
     }
     /// Push an empty function resolution cache onto the stack and make it current.
     #[allow(dead_code)]
+    #[inline(always)]
     pub fn push_fn_resolution_cache(&mut self) {
         self.fn_resolution_caches
             .0
@@ -592,6 +594,7 @@ impl State {
     /// # Panics
     ///
     /// Panics if there are no more function resolution cache in the stack.
+    #[inline(always)]
     pub fn pop_fn_resolution_cache(&mut self) {
         let mut cache = self.fn_resolution_caches.0.pop().unwrap();
         cache.clear();
@@ -1915,7 +1918,11 @@ impl Engine {
             _ => unreachable!("expression cannot be evaluated: {:?}", expr),
         };
 
-        self.check_data_size(result, expr.position())
+        #[cfg(not(feature = "unchecked"))]
+        self.check_data_size(&result)
+            .map_err(|err| err.fill_position(expr.position()))?;
+
+        result
     }
 
     /// Evaluate a statements block.
@@ -2166,29 +2173,26 @@ impl Engine {
             }
 
             // If statement
-            Stmt::If(expr, x, _) => self
-                .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                .as_bool()
-                .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))
-                .and_then(|guard_val| {
-                    if guard_val {
-                        if !x.0.is_empty() {
-                            self.eval_stmt_block(
-                                scope, mods, state, lib, this_ptr, &x.0, true, level,
-                            )
-                        } else {
-                            Ok(Dynamic::UNIT)
-                        }
+            Stmt::If(expr, x, _) => {
+                let guard_val = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .as_bool()
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?;
+
+                if guard_val {
+                    if !x.0.is_empty() {
+                        self.eval_stmt_block(scope, mods, state, lib, this_ptr, &x.0, true, level)
                     } else {
-                        if !x.1.is_empty() {
-                            self.eval_stmt_block(
-                                scope, mods, state, lib, this_ptr, &x.1, true, level,
-                            )
-                        } else {
-                            Ok(Dynamic::UNIT)
-                        }
+                        Ok(Dynamic::UNIT)
                     }
-                }),
+                } else {
+                    if !x.1.is_empty() {
+                        self.eval_stmt_block(scope, mods, state, lib, this_ptr, &x.1, true, level)
+                    } else {
+                        Ok(Dynamic::UNIT)
+                    }
+                }
+            }
 
             // Switch statement
             Stmt::Switch(match_expr, x, _) => {
@@ -2258,17 +2262,16 @@ impl Engine {
                 if !condition {
                     return Ok(Dynamic::UNIT);
                 }
-                if body.is_empty() {
-                    continue;
-                }
-
-                match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level) {
-                    Ok(_) => (),
-                    Err(err) => match *err {
-                        EvalAltResult::LoopBreak(false, _) => (),
-                        EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
-                        _ => return Err(err),
-                    },
+                if !body.is_empty() {
+                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    {
+                        Ok(_) => (),
+                        Err(err) => match *err {
+                            EvalAltResult::LoopBreak(false, _) => (),
+                            EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
+                            _ => return Err(err),
+                        },
+                    }
                 }
             },
 
@@ -2286,18 +2289,13 @@ impl Engine {
                     }
                 }
 
-                if self
+                let condition = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?
-                {
-                    if !*is_while {
-                        return Ok(Dynamic::UNIT);
-                    }
-                } else {
-                    if *is_while {
-                        return Ok(Dynamic::UNIT);
-                    }
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?;
+
+                if condition ^ *is_while {
+                    return Ok(Dynamic::UNIT);
                 }
             },
 
@@ -2364,9 +2362,11 @@ impl Engine {
                             continue;
                         }
 
-                        match self.eval_stmt_block(
+                        let result = self.eval_stmt_block(
                             scope, mods, state, lib, this_ptr, statements, true, level,
-                        ) {
+                        );
+
+                        match result {
                             Ok(_) => (),
                             Err(err) => match *err {
                                 EvalAltResult::LoopBreak(false, _) => (),
@@ -2477,25 +2477,25 @@ impl Engine {
             }
 
             // Return value
-            Stmt::Return(ReturnType::Return, Some(expr), pos) => {
-                let value = self
-                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .flatten();
-                EvalAltResult::Return(value, *pos).into()
-            }
+            Stmt::Return(ReturnType::Return, Some(expr), pos) => EvalAltResult::Return(
+                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .flatten(),
+                *pos,
+            )
+            .into(),
 
             // Empty return
             Stmt::Return(ReturnType::Return, None, pos) => {
-                EvalAltResult::Return(Default::default(), *pos).into()
+                EvalAltResult::Return(Dynamic::UNIT, *pos).into()
             }
 
             // Throw value
-            Stmt::Return(ReturnType::Exception, Some(expr), pos) => {
-                let value = self
-                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .flatten();
-                EvalAltResult::ErrorRuntime(value, *pos).into()
-            }
+            Stmt::Return(ReturnType::Exception, Some(expr), pos) => EvalAltResult::ErrorRuntime(
+                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .flatten(),
+                *pos,
+            )
+            .into(),
 
             // Empty throw
             Stmt::Return(ReturnType::Exception, None, pos) => {
@@ -2640,24 +2640,18 @@ impl Engine {
             }
         };
 
-        self.check_data_size(result, stmt.position())
-    }
+        #[cfg(not(feature = "unchecked"))]
+        self.check_data_size(&result)
+            .map_err(|err| err.fill_position(stmt.position()))?;
 
-    /// Check a result to ensure that the data size is within allowable limit.
-    /// [`Position`] in [`EvalAltResult`] may be None and should be set afterwards.
-    #[cfg(feature = "unchecked")]
-    #[inline(always)]
-    fn check_data_size(&self, result: RhaiResult, _pos: Position) -> RhaiResult {
         result
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
     #[cfg(not(feature = "unchecked"))]
-    #[inline(always)]
-    fn check_data_size(&self, result: RhaiResult, pos: Position) -> RhaiResult {
-        // Simply return all errors
+    fn check_data_size(&self, result: &RhaiResult) -> Result<(), Box<EvalAltResult>> {
         if result.is_err() {
-            return result;
+            return Ok(());
         }
 
         // If no data size limits, just return
@@ -2672,7 +2666,7 @@ impl Engine {
         }
 
         if !_has_limit {
-            return result;
+            return Ok(());
         }
 
         // Recursively calculate the size of a value (especially `Array` and `Map`)
@@ -2734,7 +2728,11 @@ impl Engine {
             .max_string_size
             .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return EvalAltResult::ErrorDataTooLarge("Length of string".to_string(), pos).into();
+            return EvalAltResult::ErrorDataTooLarge(
+                "Length of string".to_string(),
+                Position::NONE,
+            )
+            .into();
         }
 
         #[cfg(not(feature = "no_index"))]
@@ -2744,7 +2742,8 @@ impl Engine {
                 .max_array_size
                 .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), pos).into();
+            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), Position::NONE)
+                .into();
         }
 
         #[cfg(not(feature = "no_object"))]
@@ -2754,14 +2753,17 @@ impl Engine {
                 .max_map_size
                 .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return EvalAltResult::ErrorDataTooLarge("Size of object map".to_string(), pos).into();
+            return EvalAltResult::ErrorDataTooLarge(
+                "Size of object map".to_string(),
+                Position::NONE,
+            )
+            .into();
         }
 
-        result
+        Ok(())
     }
 
     /// Check if the number of operations stay within limit.
-    #[inline]
     pub(crate) fn inc_operations(
         &self,
         state: &mut State,
