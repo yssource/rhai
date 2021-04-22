@@ -72,7 +72,7 @@ b`: 1}; y["a\nb"]
     );
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 let x = #{a: 1, b: 2, c: 3};
                 let y = #{b: 42, d: 9};
                 x.mixin(y);
@@ -83,7 +83,7 @@ b`: 1}; y["a\nb"]
     );
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 let x = #{a: 1, b: 2, c: 3};
                 x += #{b: 42, d: 9};
                 x.len() + x.b
@@ -94,7 +94,7 @@ b`: 1}; y["a\nb"]
     assert_eq!(
         engine
             .eval::<Map>(
-                r"
+                "
                     let x = #{a: 1, b: 2, c: 3};
                     let y = #{b: 42, d: 9};
                     x + y
@@ -206,7 +206,7 @@ fn test_map_json() -> Result<(), Box<EvalAltResult>> {
     assert!(matches!(
         *engine.parse_json("   123", true).expect_err("should error"),
         EvalAltResult::ErrorParsing(ParseErrorType::MissingToken(token, _), pos)
-            if token == "{" && pos.position() == Some(4)
+            if token == "{"
     ));
 
     Ok(())

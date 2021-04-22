@@ -60,7 +60,11 @@ fn test_print_debug() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(logbook.read().unwrap()[0], "entry: 42");
     assert_eq!(
         logbook.read().unwrap()[1],
-        r#"DEBUG of world at 1:19: "hello!""#
+        if cfg!(not(feature = "no_position")) {
+            r#"DEBUG of world at 1:19: "hello!""#
+        } else {
+            r#"DEBUG of world at none: "hello!""#
+        }
     );
 
     for entry in logbook.read().unwrap().iter() {

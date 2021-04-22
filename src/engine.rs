@@ -13,8 +13,8 @@ use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::syntax::CustomSyntax;
 use crate::utils::get_hasher;
 use crate::{
-    Dynamic, EvalAltResult, FnPtr, Identifier, ImmutableString, Module, Position, RhaiResult,
-    Scope, Shared, StaticVec,
+    Dynamic, EvalAltResult, Identifier, ImmutableString, Module, Position, RhaiResult, Scope,
+    Shared, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -35,7 +35,7 @@ use crate::{calc_fn_hash, Array};
 use crate::Map;
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-use crate::ast::FnCallHash;
+use crate::ast::FnCallHashes;
 
 pub type Precedence = NonZeroU8;
 
@@ -574,6 +574,7 @@ impl State {
         self.scope_level == 0
     }
     /// Get a mutable reference to the current function resolution cache.
+    #[inline(always)]
     pub fn fn_resolution_cache_mut(&mut self) -> &mut FnResolutionCache {
         if self.fn_resolution_caches.0.is_empty() {
             self.fn_resolution_caches.0.push(BTreeMap::new());
@@ -582,6 +583,7 @@ impl State {
     }
     /// Push an empty function resolution cache onto the stack and make it current.
     #[allow(dead_code)]
+    #[inline(always)]
     pub fn push_fn_resolution_cache(&mut self) {
         self.fn_resolution_caches
             .0
@@ -592,6 +594,7 @@ impl State {
     /// # Panics
     ///
     /// Panics if there are no more function resolution cache in the stack.
+    #[inline(always)]
     pub fn pop_fn_resolution_cache(&mut self) {
         let mut cache = self.fn_resolution_caches.0.pop().unwrap();
         cache.clear();
@@ -836,6 +839,8 @@ fn default_debug(_s: &str, _source: Option<&str>, _pos: Position) {
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     if let Some(source) = _source {
         println!("{} @ {:?} | {}", source, _pos, _s);
+    } else if _pos.is_none() {
+        println!("{}", _s);
     } else {
         println!("{:?} | {}", _pos, _s);
     }
@@ -1186,7 +1191,7 @@ impl Engine {
                             let val_type_name = target.type_name();
                             let ((_, val_pos), _) = new_val;
 
-                            let hash_set = FnCallHash::from_native(calc_fn_hash(
+                            let hash_set = FnCallHashes::from_native(calc_fn_hash(
                                 std::iter::empty(),
                                 FN_IDX_SET,
                                 3,
@@ -1227,11 +1232,11 @@ impl Engine {
             ChainType::Dot => {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
-                    Expr::FnCall(x, pos) if x.namespace.is_none() && new_val.is_none() => {
-                        let FnCallExpr { name, hash, .. } = x.as_ref();
+                    Expr::FnCall(x, pos) if !x.is_qualified() && new_val.is_none() => {
+                        let FnCallExpr { name, hashes, .. } = x.as_ref();
                         let mut args = idx_val.as_fn_call_args();
                         self.make_method_call(
-                            mods, state, lib, name, *hash, target, &mut args, *pos, level,
+                            mods, state, lib, name, *hashes, target, &mut args, *pos, level,
                         )
                     }
                     // xxx.fn_name(...) = ???
@@ -1272,7 +1277,7 @@ impl Engine {
                         let ((mut new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
 
                         if op_info.is_some() {
-                            let hash = FnCallHash::from_native(*hash_get);
+                            let hash = FnCallHashes::from_native(*hash_get);
                             let mut args = [target.as_mut()];
                             let (mut orig_val, _) = self.exec_fn_call(
                                 mods, state, lib, getter, hash, &mut args, is_ref, true, *pos,
@@ -1285,7 +1290,7 @@ impl Engine {
                             new_val = orig_val;
                         }
 
-                        let hash = FnCallHash::from_native(*hash_set);
+                        let hash = FnCallHashes::from_native(*hash_set);
                         let mut args = [target.as_mut(), &mut new_val];
                         self.exec_fn_call(
                             mods, state, lib, setter, hash, &mut args, is_ref, true, *pos, None,
@@ -1296,7 +1301,7 @@ impl Engine {
                     // xxx.id
                     Expr::Property(x) => {
                         let ((getter, hash_get), _, Ident { pos, .. }) = x.as_ref();
-                        let hash = FnCallHash::from_native(*hash_get);
+                        let hash = FnCallHashes::from_native(*hash_get);
                         let mut args = [target.as_mut()];
                         self.exec_fn_call(
                             mods, state, lib, getter, hash, &mut args, is_ref, true, *pos, None,
@@ -1316,11 +1321,11 @@ impl Engine {
                                 )?
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
-                            Expr::FnCall(x, pos) if x.namespace.is_none() => {
-                                let FnCallExpr { name, hash, .. } = x.as_ref();
+                            Expr::FnCall(x, pos) if !x.is_qualified() => {
+                                let FnCallExpr { name, hashes, .. } = x.as_ref();
                                 let mut args = idx_val.as_fn_call_args();
                                 let (val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hash, target, &mut args, *pos, level,
+                                    mods, state, lib, name, *hashes, target, &mut args, *pos, level,
                                 )?;
                                 val.into()
                             }
@@ -1345,8 +1350,8 @@ impl Engine {
                             Expr::Property(p) => {
                                 let ((getter, hash_get), (setter, hash_set), Ident { pos, .. }) =
                                     p.as_ref();
-                                let hash_get = FnCallHash::from_native(*hash_get);
-                                let hash_set = FnCallHash::from_native(*hash_set);
+                                let hash_get = FnCallHashes::from_native(*hash_get);
+                                let hash_set = FnCallHashes::from_native(*hash_set);
                                 let arg_values = &mut [target.as_mut(), &mut Default::default()];
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self.exec_fn_call(
@@ -1394,11 +1399,11 @@ impl Engine {
                                 Ok((result, may_be_changed))
                             }
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
-                            Expr::FnCall(f, pos) if f.namespace.is_none() => {
-                                let FnCallExpr { name, hash, .. } = f.as_ref();
+                            Expr::FnCall(f, pos) if !f.is_qualified() => {
+                                let FnCallExpr { name, hashes, .. } = f.as_ref();
                                 let mut args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hash, target, &mut args, *pos, level,
+                                    mods, state, lib, name, *hashes, target, &mut args, *pos, level,
                                 )?;
                                 let val = &mut val;
                                 let target = &mut val.into();
@@ -1508,7 +1513,7 @@ impl Engine {
         self.inc_operations(state, expr.position())?;
 
         match expr {
-            Expr::FnCall(x, _) if parent_chain_type == ChainType::Dot && x.namespace.is_none() => {
+            Expr::FnCall(x, _) if parent_chain_type == ChainType::Dot && !x.is_qualified() => {
                 let mut arg_positions: StaticVec<_> = Default::default();
 
                 let mut arg_values = x
@@ -1547,7 +1552,7 @@ impl Engine {
                     }
                     Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
                     Expr::FnCall(x, _)
-                        if parent_chain_type == ChainType::Dot && x.namespace.is_none() =>
+                        if parent_chain_type == ChainType::Dot && !x.is_qualified() =>
                     {
                         let mut arg_positions: StaticVec<_> = Default::default();
 
@@ -1704,7 +1709,7 @@ impl Engine {
                 let type_name = target.type_name();
                 let args = &mut [target, &mut _idx];
                 let hash_get =
-                    FnCallHash::from_native(calc_fn_hash(std::iter::empty(), FN_IDX_GET, 2));
+                    FnCallHashes::from_native(calc_fn_hash(std::iter::empty(), FN_IDX_GET, 2));
                 self.exec_fn_call(
                     _mods, state, _lib, FN_IDX_GET, hash_get, args, _is_ref, true, idx_pos, None,
                     _level,
@@ -1749,7 +1754,6 @@ impl Engine {
             Expr::FloatConstant(x, _) => Ok((*x).into()),
             Expr::StringConstant(x, _) => Ok(x.clone().into()),
             Expr::CharConstant(x, _) => Ok((*x).into()),
-            Expr::FnPointer(x, _) => Ok(FnPtr::new_unchecked(x.clone(), Default::default()).into()),
 
             Expr::Variable(None, var_pos, x) if x.0.is_none() && x.2 == KEYWORD_THIS => this_ptr
                 .as_deref()
@@ -1828,36 +1832,36 @@ impl Engine {
                 Ok(map.into())
             }
 
-            // Normal function call
-            Expr::FnCall(x, pos) if x.namespace.is_none() => {
-                let FnCallExpr {
-                    name,
-                    capture,
-                    hash,
-                    args,
-                    constant_args: c_args,
-                    ..
-                } = x.as_ref();
-                self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args, c_args, *hash, *pos, *capture,
-                    level,
-                )
-            }
-
             // Namespace-qualified function call
-            Expr::FnCall(x, pos) if x.namespace.is_some() => {
+            Expr::FnCall(x, pos) if x.is_qualified() => {
                 let FnCallExpr {
                     name,
                     namespace,
-                    hash,
+                    hashes,
                     args,
                     constant_args: c_args,
                     ..
                 } = x.as_ref();
                 let namespace = namespace.as_ref();
-                let hash = hash.native_hash();
+                let hash = hashes.native_hash();
                 self.make_qualified_function_call(
                     scope, mods, state, lib, this_ptr, namespace, name, args, c_args, hash, *pos,
+                    level,
+                )
+            }
+
+            // Normal function call
+            Expr::FnCall(x, pos) => {
+                let FnCallExpr {
+                    name,
+                    capture,
+                    hashes,
+                    args,
+                    constant_args: c_args,
+                    ..
+                } = x.as_ref();
+                self.make_function_call(
+                    scope, mods, state, lib, this_ptr, name, args, c_args, *hashes, *pos, *capture,
                     level,
                 )
             }
@@ -1916,7 +1920,11 @@ impl Engine {
             _ => unreachable!("expression cannot be evaluated: {:?}", expr),
         };
 
-        self.check_data_size(result, expr.position())
+        #[cfg(not(feature = "unchecked"))]
+        self.check_data_size(&result)
+            .map_err(|err| err.fill_position(expr.position()))?;
+
+        result
     }
 
     /// Evaluate a statements block.
@@ -2167,29 +2175,26 @@ impl Engine {
             }
 
             // If statement
-            Stmt::If(expr, x, _) => self
-                .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                .as_bool()
-                .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))
-                .and_then(|guard_val| {
-                    if guard_val {
-                        if !x.0.is_empty() {
-                            self.eval_stmt_block(
-                                scope, mods, state, lib, this_ptr, &x.0, true, level,
-                            )
-                        } else {
-                            Ok(Dynamic::UNIT)
-                        }
+            Stmt::If(expr, x, _) => {
+                let guard_val = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .as_bool()
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?;
+
+                if guard_val {
+                    if !x.0.is_empty() {
+                        self.eval_stmt_block(scope, mods, state, lib, this_ptr, &x.0, true, level)
                     } else {
-                        if !x.1.is_empty() {
-                            self.eval_stmt_block(
-                                scope, mods, state, lib, this_ptr, &x.1, true, level,
-                            )
-                        } else {
-                            Ok(Dynamic::UNIT)
-                        }
+                        Ok(Dynamic::UNIT)
                     }
-                }),
+                } else {
+                    if !x.1.is_empty() {
+                        self.eval_stmt_block(scope, mods, state, lib, this_ptr, &x.1, true, level)
+                    } else {
+                        Ok(Dynamic::UNIT)
+                    }
+                }
+            }
 
             // Switch statement
             Stmt::Switch(match_expr, x, _) => {
@@ -2259,17 +2264,16 @@ impl Engine {
                 if !condition {
                     return Ok(Dynamic::UNIT);
                 }
-                if body.is_empty() {
-                    continue;
-                }
-
-                match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level) {
-                    Ok(_) => (),
-                    Err(err) => match *err {
-                        EvalAltResult::LoopBreak(false, _) => (),
-                        EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
-                        _ => return Err(err),
-                    },
+                if !body.is_empty() {
+                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    {
+                        Ok(_) => (),
+                        Err(err) => match *err {
+                            EvalAltResult::LoopBreak(false, _) => (),
+                            EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
+                            _ => return Err(err),
+                        },
+                    }
                 }
             },
 
@@ -2287,18 +2291,13 @@ impl Engine {
                     }
                 }
 
-                if self
+                let condition = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?
-                {
-                    if !*is_while {
-                        return Ok(Dynamic::UNIT);
-                    }
-                } else {
-                    if *is_while {
-                        return Ok(Dynamic::UNIT);
-                    }
+                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?;
+
+                if condition ^ *is_while {
+                    return Ok(Dynamic::UNIT);
                 }
             },
 
@@ -2365,9 +2364,11 @@ impl Engine {
                             continue;
                         }
 
-                        match self.eval_stmt_block(
+                        let result = self.eval_stmt_block(
                             scope, mods, state, lib, this_ptr, statements, true, level,
-                        ) {
+                        );
+
+                        match result {
                             Ok(_) => (),
                             Err(err) => match *err {
                                 EvalAltResult::LoopBreak(false, _) => (),
@@ -2390,6 +2391,40 @@ impl Engine {
 
             // Break statement
             Stmt::Break(pos) => EvalAltResult::LoopBreak(true, *pos).into(),
+
+            // Namespace-qualified function call
+            Stmt::FnCall(x, pos) if x.is_qualified() => {
+                let FnCallExpr {
+                    name,
+                    namespace,
+                    hashes,
+                    args,
+                    constant_args: c_args,
+                    ..
+                } = x.as_ref();
+                let namespace = namespace.as_ref();
+                let hash = hashes.native_hash();
+                self.make_qualified_function_call(
+                    scope, mods, state, lib, this_ptr, namespace, name, args, c_args, hash, *pos,
+                    level,
+                )
+            }
+
+            // Normal function call
+            Stmt::FnCall(x, pos) => {
+                let FnCallExpr {
+                    name,
+                    capture,
+                    hashes,
+                    args,
+                    constant_args: c_args,
+                    ..
+                } = x.as_ref();
+                self.make_function_call(
+                    scope, mods, state, lib, this_ptr, name, args, c_args, *hashes, *pos, *capture,
+                    level,
+                )
+            }
 
             // Try/Catch statement
             Stmt::TryCatch(x, _, _) => {
@@ -2478,25 +2513,25 @@ impl Engine {
             }
 
             // Return value
-            Stmt::Return(ReturnType::Return, Some(expr), pos) => {
-                let value = self
-                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .flatten();
-                EvalAltResult::Return(value, *pos).into()
-            }
+            Stmt::Return(ReturnType::Return, Some(expr), pos) => EvalAltResult::Return(
+                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .flatten(),
+                *pos,
+            )
+            .into(),
 
             // Empty return
             Stmt::Return(ReturnType::Return, None, pos) => {
-                EvalAltResult::Return(Default::default(), *pos).into()
+                EvalAltResult::Return(Dynamic::UNIT, *pos).into()
             }
 
             // Throw value
-            Stmt::Return(ReturnType::Exception, Some(expr), pos) => {
-                let value = self
-                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .flatten();
-                EvalAltResult::ErrorRuntime(value, *pos).into()
-            }
+            Stmt::Return(ReturnType::Exception, Some(expr), pos) => EvalAltResult::ErrorRuntime(
+                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .flatten(),
+                *pos,
+            )
+            .into(),
 
             // Empty throw
             Stmt::Return(ReturnType::Exception, None, pos) => {
@@ -2641,24 +2676,18 @@ impl Engine {
             }
         };
 
-        self.check_data_size(result, stmt.position())
-    }
+        #[cfg(not(feature = "unchecked"))]
+        self.check_data_size(&result)
+            .map_err(|err| err.fill_position(stmt.position()))?;
 
-    /// Check a result to ensure that the data size is within allowable limit.
-    /// [`Position`] in [`EvalAltResult`] may be None and should be set afterwards.
-    #[cfg(feature = "unchecked")]
-    #[inline(always)]
-    fn check_data_size(&self, result: RhaiResult, _pos: Position) -> RhaiResult {
         result
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
     #[cfg(not(feature = "unchecked"))]
-    #[inline(always)]
-    fn check_data_size(&self, result: RhaiResult, pos: Position) -> RhaiResult {
-        // Simply return all errors
+    fn check_data_size(&self, result: &RhaiResult) -> Result<(), Box<EvalAltResult>> {
         if result.is_err() {
-            return result;
+            return Ok(());
         }
 
         // If no data size limits, just return
@@ -2673,7 +2702,7 @@ impl Engine {
         }
 
         if !_has_limit {
-            return result;
+            return Ok(());
         }
 
         // Recursively calculate the size of a value (especially `Array` and `Map`)
@@ -2735,7 +2764,11 @@ impl Engine {
             .max_string_size
             .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return EvalAltResult::ErrorDataTooLarge("Length of string".to_string(), pos).into();
+            return EvalAltResult::ErrorDataTooLarge(
+                "Length of string".to_string(),
+                Position::NONE,
+            )
+            .into();
         }
 
         #[cfg(not(feature = "no_index"))]
@@ -2745,7 +2778,8 @@ impl Engine {
                 .max_array_size
                 .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), pos).into();
+            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), Position::NONE)
+                .into();
         }
 
         #[cfg(not(feature = "no_object"))]
@@ -2755,14 +2789,17 @@ impl Engine {
                 .max_map_size
                 .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return EvalAltResult::ErrorDataTooLarge("Size of object map".to_string(), pos).into();
+            return EvalAltResult::ErrorDataTooLarge(
+                "Size of object map".to_string(),
+                Position::NONE,
+            )
+            .into();
         }
 
-        result
+        Ok(())
     }
 
     /// Check if the number of operations stay within limit.
-    #[inline]
     pub(crate) fn inc_operations(
         &self,
         state: &mut State,

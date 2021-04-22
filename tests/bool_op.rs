@@ -38,7 +38,7 @@ fn test_bool_op_short_circuit() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<bool>(
-            r"
+            "
                 let x = true;
                 x || { throw; };
             "
@@ -48,7 +48,7 @@ fn test_bool_op_short_circuit() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<bool>(
-            r"
+            "
                 let x = false;
                 x && { throw; };
             "
@@ -65,7 +65,7 @@ fn test_bool_op_no_short_circuit1() {
 
     assert!(engine
         .eval::<bool>(
-            r"
+            "
                 let x = true;
                 x | { throw; }
             "
@@ -79,7 +79,7 @@ fn test_bool_op_no_short_circuit2() {
 
     assert!(engine
         .eval::<bool>(
-            r"
+            "
                 let x = false;
                 x & { throw; }
             "

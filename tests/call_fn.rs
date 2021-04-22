@@ -10,7 +10,7 @@ fn test_call_fn() -> Result<(), Box<EvalAltResult>> {
     scope.push("foo", 42 as INT);
 
     let ast = engine.compile(
-        r"
+        "
             fn hello(x, y) {
                 x + y
             }

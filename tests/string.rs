@@ -14,7 +14,11 @@ fn test_string() -> Result<(), Box<EvalAltResult>> {
     );
     assert_eq!(
         engine.eval::<String>("   \"Test string: \\u2764\\\n     hello, world!\"")?,
-        "Test string: ❤ hello, world!"
+        if cfg!(not(feature = "no_position")) {
+            "Test string: ❤ hello, world!"
+        } else {
+            "Test string: ❤     hello, world!"
+        }
     );
     assert_eq!(
         engine.eval::<String>("     `Test string: \\u2764\nhello,\\nworld!`")?,
@@ -319,7 +323,7 @@ fn test_string_interpolated() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<String>(
-            r"
+            "
                 let x = 40;
                 `hello ${x+2} worlds!`
             "
@@ -339,7 +343,7 @@ fn test_string_interpolated() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<String>(
-            r"
+            "
                 const x = 42;
                 `hello ${x} worlds!`
             "
@@ -351,7 +355,7 @@ fn test_string_interpolated() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<String>(
-            r"
+            "
                 const x = 42;
                 `${x} worlds!`
             "
@@ -361,7 +365,7 @@ fn test_string_interpolated() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<String>(
-            r"
+            "
                 const x = 42;
                 `hello ${x}`
             "
@@ -371,7 +375,7 @@ fn test_string_interpolated() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<String>(
-            r"
+            "
                 const x = 20;
                 `hello ${let y = x + 1; `${y * 2}`} worlds!`
             "

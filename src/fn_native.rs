@@ -1,6 +1,6 @@
 //! Module defining interfaces to native-Rust functions.
 
-use crate::ast::{FnAccess, FnCallHash};
+use crate::ast::{FnAccess, FnCallHashes};
 use crate::engine::Imports;
 use crate::plugin::PluginFunction;
 use crate::token::is_valid_identifier;
@@ -191,12 +191,12 @@ impl<'a> NativeCallContext<'a> {
         let fn_name = fn_name.as_ref();
 
         let hash = if is_method {
-            FnCallHash::from_script_and_native(
+            FnCallHashes::from_script_and_native(
                 calc_fn_hash(empty(), fn_name, args.len() - 1),
                 calc_fn_hash(empty(), fn_name, args.len()),
             )
         } else {
-            FnCallHash::from_script(calc_fn_hash(empty(), fn_name, args.len()))
+            FnCallHashes::from_script(calc_fn_hash(empty(), fn_name, args.len()))
         };
 
         self.engine()
@@ -262,7 +262,7 @@ impl FnPtr {
     }
     /// Create a new function pointer without checking its parameters.
     #[inline(always)]
-    pub(crate) fn new_unchecked(name: impl Into<Identifier>, curry: StaticVec<Dynamic>) -> Self {
+    pub(crate) fn new_unchecked(name: Identifier, curry: StaticVec<Dynamic>) -> Self {
         Self(name.into(), curry)
     }
     /// Get the name of the function.

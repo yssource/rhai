@@ -5,9 +5,6 @@ use std::ops::Range;
 use std::prelude::v1::*;
 
 #[cfg(not(feature = "unchecked"))]
-use std::string::ToString;
-
-#[cfg(not(feature = "unchecked"))]
 use num_traits::{CheckedAdd as Add, CheckedSub as Sub};
 
 #[cfg(feature = "unchecked")]
@@ -209,8 +206,6 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
             pub fn new(from: Decimal, to: Decimal, step: Decimal) -> Result<Self, Box<EvalAltResult>> {
                 #[cfg(not(feature = "unchecked"))]
                 if step.is_zero() {
-                    use std::string::ToString;
-
                     return EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
                         Box::new(EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE)),
                         crate::Position::NONE,

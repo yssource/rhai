@@ -7,8 +7,8 @@ use crate::fn_builtin::get_builtin_binary_op_fn;
 use crate::parser::map_dynamic_to_expr;
 use crate::utils::get_hasher;
 use crate::{
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, ImmutableString, Module,
-    Position, Scope, StaticVec, AST,
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, ImmutableString,
+    Module, Position, Scope, StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -628,6 +628,17 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             let catch_block = mem::take(x.2.statements()).into_vec();
             *x.2.statements() = optimize_stmt_block(catch_block, state, false, true, false).into();
         }
+        // func(...)
+        Stmt::Expr(expr @ Expr::FnCall(_, _)) => {
+            optimize_expr(expr, state);
+            match expr {
+                Expr::FnCall(x, pos) => {
+                    state.set_dirty();
+                    *stmt = Stmt::FnCall(mem::take(x), *pos);
+                }
+                _ => (),
+            }
+        }
         // {}
         Stmt::Expr(Expr::Stmt(x)) if x.is_empty() => {
             state.set_dirty();
@@ -862,15 +873,16 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
         }
         // Fn
         Expr::FnCall(x, pos)
-            if x.namespace.is_none() // Non-qualified
+            if !x.is_qualified() // Non-qualified
             && state.optimization_level == OptimizationLevel::Simple // simple optimizations
-            && x.num_args() == 1
+            && x.args_count() == 1
             && x.constant_args.len() == 1
             && x.constant_args[0].0.is::<ImmutableString>()
             && x.name == KEYWORD_FN_PTR
         => {
             state.set_dirty();
-            *expr = Expr::FnPointer(mem::take(&mut x.constant_args[0].0).take_immutable_string().unwrap(), *pos);
+            let fn_ptr = FnPtr::new_unchecked(mem::take(&mut x.constant_args[0].0).as_str_ref().unwrap().into(), Default::default());
+            *expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), *pos);
         }
 
         // Do not call some special keywords
@@ -880,9 +892,9 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
 
         // Call built-in operators
         Expr::FnCall(x, pos)
-                if x.namespace.is_none() // Non-qualified
+                if !x.is_qualified() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Simple // simple optimizations
-                && x.num_args() == 2 // binary call
+                && x.args_count() == 2 // binary call
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
                 //&& !is_valid_identifier(x.name.chars()) // cannot be scripted
         => {
@@ -893,7 +905,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
-            if !has_native_fn(state, x.hash.native_hash(), arg_types.as_ref()) {
+            if !has_native_fn(state, x.hashes.native_hash(), arg_types.as_ref()) {
                 if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
                                         .and_then(|f| {
                                             let ctx = (state.engine, x.name.as_ref(), state.lib).into();
@@ -922,13 +934,13 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
 
         // Eagerly call functions
         Expr::FnCall(x, pos)
-                if x.namespace.is_none() // Non-qualified
+                if !x.is_qualified() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Full // full optimizations
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
         => {
             // First search for script-defined functions (can override built-in)
             #[cfg(not(feature = "no_function"))]
-            let has_script_fn = state.lib.iter().any(|&m| m.get_script_fn(x.name.as_ref(), x.num_args()).is_some());
+            let has_script_fn = state.lib.iter().any(|&m| m.get_script_fn(x.name.as_ref(), x.args_count()).is_some());
             #[cfg(feature = "no_function")]
             let has_script_fn = false;
 

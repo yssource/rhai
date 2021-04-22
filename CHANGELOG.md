@@ -26,6 +26,7 @@ New features
 ------------
 
 * A module called `global` is automatically created to hold global-level constants, which can then be accessed from functions.
+* A new feature `no_position` is added to turn off position tracking during parsing to squeeze out the last drop of performance.
 
 
 Version 0.20.0

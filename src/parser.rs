@@ -1,7 +1,7 @@
 //! Main module defining the lexer and parser.
 
 use crate::ast::{
-    BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHash, Ident, OpAssignment, ReturnType,
+    BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ReturnType,
     ScriptFnDef, Stmt, StmtBlock,
 };
 use crate::dynamic::{AccessMode, Union};
@@ -15,8 +15,8 @@ use crate::token::{
 };
 use crate::utils::{get_hasher, IdentifierBuilder};
 use crate::{
-    calc_fn_hash, Dynamic, Engine, Identifier, LexError, ParseError, ParseErrorType, Position,
-    Scope, Shared, StaticVec, AST,
+    calc_fn_hash, Dynamic, Engine, FnPtr, Identifier, LexError, ParseError, ParseErrorType,
+    Position, Scope, Shared, StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -342,10 +342,10 @@ fn parse_fn_call(
                 calc_fn_hash(empty(), &id, 0)
             };
 
-            let hash = if is_valid_identifier(id.chars()) {
-                FnCallHash::from_script(hash)
+            let hashes = if is_valid_identifier(id.chars()) {
+                FnCallHashes::from_script(hash)
             } else {
-                FnCallHash::from_native(hash)
+                FnCallHashes::from_native(hash)
             };
 
             return Ok(Expr::FnCall(
@@ -353,7 +353,7 @@ fn parse_fn_call(
                     name: state.get_identifier(id),
                     capture,
                     namespace,
-                    hash,
+                    hashes,
                     args,
                     ..Default::default()
                 }),
@@ -387,10 +387,10 @@ fn parse_fn_call(
                     calc_fn_hash(empty(), &id, args.len())
                 };
 
-                let hash = if is_valid_identifier(id.chars()) {
-                    FnCallHash::from_script(hash)
+                let hashes = if is_valid_identifier(id.chars()) {
+                    FnCallHashes::from_script(hash)
                 } else {
-                    FnCallHash::from_native(hash)
+                    FnCallHashes::from_native(hash)
                 };
 
                 return Ok(Expr::FnCall(
@@ -398,7 +398,7 @@ fn parse_fn_call(
                         name: state.get_identifier(id),
                         capture,
                         namespace,
-                        hash,
+                        hashes,
                         args,
                         ..Default::default()
                     }),
@@ -1348,7 +1348,7 @@ fn parse_unary(
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
                             name: state.get_identifier("-"),
-                            hash: FnCallHash::from_native(calc_fn_hash(empty(), "-", 1)),
+                            hashes: FnCallHashes::from_native(calc_fn_hash(empty(), "-", 1)),
                             args,
                             ..Default::default()
                         }),
@@ -1374,7 +1374,7 @@ fn parse_unary(
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
                             name: state.get_identifier("+"),
-                            hash: FnCallHash::from_native(calc_fn_hash(empty(), "+", 1)),
+                            hashes: FnCallHashes::from_native(calc_fn_hash(empty(), "+", 1)),
                             args,
                             ..Default::default()
                         }),
@@ -1393,7 +1393,7 @@ fn parse_unary(
             Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
                     name: state.get_identifier("!"),
-                    hash: FnCallHash::from_native(calc_fn_hash(empty(), "!", 1)),
+                    hashes: FnCallHashes::from_native(calc_fn_hash(empty(), "!", 1)),
                     args,
                     ..Default::default()
                 }),
@@ -1415,20 +1415,20 @@ fn make_assignment_stmt<'a>(
     rhs: Expr,
     op_pos: Position,
 ) -> Result<Stmt, ParseError> {
-    fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Position {
+    fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Option<Position> {
         match expr {
             Expr::Index(x, _) | Expr::Dot(x, _) if parent_is_dot => match x.lhs {
                 Expr::Property(_) => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _))),
-                ref e => e.position(),
+                ref e => Some(e.position()),
             },
             Expr::Index(x, _) | Expr::Dot(x, _) => match x.lhs {
                 Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
                 _ => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _))),
             },
-            Expr::Property(_) if parent_is_dot => Position::NONE,
+            Expr::Property(_) if parent_is_dot => None,
             Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
-            e if parent_is_dot => e.position(),
-            _ => Position::NONE,
+            e if parent_is_dot => Some(e.position()),
+            _ => None,
         }
     }
 
@@ -1464,7 +1464,7 @@ fn make_assignment_stmt<'a>(
         // xxx[???]... = rhs, xxx.prop... = rhs
         Expr::Index(x, _) | Expr::Dot(x, _) => {
             match check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _))) {
-                Position::NONE => match &x.lhs {
+                None => match &x.lhs {
                     // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
                     Expr::Variable(None, _, x) if x.0.is_none() => {
                         Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
@@ -1488,7 +1488,7 @@ fn make_assignment_stmt<'a>(
                         Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(expr.position()))
                     }
                 },
-                pos => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(pos)),
+                Some(pos) => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(pos)),
             }
         }
         // ??? && ??? = rhs, ??? || ??? = rhs
@@ -1595,9 +1595,9 @@ fn make_dot_expr(
             }
             Expr::FnCall(mut func, func_pos) => {
                 // Recalculate hash
-                func.hash = FnCallHash::from_script_and_native(
-                    calc_fn_hash(empty(), &func.name, func.num_args()),
-                    calc_fn_hash(empty(), &func.name, func.num_args() + 1),
+                func.hashes = FnCallHashes::from_script_and_native(
+                    calc_fn_hash(empty(), &func.name, func.args_count()),
+                    calc_fn_hash(empty(), &func.name, func.args_count() + 1),
                 );
 
                 let rhs = Expr::Dot(
@@ -1623,7 +1623,7 @@ fn make_dot_expr(
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
         }
         // lhs.nnn::func(...)
-        (_, Expr::FnCall(x, _)) if x.namespace.is_some() => {
+        (_, Expr::FnCall(x, _)) if x.is_qualified() => {
             unreachable!("method call should not be namespace-qualified")
         }
         // lhs.Fn() or lhs.eval()
@@ -1651,9 +1651,9 @@ fn make_dot_expr(
         // lhs.func(...)
         (lhs, Expr::FnCall(mut func, func_pos)) => {
             // Recalculate hash
-            func.hash = FnCallHash::from_script_and_native(
-                calc_fn_hash(empty(), &func.name, func.num_args()),
-                calc_fn_hash(empty(), &func.name, func.num_args() + 1),
+            func.hashes = FnCallHashes::from_script_and_native(
+                calc_fn_hash(empty(), &func.name, func.args_count()),
+                calc_fn_hash(empty(), &func.name, func.args_count() + 1),
             );
             let rhs = Expr::FnCall(func, func_pos);
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
@@ -1739,7 +1739,7 @@ fn parse_binary_op(
 
         let op_base = FnCallExpr {
             name: state.get_identifier(op.as_ref()),
-            hash: FnCallHash::from_native(hash),
+            hashes: FnCallHashes::from_native(hash),
             capture: false,
             ..Default::default()
         };
@@ -1804,7 +1804,7 @@ fn parse_binary_op(
                 let hash = calc_fn_hash(empty(), OP_CONTAINS, 2);
                 Expr::FnCall(
                     Box::new(FnCallExpr {
-                        hash: FnCallHash::from_script(hash),
+                        hashes: FnCallHashes::from_script(hash),
                         args,
                         name: state.get_identifier(OP_CONTAINS),
                         ..op_base
@@ -1824,10 +1824,10 @@ fn parse_binary_op(
 
                 Expr::FnCall(
                     Box::new(FnCallExpr {
-                        hash: if is_valid_identifier(s.chars()) {
-                            FnCallHash::from_script(hash)
+                        hashes: if is_valid_identifier(s.chars()) {
+                            FnCallHashes::from_script(hash)
                         } else {
-                            FnCallHash::from_native(hash)
+                            FnCallHashes::from_native(hash)
                         },
                         args,
                         ..op_base
@@ -2516,7 +2516,7 @@ fn parse_stmt(
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     let comments = {
-        let mut comments: StaticVec<std::string::String> = Default::default();
+        let mut comments: StaticVec<String> = Default::default();
         let mut comments_pos = Position::NONE;
 
         // Handle doc-comments.
@@ -2771,7 +2771,7 @@ fn parse_fn(
     mut settings: ParseSettings,
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
-    comments: StaticVec<std::string::String>,
+    comments: StaticVec<String>,
 ) -> Result<ScriptFnDef, ParseError> {
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2894,7 +2894,7 @@ fn make_curry_from_externals(
     let expr = Expr::FnCall(
         Box::new(FnCallExpr {
             name: state.get_identifier(crate::engine::KEYWORD_FN_PTR_CURRY),
-            hash: FnCallHash::from_native(calc_fn_hash(
+            hashes: FnCallHashes::from_native(calc_fn_hash(
                 empty(),
                 crate::engine::KEYWORD_FN_PTR_CURRY,
                 num_externals + 1,
@@ -3018,7 +3018,8 @@ fn parse_anon_fn(
         comments: Default::default(),
     };
 
-    let expr = Expr::FnPointer(fn_name.into(), settings.pos);
+    let fn_ptr = FnPtr::new_unchecked(fn_name.into(), Default::default());
+    let expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), settings.pos);
 
     #[cfg(not(feature = "no_closure"))]
     let expr = make_curry_from_externals(state, expr, externals, settings.pos);

@@ -57,7 +57,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 let x = 0;
                 let foo = (exec |x| -> { x += 2 } while x < 42) * 10;
                 foo
@@ -67,7 +67,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
     );
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 let x = 0;
                 exec |x| -> { x += 1 } while x < 42;
                 x
@@ -77,7 +77,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
     );
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 exec |x| -> { x += 1 } while x < 42;
                 x
             "

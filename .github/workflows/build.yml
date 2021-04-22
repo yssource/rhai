@@ -21,6 +21,7 @@ jobs:
           - "--features metadata,serde,internals"
           - "--features unchecked"
           - "--features sync"
+          - "--features no_position"
           - "--features no_optimize"
           - "--features no_float"
           - "--features f32_float,serde,metadata,internals"
@@ -34,8 +35,8 @@ jobs:
           - "--features no_module"
           - "--features no_closure"
           - "--features unicode-xid-ident"
-          - "--features sync,no_function,no_float,no_optimize,no_module,no_closure,metadata,serde,unchecked"
-          - "--features no_function,no_float,no_index,no_object,no_optimize,no_module,no_closure,unchecked"
+          - "--features sync,no_function,no_float,no_position,no_optimize,no_module,no_closure,metadata,serde,unchecked"
+          - "--features no_function,no_float,no_position,no_index,no_object,no_optimize,no_module,no_closure,unchecked"
         toolchain: [stable]
         experimental: [false]
         include:

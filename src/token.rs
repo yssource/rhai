@@ -57,16 +57,28 @@ pub type TokenStream<'a> = Peekable<TokenIterator<'a>>;
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
 pub struct Position {
     /// Line number - 0 = none
+    #[cfg(not(feature = "no_position"))]
     line: u16,
     /// Character position - 0 = BOL
+    #[cfg(not(feature = "no_position"))]
     pos: u16,
 }
 
 impl Position {
     /// A [`Position`] representing no position.
-    pub const NONE: Self = Self { line: 0, pos: 0 };
+    pub const NONE: Self = Self {
+        #[cfg(not(feature = "no_position"))]
+        line: 0,
+        #[cfg(not(feature = "no_position"))]
+        pos: 0,
+    };
     /// A [`Position`] representing the first position.
-    pub const START: Self = Self { line: 1, pos: 0 };
+    pub const START: Self = Self {
+        #[cfg(not(feature = "no_position"))]
+        line: 1,
+        #[cfg(not(feature = "no_position"))]
+        pos: 0,
+    };
 
     /// Create a new [`Position`].
     ///
@@ -77,12 +89,14 @@ impl Position {
     ///
     /// Panics if `line` is zero.
     #[inline(always)]
-    pub fn new(line: u16, position: u16) -> Self {
+    pub fn new(line: u16, _position: u16) -> Self {
         assert!(line != 0, "line cannot be zero");
 
         Self {
+            #[cfg(not(feature = "no_position"))]
             line,
-            pos: position,
+            #[cfg(not(feature = "no_position"))]
+            pos: _position,
         }
     }
     /// Get the line number (1-based), or [`None`] if there is no position.
@@ -91,26 +105,40 @@ impl Position {
         if self.is_none() {
             None
         } else {
-            Some(self.line as usize)
+            #[cfg(not(feature = "no_position"))]
+            return Some(self.line as usize);
+            #[cfg(feature = "no_position")]
+            unreachable!();
         }
     }
     /// Get the character position (1-based), or [`None`] if at beginning of a line.
     #[inline(always)]
     pub fn position(self) -> Option<usize> {
-        if self.is_none() || self.pos == 0 {
+        if self.is_none() {
             None
         } else {
-            Some(self.pos as usize)
+            #[cfg(not(feature = "no_position"))]
+            return if self.pos == 0 {
+                None
+            } else {
+                Some(self.pos as usize)
+            };
+
+            #[cfg(feature = "no_position")]
+            unreachable!();
         }
     }
     /// Advance by one character position.
     #[inline(always)]
     pub(crate) fn advance(&mut self) {
-        assert!(!self.is_none(), "cannot advance Position::none");
+        #[cfg(not(feature = "no_position"))]
+        {
+            assert!(!self.is_none(), "cannot advance Position::none");
 
-        // Advance up to maximum position
-        if self.pos < u16::MAX {
-            self.pos += 1;
+            // Advance up to maximum position
+            if self.pos < u16::MAX {
+                self.pos += 1;
+            }
         }
     }
     /// Go backwards by one character position.
@@ -120,30 +148,42 @@ impl Position {
     /// Panics if already at beginning of a line - cannot rewind to a previous line.
     #[inline(always)]
     pub(crate) fn rewind(&mut self) {
-        assert!(!self.is_none(), "cannot rewind Position::none");
-        assert!(self.pos > 0, "cannot rewind at position 0");
-        self.pos -= 1;
+        #[cfg(not(feature = "no_position"))]
+        {
+            assert!(!self.is_none(), "cannot rewind Position::none");
+            assert!(self.pos > 0, "cannot rewind at position 0");
+            self.pos -= 1;
+        }
     }
     /// Advance to the next line.
     #[inline(always)]
     pub(crate) fn new_line(&mut self) {
-        assert!(!self.is_none(), "cannot advance Position::none");
+        #[cfg(not(feature = "no_position"))]
+        {
+            assert!(!self.is_none(), "cannot advance Position::none");
 
-        // Advance up to maximum position
-        if self.line < u16::MAX {
-            self.line += 1;
-            self.pos = 0;
+            // Advance up to maximum position
+            if self.line < u16::MAX {
+                self.line += 1;
+                self.pos = 0;
+            }
         }
     }
     /// Is this [`Position`] at the beginning of a line?
     #[inline(always)]
     pub fn is_beginning_of_line(self) -> bool {
-        self.pos == 0 && !self.is_none()
+        #[cfg(not(feature = "no_position"))]
+        return self.pos == 0 && !self.is_none();
+        #[cfg(feature = "no_position")]
+        return false;
     }
     /// Is there no [`Position`]?
     #[inline(always)]
     pub fn is_none(self) -> bool {
-        self == Self::NONE
+        #[cfg(not(feature = "no_position"))]
+        return self == Self::NONE;
+        #[cfg(feature = "no_position")]
+        return true;
     }
 }
 
@@ -158,17 +198,27 @@ impl fmt::Display for Position {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_none() {
-            write!(f, "none")
+            write!(f, "none")?;
         } else {
-            write!(f, "line {}, position {}", self.line, self.pos)
+            #[cfg(not(feature = "no_position"))]
+            write!(f, "line {}, position {}", self.line, self.pos)?;
+            #[cfg(feature = "no_position")]
+            unreachable!();
         }
+
+        Ok(())
     }
 }
 
 impl fmt::Debug for Position {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.line, self.pos)
+        #[cfg(not(feature = "no_position"))]
+        write!(f, "{}:{}", self.line, self.pos)?;
+        #[cfg(feature = "no_position")]
+        f.write_str("none")?;
+
+        Ok(())
     }
 }
 
@@ -179,14 +229,17 @@ impl Add for Position {
         if rhs.is_none() {
             self
         } else {
-            Self {
+            #[cfg(not(feature = "no_position"))]
+            return Self {
                 line: self.line + rhs.line - 1,
                 pos: if rhs.is_beginning_of_line() {
                     self.pos
                 } else {
                     self.pos + rhs.pos - 1
                 },
-            }
+            };
+            #[cfg(feature = "no_position")]
+            unreachable!();
         }
     }
 }
@@ -908,8 +961,9 @@ pub fn parse_string_literal(
     let mut escape = String::with_capacity(12);
 
     let start = *pos;
-    let mut skip_whitespace_until = 0;
     let mut interpolated = false;
+    #[cfg(not(feature = "no_position"))]
+    let mut skip_whitespace_until = 0;
 
     state.is_within_text_terminated_by = Some(termination_char);
 
@@ -1044,7 +1098,11 @@ pub fn parse_string_literal(
                 assert_eq!(escape, "\\", "unexpected escape {} at end of line", escape);
                 escape.clear();
                 pos.new_line();
-                skip_whitespace_until = start.position().unwrap() + 1;
+
+                #[cfg(not(feature = "no_position"))]
+                {
+                    skip_whitespace_until = start.position().unwrap() + 1;
+                }
             }
 
             // Unterminated string
@@ -1062,13 +1120,18 @@ pub fn parse_string_literal(
             }
 
             // Whitespace to skip
+            #[cfg(not(feature = "no_position"))]
             _ if next_char.is_whitespace() && pos.position().unwrap() < skip_whitespace_until => {}
 
             // All other characters
             _ => {
                 escape.clear();
                 result.push(next_char);
-                skip_whitespace_until = 0;
+
+                #[cfg(not(feature = "no_position"))]
+                {
+                    skip_whitespace_until = 0;
+                }
             }
         }
     }
@@ -1241,7 +1304,7 @@ fn get_next_token_inner(
         );
     }
 
-    let mut negated_pos = Position::NONE;
+    let mut negated: Option<Position> = None;
 
     while let Some(c) = stream.get_next() {
         pos.advance();
@@ -1350,7 +1413,7 @@ fn get_next_token_inner(
                     }
                 }
 
-                let num_pos = if !negated_pos.is_none() {
+                let num_pos = if let Some(negated_pos) = negated {
                     result.insert(0, '-');
                     negated_pos
                 } else {
@@ -1511,7 +1574,7 @@ fn get_next_token_inner(
             ('+', _) if !state.non_unary => return Some((Token::UnaryPlus, start_pos)),
             ('+', _) => return Some((Token::Plus, start_pos)),
 
-            ('-', '0'..='9') if !state.non_unary => negated_pos = start_pos,
+            ('-', '0'..='9') if !state.non_unary => negated = Some(start_pos),
             ('-', '0'..='9') => return Some((Token::Minus, start_pos)),
             ('-', '=') => {
                 eat_next(stream, pos);

@@ -33,7 +33,7 @@ fn test_comments_doc() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
     let ast = engine.compile(
-        r"
+        "
             /// Hello world
 
 
@@ -48,7 +48,7 @@ fn test_comments_doc() -> Result<(), Box<EvalAltResult>> {
 
     assert!(engine
         .compile(
-            r"
+            "
                 /// Hello world
                 let x = 42;
             "
@@ -56,7 +56,7 @@ fn test_comments_doc() -> Result<(), Box<EvalAltResult>> {
         .is_err());
 
     engine.compile(
-        r"
+        "
             ///////////////
             let x = 42;
 
@@ -66,7 +66,7 @@ fn test_comments_doc() -> Result<(), Box<EvalAltResult>> {
     )?;
 
     let ast = engine.compile(
-        r"
+        "
             /** Hello world
             ** how are you?
             **/
@@ -82,7 +82,7 @@ fn test_comments_doc() -> Result<(), Box<EvalAltResult>> {
 
     assert!(engine
         .compile(
-            r"
+            "
                 /** Hello world */
                 let x = 42;
             "
@@ -92,7 +92,7 @@ fn test_comments_doc() -> Result<(), Box<EvalAltResult>> {
     engine.enable_doc_comments(false);
 
     engine.compile(
-        r"
+        "
             /// Hello world!
             let x = 42;
 

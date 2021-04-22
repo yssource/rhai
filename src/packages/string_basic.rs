@@ -103,7 +103,7 @@ mod print_debug_functions {
         )]
         pub fn format_array(ctx: NativeCallContext, array: &mut Array) -> ImmutableString {
             let len = array.len();
-            let mut result = std::string::String::with_capacity(len * 5 + 2);
+            let mut result = String::with_capacity(len * 5 + 2);
             result.push_str("[");
 
             array.iter_mut().enumerate().for_each(|(i, x)| {
@@ -130,7 +130,7 @@ mod print_debug_functions {
         )]
         pub fn format_map(ctx: NativeCallContext, map: &mut Map) -> ImmutableString {
             let len = map.len();
-            let mut result = std::string::String::with_capacity(len * 5 + 3);
+            let mut result = String::with_capacity(len * 5 + 3);
             result.push_str("#{");
 
             map.iter_mut().enumerate().for_each(|(i, (k, v))| {

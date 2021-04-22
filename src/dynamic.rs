@@ -407,6 +407,13 @@ impl Hash for Dynamic {
                     value.hash(state);
                 })
             }
+            Union::FnPtr(f, _) if f.is_curried() => {
+                unimplemented!(
+                    "{} with curried arguments cannot be hashed",
+                    self.type_name()
+                )
+            }
+            Union::FnPtr(f, _) => f.fn_name().hash(state),
 
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(cell, _) => {
@@ -1717,13 +1724,21 @@ impl From<&ImmutableString> for Dynamic {
 impl From<&crate::Identifier> for Dynamic {
     #[inline(always)]
     fn from(value: &crate::Identifier) -> Self {
-        std::string::ToString::to_string(value).into()
+        value.to_string().into()
     }
 }
 #[cfg(not(feature = "no_index"))]
-impl<T: Variant + Clone> From<std::vec::Vec<T>> for Dynamic {
+impl Dynamic {
+    /// Create a [`Dynamc`] from an [`Array`].
     #[inline(always)]
-    fn from(value: std::vec::Vec<T>) -> Self {
+    pub(crate) fn from_array(array: Array) -> Self {
+        Self(Union::Array(Box::new(array), AccessMode::ReadWrite))
+    }
+}
+#[cfg(not(feature = "no_index"))]
+impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
+    #[inline(always)]
+    fn from(value: Vec<T>) -> Self {
         Self(Union::Array(
             Box::new(value.into_iter().map(Dynamic::from).collect()),
             AccessMode::ReadWrite,
@@ -1748,6 +1763,14 @@ impl<T: Variant + Clone> std::iter::FromIterator<T> for Dynamic {
             Box::new(iter.into_iter().map(Dynamic::from).collect()),
             AccessMode::ReadWrite,
         ))
+    }
+}
+#[cfg(not(feature = "no_object"))]
+impl Dynamic {
+    /// Create a [`Dynamc`] from a [`Map`].
+    #[inline(always)]
+    pub(crate) fn from_map(map: Map) -> Self {
+        Self(Union::Map(Box::new(map), AccessMode::ReadWrite))
     }
 }
 #[cfg(not(feature = "no_object"))]

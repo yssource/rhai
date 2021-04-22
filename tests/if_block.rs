@@ -13,7 +13,7 @@ fn test_if() -> Result<(), Box<EvalAltResult>> {
     );
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 if false { 55 }
                 else if false { 33 }
                 else if false { 66 }
@@ -34,7 +34,7 @@ fn test_if_expr() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 let x = 42;
                 let y = 1 + if x > 40 { 100 } else { 0 } / x;
                 y

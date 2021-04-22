@@ -33,7 +33,7 @@ fn test_switch() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval_with_scope::<INT>(
             &mut scope,
-            r"
+            "
                 let y = [1, 2, 3];
 
                 switch y {
@@ -50,7 +50,7 @@ fn test_switch() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval_with_scope::<INT>(
             &mut scope,
-            r"
+            "
                 let y = #{a:1, b:true, c:'x'};
 
                 switch y {
@@ -98,7 +98,7 @@ fn test_switch_condition() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval_with_scope::<INT>(
             &mut scope,
-            r"
+            "
                 switch x / 2 {
                     21 if x > 40 => 1,
                     0 if x < 100 => 2,
@@ -113,7 +113,7 @@ fn test_switch_condition() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval_with_scope::<INT>(
             &mut scope,
-            r"
+            "
                 switch x / 2 {
                     21 if x < 40 => 1,
                     0 if x < 100 => 2,
@@ -128,7 +128,7 @@ fn test_switch_condition() -> Result<(), Box<EvalAltResult>> {
     assert!(matches!(
         *engine
             .compile(
-                r"
+                "
                     switch x {
                         21 if x < 40 => 1,
                         21 if x == 10 => 10,

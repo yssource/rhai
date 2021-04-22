@@ -7,7 +7,7 @@ fn test_chars() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<char>("'y'")?, 'y');
     assert_eq!(engine.eval::<char>(r"'\''")?, '\'');
     assert_eq!(engine.eval::<char>(r#"'"'"#)?, '"');
-    assert_eq!(engine.eval::<char>("'\\u2764'")?, '❤');
+    assert_eq!(engine.eval::<char>(r"'\u2764'")?, '❤');
 
     #[cfg(not(feature = "no_index"))]
     {

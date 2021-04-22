@@ -220,7 +220,7 @@ pub use token::{
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
 pub use ast::{
-    ASTNode, BinaryExpr, CustomExpr, Expr, FloatWrapper, FnCallExpr, FnCallHash, Ident,
+    ASTNode, BinaryExpr, CustomExpr, Expr, FloatWrapper, FnCallExpr, FnCallHashes, Ident,
     OpAssignment, ReturnType, ScriptFnDef, Stmt, StmtBlock,
 };
 

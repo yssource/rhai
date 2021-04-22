@@ -1,6 +1,6 @@
 //! Implement function-calling mechanism for [`Engine`].
 
-use crate::ast::FnCallHash;
+use crate::ast::FnCallHashes;
 use crate::engine::{
     FnResolutionCacheEntry, Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
     KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
@@ -463,7 +463,7 @@ impl Engine {
     ) -> RhaiResult {
         #[inline(always)]
         fn make_error(
-            name: std::string::String,
+            name: String,
             fn_def: &crate::ast::ScriptFnDef,
             state: &State,
             err: Box<EvalAltResult>,
@@ -623,7 +623,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        hash: FnCallHash,
+        hash: FnCallHashes,
         args: &mut FnCallArgs,
         is_ref: bool,
         _is_method: bool,
@@ -893,7 +893,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        mut hash: FnCallHash,
+        mut hash: FnCallHashes,
         target: &mut crate::engine::Target,
         (call_args, call_arg_positions): &mut (StaticVec<Dynamic>, StaticVec<Position>),
         pos: Position,
@@ -913,7 +913,7 @@ impl Engine {
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hashes
-                let new_hash = FnCallHash::from_script(calc_fn_hash(empty(), fn_name, args_len));
+                let new_hash = FnCallHashes::from_script(calc_fn_hash(empty(), fn_name, args_len));
                 // Arguments are passed as-is, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
                 let mut args = curry
@@ -948,7 +948,7 @@ impl Engine {
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hash
-                let new_hash = FnCallHash::from_script_and_native(
+                let new_hash = FnCallHashes::from_script_and_native(
                     calc_fn_hash(empty(), fn_name, args_len),
                     calc_fn_hash(empty(), fn_name, args_len + 1),
                 );
@@ -1022,7 +1022,7 @@ impl Engine {
                                     call_arg_positions.insert(i, Position::NONE);
                                 });
                             // Recalculate the hash based on the new function name and new arguments
-                            hash = FnCallHash::from_script_and_native(
+                            hash = FnCallHashes::from_script_and_native(
                                 calc_fn_hash(empty(), fn_name, call_args.len()),
                                 calc_fn_hash(empty(), fn_name, call_args.len() + 1),
                             );
@@ -1060,7 +1060,7 @@ impl Engine {
         fn_name: &str,
         args_expr: &[Expr],
         constant_args: &[(Dynamic, Position)],
-        mut hash: FnCallHash,
+        mut hashes: FnCallHashes,
         pos: Position,
         capture_scope: bool,
         level: usize,
@@ -1108,10 +1108,10 @@ impl Engine {
 
                 // Recalculate hash
                 let args_len = total_args + curry.len();
-                hash = if !hash.is_native_only() {
-                    FnCallHash::from_script(calc_fn_hash(empty(), name, args_len))
+                hashes = if !hashes.is_native_only() {
+                    FnCallHashes::from_script(calc_fn_hash(empty(), name, args_len))
                 } else {
-                    FnCallHash::from_native(calc_fn_hash(empty(), name, args_len))
+                    FnCallHashes::from_native(calc_fn_hash(empty(), name, args_len))
                 };
             }
             // Handle Fn()
@@ -1345,7 +1345,7 @@ impl Engine {
         }
 
         self.exec_fn_call(
-            mods, state, lib, name, hash, &mut args, is_ref, false, pos, capture, level,
+            mods, state, lib, name, hashes, &mut args, is_ref, false, pos, capture, level,
         )
         .map(|(v, _)| v)
     }

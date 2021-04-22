@@ -5,7 +5,7 @@ use rhai::{Engine, EvalAltResult, Module, INT};
 fn test_for() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
-    let script = r"
+    let script = "
         let sum1 = 0;
         let sum2 = 0;
         let inputs = [1, 2, 3, 4, 5];
@@ -29,7 +29,7 @@ fn test_for() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 let sum = 0;
                 for x in range(1, 10, 2) { sum += x; }
                 sum
@@ -40,7 +40,7 @@ fn test_for() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 let sum = 0;
                 for x in range(10, 1, 2) { sum += x; }
                 sum
@@ -51,7 +51,7 @@ fn test_for() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 let sum = 0;
                 for x in range(1, 10, -2) { sum += x; }
                 sum
@@ -62,7 +62,7 @@ fn test_for() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r"
+            "
                 let sum = 0;
                 for x in range(10, 1, -2) { sum += x; }
                 sum
@@ -80,7 +80,7 @@ fn test_for_overflow() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     #[cfg(not(feature = "only_i32"))]
-    let script = r"
+    let script = "
         let sum = 0;
 
         for x in range(9223372036854775807, 0, 9223372036854775807) {
@@ -90,7 +90,7 @@ fn test_for_overflow() -> Result<(), Box<EvalAltResult>> {
         sum
     ";
     #[cfg(feature = "only_i32")]
-    let script = r"
+    let script = "
         let sum = 0;
 
         for x in range(2147483647 , 0, 2147483647 ) {
