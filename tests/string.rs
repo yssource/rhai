@@ -14,7 +14,11 @@ fn test_string() -> Result<(), Box<EvalAltResult>> {
     );
     assert_eq!(
         engine.eval::<String>("   \"Test string: \\u2764\\\n     hello, world!\"")?,
-        "Test string: ❤ hello, world!"
+        if cfg!(not(feature = "no_position")) {
+            "Test string: ❤ hello, world!"
+        } else {
+            "Test string: ❤     hello, world!"
+        }
     );
     assert_eq!(
         engine.eval::<String>("     `Test string: \\u2764\nhello,\\nworld!`")?,

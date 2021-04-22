@@ -780,7 +780,12 @@ pub struct Ident {
 impl fmt::Debug for Ident {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?} @ {:?}", self.name, self.pos)
+        #[cfg(not(feature = "no_position"))]
+        write!(f, "{:?} @ {:?}", self.name, self.pos)?;
+        #[cfg(feature = "no_position")]
+        write!(f, "{:?}", self.name)?;
+
+        Ok(())
     }
 }
 
@@ -1687,31 +1692,59 @@ impl Default for Expr {
 impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            #[cfg(not(feature = "no_position"))]
             Self::DynamicConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
+            #[cfg(not(feature = "no_position"))]
             Self::BoolConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
+            #[cfg(not(feature = "no_position"))]
             Self::IntegerConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
             #[cfg(not(feature = "no_float"))]
+            #[cfg(not(feature = "no_position"))]
             Self::FloatConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
+            #[cfg(not(feature = "no_position"))]
             Self::CharConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
+            #[cfg(not(feature = "no_position"))]
             Self::StringConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
+            #[cfg(not(feature = "no_position"))]
             Self::Unit(pos) => write!(f, "() @ {:?}", pos),
+
+            #[cfg(feature = "no_position")]
+            Self::DynamicConstant(value, _) => write!(f, "{:?}", value),
+            #[cfg(feature = "no_position")]
+            Self::BoolConstant(value, _) => write!(f, "{:?}", value),
+            #[cfg(feature = "no_position")]
+            Self::IntegerConstant(value, _) => write!(f, "{:?}", value),
+            #[cfg(not(feature = "no_float"))]
+            #[cfg(feature = "no_position")]
+            Self::FloatConstant(value, _) => write!(f, "{:?}", value),
+            #[cfg(feature = "no_position")]
+            Self::CharConstant(value, _) => write!(f, "{:?}", value),
+            #[cfg(feature = "no_position")]
+            Self::StringConstant(value, _) => write!(f, "{:?}", value),
+            #[cfg(feature = "no_position")]
+            Self::Unit(_) => f.write_str("()"),
+
             Self::InterpolatedString(x) => {
                 f.write_str("InterpolatedString")?;
                 f.debug_list().entries(x.iter()).finish()
             }
-            Self::Array(x, pos) => {
+            Self::Array(x, _pos) => {
                 f.write_str("Array")?;
                 f.debug_list().entries(x.iter()).finish()?;
-                write!(f, " @ {:?}", pos)
+                #[cfg(not(feature = "no_position"))]
+                write!(f, " @ {:?}", _pos)?;
+                Ok(())
             }
-            Self::Map(x, pos) => {
+            Self::Map(x, _pos) => {
                 f.write_str("Map")?;
                 f.debug_map()
                     .entries(x.0.iter().map(|(k, v)| (k, v)))
                     .finish()?;
-                write!(f, " @ {:?}", pos)
+                #[cfg(not(feature = "no_position"))]
+                write!(f, " @ {:?}", _pos)?;
+                Ok(())
             }
-            Self::Variable(i, pos, x) => {
+            Self::Variable(i, _pos, x) => {
                 f.write_str("Variable(")?;
                 match x.1 {
                     Some((_, ref namespace)) => write!(f, "{}", namespace)?,
@@ -1722,15 +1755,23 @@ impl fmt::Debug for Expr {
                     Some(n) => write!(f, ", {}", n)?,
                     _ => (),
                 }
-                write!(f, ") @ {:?}", pos)
+                f.write_str(")")?;
+                #[cfg(not(feature = "no_position"))]
+                write!(f, " @ {:?}", _pos)?;
+                Ok(())
             }
+            #[cfg(not(feature = "no_position"))]
             Self::Property(x) => write!(f, "Property({:?} @ {:?})", x.2.name, x.2.pos),
+            #[cfg(feature = "no_position")]
+            Self::Property(x) => write!(f, "Property({:?})", x.2.name),
             Self::Stmt(x) => {
                 f.write_str("Stmt")?;
                 f.debug_list().entries(x.0.iter()).finish()?;
-                write!(f, " @ {:?}", x.1)
+                #[cfg(not(feature = "no_position"))]
+                write!(f, " @ {:?}", x.1)?;
+                Ok(())
             }
-            Self::FnCall(x, pos) => {
+            Self::FnCall(x, _pos) => {
                 let mut ff = f.debug_struct("FnCall");
                 if let Some(ref ns) = x.namespace {
                     ff.field("namespace", ns);
@@ -1745,9 +1786,11 @@ impl fmt::Debug for Expr {
                     ff.field("capture", &x.capture);
                 }
                 ff.finish()?;
-                write!(f, " @ {:?}", pos)
+                #[cfg(not(feature = "no_position"))]
+                write!(f, " @ {:?}", _pos)?;
+                Ok(())
             }
-            Self::Dot(x, pos) | Self::Index(x, pos) | Self::And(x, pos) | Self::Or(x, pos) => {
+            Self::Dot(x, _pos) | Self::Index(x, _pos) | Self::And(x, _pos) | Self::Or(x, _pos) => {
                 let op_name = match self {
                     Self::Dot(_, _) => "Dot",
                     Self::Index(_, _) => "Index",
@@ -1760,11 +1803,15 @@ impl fmt::Debug for Expr {
                     .field("lhs", &x.lhs)
                     .field("rhs", &x.rhs)
                     .finish()?;
-                write!(f, " @ {:?}", pos)
+                #[cfg(not(feature = "no_position"))]
+                write!(f, " @ {:?}", _pos)?;
+                Ok(())
             }
-            Self::Custom(x, pos) => {
+            Self::Custom(x, _pos) => {
                 f.debug_tuple("Custom").field(x).finish()?;
-                write!(f, " @ {:?}", pos)
+                #[cfg(not(feature = "no_position"))]
+                write!(f, " @ {:?}", _pos)?;
+                Ok(())
             }
         }
     }
@@ -2058,6 +2105,7 @@ mod tests {
 
         assert_eq!(size_of::<Dynamic>(), 16);
         assert_eq!(size_of::<Option<Dynamic>>(), 16);
+        #[cfg(not(feature = "no_position"))]
         assert_eq!(size_of::<Position>(), 4);
         assert_eq!(size_of::<ast::Expr>(), 16);
         assert_eq!(size_of::<Option<ast::Expr>>(), 16);
@@ -2066,7 +2114,10 @@ mod tests {
         assert_eq!(size_of::<FnPtr>(), 96);
         assert_eq!(size_of::<Scope>(), 288);
         assert_eq!(size_of::<LexError>(), 56);
-        assert_eq!(size_of::<ParseError>(), 16);
+        assert_eq!(
+            size_of::<ParseError>(),
+            if cfg!(feature = "no_position") { 8 } else { 16 }
+        );
         assert_eq!(size_of::<EvalAltResult>(), 72);
     }
 }

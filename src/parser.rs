@@ -1415,20 +1415,20 @@ fn make_assignment_stmt<'a>(
     rhs: Expr,
     op_pos: Position,
 ) -> Result<Stmt, ParseError> {
-    fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Position {
+    fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Option<Position> {
         match expr {
             Expr::Index(x, _) | Expr::Dot(x, _) if parent_is_dot => match x.lhs {
                 Expr::Property(_) => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _))),
-                ref e => e.position(),
+                ref e => Some(e.position()),
             },
             Expr::Index(x, _) | Expr::Dot(x, _) => match x.lhs {
                 Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
                 _ => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _))),
             },
-            Expr::Property(_) if parent_is_dot => Position::NONE,
+            Expr::Property(_) if parent_is_dot => None,
             Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
-            e if parent_is_dot => e.position(),
-            _ => Position::NONE,
+            e if parent_is_dot => Some(e.position()),
+            _ => None,
         }
     }
 
@@ -1464,7 +1464,7 @@ fn make_assignment_stmt<'a>(
         // xxx[???]... = rhs, xxx.prop... = rhs
         Expr::Index(x, _) | Expr::Dot(x, _) => {
             match check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _))) {
-                Position::NONE => match &x.lhs {
+                None => match &x.lhs {
                     // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
                     Expr::Variable(None, _, x) if x.0.is_none() => {
                         Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
@@ -1488,7 +1488,7 @@ fn make_assignment_stmt<'a>(
                         Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(expr.position()))
                     }
                 },
-                pos => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(pos)),
+                Some(pos) => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(pos)),
             }
         }
         // ??? && ??? = rhs, ??? || ??? = rhs

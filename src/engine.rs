@@ -839,6 +839,8 @@ fn default_debug(_s: &str, _source: Option<&str>, _pos: Position) {
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     if let Some(source) = _source {
         println!("{} @ {:?} | {}", source, _pos, _s);
+    } else if _pos.is_none() {
+        println!("{}", _s);
     } else {
         println!("{:?} | {}", _pos, _s);
     }

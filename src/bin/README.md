@@ -1,7 +1,7 @@
 Rhai Tools
 ==========
 
-Tools written in Rhai.
+Tools for running Rhai scripts.
 
 
 How to Run
