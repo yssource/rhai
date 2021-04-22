@@ -2166,7 +2166,10 @@ impl Engine {
     /// ast.set_source("world");
     /// engine.consume_ast(&ast)?;
     ///
+    /// #[cfg(not(feature = "no_position"))]
     /// assert_eq!(*result.read().unwrap(), r#"world @ 1:18 > "hello""#);
+    /// #[cfg(feature = "no_position")]
+    /// assert_eq!(*result.read().unwrap(), r#"world @ none > "hello""#);
     /// # Ok(())
     /// # }
     /// ```
