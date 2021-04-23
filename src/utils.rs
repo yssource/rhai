@@ -395,7 +395,13 @@ impl Add<String> for &ImmutableString {
 impl AddAssign<String> for ImmutableString {
     #[inline(always)]
     fn add_assign(&mut self, rhs: String) {
-        self.make_mut().push_str(&rhs);
+        if !rhs.is_empty() {
+            if self.is_empty() {
+                self.0 = Into::<SmartString>::into(rhs).into();
+            } else {
+                self.make_mut().push_str(&rhs);
+            }
+        }
     }
 }
 
