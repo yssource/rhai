@@ -1,10 +1,11 @@
 //! Module implementing the [`AST`] optimizer.
 
-use crate::ast::{Expr, Stmt};
+use crate::ast::{Expr, OpAssignment, Stmt};
 use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
 use crate::parser::map_dynamic_to_expr;
+use crate::token::Token;
 use crate::utils::get_hasher;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, ImmutableString,
@@ -381,6 +382,33 @@ fn optimize_stmt_block(
 /// Optimize a [statement][Stmt].
 fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
     match stmt {
+        // var = var op expr => var op= expr
+        Stmt::Assignment(x, _)
+            if x.1.is_none()
+                && x.0.is_variable_access(true)
+                && matches!(&x.2, Expr::FnCall(x2, _)
+                        if Token::lookup_from_syntax(&x2.name).and_then(|t| t.make_op_assignment()).is_some()
+                        && x2.args_count() == 2 && x2.args.len() >= 1
+                        && x2.args[0].get_variable_name(true) == x.0.get_variable_name(true)
+                ) =>
+        {
+            match &mut x.2 {
+                Expr::FnCall(x2, _) => {
+                    state.set_dirty();
+                    let op = Token::lookup_from_syntax(&x2.name).unwrap();
+                    let op_assignment = op.make_op_assignment().unwrap();
+                    x.1 = Some(OpAssignment::new(op_assignment.keyword_syntax()));
+                    x.2 = if x2.args.len() > 1 {
+                        mem::take(&mut x2.args[1])
+                    } else {
+                        let (value, pos) = mem::take(&mut x2.constant_args[0]);
+                        Expr::DynamicConstant(Box::new(value), pos)
+                    };
+                }
+                _ => unreachable!(),
+            }
+        }
+
         // expr op= expr
         Stmt::Assignment(x, _) => match x.0 {
             Expr::Variable(_, _, _) => optimize_expr(&mut x.2, state),

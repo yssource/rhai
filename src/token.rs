@@ -578,6 +578,42 @@ impl Token {
         }
     }
 
+    /// Get the corresponding operator of the token if it is an op-assignment operator.
+    pub fn map_op_assignment(&self) -> Option<Self> {
+        Some(match self {
+            Self::PlusAssign => Self::Plus,
+            Self::MinusAssign => Self::Minus,
+            Self::MultiplyAssign => Self::Multiply,
+            Self::DivideAssign => Self::Divide,
+            Self::LeftShiftAssign => Self::LeftShift,
+            Self::RightShiftAssign => Self::RightShift,
+            Self::ModuloAssign => Self::Modulo,
+            Self::PowerOfAssign => Self::PowerOf,
+            Self::AndAssign => Self::Ampersand,
+            Self::OrAssign => Self::Pipe,
+            Self::XOrAssign => Self::XOr,
+            _ => return None,
+        })
+    }
+
+    /// Get the corresponding op-assignment operator of the token.
+    pub fn make_op_assignment(&self) -> Option<Self> {
+        Some(match self {
+            Self::Plus => Self::PlusAssign,
+            Self::Minus => Self::MinusAssign,
+            Self::Multiply => Self::MultiplyAssign,
+            Self::Divide => Self::DivideAssign,
+            Self::LeftShift => Self::LeftShiftAssign,
+            Self::RightShift => Self::RightShiftAssign,
+            Self::Modulo => Self::ModuloAssign,
+            Self::PowerOf => Self::PowerOfAssign,
+            Self::Ampersand => Self::AndAssign,
+            Self::Pipe => Self::OrAssign,
+            Self::XOr => Self::XOrAssign,
+            _ => return None,
+        })
+    }
+
     /// Reverse lookup a token from a piece of syntax.
     pub fn lookup_from_syntax(syntax: &str) -> Option<Self> {
         use Token::*;

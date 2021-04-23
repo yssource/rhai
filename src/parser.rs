@@ -1518,19 +1518,7 @@ fn parse_op_assignment_stmt(
 
     let op = match token {
         Token::Equals => "",
-
-        Token::PlusAssign
-        | Token::MinusAssign
-        | Token::MultiplyAssign
-        | Token::DivideAssign
-        | Token::LeftShiftAssign
-        | Token::RightShiftAssign
-        | Token::ModuloAssign
-        | Token::PowerOfAssign
-        | Token::AndAssign
-        | Token::OrAssign
-        | Token::XOrAssign => token.keyword_syntax(),
-
+        _ if token.map_op_assignment().is_some() => token.keyword_syntax(),
         _ => return Ok(Stmt::Expr(lhs)),
     };
 
