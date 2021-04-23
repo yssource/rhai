@@ -780,12 +780,8 @@ pub struct Ident {
 impl fmt::Debug for Ident {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        #[cfg(not(feature = "no_position"))]
-        write!(f, "{:?} @ {:?}", self.name, self.pos)?;
-        #[cfg(feature = "no_position")]
         write!(f, "{:?}", self.name)?;
-
-        Ok(())
+        self.pos.debug_print(f)
     }
 }
 
@@ -879,10 +875,7 @@ impl fmt::Debug for StmtBlock {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)?;
-        if !self.1.is_none() {
-            write!(f, " @ {:?}", self.1)?;
-        }
-        Ok(())
+        self.1.debug_print(f)
     }
 }
 
@@ -1691,60 +1684,33 @@ impl Default for Expr {
 
 impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            #[cfg(not(feature = "no_position"))]
-            Self::DynamicConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
-            #[cfg(not(feature = "no_position"))]
-            Self::BoolConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
-            #[cfg(not(feature = "no_position"))]
-            Self::IntegerConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
-            #[cfg(not(feature = "no_float"))]
-            #[cfg(not(feature = "no_position"))]
-            Self::FloatConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
-            #[cfg(not(feature = "no_position"))]
-            Self::CharConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
-            #[cfg(not(feature = "no_position"))]
-            Self::StringConstant(value, pos) => write!(f, "{:?} @ {:?}", value, pos),
-            #[cfg(not(feature = "no_position"))]
-            Self::Unit(pos) => write!(f, "() @ {:?}", pos),
+        let mut display_pos = self.position();
 
-            #[cfg(feature = "no_position")]
+        match self {
             Self::DynamicConstant(value, _) => write!(f, "{:?}", value),
-            #[cfg(feature = "no_position")]
             Self::BoolConstant(value, _) => write!(f, "{:?}", value),
-            #[cfg(feature = "no_position")]
             Self::IntegerConstant(value, _) => write!(f, "{:?}", value),
             #[cfg(not(feature = "no_float"))]
-            #[cfg(feature = "no_position")]
             Self::FloatConstant(value, _) => write!(f, "{:?}", value),
-            #[cfg(feature = "no_position")]
             Self::CharConstant(value, _) => write!(f, "{:?}", value),
-            #[cfg(feature = "no_position")]
             Self::StringConstant(value, _) => write!(f, "{:?}", value),
-            #[cfg(feature = "no_position")]
             Self::Unit(_) => f.write_str("()"),
 
             Self::InterpolatedString(x) => {
                 f.write_str("InterpolatedString")?;
+                return f.debug_list().entries(x.iter()).finish();
+            }
+            Self::Array(x, _) => {
+                f.write_str("Array")?;
                 f.debug_list().entries(x.iter()).finish()
             }
-            Self::Array(x, _pos) => {
-                f.write_str("Array")?;
-                f.debug_list().entries(x.iter()).finish()?;
-                #[cfg(not(feature = "no_position"))]
-                write!(f, " @ {:?}", _pos)?;
-                Ok(())
-            }
-            Self::Map(x, _pos) => {
+            Self::Map(x, _) => {
                 f.write_str("Map")?;
                 f.debug_map()
                     .entries(x.0.iter().map(|(k, v)| (k, v)))
-                    .finish()?;
-                #[cfg(not(feature = "no_position"))]
-                write!(f, " @ {:?}", _pos)?;
-                Ok(())
+                    .finish()
             }
-            Self::Variable(i, _pos, x) => {
+            Self::Variable(i, _, x) => {
                 f.write_str("Variable(")?;
                 match x.1 {
                     Some((_, ref namespace)) => write!(f, "{}", namespace)?,
@@ -1755,23 +1721,14 @@ impl fmt::Debug for Expr {
                     Some(n) => write!(f, ", {}", n)?,
                     _ => (),
                 }
-                f.write_str(")")?;
-                #[cfg(not(feature = "no_position"))]
-                write!(f, " @ {:?}", _pos)?;
-                Ok(())
+                f.write_str(")")
             }
-            #[cfg(not(feature = "no_position"))]
-            Self::Property(x) => write!(f, "Property({:?} @ {:?})", x.2.name, x.2.pos),
-            #[cfg(feature = "no_position")]
-            Self::Property(x) => write!(f, "Property({:?})", x.2.name),
+            Self::Property(x) => write!(f, "Property({})", x.2.name),
             Self::Stmt(x) => {
                 f.write_str("Stmt")?;
-                f.debug_list().entries(x.0.iter()).finish()?;
-                #[cfg(not(feature = "no_position"))]
-                write!(f, " @ {:?}", x.1)?;
-                Ok(())
+                f.debug_list().entries(x.0.iter()).finish()
             }
-            Self::FnCall(x, _pos) => {
+            Self::FnCall(x, _) => {
                 let mut ff = f.debug_struct("FnCall");
                 if let Some(ref ns) = x.namespace {
                     ff.field("namespace", ns);
@@ -1785,12 +1742,9 @@ impl fmt::Debug for Expr {
                 if x.capture {
                     ff.field("capture", &x.capture);
                 }
-                ff.finish()?;
-                #[cfg(not(feature = "no_position"))]
-                write!(f, " @ {:?}", _pos)?;
-                Ok(())
+                ff.finish()
             }
-            Self::Dot(x, _pos) | Self::Index(x, _pos) | Self::And(x, _pos) | Self::Or(x, _pos) => {
+            Self::Dot(x, pos) | Self::Index(x, pos) | Self::And(x, pos) | Self::Or(x, pos) => {
                 let op_name = match self {
                     Self::Dot(_, _) => "Dot",
                     Self::Index(_, _) => "Index",
@@ -1799,21 +1753,17 @@ impl fmt::Debug for Expr {
                     _ => unreachable!(),
                 };
 
+                display_pos = *pos;
+
                 f.debug_struct(op_name)
                     .field("lhs", &x.lhs)
                     .field("rhs", &x.rhs)
-                    .finish()?;
-                #[cfg(not(feature = "no_position"))]
-                write!(f, " @ {:?}", _pos)?;
-                Ok(())
+                    .finish()
             }
-            Self::Custom(x, _pos) => {
-                f.debug_tuple("Custom").field(x).finish()?;
-                #[cfg(not(feature = "no_position"))]
-                write!(f, " @ {:?}", _pos)?;
-                Ok(())
-            }
-        }
+            Self::Custom(x, _) => f.debug_tuple("Custom").field(x).finish(),
+        }?;
+
+        display_pos.debug_print(f)
     }
 }
 
@@ -1875,26 +1825,26 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, pos) => *pos,
 
-            Self::DynamicConstant(_, pos) => *pos,
-            Self::BoolConstant(_, pos) => *pos,
-            Self::IntegerConstant(_, pos) => *pos,
-            Self::CharConstant(_, pos) => *pos,
-            Self::StringConstant(_, pos) => *pos,
+            Self::DynamicConstant(_, pos)
+            | Self::BoolConstant(_, pos)
+            | Self::IntegerConstant(_, pos)
+            | Self::CharConstant(_, pos)
+            | Self::Unit(pos)
+            | Self::StringConstant(_, pos)
+            | Self::Array(_, pos)
+            | Self::Map(_, pos)
+            | Self::Variable(_, pos, _)
+            | Self::FnCall(_, pos)
+            | Self::Custom(_, pos) => *pos,
+
             Self::InterpolatedString(x) => x.first().unwrap().position(),
-            Self::Array(_, pos) => *pos,
-            Self::Map(_, pos) => *pos,
+
             Self::Property(x) => (x.2).pos,
             Self::Stmt(x) => x.1,
-            Self::Variable(_, pos, _) => *pos,
-            Self::FnCall(_, pos) => *pos,
 
-            Self::And(x, _) | Self::Or(x, _) => x.lhs.position(),
-
-            Self::Unit(pos) => *pos,
-
-            Self::Dot(x, _) | Self::Index(x, _) => x.lhs.position(),
-
-            Self::Custom(_, pos) => *pos,
+            Self::And(x, _) | Self::Or(x, _) | Self::Dot(x, _) | Self::Index(x, _) => {
+                x.lhs.position()
+            }
         }
     }
     /// Override the [position][Position] of the expression.
@@ -1904,24 +1854,28 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, pos) => *pos = new_pos,
 
-            Self::DynamicConstant(_, pos) => *pos = new_pos,
-            Self::BoolConstant(_, pos) => *pos = new_pos,
-            Self::IntegerConstant(_, pos) => *pos = new_pos,
-            Self::CharConstant(_, pos) => *pos = new_pos,
-            Self::StringConstant(_, pos) => *pos = new_pos,
+            Self::DynamicConstant(_, pos)
+            | Self::BoolConstant(_, pos)
+            | Self::IntegerConstant(_, pos)
+            | Self::CharConstant(_, pos)
+            | Self::Unit(pos)
+            | Self::StringConstant(_, pos)
+            | Self::Array(_, pos)
+            | Self::Map(_, pos)
+            | Self::And(_, pos)
+            | Self::Or(_, pos)
+            | Self::Dot(_, pos)
+            | Self::Index(_, pos)
+            | Self::Variable(_, pos, _)
+            | Self::FnCall(_, pos)
+            | Self::Custom(_, pos) => *pos = new_pos,
+
             Self::InterpolatedString(x) => {
                 x.first_mut().unwrap().set_position(new_pos);
             }
-            Self::Array(_, pos) => *pos = new_pos,
-            Self::Map(_, pos) => *pos = new_pos,
-            Self::Variable(_, pos, _) => *pos = new_pos,
+
             Self::Property(x) => (x.2).pos = new_pos,
             Self::Stmt(x) => x.1 = new_pos,
-            Self::FnCall(_, pos) => *pos = new_pos,
-            Self::And(_, pos) | Self::Or(_, pos) => *pos = new_pos,
-            Self::Unit(pos) => *pos = new_pos,
-            Self::Dot(_, pos) | Self::Index(_, pos) => *pos = new_pos,
-            Self::Custom(_, pos) => *pos = new_pos,
         }
 
         self

@@ -185,6 +185,16 @@ impl Position {
         #[cfg(feature = "no_position")]
         return true;
     }
+    /// Print this [`Position`] for debug purposes.
+    #[inline(always)]
+    pub(crate) fn debug_print(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        #[cfg(not(feature = "no_position"))]
+        if !self.is_none() {
+            write!(f, " @ {:?}", self)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl Default for Position {
