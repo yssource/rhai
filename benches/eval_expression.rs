@@ -126,9 +126,9 @@ fn bench_eval_loop_number(bench: &mut Bencher) {
 #[bench]
 fn bench_eval_loop_strings_build(bench: &mut Bencher) {
     let script = r#"
-        let s = "hello";
+        let s;
         for x in range(0, 10000) {
-            s += "x";
+            s = "hello, world!" + "hello, world!";
         }
     "#;
 
@@ -143,9 +143,9 @@ fn bench_eval_loop_strings_build(bench: &mut Bencher) {
 #[bench]
 fn bench_eval_loop_strings_no_build(bench: &mut Bencher) {
     let script = r#"
-        let s = "hello";
+        let s;
         for x in range(0, 10000) {
-            s += "";
+            s = "hello" + "";
         }
     "#;
 
