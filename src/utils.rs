@@ -1,7 +1,7 @@
 //! Module containing various utility types and functions.
 
 use crate::fn_native::{shared_make_mut, shared_take};
-use crate::{Identifier, Shared};
+use crate::{Identifier, Shared, SmartString};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -141,10 +141,10 @@ pub(crate) fn combine_hashes(a: u64, b: u64) -> u64 {
 /// assert_eq!(s, "hello, world!");
 /// ```
 #[derive(Clone, Eq, Ord, Hash, Default)]
-pub struct ImmutableString(Shared<String>);
+pub struct ImmutableString(Shared<SmartString>);
 
 impl Deref for ImmutableString {
-    type Target = String;
+    type Target = SmartString;
 
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
@@ -152,9 +152,9 @@ impl Deref for ImmutableString {
     }
 }
 
-impl AsRef<String> for ImmutableString {
+impl AsRef<SmartString> for ImmutableString {
     #[inline(always)]
-    fn as_ref(&self) -> &String {
+    fn as_ref(&self) -> &SmartString {
         &self.0
     }
 }
@@ -166,9 +166,9 @@ impl AsRef<str> for ImmutableString {
     }
 }
 
-impl Borrow<String> for ImmutableString {
+impl Borrow<SmartString> for ImmutableString {
     #[inline(always)]
-    fn borrow(&self) -> &String {
+    fn borrow(&self) -> &SmartString {
         &self.0
     }
 }
@@ -183,33 +183,31 @@ impl Borrow<str> for ImmutableString {
 impl From<&str> for ImmutableString {
     #[inline(always)]
     fn from(value: &str) -> Self {
-        Self(value.to_string().into())
+        Self(Into::<SmartString>::into(value).into())
     }
 }
 impl From<&String> for ImmutableString {
     #[inline(always)]
     fn from(value: &String) -> Self {
-        Self(value.to_string().into())
+        Self(Into::<SmartString>::into(value).into())
     }
 }
 impl From<String> for ImmutableString {
     #[inline(always)]
     fn from(value: String) -> Self {
+        Self(Into::<SmartString>::into(value).into())
+    }
+}
+impl From<SmartString> for ImmutableString {
+    #[inline(always)]
+    fn from(value: SmartString) -> Self {
         Self(value.into())
     }
 }
-
-impl From<Box<String>> for ImmutableString {
+impl From<ImmutableString> for SmartString {
     #[inline(always)]
-    fn from(value: Box<String>) -> Self {
-        Self(value.into())
-    }
-}
-
-impl From<ImmutableString> for String {
-    #[inline(always)]
-    fn from(value: ImmutableString) -> Self {
-        value.into_owned()
+    fn from(mut value: ImmutableString) -> Self {
+        std::mem::take(shared_make_mut(&mut value.0))
     }
 }
 
@@ -218,35 +216,35 @@ impl FromStr for ImmutableString {
 
     #[inline(always)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(s.to_string().into()))
+        Ok(Self(Into::<SmartString>::into(s).into()))
     }
 }
 
 impl FromIterator<char> for ImmutableString {
     #[inline(always)]
     fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
-        Self(iter.into_iter().collect::<String>().into())
+        Self(iter.into_iter().collect::<SmartString>().into())
     }
 }
 
 impl<'a> FromIterator<&'a char> for ImmutableString {
     #[inline(always)]
     fn from_iter<T: IntoIterator<Item = &'a char>>(iter: T) -> Self {
-        Self(iter.into_iter().cloned().collect::<String>().into())
+        Self(iter.into_iter().cloned().collect::<SmartString>().into())
     }
 }
 
 impl<'a> FromIterator<&'a str> for ImmutableString {
     #[inline(always)]
     fn from_iter<T: IntoIterator<Item = &'a str>>(iter: T) -> Self {
-        Self(iter.into_iter().collect::<String>().into())
+        Self(iter.into_iter().collect::<SmartString>().into())
     }
 }
 
 impl<'a> FromIterator<String> for ImmutableString {
     #[inline(always)]
     fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
-        Self(iter.into_iter().collect::<String>().into())
+        Self(iter.into_iter().collect::<SmartString>().into())
     }
 }
 
@@ -466,7 +464,7 @@ impl SubAssign<&ImmutableString> for ImmutableString {
             if self.is_empty() {
                 self.0 = rhs.0.clone();
             } else {
-                self.0 = self.replace(rhs.as_str(), "").into();
+                self.0 = Into::<SmartString>::into(self.replace(rhs.as_str(), "")).into();
             }
         }
     }
@@ -479,7 +477,7 @@ impl SubAssign<ImmutableString> for ImmutableString {
             if self.is_empty() {
                 self.0 = rhs.0;
             } else {
-                self.0 = self.replace(rhs.as_str(), "").into();
+                self.0 = Into::<SmartString>::into(self.replace(rhs.as_str(), "")).into();
             }
         }
     }
@@ -518,7 +516,7 @@ impl Sub<String> for &ImmutableString {
 impl SubAssign<String> for ImmutableString {
     #[inline(always)]
     fn sub_assign(&mut self, rhs: String) {
-        self.0 = self.replace(&rhs, "").into();
+        self.0 = Into::<SmartString>::into(self.replace(&rhs, "")).into();
     }
 }
 
@@ -543,7 +541,7 @@ impl Sub<char> for &ImmutableString {
 impl SubAssign<char> for ImmutableString {
     #[inline(always)]
     fn sub_assign(&mut self, rhs: char) {
-        self.0 = self.replace(rhs, "").into();
+        self.0 = Into::<SmartString>::into(self.replace(rhs, "")).into();
     }
 }
 
@@ -588,34 +586,18 @@ impl PartialOrd<ImmutableString> for String {
     }
 }
 
-#[cfg(not(feature = "no_smartstring"))]
-impl From<ImmutableString> for Identifier {
-    #[inline(always)]
-    fn from(value: ImmutableString) -> Self {
-        value.into_owned().into()
-    }
-}
-
-#[cfg(not(feature = "no_smartstring"))]
-impl From<Identifier> for ImmutableString {
-    #[inline(always)]
-    fn from(value: Identifier) -> Self {
-        value.to_string().into()
-    }
-}
-
 impl ImmutableString {
     /// Consume the [`ImmutableString`] and convert it into a [`String`].
     /// If there are other references to the same string, a cloned copy is returned.
     #[inline(always)]
     pub fn into_owned(mut self) -> String {
         self.make_mut(); // Make sure it is unique reference
-        shared_take(self.0) // Should succeed
+        shared_take(self.0).into() // Should succeed
     }
     /// Make sure that the [`ImmutableString`] is unique (i.e. no other outstanding references).
-    /// Then return a mutable reference to the [`String`].
+    /// Then return a mutable reference to the [`SmartString`].
     #[inline(always)]
-    pub fn make_mut(&mut self) -> &mut String {
+    pub(crate) fn make_mut(&mut self) -> &mut SmartString {
         shared_make_mut(&mut self.0)
     }
 }
@@ -630,17 +612,17 @@ impl ImmutableString {
 /// yet interned.
 #[derive(Debug, Clone, Default, Hash)]
 pub struct IdentifierBuilder(
-    #[cfg(feature = "no_smartstring")] std::collections::BTreeSet<Identifier>,
+    #[cfg(feature = "no_smartstring_for_identifier")] std::collections::BTreeSet<Identifier>,
 );
 
 impl IdentifierBuilder {
     /// Get an identifier from a text string.
     #[inline(always)]
     pub fn get(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
-        #[cfg(not(feature = "no_smartstring"))]
+        #[cfg(not(feature = "no_smartstring_for_identifier"))]
         return text.as_ref().into();
 
-        #[cfg(feature = "no_smartstring")]
+        #[cfg(feature = "no_smartstring_for_identifier")]
         return self.0.get(text.as_ref()).cloned().unwrap_or_else(|| {
             let s: Identifier = text.into();
             self.0.insert(s.clone());
