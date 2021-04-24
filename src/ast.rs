@@ -1899,9 +1899,7 @@ impl Expr {
 
             Self::Map(x, _) => x.0.iter().map(|(_, v)| v).all(Self::is_pure),
 
-            Self::Index(x, _) | Self::And(x, _) | Self::Or(x, _) => {
-                x.lhs.is_pure() && x.rhs.is_pure()
-            }
+            Self::And(x, _) | Self::Or(x, _) => x.lhs.is_pure() && x.rhs.is_pure(),
 
             Self::Stmt(x) => x.0.iter().all(Stmt::is_pure),
 

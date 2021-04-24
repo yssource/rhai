@@ -10,6 +10,7 @@ Bug fixes
 ---------
 
 * Fixed bug when position is zero in `insert` and `split_at` methods for arrays.
+* Indexing operations with pure index values are no longer considered pure due to the possibility of indexers.
 
 Breaking changes
 ----------------
