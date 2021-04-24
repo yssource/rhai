@@ -5,7 +5,7 @@ use std::ops::Range;
 use std::prelude::v1::*;
 
 #[cfg(not(feature = "unchecked"))]
-use num_traits::{CheckedAdd, CheckedSub};
+use num_traits::{CheckedAdd as Add, CheckedSub as Sub};
 
 #[cfg(feature = "unchecked")]
 use std::ops::{Add, Sub};
@@ -14,11 +14,11 @@ use std::ops::{Add, Sub};
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 struct StepRange<T>(T, T, T)
 where
-    T: Variant + Copy + PartialOrd + CheckedAdd<Output = T> + CheckedSub<Output = T>;
+    T: Variant + Copy + PartialOrd + Add<Output = T> + Sub<Output = T>;
 
 impl<T> StepRange<T>
 where
-    T: Variant + Copy + PartialOrd + CheckedAdd<Output = T> + CheckedSub<Output = T>,
+    T: Variant + Copy + PartialOrd + Add<Output = T> + Sub<Output = T>,
 {
     pub fn new(from: T, to: T, step: T) -> Result<Self, Box<EvalAltResult>> {
         #[cfg(not(feature = "unchecked"))]
@@ -43,7 +43,7 @@ where
 
 impl<T> Iterator for StepRange<T>
 where
-    T: Variant + Copy + PartialOrd + CheckedAdd<Output = T> + CheckedSub<Output = T>,
+    T: Variant + Copy + PartialOrd + Add<Output = T> + Sub<Output = T>,
 {
     type Item = T;
 
