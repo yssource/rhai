@@ -1347,13 +1347,22 @@ pub struct OpAssignment {
 }
 
 impl OpAssignment {
-    pub fn new(op: &'static str) -> Self {
-        let op2 = &op[..op.len() - 1]; // extract operator without =
+    /// Create a new [`OpAssignment`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the operator name is not an op-assignment operator.
+    pub fn new(op: Token) -> Self {
+        let op_raw = op
+            .map_op_assignment()
+            .expect("token must be an op-assignment operator")
+            .keyword_syntax();
+        let op_assignment = op.keyword_syntax();
 
         Self {
-            hash_op_assign: calc_fn_hash(empty(), op, 2),
-            hash_op: calc_fn_hash(empty(), op2, 2),
-            op,
+            hash_op_assign: calc_fn_hash(empty(), op_assignment, 2),
+            hash_op: calc_fn_hash(empty(), op_raw, 2),
+            op: op_assignment,
         }
     }
 }

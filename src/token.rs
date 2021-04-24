@@ -578,6 +578,25 @@ impl Token {
         }
     }
 
+    /// Is this token an op-assignment operator?
+    #[inline]
+    pub fn is_op_assignment(&self) -> bool {
+        match self {
+            Self::PlusAssign
+            | Self::MinusAssign
+            | Self::MultiplyAssign
+            | Self::DivideAssign
+            | Self::LeftShiftAssign
+            | Self::RightShiftAssign
+            | Self::ModuloAssign
+            | Self::PowerOfAssign
+            | Self::AndAssign
+            | Self::OrAssign
+            | Self::XOrAssign => true,
+            _ => false,
+        }
+    }
+
     /// Get the corresponding operator of the token if it is an op-assignment operator.
     pub fn map_op_assignment(&self) -> Option<Self> {
         Some(match self {
@@ -594,6 +613,25 @@ impl Token {
             Self::XOrAssign => Self::XOr,
             _ => return None,
         })
+    }
+
+    /// Has this token a corresponding op-assignment operator?
+    #[inline]
+    pub fn has_op_assignment(&self) -> bool {
+        match self {
+            Self::Plus
+            | Self::Minus
+            | Self::Multiply
+            | Self::Divide
+            | Self::LeftShift
+            | Self::RightShift
+            | Self::Modulo
+            | Self::PowerOf
+            | Self::Ampersand
+            | Self::Pipe
+            | Self::XOr => true,
+            _ => false,
+        }
     }
 
     /// Get the corresponding op-assignment operator of the token.

@@ -11,6 +11,7 @@ use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::syntax::CustomSyntax;
+use crate::token::Token;
 use crate::utils::get_hasher;
 use crate::{
     Dynamic, EvalAltResult, Identifier, ImmutableString, Module, Position, RhaiResult, Scope,
@@ -221,13 +222,13 @@ pub const FN_ANONYMOUS: &str = "anon$";
 /// Standard equality comparison operator.
 pub const OP_EQUALS: &str = "==";
 
-/// Standard concatenation operator.
-pub const OP_CONCAT: &str = "+=";
-
 /// Standard method function for containment testing.
 ///
 /// The `in` operator is implemented as a call to this method.
 pub const OP_CONTAINS: &str = "contains";
+
+/// Standard concatenation operator token.
+pub const TOKEN_OP_CONCAT: Token = Token::PlusAssign;
 
 /// Method of chaining.
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
@@ -1792,7 +1793,7 @@ impl Engine {
                         mods,
                         state,
                         lib,
-                        Some(OpAssignment::new(OP_CONCAT)),
+                        Some(OpAssignment::new(TOKEN_OP_CONCAT)),
                         pos,
                         (&mut result).into(),
                         item,

@@ -387,7 +387,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             if x.1.is_none()
                 && x.0.is_variable_access(true)
                 && matches!(&x.2, Expr::FnCall(x2, _)
-                        if Token::lookup_from_syntax(&x2.name).and_then(|t| t.make_op_assignment()).is_some()
+                        if Token::lookup_from_syntax(&x2.name).map(|t| t.has_op_assignment()).unwrap_or(false)
                         && x2.args_count() == 2 && x2.args.len() >= 1
                         && x2.args[0].get_variable_name(true) == x.0.get_variable_name(true)
                 ) =>
@@ -397,7 +397,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                     state.set_dirty();
                     let op = Token::lookup_from_syntax(&x2.name).unwrap();
                     let op_assignment = op.make_op_assignment().unwrap();
-                    x.1 = Some(OpAssignment::new(op_assignment.keyword_syntax()));
+                    x.1 = Some(OpAssignment::new(op_assignment));
                     x.2 = if x2.args.len() > 1 {
                         mem::take(&mut x2.args[1])
                     } else {
