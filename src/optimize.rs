@@ -239,29 +239,18 @@ fn optimize_stmt_block(
             .find_map(|(i, stmt)| match stmt {
                 stmt if !is_pure(stmt) => Some(i),
 
-                Stmt::Noop(_) | Stmt::Return(_, None, _) => None,
-
-                Stmt::Let(e, _, _, _)
-                | Stmt::Const(e, _, _, _)
-                | Stmt::Expr(e)
-                | Stmt::Return(_, Some(e), _)
-                    if e.is_constant() =>
+                Stmt::Let(e, _, _, _) | Stmt::Const(e, _, _, _) | Stmt::Expr(e)
+                    if !e.is_constant() =>
                 {
-                    None
+                    Some(i)
                 }
 
                 #[cfg(not(feature = "no_module"))]
-                Stmt::Import(e, _, _) if e.is_constant() => None,
+                Stmt::Import(e, _, _) if !e.is_constant() => Some(i),
 
-                #[cfg(not(feature = "no_module"))]
-                Stmt::Export(_, _) => None,
-
-                #[cfg(not(feature = "no_closure"))]
-                Stmt::Share(_) => None,
-
-                _ => Some(i),
+                _ => None,
             })
-            .map_or(0, |n| statements.len() - n);
+            .map_or(0, |n| statements.len() - n - 1);
 
         while index < statements.len() {
             if preserve_result && index >= statements.len() - 1 {
