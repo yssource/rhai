@@ -1632,6 +1632,7 @@ impl Engine {
 
                 let arr_len = arr.len();
 
+                #[cfg(not(feature = "unchecked"))]
                 let arr_idx = if index < 0 {
                     // Count from end if negative
                     arr_len
@@ -1651,10 +1652,20 @@ impl Engine {
                 } else {
                     index as usize
                 };
+                #[cfg(feature = "unchecked")]
+                let arr_idx = if index < 0 {
+                    arr_len - index.abs() as usize
+                } else {
+                    index as usize
+                };
 
-                arr.get_mut(arr_idx)
-                    .map(Target::from)
-                    .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into())
+                #[cfg(not(feature = "unchecked"))]
+                return arr.get_mut(arr_idx).map(Target::from).ok_or_else(|| {
+                    EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into()
+                });
+
+                #[cfg(feature = "unchecked")]
+                return Ok(Target::from(&mut arr[arr_idx]));
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -1668,25 +1679,26 @@ impl Engine {
                     map.insert(index.clone().into(), Default::default());
                 }
 
-                Ok(map
+                return Ok(map
                     .get_mut(index.as_str())
                     .map(Target::from)
-                    .unwrap_or_else(|| Target::from(())))
+                    .unwrap_or_else(|| Target::from(())));
             }
 
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Str(s, _)) => {
                 // val_string[idx]
-                let chars_len = s.chars().count();
+                let _chars_len = s.chars().count();
                 let index = _idx
                     .as_int()
                     .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
 
+                #[cfg(not(feature = "unchecked"))]
                 let (ch, offset) = if index >= 0 {
                     let offset = index as usize;
                     (
                         s.chars().nth(offset).ok_or_else(|| {
-                            EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos)
+                            EvalAltResult::ErrorStringBounds(_chars_len, index, idx_pos)
                         })?,
                         offset,
                     )
@@ -1694,15 +1706,24 @@ impl Engine {
                     let offset = index as usize;
                     (
                         s.chars().rev().nth(offset - 1).ok_or_else(|| {
-                            EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos)
+                            EvalAltResult::ErrorStringBounds(_chars_len, index, idx_pos)
                         })?,
                         offset,
                     )
                 } else {
-                    return EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos).into();
+                    return EvalAltResult::ErrorStringBounds(_chars_len, index, idx_pos).into();
                 };
 
-                Ok(Target::StringChar(target, offset, ch.into()))
+                #[cfg(feature = "unchecked")]
+                let (ch, offset) = if index >= 0 {
+                    let offset = index as usize;
+                    (s.chars().nth(offset).unwrap(), offset)
+                } else {
+                    let offset = index.abs() as usize;
+                    (s.chars().rev().nth(offset - 1).unwrap(), offset)
+                };
+
+                return Ok(Target::StringChar(target, offset, ch.into()));
             }
 
             #[cfg(not(feature = "no_index"))]
@@ -1711,27 +1732,33 @@ impl Engine {
                 let args = &mut [target, &mut _idx];
                 let hash_get =
                     FnCallHashes::from_native(calc_fn_hash(std::iter::empty(), FN_IDX_GET, 2));
-                self.exec_fn_call(
-                    _mods, state, _lib, FN_IDX_GET, hash_get, args, _is_ref, true, idx_pos, None,
-                    _level,
-                )
-                .map(|(v, _)| v.into())
-                .map_err(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _) if fn_sig.ends_with(']') => {
-                        Box::new(EvalAltResult::ErrorIndexingType(
-                            type_name.into(),
-                            Position::NONE,
-                        ))
-                    }
-                    _ => err,
-                })
+
+                return self
+                    .exec_fn_call(
+                        _mods, state, _lib, FN_IDX_GET, hash_get, args, _is_ref, true, idx_pos,
+                        None, _level,
+                    )
+                    .map(|(v, _)| v.into())
+                    .map_err(|err| match *err {
+                        EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                            if fn_sig.ends_with(']') =>
+                        {
+                            Box::new(EvalAltResult::ErrorIndexingType(
+                                type_name.into(),
+                                Position::NONE,
+                            ))
+                        }
+                        _ => err,
+                    });
             }
 
-            _ => EvalAltResult::ErrorIndexingType(
-                self.map_type_name(target.type_name()).into(),
-                Position::NONE,
-            )
-            .into(),
+            _ => {
+                return EvalAltResult::ErrorIndexingType(
+                    self.map_type_name(target.type_name()).into(),
+                    Position::NONE,
+                )
+                .into()
+            }
         }
     }
 
