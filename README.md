@@ -3,13 +3,15 @@ Rhai - Embedded Scripting for Rust
 
 ![GitHub last commit](https://img.shields.io/github/last-commit/rhaiscript/rhai?logo=github)
 [![Build Status](https://github.com/rhaiscript/rhai/workflows/Build/badge.svg)](https://github.com/rhaiscript/rhai/actions)
-[![stars](https://img.shields.io/github/stars/rhaiscript/rhai?logo=github)](https://github.com/rhaiscript/rhai)
-[![license](https://img.shields.io/crates/l/rhai)](https://github.com/license/rhaiscript/rhai)
+[![Stars](https://img.shields.io/github/stars/rhaiscript/rhai?logo=github)](https://github.com/rhaiscript/rhai)
+[![License](https://img.shields.io/crates/l/rhai)](https://github.com/license/rhaiscript/rhai)
 [![crates.io](https://img.shields.io/crates/v/rhai?logo=rust)](https://crates.io/crates/rhai/)
 [![crates.io](https://img.shields.io/crates/d/rhai?logo=rust)](https://crates.io/crates/rhai/)
 [![API Docs](https://docs.rs/rhai/badge.svg?logo=docs.rs)](https://docs.rs/rhai/)
-[![chat](https://img.shields.io/discord/767611025456889857.svg?logo=discord)](https://discord.gg/HquqbYFcZ9)
-[![Reddit](https://img.shields.io/reddit/subreddit-subscribers/Rhai?logo=reddit)](https://www.reddit.com/r/Rhai)
+[![VS Code plugin installs](https://img.shields.io/visual-studio-marketplace/i/rhaiscript.vscode-rhai?label=vs%20code)](https://img.shields.io/visual-studio-marketplace/i/rhaiscript.vscode-rhai)
+[![Sublime Text package downloads](https://img.shields.io/packagecontrol/dt/Rhai.svg?label=sublime%20text)](https://packagecontrol.io/packages/Rhai)
+[![Discord Chat](https://img.shields.io/discord/767611025456889857.svg?logo=discord&label=discord)](https://discord.gg/HquqbYFcZ9)
+[![Reddit Channel](https://img.shields.io/reddit/subreddit-subscribers/Rhai?logo=reddit&label=reddit)](https://www.reddit.com/r/Rhai)
 
 [![Rhai logo](https://rhai.rs/book/images/logo/rhai-banner-transparent-colour.svg)](https://rhai.rs)
 
