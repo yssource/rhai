@@ -1,31 +1,52 @@
 use rhai::{Engine, EvalAltResult, Module, INT};
 
-#[cfg(not(feature = "no_index"))]
+#[cfg(not(feature = "no_float"))]
+use rhai::FLOAT;
+
+#[cfg(feature = "decimal")]
+#[cfg(not(feature = "no_float"))]
+use rust_decimal::Decimal;
+
 #[test]
 fn test_for() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
-    let script = "
-        let sum1 = 0;
-        let sum2 = 0;
-        let inputs = [1, 2, 3, 4, 5];
+    #[cfg(not(feature = "no_index"))]
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                let sum1 = 0;
+                let sum2 = 0;
+                let inputs = [1, 2, 3, 4, 5];
 
-        for x in inputs {
-            sum1 += x;
-        }
+                for x in inputs {
+                    sum1 += x;
+                }
 
-        for x in range(1, 6) {
-            sum2 += x;
-        }
+                for x in range(1, 6) {
+                    sum2 += x;
+                }
 
-        for x in range(1, 6, 3) {
-            sum2 += x;
-        }
+                for x in range(1, 6, 3) {
+                    sum2 += x;
+                }
 
-        sum1 + sum2
-    ";
+                sum1 + sum2
+            "
+        )?,
+        35
+    );
 
-    assert_eq!(engine.eval::<INT>(script)?, 35);
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                let sum = 0;
+                for x in range(1, 10) { sum += x; }
+                sum
+            "
+        )?,
+        45
+    );
 
     assert_eq!(
         engine.eval::<INT>(
@@ -70,6 +91,101 @@ fn test_for() -> Result<(), Box<EvalAltResult>> {
         )?,
         30
     );
+
+    #[cfg(not(feature = "no_float"))]
+    {
+        assert_eq!(
+            engine.eval::<FLOAT>(
+                "
+                    let sum = 0.0;
+                    for x in range(1.0, 10.0, 2.0) { sum += x; }
+                    sum
+                "
+            )?,
+            25.0
+        );
+
+        assert_eq!(
+            engine.eval::<FLOAT>(
+                "
+                    let sum = 0.0;
+                    for x in range(10.0, 1.0, 2.0) { sum += x; }
+                    sum
+                "
+            )?,
+            0.0
+        );
+
+        assert_eq!(
+            engine.eval::<FLOAT>(
+                "
+                    let sum = 0.0;
+                    for x in range(1.0, 10.0, -2.0) { sum += x; }
+                    sum
+                "
+            )?,
+            0.0
+        );
+
+        assert_eq!(
+            engine.eval::<FLOAT>(
+                "
+                    let sum = 0.0;
+                    for x in range(10.0, 1.0, -2.0) { sum += x; }
+                    sum
+                "
+            )?,
+            30.0
+        );
+    }
+
+    #[cfg(not(feature = "no_float"))]
+    #[cfg(feature = "decimal")]
+    {
+        assert_eq!(
+            engine.eval::<Decimal>(
+                "
+                    let sum = to_decimal(0);
+                    for x in range(to_decimal(1), to_decimal(10), to_decimal(2)) { sum += x; }
+                    sum
+                "
+            )?,
+            Decimal::from(25)
+        );
+
+        assert_eq!(
+            engine.eval::<Decimal>(
+                "
+                    let sum = to_decimal(0);
+                    for x in range(to_decimal(10), to_decimal(1), to_decimal(2)) { sum += x; }
+                    sum
+                "
+            )?,
+            Decimal::from(0)
+        );
+
+        assert_eq!(
+            engine.eval::<Decimal>(
+                "
+                    let sum = to_decimal(0);
+                    for x in range(to_decimal(1), to_decimal(10), to_decimal(-2)) { sum += x; }
+                    sum
+                "
+            )?,
+            Decimal::from(0)
+        );
+
+        assert_eq!(
+            engine.eval::<Decimal>(
+                "
+                    let sum = to_decimal(0);
+                    for x in range(to_decimal(10), to_decimal(1), to_decimal(-2)) { sum += x; }
+                    sum
+                "
+            )?,
+            Decimal::from(30)
+        );
+    }
 
     Ok(())
 }
