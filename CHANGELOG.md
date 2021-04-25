@@ -17,6 +17,7 @@ Breaking changes
 
 * `Dynamic::is_shared` and `Dynamic::is_locked` are removed under the `no_closure` feature. They used to always return `false`.
 * `Engine::call_fn` now evaluates the `AST` before calling the function.
+* `Engine::on_progress` is disabled with `unchecked`.
 
 Enhancements
 ------------

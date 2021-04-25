@@ -3,8 +3,7 @@
 use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt};
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_native::{
-    CallableFunction, IteratorFn, OnDebugCallback, OnPrintCallback, OnProgressCallback,
-    OnVarCallback,
+    CallableFunction, IteratorFn, OnDebugCallback, OnPrintCallback, OnVarCallback,
 };
 use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
@@ -775,7 +774,8 @@ pub struct Engine {
     /// Callback closure for implementing the `debug` command.
     pub(crate) debug: OnDebugCallback,
     /// Callback closure for progress reporting.
-    pub(crate) progress: Option<OnProgressCallback>,
+    #[cfg(not(feature = "unchecked"))]
+    pub(crate) progress: Option<crate::fn_native::OnProgressCallback>,
 
     /// Optimize the AST after compilation.
     pub(crate) optimization_level: OptimizationLevel,
@@ -879,6 +879,7 @@ impl Engine {
             debug: Box::new(default_debug),
 
             // progress callback
+            #[cfg(not(feature = "unchecked"))]
             progress: None,
 
             // optimization level
@@ -939,6 +940,8 @@ impl Engine {
 
             print: Box::new(|_| {}),
             debug: Box::new(|_, _, _| {}),
+
+            #[cfg(not(feature = "unchecked"))]
             progress: None,
 
             optimization_level: if cfg!(feature = "no_optimize") {
@@ -1459,8 +1462,9 @@ impl Engine {
 
         match lhs {
             // id.??? or id[???]
-            Expr::Variable(_, var_pos, x) => {
-                self.inc_operations(state, *var_pos)?;
+            Expr::Variable(_, _var_pos, x) => {
+                #[cfg(not(feature = "unchecked"))]
+                self.inc_operations(state, *_var_pos)?;
 
                 let (target, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
@@ -1511,6 +1515,7 @@ impl Engine {
         size: usize,
         level: usize,
     ) -> Result<(), Box<EvalAltResult>> {
+        #[cfg(not(feature = "unchecked"))]
         self.inc_operations(state, expr.position())?;
 
         match expr {
@@ -1620,6 +1625,7 @@ impl Engine {
         _indexers: bool,
         _level: usize,
     ) -> Result<Target<'t>, Box<EvalAltResult>> {
+        #[cfg(not(feature = "unchecked"))]
         self.inc_operations(state, Position::NONE)?;
 
         match target {
@@ -1654,18 +1660,15 @@ impl Engine {
                 };
                 #[cfg(feature = "unchecked")]
                 let arr_idx = if index < 0 {
+                    // Count from end if negative
                     arr_len - index.abs() as usize
                 } else {
                     index as usize
                 };
 
-                #[cfg(not(feature = "unchecked"))]
-                return arr.get_mut(arr_idx).map(Target::from).ok_or_else(|| {
-                    EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into()
-                });
-
-                #[cfg(feature = "unchecked")]
-                return Ok(Target::from(&mut arr[arr_idx]));
+                arr.get_mut(arr_idx)
+                    .map(Target::from)
+                    .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into())
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -1679,26 +1682,26 @@ impl Engine {
                     map.insert(index.clone().into(), Default::default());
                 }
 
-                return Ok(map
+                Ok(map
                     .get_mut(index.as_str())
                     .map(Target::from)
-                    .unwrap_or_else(|| Target::from(())));
+                    .unwrap_or_else(|| Target::from(Dynamic::UNIT)))
             }
 
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Str(s, _)) => {
                 // val_string[idx]
-                let _chars_len = s.chars().count();
                 let index = _idx
                     .as_int()
                     .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
 
-                #[cfg(not(feature = "unchecked"))]
                 let (ch, offset) = if index >= 0 {
+                    // Count from end if negative
                     let offset = index as usize;
                     (
                         s.chars().nth(offset).ok_or_else(|| {
-                            EvalAltResult::ErrorStringBounds(_chars_len, index, idx_pos)
+                            let chars_len = s.chars().count();
+                            EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos)
                         })?,
                         offset,
                     )
@@ -1706,24 +1709,17 @@ impl Engine {
                     let offset = index as usize;
                     (
                         s.chars().rev().nth(offset - 1).ok_or_else(|| {
-                            EvalAltResult::ErrorStringBounds(_chars_len, index, idx_pos)
+                            let chars_len = s.chars().count();
+                            EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos)
                         })?,
                         offset,
                     )
                 } else {
-                    return EvalAltResult::ErrorStringBounds(_chars_len, index, idx_pos).into();
+                    let chars_len = s.chars().count();
+                    return EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos).into();
                 };
 
-                #[cfg(feature = "unchecked")]
-                let (ch, offset) = if index >= 0 {
-                    let offset = index as usize;
-                    (s.chars().nth(offset).unwrap(), offset)
-                } else {
-                    let offset = index.abs() as usize;
-                    (s.chars().rev().nth(offset - 1).unwrap(), offset)
-                };
-
-                return Ok(Target::StringChar(target, offset, ch.into()));
+                Ok(Target::StringChar(target, offset, ch.into()))
             }
 
             #[cfg(not(feature = "no_index"))]
@@ -1733,32 +1729,27 @@ impl Engine {
                 let hash_get =
                     FnCallHashes::from_native(calc_fn_hash(std::iter::empty(), FN_IDX_GET, 2));
 
-                return self
-                    .exec_fn_call(
-                        _mods, state, _lib, FN_IDX_GET, hash_get, args, _is_ref, true, idx_pos,
-                        None, _level,
-                    )
-                    .map(|(v, _)| v.into())
-                    .map_err(|err| match *err {
-                        EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                            if fn_sig.ends_with(']') =>
-                        {
-                            Box::new(EvalAltResult::ErrorIndexingType(
-                                type_name.into(),
-                                Position::NONE,
-                            ))
-                        }
-                        _ => err,
-                    });
+                self.exec_fn_call(
+                    _mods, state, _lib, FN_IDX_GET, hash_get, args, _is_ref, true, idx_pos, None,
+                    _level,
+                )
+                .map(|(v, _)| v.into())
+                .map_err(|err| match *err {
+                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _) if fn_sig.ends_with(']') => {
+                        Box::new(EvalAltResult::ErrorIndexingType(
+                            type_name.into(),
+                            Position::NONE,
+                        ))
+                    }
+                    _ => err,
+                })
             }
 
-            _ => {
-                return EvalAltResult::ErrorIndexingType(
-                    self.map_type_name(target.type_name()).into(),
-                    Position::NONE,
-                )
-                .into()
-            }
+            _ => EvalAltResult::ErrorIndexingType(
+                self.map_type_name(target.type_name()).into(),
+                Position::NONE,
+            )
+            .into(),
         }
     }
 
@@ -1773,6 +1764,7 @@ impl Engine {
         expr: &Expr,
         level: usize,
     ) -> RhaiResult {
+        #[cfg(not(feature = "unchecked"))]
         self.inc_operations(state, expr.position())?;
 
         let result = match expr {
@@ -2110,6 +2102,7 @@ impl Engine {
         stmt: &Stmt,
         level: usize,
     ) -> RhaiResult {
+        #[cfg(not(feature = "unchecked"))]
         self.inc_operations(state, stmt.position())?;
 
         let result = match stmt {
@@ -2138,6 +2131,7 @@ impl Engine {
                     .into();
                 }
 
+                #[cfg(not(feature = "unchecked"))]
                 self.inc_operations(state, pos)?;
 
                 if lhs_ptr.is_read_only() {
@@ -2332,7 +2326,6 @@ impl Engine {
             // For loop
             Stmt::For(expr, x, _) => {
                 let (Ident { name, .. }, statements) = x.as_ref();
-                let pos = statements.position();
                 let iter_obj = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten();
@@ -2386,7 +2379,8 @@ impl Engine {
                             *loop_var = value;
                         }
 
-                        self.inc_operations(state, pos)?;
+                        #[cfg(not(feature = "unchecked"))]
+                        self.inc_operations(state, statements.position())?;
 
                         if statements.is_empty() {
                             continue;
@@ -2828,6 +2822,7 @@ impl Engine {
     }
 
     /// Check if the number of operations stay within limit.
+    #[cfg(not(feature = "unchecked"))]
     pub(crate) fn inc_operations(
         &self,
         state: &mut State,
@@ -2835,7 +2830,6 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         state.operations += 1;
 
-        #[cfg(not(feature = "unchecked"))]
         // Guard against too many operations
         if self.max_operations() > 0 && state.operations > self.max_operations() {
             return EvalAltResult::ErrorTooManyOperations(pos).into();

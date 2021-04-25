@@ -2105,6 +2105,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn on_progress(
         &mut self,

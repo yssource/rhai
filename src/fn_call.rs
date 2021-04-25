@@ -294,6 +294,7 @@ impl Engine {
         is_op_assignment: bool,
         pos: Position,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+        #[cfg(not(feature = "unchecked"))]
         self.inc_operations(state, pos)?;
 
         let state_source = state.source.clone();
@@ -483,6 +484,7 @@ impl Engine {
             .into()
         }
 
+        #[cfg(not(feature = "unchecked"))]
         self.inc_operations(state, pos)?;
 
         if fn_def.body.is_empty() {
@@ -844,10 +846,11 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         script: &str,
-        pos: Position,
+        _pos: Position,
         level: usize,
     ) -> RhaiResult {
-        self.inc_operations(state, pos)?;
+        #[cfg(not(feature = "unchecked"))]
+        self.inc_operations(state, _pos)?;
 
         let script = script.trim();
         if script.is_empty() {
@@ -1305,14 +1308,15 @@ impl Engine {
                     .chain(constant_args.iter().map(|(v, _)| Ok(v.clone())))
                     .collect::<Result<_, _>>()?;
 
-                let (mut target, pos) =
+                let (mut target, _pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, &args_expr[0])?;
 
                 if target.as_ref().is_read_only() {
                     target = target.into_owned();
                 }
 
-                self.inc_operations(state, pos)?;
+                #[cfg(not(feature = "unchecked"))]
+                self.inc_operations(state, _pos)?;
 
                 #[cfg(not(feature = "no_closure"))]
                 let target_is_shared = target.is_shared();
@@ -1396,10 +1400,11 @@ impl Engine {
                     .collect::<Result<_, _>>()?;
 
                 // Get target reference to first argument
-                let (target, pos) =
+                let (target, _pos) =
                     self.search_scope_only(scope, mods, state, lib, this_ptr, &args_expr[0])?;
 
-                self.inc_operations(state, pos)?;
+                #[cfg(not(feature = "unchecked"))]
+                self.inc_operations(state, _pos)?;
 
                 #[cfg(not(feature = "no_closure"))]
                 let target_is_shared = target.is_shared();
@@ -1439,6 +1444,7 @@ impl Engine {
         let func = match module.get_qualified_fn(hash) {
             // Then search in Rust functions
             None => {
+                #[cfg(not(feature = "unchecked"))]
                 self.inc_operations(state, pos)?;
 
                 let hash_params = calc_fn_params_hash(args.iter().map(|a| a.type_id()));
