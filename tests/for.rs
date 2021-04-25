@@ -8,7 +8,7 @@ use rhai::FLOAT;
 use rust_decimal::Decimal;
 
 #[test]
-fn test_for() -> Result<(), Box<EvalAltResult>> {
+fn test_for_loop() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     #[cfg(not(feature = "no_index"))]
@@ -59,6 +59,7 @@ fn test_for() -> Result<(), Box<EvalAltResult>> {
         25
     );
 
+    #[cfg(not(feature = "unchecked"))]
     assert_eq!(
         engine.eval::<INT>(
             "
@@ -70,6 +71,7 @@ fn test_for() -> Result<(), Box<EvalAltResult>> {
         0
     );
 
+    #[cfg(not(feature = "unchecked"))]
     assert_eq!(
         engine.eval::<INT>(
             "
@@ -105,6 +107,7 @@ fn test_for() -> Result<(), Box<EvalAltResult>> {
             25.0
         );
 
+        #[cfg(not(feature = "unchecked"))]
         assert_eq!(
             engine.eval::<FLOAT>(
                 "
@@ -116,6 +119,7 @@ fn test_for() -> Result<(), Box<EvalAltResult>> {
             0.0
         );
 
+        #[cfg(not(feature = "unchecked"))]
         assert_eq!(
             engine.eval::<FLOAT>(
                 "
@@ -153,6 +157,7 @@ fn test_for() -> Result<(), Box<EvalAltResult>> {
             Decimal::from(25)
         );
 
+        #[cfg(not(feature = "unchecked"))]
         assert_eq!(
             engine.eval::<Decimal>(
                 "
@@ -164,6 +169,7 @@ fn test_for() -> Result<(), Box<EvalAltResult>> {
             Decimal::from(0)
         );
 
+        #[cfg(not(feature = "unchecked"))]
         assert_eq!(
             engine.eval::<Decimal>(
                 "
