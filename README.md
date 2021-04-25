@@ -7,9 +7,9 @@ Rhai - Embedded Scripting for Rust
 [![License](https://img.shields.io/crates/l/rhai)](https://github.com/license/rhaiscript/rhai)
 [![crates.io](https://img.shields.io/crates/v/rhai?logo=rust)](https://crates.io/crates/rhai/)
 [![crates.io](https://img.shields.io/crates/d/rhai?logo=rust)](https://crates.io/crates/rhai/)
-[![API Docs](https://docs.rs/rhai/badge.svg?logo=docs.rs)](https://docs.rs/rhai/)
-[![VS Code plugin installs](https://img.shields.io/visual-studio-marketplace/i/rhaiscript.vscode-rhai?label=vs%20code)](https://img.shields.io/visual-studio-marketplace/i/rhaiscript.vscode-rhai)
-[![Sublime Text package downloads](https://img.shields.io/packagecontrol/dt/Rhai.svg?label=sublime%20text)](https://packagecontrol.io/packages/Rhai)
+[![API Docs](https://docs.rs/rhai/badge.svg?logo=docs-rs)](https://docs.rs/rhai/)
+[![VS Code plugin installs](https://img.shields.io/visual-studio-marketplace/i/rhaiscript.vscode-rhai?logo=visual-studio-code&label=vs%20code)](https://marketplace.visualstudio.com/items?itemName=rhaiscript.vscode-rhai)
+[![Sublime Text package downloads](https://img.shields.io/packagecontrol/dt/Rhai.svg?logo=sublime-text&label=sublime%20text)](https://packagecontrol.io/packages/Rhai)
 [![Discord Chat](https://img.shields.io/discord/767611025456889857.svg?logo=discord&label=discord)](https://discord.gg/HquqbYFcZ9)
 [![Reddit Channel](https://img.shields.io/reddit/subreddit-subscribers/Rhai?logo=reddit&label=reddit)](https://www.reddit.com/r/Rhai)
 
