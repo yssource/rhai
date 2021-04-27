@@ -187,10 +187,10 @@ impl Position {
     }
     /// Print this [`Position`] for debug purposes.
     #[inline(always)]
-    pub(crate) fn debug_print(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    pub(crate) fn debug_print(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(not(feature = "no_position"))]
         if !self.is_none() {
-            write!(f, " @ {:?}", self)?;
+            write!(_f, " @ {:?}", self)?;
         }
 
         Ok(())

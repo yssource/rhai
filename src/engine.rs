@@ -51,35 +51,42 @@ pub type Precedence = NonZeroU8;
 // We cannot use Cow<str> here because `eval` may load a [module][Module] and
 // the module name will live beyond the AST of the eval script text.
 // The best we can do is a shared reference.
+//
+// This implementation splits the module names from the shared modules to improve data locality.
+// Most usage will be looking up a particular key from the list and then getting the module that
+// corresponds to that key.
 #[derive(Clone, Default)]
-pub struct Imports(StaticVec<Identifier>, StaticVec<Shared<Module>>);
+pub struct Imports {
+    keys: StaticVec<Identifier>,
+    modules: StaticVec<Shared<Module>>,
+}
 
 impl Imports {
     /// Get the length of this stack of imported [modules][Module].
     #[inline(always)]
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.keys.len()
     }
     /// Is this stack of imported [modules][Module] empty?
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.keys.is_empty()
     }
     /// Get the imported [modules][Module] at a particular index.
     #[inline(always)]
     pub fn get(&self, index: usize) -> Option<Shared<Module>> {
-        self.1.get(index).cloned()
+        self.modules.get(index).cloned()
     }
     /// Get the imported [modules][Module] at a particular index.
     #[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut Shared<Module>> {
-        self.1.get_mut(index)
+        self.modules.get_mut(index)
     }
     /// Get the index of an imported [modules][Module] by name.
     #[inline(always)]
     pub fn find(&self, name: &str) -> Option<usize> {
-        self.0
+        self.keys
             .iter()
             .enumerate()
             .rev()
@@ -88,22 +95,22 @@ impl Imports {
     /// Push an imported [modules][Module] onto the stack.
     #[inline(always)]
     pub fn push(&mut self, name: impl Into<Identifier>, module: impl Into<Shared<Module>>) {
-        self.0.push(name.into());
-        self.1.push(module.into());
+        self.keys.push(name.into());
+        self.modules.push(module.into());
     }
     /// Truncate the stack of imported [modules][Module] to a particular length.
     #[inline(always)]
     pub fn truncate(&mut self, size: usize) {
-        self.0.truncate(size);
-        self.1.truncate(size);
+        self.keys.truncate(size);
+        self.modules.truncate(size);
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     #[inline(always)]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
-        self.0
+        self.keys
             .iter()
-            .zip(self.1.iter())
+            .zip(self.modules.iter())
             .rev()
             .map(|(name, module)| (name.as_str(), module.as_ref()))
     }
@@ -111,29 +118,32 @@ impl Imports {
     #[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn iter_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
-        self.0.iter().rev().zip(self.1.iter().rev())
+        self.keys.iter().rev().zip(self.modules.iter().rev())
     }
     /// Get an iterator to this stack of imported [modules][Module] in forward order.
     #[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn scan_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
-        self.0.iter().zip(self.1.iter())
+        self.keys.iter().zip(self.modules.iter())
     }
     /// Get a consuming iterator to this stack of imported [modules][Module] in reverse order.
     #[inline(always)]
     pub fn into_iter(self) -> impl Iterator<Item = (Identifier, Shared<Module>)> {
-        self.0.into_iter().rev().zip(self.1.into_iter().rev())
+        self.keys
+            .into_iter()
+            .rev()
+            .zip(self.modules.into_iter().rev())
     }
     /// Does the specified function hash key exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
     #[inline(always)]
     pub fn contains_fn(&self, hash: u64) -> bool {
-        self.1.iter().any(|m| m.contains_qualified_fn(hash))
+        self.modules.iter().any(|m| m.contains_qualified_fn(hash))
     }
     /// Get specified function via its hash key.
     #[inline(always)]
     pub fn get_fn(&self, hash: u64) -> Option<(&CallableFunction, Option<&Identifier>)> {
-        self.1
+        self.modules
             .iter()
             .rev()
             .find_map(|m| m.get_qualified_fn(hash).map(|f| (f, m.id_raw())))
@@ -143,12 +153,15 @@ impl Imports {
     #[allow(dead_code)]
     #[inline(always)]
     pub fn contains_iter(&self, id: TypeId) -> bool {
-        self.1.iter().any(|m| m.contains_qualified_iter(id))
+        self.modules.iter().any(|m| m.contains_qualified_iter(id))
     }
     /// Get the specified [`TypeId`][std::any::TypeId] iterator.
     #[inline(always)]
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
-        self.1.iter().rev().find_map(|m| m.get_qualified_iter(id))
+        self.modules
+            .iter()
+            .rev()
+            .find_map(|m| m.get_qualified_iter(id))
     }
 }
 
@@ -160,7 +173,7 @@ impl fmt::Debug for Imports {
             f.debug_map().finish()
         } else {
             f.debug_map()
-                .entries(self.0.iter().zip(self.1.iter()))
+                .entries(self.keys.iter().zip(self.modules.iter()))
                 .finish()
         }
     }
@@ -232,24 +245,27 @@ pub const TOKEN_OP_CONCAT: Token = Token::PlusAssign;
 /// Method of chaining.
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum ChainType {
-    /// Not a chaining type.
-    NonChaining,
+enum ChainType {
     /// Indexing.
+    #[cfg(not(feature = "no_index"))]
     Index,
     /// Dotting.
+    #[cfg(not(feature = "no_object"))]
     Dot,
 }
 
 /// Value of a chaining argument.
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 #[derive(Debug, Clone, Hash)]
-pub enum ChainArgument {
+enum ChainArgument {
     /// Dot-property access.
+    #[cfg(not(feature = "no_object"))]
     Property(Position),
-    /// Arguments to a dot-function call.
-    FnCallArgs(StaticVec<Dynamic>, StaticVec<Position>),
+    /// Arguments to a dot method call.
+    #[cfg(not(feature = "no_object"))]
+    MethodCallArgs(StaticVec<Dynamic>, StaticVec<Position>),
     /// Index value.
+    #[cfg(not(feature = "no_index"))]
     IndexValue(Dynamic, Position),
 }
 
@@ -264,7 +280,8 @@ impl ChainArgument {
     #[cfg(not(feature = "no_index"))]
     pub fn as_index_value(self) -> Dynamic {
         match self {
-            Self::Property(_) | Self::FnCallArgs(_, _) => {
+            #[cfg(not(feature = "no_object"))]
+            Self::Property(_) | Self::MethodCallArgs(_, _) => {
                 panic!("expecting ChainArgument::IndexValue")
             }
             Self::IndexValue(value, _) => value,
@@ -274,28 +291,32 @@ impl ChainArgument {
     ///
     /// # Panics
     ///
-    /// Panics if not `ChainArgument::FnCallArgs`.
+    /// Panics if not `ChainArgument::MethodCallArgs`.
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
     pub fn as_fn_call_args(self) -> (StaticVec<Dynamic>, StaticVec<Position>) {
         match self {
-            Self::Property(_) | Self::IndexValue(_, _) => {
-                panic!("expecting ChainArgument::FnCallArgs")
+            Self::Property(_) => {
+                panic!("expecting ChainArgument::MethodCallArgs")
             }
-            Self::FnCallArgs(values, positions) => (values, positions),
+            #[cfg(not(feature = "no_index"))]
+            Self::IndexValue(_, _) => {
+                panic!("expecting ChainArgument::MethodCallArgs")
+            }
+            Self::MethodCallArgs(values, positions) => (values, positions),
         }
     }
 }
 
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+#[cfg(not(feature = "no_object"))]
 impl From<(StaticVec<Dynamic>, StaticVec<Position>)> for ChainArgument {
     #[inline(always)]
     fn from((values, positions): (StaticVec<Dynamic>, StaticVec<Position>)) -> Self {
-        Self::FnCallArgs(values, positions)
+        Self::MethodCallArgs(values, positions)
     }
 }
 
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+#[cfg(not(feature = "no_index"))]
 impl From<(Dynamic, Position)> for ChainArgument {
     #[inline(always)]
     fn from((value, pos): (Dynamic, Position)) -> Self {
@@ -1129,14 +1150,14 @@ impl Engine {
         level: usize,
         new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        assert!(chain_type != ChainType::NonChaining);
-
         let is_ref = target.is_ref();
 
-        let next_chain = match rhs {
-            Expr::Index(_, _) => ChainType::Index,
-            Expr::Dot(_, _) => ChainType::Dot,
-            _ => ChainType::NonChaining,
+        let rhs_chain = match rhs {
+            #[cfg(not(feature = "no_index"))]
+            Expr::Index(_, _) => Some(ChainType::Index),
+            #[cfg(not(feature = "no_object"))]
+            Expr::Dot(_, _) => Some(ChainType::Dot),
+            _ => None,
         };
 
         // Pop the last index value
@@ -1155,9 +1176,10 @@ impl Engine {
                         let obj_ptr = &mut self.get_indexed_mut(
                             mods, state, lib, target, idx_val, idx_pos, false, is_ref, true, level,
                         )?;
+                        let rhs_chain = rhs_chain.unwrap();
 
                         self.eval_dot_index_chain_helper(
-                            mods, state, lib, this_ptr, obj_ptr, &x.rhs, idx_values, next_chain,
+                            mods, state, lib, this_ptr, obj_ptr, &x.rhs, idx_values, rhs_chain,
                             level, new_val,
                         )
                         .map_err(|err| err.fill_position(*x_pos))
@@ -1340,9 +1362,10 @@ impl Engine {
                             // Others - syntax error
                             expr => unreachable!("invalid dot expression: {:?}", expr),
                         };
+                        let rhs_chain = rhs_chain.unwrap();
 
                         self.eval_dot_index_chain_helper(
-                            mods, state, lib, this_ptr, &mut val, &x.rhs, idx_values, next_chain,
+                            mods, state, lib, this_ptr, &mut val, &x.rhs, idx_values, rhs_chain,
                             level, new_val,
                         )
                         .map_err(|err| err.fill_position(*x_pos))
@@ -1354,6 +1377,7 @@ impl Engine {
                             Expr::Property(p) => {
                                 let ((getter, hash_get), (setter, hash_set), Ident { pos, .. }) =
                                     p.as_ref();
+                                let rhs_chain = rhs_chain.unwrap();
                                 let hash_get = FnCallHashes::from_native(*hash_get);
                                 let hash_set = FnCallHashes::from_native(*hash_set);
                                 let arg_values = &mut [target.as_mut(), &mut Default::default()];
@@ -1374,7 +1398,7 @@ impl Engine {
                                         &mut val.into(),
                                         &x.rhs,
                                         idx_values,
-                                        next_chain,
+                                        rhs_chain,
                                         level,
                                         new_val,
                                     )
@@ -1405,6 +1429,7 @@ impl Engine {
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
                             Expr::FnCall(f, pos) if !f.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = f.as_ref();
+                                let rhs_chain = rhs_chain.unwrap();
                                 let mut args = idx_val.as_fn_call_args();
                                 let (mut val, _) = self.make_method_call(
                                     mods, state, lib, name, *hashes, target, &mut args, *pos, level,
@@ -1414,7 +1439,7 @@ impl Engine {
 
                                 self.eval_dot_index_chain_helper(
                                     mods, state, lib, this_ptr, target, &x.rhs, idx_values,
-                                    next_chain, level, new_val,
+                                    rhs_chain, level, new_val,
                                 )
                                 .map_err(|err| err.fill_position(*pos))
                             }
@@ -1430,8 +1455,6 @@ impl Engine {
                     _ => EvalAltResult::ErrorDotExpr("".into(), rhs.position()).into(),
                 }
             }
-
-            chain_type => unreachable!("invalid ChainType: {:?}", chain_type),
         }
     }
 
@@ -1449,7 +1472,9 @@ impl Engine {
         new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
     ) -> RhaiResult {
         let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, op_pos) = match expr {
+            #[cfg(not(feature = "no_index"))]
             Expr::Index(x, pos) => (x.as_ref(), ChainType::Index, *pos),
+            #[cfg(not(feature = "no_object"))]
             Expr::Dot(x, pos) => (x.as_ref(), ChainType::Dot, *pos),
             _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
         };
@@ -1510,7 +1535,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
-        parent_chain_type: ChainType,
+        _parent_chain_type: ChainType,
         idx_values: &mut StaticVec<ChainArgument>,
         size: usize,
         level: usize,
@@ -1519,7 +1544,8 @@ impl Engine {
         self.inc_operations(state, expr.position())?;
 
         match expr {
-            Expr::FnCall(x, _) if parent_chain_type == ChainType::Dot && !x.is_qualified() => {
+            #[cfg(not(feature = "no_object"))]
+            Expr::FnCall(x, _) if _parent_chain_type == ChainType::Dot && !x.is_qualified() => {
                 let mut arg_positions: StaticVec<_> = Default::default();
 
                 let mut arg_values = x
@@ -1539,11 +1565,13 @@ impl Engine {
 
                 idx_values.push((arg_values, arg_positions).into());
             }
-            Expr::FnCall(_, _) if parent_chain_type == ChainType::Dot => {
+            #[cfg(not(feature = "no_object"))]
+            Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dot => {
                 unreachable!("function call in dot chain should not be namespace-qualified")
             }
 
-            Expr::Property(x) if parent_chain_type == ChainType::Dot => {
+            #[cfg(not(feature = "no_object"))]
+            Expr::Property(x) if _parent_chain_type == ChainType::Dot => {
                 idx_values.push(ChainArgument::Property(x.2.pos))
             }
             Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
@@ -1553,12 +1581,15 @@ impl Engine {
 
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
-                    Expr::Property(x) if parent_chain_type == ChainType::Dot => {
+                    #[cfg(not(feature = "no_object"))]
+                    Expr::Property(x) if _parent_chain_type == ChainType::Dot => {
                         ChainArgument::Property(x.2.pos)
                     }
                     Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
+
+                    #[cfg(not(feature = "no_object"))]
                     Expr::FnCall(x, _)
-                        if parent_chain_type == ChainType::Dot && !x.is_qualified() =>
+                        if _parent_chain_type == ChainType::Dot && !x.is_qualified() =>
                     {
                         let mut arg_positions: StaticVec<_> = Default::default();
 
@@ -1579,17 +1610,26 @@ impl Engine {
 
                         (arg_values, arg_positions).into()
                     }
-                    Expr::FnCall(_, _) if parent_chain_type == ChainType::Dot => {
+                    #[cfg(not(feature = "no_object"))]
+                    Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dot => {
                         unreachable!("function call in dot chain should not be namespace-qualified")
                     }
-                    _ => self
+                    #[cfg(not(feature = "no_object"))]
+                    expr if _parent_chain_type == ChainType::Dot => {
+                        unreachable!("invalid dot expression: {:?}", expr);
+                    }
+                    #[cfg(not(feature = "no_index"))]
+                    _ if _parent_chain_type == ChainType::Index => self
                         .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)
                         .map(|v| (v.flatten(), lhs.position()).into())?,
+                    expr => unreachable!("unknown chained expression: {:?}", expr),
                 };
 
                 // Push in reverse order
                 let chain_type = match expr {
+                    #[cfg(not(feature = "no_index"))]
                     Expr::Index(_, _) => ChainType::Index,
+                    #[cfg(not(feature = "no_object"))]
                     Expr::Dot(_, _) => ChainType::Dot,
                     _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
                 };
@@ -1600,10 +1640,16 @@ impl Engine {
                 idx_values.push(lhs_val);
             }
 
-            _ => idx_values.push(
+            #[cfg(not(feature = "no_object"))]
+            _ if _parent_chain_type == ChainType::Dot => {
+                unreachable!("invalid dot expression: {:?}", expr);
+            }
+            #[cfg(not(feature = "no_index"))]
+            _ if _parent_chain_type == ChainType::Index => idx_values.push(
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
                     .map(|v| (v.flatten(), expr.position()).into())?,
             ),
+            _ => unreachable!("unknown chained expression: {:?}", expr),
         }
 
         Ok(())
