@@ -1419,7 +1419,7 @@ impl fmt::Debug for FnCallHashes {
 }
 
 impl FnCallHashes {
-    /// Create a [`FnCallHash`] with only the native Rust hash.
+    /// Create a [`FnCallHashes`] with only the native Rust hash.
     #[inline(always)]
     pub fn from_native(hash: u64) -> Self {
         Self {
@@ -1427,7 +1427,7 @@ impl FnCallHashes {
             native: hash,
         }
     }
-    /// Create a [`FnCallHash`] with both native Rust and script function hashes set to the same value.
+    /// Create a [`FnCallHashes`] with both native Rust and script function hashes set to the same value.
     #[inline(always)]
     pub fn from_script(hash: u64) -> Self {
         Self {
@@ -1435,7 +1435,7 @@ impl FnCallHashes {
             native: hash,
         }
     }
-    /// Create a [`FnCallHash`] with both native Rust and script function hashes.
+    /// Create a [`FnCallHashes`] with both native Rust and script function hashes.
     #[inline(always)]
     pub fn from_script_and_native(script: u64, native: u64) -> Self {
         Self {
@@ -1443,21 +1443,21 @@ impl FnCallHashes {
             native,
         }
     }
-    /// Is this [`FnCallHash`] native Rust only?
+    /// Is this [`FnCallHashes`] native Rust only?
     #[inline(always)]
     pub fn is_native_only(&self) -> bool {
         self.script.is_none()
     }
-    /// Get the script function hash from this [`FnCallHash`].
+    /// Get the script function hash from this [`FnCallHashes`].
     ///
     /// # Panics
     ///
-    /// Panics if the [`FnCallHash`] is native Rust only.
+    /// Panics if the [`FnCallHashes`] is native Rust only.
     #[inline(always)]
     pub fn script_hash(&self) -> u64 {
         self.script.unwrap()
     }
-    /// Get the naive Rust function hash from this [`FnCallHash`].
+    /// Get the naive Rust function hash from this [`FnCallHashes`].
     #[inline(always)]
     pub fn native_hash(&self) -> u64 {
         self.native

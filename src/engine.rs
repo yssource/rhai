@@ -1676,7 +1676,7 @@ impl Engine {
 
         match target {
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Array(arr, _)) => {
+            Dynamic(Union::Array(arr, _, _)) => {
                 // val_array[idx]
                 let index = _idx
                     .as_int()
@@ -1718,7 +1718,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_object"))]
-            Dynamic(Union::Map(map, _)) => {
+            Dynamic(Union::Map(map, _, _)) => {
                 // val_map[idx]
                 let index = &*_idx.read_lock::<ImmutableString>().ok_or_else(|| {
                     self.make_type_mismatch_err::<ImmutableString>(_idx.type_name(), idx_pos)
@@ -1735,7 +1735,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Str(s, _)) => {
+            Dynamic(Union::Str(s, _, _)) => {
                 // val_string[idx]
                 let index = _idx
                     .as_int()
@@ -2569,7 +2569,7 @@ impl Engine {
                             Ok(_) => Ok(Dynamic::UNIT),
                             Err(result_err) => match *result_err {
                                 // Re-throw exception
-                                EvalAltResult::ErrorRuntime(Dynamic(Union::Unit(_, _)), pos) => {
+                                EvalAltResult::ErrorRuntime(Dynamic(Union::Unit(_, _, _)), pos) => {
                                     err.set_position(pos);
                                     Err(err)
                                 }
@@ -2777,18 +2777,18 @@ impl Engine {
         fn calc_size(value: &Dynamic) -> (usize, usize, usize) {
             match value {
                 #[cfg(not(feature = "no_index"))]
-                Dynamic(Union::Array(arr, _)) => {
+                Dynamic(Union::Array(arr, _, _)) => {
                     let mut arrays = 0;
                     let mut maps = 0;
 
                     arr.iter().for_each(|value| match value {
-                        Dynamic(Union::Array(_, _)) => {
+                        Dynamic(Union::Array(_, _, _)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
                         }
                         #[cfg(not(feature = "no_object"))]
-                        Dynamic(Union::Map(_, _)) => {
+                        Dynamic(Union::Map(_, _, _)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
@@ -2799,18 +2799,18 @@ impl Engine {
                     (arrays, maps, 0)
                 }
                 #[cfg(not(feature = "no_object"))]
-                Dynamic(Union::Map(map, _)) => {
+                Dynamic(Union::Map(map, _, _)) => {
                     let mut arrays = 0;
                     let mut maps = 0;
 
                     map.values().for_each(|value| match value {
                         #[cfg(not(feature = "no_index"))]
-                        Dynamic(Union::Array(_, _)) => {
+                        Dynamic(Union::Array(_, _, _)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
                         }
-                        Dynamic(Union::Map(_, _)) => {
+                        Dynamic(Union::Map(_, _, _)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
@@ -2820,7 +2820,7 @@ impl Engine {
 
                     (arrays, maps, 0)
                 }
-                Dynamic(Union::Str(s, _)) => (0, 0, s.len()),
+                Dynamic(Union::Str(s, _, _)) => (0, 0, s.len()),
                 _ => (0, 0, 0),
             }
         }

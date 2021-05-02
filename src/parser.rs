@@ -3135,22 +3135,22 @@ impl Engine {
 pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
     match value.0 {
         #[cfg(not(feature = "no_float"))]
-        Union::Float(value, _) => Some(Expr::FloatConstant(value, pos)),
+        Union::Float(value, _, _) => Some(Expr::FloatConstant(value, pos)),
 
         #[cfg(feature = "decimal")]
-        Union::Decimal(value, _) => Some(Expr::DynamicConstant(Box::new((*value).into()), pos)),
+        Union::Decimal(value, _, _) => Some(Expr::DynamicConstant(Box::new((*value).into()), pos)),
 
-        Union::Unit(_, _) => Some(Expr::Unit(pos)),
-        Union::Int(value, _) => Some(Expr::IntegerConstant(value, pos)),
-        Union::Char(value, _) => Some(Expr::CharConstant(value, pos)),
-        Union::Str(value, _) => Some(Expr::StringConstant(value, pos)),
-        Union::Bool(value, _) => Some(Expr::BoolConstant(value, pos)),
+        Union::Unit(_, _, _) => Some(Expr::Unit(pos)),
+        Union::Int(value, _, _) => Some(Expr::IntegerConstant(value, pos)),
+        Union::Char(value, _, _) => Some(Expr::CharConstant(value, pos)),
+        Union::Str(value, _, _) => Some(Expr::StringConstant(value, pos)),
+        Union::Bool(value, _, _) => Some(Expr::BoolConstant(value, pos)),
 
         #[cfg(not(feature = "no_index"))]
-        Union::Array(array, _) => Some(Expr::DynamicConstant(Box::new((*array).into()), pos)),
+        Union::Array(array, _, _) => Some(Expr::DynamicConstant(Box::new((*array).into()), pos)),
 
         #[cfg(not(feature = "no_object"))]
-        Union::Map(map, _) => Some(Expr::DynamicConstant(Box::new((*map).into()), pos)),
+        Union::Map(map, _, _) => Some(Expr::DynamicConstant(Box::new((*map).into()), pos)),
 
         _ => None,
     }
