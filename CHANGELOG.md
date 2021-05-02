@@ -4,6 +4,12 @@ Rhai Release Notes
 Version 0.20.2
 ==============
 
+New features
+------------
+
+* Each `Dynamic` value can now contain arbitrary data (type `i16`) in the form of a _tag_. This is to use up otherwise wasted space in the `Dynamic` type.
+
+
 Version 0.20.1
 ==============
 

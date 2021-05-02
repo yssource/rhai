@@ -1,6 +1,6 @@
 [package]
 name = "rhai_codegen"
-version = "0.3.5"
+version = "0.3.6"
 edition = "2018"
 authors = ["jhwgh1968", "Stephen Chung"]
 description = "Procedural macros support package for Rhai, a scripting language and engine for Rust"
