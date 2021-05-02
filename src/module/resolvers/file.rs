@@ -342,7 +342,7 @@ impl ModuleResolver for FileModuleResolver {
                 ast.set_source(path);
                 Some(Ok(ast))
             }
-            err @ Err(_) => Some(err),
+            err => Some(err),
         }
     }
 }

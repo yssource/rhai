@@ -1074,7 +1074,7 @@ impl Engine {
                     Some(Ok(module_ast)) => {
                         collect_imports(&module_ast, &mut resolver, &mut imports)
                     }
-                    Some(err @ Err(_)) => return err,
+                    Some(err) => return err,
                     None => (),
                 }
 
@@ -2105,6 +2105,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
     pub fn on_progress(
         &mut self,

@@ -10,12 +10,14 @@ Bug fixes
 ---------
 
 * Fixed bug when position is zero in `insert` and `split_at` methods for arrays.
+* Indexing operations with pure index values are no longer considered pure due to the possibility of indexers.
 
 Breaking changes
 ----------------
 
 * `Dynamic::is_shared` and `Dynamic::is_locked` are removed under the `no_closure` feature. They used to always return `false`.
 * `Engine::call_fn` now evaluates the `AST` before calling the function.
+* `Engine::on_progress` is disabled with `unchecked`.
 
 Enhancements
 ------------

@@ -418,9 +418,11 @@ pub type FnPlugin = dyn PluginFunction;
 pub type FnPlugin = dyn PluginFunction + Send + Sync;
 
 /// A standard callback function for progress reporting.
+#[cfg(not(feature = "unchecked"))]
 #[cfg(not(feature = "sync"))]
 pub type OnProgressCallback = Box<dyn Fn(u64) -> Option<Dynamic> + 'static>;
 /// A standard callback function for progress reporting.
+#[cfg(not(feature = "unchecked"))]
 #[cfg(feature = "sync")]
 pub type OnProgressCallback = Box<dyn Fn(u64) -> Option<Dynamic> + Send + Sync + 'static>;
 

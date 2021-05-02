@@ -185,6 +185,16 @@ impl Position {
         #[cfg(feature = "no_position")]
         return true;
     }
+    /// Print this [`Position`] for debug purposes.
+    #[inline(always)]
+    pub(crate) fn debug_print(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        #[cfg(not(feature = "no_position"))]
+        if !self.is_none() {
+            write!(_f, " @ {:?}", self)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl Default for Position {
@@ -566,6 +576,80 @@ impl Token {
 
             token => token.keyword_syntax().into(),
         }
+    }
+
+    /// Is this token an op-assignment operator?
+    #[inline]
+    pub fn is_op_assignment(&self) -> bool {
+        match self {
+            Self::PlusAssign
+            | Self::MinusAssign
+            | Self::MultiplyAssign
+            | Self::DivideAssign
+            | Self::LeftShiftAssign
+            | Self::RightShiftAssign
+            | Self::ModuloAssign
+            | Self::PowerOfAssign
+            | Self::AndAssign
+            | Self::OrAssign
+            | Self::XOrAssign => true,
+            _ => false,
+        }
+    }
+
+    /// Get the corresponding operator of the token if it is an op-assignment operator.
+    pub fn map_op_assignment(&self) -> Option<Self> {
+        Some(match self {
+            Self::PlusAssign => Self::Plus,
+            Self::MinusAssign => Self::Minus,
+            Self::MultiplyAssign => Self::Multiply,
+            Self::DivideAssign => Self::Divide,
+            Self::LeftShiftAssign => Self::LeftShift,
+            Self::RightShiftAssign => Self::RightShift,
+            Self::ModuloAssign => Self::Modulo,
+            Self::PowerOfAssign => Self::PowerOf,
+            Self::AndAssign => Self::Ampersand,
+            Self::OrAssign => Self::Pipe,
+            Self::XOrAssign => Self::XOr,
+            _ => return None,
+        })
+    }
+
+    /// Has this token a corresponding op-assignment operator?
+    #[inline]
+    pub fn has_op_assignment(&self) -> bool {
+        match self {
+            Self::Plus
+            | Self::Minus
+            | Self::Multiply
+            | Self::Divide
+            | Self::LeftShift
+            | Self::RightShift
+            | Self::Modulo
+            | Self::PowerOf
+            | Self::Ampersand
+            | Self::Pipe
+            | Self::XOr => true,
+            _ => false,
+        }
+    }
+
+    /// Get the corresponding op-assignment operator of the token.
+    pub fn make_op_assignment(&self) -> Option<Self> {
+        Some(match self {
+            Self::Plus => Self::PlusAssign,
+            Self::Minus => Self::MinusAssign,
+            Self::Multiply => Self::MultiplyAssign,
+            Self::Divide => Self::DivideAssign,
+            Self::LeftShift => Self::LeftShiftAssign,
+            Self::RightShift => Self::RightShiftAssign,
+            Self::Modulo => Self::ModuloAssign,
+            Self::PowerOf => Self::PowerOfAssign,
+            Self::Ampersand => Self::AndAssign,
+            Self::Pipe => Self::OrAssign,
+            Self::XOr => Self::XOrAssign,
+            _ => return None,
+        })
     }
 
     /// Reverse lookup a token from a piece of syntax.

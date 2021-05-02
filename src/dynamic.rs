@@ -2,7 +2,7 @@
 
 use crate::fn_native::SendSync;
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
-use crate::{FnPtr, ImmutableString, INT};
+use crate::{FnPtr, ImmutableString, SmartString, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -900,6 +900,12 @@ impl Dynamic {
                 .deref()
                 .into();
         }
+        if TypeId::of::<T>() == TypeId::of::<SmartString>() {
+            return <dyn Any>::downcast_ref::<SmartString>(&value)
+                .unwrap()
+                .clone()
+                .into();
+        }
         if TypeId::of::<T>() == TypeId::of::<()>() {
             return ().into();
         }
@@ -1173,13 +1179,13 @@ impl Dynamic {
     /// ```
     #[inline(always)]
     pub fn clone_cast<T: Any + Clone>(&self) -> T {
-        self.read_lock::<T>().unwrap().clone()
+        self.flatten_clone().cast::<T>()
     }
     /// Flatten the [`Dynamic`] and clone it.
     ///
     /// If the [`Dynamic`] is not a shared value, it returns a cloned copy.
     ///
-    /// If the [`Dynamic`] is a shared value, it a cloned copy of the shared value.
+    /// If the [`Dynamic`] is a shared value, it returns a cloned copy of the shared value.
     #[inline(always)]
     pub fn flatten_clone(&self) -> Self {
         #[cfg(not(feature = "no_closure"))]
@@ -1361,7 +1367,7 @@ impl Dynamic {
     ///
     /// Returns [`None`] if the cast fails, or if the value is shared.
     #[inline(always)]
-    pub(crate) fn downcast_ref<T: Any + Clone>(&self) -> Option<&T> {
+    pub(crate) fn downcast_ref<T: Any + Clone + ?Sized>(&self) -> Option<&T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
         if TypeId::of::<T>() == TypeId::of::<INT>() {
@@ -1393,12 +1399,6 @@ impl Dynamic {
         if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
             return match &self.0 {
                 Union::Str(value, _) => <dyn Any>::downcast_ref::<T>(value),
-                _ => None,
-            };
-        }
-        if TypeId::of::<T>() == TypeId::of::<String>() {
-            return match &self.0 {
-                Union::Str(value, _) => <dyn Any>::downcast_ref::<T>(value.as_ref() as &String),
                 _ => None,
             };
         }
@@ -1720,7 +1720,7 @@ impl From<&ImmutableString> for Dynamic {
         value.clone().into()
     }
 }
-#[cfg(not(feature = "no_smartstring"))]
+#[cfg(not(feature = "no_smartstring_for_identifier"))]
 impl From<&crate::Identifier> for Dynamic {
     #[inline(always)]
     fn from(value: &crate::Identifier) -> Self {

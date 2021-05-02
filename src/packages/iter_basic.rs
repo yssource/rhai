@@ -10,10 +10,6 @@ use num_traits::{CheckedAdd as Add, CheckedSub as Sub};
 #[cfg(feature = "unchecked")]
 use std::ops::{Add, Sub};
 
-fn get_range<T: Variant + Clone>(from: T, to: T) -> Result<Range<T>, Box<EvalAltResult>> {
-    Ok(from..to)
-}
-
 // Register range function with step
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 struct StepRange<T>(T, T, T)
@@ -130,18 +126,11 @@ where
     }
 }
 
-fn get_step_range<T>(from: T, to: T, step: T) -> Result<StepRange<T>, Box<EvalAltResult>>
-where
-    T: Variant + Copy + PartialOrd + Add<Output = T> + Sub<Output = T>,
-{
-    StepRange::<T>::new(from, to, step)
-}
-
 macro_rules! reg_range {
     ($lib:ident | $x:expr => $( $y:ty ),*) => {
         $(
             $lib.set_iterator::<Range<$y>>();
-            let _hash = $lib.set_native_fn($x, get_range::<$y>);
+            let _hash = $lib.set_native_fn($x, |from: $y, to: $y| Ok(from..to));
 
             #[cfg(feature = "metadata")]
             $lib.update_fn_metadata(_hash, &[
@@ -154,7 +143,7 @@ macro_rules! reg_range {
     ($lib:ident | step $x:expr => $( $y:ty ),*) => {
         $(
             $lib.set_iterator::<StepRange<$y>>();
-            let _hash = $lib.set_native_fn($x, get_step_range::<$y>);
+            let _hash = $lib.set_native_fn($x, |from: $y, to: $y, step: $y| StepRange::new(from, to, step));
 
             #[cfg(feature = "metadata")]
             $lib.update_fn_metadata(_hash, &[
@@ -192,12 +181,72 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
         }
     }
 
+    #[cfg(not(feature = "no_float"))]
+    {
+        use crate::FLOAT;
+
+        #[derive(Debug, Clone, Copy, PartialEq)]
+        struct StepFloatRange(FLOAT, FLOAT, FLOAT);
+
+        impl StepFloatRange {
+            pub fn new(from: FLOAT, to: FLOAT, step: FLOAT) -> Result<Self, Box<EvalAltResult>> {
+                #[cfg(not(feature = "unchecked"))]
+                if step == 0.0 {
+                    return EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
+                        Box::new(EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE)),
+                        crate::Position::NONE,
+                    ).into();
+                }
+
+                Ok(Self(from, to, step))
+            }
+        }
+
+        impl Iterator for StepFloatRange {
+            type Item = FLOAT;
+
+            fn next(&mut self) -> Option<FLOAT> {
+                if self.0 == self.1 {
+                    None
+                } else if self.0 < self.1 {
+                    #[cfg(not(feature = "unchecked"))]
+                    if self.2 < 0.0 {
+                        return None;
+                    }
+
+                    let v = self.0;
+                    let n = self.0 + self.2;
+
+                    self.0 = if n >= self.1 { self.1 } else { n };
+                    Some(v)
+                } else {
+                    #[cfg(not(feature = "unchecked"))]
+                    if self.2 > 0.0 {
+                        return None;
+                    }
+
+                    let v = self.0;
+                    let n = self.0 + self.2;
+
+                    self.0 = if n <= self.1 { self.1 } else { n };
+                    Some(v)
+                }
+            }
+        }
+
+        impl std::iter::FusedIterator for StepFloatRange {}
+
+        lib.set_iterator::<StepFloatRange>();
+
+        let _hash = lib.set_native_fn("range", |from, to, step| StepFloatRange::new(from, to, step));
+        #[cfg(feature = "metadata")]
+        lib.update_fn_metadata(_hash, &["from: FLOAT", "to: FLOAT", "step: FLOAT", "Iterator<Item=FLOAT>"]);
+    }
+
     #[cfg(feature = "decimal")]
     {
-        use rust_decimal::{
-            prelude::{One, Zero},
-            Decimal,
-        };
+        use rust_decimal::Decimal;
+        use num_traits::Zero;
 
         #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
         struct StepDecimalRange(Decimal, Decimal, Decimal);
@@ -251,10 +300,6 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
         impl std::iter::FusedIterator for StepDecimalRange {}
 
         lib.set_iterator::<StepDecimalRange>();
-
-        let _hash = lib.set_native_fn("range", |from, to| StepDecimalRange::new(from, to, Decimal::one()));
-        #[cfg(feature = "metadata")]
-        lib.update_fn_metadata(_hash, &["from: Decimal", "to: Decimal", "Iterator<Item=Decimal>"]);
 
         let _hash = lib.set_native_fn("range", |from, to, step| StepDecimalRange::new(from, to, step));
         #[cfg(feature = "metadata")]

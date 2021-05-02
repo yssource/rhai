@@ -1,10 +1,11 @@
 //! Module implementing the [`AST`] optimizer.
 
-use crate::ast::{Expr, Stmt};
+use crate::ast::{Expr, OpAssignment, Stmt};
 use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
 use crate::parser::map_dynamic_to_expr;
+use crate::token::Token;
 use crate::utils::get_hasher;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, ImmutableString,
@@ -238,29 +239,18 @@ fn optimize_stmt_block(
             .find_map(|(i, stmt)| match stmt {
                 stmt if !is_pure(stmt) => Some(i),
 
-                Stmt::Noop(_) | Stmt::Return(_, None, _) => None,
-
-                Stmt::Let(e, _, _, _)
-                | Stmt::Const(e, _, _, _)
-                | Stmt::Expr(e)
-                | Stmt::Return(_, Some(e), _)
-                    if e.is_constant() =>
+                Stmt::Let(e, _, _, _) | Stmt::Const(e, _, _, _) | Stmt::Expr(e)
+                    if !e.is_constant() =>
                 {
-                    None
+                    Some(i)
                 }
 
                 #[cfg(not(feature = "no_module"))]
-                Stmt::Import(e, _, _) if e.is_constant() => None,
+                Stmt::Import(e, _, _) if !e.is_constant() => Some(i),
 
-                #[cfg(not(feature = "no_module"))]
-                Stmt::Export(_, _) => None,
-
-                #[cfg(not(feature = "no_closure"))]
-                Stmt::Share(_) => None,
-
-                _ => Some(i),
+                _ => None,
             })
-            .map_or(0, |n| statements.len() - n);
+            .map_or(0, |n| statements.len() - n - 1);
 
         while index < statements.len() {
             if preserve_result && index >= statements.len() - 1 {
@@ -381,6 +371,33 @@ fn optimize_stmt_block(
 /// Optimize a [statement][Stmt].
 fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
     match stmt {
+        // var = var op expr => var op= expr
+        Stmt::Assignment(x, _)
+            if x.1.is_none()
+                && x.0.is_variable_access(true)
+                && matches!(&x.2, Expr::FnCall(x2, _)
+                        if Token::lookup_from_syntax(&x2.name).map(|t| t.has_op_assignment()).unwrap_or(false)
+                        && x2.args_count() == 2 && x2.args.len() >= 1
+                        && x2.args[0].get_variable_name(true) == x.0.get_variable_name(true)
+                ) =>
+        {
+            match &mut x.2 {
+                Expr::FnCall(x2, _) => {
+                    state.set_dirty();
+                    let op = Token::lookup_from_syntax(&x2.name).unwrap();
+                    let op_assignment = op.make_op_assignment().unwrap();
+                    x.1 = Some(OpAssignment::new(op_assignment));
+                    x.2 = if x2.args.len() > 1 {
+                        mem::take(&mut x2.args[1])
+                    } else {
+                        let (value, pos) = mem::take(&mut x2.constant_args[0]);
+                        Expr::DynamicConstant(Box::new(value), pos)
+                    };
+                }
+                _ => unreachable!(),
+            }
+        }
+
         // expr op= expr
         Stmt::Assignment(x, _) => match x.0 {
             Expr::Variable(_, _, _) => optimize_expr(&mut x.2, state),

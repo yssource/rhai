@@ -1409,7 +1409,7 @@ fn parse_unary(
 
 /// Make an assignment statement.
 fn make_assignment_stmt<'a>(
-    op: &'static str,
+    op: Option<Token>,
     state: &mut ParseState,
     lhs: Expr,
     rhs: Expr,
@@ -1432,11 +1432,7 @@ fn make_assignment_stmt<'a>(
         }
     }
 
-    let op_info = if op.is_empty() {
-        None
-    } else {
-        Some(OpAssignment::new(op))
-    };
+    let op_info = op.map(|v| OpAssignment::new(v));
 
     match &lhs {
         // const_expr = rhs
@@ -1516,25 +1512,12 @@ fn parse_op_assignment_stmt(
     let (token, token_pos) = input.peek().unwrap();
     settings.pos = *token_pos;
 
-    let op = match token {
-        Token::Equals => "",
-
-        Token::PlusAssign
-        | Token::MinusAssign
-        | Token::MultiplyAssign
-        | Token::DivideAssign
-        | Token::LeftShiftAssign
-        | Token::RightShiftAssign
-        | Token::ModuloAssign
-        | Token::PowerOfAssign
-        | Token::AndAssign
-        | Token::OrAssign
-        | Token::XOrAssign => token.keyword_syntax(),
-
+    let (op, pos) = match token {
+        Token::Equals => (None, input.next().unwrap().1),
+        _ if token.is_op_assignment() => input.next().map(|(op, pos)| (Some(op), pos)).unwrap(),
         _ => return Ok(Stmt::Expr(lhs)),
     };
 
-    let (_, pos) = input.next().unwrap();
     let rhs = parse_expr(input, state, lib, settings.level_up())?;
     make_assignment_stmt(op, state, lhs, rhs, pos)
 }

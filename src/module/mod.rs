@@ -1661,6 +1661,16 @@ impl fmt::Debug for NamespaceRef {
     }
 }
 
+impl fmt::Display for NamespaceRef {
+    #[inline(always)]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for Ident { name, .. } in self.path.iter() {
+            write!(f, "{}{}", name, Token::DoubleColon.syntax())?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for NamespaceRef {
     type Target = StaticVec<Ident>;
 
@@ -1674,16 +1684,6 @@ impl DerefMut for NamespaceRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.path
-    }
-}
-
-impl fmt::Display for NamespaceRef {
-    #[inline(always)]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for Ident { name, .. } in self.path.iter() {
-            write!(f, "{}{}", name, Token::DoubleColon.syntax())?;
-        }
-        Ok(())
     }
 }
 

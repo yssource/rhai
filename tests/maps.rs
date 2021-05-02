@@ -205,7 +205,7 @@ fn test_map_json() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine.parse_json("   123", true).expect_err("should error"),
-        EvalAltResult::ErrorParsing(ParseErrorType::MissingToken(token, _), pos)
+        EvalAltResult::ErrorParsing(ParseErrorType::MissingToken(token, _), _)
             if token == "{"
     ));
 
