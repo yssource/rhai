@@ -558,7 +558,7 @@ pub struct FnResolutionCacheEntry {
 }
 
 /// A function resolution cache.
-pub type FnResolutionCache = BTreeMap<u64, Option<FnResolutionCacheEntry>>;
+pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
 
 /// _(INTERNALS)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
@@ -776,7 +776,7 @@ pub struct Engine {
     pub(crate) module_resolver: Box<dyn crate::ModuleResolver>,
 
     /// A map mapping type names to pretty-print names.
-    pub(crate) type_names: BTreeMap<Identifier, Identifier>,
+    pub(crate) type_names: BTreeMap<Identifier, Box<Identifier>>,
 
     /// An empty [`ImmutableString`] for cloning purposes.
     pub(crate) empty_string: ImmutableString,
@@ -786,7 +786,7 @@ pub struct Engine {
     /// A map containing custom keywords and precedence to recognize.
     pub(crate) custom_keywords: BTreeMap<Identifier, Option<Precedence>>,
     /// Custom syntax.
-    pub(crate) custom_syntax: BTreeMap<Identifier, CustomSyntax>,
+    pub(crate) custom_syntax: BTreeMap<Identifier, Box<CustomSyntax>>,
     /// Callback closure for resolving variable access.
     pub(crate) resolve_var: Option<OnVarCallback>,
 

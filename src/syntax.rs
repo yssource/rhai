@@ -230,13 +230,14 @@ impl Engine {
         new_vars: isize,
         func: impl Fn(&mut EvalContext, &[Expression]) -> RhaiResult + SendSync + 'static,
     ) -> &mut Self {
-        let syntax = CustomSyntax {
-            parse: Box::new(parse),
-            func: (Box::new(func) as Box<FnCustomSyntaxEval>).into(),
-            scope_delta: new_vars,
-        };
-
-        self.custom_syntax.insert(key.into(), syntax);
+        self.custom_syntax.insert(
+            key.into(),
+            Box::new(CustomSyntax {
+                parse: Box::new(parse),
+                func: (Box::new(func) as Box<FnCustomSyntaxEval>).into(),
+                scope_delta: new_vars,
+            }),
+        );
         self
     }
 }

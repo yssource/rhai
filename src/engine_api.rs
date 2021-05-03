@@ -265,7 +265,8 @@ impl Engine {
     #[inline(always)]
     pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) -> &mut Self {
         // Add the pretty-print type name into the map
-        self.type_names.insert(type_name::<T>().into(), name.into());
+        self.type_names
+            .insert(type_name::<T>().into(), Box::new(name.into()));
         self
     }
     /// Register an type iterator for an iterable type with the [`Engine`].

@@ -48,7 +48,7 @@ impl Default for FnNamespace {
 #[derive(Debug, Clone)]
 pub struct FuncInfo {
     /// Function instance.
-    pub func: CallableFunction,
+    pub func: Shared<CallableFunction>,
     /// Function namespace.
     pub namespace: FnNamespace,
     /// Function access mode.
@@ -140,7 +140,7 @@ pub struct Module {
     functions: BTreeMap<u64, Box<FuncInfo>>,
     /// Flattened collection of all external Rust functions, native or scripted.
     /// including those in sub-modules.
-    all_functions: BTreeMap<u64, CallableFunction>,
+    all_functions: BTreeMap<u64, Shared<CallableFunction>>,
     /// Iterator functions, keyed by the type producing the iterator.
     type_iterators: BTreeMap<TypeId, IteratorFn>,
     /// Flattened collection of iterator functions, including those in sub-modules.
@@ -497,7 +497,7 @@ impl Module {
                 param_types: Default::default(),
                 #[cfg(feature = "metadata")]
                 param_names,
-                func: fn_def.into(),
+                func: Into::<CallableFunction>::into(fn_def).into(),
             }),
         );
         self.indexed = false;
@@ -721,7 +721,7 @@ impl Module {
                 param_types,
                 #[cfg(feature = "metadata")]
                 param_names,
-                func,
+                func: func.into(),
             }),
         );
 
@@ -1119,7 +1119,7 @@ impl Module {
     /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
     #[inline(always)]
     pub(crate) fn get_fn(&self, hash_fn: u64) -> Option<&CallableFunction> {
-        self.functions.get(&hash_fn).map(|f| &f.func)
+        self.functions.get(&hash_fn).map(|f| f.func.as_ref())
     }
 
     /// Does the particular namespace-qualified function exist in the [`Module`]?
@@ -1135,7 +1135,9 @@ impl Module {
     /// The [`u64`] hash is calculated by [`build_index`][Module::build_index].
     #[inline(always)]
     pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
-        self.all_functions.get(&hash_qualified_fn)
+        self.all_functions
+            .get(&hash_qualified_fn)
+            .map(|f| f.as_ref())
     }
 
     /// Combine another [`Module`] into this [`Module`].
@@ -1486,7 +1488,7 @@ impl Module {
             module: &'a Module,
             path: &mut Vec<&'a str>,
             variables: &mut BTreeMap<u64, Dynamic>,
-            functions: &mut BTreeMap<u64, CallableFunction>,
+            functions: &mut BTreeMap<u64, Shared<CallableFunction>>,
             type_iterators: &mut BTreeMap<TypeId, IteratorFn>,
         ) -> bool {
             let mut contains_indexed_global_functions = false;

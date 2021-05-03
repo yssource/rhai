@@ -161,7 +161,7 @@ impl Engine {
         args: Option<&mut FnCallArgs>,
         allow_dynamic: bool,
         is_op_assignment: bool,
-    ) -> &'s Option<FnResolutionCacheEntry> {
+    ) -> &'s Option<Box<FnResolutionCacheEntry>> {
         let mut hash = if let Some(ref args) = args {
             let hash_params = calc_fn_params_hash(args.iter().map(|a| a.type_id()));
             combine_hashes(hash_script, hash_params)
@@ -222,7 +222,7 @@ impl Engine {
 
                     match func {
                         // Specific version found
-                        Some(f) => return Some(f),
+                        Some(f) => return Some(Box::new(f)),
 
                         // Stop when all permutations are exhausted
                         None if bitmask >= max_bitmask => {
@@ -250,6 +250,7 @@ impl Engine {
                                         },
                                     )
                                 }
+                                .map(Box::new)
                             });
                         }
 
@@ -311,7 +312,8 @@ impl Engine {
             is_op_assignment,
         );
 
-        if let Some(FnResolutionCacheEntry { func, source }) = func {
+        if let Some(f) = func {
+            let FnResolutionCacheEntry { func, source } = f.as_ref();
             assert!(func.is_native());
 
             // Calling pure function but the first argument is a reference?
@@ -717,10 +719,11 @@ impl Engine {
         };
 
         #[cfg(not(feature = "no_function"))]
-        if let Some(FnResolutionCacheEntry { func, source }) = hash_script.and_then(|hash| {
+        if let Some(f) = hash_script.and_then(|hash| {
             self.resolve_function(mods, state, lib, fn_name, hash, None, false, false)
                 .clone()
         }) {
+            let FnResolutionCacheEntry { func, source } = *f;
             // Script function call
             assert!(func.is_script());
 
