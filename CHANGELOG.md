@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 0.20.2
 ==============
 
+Breaking changes
+----------------
+
+* `Engine::disable_doc_comments` is removed because doc-comments are now placed under the `metadata` feature flag.
+
 New features
 ------------
 

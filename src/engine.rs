@@ -804,11 +804,6 @@ pub struct Engine {
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
     pub(crate) limits: Limits,
-
-    /// Disable doc-comments?
-    #[cfg(not(feature = "no_function"))]
-    #[cfg(feature = "metadata")]
-    pub(crate) disable_doc_comments: bool,
 }
 
 impl fmt::Debug for Engine {
@@ -926,10 +921,6 @@ impl Engine {
                 #[cfg(not(feature = "no_object"))]
                 max_map_size: None,
             },
-
-            #[cfg(not(feature = "no_function"))]
-            #[cfg(feature = "metadata")]
-            disable_doc_comments: false,
         };
 
         engine.global_namespace.set_internal(true);
@@ -987,10 +978,6 @@ impl Engine {
                 #[cfg(not(feature = "no_object"))]
                 max_map_size: None,
             },
-
-            #[cfg(not(feature = "no_function"))]
-            #[cfg(feature = "metadata")]
-            disable_doc_comments: false,
         };
 
         engine.global_namespace.set_internal(true);
