@@ -705,7 +705,7 @@ impl Clone for Dynamic {
             #[cfg(not(feature = "no_float"))]
             Union::Float(value, tag, _) => Self(Union::Float(value, tag, AccessMode::ReadWrite)),
             #[cfg(feature = "decimal")]
-            Union::Decimal(ref value, _, _) => {
+            Union::Decimal(ref value, tag, _) => {
                 Self(Union::Decimal(value.clone(), tag, AccessMode::ReadWrite))
             }
             #[cfg(not(feature = "no_index"))]

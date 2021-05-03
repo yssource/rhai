@@ -246,7 +246,6 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
     #[cfg(feature = "decimal")]
     {
         use rust_decimal::Decimal;
-        use num_traits::Zero;
 
         #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
         struct StepDecimalRange(Decimal, Decimal, Decimal);
@@ -254,11 +253,15 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
         impl StepDecimalRange {
             pub fn new(from: Decimal, to: Decimal, step: Decimal) -> Result<Self, Box<EvalAltResult>> {
                 #[cfg(not(feature = "unchecked"))]
-                if step.is_zero() {
-                    return EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
-                        Box::new(EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE)),
-                        crate::Position::NONE,
-                    ).into();
+                {
+                    use num_traits::Zero;
+
+                    if step.is_zero() {
+                        return EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
+                            Box::new(EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE)),
+                            crate::Position::NONE,
+                        ).into();
+                    }
                 }
 
                 Ok(Self(from, to, step))

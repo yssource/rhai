@@ -307,7 +307,6 @@ mod decimal_functions {
         prelude::{FromStr, RoundingStrategy},
         Decimal,
     };
-    use std::convert::TryFrom;
 
     #[rhai_fn(name = "floor", get = "floor")]
     pub fn floor(x: Decimal) -> Decimal {
@@ -424,6 +423,8 @@ mod decimal_functions {
 
     #[cfg(not(feature = "no_float"))]
     pub mod float {
+        use std::convert::TryFrom;
+
         #[rhai_fn(name = "to_decimal", return_raw)]
         pub fn f32_to_decimal(x: f32) -> Result<Decimal, Box<EvalAltResult>> {
             Decimal::try_from(x).map_err(|_| {
