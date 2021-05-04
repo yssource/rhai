@@ -148,6 +148,23 @@ impl<'a> Into<ScriptFnMetadata<'a>> for &'a ScriptFnDef {
     }
 }
 
+#[cfg(not(feature = "no_function"))]
+impl std::cmp::PartialOrd for ScriptFnMetadata<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[cfg(not(feature = "no_function"))]
+impl std::cmp::Ord for ScriptFnMetadata<'_> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.name.cmp(other.name) {
+            std::cmp::Ordering::Equal => self.params.len().cmp(&other.params.len()),
+            cmp => cmp,
+        }
+    }
+}
+
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 ///
 /// # Thread Safety

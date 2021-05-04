@@ -1456,7 +1456,7 @@ impl Module {
             .filter(|f| f.func.is_script())
             .for_each(|f| {
                 // Encapsulate AST environment
-                let mut func = crate::fn_native::shared_take_or_clone(f.func.get_fn_def().clone());
+                let mut func = f.func.get_fn_def().as_ref().clone();
                 func.lib = Some(ast.shared_lib());
                 func.mods = func_mods.clone();
                 module.set_script_fn(func);
