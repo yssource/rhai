@@ -348,6 +348,8 @@ fn parse_fn_call(
                 FnCallHashes::from_native(hash)
             };
 
+            args.shrink_to_fit();
+
             return Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
                     name: state.get_identifier(id),
@@ -392,6 +394,8 @@ fn parse_fn_call(
                 } else {
                     FnCallHashes::from_native(hash)
                 };
+
+                args.shrink_to_fit();
 
                 return Ok(Expr::FnCall(
                     Box::new(FnCallExpr {
@@ -1066,6 +1070,7 @@ fn parse_primary(
                 }
             }
 
+            segments.shrink_to_fit();
             Expr::InterpolatedString(Box::new(segments))
         }
 
@@ -1344,6 +1349,7 @@ fn parse_unary(
                 expr => {
                     let mut args = StaticVec::new();
                     args.push(expr);
+                    args.shrink_to_fit();
 
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
@@ -1370,6 +1376,7 @@ fn parse_unary(
                 expr => {
                     let mut args = StaticVec::new();
                     args.push(expr);
+                    args.shrink_to_fit();
 
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
@@ -1387,8 +1394,8 @@ fn parse_unary(
         Token::Bang => {
             let pos = eat_token(input, Token::Bang);
             let mut args = StaticVec::new();
-            let expr = parse_unary(input, state, lib, settings.level_up())?;
-            args.push(expr);
+            args.push(parse_unary(input, state, lib, settings.level_up())?);
+            args.shrink_to_fit();
 
             Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
@@ -1730,6 +1737,7 @@ fn parse_binary_op(
         let mut args = StaticVec::new();
         args.push(root);
         args.push(rhs);
+        args.shrink_to_fit();
 
         root = match op_token {
             Token::Plus
@@ -1782,6 +1790,7 @@ fn parse_binary_op(
                 // Swap the arguments
                 let current_lhs = args.remove(0);
                 args.push(current_lhs);
+                args.shrink_to_fit();
 
                 // Convert into a call to `contains`
                 let hash = calc_fn_hash(empty(), OP_CONTAINS, 2);
@@ -1836,7 +1845,7 @@ fn parse_custom_syntax(
 ) -> Result<Expr, ParseError> {
     let mut keywords: StaticVec<Expr> = Default::default();
     let mut segments: StaticVec<_> = Default::default();
-    let mut tokens: Vec<_> = Default::default();
+    let mut tokens: StaticVec<_> = Default::default();
 
     // Adjust the variables stack
     match syntax.scope_delta {
@@ -1919,6 +1928,9 @@ fn parse_custom_syntax(
             },
         }
     }
+
+    keywords.shrink_to_fit();
+    tokens.shrink_to_fit();
 
     Ok(Expr::Custom(
         Box::new(CustomExpr {
@@ -2366,7 +2378,7 @@ fn parse_export(
         }
     }
 
-    Ok(Stmt::Export(exports, settings.pos))
+    Ok(Stmt::Export(exports.into_boxed_slice(), settings.pos))
 }
 
 /// Parse a statement block.
@@ -2467,7 +2479,7 @@ fn parse_block(
     #[cfg(not(feature = "no_module"))]
     state.modules.truncate(prev_mods_len);
 
-    Ok(Stmt::Block(statements, settings.pos))
+    Ok(Stmt::Block(statements.into_boxed_slice(), settings.pos))
 }
 
 /// Parse an expression as a statement.
@@ -2820,7 +2832,8 @@ fn parse_fn(
     }
     .into();
 
-    let params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
+    let mut params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
+    params.shrink_to_fit();
 
     #[cfg(not(feature = "no_closure"))]
     let externals = state
@@ -2873,6 +2886,8 @@ fn make_curry_from_externals(
             Box::new((None, None, x.clone())),
         ));
     });
+
+    args.shrink_to_fit();
 
     let expr = Expr::FnCall(
         Box::new(FnCallExpr {
@@ -2967,7 +2982,7 @@ fn parse_anon_fn(
         Default::default()
     };
 
-    let params: StaticVec<_> = if cfg!(not(feature = "no_closure")) {
+    let mut params: StaticVec<_> = if cfg!(not(feature = "no_closure")) {
         externals
             .iter()
             .cloned()
@@ -2976,6 +2991,7 @@ fn parse_anon_fn(
     } else {
         params.into_iter().map(|(v, _)| v).collect()
     };
+    params.shrink_to_fit();
 
     // Create unique function name by hashing the script body plus the parameters.
     let hasher = &mut get_hasher();

@@ -417,7 +417,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
 
             *stmt = if preserve_result {
                 // -> { expr, Noop }
-                Stmt::Block(vec![Stmt::Expr(expr), Stmt::Noop(pos)], pos)
+                Stmt::Block(Box::new([Stmt::Expr(expr), Stmt::Noop(pos)]), pos)
             } else {
                 // -> expr
                 Stmt::Expr(expr)
@@ -434,7 +434,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             let else_block = mem::take(&mut *x.1).into_vec();
             *stmt = match optimize_stmt_block(else_block, state, preserve_result, true, false) {
                 statements if statements.is_empty() => Stmt::Noop(x.1.position()),
-                statements => Stmt::Block(statements, x.1.position()),
+                statements => Stmt::Block(statements.into_boxed_slice(), x.1.position()),
             }
         }
         // if true { if_block } else { else_block } -> if_block
@@ -443,7 +443,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             let if_block = mem::take(&mut *x.0).into_vec();
             *stmt = match optimize_stmt_block(if_block, state, preserve_result, true, false) {
                 statements if statements.is_empty() => Stmt::Noop(x.0.position()),
-                statements => Stmt::Block(statements, x.0.position()),
+                statements => Stmt::Block(statements.into_boxed_slice(), x.0.position()),
             }
         }
         // if expr { if_block } else { else_block }
@@ -484,7 +484,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                         condition,
                         Box::new((
                             mem::take(&mut block.1),
-                            Stmt::Block(def_stmt, def_pos).into(),
+                            Stmt::Block(def_stmt.into_boxed_slice(), def_pos).into(),
                         )),
                         match_expr.position(),
                     );
@@ -494,7 +494,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                     let statements = mem::take(&mut *block.1);
                     let statements =
                         optimize_stmt_block(statements.into_vec(), state, true, true, false);
-                    *stmt = Stmt::Block(statements, new_pos);
+                    *stmt = Stmt::Block(statements.into_boxed_slice(), new_pos);
                 }
             } else {
                 // Promote the default case
@@ -505,7 +505,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                 } else {
                     x.1.position()
                 };
-                *stmt = Stmt::Block(def_stmt, def_pos);
+                *stmt = Stmt::Block(def_stmt.into_boxed_slice(), def_pos);
             }
         }
         // switch
@@ -572,7 +572,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                             if preserve_result {
                                 statements.push(Stmt::Noop(pos))
                             }
-                            *stmt = Stmt::Block(statements, pos);
+                            *stmt = Stmt::Block(statements.into_boxed_slice(), pos);
                         } else {
                             *stmt = Stmt::Noop(pos);
                         };
@@ -588,7 +588,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             let block_pos = body.position();
             let block = mem::take(body.statements()).into_vec();
             *stmt = Stmt::Block(
-                optimize_stmt_block(block, state, false, true, false),
+                optimize_stmt_block(block, state, false, true, false).into_boxed_slice(),
                 block_pos,
             );
         }
@@ -611,8 +611,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         Stmt::Import(expr, _, _) => optimize_expr(expr, state),
         // { block }
         Stmt::Block(statements, pos) => {
-            let mut block =
-                optimize_stmt_block(mem::take(statements), state, preserve_result, true, false);
+            let statements = mem::take(statements).into_vec();
+            let mut block = optimize_stmt_block(statements, state, preserve_result, true, false);
 
             match block.as_mut_slice() {
                 [] => {
@@ -624,7 +624,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                     state.set_dirty();
                     *stmt = mem::take(s);
                 }
-                _ => *stmt = Stmt::Block(block, *pos),
+                _ => *stmt = Stmt::Block(block.into_boxed_slice(), *pos),
             }
         }
         // try { pure try_block } catch ( var ) { catch_block } -> try_block
@@ -634,7 +634,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             let try_pos = x.0.position();
             let try_block = mem::take(&mut *x.0).into_vec();
             *stmt = Stmt::Block(
-                optimize_stmt_block(try_block, state, false, true, false),
+                optimize_stmt_block(try_block, state, false, true, false).into_boxed_slice(),
                 try_pos,
             );
         }
@@ -820,6 +820,8 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                     }
                 }
             }
+
+            x.shrink_to_fit();
         }
         // [ constant .. ]
         #[cfg(not(feature = "no_index"))]
@@ -947,6 +949,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             }
 
             x.args.shrink_to_fit();
+            x.constant_args.shrink_to_fit();
         }
 
         // Eagerly call functions
@@ -1006,6 +1009,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             }
 
             x.args.shrink_to_fit();
+            x.constant_args.shrink_to_fit();
         }
 
         // constant-name

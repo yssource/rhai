@@ -14,6 +14,7 @@ use std::{
     fmt,
     hash::Hash,
     iter::empty,
+    mem,
     num::{NonZeroU8, NonZeroUsize},
     ops::{Add, AddAssign, Deref, DerefMut},
 };
@@ -203,9 +204,10 @@ impl AST {
         statements: impl IntoIterator<Item = Stmt>,
         functions: impl Into<Shared<Module>>,
     ) -> Self {
+        let statements: StaticVec<_> = statements.into_iter().collect();
         Self {
             source: None,
-            body: StmtBlock(statements.into_iter().collect(), Position::NONE),
+            body: StmtBlock::new(statements, Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -218,9 +220,10 @@ impl AST {
         functions: impl Into<Shared<Module>>,
         source: impl Into<Identifier>,
     ) -> Self {
+        let statements: StaticVec<_> = statements.into_iter().collect();
         Self {
             source: Some(source.into()),
-            body: StmtBlock(statements.into_iter().collect(), Position::NONE),
+            body: StmtBlock::new(statements, Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -852,7 +855,9 @@ pub struct StmtBlock(StaticVec<Stmt>, Position);
 impl StmtBlock {
     /// Create a new [`StmtBlock`].
     pub fn new(statements: impl Into<StaticVec<Stmt>>, pos: Position) -> Self {
-        Self(statements.into(), pos)
+        let mut statements = statements.into();
+        statements.shrink_to_fit();
+        Self(statements, pos)
     }
     /// Is this statements block empty?
     #[inline(always)]
@@ -899,7 +904,7 @@ impl fmt::Debug for StmtBlock {
 impl From<StmtBlock> for Stmt {
     fn from(block: StmtBlock) -> Self {
         let block_pos = block.position();
-        Self::Block(block.0.into_vec(), block_pos)
+        Self::Block(block.0.into_boxed_slice(), block_pos)
     }
 }
 
@@ -939,7 +944,7 @@ pub enum Stmt {
     ///        function call forming one statement.
     FnCall(Box<FnCallExpr>, Position),
     /// `{` stmt`;` ... `}`
-    Block(Vec<Stmt>, Position),
+    Block(Box<[Stmt]>, Position),
     /// `try` `{` stmt; ... `}` `catch` `(` var `)` `{` stmt; ... `}`
     TryCatch(
         Box<(StmtBlock, Option<Ident>, StmtBlock)>,
@@ -959,7 +964,7 @@ pub enum Stmt {
     Import(Expr, Option<Box<Ident>>, Position),
     /// `export` var `as` var `,` ...
     #[cfg(not(feature = "no_module"))]
-    Export(Vec<(Ident, Option<Ident>)>, Position),
+    Export(Box<[(Ident, Option<Ident>)]>, Position),
     /// Convert a variable to shared.
     #[cfg(not(feature = "no_closure"))]
     Share(Identifier),
@@ -976,7 +981,9 @@ impl From<Stmt> for StmtBlock {
     #[inline(always)]
     fn from(stmt: Stmt) -> Self {
         match stmt {
-            Stmt::Block(block, pos) => Self(block.into(), pos),
+            Stmt::Block(mut block, pos) => {
+                Self(block.iter_mut().map(|v| mem::take(v)).collect(), pos)
+            }
             Stmt::Noop(pos) => Self(Default::default(), pos),
             _ => {
                 let pos = stmt.position();
@@ -1282,7 +1289,7 @@ impl Stmt {
                 }
             }
             Self::Block(x, _) => {
-                for s in x {
+                for s in x.iter() {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -1330,10 +1337,10 @@ impl Stmt {
 pub struct CustomExpr {
     /// List of keywords.
     pub keywords: StaticVec<Expr>,
-    /// List of tokens actually parsed.
-    pub tokens: Vec<Identifier>,
     /// Delta number of variables in the scope.
     pub scope_delta: isize,
+    /// List of tokens actually parsed.
+    pub tokens: StaticVec<Identifier>,
 }
 
 /// _(INTERNALS)_ A binary expression.

@@ -695,19 +695,22 @@ impl Module {
     ) -> u64 {
         let is_method = func.is_method();
 
-        let param_types: StaticVec<_> = arg_types
+        let mut param_types: StaticVec<_> = arg_types
             .iter()
             .cloned()
             .enumerate()
             .map(|(i, type_id)| Self::map_type(!is_method || i > 0, type_id))
             .collect();
+        param_types.shrink_to_fit();
 
         #[cfg(feature = "metadata")]
-        let param_names = _arg_names
+        let mut param_names: StaticVec<_> = _arg_names
             .iter()
             .flat_map(|p| p.iter())
             .map(|&arg| self.identifiers.get(arg))
             .collect();
+        #[cfg(feature = "metadata")]
+        param_names.shrink_to_fit();
 
         let hash_fn = calc_native_fn_hash(empty(), &name, &param_types);
 
@@ -1692,6 +1695,8 @@ impl DerefMut for NamespaceRef {
 impl From<StaticVec<Ident>> for NamespaceRef {
     #[inline(always)]
     fn from(path: StaticVec<Ident>) -> Self {
+        let mut path = path;
+        path.shrink_to_fit();
         Self { index: None, path }
     }
 }
