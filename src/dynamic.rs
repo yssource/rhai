@@ -2,7 +2,7 @@
 
 use crate::fn_native::SendSync;
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
-use crate::{FnPtr, ImmutableString, SmartString, INT};
+use crate::{FnPtr, ImmutableString, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -973,12 +973,6 @@ impl Dynamic {
                 .deref()
                 .into();
         }
-        if TypeId::of::<T>() == TypeId::of::<SmartString>() {
-            return <dyn Any>::downcast_ref::<SmartString>(&value)
-                .unwrap()
-                .clone()
-                .into();
-        }
         if TypeId::of::<T>() == TypeId::of::<()>() {
             return ().into();
         }
@@ -1803,7 +1797,7 @@ impl From<&ImmutableString> for Dynamic {
         value.clone().into()
     }
 }
-#[cfg(not(feature = "no_smartstring_for_identifier"))]
+#[cfg(not(feature = "no_smartstring"))]
 impl From<&crate::Identifier> for Dynamic {
     #[inline(always)]
     fn from(value: &crate::Identifier) -> Self {

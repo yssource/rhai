@@ -13,6 +13,7 @@ New features
 ------------
 
 * Each `Dynamic` value can now contain arbitrary data (type `i16`) in the form of a _tag_. This is to use up otherwise wasted space in the `Dynamic` type.
+* A new internal feature `no_smartstring` to turn off `SmartString` for those rare cases that it is needed.
 
 
 Version 0.20.1

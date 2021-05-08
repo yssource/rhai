@@ -129,7 +129,7 @@ pub struct Module {
     /// ID identifying the module.
     id: Option<Identifier>,
     /// Is this module internal?
-    internal: bool,
+    pub(crate) internal: bool,
     /// Sub-modules.
     modules: BTreeMap<Identifier, Shared<Module>>,
     /// [`Module`] variables.
@@ -309,20 +309,6 @@ impl Module {
         self
     }
 
-    /// Is the [`Module`] internal?
-    #[allow(dead_code)]
-    #[inline(always)]
-    pub(crate) fn is_internal(&self) -> bool {
-        self.internal
-    }
-
-    /// Set the internal status of the [`Module`].
-    #[inline(always)]
-    pub(crate) fn set_internal(&mut self, value: bool) -> &mut Self {
-        self.internal = value;
-        self
-    }
-
     /// Is the [`Module`] empty?
     ///
     /// # Example
@@ -476,10 +462,7 @@ impl Module {
     /// If there is an existing function of the same name and number of arguments, it is replaced.
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub(crate) fn set_script_fn(
-        &mut self,
-        fn_def: impl Into<Shared<crate::ast::ScriptFnDef>>,
-    ) -> u64 {
+    pub fn set_script_fn(&mut self, fn_def: impl Into<Shared<crate::ast::ScriptFnDef>>) -> u64 {
         let fn_def = fn_def.into();
 
         // None + function name + number of arguments.

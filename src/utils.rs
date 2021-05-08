@@ -198,6 +198,7 @@ impl From<String> for ImmutableString {
         Self(Into::<SmartString>::into(value).into())
     }
 }
+#[cfg(not(feature = "no_smartstring"))]
 impl From<SmartString> for ImmutableString {
     #[inline(always)]
     fn from(value: SmartString) -> Self {
@@ -244,6 +245,14 @@ impl<'a> FromIterator<&'a str> for ImmutableString {
 impl<'a> FromIterator<String> for ImmutableString {
     #[inline(always)]
     fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
+        Self(iter.into_iter().collect::<SmartString>().into())
+    }
+}
+
+#[cfg(not(feature = "no_smartstring"))]
+impl<'a> FromIterator<SmartString> for ImmutableString {
+    #[inline(always)]
+    fn from_iter<T: IntoIterator<Item = SmartString>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<SmartString>().into())
     }
 }
@@ -618,17 +627,17 @@ impl ImmutableString {
 /// yet interned.
 #[derive(Debug, Clone, Default, Hash)]
 pub struct IdentifierBuilder(
-    #[cfg(feature = "no_smartstring_for_identifier")] std::collections::BTreeSet<Identifier>,
+    #[cfg(feature = "no_smartstring")] std::collections::BTreeSet<Identifier>,
 );
 
 impl IdentifierBuilder {
     /// Get an identifier from a text string.
     #[inline(always)]
     pub fn get(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
-        #[cfg(not(feature = "no_smartstring_for_identifier"))]
+        #[cfg(not(feature = "no_smartstring"))]
         return text.as_ref().into();
 
-        #[cfg(feature = "no_smartstring_for_identifier")]
+        #[cfg(feature = "no_smartstring")]
         return self.0.get(text.as_ref()).cloned().unwrap_or_else(|| {
             let s: Identifier = text.into();
             self.0.insert(s.clone());

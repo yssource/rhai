@@ -923,7 +923,7 @@ impl Engine {
             },
         };
 
-        engine.global_namespace.set_internal(true);
+        engine.global_namespace.internal = true;
         engine.register_global_module(StandardPackage::new().as_shared_module());
 
         engine
@@ -980,7 +980,7 @@ impl Engine {
             },
         };
 
-        engine.global_namespace.set_internal(true);
+        engine.global_namespace.internal = true;
 
         engine
     }
@@ -2610,18 +2610,15 @@ impl Engine {
                     #[cfg(not(feature = "no_function"))]
                     if entry_type == AccessMode::ReadOnly && lib.iter().any(|&m| !m.is_empty()) {
                         let global = if let Some(index) = mods.find(KEYWORD_GLOBAL) {
-                            let global = mods.get_mut(index).unwrap();
-
-                            if !global.is_internal() {
-                                None
-                            } else {
-                                Some(global)
+                            match mods.get_mut(index).unwrap() {
+                                m if m.internal => Some(m),
+                                _ => None,
                             }
                         } else {
                             // Create automatic global module
                             let mut global = Module::new();
-                            global.set_internal(true);
-                            mods.push(crate::engine::KEYWORD_GLOBAL, global);
+                            global.internal = true;
+                            mods.push(KEYWORD_GLOBAL, global);
                             Some(mods.get_mut(mods.len() - 1).unwrap())
                         };
 

@@ -5,8 +5,8 @@ use crate::engine::Imports;
 use crate::plugin::PluginFunction;
 use crate::token::is_valid_identifier;
 use crate::{
-    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, Identifier, ImmutableString, Module,
-    Position, RhaiResult, StaticVec,
+    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, Identifier, Module, Position,
+    RhaiResult, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -367,16 +367,17 @@ impl TryFrom<Identifier> for FnPtr {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, Default::default()))
         } else {
-            EvalAltResult::ErrorFunctionNotFound(value.into(), Position::NONE).into()
+            EvalAltResult::ErrorFunctionNotFound(value.to_string(), Position::NONE).into()
         }
     }
 }
 
-impl TryFrom<ImmutableString> for FnPtr {
+#[cfg(not(feature = "no_smartstring"))]
+impl TryFrom<crate::ImmutableString> for FnPtr {
     type Error = Box<EvalAltResult>;
 
     #[inline(always)]
-    fn try_from(value: ImmutableString) -> Result<Self, Self::Error> {
+    fn try_from(value: crate::ImmutableString) -> Result<Self, Self::Error> {
         let s: Identifier = value.into();
         Self::try_from(s)
     }
