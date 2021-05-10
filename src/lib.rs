@@ -211,11 +211,13 @@ pub use dynamic::{DynamicReadLock, DynamicWriteLock, Variant};
 
 // Expose internal data structures.
 #[cfg(feature = "internals")]
+#[deprecated = "this function is volatile and may change"]
+pub use token::{get_next_token, parse_string_literal};
+
+// Expose internal data structures.
+#[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
-pub use token::{
-    get_next_token, parse_string_literal, InputStream, Token, TokenizeState, TokenizerControl,
-    TokenizerControlBlock,
-};
+pub use token::{InputStream, Token, TokenizeState, TokenizerControl, TokenizerControlBlock};
 
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]

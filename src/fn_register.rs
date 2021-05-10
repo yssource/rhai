@@ -61,15 +61,15 @@ pub trait RegisterNativeFunction<Args, Result> {
     fn into_callable_function(self) -> CallableFunction;
     /// Get the type ID's of this function's parameters.
     fn param_types() -> Box<[TypeId]>;
-    /// Get the type names of this function's parameters.
+    /// _(METADATA)_ Get the type names of this function's parameters.
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     fn param_names() -> Box<[&'static str]>;
-    /// Get the type ID of this function's return value.
+    /// _(METADATA)_ Get the type ID of this function's return value.
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     fn return_type() -> TypeId;
-    /// Get the type name of this function's return value.
+    /// _(METADATA)_ Get the type name of this function's return value.
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     fn return_type_name() -> &'static str;

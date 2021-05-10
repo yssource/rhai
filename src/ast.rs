@@ -53,6 +53,8 @@ pub struct ScriptFnDef {
     /// Encapsulated running environment, if any.
     pub lib: Option<Shared<Module>>,
     /// Encapsulated imported modules.
+    ///
+    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     pub mods: crate::engine::Imports,
     /// Function name.
@@ -62,9 +64,14 @@ pub struct ScriptFnDef {
     /// Names of function parameters.
     pub params: StaticVec<Identifier>,
     /// Access to external variables.
+    ///
+    /// Not available under `no_closure`.
     #[cfg(not(feature = "no_closure"))]
     pub externals: std::collections::BTreeSet<Identifier>,
-    /// Function doc-comments (if any).
+    /// _(METADATA)_ Function doc-comments (if any).
+    /// Exported under the `metadata` feature only.
+    ///
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     pub comments: StaticVec<String>,
@@ -98,7 +105,10 @@ impl fmt::Display for ScriptFnDef {
 #[cfg(not(feature = "no_function"))]
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct ScriptFnMetadata<'a> {
-    /// Function doc-comments (if any).
+    /// _(METADATA)_ Function doc-comments (if any).
+    /// Exported under the `metadata` feature only.
+    ///
+    /// Not available under `no_function`.
     ///
     /// Block doc-comments are kept in a single string slice with line-breaks within.
     ///
@@ -180,6 +190,8 @@ pub struct AST {
     /// Script-defined functions.
     functions: Shared<Module>,
     /// Embedded module resolver, if any.
+    ///
+    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
 }
@@ -287,7 +299,7 @@ impl AST {
     /// _(INTERNALS)_ Get the internal shared [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
     ///
-    /// Not available under `no_function`.
+    /// Not available under `no_function` or `no_module`.
     #[cfg(feature = "internals")]
     #[deprecated = "this method is volatile and may change"]
     #[cfg(not(feature = "no_module"))]
@@ -323,6 +335,8 @@ impl AST {
     }
     /// _(INTERNALS)_ Get the embedded [module resolver][crate::ModuleResolver].
     /// Exported under the `internals` feature only.
+    ///
+    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     #[cfg(feature = "internals")]
     #[inline(always)]
@@ -960,12 +974,18 @@ pub enum Stmt {
     /// `return`/`throw`
     Return(ReturnType, Option<Expr>, Position),
     /// `import` expr `as` var
+    ///
+    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     Import(Expr, Option<Box<Ident>>, Position),
     /// `export` var `as` var `,` ...
+    ///
+    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     Export(Box<[(Ident, Option<Ident>)]>, Position),
     /// Convert a variable to shared.
+    ///
+    /// Not available under `no_closure`.
     #[cfg(not(feature = "no_closure"))]
     Share(Identifier),
 }
@@ -1529,6 +1549,8 @@ impl FnCallExpr {
 }
 
 /// A type that wraps a floating-point number and implements [`Hash`].
+///
+/// Not available under `no_float`.
 #[cfg(not(feature = "no_float"))]
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct FloatWrapper<F>(F);
@@ -1659,6 +1681,8 @@ pub enum Expr {
     /// Integer constant.
     IntegerConstant(INT, Position),
     /// Floating-point constant.
+    ///
+    /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     FloatConstant(FloatWrapper<FLOAT>, Position),
     /// Character constant.

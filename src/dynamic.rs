@@ -164,20 +164,29 @@ pub enum Union {
     /// An integer value.
     Int(INT, Tag, AccessMode),
     /// A floating-point value.
+    ///
+    /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     Float(FloatWrapper<FLOAT>, Tag, AccessMode),
-    /// A fixed-precision decimal value.
+    /// _(DECIMAL)_ A fixed-precision decimal value.
+    /// Exported under the `decimal` feature only.
     #[cfg(feature = "decimal")]
     Decimal(Box<Decimal>, Tag, AccessMode),
     /// An array value.
+    ///
+    /// Not available under `no_index`.
     #[cfg(not(feature = "no_index"))]
     Array(Box<Array>, Tag, AccessMode),
     /// An object map value.
+    ///
+    /// Not available under `no_object`.
     #[cfg(not(feature = "no_object"))]
     Map(Box<Map>, Tag, AccessMode),
     /// A function pointer.
     FnPtr(Box<FnPtr>, Tag, AccessMode),
     /// A timestamp value.
+    ///
+    /// Not available under `no-std`.
     #[cfg(not(feature = "no_std"))]
     TimeStamp(Box<Instant>, Tag, AccessMode),
 
@@ -185,14 +194,21 @@ pub enum Union {
     Variant(Box<Box<dyn Variant>>, Tag, AccessMode),
 
     /// A _shared_ value of any type.
+    ///
+    /// Not available under `no_closure`.
     #[cfg(not(feature = "no_closure"))]
     Shared(crate::Shared<crate::Locked<Dynamic>>, Tag, AccessMode),
 }
 
-/// Underlying [`Variant`] read guard for [`Dynamic`].
+/// _(INTERNALS)_ Lock guard for reading a [`Dynamic`].
+/// Exported under the `internals` feature only.
 ///
-/// This data structure provides transparent interoperability between
-/// normal [`Dynamic`] and shared [`Dynamic`] values.
+/// This type provides transparent interoperability between normal [`Dynamic`] and shared
+/// [`Dynamic`] values.
+///
+/// # Volatile Data Structure
+///
+/// This type is volatile and may change.
 #[derive(Debug)]
 pub struct DynamicReadLock<'d, T: Clone>(DynamicReadLockInner<'d, T>);
 
@@ -226,10 +242,15 @@ impl<'d, T: Any + Clone> Deref for DynamicReadLock<'d, T> {
     }
 }
 
-/// Underlying [`Variant`] write guard for [`Dynamic`].
+/// _(INTERNALS)_ Lock guard for writing a [`Dynamic`].
+/// Exported under the `internals` feature only.
 ///
-/// This data structure provides transparent interoperability between
-/// normal [`Dynamic`] and shared [`Dynamic`] values.
+/// This type provides transparent interoperability between normal [`Dynamic`] and shared
+/// [`Dynamic`] values.
+///
+/// # Volatile Data Structure
+///
+/// This type is volatile and may change.
 #[derive(Debug)]
 pub struct DynamicWriteLock<'d, T: Clone>(DynamicWriteLockInner<'d, T>);
 
@@ -758,21 +779,27 @@ impl Dynamic {
     pub const ONE: Dynamic = Self(Union::Int(1, DEFAULT_TAG, AccessMode::ReadWrite));
     /// A [`Dynamic`] containing the integer negative one.
     pub const NEGATIVE_ONE: Dynamic = Self(Union::Int(-1, DEFAULT_TAG, AccessMode::ReadWrite));
-    /// A [`Dynamic`] containing the floating-point zero.
+    /// A [`Dynamic`] containing `0.0`.
+    ///
+    /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     pub const FLOAT_ZERO: Dynamic = Self(Union::Float(
         FloatWrapper::const_new(0.0),
         DEFAULT_TAG,
         AccessMode::ReadWrite,
     ));
-    /// A [`Dynamic`] containing the floating-point one.
+    /// A [`Dynamic`] containing `1.0`.
+    ///
+    /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     pub const FLOAT_ONE: Dynamic = Self(Union::Float(
         FloatWrapper::const_new(1.0),
         DEFAULT_TAG,
         AccessMode::ReadWrite,
     ));
-    /// A [`Dynamic`] containing the floating-point negative one.
+    /// A [`Dynamic`] containing the `-1.0`.
+    ///
+    /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     pub const FLOAT_NEGATIVE_ONE: Dynamic = Self(Union::Float(
         FloatWrapper::const_new(-1.0),
@@ -1806,7 +1833,7 @@ impl From<&crate::Identifier> for Dynamic {
 }
 #[cfg(not(feature = "no_index"))]
 impl Dynamic {
-    /// Create a [`Dynamc`] from an [`Array`].
+    /// Create a [`Dynamic`] from an [`Array`].
     #[inline(always)]
     pub(crate) fn from_array(array: Array) -> Self {
         Self(Union::Array(
@@ -1851,7 +1878,7 @@ impl<T: Variant + Clone> std::iter::FromIterator<T> for Dynamic {
 }
 #[cfg(not(feature = "no_object"))]
 impl Dynamic {
-    /// Create a [`Dynamc`] from a [`Map`].
+    /// Create a [`Dynamic`] from a [`Map`].
     #[inline(always)]
     pub(crate) fn from_map(map: Map) -> Self {
         Self(Union::Map(
