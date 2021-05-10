@@ -39,4 +39,4 @@ lto = "fat"
 
 [patch.crates-io]
 # Patch smartstring wth a PR fix because it doesn't properly handle no-std builds.
-smartstring = { git = "https://github.com/okready/smartstring", branch = "fix-no_std-builds" }
+smartstring = { git = "https://github.com/rhaiscript/smartstring" }
