@@ -207,7 +207,7 @@ pub use optimize::OptimizationLevel;
 
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
-pub use dynamic::Variant;
+pub use dynamic::{DynamicReadLock, DynamicWriteLock, Variant};
 
 // Expose internal data structures.
 #[cfg(feature = "internals")]
