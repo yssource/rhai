@@ -87,28 +87,33 @@ pub struct CustomSyntax {
     pub parse: Box<FnCustomSyntaxParse>,
     /// Custom syntax implementation function.
     pub func: Shared<FnCustomSyntaxEval>,
-    /// Delta number of variables in the scope.
-    pub scope_delta: isize,
+    /// Any variables added/removed in the scope?
+    pub scope_changed: bool,
 }
 
 impl Engine {
     /// Register a custom syntax with the [`Engine`].
     ///
     /// * `keywords` holds a slice of strings that define the custom syntax.  
-    /// * `new_vars` is the number of new variables declared by this custom syntax, or the number of variables removed (if negative).
+    /// * `scope_changed` specifies variables have been added/removed by this custom syntax.
     /// * `func` is the implementation function.
     ///
-    /// # Notes
+    /// # Caveat - Do not change beyond block scope
     ///
-    /// If `new_vars` is positive, then a number of new variables are expected to be pushed into the
-    /// current [`Scope`][crate::Scope].
+    /// If `scope_changed` is `true`, then the current [`Scope`][crate::Scope] is assumed to be
+    /// modified by this custom syntax.
     ///
-    /// If `new_vars` is negative, then it is expected that only the top `new_vars` variables in the
-    /// current [`Scope`][crate::Scope] will be _popped_.  Do not randomly remove variables.
+    /// Adding new variables and/or removing variables are allowed. Simply modifying the values of
+    /// variables does NOT count, so `false` should be passed in this case.
+    ///
+    /// However, only variables declared within the current _block scope_ should be touched,
+    /// since they all go away at the end of the block.
+    ///
+    /// Variables in parent blocks should be left untouched as they persist beyond the current block.
     pub fn register_custom_syntax<S: AsRef<str> + Into<Identifier>>(
         &mut self,
         keywords: &[S],
-        new_vars: isize,
+        scope_changed: bool,
         func: impl Fn(&mut EvalContext, &[Expression]) -> RhaiResult + SendSync + 'static,
     ) -> Result<&mut Self, ParseError> {
         let keywords = keywords.as_ref();
@@ -203,7 +208,7 @@ impl Engine {
                     Ok(Some(segments[stream.len()].clone()))
                 }
             },
-            new_vars,
+            scope_changed,
             func,
         );
 
@@ -215,7 +220,7 @@ impl Engine {
     ///
     /// This function is very low level.
     ///
-    /// * `new_vars` is the number of new variables declared by this custom syntax, or the number of variables removed (if negative).
+    /// * `scope_changed` specifies variables have been added/removed by this custom syntax.
     /// * `parse` is the parsing function.
     /// * `func` is the implementation function.
     ///
@@ -227,7 +232,7 @@ impl Engine {
         parse: impl Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError>
             + SendSync
             + 'static,
-        new_vars: isize,
+        scope_changed: bool,
         func: impl Fn(&mut EvalContext, &[Expression]) -> RhaiResult + SendSync + 'static,
     ) -> &mut Self {
         self.custom_syntax.insert(
@@ -235,7 +240,7 @@ impl Engine {
             Box::new(CustomSyntax {
                 parse: Box::new(parse),
                 func: (Box::new(func) as Box<FnCustomSyntaxEval>).into(),
-                scope_delta: new_vars,
+                scope_changed,
             }),
         );
         self

@@ -1848,22 +1848,12 @@ fn parse_custom_syntax(
     let mut tokens: StaticVec<_> = Default::default();
 
     // Adjust the variables stack
-    match syntax.scope_delta {
-        delta if delta > 0 => {
-            // Add enough empty variable names to the stack.
-            // Empty variable names act as a barrier so earlier variables will not be matched.
-            // Variable searches stop at the first empty variable name.
-            let empty = state.get_identifier("");
-            state.stack.resize(
-                state.stack.len() + delta as usize,
-                (empty, AccessMode::ReadWrite),
-            );
-        }
-        delta if delta < 0 && state.stack.len() <= delta.abs() as usize => state.stack.clear(),
-        delta if delta < 0 => state
-            .stack
-            .truncate(state.stack.len() - delta.abs() as usize),
-        _ => (),
+    if syntax.scope_changed {
+        // Add an empty variable name to the stack.
+        // Empty variable names act as a barrier so earlier variables will not be matched.
+        // Variable searches stop at the first empty variable name.
+        let empty = state.get_identifier("");
+        state.stack.push((empty, AccessMode::ReadWrite));
     }
 
     let parse_func = &syntax.parse;
@@ -1936,7 +1926,7 @@ fn parse_custom_syntax(
         Box::new(CustomExpr {
             keywords,
             tokens,
-            scope_delta: syntax.scope_delta,
+            scope_changed: syntax.scope_changed,
         }),
         pos,
     ))

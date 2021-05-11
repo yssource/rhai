@@ -1357,8 +1357,8 @@ impl Stmt {
 pub struct CustomExpr {
     /// List of keywords.
     pub keywords: StaticVec<Expr>,
-    /// Delta number of variables in the scope.
-    pub scope_delta: isize,
+    /// Is the current [`Scope`][crate::Scope] modified?
+    pub scope_changed: bool,
     /// List of tokens actually parsed.
     pub tokens: StaticVec<Identifier>,
 }

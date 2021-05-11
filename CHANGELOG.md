@@ -8,6 +8,7 @@ Breaking changes
 ----------------
 
 * `Engine::disable_doc_comments` is removed because doc-comments are now placed under the `metadata` feature flag.
+* Registering a custom syntax now only requires specifying whether the `Scope` is adjusted (i.e. whether variables are added or removed). There is no need to specify the number of variables added/removed.
 
 New features
 ------------
@@ -15,6 +16,11 @@ New features
 * Each `Dynamic` value can now contain arbitrary data (type `i16`) in the form of a _tag_. This is to use up otherwise wasted space in the `Dynamic` type.
 * A new internal feature `no_smartstring` to turn off `SmartString` for those rare cases that it is needed.
 * `DynamicReadLock` and `DynamicWriteLoc` are exposed under `internals`.
+
+Enhancements
+------------
+
+* Registering a custom syntax now only requires specifying whether the `Scope` is adjusted (i.e. whether variables are added or removed). This allows more flexibility for cases where the number of new variables declared depends on internal logic.
 
 
 Version 0.20.1
