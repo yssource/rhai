@@ -1027,35 +1027,43 @@ impl Dynamic {
         }
 
         value = match unsafe_try_cast::<_, String>(value) {
-            Ok(s) => return (s).into(),
-            Err(val) => val,
+            Ok(s) => return s.into(),
+            Err(value) => value,
         };
         #[cfg(not(feature = "no_index"))]
         {
             value = match unsafe_try_cast::<_, Array>(value) {
-                Ok(array) => return (array).into(),
-                Err(val) => val,
+                Ok(array) => return array.into(),
+                Err(value) => value,
             };
         }
 
         #[cfg(not(feature = "no_object"))]
         {
             value = match unsafe_try_cast::<_, Map>(value) {
-                Ok(map) => return (map).into(),
-                Err(val) => val,
+                Ok(map) => return map.into(),
+                Err(value) => value,
             };
         }
 
         value = match unsafe_try_cast::<_, FnPtr>(value) {
-            Ok(fn_ptr) => return (fn_ptr).into(),
-            Err(val) => val,
+            Ok(fn_ptr) => return fn_ptr.into(),
+            Err(value) => value,
         };
 
         #[cfg(not(feature = "no_std"))]
         {
             value = match unsafe_try_cast::<_, Instant>(value) {
-                Ok(timestamp) => return (timestamp).into(),
-                Err(val) => val,
+                Ok(timestamp) => return timestamp.into(),
+                Err(value) => value,
+            };
+        }
+
+        #[cfg(not(feature = "no_closure"))]
+        {
+            value = match unsafe_try_cast::<_, crate::Shared<crate::Locked<Dynamic>>>(value) {
+                Ok(value) => return value.into(),
+                Err(value) => value,
             };
         }
 
@@ -1969,6 +1977,17 @@ impl From<Instant> for Dynamic {
     fn from(value: Instant) -> Self {
         Self(Union::TimeStamp(
             Box::new(value),
+            DEFAULT_TAG,
+            AccessMode::ReadWrite,
+        ))
+    }
+}
+#[cfg(not(feature = "no_closure"))]
+impl From<crate::Shared<crate::Locked<Dynamic>>> for Dynamic {
+    #[inline(always)]
+    fn from(value: crate::Shared<crate::Locked<Self>>) -> Self {
+        Self(Union::Shared(
+            value.into(),
             DEFAULT_TAG,
             AccessMode::ReadWrite,
         ))
