@@ -5,9 +5,6 @@ use crate::{def_package, EvalAltResult, Position, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
-#[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
-
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]
 use num_traits::Float;
@@ -77,7 +74,7 @@ macro_rules! gen_arithmetic_functions {
                         } else if y < 0 {
                             Err(make_err(format!("Integer raised to a negative index: {} ~ {}", x, y)))
                         } else {
-                            x.checked_pow(y as u32).ok_or_else(|| make_err(format!("Power overflow: {} ~ {}", x, y)))
+                            x.checked_pow(y as u32).ok_or_else(|| make_err(format!("Exponential overflow: {} ~ {}", x, y)))
                         }
                     } else {
                         Ok(x.pow(y as u32))
@@ -423,23 +420,13 @@ mod f64_functions {
             1
         }
     }
-    #[rhai_fn(name = "**", return_raw)]
-    pub fn pow_f_i(x: FLOAT, y: INT) -> Result<FLOAT, Box<EvalAltResult>> {
-        if cfg!(not(feature = "unchecked")) && y > (i32::MAX as INT) {
-            Err(make_err(format!(
-                "Number raised to too large an index: {} ~ {}",
-                x, y
-            )))
-        } else {
-            Ok(x.powi(y as i32))
-        }
-    }
 }
 
 #[cfg(feature = "decimal")]
 #[export_module]
 pub mod decimal_functions {
-    use rust_decimal::{prelude::Zero, Decimal};
+    use num_traits::Pow;
+    use rust_decimal::{prelude::Zero, Decimal, MathematicalOps};
 
     #[rhai_fn(skip, return_raw)]
     pub fn add(x: Decimal, y: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
@@ -493,6 +480,15 @@ pub mod decimal_functions {
             })
         } else {
             Ok(x % y)
+        }
+    }
+    #[rhai_fn(skip, return_raw)]
+    pub fn power(x: Decimal, y: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+        if cfg!(not(feature = "unchecked")) {
+            x.checked_powd(y)
+                .ok_or_else(|| make_err(format!("Exponential overflow: {} + {}", x, y)))
+        } else {
+            Ok(x.pow(y))
         }
     }
     #[rhai_fn(name = "-")]

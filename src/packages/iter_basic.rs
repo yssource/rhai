@@ -253,15 +253,11 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
         impl StepDecimalRange {
             pub fn new(from: Decimal, to: Decimal, step: Decimal) -> Result<Self, Box<EvalAltResult>> {
                 #[cfg(not(feature = "unchecked"))]
-                {
-                    use num_traits::Zero;
-
-                    if step.is_zero() {
-                        return EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
-                            Box::new(EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE)),
-                            crate::Position::NONE,
-                        ).into();
-                    }
+                if step.is_zero() {
+                    return EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
+                        Box::new(EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE)),
+                        crate::Position::NONE,
+                    ).into();
                 }
 
                 Ok(Self(from, to, step))

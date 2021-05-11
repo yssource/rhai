@@ -222,6 +222,7 @@ mod float_functions {
     pub fn log(x: FLOAT, base: FLOAT) -> FLOAT {
         x.log(base)
     }
+    #[rhai_fn(name = "log")]
     pub fn log10(x: FLOAT) -> FLOAT {
         x.log10()
     }
@@ -305,9 +306,33 @@ mod float_functions {
 mod decimal_functions {
     use rust_decimal::{
         prelude::{FromStr, RoundingStrategy},
-        Decimal,
+        Decimal, MathematicalOps,
     };
 
+    #[rhai_fn(return_raw)]
+    pub fn sqrt(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+        if cfg!(not(feature = "unchecked")) {
+            x.sqrt()
+                .ok_or_else(|| make_err(format!("Error taking the square root of {}", x,)))
+        } else {
+            Ok(x.sqrt().unwrap())
+        }
+    }
+    #[rhai_fn(return_raw)]
+    pub fn exp(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+        if cfg!(not(feature = "unchecked")) {
+            if x > Decimal::from_parts(10, 0, 0, false, 0) {
+                Err(make_err(format!("Exponential overflow: e ** {}", x,)))
+            } else {
+                Ok(x.exp())
+            }
+        } else {
+            Ok(x.exp())
+        }
+    }
+    pub fn ln(x: Decimal) -> Decimal {
+        x.ln()
+    }
     #[rhai_fn(name = "floor", get = "floor")]
     pub fn floor(x: Decimal) -> Decimal {
         x.floor()

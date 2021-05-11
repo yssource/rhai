@@ -777,6 +777,10 @@ impl Dynamic {
     pub const ZERO: Dynamic = Self(Union::Int(0, DEFAULT_TAG, AccessMode::ReadWrite));
     /// A [`Dynamic`] containing the integer one.
     pub const ONE: Dynamic = Self(Union::Int(1, DEFAULT_TAG, AccessMode::ReadWrite));
+    /// A [`Dynamic`] containing the integer two.
+    pub const TWO: Dynamic = Self(Union::Int(2, DEFAULT_TAG, AccessMode::ReadWrite));
+    /// A [`Dynamic`] containing the integer ten.
+    pub const TEN: Dynamic = Self(Union::Int(10, DEFAULT_TAG, AccessMode::ReadWrite));
     /// A [`Dynamic`] containing the integer negative one.
     pub const NEGATIVE_ONE: Dynamic = Self(Union::Int(-1, DEFAULT_TAG, AccessMode::ReadWrite));
     /// A [`Dynamic`] containing `0.0`.
@@ -794,6 +798,24 @@ impl Dynamic {
     #[cfg(not(feature = "no_float"))]
     pub const FLOAT_ONE: Dynamic = Self(Union::Float(
         FloatWrapper::const_new(1.0),
+        DEFAULT_TAG,
+        AccessMode::ReadWrite,
+    ));
+    /// A [`Dynamic`] containing `2.0`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_TWO: Dynamic = Self(Union::Float(
+        FloatWrapper::const_new(2.0),
+        DEFAULT_TAG,
+        AccessMode::ReadWrite,
+    ));
+    /// A [`Dynamic`] containing `10.0`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_TEN: Dynamic = Self(Union::Float(
+        FloatWrapper::const_new(10.0),
         DEFAULT_TAG,
         AccessMode::ReadWrite,
     ));
