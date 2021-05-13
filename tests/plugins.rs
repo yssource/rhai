@@ -31,14 +31,16 @@ mod test {
         }
 
         #[rhai_fn(name = "test", name = "hi")]
-        #[inline(always)]
         pub fn len(array: &mut Array, mul: INT) -> INT {
             (array.len() as INT) * mul
         }
         #[rhai_fn(name = "+")]
-        #[inline(always)]
         pub fn funky_add(x: INT, y: INT) -> INT {
             x / 2 + y * 2
+        }
+        #[rhai_fn(pure)]
+        pub fn no_effect(_array: &mut Array, _value: INT) {
+            // do nothing to array
         }
     }
 }
@@ -82,7 +84,15 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
     reg_functions!(engine += greet::single(INT, bool, char));
 
     #[cfg(not(feature = "no_object"))]
-    assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; a.foo")?, 1);
+    {
+        assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; a.foo")?, 1);
+        engine.consume("const A = [1, 2, 3]; A.no_effect(42);")?;
+
+        assert!(
+            matches!(*engine.consume("const A = [1, 2, 3]; A.test(42);").expect_err("should error"),
+            EvalAltResult::ErrorAssignmentToConstant(x, _) if x == "array")
+        )
+    }
 
     assert_eq!(engine.eval::<INT>(r#"hash("hello")"#)?, 42);
     assert_eq!(engine.eval::<INT>(r#"hash2("hello")"#)?, 42);

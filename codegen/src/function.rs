@@ -550,6 +550,13 @@ impl ExportedFn {
                     "property setter cannot return any value",
                 ))
             }
+            // 3c. Property setters cannot be pure.
+            FnSpecialAccess::Property(Property::Set(_)) if params.pure.is_some() => {
+                return Err(syn::Error::new(
+                    params.pure.unwrap(),
+                    "property setter cannot be pure",
+                ))
+            }
             // 4a. Index getters must take the subject and the accessed "index" as arguments.
             FnSpecialAccess::Index(Index::Get) if self.arg_count() != 2 => {
                 return Err(syn::Error::new(
@@ -578,6 +585,13 @@ impl ExportedFn {
                 return Err(syn::Error::new(
                     self.signature.output.span(),
                     "index setter cannot return any value",
+                ))
+            }
+            // 5b. Index setters cannot be pure.
+            FnSpecialAccess::Index(Index::Set) if params.pure.is_some() => {
+                return Err(syn::Error::new(
+                    params.pure.unwrap(),
+                    "index setter cannot be pure",
                 ))
             }
             _ => {}

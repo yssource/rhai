@@ -22,6 +22,7 @@ Enhancements
 ------------
 
 * Registering a custom syntax now only requires specifying whether the `Scope` is adjusted (i.e. whether variables are added or removed). This allows more flexibility for cases where the number of new variables declared depends on internal logic.
+* Putting a `pure` attribute on a plugin property setter now raises a syntax error.
 
 
 Version 0.20.1
