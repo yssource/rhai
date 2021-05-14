@@ -2120,10 +2120,14 @@ mod tests {
         assert_eq!(size_of::<Option<ast::Expr>>(), 16);
         assert_eq!(size_of::<ast::Stmt>(), 32);
         assert_eq!(size_of::<Option<ast::Stmt>>(), 32);
-        #[cfg(not(feature = "no_smartstring"))]
-        assert_eq!(size_of::<FnPtr>(), 96);
-        #[cfg(feature = "no_smartstring")]
-        assert_eq!(size_of::<FnPtr>(), 80);
+        assert_eq!(
+            size_of::<FnPtr>(),
+            if cfg!(feature = "no_smartstring") {
+                80
+            } else {
+                96
+            }
+        );
         assert_eq!(size_of::<Scope>(), 288);
         assert_eq!(size_of::<LexError>(), 56);
         assert_eq!(

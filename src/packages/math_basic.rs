@@ -321,7 +321,7 @@ mod decimal_functions {
     #[rhai_fn(return_raw)]
     pub fn exp(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) {
-            if x > Decimal::from_parts(10, 0, 0, false, 0) {
+            if x > Decimal::from_parts(117578, 0, 0, false, 4) {
                 Err(make_err(format!("Exponential overflow: e ** {}", x,)))
             } else {
                 Ok(x.exp())
