@@ -492,9 +492,7 @@ mod generate_tests {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         if args[0usize].is_read_only() {
-                            return Err(Box::new(
-                                EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE)
-                            ));
+                            return EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into();
                         }
                         let arg1 = mem::take(args[1usize]).cast::<usize>();
                         let arg0 = &mut args[0usize].write_lock::<usize>().unwrap();

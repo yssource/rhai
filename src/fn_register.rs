@@ -3,8 +3,10 @@
 #![allow(non_snake_case)]
 
 use crate::dynamic::{DynamicWriteLock, Variant};
+use crate::engine::FN_SET;
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
 use crate::r#unsafe::unsafe_try_cast;
+use crate::token::Position;
 use crate::{Dynamic, EvalAltResult, NativeCallContext};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -97,7 +99,11 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type() -> TypeId { TypeId::of::<RET>() }
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RET>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
-                CallableFunction::$abi(Box::new(move |_: NativeCallContext, args: &mut FnCallArgs| {
+                CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
+                    if args.len() == 2 && ctx.fn_name().starts_with(FN_SET) && args[0].is_read_only() {
+                        return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
+                    }
+
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
                     $($let $par = ($clone)(_drain.next().unwrap()); )*
@@ -122,6 +128,10 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RET>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
+                    if args.len() == 2 && ctx.fn_name().starts_with(FN_SET) && args[0].is_read_only() {
+                        return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
+                    }
+
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
                     $($let $par = ($clone)(_drain.next().unwrap()); )*
@@ -145,7 +155,11 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type() -> TypeId { TypeId::of::<Result<RET, Box<EvalAltResult>>>() }
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<Result<RET, Box<EvalAltResult>>>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
-                CallableFunction::$abi(Box::new(move |_: NativeCallContext, args: &mut FnCallArgs| {
+                CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
+                    if args.len() == 2 && ctx.fn_name().starts_with(FN_SET) && args[0].is_read_only() {
+                        return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
+                    }
+
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
                     $($let $par = ($clone)(_drain.next().unwrap()); )*
@@ -167,6 +181,10 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<Result<RET, Box<EvalAltResult>>>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
+                    if args.len() == 2 && ctx.fn_name().starts_with(FN_SET) && args[0].is_read_only() {
+                        return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
+                    }
+
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
                     $($let $par = ($clone)(_drain.next().unwrap()); )*

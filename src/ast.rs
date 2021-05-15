@@ -1523,7 +1523,7 @@ pub struct FnCallExpr {
     /// List of function call argument expressions.
     pub args: StaticVec<Expr>,
     /// List of function call arguments that are constants.
-    pub constant_args: smallvec::SmallVec<[(Dynamic, Position); 2]>,
+    pub literal_args: smallvec::SmallVec<[(Dynamic, Position); 2]>,
     /// Function name.
     pub name: Identifier,
     /// Does this function call capture the parent scope?
@@ -1539,12 +1539,12 @@ impl FnCallExpr {
     /// Are there no arguments to this function call?
     #[inline(always)]
     pub fn is_args_empty(&self) -> bool {
-        self.args.is_empty() && self.constant_args.is_empty()
+        self.args.is_empty() && self.literal_args.is_empty()
     }
     /// Get the number of arguments to this function call.
     #[inline(always)]
     pub fn args_count(&self) -> usize {
-        self.args.len() + self.constant_args.len()
+        self.args.len() + self.literal_args.len()
     }
 }
 
@@ -1793,8 +1793,8 @@ impl fmt::Debug for Expr {
                 ff.field("name", &x.name)
                     .field("hash", &x.hashes)
                     .field("args", &x.args);
-                if !x.constant_args.is_empty() {
-                    ff.field("constant_args", &x.constant_args);
+                if !x.literal_args.is_empty() {
+                    ff.field("literal_args", &x.literal_args);
                 }
                 if x.capture {
                     ff.field("capture", &x.capture);

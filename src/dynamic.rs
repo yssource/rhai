@@ -870,9 +870,15 @@ impl Dynamic {
             #[cfg(feature = "decimal")]
             Union::Decimal(_, _, access) => *access = typ,
             #[cfg(not(feature = "no_index"))]
-            Union::Array(_, _, access) => *access = typ,
+            Union::Array(a, _, access) => {
+                *access = typ;
+                a.iter_mut().for_each(|v| v.set_access_mode(typ));
+            }
             #[cfg(not(feature = "no_object"))]
-            Union::Map(_, _, access) => *access = typ,
+            Union::Map(m, _, access) => {
+                *access = typ;
+                m.values_mut().for_each(|v| v.set_access_mode(typ));
+            }
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(_, _, access) => *access = typ,
             #[cfg(not(feature = "no_closure"))]

@@ -390,7 +390,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                     x.2 = if x2.args.len() > 1 {
                         mem::take(&mut x2.args[1])
                     } else {
-                        let (value, pos) = mem::take(&mut x2.constant_args[0]);
+                        let (value, pos) = mem::take(&mut x2.literal_args[0]);
                         Expr::DynamicConstant(Box::new(value), pos)
                     };
                 }
@@ -895,12 +895,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             if !x.is_qualified() // Non-qualified
             && state.optimization_level == OptimizationLevel::Simple // simple optimizations
             && x.args_count() == 1
-            && x.constant_args.len() == 1
-            && x.constant_args[0].0.is::<ImmutableString>()
+            && x.literal_args.len() == 1
+            && x.literal_args[0].0.is::<ImmutableString>()
             && x.name == KEYWORD_FN_PTR
         => {
             state.set_dirty();
-            let fn_ptr = FnPtr::new_unchecked(mem::take(&mut x.constant_args[0].0).as_str_ref().unwrap().into(), Default::default());
+            let fn_ptr = FnPtr::new_unchecked(mem::take(&mut x.literal_args[0].0).as_str_ref().unwrap().into(), Default::default());
             *expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), *pos);
         }
 
@@ -918,7 +918,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                 //&& !is_valid_identifier(x.name.chars()) // cannot be scripted
         => {
             let mut arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap())
-                                                .chain(x.constant_args.iter().map(|(v, _)| v).cloned())
+                                                .chain(x.literal_args.iter().map(|(v, _)| v).cloned())
                                                 .collect();
 
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
@@ -945,11 +945,11 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             while x.args.last().map(Expr::is_constant).unwrap_or(false) {
                 let arg = x.args.pop().unwrap();
                 let arg_pos = arg.position();
-                x.constant_args.insert(0, (arg.get_constant_value().unwrap(), arg_pos));
+                x.literal_args.insert(0, (arg.get_constant_value().unwrap(), arg_pos));
             }
 
             x.args.shrink_to_fit();
-            x.constant_args.shrink_to_fit();
+            x.literal_args.shrink_to_fit();
         }
 
         // Eagerly call functions
@@ -966,7 +966,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
 
             if !has_script_fn {
                 let mut arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap())
-                                                    .chain(x.constant_args.iter().map(|(v, _)| v).cloned())
+                                                    .chain(x.literal_args.iter().map(|(v, _)| v).cloned())
                                                     .collect();
 
                 // Save the typename of the first argument if it is `type_of()`
@@ -1005,11 +1005,11 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             while x.args.last().map(Expr::is_constant).unwrap_or(false) {
                 let arg = x.args.pop().unwrap();
                 let arg_pos = arg.position();
-                x.constant_args.insert(0, (arg.get_constant_value().unwrap(), arg_pos));
+                x.literal_args.insert(0, (arg.get_constant_value().unwrap(), arg_pos));
             }
 
             x.args.shrink_to_fit();
-            x.constant_args.shrink_to_fit();
+            x.literal_args.shrink_to_fit();
         }
 
         // constant-name

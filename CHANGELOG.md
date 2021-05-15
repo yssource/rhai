@@ -9,6 +9,7 @@ Breaking changes
 
 * `Engine::disable_doc_comments` is removed because doc-comments are now placed under the `metadata` feature flag.
 * Registering a custom syntax now only requires specifying whether the `Scope` is adjusted (i.e. whether variables are added or removed). There is no need to specify the number of variables added/removed.
+* Assigning to a property of a constant is now allowed and no longer raise an `EvalAltResult::ErrorAssignmentToConstant` error. This is to facilitate the Singleton pattern. Registered setter functions are automatically guarded against setters calling on constants and will continue to raise errors unless the `pure` attribute is present (for plugins).
 
 New features
 ------------
@@ -22,7 +23,7 @@ Enhancements
 ------------
 
 * Registering a custom syntax now only requires specifying whether the `Scope` is adjusted (i.e. whether variables are added or removed). This allows more flexibility for cases where the number of new variables declared depends on internal logic.
-* Putting a `pure` attribute on a plugin property setter now raises a syntax error.
+* Putting a `pure` attribute on a plugin property/index setter now enables it to be used on constants.
 
 
 Version 0.20.1

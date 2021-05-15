@@ -1468,23 +1468,9 @@ fn make_assignment_stmt<'a>(
         Expr::Index(x, _) | Expr::Dot(x, _) => {
             match check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _))) {
                 None => match &x.lhs {
-                    // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
-                    Expr::Variable(None, _, x) if x.0.is_none() => {
+                    // var[???] = rhs, var.??? = rhs
+                    Expr::Variable(_, _, _) => {
                         Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
-                    }
-                    // var[???] (indexed) = rhs, var.??? (indexed) = rhs
-                    Expr::Variable(i, var_pos, x) => {
-                        let (index, _, name) = x.as_ref();
-                        let index = i.map_or_else(|| index.unwrap().get(), |n| n.get() as usize);
-                        match state.stack[state.stack.len() - index].1 {
-                            AccessMode::ReadWrite => {
-                                Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
-                            }
-                            // Constant values cannot be assigned to
-                            AccessMode::ReadOnly => {
-                                Err(PERR::AssignmentToConstant(name.to_string()).into_err(*var_pos))
-                            }
-                        }
                     }
                     // expr[???] = rhs, expr.??? = rhs
                     expr => {

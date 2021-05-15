@@ -16,7 +16,7 @@ fn test_constant() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_index"))]
     assert!(matches!(
         *engine.consume("const x = [1, 2, 3, 4, 5]; x[2] = 42;").expect_err("expects error"),
-        EvalAltResult::ErrorParsing(ParseErrorType::AssignmentToConstant(x), _) if x == "x"
+        EvalAltResult::ErrorAssignmentToConstant(x, _) if x == "x"
     ));
 
     Ok(())
@@ -48,6 +48,7 @@ fn test_constant_mut() -> Result<(), Box<EvalAltResult>> {
     engine
         .register_type_with_name::<TestStruct>("TestStruct")
         .register_get("value", |obj: &mut TestStruct| obj.0)
+        .register_set("value", |obj: &mut TestStruct, value: INT| obj.0 = value)
         .register_fn("update_value", |obj: &mut TestStruct, value: INT| {
             obj.0 = value
         });
@@ -66,6 +67,13 @@ fn test_constant_mut() -> Result<(), Box<EvalAltResult>> {
         )?,
         42
     );
+
+    assert!(matches!(
+        *engine
+            .consume_with_scope(&mut scope, "MY_NUMBER.value = 42;")
+            .expect_err("should error"),
+        EvalAltResult::ErrorAssignmentToConstant(_, _)
+    ));
 
     Ok(())
 }
