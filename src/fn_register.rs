@@ -3,7 +3,6 @@
 #![allow(non_snake_case)]
 
 use crate::dynamic::{DynamicWriteLock, Variant};
-use crate::engine::{FN_IDX_SET, FN_SET};
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
 use crate::r#unsafe::unsafe_try_cast;
 use crate::token::Position;
@@ -77,6 +76,19 @@ pub trait RegisterNativeFunction<Args, Result> {
     fn return_type_name() -> &'static str;
 }
 
+#[inline(always)]
+fn is_setter(_fn_name: &str) -> bool {
+    #[cfg(not(feature = "no_object"))]
+    if _fn_name.starts_with(crate::engine::FN_SET) {
+        return true;
+    }
+    #[cfg(not(feature = "no_index"))]
+    if _fn_name.starts_with(crate::engine::FN_IDX_SET) {
+        return true;
+    }
+    false
+}
+
 macro_rules! def_register {
     () => {
         def_register!(imp from_pure :);
@@ -100,7 +112,7 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RET>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
-                    if args.len() == 2 && args[0].is_read_only() && (ctx.fn_name().starts_with(FN_SET) || ctx.fn_name().starts_with(FN_IDX_SET)) {
+                    if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
                         return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
                     }
 
@@ -128,7 +140,7 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RET>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
-                    if args.len() == 2 && args[0].is_read_only() && (ctx.fn_name().starts_with(FN_SET) || ctx.fn_name().starts_with(FN_IDX_SET)) {
+                    if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
                         return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
                     }
 
@@ -156,7 +168,7 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<Result<RET, Box<EvalAltResult>>>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
-                    if args.len() == 2 && args[0].is_read_only() && (ctx.fn_name().starts_with(FN_SET) || ctx.fn_name().starts_with(FN_IDX_SET)) {
+                    if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
                         return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
                     }
 
@@ -181,7 +193,7 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<Result<RET, Box<EvalAltResult>>>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
-                    if args.len() == 2 && args[0].is_read_only() && (ctx.fn_name().starts_with(FN_SET) || ctx.fn_name().starts_with(FN_IDX_SET)) {
+                    if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
                         return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
                     }
 

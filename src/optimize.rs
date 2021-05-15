@@ -1060,7 +1060,7 @@ fn optimize_top_level(
             state.push_var(
                 name,
                 AccessMode::ReadOnly,
-                Expr::DynamicConstant(Box::new(value.clone()), Position::NONE),
+                Expr::DynamicConstant(Box::new(value), Position::NONE),
             );
         }
     });
