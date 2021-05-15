@@ -973,10 +973,6 @@ pub struct TokenizeState {
     pub comment_level: usize,
     /// Include comments?
     pub include_comments: bool,
-    /// Disable doc-comments?
-    #[cfg(not(feature = "no_function"))]
-    #[cfg(feature = "metadata")]
-    pub disable_doc_comments: bool,
     /// Is the current tokenizer position within the text stream of an interpolated string?
     pub is_within_text_terminated_by: Option<char>,
 }
@@ -1357,12 +1353,11 @@ fn get_next_token_inner(
 
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
-        let include_comments =
-            if !state.disable_doc_comments && is_doc_comment(comment.as_ref().unwrap()) {
-                true
-            } else {
-                include_comments
-            };
+        let include_comments = if is_doc_comment(comment.as_ref().unwrap()) {
+            true
+        } else {
+            include_comments
+        };
 
         if include_comments {
             return Some((Token::Comment(comment.unwrap()), start_pos));
@@ -1705,7 +1700,7 @@ fn get_next_token_inner(
                 let mut comment = match stream.peek_next() {
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
-                    Some('/') if !state.disable_doc_comments => {
+                    Some('/') => {
                         eat_next(stream, pos);
 
                         // Long streams of `///...` are not doc-comments
@@ -1740,7 +1735,7 @@ fn get_next_token_inner(
                 let mut comment = match stream.peek_next() {
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
-                    Some('*') if !state.disable_doc_comments => {
+                    Some('*') => {
                         eat_next(stream, pos);
 
                         // Long streams of `/****...` are not doc-comments
@@ -2239,9 +2234,6 @@ impl Engine {
                     non_unary: false,
                     comment_level: 0,
                     include_comments: false,
-                    #[cfg(not(feature = "no_function"))]
-                    #[cfg(feature = "metadata")]
-                    disable_doc_comments: self.disable_doc_comments,
                     is_within_text_terminated_by: None,
                 },
                 pos: Position::new(1, 0),

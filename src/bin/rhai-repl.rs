@@ -106,7 +106,7 @@ fn main() {
                 .compile(&contents)
                 .map_err(|err| err.into())
                 .and_then(|mut ast| {
-                    ast.set_source(filename.to_string_lossy());
+                    ast.set_source(filename.to_string_lossy().to_string());
                     Module::eval_ast_as_new(Default::default(), &ast, &engine)
                 }) {
                 Err(err) => {

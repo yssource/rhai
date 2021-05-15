@@ -5,6 +5,7 @@
 use crate::dynamic::{DynamicWriteLock, Variant};
 use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
 use crate::r#unsafe::unsafe_try_cast;
+use crate::token::Position;
 use crate::{Dynamic, EvalAltResult, NativeCallContext};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -61,18 +62,31 @@ pub trait RegisterNativeFunction<Args, Result> {
     fn into_callable_function(self) -> CallableFunction;
     /// Get the type ID's of this function's parameters.
     fn param_types() -> Box<[TypeId]>;
-    /// Get the type names of this function's parameters.
+    /// _(METADATA)_ Get the type names of this function's parameters.
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     fn param_names() -> Box<[&'static str]>;
-    /// Get the type ID of this function's return value.
+    /// _(METADATA)_ Get the type ID of this function's return value.
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     fn return_type() -> TypeId;
-    /// Get the type name of this function's return value.
+    /// _(METADATA)_ Get the type name of this function's return value.
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     fn return_type_name() -> &'static str;
+}
+
+#[inline(always)]
+fn is_setter(_fn_name: &str) -> bool {
+    #[cfg(not(feature = "no_object"))]
+    if _fn_name.starts_with(crate::engine::FN_SET) {
+        return true;
+    }
+    #[cfg(not(feature = "no_index"))]
+    if _fn_name.starts_with(crate::engine::FN_IDX_SET) {
+        return true;
+    }
+    false
 }
 
 macro_rules! def_register {
@@ -97,7 +111,11 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type() -> TypeId { TypeId::of::<RET>() }
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RET>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
-                CallableFunction::$abi(Box::new(move |_: NativeCallContext, args: &mut FnCallArgs| {
+                CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
+                    if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
+                        return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
+                    }
+
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
                     $($let $par = ($clone)(_drain.next().unwrap()); )*
@@ -122,6 +140,10 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<RET>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
+                    if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
+                        return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
+                    }
+
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
                     $($let $par = ($clone)(_drain.next().unwrap()); )*
@@ -145,7 +167,11 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type() -> TypeId { TypeId::of::<Result<RET, Box<EvalAltResult>>>() }
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<Result<RET, Box<EvalAltResult>>>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
-                CallableFunction::$abi(Box::new(move |_: NativeCallContext, args: &mut FnCallArgs| {
+                CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
+                    if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
+                        return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
+                    }
+
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
                     $($let $par = ($clone)(_drain.next().unwrap()); )*
@@ -167,6 +193,10 @@ macro_rules! def_register {
             #[cfg(feature = "metadata")] #[inline(always)] fn return_type_name() -> &'static str { std::any::type_name::<Result<RET, Box<EvalAltResult>>>() }
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
+                    if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
+                        return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
+                    }
+
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
                     $($let $par = ($clone)(_drain.next().unwrap()); )*

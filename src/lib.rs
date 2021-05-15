@@ -140,11 +140,11 @@ pub use utils::ImmutableString;
 
 /// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
 /// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
-#[cfg(not(feature = "no_smartstring_for_identifier"))]
+#[cfg(not(feature = "no_smartstring"))]
 pub type Identifier = SmartString;
 
 /// An identifier in Rhai.
-#[cfg(feature = "no_smartstring_for_identifier")]
+#[cfg(feature = "no_smartstring")]
 pub type Identifier = ImmutableString;
 
 /// A trait to enable registering Rust functions.
@@ -207,15 +207,17 @@ pub use optimize::OptimizationLevel;
 
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
-pub use dynamic::Variant;
+pub use dynamic::{DynamicReadLock, DynamicWriteLock, Variant};
+
+// Expose internal data structures.
+#[cfg(feature = "internals")]
+#[deprecated = "this function is volatile and may change"]
+pub use token::{get_next_token, parse_string_literal};
 
 // Expose internal data structures.
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
-pub use token::{
-    get_next_token, parse_string_literal, InputStream, Token, TokenizeState, TokenizerControl,
-    TokenizerControlBlock,
-};
+pub use token::{InputStream, Token, TokenizeState, TokenizerControl, TokenizerControlBlock};
 
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
@@ -306,9 +308,14 @@ type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 pub type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 
 #[cfg(not(feature = "internals"))]
+#[cfg(not(feature = "no_smartstring"))]
 pub(crate) type SmartString = smartstring::SmartString<smartstring::Compact>;
 
+#[cfg(feature = "no_smartstring")]
+pub(crate) type SmartString = String;
+
 #[cfg(feature = "internals")]
+#[cfg(not(feature = "no_smartstring"))]
 pub type SmartString = smartstring::SmartString<smartstring::Compact>;
 
 // Compiler guards against mutually-exclusive feature flags

@@ -390,7 +390,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                     x.2 = if x2.args.len() > 1 {
                         mem::take(&mut x2.args[1])
                     } else {
-                        let (value, pos) = mem::take(&mut x2.constant_args[0]);
+                        let (value, pos) = mem::take(&mut x2.literal_args[0]);
                         Expr::DynamicConstant(Box::new(value), pos)
                     };
                 }
@@ -417,7 +417,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
 
             *stmt = if preserve_result {
                 // -> { expr, Noop }
-                Stmt::Block(vec![Stmt::Expr(expr), Stmt::Noop(pos)], pos)
+                Stmt::Block(Box::new([Stmt::Expr(expr), Stmt::Noop(pos)]), pos)
             } else {
                 // -> expr
                 Stmt::Expr(expr)
@@ -434,7 +434,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             let else_block = mem::take(&mut *x.1).into_vec();
             *stmt = match optimize_stmt_block(else_block, state, preserve_result, true, false) {
                 statements if statements.is_empty() => Stmt::Noop(x.1.position()),
-                statements => Stmt::Block(statements, x.1.position()),
+                statements => Stmt::Block(statements.into_boxed_slice(), x.1.position()),
             }
         }
         // if true { if_block } else { else_block } -> if_block
@@ -443,7 +443,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             let if_block = mem::take(&mut *x.0).into_vec();
             *stmt = match optimize_stmt_block(if_block, state, preserve_result, true, false) {
                 statements if statements.is_empty() => Stmt::Noop(x.0.position()),
-                statements => Stmt::Block(statements, x.0.position()),
+                statements => Stmt::Block(statements.into_boxed_slice(), x.0.position()),
             }
         }
         // if expr { if_block } else { else_block }
@@ -484,7 +484,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                         condition,
                         Box::new((
                             mem::take(&mut block.1),
-                            Stmt::Block(def_stmt, def_pos).into(),
+                            Stmt::Block(def_stmt.into_boxed_slice(), def_pos).into(),
                         )),
                         match_expr.position(),
                     );
@@ -494,7 +494,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                     let statements = mem::take(&mut *block.1);
                     let statements =
                         optimize_stmt_block(statements.into_vec(), state, true, true, false);
-                    *stmt = Stmt::Block(statements, new_pos);
+                    *stmt = Stmt::Block(statements.into_boxed_slice(), new_pos);
                 }
             } else {
                 // Promote the default case
@@ -505,7 +505,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                 } else {
                     x.1.position()
                 };
-                *stmt = Stmt::Block(def_stmt, def_pos);
+                *stmt = Stmt::Block(def_stmt.into_boxed_slice(), def_pos);
             }
         }
         // switch
@@ -572,7 +572,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                             if preserve_result {
                                 statements.push(Stmt::Noop(pos))
                             }
-                            *stmt = Stmt::Block(statements, pos);
+                            *stmt = Stmt::Block(statements.into_boxed_slice(), pos);
                         } else {
                             *stmt = Stmt::Noop(pos);
                         };
@@ -588,7 +588,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             let block_pos = body.position();
             let block = mem::take(body.statements()).into_vec();
             *stmt = Stmt::Block(
-                optimize_stmt_block(block, state, false, true, false),
+                optimize_stmt_block(block, state, false, true, false).into_boxed_slice(),
                 block_pos,
             );
         }
@@ -611,8 +611,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         Stmt::Import(expr, _, _) => optimize_expr(expr, state),
         // { block }
         Stmt::Block(statements, pos) => {
-            let mut block =
-                optimize_stmt_block(mem::take(statements), state, preserve_result, true, false);
+            let statements = mem::take(statements).into_vec();
+            let mut block = optimize_stmt_block(statements, state, preserve_result, true, false);
 
             match block.as_mut_slice() {
                 [] => {
@@ -624,7 +624,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                     state.set_dirty();
                     *stmt = mem::take(s);
                 }
-                _ => *stmt = Stmt::Block(block, *pos),
+                _ => *stmt = Stmt::Block(block.into_boxed_slice(), *pos),
             }
         }
         // try { pure try_block } catch ( var ) { catch_block } -> try_block
@@ -634,7 +634,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             let try_pos = x.0.position();
             let try_block = mem::take(&mut *x.0).into_vec();
             *stmt = Stmt::Block(
-                optimize_stmt_block(try_block, state, false, true, false),
+                optimize_stmt_block(try_block, state, false, true, false).into_boxed_slice(),
                 try_pos,
             );
         }
@@ -820,6 +820,8 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                     }
                 }
             }
+
+            x.shrink_to_fit();
         }
         // [ constant .. ]
         #[cfg(not(feature = "no_index"))]
@@ -893,12 +895,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             if !x.is_qualified() // Non-qualified
             && state.optimization_level == OptimizationLevel::Simple // simple optimizations
             && x.args_count() == 1
-            && x.constant_args.len() == 1
-            && x.constant_args[0].0.is::<ImmutableString>()
+            && x.literal_args.len() == 1
+            && x.literal_args[0].0.is::<ImmutableString>()
             && x.name == KEYWORD_FN_PTR
         => {
             state.set_dirty();
-            let fn_ptr = FnPtr::new_unchecked(mem::take(&mut x.constant_args[0].0).as_str_ref().unwrap().into(), Default::default());
+            let fn_ptr = FnPtr::new_unchecked(mem::take(&mut x.literal_args[0].0).as_str_ref().unwrap().into(), Default::default());
             *expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), *pos);
         }
 
@@ -916,7 +918,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                 //&& !is_valid_identifier(x.name.chars()) // cannot be scripted
         => {
             let mut arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap())
-                                                .chain(x.constant_args.iter().map(|(v, _)| v).cloned())
+                                                .chain(x.literal_args.iter().map(|(v, _)| v).cloned())
                                                 .collect();
 
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
@@ -943,10 +945,11 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             while x.args.last().map(Expr::is_constant).unwrap_or(false) {
                 let arg = x.args.pop().unwrap();
                 let arg_pos = arg.position();
-                x.constant_args.insert(0, (arg.get_constant_value().unwrap(), arg_pos));
+                x.literal_args.insert(0, (arg.get_constant_value().unwrap(), arg_pos));
             }
 
             x.args.shrink_to_fit();
+            x.literal_args.shrink_to_fit();
         }
 
         // Eagerly call functions
@@ -963,7 +966,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
 
             if !has_script_fn {
                 let mut arg_values: StaticVec<_> = x.args.iter().map(|e| e.get_constant_value().unwrap())
-                                                    .chain(x.constant_args.iter().map(|(v, _)| v).cloned())
+                                                    .chain(x.literal_args.iter().map(|(v, _)| v).cloned())
                                                     .collect();
 
                 // Save the typename of the first argument if it is `type_of()`
@@ -1002,10 +1005,11 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
             while x.args.last().map(Expr::is_constant).unwrap_or(false) {
                 let arg = x.args.pop().unwrap();
                 let arg_pos = arg.position();
-                x.constant_args.insert(0, (arg.get_constant_value().unwrap(), arg_pos));
+                x.literal_args.insert(0, (arg.get_constant_value().unwrap(), arg_pos));
             }
 
             x.args.shrink_to_fit();
+            x.literal_args.shrink_to_fit();
         }
 
         // constant-name
@@ -1020,7 +1024,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
 
         // Custom syntax
         Expr::Custom(x, _) => {
-            if x.scope_delta != 0 {
+            if x.scope_changed {
                 state.propagate_constants = false;
             }
             x.keywords.iter_mut().for_each(|expr| optimize_expr(expr, state));
@@ -1052,10 +1056,12 @@ fn optimize_top_level(
     scope.iter().for_each(|(name, constant, value)| {
         if !constant {
             state.push_var(name, AccessMode::ReadWrite, Expr::Unit(Position::NONE));
-        } else if let Some(val) = map_dynamic_to_expr(value, Position::NONE) {
-            state.push_var(name, AccessMode::ReadOnly, val);
         } else {
-            state.push_var(name, AccessMode::ReadOnly, Expr::Unit(Position::NONE));
+            state.push_var(
+                name,
+                AccessMode::ReadOnly,
+                Expr::DynamicConstant(Box::new(value), Position::NONE),
+            );
         }
     });
 

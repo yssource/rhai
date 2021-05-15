@@ -183,6 +183,8 @@ impl Engine {
     /// Register a custom type for use with the [`Engine`].
     /// The type must implement [`Clone`].
     ///
+    /// Not available under `no_object`.
+    ///
     /// # Example
     ///
     /// ```
@@ -223,6 +225,8 @@ impl Engine {
     }
     /// Register a custom type for use with the [`Engine`], with a pretty-print name
     /// for the `type_of` function. The type must implement [`Clone`].
+    ///
+    /// Not available under `no_object`.
     ///
     /// # Example
     ///
@@ -265,7 +269,8 @@ impl Engine {
     #[inline(always)]
     pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) -> &mut Self {
         // Add the pretty-print type name into the map
-        self.type_names.insert(type_name::<T>().into(), name.into());
+        self.type_names
+            .insert(type_name::<T>().into(), Box::new(name.into()));
         self
     }
     /// Register an type iterator for an iterable type with the [`Engine`].
@@ -282,6 +287,8 @@ impl Engine {
     /// Register a getter function for a member of a registered type with the [`Engine`].
     ///
     /// The function signature must start with `&mut self` and not `&self`.
+    ///
+    /// Not available under `no_object`.
     ///
     /// # Example
     ///
@@ -328,6 +335,8 @@ impl Engine {
     ///
     /// The function signature must start with `&mut self` and not `&self`.
     ///
+    /// Not available under `no_object`.
+    ///
     /// # Example
     ///
     /// ```
@@ -372,6 +381,8 @@ impl Engine {
         self.register_result_fn(&make_getter(name), get_fn)
     }
     /// Register a setter function for a member of a registered type with the [`Engine`].
+    ///
+    /// Not available under `no_object`.
     ///
     /// # Example
     ///
@@ -418,6 +429,8 @@ impl Engine {
         self.register_fn(&make_setter(name), set_fn)
     }
     /// Register a setter function for a member of a registered type with the [`Engine`].
+    ///
+    /// Not available under `no_object`.
     ///
     /// # Example
     ///
@@ -473,6 +486,8 @@ impl Engine {
     ///
     /// All function signatures must start with `&mut self` and not `&self`.
     ///
+    /// Not available under `no_object`.
+    ///
     /// # Example
     ///
     /// ```
@@ -520,6 +535,8 @@ impl Engine {
     /// Register an index getter for a custom type with the [`Engine`].
     ///
     /// The function signature must start with `&mut self` and not `&self`.
+    ///
+    /// Not available under `no_index`.
     ///
     /// # Panics
     ///
@@ -584,6 +601,8 @@ impl Engine {
     /// Register an index getter for a custom type with the [`Engine`].
     ///
     /// The function signature must start with `&mut self` and not `&self`.
+    ///
+    /// Not available under `no_index`.
     ///
     /// # Panics
     ///
@@ -653,6 +672,8 @@ impl Engine {
     }
     /// Register an index setter for a custom type with the [`Engine`].
     ///
+    /// Not available under `no_index`.
+    ///
     /// # Panics
     ///
     /// Panics if the type is [`Array`], [`Map`], [`String`], [`ImmutableString`][crate::ImmutableString] or `&str`.
@@ -716,6 +737,8 @@ impl Engine {
         self.register_fn(crate::engine::FN_IDX_SET, set_fn)
     }
     /// Register an index setter for a custom type with the [`Engine`].
+    ///
+    /// Not available under `no_index`.
     ///
     /// # Panics
     ///
@@ -790,6 +813,8 @@ impl Engine {
         )
     }
     /// Short-hand for register both index getter and setter functions for a custom type with the [`Engine`].
+    ///
+    /// Not available under `no_index`.
     ///
     /// # Panics
     ///
@@ -868,6 +893,8 @@ impl Engine {
     ///
     /// Functions marked [`FnNamespace::Global`] and type iterators are exposed to scripts without
     /// namespace qualifications.
+    ///
+    /// Not available under `no_module`.
     ///
     /// # Example
     ///
@@ -1022,6 +1049,8 @@ impl Engine {
     }
     /// Compile a string into an [`AST`] using own scope, which can be used later for evaluation,
     /// embedding all imported modules.
+    ///
+    /// Not available under `no_module`.
     ///
     /// Modules referred by `import` statements containing literal string paths are eagerly resolved
     /// via the current [module resolver][crate::ModuleResolver] and embedded into the resultant
@@ -1270,6 +1299,8 @@ impl Engine {
     }
     /// Parse a JSON string into an [object map][`Map`].
     /// This is a light-weight alternative to using, say, [`serde_json`] to deserialize the JSON.
+    ///
+    /// Not available under `no_object`.
     ///
     /// The JSON string must be an object hash.  It cannot be a simple scalar value.
     ///
@@ -1787,6 +1818,8 @@ impl Engine {
     /// Call a script function defined in an [`AST`] with multiple arguments.
     /// Arguments are passed as a tuple.
     ///
+    /// Not available under `no_function`.
+    ///
     /// The [`AST`] is evaluated before calling the function.
     /// This allows a script to load the necessary modules.
     /// This is usually desired. If not, a specialized [`AST`] can be prepared that contains only
@@ -1853,6 +1886,8 @@ impl Engine {
     }
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments
     /// and optionally a value for binding to the `this` pointer.
+    ///
+    /// Not available under `no_function`.
     ///
     /// There is an option to evaluate the [`AST`] to load necessary modules before calling the function.
     ///
@@ -1970,6 +2005,8 @@ impl Engine {
     /// Optimize the [`AST`] with constants defined in an external Scope.
     /// An optimized copy of the [`AST`] is returned while the original [`AST`] is consumed.
     ///
+    /// Not available under `no_optimize`.
+    ///
     /// Although optimization is performed by default during compilation, sometimes it is necessary to
     /// _re_-optimize an [`AST`]. For example, when working with constants that are passed in via an
     /// external scope, it will be more efficient to optimize the [`AST`] once again to take advantage
@@ -2002,7 +2039,7 @@ impl Engine {
         let stmt = std::mem::take(ast.statements_mut());
         crate::optimize::optimize_into_ast(self, scope, stmt.into_vec(), lib, optimization_level)
     }
-    /// Generate a list of all registered functions.
+    /// _(METADATA)_ Generate a list of all registered functions.
     /// Exported under the `metadata` feature only.
     ///
     /// Functions from the following sources are included, in order:
@@ -2072,6 +2109,8 @@ impl Engine {
         self
     }
     /// Register a callback for script evaluation progress.
+    ///
+    /// Not available under `unchecked`.
     ///
     /// # Example
     ///

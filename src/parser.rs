@@ -348,6 +348,8 @@ fn parse_fn_call(
                 FnCallHashes::from_native(hash)
             };
 
+            args.shrink_to_fit();
+
             return Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
                     name: state.get_identifier(id),
@@ -392,6 +394,8 @@ fn parse_fn_call(
                 } else {
                     FnCallHashes::from_native(hash)
                 };
+
+                args.shrink_to_fit();
 
                 return Ok(Expr::FnCall(
                     Box::new(FnCallExpr {
@@ -1066,6 +1070,7 @@ fn parse_primary(
                 }
             }
 
+            segments.shrink_to_fit();
             Expr::InterpolatedString(Box::new(segments))
         }
 
@@ -1344,6 +1349,7 @@ fn parse_unary(
                 expr => {
                     let mut args = StaticVec::new();
                     args.push(expr);
+                    args.shrink_to_fit();
 
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
@@ -1370,6 +1376,7 @@ fn parse_unary(
                 expr => {
                     let mut args = StaticVec::new();
                     args.push(expr);
+                    args.shrink_to_fit();
 
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
@@ -1387,8 +1394,8 @@ fn parse_unary(
         Token::Bang => {
             let pos = eat_token(input, Token::Bang);
             let mut args = StaticVec::new();
-            let expr = parse_unary(input, state, lib, settings.level_up())?;
-            args.push(expr);
+            args.push(parse_unary(input, state, lib, settings.level_up())?);
+            args.shrink_to_fit();
 
             Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
@@ -1461,23 +1468,9 @@ fn make_assignment_stmt<'a>(
         Expr::Index(x, _) | Expr::Dot(x, _) => {
             match check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _))) {
                 None => match &x.lhs {
-                    // var[???] (non-indexed) = rhs, var.??? (non-indexed) = rhs
-                    Expr::Variable(None, _, x) if x.0.is_none() => {
+                    // var[???] = rhs, var.??? = rhs
+                    Expr::Variable(_, _, _) => {
                         Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
-                    }
-                    // var[???] (indexed) = rhs, var.??? (indexed) = rhs
-                    Expr::Variable(i, var_pos, x) => {
-                        let (index, _, name) = x.as_ref();
-                        let index = i.map_or_else(|| index.unwrap().get(), |n| n.get() as usize);
-                        match state.stack[state.stack.len() - index].1 {
-                            AccessMode::ReadWrite => {
-                                Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
-                            }
-                            // Constant values cannot be assigned to
-                            AccessMode::ReadOnly => {
-                                Err(PERR::AssignmentToConstant(name.to_string()).into_err(*var_pos))
-                            }
-                        }
                     }
                     // expr[???] = rhs, expr.??? = rhs
                     expr => {
@@ -1730,6 +1723,7 @@ fn parse_binary_op(
         let mut args = StaticVec::new();
         args.push(root);
         args.push(rhs);
+        args.shrink_to_fit();
 
         root = match op_token {
             Token::Plus
@@ -1782,6 +1776,7 @@ fn parse_binary_op(
                 // Swap the arguments
                 let current_lhs = args.remove(0);
                 args.push(current_lhs);
+                args.shrink_to_fit();
 
                 // Convert into a call to `contains`
                 let hash = calc_fn_hash(empty(), OP_CONTAINS, 2);
@@ -1836,25 +1831,15 @@ fn parse_custom_syntax(
 ) -> Result<Expr, ParseError> {
     let mut keywords: StaticVec<Expr> = Default::default();
     let mut segments: StaticVec<_> = Default::default();
-    let mut tokens: Vec<_> = Default::default();
+    let mut tokens: StaticVec<_> = Default::default();
 
     // Adjust the variables stack
-    match syntax.scope_delta {
-        delta if delta > 0 => {
-            // Add enough empty variable names to the stack.
-            // Empty variable names act as a barrier so earlier variables will not be matched.
-            // Variable searches stop at the first empty variable name.
-            let empty = state.get_identifier("");
-            state.stack.resize(
-                state.stack.len() + delta as usize,
-                (empty, AccessMode::ReadWrite),
-            );
-        }
-        delta if delta < 0 && state.stack.len() <= delta.abs() as usize => state.stack.clear(),
-        delta if delta < 0 => state
-            .stack
-            .truncate(state.stack.len() - delta.abs() as usize),
-        _ => (),
+    if syntax.scope_changed {
+        // Add an empty variable name to the stack.
+        // Empty variable names act as a barrier so earlier variables will not be matched.
+        // Variable searches stop at the first empty variable name.
+        let empty = state.get_identifier("");
+        state.stack.push((empty, AccessMode::ReadWrite));
     }
 
     let parse_func = &syntax.parse;
@@ -1920,11 +1905,14 @@ fn parse_custom_syntax(
         }
     }
 
+    keywords.shrink_to_fit();
+    tokens.shrink_to_fit();
+
     Ok(Expr::Custom(
         Box::new(CustomExpr {
             keywords,
             tokens,
-            scope_delta: syntax.scope_delta,
+            scope_changed: syntax.scope_changed,
         }),
         pos,
     ))
@@ -2366,7 +2354,7 @@ fn parse_export(
         }
     }
 
-    Ok(Stmt::Export(exports, settings.pos))
+    Ok(Stmt::Export(exports.into_boxed_slice(), settings.pos))
 }
 
 /// Parse a statement block.
@@ -2467,7 +2455,7 @@ fn parse_block(
     #[cfg(not(feature = "no_module"))]
     state.modules.truncate(prev_mods_len);
 
-    Ok(Stmt::Block(statements, settings.pos))
+    Ok(Stmt::Block(statements.into_boxed_slice(), settings.pos))
 }
 
 /// Parse an expression as a statement.
@@ -2820,7 +2808,8 @@ fn parse_fn(
     }
     .into();
 
-    let params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
+    let mut params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
+    params.shrink_to_fit();
 
     #[cfg(not(feature = "no_closure"))]
     let externals = state
@@ -2873,6 +2862,8 @@ fn make_curry_from_externals(
             Box::new((None, None, x.clone())),
         ));
     });
+
+    args.shrink_to_fit();
 
     let expr = Expr::FnCall(
         Box::new(FnCallExpr {
@@ -2967,7 +2958,7 @@ fn parse_anon_fn(
         Default::default()
     };
 
-    let params: StaticVec<_> = if cfg!(not(feature = "no_closure")) {
+    let mut params: StaticVec<_> = if cfg!(not(feature = "no_closure")) {
         externals
             .iter()
             .cloned()
@@ -2976,6 +2967,7 @@ fn parse_anon_fn(
     } else {
         params.into_iter().map(|(v, _)| v).collect()
     };
+    params.shrink_to_fit();
 
     // Create unique function name by hashing the script body plus the parameters.
     let hasher = &mut get_hasher();
@@ -3135,22 +3127,22 @@ impl Engine {
 pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
     match value.0 {
         #[cfg(not(feature = "no_float"))]
-        Union::Float(value, _) => Some(Expr::FloatConstant(value, pos)),
+        Union::Float(value, _, _) => Some(Expr::FloatConstant(value, pos)),
 
         #[cfg(feature = "decimal")]
-        Union::Decimal(value, _) => Some(Expr::DynamicConstant(Box::new((*value).into()), pos)),
+        Union::Decimal(value, _, _) => Some(Expr::DynamicConstant(Box::new((*value).into()), pos)),
 
-        Union::Unit(_, _) => Some(Expr::Unit(pos)),
-        Union::Int(value, _) => Some(Expr::IntegerConstant(value, pos)),
-        Union::Char(value, _) => Some(Expr::CharConstant(value, pos)),
-        Union::Str(value, _) => Some(Expr::StringConstant(value, pos)),
-        Union::Bool(value, _) => Some(Expr::BoolConstant(value, pos)),
+        Union::Unit(_, _, _) => Some(Expr::Unit(pos)),
+        Union::Int(value, _, _) => Some(Expr::IntegerConstant(value, pos)),
+        Union::Char(value, _, _) => Some(Expr::CharConstant(value, pos)),
+        Union::Str(value, _, _) => Some(Expr::StringConstant(value, pos)),
+        Union::Bool(value, _, _) => Some(Expr::BoolConstant(value, pos)),
 
         #[cfg(not(feature = "no_index"))]
-        Union::Array(array, _) => Some(Expr::DynamicConstant(Box::new((*array).into()), pos)),
+        Union::Array(array, _, _) => Some(Expr::DynamicConstant(Box::new((*array).into()), pos)),
 
         #[cfg(not(feature = "no_object"))]
-        Union::Map(map, _) => Some(Expr::DynamicConstant(Box::new((*map).into()), pos)),
+        Union::Map(map, _, _) => Some(Expr::DynamicConstant(Box::new((*map).into()), pos)),
 
         _ => None,
     }

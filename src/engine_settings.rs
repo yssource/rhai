@@ -31,16 +31,6 @@ impl Engine {
     pub fn optimization_level(&self) -> crate::OptimizationLevel {
         self.optimization_level
     }
-    /// _(METADATA)_ Enable/disable doc-comments for functions.
-    /// Exported under the `metadata` feature only.
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
-    #[cfg(feature = "metadata")]
-    #[inline(always)]
-    pub fn enable_doc_comments(&mut self, enable: bool) -> &mut Self {
-        self.disable_doc_comments = !enable;
-        self
-    }
     /// Set the maximum levels of function calls allowed for a script in order to avoid
     /// infinite recursion and stack overflows.
     ///

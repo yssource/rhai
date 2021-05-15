@@ -19,21 +19,25 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
 
     engine.register_custom_syntax(
         &[
-            "exec", "|", "$ident$", "|", "->", "$block$", "while", "$expr$",
+            "exec", "[", "$ident$", "]", "->", "$block$", "while", "$expr$",
         ],
-        1,
+        true,
         |context, inputs| {
             let var_name = inputs[0].get_variable_name().unwrap().to_string();
             let stmt = inputs.get(1).unwrap();
             let condition = inputs.get(2).unwrap();
 
-            context.scope_mut().push(var_name, 0 as INT);
+            context.scope_mut().push(var_name.clone(), 0 as INT);
 
             let mut count: INT = 0;
 
             loop {
                 context.eval_expression_tree(stmt)?;
                 count += 1;
+
+                context
+                    .scope_mut()
+                    .push(format!("{}{}", var_name, count), count);
 
                 let stop = !context
                     .eval_expression_tree(condition)?
@@ -59,7 +63,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<INT>(
             "
                 let x = 0;
-                let foo = (exec |x| -> { x += 2 } while x < 42) * 10;
+                let foo = (exec [x] -> { x += 2 } while x < 42) * 10;
                 foo
             "
         )?,
@@ -69,7 +73,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<INT>(
             "
                 let x = 0;
-                exec |x| -> { x += 1 } while x < 42;
+                exec [x] -> { x += 1 } while x < 42;
                 x
             "
         )?,
@@ -78,17 +82,27 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval::<INT>(
             "
-                exec |x| -> { x += 1 } while x < 42;
+                exec [x] -> { x += 1 } while x < 42;
                 x
             "
         )?,
         42
     );
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                let foo = 123;
+                exec [x] -> { x += 1 } while x < 42;
+                foo + x + x1 + x2 + x3
+            "
+        )?,
+        171
+    );
 
     // The first symbol must be an identifier
     assert_eq!(
         *engine
-            .register_custom_syntax(&["!"], 0, |_, _| Ok(Dynamic::UNIT))
+            .register_custom_syntax(&["!"], false, |_, _| Ok(Dynamic::UNIT))
             .expect_err("should error")
             .0,
         ParseErrorType::BadInput(LexError::ImproperSymbol(
@@ -114,14 +128,14 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
                 s => Err(ParseError(
                     Box::new(ParseErrorType::BadInput(LexError::ImproperSymbol(
                         s.to_string(),
-                        "".to_string(),
+                        Default::default(),
                     ))),
                     Position::NONE,
                 )),
             },
             _ => unreachable!(),
         },
-        1,
+        true,
         |context, inputs| {
             context.scope_mut().push("foo", 999 as INT);
 

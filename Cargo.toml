@@ -3,7 +3,7 @@ members = [".", "codegen"]
 
 [package]
 name = "rhai"
-version = "0.20.1"
+version = "0.20.2"
 edition = "2018"
 authors = ["Jonathan Turner", "Lukáš Hozda", "Stephen Chung", "jhwgh1968"]
 description = "Embedded scripting for Rust"
@@ -32,7 +32,7 @@ no_float = []                   # no floating-point
 f32_float = []                  # set FLOAT=f32
 only_i32 = []                   # set INT=i32 (useful for 32-bit systems)
 only_i64 = []                   # set INT=i64 (default) and disable support for all other integer types
-decimal = ["rust_decimal"]      # add the Decimal number type
+decimal = ["rust_decimal/std"]  # add the Decimal number type
 no_index = []                   # no arrays and indexing
 no_object = []                  # no custom objects
 no_function = ["no_closure"]    # no script-defined functions (meaning no closures)
@@ -47,6 +47,9 @@ no_std = ["no-std-compat", "num-traits/libm", "core-error", "libm", "ahash/compi
 # compiling for WASM
 wasm-bindgen = ["instant/wasm-bindgen"]
 stdweb = ["instant/stdweb"]
+
+# internal feature flags - volatile
+no_smartstring = []             # Do not use SmartString
 
 [profile.release]
 lto = "fat"
@@ -89,8 +92,9 @@ default_features = false
 optional = true
 
 [dependencies.rust_decimal]
-version = "1.11"
+version = "1.13"
 default_features = false
+features = ["maths"]
 optional = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

@@ -30,7 +30,7 @@ fn test_comments() -> Result<(), Box<EvalAltResult>> {
 #[cfg(feature = "metadata")]
 #[test]
 fn test_comments_doc() -> Result<(), Box<EvalAltResult>> {
-    let mut engine = Engine::new();
+    let engine = Engine::new();
 
     let ast = engine.compile(
         "
@@ -88,18 +88,6 @@ fn test_comments_doc() -> Result<(), Box<EvalAltResult>> {
             "
         )
         .is_err());
-
-    engine.enable_doc_comments(false);
-
-    engine.compile(
-        "
-            /// Hello world!
-            let x = 42;
-
-            /** Hello world! */
-            let x = 42;
-        ",
-    )?;
 
     Ok(())
 }

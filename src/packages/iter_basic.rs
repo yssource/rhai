@@ -26,7 +26,7 @@ where
             if r == from {
                 return EvalAltResult::ErrorInFunctionCall(
                     "range".to_string(),
-                    "".to_string(),
+                    Default::default(),
                     Box::new(EvalAltResult::ErrorArithmetic(
                         "step value cannot be zero".to_string(),
                         crate::Position::NONE,
@@ -246,7 +246,6 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
     #[cfg(feature = "decimal")]
     {
         use rust_decimal::Decimal;
-        use num_traits::Zero;
 
         #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
         struct StepDecimalRange(Decimal, Decimal, Decimal);

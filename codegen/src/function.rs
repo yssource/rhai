@@ -541,8 +541,10 @@ impl ExportedFn {
                     "property setter requires exactly 2 parameters",
                 ))
             }
-            // 3b. Property setters must return nothing.
-            FnSpecialAccess::Property(Property::Set(_)) if self.return_type().is_some() => {
+            // 3b. Non-raw property setters must return nothing.
+            FnSpecialAccess::Property(Property::Set(_))
+                if params.return_raw.is_none() && self.return_type().is_some() =>
+            {
                 return Err(syn::Error::new(
                     self.signature.output.span(),
                     "property setter cannot return any value",
@@ -569,8 +571,10 @@ impl ExportedFn {
                     "index setter requires exactly 3 parameters",
                 ))
             }
-            // 5b. Index setters must return nothing.
-            FnSpecialAccess::Index(Index::Set) if self.return_type().is_some() => {
+            // 5b. Non-raw index setters must return nothing.
+            FnSpecialAccess::Index(Index::Set)
+                if params.return_raw.is_none() && self.return_type().is_some() =>
+            {
                 return Err(syn::Error::new(
                     self.signature.output.span(),
                     "index setter cannot return any value",
@@ -693,9 +697,7 @@ impl ExportedFn {
                         unpack_statements.push(
                         syn::parse2::<syn::Stmt>(quote! {
                             if args[0usize].is_read_only() {
-                                return Err(Box::new(
-                                    EvalAltResult::ErrorAssignmentToConstant(#arg_lit_str.to_string(), Position::NONE)
-                                ));
+                                return EvalAltResult::ErrorAssignmentToConstant(#arg_lit_str.to_string(), Position::NONE).into();
                             }
                         })
                         .unwrap(),

@@ -14,6 +14,7 @@ use std::{
     fmt,
     hash::Hash,
     iter::empty,
+    mem,
     num::{NonZeroU8, NonZeroUsize},
     ops::{Add, AddAssign, Deref, DerefMut},
 };
@@ -52,6 +53,8 @@ pub struct ScriptFnDef {
     /// Encapsulated running environment, if any.
     pub lib: Option<Shared<Module>>,
     /// Encapsulated imported modules.
+    ///
+    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     pub mods: crate::engine::Imports,
     /// Function name.
@@ -61,9 +64,14 @@ pub struct ScriptFnDef {
     /// Names of function parameters.
     pub params: StaticVec<Identifier>,
     /// Access to external variables.
+    ///
+    /// Not available under `no_closure`.
     #[cfg(not(feature = "no_closure"))]
     pub externals: std::collections::BTreeSet<Identifier>,
-    /// Function doc-comments (if any).
+    /// _(METADATA)_ Function doc-comments (if any).
+    /// Exported under the `metadata` feature only.
+    ///
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     pub comments: StaticVec<String>,
@@ -97,7 +105,10 @@ impl fmt::Display for ScriptFnDef {
 #[cfg(not(feature = "no_function"))]
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct ScriptFnMetadata<'a> {
-    /// Function doc-comments (if any).
+    /// _(METADATA)_ Function doc-comments (if any).
+    /// Exported under the `metadata` feature only.
+    ///
+    /// Not available under `no_function`.
     ///
     /// Block doc-comments are kept in a single string slice with line-breaks within.
     ///
@@ -148,6 +159,23 @@ impl<'a> Into<ScriptFnMetadata<'a>> for &'a ScriptFnDef {
     }
 }
 
+#[cfg(not(feature = "no_function"))]
+impl std::cmp::PartialOrd for ScriptFnMetadata<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[cfg(not(feature = "no_function"))]
+impl std::cmp::Ord for ScriptFnMetadata<'_> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.name.cmp(other.name) {
+            std::cmp::Ordering::Equal => self.params.len().cmp(&other.params.len()),
+            cmp => cmp,
+        }
+    }
+}
+
 /// Compiled AST (abstract syntax tree) of a Rhai script.
 ///
 /// # Thread Safety
@@ -162,6 +190,8 @@ pub struct AST {
     /// Script-defined functions.
     functions: Shared<Module>,
     /// Embedded module resolver, if any.
+    ///
+    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
 }
@@ -186,9 +216,10 @@ impl AST {
         statements: impl IntoIterator<Item = Stmt>,
         functions: impl Into<Shared<Module>>,
     ) -> Self {
+        let statements: StaticVec<_> = statements.into_iter().collect();
         Self {
             source: None,
-            body: StmtBlock(statements.into_iter().collect(), Position::NONE),
+            body: StmtBlock::new(statements, Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -201,9 +232,10 @@ impl AST {
         functions: impl Into<Shared<Module>>,
         source: impl Into<Identifier>,
     ) -> Self {
+        let statements: StaticVec<_> = statements.into_iter().collect();
         Self {
             source: Some(source.into()),
-            body: StmtBlock(statements.into_iter().collect(), Position::NONE),
+            body: StmtBlock::new(statements, Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -267,7 +299,7 @@ impl AST {
     /// _(INTERNALS)_ Get the internal shared [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
     ///
-    /// Not available under `no_function`.
+    /// Not available under `no_function` or `no_module`.
     #[cfg(feature = "internals")]
     #[deprecated = "this method is volatile and may change"]
     #[cfg(not(feature = "no_module"))]
@@ -303,6 +335,8 @@ impl AST {
     }
     /// _(INTERNALS)_ Get the embedded [module resolver][crate::ModuleResolver].
     /// Exported under the `internals` feature only.
+    ///
+    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     #[cfg(feature = "internals")]
     #[inline(always)]
@@ -835,7 +869,9 @@ pub struct StmtBlock(StaticVec<Stmt>, Position);
 impl StmtBlock {
     /// Create a new [`StmtBlock`].
     pub fn new(statements: impl Into<StaticVec<Stmt>>, pos: Position) -> Self {
-        Self(statements.into(), pos)
+        let mut statements = statements.into();
+        statements.shrink_to_fit();
+        Self(statements, pos)
     }
     /// Is this statements block empty?
     #[inline(always)]
@@ -882,7 +918,7 @@ impl fmt::Debug for StmtBlock {
 impl From<StmtBlock> for Stmt {
     fn from(block: StmtBlock) -> Self {
         let block_pos = block.position();
-        Self::Block(block.0.into_vec(), block_pos)
+        Self::Block(block.0.into_boxed_slice(), block_pos)
     }
 }
 
@@ -922,7 +958,7 @@ pub enum Stmt {
     ///        function call forming one statement.
     FnCall(Box<FnCallExpr>, Position),
     /// `{` stmt`;` ... `}`
-    Block(Vec<Stmt>, Position),
+    Block(Box<[Stmt]>, Position),
     /// `try` `{` stmt; ... `}` `catch` `(` var `)` `{` stmt; ... `}`
     TryCatch(
         Box<(StmtBlock, Option<Ident>, StmtBlock)>,
@@ -938,12 +974,18 @@ pub enum Stmt {
     /// `return`/`throw`
     Return(ReturnType, Option<Expr>, Position),
     /// `import` expr `as` var
+    ///
+    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     Import(Expr, Option<Box<Ident>>, Position),
     /// `export` var `as` var `,` ...
+    ///
+    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
-    Export(Vec<(Ident, Option<Ident>)>, Position),
+    Export(Box<[(Ident, Option<Ident>)]>, Position),
     /// Convert a variable to shared.
+    ///
+    /// Not available under `no_closure`.
     #[cfg(not(feature = "no_closure"))]
     Share(Identifier),
 }
@@ -959,7 +1001,9 @@ impl From<Stmt> for StmtBlock {
     #[inline(always)]
     fn from(stmt: Stmt) -> Self {
         match stmt {
-            Stmt::Block(block, pos) => Self(block.into(), pos),
+            Stmt::Block(mut block, pos) => {
+                Self(block.iter_mut().map(|v| mem::take(v)).collect(), pos)
+            }
             Stmt::Noop(pos) => Self(Default::default(), pos),
             _ => {
                 let pos = stmt.position();
@@ -1265,7 +1309,7 @@ impl Stmt {
                 }
             }
             Self::Block(x, _) => {
-                for s in x {
+                for s in x.iter() {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -1313,10 +1357,10 @@ impl Stmt {
 pub struct CustomExpr {
     /// List of keywords.
     pub keywords: StaticVec<Expr>,
+    /// Is the current [`Scope`][crate::Scope] modified?
+    pub scope_changed: bool,
     /// List of tokens actually parsed.
-    pub tokens: Vec<Identifier>,
-    /// Delta number of variables in the scope.
-    pub scope_delta: isize,
+    pub tokens: StaticVec<Identifier>,
 }
 
 /// _(INTERNALS)_ A binary expression.
@@ -1419,7 +1463,7 @@ impl fmt::Debug for FnCallHashes {
 }
 
 impl FnCallHashes {
-    /// Create a [`FnCallHash`] with only the native Rust hash.
+    /// Create a [`FnCallHashes`] with only the native Rust hash.
     #[inline(always)]
     pub fn from_native(hash: u64) -> Self {
         Self {
@@ -1427,7 +1471,7 @@ impl FnCallHashes {
             native: hash,
         }
     }
-    /// Create a [`FnCallHash`] with both native Rust and script function hashes set to the same value.
+    /// Create a [`FnCallHashes`] with both native Rust and script function hashes set to the same value.
     #[inline(always)]
     pub fn from_script(hash: u64) -> Self {
         Self {
@@ -1435,7 +1479,7 @@ impl FnCallHashes {
             native: hash,
         }
     }
-    /// Create a [`FnCallHash`] with both native Rust and script function hashes.
+    /// Create a [`FnCallHashes`] with both native Rust and script function hashes.
     #[inline(always)]
     pub fn from_script_and_native(script: u64, native: u64) -> Self {
         Self {
@@ -1443,21 +1487,21 @@ impl FnCallHashes {
             native,
         }
     }
-    /// Is this [`FnCallHash`] native Rust only?
+    /// Is this [`FnCallHashes`] native Rust only?
     #[inline(always)]
     pub fn is_native_only(&self) -> bool {
         self.script.is_none()
     }
-    /// Get the script function hash from this [`FnCallHash`].
+    /// Get the script function hash from this [`FnCallHashes`].
     ///
     /// # Panics
     ///
-    /// Panics if the [`FnCallHash`] is native Rust only.
+    /// Panics if the [`FnCallHashes`] is native Rust only.
     #[inline(always)]
     pub fn script_hash(&self) -> u64 {
         self.script.unwrap()
     }
-    /// Get the naive Rust function hash from this [`FnCallHash`].
+    /// Get the naive Rust function hash from this [`FnCallHashes`].
     #[inline(always)]
     pub fn native_hash(&self) -> u64 {
         self.native
@@ -1479,7 +1523,7 @@ pub struct FnCallExpr {
     /// List of function call argument expressions.
     pub args: StaticVec<Expr>,
     /// List of function call arguments that are constants.
-    pub constant_args: smallvec::SmallVec<[(Dynamic, Position); 2]>,
+    pub literal_args: smallvec::SmallVec<[(Dynamic, Position); 2]>,
     /// Function name.
     pub name: Identifier,
     /// Does this function call capture the parent scope?
@@ -1495,16 +1539,18 @@ impl FnCallExpr {
     /// Are there no arguments to this function call?
     #[inline(always)]
     pub fn is_args_empty(&self) -> bool {
-        self.args.is_empty() && self.constant_args.is_empty()
+        self.args.is_empty() && self.literal_args.is_empty()
     }
     /// Get the number of arguments to this function call.
     #[inline(always)]
     pub fn args_count(&self) -> usize {
-        self.args.len() + self.constant_args.len()
+        self.args.len() + self.literal_args.len()
     }
 }
 
 /// A type that wraps a floating-point number and implements [`Hash`].
+///
+/// Not available under `no_float`.
 #[cfg(not(feature = "no_float"))]
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct FloatWrapper<F>(F);
@@ -1635,6 +1681,8 @@ pub enum Expr {
     /// Integer constant.
     IntegerConstant(INT, Position),
     /// Floating-point constant.
+    ///
+    /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     FloatConstant(FloatWrapper<FLOAT>, Position),
     /// Character constant.
@@ -1745,8 +1793,8 @@ impl fmt::Debug for Expr {
                 ff.field("name", &x.name)
                     .field("hash", &x.hashes)
                     .field("args", &x.args);
-                if !x.constant_args.is_empty() {
-                    ff.field("constant_args", &x.constant_args);
+                if !x.literal_args.is_empty() {
+                    ff.field("literal_args", &x.literal_args);
                 }
                 if x.capture {
                     ff.field("capture", &x.capture);
@@ -2072,7 +2120,14 @@ mod tests {
         assert_eq!(size_of::<Option<ast::Expr>>(), 16);
         assert_eq!(size_of::<ast::Stmt>(), 32);
         assert_eq!(size_of::<Option<ast::Stmt>>(), 32);
-        assert_eq!(size_of::<FnPtr>(), 96);
+        assert_eq!(
+            size_of::<FnPtr>(),
+            if cfg!(feature = "no_smartstring") {
+                80
+            } else {
+                96
+            }
+        );
         assert_eq!(size_of::<Scope>(), 288);
         assert_eq!(size_of::<LexError>(), 56);
         assert_eq!(

@@ -558,7 +558,7 @@ pub struct FnResolutionCacheEntry {
 }
 
 /// A function resolution cache.
-pub type FnResolutionCache = BTreeMap<u64, Option<FnResolutionCacheEntry>>;
+pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
 
 /// _(INTERNALS)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
@@ -776,7 +776,7 @@ pub struct Engine {
     pub(crate) module_resolver: Box<dyn crate::ModuleResolver>,
 
     /// A map mapping type names to pretty-print names.
-    pub(crate) type_names: BTreeMap<Identifier, Identifier>,
+    pub(crate) type_names: BTreeMap<Identifier, Box<Identifier>>,
 
     /// An empty [`ImmutableString`] for cloning purposes.
     pub(crate) empty_string: ImmutableString,
@@ -786,7 +786,7 @@ pub struct Engine {
     /// A map containing custom keywords and precedence to recognize.
     pub(crate) custom_keywords: BTreeMap<Identifier, Option<Precedence>>,
     /// Custom syntax.
-    pub(crate) custom_syntax: BTreeMap<Identifier, CustomSyntax>,
+    pub(crate) custom_syntax: BTreeMap<Identifier, Box<CustomSyntax>>,
     /// Callback closure for resolving variable access.
     pub(crate) resolve_var: Option<OnVarCallback>,
 
@@ -804,11 +804,6 @@ pub struct Engine {
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
     pub(crate) limits: Limits,
-
-    /// Disable doc-comments?
-    #[cfg(not(feature = "no_function"))]
-    #[cfg(feature = "metadata")]
-    pub(crate) disable_doc_comments: bool,
 }
 
 impl fmt::Debug for Engine {
@@ -926,13 +921,9 @@ impl Engine {
                 #[cfg(not(feature = "no_object"))]
                 max_map_size: None,
             },
-
-            #[cfg(not(feature = "no_function"))]
-            #[cfg(feature = "metadata")]
-            disable_doc_comments: false,
         };
 
-        engine.global_namespace.set_internal(true);
+        engine.global_namespace.internal = true;
         engine.register_global_module(StandardPackage::new().as_shared_module());
 
         engine
@@ -987,13 +978,9 @@ impl Engine {
                 #[cfg(not(feature = "no_object"))]
                 max_map_size: None,
             },
-
-            #[cfg(not(feature = "no_function"))]
-            #[cfg(feature = "metadata")]
-            disable_doc_comments: false,
         };
 
-        engine.global_namespace.set_internal(true);
+        engine.global_namespace.internal = true;
 
         engine
     }
@@ -1144,6 +1131,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         target: &mut Target,
+        root: (&str, Position),
         rhs: &Expr,
         idx_values: &mut StaticVec<ChainArgument>,
         chain_type: ChainType,
@@ -1179,8 +1167,8 @@ impl Engine {
                         let rhs_chain = rhs_chain.unwrap();
 
                         self.eval_dot_index_chain_helper(
-                            mods, state, lib, this_ptr, obj_ptr, &x.rhs, idx_values, rhs_chain,
-                            level, new_val,
+                            mods, state, lib, this_ptr, obj_ptr, root, &x.rhs, idx_values,
+                            rhs_chain, level, new_val,
                         )
                         .map_err(|err| err.fill_position(*x_pos))
                     }
@@ -1199,7 +1187,8 @@ impl Engine {
                             Ok(obj_ptr) => {
                                 let ((new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
                                 self.eval_op_assignment(
-                                    mods, state, lib, op_info, op_pos, obj_ptr, new_val, new_pos,
+                                    mods, state, lib, op_info, op_pos, obj_ptr, root, new_val,
+                                    new_pos,
                                 )?;
                                 None
                             }
@@ -1282,7 +1271,7 @@ impl Engine {
                         )?;
                         let ((new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
                         self.eval_op_assignment(
-                            mods, state, lib, op_info, op_pos, val, new_val, new_pos,
+                            mods, state, lib, op_info, op_pos, val, root, new_val, new_pos,
                         )?;
                         Ok((Dynamic::UNIT, true))
                     }
@@ -1311,7 +1300,7 @@ impl Engine {
                             )?;
                             let obj_ptr = (&mut orig_val).into();
                             self.eval_op_assignment(
-                                mods, state, lib, op_info, op_pos, obj_ptr, new_val, new_pos,
+                                mods, state, lib, op_info, op_pos, obj_ptr, root, new_val, new_pos,
                             )?;
                             new_val = orig_val;
                         }
@@ -1365,8 +1354,8 @@ impl Engine {
                         let rhs_chain = rhs_chain.unwrap();
 
                         self.eval_dot_index_chain_helper(
-                            mods, state, lib, this_ptr, &mut val, &x.rhs, idx_values, rhs_chain,
-                            level, new_val,
+                            mods, state, lib, this_ptr, &mut val, root, &x.rhs, idx_values,
+                            rhs_chain, level, new_val,
                         )
                         .map_err(|err| err.fill_position(*x_pos))
                     }
@@ -1396,6 +1385,7 @@ impl Engine {
                                         lib,
                                         this_ptr,
                                         &mut val.into(),
+                                        root,
                                         &x.rhs,
                                         idx_values,
                                         rhs_chain,
@@ -1438,7 +1428,7 @@ impl Engine {
                                 let target = &mut val.into();
 
                                 self.eval_dot_index_chain_helper(
-                                    mods, state, lib, this_ptr, target, &x.rhs, idx_values,
+                                    mods, state, lib, this_ptr, target, root, &x.rhs, idx_values,
                                     rhs_chain, level, new_val,
                                 )
                                 .map_err(|err| err.fill_position(*pos))
@@ -1487,21 +1477,16 @@ impl Engine {
 
         match lhs {
             // id.??? or id[???]
-            Expr::Variable(_, _var_pos, x) => {
+            Expr::Variable(_, var_pos, x) => {
                 #[cfg(not(feature = "unchecked"))]
-                self.inc_operations(state, *_var_pos)?;
+                self.inc_operations(state, *var_pos)?;
 
-                let (target, pos) =
-                    self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
-
-                // Constants cannot be modified
-                if target.is_read_only() && new_val.is_some() {
-                    return EvalAltResult::ErrorAssignmentToConstant(x.2.to_string(), pos).into();
-                }
+                let (target, _) = self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
 
                 let obj_ptr = &mut target.into();
+                let root = (x.2.as_str(), *var_pos);
                 self.eval_dot_index_chain_helper(
-                    mods, state, lib, &mut None, obj_ptr, rhs, idx_values, chain_type, level,
+                    mods, state, lib, &mut None, obj_ptr, root, rhs, idx_values, chain_type, level,
                     new_val,
                 )
                 .map(|(v, _)| v)
@@ -1513,8 +1498,9 @@ impl Engine {
             expr => {
                 let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let obj_ptr = &mut value.into();
+                let root = ("", expr.position());
                 self.eval_dot_index_chain_helper(
-                    mods, state, lib, this_ptr, obj_ptr, rhs, idx_values, chain_type, level,
+                    mods, state, lib, this_ptr, obj_ptr, root, rhs, idx_values, chain_type, level,
                     new_val,
                 )
                 .map(|(v, _)| v)
@@ -1558,7 +1544,7 @@ impl Engine {
                     })
                     .collect::<Result<StaticVec<_>, _>>()?;
 
-                x.constant_args
+                x.literal_args
                     .iter()
                     .inspect(|(_, pos)| arg_positions.push(*pos))
                     .for_each(|(v, _)| arg_values.push(v.clone()));
@@ -1603,7 +1589,7 @@ impl Engine {
                             })
                             .collect::<Result<StaticVec<_>, _>>()?;
 
-                        x.constant_args
+                        x.literal_args
                             .iter()
                             .inspect(|(_, pos)| arg_positions.push(*pos))
                             .for_each(|(v, _)| arg_values.push(v.clone()));
@@ -1676,7 +1662,7 @@ impl Engine {
 
         match target {
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Array(arr, _)) => {
+            Dynamic(Union::Array(arr, _, _)) => {
                 // val_array[idx]
                 let index = _idx
                     .as_int()
@@ -1718,7 +1704,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_object"))]
-            Dynamic(Union::Map(map, _)) => {
+            Dynamic(Union::Map(map, _, _)) => {
                 // val_map[idx]
                 let index = &*_idx.read_lock::<ImmutableString>().ok_or_else(|| {
                     self.make_type_mismatch_err::<ImmutableString>(_idx.type_name(), idx_pos)
@@ -1735,7 +1721,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
-            Dynamic(Union::Str(s, _)) => {
+            Dynamic(Union::Str(s, _, _)) => {
                 // val_string[idx]
                 let index = _idx
                     .as_int()
@@ -1861,6 +1847,7 @@ impl Engine {
                         Some(OpAssignment::new(TOKEN_OP_CONCAT)),
                         pos,
                         (&mut result).into(),
+                        ("", Position::NONE),
                         item,
                         expr.position(),
                     )?;
@@ -1905,7 +1892,7 @@ impl Engine {
                     namespace,
                     hashes,
                     args,
-                    constant_args: c_args,
+                    literal_args: c_args,
                     ..
                 } = x.as_ref();
                 let namespace = namespace.as_ref();
@@ -1923,7 +1910,7 @@ impl Engine {
                     capture,
                     hashes,
                     args,
-                    constant_args: c_args,
+                    literal_args: c_args,
                     ..
                 } = x.as_ref();
                 self.make_function_call(
@@ -2077,11 +2064,13 @@ impl Engine {
         op_info: Option<OpAssignment>,
         op_pos: Position,
         mut target: Target,
+        root: (&str, Position),
         mut new_value: Dynamic,
         new_value_pos: Position,
     ) -> Result<(), Box<EvalAltResult>> {
         if target.is_read_only() {
-            unreachable!("LHS should not be read-only");
+            // Assignment to constant variable
+            return EvalAltResult::ErrorAssignmentToConstant(root.0.to_string(), root.1).into();
         }
 
         if let Some(OpAssignment {
@@ -2180,26 +2169,18 @@ impl Engine {
                 #[cfg(not(feature = "unchecked"))]
                 self.inc_operations(state, pos)?;
 
-                if lhs_ptr.is_read_only() {
-                    // Assignment to constant variable
-                    EvalAltResult::ErrorAssignmentToConstant(
-                        lhs_expr.get_variable_name(false).unwrap().to_string(),
-                        pos,
-                    )
-                    .into()
-                } else {
-                    self.eval_op_assignment(
-                        mods,
-                        state,
-                        lib,
-                        op_info.clone(),
-                        *op_pos,
-                        lhs_ptr,
-                        rhs_val,
-                        rhs_expr.position(),
-                    )?;
-                    Ok(Dynamic::UNIT)
-                }
+                self.eval_op_assignment(
+                    mods,
+                    state,
+                    lib,
+                    op_info.clone(),
+                    *op_pos,
+                    lhs_ptr,
+                    (lhs_expr.get_variable_name(false).unwrap(), pos),
+                    rhs_val,
+                    rhs_expr.position(),
+                )?;
+                Ok(Dynamic::UNIT)
             }
 
             // lhs op= rhs
@@ -2467,7 +2448,7 @@ impl Engine {
                     namespace,
                     hashes,
                     args,
-                    constant_args: c_args,
+                    literal_args: c_args,
                     ..
                 } = x.as_ref();
                 let namespace = namespace.as_ref();
@@ -2485,7 +2466,7 @@ impl Engine {
                     capture,
                     hashes,
                     args,
-                    constant_args: c_args,
+                    literal_args: c_args,
                     ..
                 } = x.as_ref();
                 self.make_function_call(
@@ -2569,7 +2550,7 @@ impl Engine {
                             Ok(_) => Ok(Dynamic::UNIT),
                             Err(result_err) => match *result_err {
                                 // Re-throw exception
-                                EvalAltResult::ErrorRuntime(Dynamic(Union::Unit(_, _)), pos) => {
+                                EvalAltResult::ErrorRuntime(Dynamic(Union::Unit(_, _, _)), pos) => {
                                     err.set_position(pos);
                                     Err(err)
                                 }
@@ -2623,18 +2604,15 @@ impl Engine {
                     #[cfg(not(feature = "no_function"))]
                     if entry_type == AccessMode::ReadOnly && lib.iter().any(|&m| !m.is_empty()) {
                         let global = if let Some(index) = mods.find(KEYWORD_GLOBAL) {
-                            let global = mods.get_mut(index).unwrap();
-
-                            if !global.is_internal() {
-                                None
-                            } else {
-                                Some(global)
+                            match mods.get_mut(index).unwrap() {
+                                m if m.internal => Some(m),
+                                _ => None,
                             }
                         } else {
                             // Create automatic global module
                             let mut global = Module::new();
-                            global.set_internal(true);
-                            mods.push(crate::engine::KEYWORD_GLOBAL, global);
+                            global.internal = true;
+                            mods.push(KEYWORD_GLOBAL, global);
                             Some(mods.get_mut(mods.len() - 1).unwrap())
                         };
 
@@ -2777,18 +2755,18 @@ impl Engine {
         fn calc_size(value: &Dynamic) -> (usize, usize, usize) {
             match value {
                 #[cfg(not(feature = "no_index"))]
-                Dynamic(Union::Array(arr, _)) => {
+                Dynamic(Union::Array(arr, _, _)) => {
                     let mut arrays = 0;
                     let mut maps = 0;
 
                     arr.iter().for_each(|value| match value {
-                        Dynamic(Union::Array(_, _)) => {
+                        Dynamic(Union::Array(_, _, _)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
                         }
                         #[cfg(not(feature = "no_object"))]
-                        Dynamic(Union::Map(_, _)) => {
+                        Dynamic(Union::Map(_, _, _)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
@@ -2799,18 +2777,18 @@ impl Engine {
                     (arrays, maps, 0)
                 }
                 #[cfg(not(feature = "no_object"))]
-                Dynamic(Union::Map(map, _)) => {
+                Dynamic(Union::Map(map, _, _)) => {
                     let mut arrays = 0;
                     let mut maps = 0;
 
                     map.values().for_each(|value| match value {
                         #[cfg(not(feature = "no_index"))]
-                        Dynamic(Union::Array(_, _)) => {
+                        Dynamic(Union::Array(_, _, _)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
                         }
-                        Dynamic(Union::Map(_, _)) => {
+                        Dynamic(Union::Map(_, _, _)) => {
                             let (a, m, _) = calc_size(value);
                             arrays += a;
                             maps += m;
@@ -2820,7 +2798,7 @@ impl Engine {
 
                     (arrays, maps, 0)
                 }
-                Dynamic(Union::Str(s, _)) => (0, 0, s.len()),
+                Dynamic(Union::Str(s, _, _)) => (0, 0, s.len()),
                 _ => (0, 0, 0),
             }
         }

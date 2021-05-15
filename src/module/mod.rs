@@ -48,7 +48,7 @@ impl Default for FnNamespace {
 #[derive(Debug, Clone)]
 pub struct FuncInfo {
     /// Function instance.
-    pub func: CallableFunction,
+    pub func: Shared<CallableFunction>,
     /// Function namespace.
     pub namespace: FnNamespace,
     /// Function access mode.
@@ -129,7 +129,7 @@ pub struct Module {
     /// ID identifying the module.
     id: Option<Identifier>,
     /// Is this module internal?
-    internal: bool,
+    pub(crate) internal: bool,
     /// Sub-modules.
     modules: BTreeMap<Identifier, Shared<Module>>,
     /// [`Module`] variables.
@@ -140,7 +140,7 @@ pub struct Module {
     functions: BTreeMap<u64, Box<FuncInfo>>,
     /// Flattened collection of all external Rust functions, native or scripted.
     /// including those in sub-modules.
-    all_functions: BTreeMap<u64, CallableFunction>,
+    all_functions: BTreeMap<u64, Shared<CallableFunction>>,
     /// Iterator functions, keyed by the type producing the iterator.
     type_iterators: BTreeMap<TypeId, IteratorFn>,
     /// Flattened collection of iterator functions, including those in sub-modules.
@@ -309,20 +309,6 @@ impl Module {
         self
     }
 
-    /// Is the [`Module`] internal?
-    #[allow(dead_code)]
-    #[inline(always)]
-    pub(crate) fn is_internal(&self) -> bool {
-        self.internal
-    }
-
-    /// Set the internal status of the [`Module`].
-    #[inline(always)]
-    pub(crate) fn set_internal(&mut self, value: bool) -> &mut Self {
-        self.internal = value;
-        self
-    }
-
     /// Is the [`Module`] empty?
     ///
     /// # Example
@@ -476,10 +462,7 @@ impl Module {
     /// If there is an existing function of the same name and number of arguments, it is replaced.
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub(crate) fn set_script_fn(
-        &mut self,
-        fn_def: impl Into<Shared<crate::ast::ScriptFnDef>>,
-    ) -> u64 {
+    pub fn set_script_fn(&mut self, fn_def: impl Into<Shared<crate::ast::ScriptFnDef>>) -> u64 {
         let fn_def = fn_def.into();
 
         // None + function name + number of arguments.
@@ -497,7 +480,7 @@ impl Module {
                 param_types: Default::default(),
                 #[cfg(feature = "metadata")]
                 param_names,
-                func: fn_def.into(),
+                func: Into::<CallableFunction>::into(fn_def).into(),
             }),
         );
         self.indexed = false;
@@ -695,19 +678,22 @@ impl Module {
     ) -> u64 {
         let is_method = func.is_method();
 
-        let param_types: StaticVec<_> = arg_types
+        let mut param_types: StaticVec<_> = arg_types
             .iter()
             .cloned()
             .enumerate()
             .map(|(i, type_id)| Self::map_type(!is_method || i > 0, type_id))
             .collect();
+        param_types.shrink_to_fit();
 
         #[cfg(feature = "metadata")]
-        let param_names = _arg_names
+        let mut param_names: StaticVec<_> = _arg_names
             .iter()
             .flat_map(|p| p.iter())
             .map(|&arg| self.identifiers.get(arg))
             .collect();
+        #[cfg(feature = "metadata")]
+        param_names.shrink_to_fit();
 
         let hash_fn = calc_native_fn_hash(empty(), &name, &param_types);
 
@@ -721,7 +707,7 @@ impl Module {
                 param_types,
                 #[cfg(feature = "metadata")]
                 param_names,
-                func,
+                func: func.into(),
             }),
         );
 
@@ -1119,7 +1105,7 @@ impl Module {
     /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
     #[inline(always)]
     pub(crate) fn get_fn(&self, hash_fn: u64) -> Option<&CallableFunction> {
-        self.functions.get(&hash_fn).map(|f| &f.func)
+        self.functions.get(&hash_fn).map(|f| f.func.as_ref())
     }
 
     /// Does the particular namespace-qualified function exist in the [`Module`]?
@@ -1135,7 +1121,9 @@ impl Module {
     /// The [`u64`] hash is calculated by [`build_index`][Module::build_index].
     #[inline(always)]
     pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
-        self.all_functions.get(&hash_qualified_fn)
+        self.all_functions
+            .get(&hash_qualified_fn)
+            .map(|f| f.as_ref())
     }
 
     /// Combine another [`Module`] into this [`Module`].
@@ -1454,7 +1442,7 @@ impl Module {
             .filter(|f| f.func.is_script())
             .for_each(|f| {
                 // Encapsulate AST environment
-                let mut func = crate::fn_native::shared_take_or_clone(f.func.get_fn_def().clone());
+                let mut func = f.func.get_fn_def().as_ref().clone();
                 func.lib = Some(ast.shared_lib());
                 func.mods = func_mods.clone();
                 module.set_script_fn(func);
@@ -1486,7 +1474,7 @@ impl Module {
             module: &'a Module,
             path: &mut Vec<&'a str>,
             variables: &mut BTreeMap<u64, Dynamic>,
-            functions: &mut BTreeMap<u64, CallableFunction>,
+            functions: &mut BTreeMap<u64, Shared<CallableFunction>>,
             type_iterators: &mut BTreeMap<TypeId, IteratorFn>,
         ) -> bool {
             let mut contains_indexed_global_functions = false;
@@ -1690,6 +1678,8 @@ impl DerefMut for NamespaceRef {
 impl From<StaticVec<Ident>> for NamespaceRef {
     #[inline(always)]
     fn from(path: StaticVec<Ident>) -> Self {
+        let mut path = path;
+        path.shrink_to_fit();
         Self { index: None, path }
     }
 }

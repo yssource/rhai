@@ -184,15 +184,19 @@ pub fn get_builtin_binary_op_fn(
                         "*" => impl_op!(from Decimal => multiply($xx, $yy)),
                         "/" => impl_op!(from Decimal => divide($xx, $yy)),
                         "%" => impl_op!(from Decimal => modulo($xx, $yy)),
+                        "**" => impl_op!(from Decimal => power($xx, $yy)),
                         _ => ()
                     }
                 } else {
+                    use rust_decimal::MathematicalOps;
+
                     match op {
                         "+" => impl_op!(from Decimal => $xx + $yy),
                         "-" => impl_op!(from Decimal => $xx - $yy),
                         "*" => impl_op!(from Decimal => $xx * $yy),
                         "/" => impl_op!(from Decimal => $xx / $yy),
                         "%" => impl_op!(from Decimal => $xx % $yy),
+                        "**" => impl_op!(from Decimal => $xx.powd($yy)),
                         _ => ()
                     }
                 }
@@ -522,15 +526,19 @@ pub fn get_builtin_op_assignment_fn(
                         "*=" => impl_op!(from $x => multiply($xx, $yy)),
                         "/=" => impl_op!(from $x => divide($xx, $yy)),
                         "%=" => impl_op!(from $x => modulo($xx, $yy)),
+                        "**=" => impl_op!(from $x => power($xx, $yy)),
                         _ => return None,
                     }
                 } else {
+                    use rust_decimal::MathematicalOps;
+
                     match op {
                         "+=" => impl_op!(from $x += $yy),
                         "-=" => impl_op!(from $x -= $yy),
                         "*=" => impl_op!(from $x *= $yy),
                         "/=" => impl_op!(from $x /= $yy),
                         "%=" => impl_op!(from $x %= $yy),
+                        "**=" => impl_op!(from $x => $xx.powd($yy)),
                         _ => return None,
                     }
                 }

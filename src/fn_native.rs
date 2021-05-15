@@ -5,8 +5,8 @@ use crate::engine::Imports;
 use crate::plugin::PluginFunction;
 use crate::token::is_valid_identifier;
 use crate::{
-    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, Identifier, ImmutableString, Module,
-    Position, RhaiResult, StaticVec,
+    calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, Identifier, Module, Position,
+    RhaiResult, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -39,10 +39,14 @@ pub use std::rc::Rc as Shared;
 pub use std::sync::Arc as Shared;
 
 /// Synchronized shared object.
+///
+/// Not available under `no_closure`.
 #[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "sync"))]
 pub use std::cell::RefCell as Locked;
 /// Synchronized shared object.
+///
+/// Not available under `no_closure`.
 #[cfg(not(feature = "no_closure"))]
 #[cfg(feature = "sync")]
 pub use std::sync::RwLock as Locked;
@@ -101,6 +105,8 @@ impl<'a> NativeCallContext<'a> {
     }
     /// _(INTERNALS)_ Create a new [`NativeCallContext`].
     /// Exported under the `internals` feature only.
+    ///
+    /// Not available under `no_module`.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
@@ -135,6 +141,8 @@ impl<'a> NativeCallContext<'a> {
         self.source
     }
     /// Get an iterator over the current set of modules imported via `import` statements.
+    ///
+    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
@@ -151,6 +159,8 @@ impl<'a> NativeCallContext<'a> {
     }
     /// _(INTERNALS)_ The current set of modules imported via `import` statements.
     /// Exported under the `internals` feature only.
+    ///
+    /// Not available under `no_module`.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
@@ -303,6 +313,8 @@ impl FnPtr {
         !self.1.is_empty()
     }
     /// Does the function pointer refer to an anonymous function?
+    ///
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn is_anonymous(&self) -> bool {
@@ -367,16 +379,17 @@ impl TryFrom<Identifier> for FnPtr {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, Default::default()))
         } else {
-            EvalAltResult::ErrorFunctionNotFound(value.into(), Position::NONE).into()
+            EvalAltResult::ErrorFunctionNotFound(value.to_string(), Position::NONE).into()
         }
     }
 }
 
-impl TryFrom<ImmutableString> for FnPtr {
+#[cfg(not(feature = "no_smartstring"))]
+impl TryFrom<crate::ImmutableString> for FnPtr {
     type Error = Box<EvalAltResult>;
 
     #[inline(always)]
-    fn try_from(value: ImmutableString) -> Result<Self, Self::Error> {
+    fn try_from(value: crate::ImmutableString) -> Result<Self, Self::Error> {
         let s: Identifier = value.into();
         Self::try_from(s)
     }
@@ -466,6 +479,8 @@ pub enum CallableFunction {
     /// A plugin function,
     Plugin(Shared<FnPlugin>),
     /// A script-defined function.
+    ///
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     Script(Shared<crate::ast::ScriptFnDef>),
 }
@@ -599,6 +614,8 @@ impl CallableFunction {
         }
     }
     /// Get a shared reference to a script-defined function definition.
+    ///
+    /// Not available under `no_function`.
     ///
     /// # Panics
     ///
