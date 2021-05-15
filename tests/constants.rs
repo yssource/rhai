@@ -16,7 +16,7 @@ fn test_constant() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_index"))]
     assert!(matches!(
         *engine.consume("const x = [1, 2, 3, 4, 5]; x[2] = 42;").expect_err("expects error"),
-        EvalAltResult::ErrorParsing(ParseErrorType::AssignmentToConstant(x), _) if x == "x"
+        EvalAltResult::ErrorAssignmentToConstant(x, _) if x == "x"
     ));
 
     Ok(())
@@ -45,16 +45,65 @@ fn test_constant_mut() -> Result<(), Box<EvalAltResult>> {
 
     let mut engine = Engine::new();
 
+    fn set_value(obj: &mut TestStruct, value: INT) {
+        obj.0 = value;
+    }
+
     engine
         .register_type_with_name::<TestStruct>("TestStruct")
+        .register_fn("new_ts", || TestStruct(123))
         .register_get("value", |obj: &mut TestStruct| obj.0)
-        .register_fn("update_value", |obj: &mut TestStruct, value: INT| {
-            obj.0 = value
-        });
+        .register_set("value", set_value)
+        .register_fn("update_value", set_value);
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                const MY_NUMBER = new_ts();
+                MY_NUMBER.update_value(42);
+                MY_NUMBER.value
+            ",
+        )?,
+        42
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                const MY_NUMBER = new_ts();
+                update_value(MY_NUMBER, 42);
+                MY_NUMBER.value
+            ",
+        )?,
+        123
+    );
+
+    assert!(matches!(
+        *engine
+            .consume(
+                "
+                    const MY_NUMBER = new_ts();
+                    MY_NUMBER.value = 42;
+                "
+            )
+            .expect_err("should error"),
+        EvalAltResult::ErrorAssignmentToConstant(_, _)
+    ));
 
     let mut scope = Scope::new();
 
     scope.push_constant("MY_NUMBER", TestStruct(123));
+
+    assert_eq!(
+        engine.eval_with_scope::<INT>(
+            &mut scope,
+            "
+                update_value(MY_NUMBER, 42);
+                MY_NUMBER.value
+            ",
+        )?,
+        123
+    );
 
     assert_eq!(
         engine.eval_with_scope::<INT>(
@@ -66,6 +115,13 @@ fn test_constant_mut() -> Result<(), Box<EvalAltResult>> {
         )?,
         42
     );
+
+    assert!(matches!(
+        *engine
+            .consume_with_scope(&mut scope, "MY_NUMBER.value = 42;")
+            .expect_err("should error"),
+        EvalAltResult::ErrorAssignmentToConstant(_, _)
+    ));
 
     Ok(())
 }

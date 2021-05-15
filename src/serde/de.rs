@@ -115,7 +115,7 @@ pub fn from_dynamic<'de, T: Deserialize<'de>>(
 
 impl Error for Box<EvalAltResult> {
     fn custom<T: fmt::Display>(err: T) -> Self {
-        LexError::ImproperSymbol("".to_string(), err.to_string())
+        LexError::ImproperSymbol(Default::default(), err.to_string())
             .into_err(Position::NONE)
             .into()
     }

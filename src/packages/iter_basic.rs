@@ -26,7 +26,7 @@ where
             if r == from {
                 return EvalAltResult::ErrorInFunctionCall(
                     "range".to_string(),
-                    "".to_string(),
+                    Default::default(),
                     Box::new(EvalAltResult::ErrorArithmetic(
                         "step value cannot be zero".to_string(),
                         crate::Position::NONE,

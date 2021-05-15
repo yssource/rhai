@@ -1131,6 +1131,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         target: &mut Target,
+        root: (&str, Position),
         rhs: &Expr,
         idx_values: &mut StaticVec<ChainArgument>,
         chain_type: ChainType,
@@ -1166,8 +1167,8 @@ impl Engine {
                         let rhs_chain = rhs_chain.unwrap();
 
                         self.eval_dot_index_chain_helper(
-                            mods, state, lib, this_ptr, obj_ptr, &x.rhs, idx_values, rhs_chain,
-                            level, new_val,
+                            mods, state, lib, this_ptr, obj_ptr, root, &x.rhs, idx_values,
+                            rhs_chain, level, new_val,
                         )
                         .map_err(|err| err.fill_position(*x_pos))
                     }
@@ -1186,7 +1187,8 @@ impl Engine {
                             Ok(obj_ptr) => {
                                 let ((new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
                                 self.eval_op_assignment(
-                                    mods, state, lib, op_info, op_pos, obj_ptr, new_val, new_pos,
+                                    mods, state, lib, op_info, op_pos, obj_ptr, root, new_val,
+                                    new_pos,
                                 )?;
                                 None
                             }
@@ -1269,7 +1271,7 @@ impl Engine {
                         )?;
                         let ((new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
                         self.eval_op_assignment(
-                            mods, state, lib, op_info, op_pos, val, new_val, new_pos,
+                            mods, state, lib, op_info, op_pos, val, root, new_val, new_pos,
                         )?;
                         Ok((Dynamic::UNIT, true))
                     }
@@ -1298,7 +1300,7 @@ impl Engine {
                             )?;
                             let obj_ptr = (&mut orig_val).into();
                             self.eval_op_assignment(
-                                mods, state, lib, op_info, op_pos, obj_ptr, new_val, new_pos,
+                                mods, state, lib, op_info, op_pos, obj_ptr, root, new_val, new_pos,
                             )?;
                             new_val = orig_val;
                         }
@@ -1352,8 +1354,8 @@ impl Engine {
                         let rhs_chain = rhs_chain.unwrap();
 
                         self.eval_dot_index_chain_helper(
-                            mods, state, lib, this_ptr, &mut val, &x.rhs, idx_values, rhs_chain,
-                            level, new_val,
+                            mods, state, lib, this_ptr, &mut val, root, &x.rhs, idx_values,
+                            rhs_chain, level, new_val,
                         )
                         .map_err(|err| err.fill_position(*x_pos))
                     }
@@ -1383,6 +1385,7 @@ impl Engine {
                                         lib,
                                         this_ptr,
                                         &mut val.into(),
+                                        root,
                                         &x.rhs,
                                         idx_values,
                                         rhs_chain,
@@ -1425,7 +1428,7 @@ impl Engine {
                                 let target = &mut val.into();
 
                                 self.eval_dot_index_chain_helper(
-                                    mods, state, lib, this_ptr, target, &x.rhs, idx_values,
+                                    mods, state, lib, this_ptr, target, root, &x.rhs, idx_values,
                                     rhs_chain, level, new_val,
                                 )
                                 .map_err(|err| err.fill_position(*pos))
@@ -1474,21 +1477,16 @@ impl Engine {
 
         match lhs {
             // id.??? or id[???]
-            Expr::Variable(_, _var_pos, x) => {
+            Expr::Variable(_, var_pos, x) => {
                 #[cfg(not(feature = "unchecked"))]
-                self.inc_operations(state, *_var_pos)?;
+                self.inc_operations(state, *var_pos)?;
 
-                let (target, pos) =
-                    self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
-
-                // Constants cannot be modified
-                if target.is_read_only() && new_val.is_some() {
-                    return EvalAltResult::ErrorAssignmentToConstant(x.2.to_string(), pos).into();
-                }
+                let (target, _) = self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
 
                 let obj_ptr = &mut target.into();
+                let root = (x.2.as_str(), *var_pos);
                 self.eval_dot_index_chain_helper(
-                    mods, state, lib, &mut None, obj_ptr, rhs, idx_values, chain_type, level,
+                    mods, state, lib, &mut None, obj_ptr, root, rhs, idx_values, chain_type, level,
                     new_val,
                 )
                 .map(|(v, _)| v)
@@ -1500,8 +1498,9 @@ impl Engine {
             expr => {
                 let value = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
                 let obj_ptr = &mut value.into();
+                let root = ("", expr.position());
                 self.eval_dot_index_chain_helper(
-                    mods, state, lib, this_ptr, obj_ptr, rhs, idx_values, chain_type, level,
+                    mods, state, lib, this_ptr, obj_ptr, root, rhs, idx_values, chain_type, level,
                     new_val,
                 )
                 .map(|(v, _)| v)
@@ -1545,7 +1544,7 @@ impl Engine {
                     })
                     .collect::<Result<StaticVec<_>, _>>()?;
 
-                x.constant_args
+                x.literal_args
                     .iter()
                     .inspect(|(_, pos)| arg_positions.push(*pos))
                     .for_each(|(v, _)| arg_values.push(v.clone()));
@@ -1590,7 +1589,7 @@ impl Engine {
                             })
                             .collect::<Result<StaticVec<_>, _>>()?;
 
-                        x.constant_args
+                        x.literal_args
                             .iter()
                             .inspect(|(_, pos)| arg_positions.push(*pos))
                             .for_each(|(v, _)| arg_values.push(v.clone()));
@@ -1848,6 +1847,7 @@ impl Engine {
                         Some(OpAssignment::new(TOKEN_OP_CONCAT)),
                         pos,
                         (&mut result).into(),
+                        ("", Position::NONE),
                         item,
                         expr.position(),
                     )?;
@@ -1892,7 +1892,7 @@ impl Engine {
                     namespace,
                     hashes,
                     args,
-                    constant_args: c_args,
+                    literal_args: c_args,
                     ..
                 } = x.as_ref();
                 let namespace = namespace.as_ref();
@@ -1910,7 +1910,7 @@ impl Engine {
                     capture,
                     hashes,
                     args,
-                    constant_args: c_args,
+                    literal_args: c_args,
                     ..
                 } = x.as_ref();
                 self.make_function_call(
@@ -2064,11 +2064,13 @@ impl Engine {
         op_info: Option<OpAssignment>,
         op_pos: Position,
         mut target: Target,
+        root: (&str, Position),
         mut new_value: Dynamic,
         new_value_pos: Position,
     ) -> Result<(), Box<EvalAltResult>> {
         if target.is_read_only() {
-            unreachable!("LHS should not be read-only");
+            // Assignment to constant variable
+            return EvalAltResult::ErrorAssignmentToConstant(root.0.to_string(), root.1).into();
         }
 
         if let Some(OpAssignment {
@@ -2167,26 +2169,18 @@ impl Engine {
                 #[cfg(not(feature = "unchecked"))]
                 self.inc_operations(state, pos)?;
 
-                if lhs_ptr.is_read_only() {
-                    // Assignment to constant variable
-                    EvalAltResult::ErrorAssignmentToConstant(
-                        lhs_expr.get_variable_name(false).unwrap().to_string(),
-                        pos,
-                    )
-                    .into()
-                } else {
-                    self.eval_op_assignment(
-                        mods,
-                        state,
-                        lib,
-                        op_info.clone(),
-                        *op_pos,
-                        lhs_ptr,
-                        rhs_val,
-                        rhs_expr.position(),
-                    )?;
-                    Ok(Dynamic::UNIT)
-                }
+                self.eval_op_assignment(
+                    mods,
+                    state,
+                    lib,
+                    op_info.clone(),
+                    *op_pos,
+                    lhs_ptr,
+                    (lhs_expr.get_variable_name(false).unwrap(), pos),
+                    rhs_val,
+                    rhs_expr.position(),
+                )?;
+                Ok(Dynamic::UNIT)
             }
 
             // lhs op= rhs
@@ -2454,7 +2448,7 @@ impl Engine {
                     namespace,
                     hashes,
                     args,
-                    constant_args: c_args,
+                    literal_args: c_args,
                     ..
                 } = x.as_ref();
                 let namespace = namespace.as_ref();
@@ -2472,7 +2466,7 @@ impl Engine {
                     capture,
                     hashes,
                     args,
-                    constant_args: c_args,
+                    literal_args: c_args,
                     ..
                 } = x.as_ref();
                 self.make_function_call(

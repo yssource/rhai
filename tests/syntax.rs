@@ -128,7 +128,7 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
                 s => Err(ParseError(
                     Box::new(ParseErrorType::BadInput(LexError::ImproperSymbol(
                         s.to_string(),
-                        "".to_string(),
+                        Default::default(),
                     ))),
                     Position::NONE,
                 )),

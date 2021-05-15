@@ -38,9 +38,10 @@ mod test {
         pub fn funky_add(x: INT, y: INT) -> INT {
             x / 2 + y * 2
         }
-        #[rhai_fn(pure)]
-        pub fn no_effect(_array: &mut Array, _value: INT) {
-            // do nothing to array
+        #[rhai_fn(name = "no_effect", set = "no_effect", pure)]
+        pub fn no_effect(array: &mut Array, value: INT) {
+            // array is not modified
+            println!("Array = {:?}, Value = {}", array, value);
         }
     }
 }
@@ -87,6 +88,7 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
     {
         assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; a.foo")?, 1);
         engine.consume("const A = [1, 2, 3]; A.no_effect(42);")?;
+        engine.consume("const A = [1, 2, 3]; A.no_effect = 42;")?;
 
         assert!(
             matches!(*engine.consume("const A = [1, 2, 3]; A.test(42);").expect_err("should error"),
