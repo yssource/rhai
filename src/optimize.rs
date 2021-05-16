@@ -4,7 +4,6 @@ use crate::ast::{Expr, OpAssignment, Stmt};
 use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
-use crate::parser::map_dynamic_to_expr;
 use crate::token::Token;
 use crate::utils::get_hasher;
 use crate::{
@@ -59,7 +58,7 @@ struct State<'a> {
     /// Has the [`AST`] been changed during this pass?
     changed: bool,
     /// Collection of constants to use for eager function evaluations.
-    variables: Vec<(String, AccessMode, Expr)>,
+    variables: Vec<(String, AccessMode, Option<Dynamic>)>,
     /// Activate constants propagation?
     propagate_constants: bool,
     /// An [`Engine`] instance for eager function evaluation.
@@ -109,21 +108,21 @@ impl<'a> State<'a> {
     }
     /// Add a new constant to the list.
     #[inline(always)]
-    pub fn push_var(&mut self, name: &str, access: AccessMode, value: Expr) {
+    pub fn push_var(&mut self, name: &str, access: AccessMode, value: Option<Dynamic>) {
         self.variables.push((name.into(), access, value))
     }
     /// Look up a constant from the list.
     #[inline]
-    pub fn find_constant(&self, name: &str) -> Option<&Expr> {
+    pub fn find_constant(&self, name: &str) -> Option<&Dynamic> {
         if !self.propagate_constants {
             return None;
         }
 
-        self.variables.iter().rev().find_map(|(n, access, expr)| {
+        self.variables.iter().rev().find_map(|(n, access, value)| {
             if n == name {
                 match access {
                     AccessMode::ReadWrite => None,
-                    AccessMode::ReadOnly => Some(expr),
+                    AccessMode::ReadOnly => value.as_ref(),
                 }
             } else {
                 None
@@ -217,13 +216,17 @@ fn optimize_stmt_block(
                     optimize_expr(value_expr, state);
 
                     if value_expr.is_constant() {
-                        state.push_var(&x.name, AccessMode::ReadOnly, value_expr.clone());
+                        state.push_var(
+                            &x.name,
+                            AccessMode::ReadOnly,
+                            value_expr.get_constant_value(),
+                        );
                     }
                 }
                 // Add variables into the state
                 Stmt::Let(value_expr, x, _, _) => {
                     optimize_expr(value_expr, state);
-                    state.push_var(&x.name, AccessMode::ReadWrite, Expr::Unit(x.pos));
+                    state.push_var(&x.name, AccessMode::ReadWrite, None);
                 }
                 // Optimize the statement
                 _ => optimize_stmt(stmt, state, preserve_result),
@@ -925,15 +928,16 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
 
             // Search for overloaded operators (can override built-in).
             if !has_native_fn(state, x.hashes.native_hash(), arg_types.as_ref()) {
-                if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
-                                        .and_then(|f| {
-                                            let ctx = (state.engine, x.name.as_ref(), state.lib).into();
-                                            let (first, second) = arg_values.split_first_mut().unwrap();
-                                            (f)(ctx, &mut [ first, &mut second[0] ]).ok()
-                                        })
-                                        .and_then(|result| map_dynamic_to_expr(result, *pos))
+                if let Some(mut result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
+                                            .and_then(|f| {
+                                                let ctx = (state.engine, x.name.as_ref(), state.lib).into();
+                                                let (first, second) = arg_values.split_first_mut().unwrap();
+                                                (f)(ctx, &mut [ first, &mut second[0] ]).ok()
+                                            })
+                                            .map(Expr::from)
                 {
                     state.set_dirty();
+                    result.set_position(*pos);
                     *expr = result;
                     return;
                 }
@@ -977,18 +981,19 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
                     ""
                 };
 
-                if let Some(result) = call_fn_with_constant_arguments(&state, x.name.as_ref(), &mut arg_values)
-                                        .or_else(|| {
-                                            if !arg_for_type_of.is_empty() {
-                                                // Handle `type_of()`
-                                                Some(arg_for_type_of.to_string().into())
-                                            } else {
-                                                None
-                                            }
-                                        })
-                                        .and_then(|result| map_dynamic_to_expr(result, *pos))
+                if let Some(mut result) = call_fn_with_constant_arguments(&state, x.name.as_ref(), &mut arg_values)
+                                            .or_else(|| {
+                                                if !arg_for_type_of.is_empty() {
+                                                    // Handle `type_of()`
+                                                    Some(arg_for_type_of.to_string().into())
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                            .map(Expr::from)
                 {
                     state.set_dirty();
+                    result.set_position(*pos);
                     *expr = result;
                     return;
                 }
@@ -1014,12 +1019,11 @@ fn optimize_expr(expr: &mut Expr, state: &mut State) {
 
         // constant-name
         Expr::Variable(_, pos, x) if x.1.is_none() && state.find_constant(&x.2).is_some() => {
-            state.set_dirty();
-
             // Replace constant with value
-            let mut result = state.find_constant(&x.2).unwrap().clone();
-            result.set_position(*pos);
-            *expr = result;
+            let pos = *pos;
+            *expr = Expr::from(state.find_constant(&x.2).unwrap().clone());
+            expr.set_position(pos);
+            state.set_dirty();
         }
 
         // Custom syntax
@@ -1055,13 +1059,9 @@ fn optimize_top_level(
     // Add constants and variables from the scope
     scope.iter().for_each(|(name, constant, value)| {
         if !constant {
-            state.push_var(name, AccessMode::ReadWrite, Expr::Unit(Position::NONE));
+            state.push_var(name, AccessMode::ReadWrite, None);
         } else {
-            state.push_var(
-                name,
-                AccessMode::ReadOnly,
-                Expr::DynamicConstant(Box::new(value), Position::NONE),
-            );
+            state.push_var(name, AccessMode::ReadOnly, Some(value));
         }
     });
 

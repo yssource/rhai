@@ -3121,29 +3121,32 @@ impl Engine {
     }
 }
 
-/// Map a `Dynamic` value to an expression.
-///
-/// Returns Some(expression) if conversion is successful.  Otherwise None.
-pub fn map_dynamic_to_expr(value: Dynamic, pos: Position) -> Option<Expr> {
-    match value.0 {
-        #[cfg(not(feature = "no_float"))]
-        Union::Float(value, _, _) => Some(Expr::FloatConstant(value, pos)),
+impl From<Dynamic> for Expr {
+    fn from(value: Dynamic) -> Self {
+        match value.0 {
+            #[cfg(not(feature = "no_float"))]
+            Union::Float(value, _, _) => Self::FloatConstant(value, Position::NONE),
 
-        #[cfg(feature = "decimal")]
-        Union::Decimal(value, _, _) => Some(Expr::DynamicConstant(Box::new((*value).into()), pos)),
+            #[cfg(feature = "decimal")]
+            Union::Decimal(value, _, _) => {
+                Self::DynamicConstant(Box::new((*value).into()), Position::NONE)
+            }
 
-        Union::Unit(_, _, _) => Some(Expr::Unit(pos)),
-        Union::Int(value, _, _) => Some(Expr::IntegerConstant(value, pos)),
-        Union::Char(value, _, _) => Some(Expr::CharConstant(value, pos)),
-        Union::Str(value, _, _) => Some(Expr::StringConstant(value, pos)),
-        Union::Bool(value, _, _) => Some(Expr::BoolConstant(value, pos)),
+            Union::Unit(_, _, _) => Self::Unit(Position::NONE),
+            Union::Int(value, _, _) => Self::IntegerConstant(value, Position::NONE),
+            Union::Char(value, _, _) => Self::CharConstant(value, Position::NONE),
+            Union::Str(value, _, _) => Self::StringConstant(value, Position::NONE),
+            Union::Bool(value, _, _) => Self::BoolConstant(value, Position::NONE),
 
-        #[cfg(not(feature = "no_index"))]
-        Union::Array(array, _, _) => Some(Expr::DynamicConstant(Box::new((*array).into()), pos)),
+            #[cfg(not(feature = "no_index"))]
+            Union::Array(array, _, _) => {
+                Self::DynamicConstant(Box::new((*array).into()), Position::NONE)
+            }
 
-        #[cfg(not(feature = "no_object"))]
-        Union::Map(map, _, _) => Some(Expr::DynamicConstant(Box::new((*map).into()), pos)),
+            #[cfg(not(feature = "no_object"))]
+            Union::Map(map, _, _) => Self::DynamicConstant(Box::new((*map).into()), Position::NONE),
 
-        _ => None,
+            _ => Self::DynamicConstant(Box::new(value.into()), Position::NONE),
+        }
     }
 }
