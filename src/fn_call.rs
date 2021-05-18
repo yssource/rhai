@@ -375,12 +375,8 @@ impl Engine {
             crate::engine::FN_IDX_GET => {
                 assert!(args.len() == 2);
 
-                EvalAltResult::ErrorFunctionNotFound(
-                    format!(
-                        "{} [{}]",
-                        self.map_type_name(args[0].type_name()),
-                        self.map_type_name(args[1].type_name()),
-                    ),
+                EvalAltResult::ErrorIndexingType(
+                    self.map_type_name(args[0].type_name()).to_string(),
                     pos,
                 )
                 .into()
@@ -391,12 +387,8 @@ impl Engine {
             crate::engine::FN_IDX_SET => {
                 assert!(args.len() == 3);
 
-                EvalAltResult::ErrorFunctionNotFound(
-                    format!(
-                        "{} [{}]=",
-                        self.map_type_name(args[0].type_name()),
-                        self.map_type_name(args[1].type_name()),
-                    ),
+                EvalAltResult::ErrorIndexingType(
+                    self.map_type_name(args[0].type_name()).to_string(),
                     pos,
                 )
                 .into()

@@ -24,7 +24,6 @@ use std::{
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
 
-#[cfg(not(feature = "no_index"))]
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
 
@@ -956,7 +955,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash));
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn set_indexer_get_fn<ARGS, A, B, T, F>(&mut self, func: F) -> u64
     where
@@ -966,6 +965,7 @@ impl Module {
         F: RegisterNativeFunction<ARGS, Result<T, Box<EvalAltResult>>>,
         F: Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     {
+        #[cfg(not(feature = "no_index"))]
         if TypeId::of::<A>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -1016,7 +1016,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash));
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn set_indexer_set_fn<ARGS, A, B, C, F>(&mut self, func: F) -> u64
     where
@@ -1026,6 +1026,7 @@ impl Module {
         F: RegisterNativeFunction<ARGS, Result<(), Box<EvalAltResult>>>,
         F: Fn(&mut A, B, C) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     {
+        #[cfg(not(feature = "no_index"))]
         if TypeId::of::<A>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -1082,7 +1083,7 @@ impl Module {
     /// assert!(module.contains_fn(hash_get));
     /// assert!(module.contains_fn(hash_set));
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn set_indexer_get_set_fn<A, B, T>(
         &mut self,

@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_object"))]
 
-use rhai::{Engine, EvalAltResult, ImmutableString, INT};
+use rhai::{Engine, EvalAltResult, INT};
 
 #[test]
 fn test_get_set() -> Result<(), Box<EvalAltResult>> {
@@ -46,18 +46,25 @@ fn test_get_set() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<INT>("let a = new_ts(); a.x.add(); a.x")?, 42);
     assert_eq!(engine.eval::<INT>("let a = new_ts(); a.y.add(); a.y")?, 0);
 
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     {
         engine.register_indexer_get_set(
-            |value: &mut TestStruct, index: ImmutableString| value.array[index.len()],
-            |value: &mut TestStruct, index: ImmutableString, new_val: INT| {
-                value.array[index.len()] = new_val
-            },
+            |value: &mut TestStruct, index: &str| value.array[index.len()],
+            |value: &mut TestStruct, index: &str, new_val: INT| value.array[index.len()] = new_val,
         );
 
+        #[cfg(not(feature = "no_index"))]
         assert_eq!(engine.eval::<INT>(r#"let a = new_ts(); a["abc"]"#)?, 4);
+
+        #[cfg(not(feature = "no_index"))]
         assert_eq!(
             engine.eval::<INT>(r#"let a = new_ts(); a["abc"] = 42; a["abc"]"#)?,
+            42
+        );
+
+        assert_eq!(engine.eval::<INT>(r"let a = new_ts(); a.abc")?, 4);
+        assert_eq!(
+            engine.eval::<INT>(r"let a = new_ts(); a.abc = 42; a.abc")?,
             42
         );
     }

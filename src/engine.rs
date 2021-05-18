@@ -224,9 +224,9 @@ pub const KEYWORD_GLOBAL: &str = "global";
 pub const FN_GET: &str = "get$";
 #[cfg(not(feature = "no_object"))]
 pub const FN_SET: &str = "set$";
-#[cfg(not(feature = "no_index"))]
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 pub const FN_IDX_GET: &str = "index$get$";
-#[cfg(not(feature = "no_index"))]
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 pub const FN_IDX_SET: &str = "index$set$";
 #[cfg(not(feature = "no_function"))]
 pub const FN_ANONYMOUS: &str = "anon$";
@@ -1256,7 +1256,7 @@ impl Engine {
                     }
                     // {xxx:map}.id op= ???
                     Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
-                        let Ident { name, pos, .. } = &x.2;
+                        let (name, pos) = &x.2;
                         let index = name.into();
                         let val = self.get_indexed_mut(
                             mods, state, lib, target, index, *pos, true, is_ref, false, level,
@@ -1269,7 +1269,7 @@ impl Engine {
                     }
                     // {xxx:map}.id
                     Expr::Property(x) if target.is::<Map>() => {
-                        let Ident { name, pos, .. } = &x.2;
+                        let (name, pos) = &x.2;
                         let index = name.into();
                         let val = self.get_indexed_mut(
                             mods, state, lib, target, index, *pos, false, is_ref, false, level,
@@ -1279,8 +1279,7 @@ impl Engine {
                     }
                     // xxx.id op= ???
                     Expr::Property(x) if new_val.is_some() => {
-                        let ((getter, hash_get), (setter, hash_set), Ident { pos, .. }) =
-                            x.as_ref();
+                        let ((getter, hash_get), (setter, hash_set), (name, pos)) = x.as_ref();
                         let ((mut new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
 
                         if op_info.is_some() {
@@ -1303,24 +1302,66 @@ impl Engine {
                             mods, state, lib, setter, hash, &mut args, is_ref, true, *pos, None,
                             level,
                         )
-                        .map(|(v, _)| (v, true))
+                        .or_else(|err| match *err {
+                            // Try an indexer if property does not exist
+                            EvalAltResult::ErrorDotExpr(_, _) => {
+                                let mut prop = name.into();
+                                let args = &mut [target, &mut prop, &mut new_val];
+                                let hash_set = FnCallHashes::from_native(crate::calc_fn_hash(
+                                    std::iter::empty(),
+                                    FN_IDX_SET,
+                                    3,
+                                ));
+                                self.exec_fn_call(
+                                    mods, state, lib, FN_IDX_SET, hash_set, args, is_ref, true,
+                                    *pos, None, level,
+                                )
+                                .map_err(
+                                    |idx_err| match *idx_err {
+                                        EvalAltResult::ErrorIndexingType(_, _) => err,
+                                        _ => idx_err,
+                                    },
+                                )
+                            }
+                            _ => Err(err),
+                        })
                     }
                     // xxx.id
                     Expr::Property(x) => {
-                        let ((getter, hash_get), _, Ident { pos, .. }) = x.as_ref();
+                        let ((getter, hash_get), _, (name, pos)) = x.as_ref();
                         let hash = FnCallHashes::from_native(*hash_get);
                         let mut args = [target.as_mut()];
                         self.exec_fn_call(
                             mods, state, lib, getter, hash, &mut args, is_ref, true, *pos, None,
                             level,
                         )
-                        .map(|(v, _)| (v, false))
+                        .map_or_else(
+                            |err| match *err {
+                                // Try an indexer if property does not exist
+                                EvalAltResult::ErrorDotExpr(_, _) => {
+                                    let prop = name.into();
+                                    self.get_indexed_mut(
+                                        mods, state, lib, target, prop, *pos, false, is_ref, true,
+                                        level,
+                                    )
+                                    .map(|v| (v.take_or_clone(), false))
+                                    .map_err(|idx_err| {
+                                        match *idx_err {
+                                            EvalAltResult::ErrorIndexingType(_, _) => err,
+                                            _ => idx_err,
+                                        }
+                                    })
+                                }
+                                _ => Err(err),
+                            },
+                            |(v, _)| Ok((v, false)),
+                        )
                     }
                     // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
                     Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target.is::<Map>() => {
                         let mut val = match &x.lhs {
                             Expr::Property(p) => {
-                                let Ident { name, pos, .. } = &p.2;
+                                let (name, pos) = &p.2;
                                 let index = name.into();
                                 self.get_indexed_mut(
                                     mods, state, lib, target, index, *pos, false, is_ref, true,
@@ -1356,17 +1397,36 @@ impl Engine {
                         match &x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(p) => {
-                                let ((getter, hash_get), (setter, hash_set), Ident { pos, .. }) =
+                                let ((getter, hash_get), (setter, hash_set), (name, pos)) =
                                     p.as_ref();
                                 let rhs_chain = rhs_chain.unwrap();
                                 let hash_get = FnCallHashes::from_native(*hash_get);
                                 let hash_set = FnCallHashes::from_native(*hash_set);
-                                let arg_values = &mut [target.as_mut(), &mut Default::default()];
+                                let mut arg_values = [target.as_mut(), &mut Default::default()];
                                 let args = &mut arg_values[..1];
-                                let (mut val, updated) = self.exec_fn_call(
-                                    mods, state, lib, getter, hash_get, args, is_ref, true, *pos,
-                                    None, level,
-                                )?;
+                                let (mut val, updated) = self
+                                    .exec_fn_call(
+                                        mods, state, lib, getter, hash_get, args, is_ref, true,
+                                        *pos, None, level,
+                                    )
+                                    .or_else(|err| match *err {
+                                        // Try an indexer if property does not exist
+                                        EvalAltResult::ErrorDotExpr(_, _) => {
+                                            let prop = name.into();
+                                            self.get_indexed_mut(
+                                                mods, state, lib, target, prop, *pos, false,
+                                                is_ref, true, level,
+                                            )
+                                            .map(|v| (v.take_or_clone(), false))
+                                            .map_err(
+                                                |idx_err| match *idx_err {
+                                                    EvalAltResult::ErrorIndexingType(_, _) => err,
+                                                    _ => idx_err,
+                                                },
+                                            )
+                                        }
+                                        _ => Err(err),
+                                    })?;
 
                                 let val = &mut val;
 
@@ -1389,17 +1449,36 @@ impl Engine {
                                 // Feed the value back via a setter just in case it has been updated
                                 if updated || may_be_changed {
                                     // Re-use args because the first &mut parameter will not be consumed
-                                    arg_values[1] = val;
+                                    let mut arg_values = [target.as_mut(), val];
+                                    let args = &mut arg_values;
                                     self.exec_fn_call(
-                                        mods, state, lib, setter, hash_set, arg_values, is_ref,
-                                        true, *pos, None, level,
+                                        mods, state, lib, setter, hash_set, args, is_ref, true,
+                                        *pos, None, level,
                                     )
                                     .or_else(
                                         |err| match *err {
-                                            // If there is no setter, no need to feed it back because
-                                            // the property is read-only
+                                            // Try an indexer if property does not exist
                                             EvalAltResult::ErrorDotExpr(_, _) => {
-                                                Ok((Dynamic::UNIT, false))
+                                                let mut prop = name.into();
+                                                let args = &mut [target.as_mut(), &mut prop, val];
+                                                let hash_set =
+                                                    FnCallHashes::from_native(crate::calc_fn_hash(
+                                                        std::iter::empty(),
+                                                        FN_IDX_SET,
+                                                        3,
+                                                    ));
+                                                self.exec_fn_call(
+                                                    mods, state, lib, FN_IDX_SET, hash_set, args,
+                                                    is_ref, true, *pos, None, level,
+                                                )
+                                                .or_else(|idx_err| match *idx_err {
+                                                    EvalAltResult::ErrorIndexingType(_, _) => {
+                                                        // If there is no setter, no need to feed it back because
+                                                        // the property is read-only
+                                                        Ok((Dynamic::UNIT, false))
+                                                    }
+                                                    _ => Err(idx_err),
+                                                })
                                             }
                                             _ => Err(err),
                                         },
@@ -1550,7 +1629,7 @@ impl Engine {
 
             #[cfg(not(feature = "no_object"))]
             Expr::Property(x) if _parent_chain_type == ChainType::Dot => {
-                idx_values.push(ChainArgument::Property(x.2.pos))
+                idx_values.push(ChainArgument::Property((x.2).1))
             }
             Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
 
@@ -1561,7 +1640,7 @@ impl Engine {
                 let lhs_val = match lhs {
                     #[cfg(not(feature = "no_object"))]
                     Expr::Property(x) if _parent_chain_type == ChainType::Dot => {
-                        ChainArgument::Property(x.2.pos)
+                        ChainArgument::Property((x.2).1)
                     }
                     Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
 
@@ -1748,7 +1827,6 @@ impl Engine {
 
             #[cfg(not(feature = "no_index"))]
             _ if _indexers => {
-                let type_name = target.type_name();
                 let args = &mut [target, &mut _idx];
                 let hash_get =
                     FnCallHashes::from_native(calc_fn_hash(std::iter::empty(), FN_IDX_GET, 2));
@@ -1758,15 +1836,6 @@ impl Engine {
                     _level,
                 )
                 .map(|(v, _)| v.into())
-                .map_err(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _) if fn_sig.ends_with(']') => {
-                        Box::new(EvalAltResult::ErrorIndexingType(
-                            type_name.into(),
-                            Position::NONE,
-                        ))
-                    }
-                    _ => err,
-                })
             }
 
             _ => EvalAltResult::ErrorIndexingType(

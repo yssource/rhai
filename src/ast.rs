@@ -1715,7 +1715,13 @@ pub enum Expr {
         )>,
     ),
     /// Property access - ((getter, hash), (setter, hash), prop)
-    Property(Box<((Identifier, u64), (Identifier, u64), Ident)>),
+    Property(
+        Box<(
+            (Identifier, u64),
+            (Identifier, u64),
+            (ImmutableString, Position),
+        )>,
+    ),
     /// { [statement][Stmt] ... }
     Stmt(Box<StmtBlock>),
     /// func `(` expr `,` ... `)`
@@ -1780,7 +1786,7 @@ impl fmt::Debug for Expr {
                 }
                 f.write_str(")")
             }
-            Self::Property(x) => write!(f, "Property({})", x.2.name),
+            Self::Property(x) => write!(f, "Property({})", (x.2).0),
             Self::Stmt(x) => {
                 f.write_str("Stmt")?;
                 f.debug_list().entries(x.0.iter()).finish()
@@ -1896,7 +1902,7 @@ impl Expr {
 
             Self::InterpolatedString(x) => x.first().unwrap().position(),
 
-            Self::Property(x) => (x.2).pos,
+            Self::Property(x) => (x.2).1,
             Self::Stmt(x) => x.1,
 
             Self::And(x, _) | Self::Or(x, _) | Self::Dot(x, _) | Self::Index(x, _) => {
@@ -1931,7 +1937,7 @@ impl Expr {
                 x.first_mut().unwrap().set_position(new_pos);
             }
 
-            Self::Property(x) => (x.2).pos = new_pos,
+            Self::Property(x) => (x.2).1 = new_pos,
             Self::Stmt(x) => x.1 = new_pos,
         }
 

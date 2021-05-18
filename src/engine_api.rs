@@ -534,7 +534,7 @@ impl Engine {
     ///
     /// The function signature must start with `&mut self` and not `&self`.
     ///
-    /// Not available under `no_index`.
+    /// Not available under both `no_index` and `no_object`.
     ///
     /// # Panics
     ///
@@ -574,12 +574,13 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn register_indexer_get<T: Variant + Clone, X: Variant + Clone, V: Variant + Clone>(
         &mut self,
         get_fn: impl Fn(&mut T, X) -> V + SendSync + 'static,
     ) -> &mut Self {
+        #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -600,7 +601,7 @@ impl Engine {
     ///
     /// The function signature must start with `&mut self` and not `&self`.
     ///
-    /// Not available under `no_index`.
+    /// Not available under both `no_index` and `no_object`.
     ///
     /// # Panics
     ///
@@ -642,7 +643,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn register_indexer_get_result<
         T: Variant + Clone,
@@ -652,6 +653,7 @@ impl Engine {
         &mut self,
         get_fn: impl Fn(&mut T, X) -> Result<V, Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
+        #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -670,7 +672,7 @@ impl Engine {
     }
     /// Register an index setter for a custom type with the [`Engine`].
     ///
-    /// Not available under `no_index`.
+    /// Not available under both `no_index` and `no_object`.
     ///
     /// # Panics
     ///
@@ -712,12 +714,13 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn register_indexer_set<T: Variant + Clone, X: Variant + Clone, V: Variant + Clone>(
         &mut self,
         set_fn: impl Fn(&mut T, X, V) + SendSync + 'static,
     ) -> &mut Self {
+        #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -736,7 +739,7 @@ impl Engine {
     }
     /// Register an index setter for a custom type with the [`Engine`].
     ///
-    /// Not available under `no_index`.
+    /// Not available under both `no_index` and `no_object`.
     ///
     /// # Panics
     ///
@@ -781,7 +784,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn register_indexer_set_result<
         T: Variant + Clone,
@@ -791,6 +794,7 @@ impl Engine {
         &mut self,
         set_fn: impl Fn(&mut T, X, V) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
+        #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -809,7 +813,7 @@ impl Engine {
     }
     /// Short-hand for registering both index getter and setter functions for a custom type with the [`Engine`].
     ///
-    /// Not available under `no_index`.
+    /// Not available under both `no_index` and `no_object`.
     ///
     /// # Panics
     ///
@@ -851,7 +855,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn register_indexer_get_set<T: Variant + Clone, X: Variant + Clone, V: Variant + Clone>(
         &mut self,

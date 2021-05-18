@@ -232,10 +232,7 @@ impl Expr {
                 Self::Property(Box::new((
                     (getter, hash_get),
                     (setter, hash_set),
-                    Ident {
-                        name: state.get_identifier(ident),
-                        pos,
-                    },
+                    (state.get_identifier(ident).into(), pos),
                 )))
             }
             _ => self,
@@ -1541,10 +1538,7 @@ fn make_dot_expr(
             let rhs = Expr::Property(Box::new((
                 (getter, hash_get),
                 (setter, hash_set),
-                Ident {
-                    name: state.get_identifier(ident),
-                    pos: var_pos,
-                },
+                (state.get_identifier(ident).into(), var_pos),
             )));
 
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
