@@ -570,6 +570,7 @@ impl Engine {
     ///     // Register an indexer.
     ///     .register_indexer_get(TestStruct::get_field);
     ///
+    /// # #[cfg(not(feature = "no_index"))]
     /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a[2]")?, 3);
     /// # Ok(())
     /// # }
@@ -639,6 +640,7 @@ impl Engine {
     ///     // Register an indexer.
     ///     .register_indexer_get_result(TestStruct::get_field);
     ///
+    /// # #[cfg(not(feature = "no_index"))]
     /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a[2]")?, 3);
     /// # Ok(())
     /// # }
@@ -707,6 +709,7 @@ impl Engine {
     ///     // Register an indexer.
     ///     .register_indexer_set(TestStruct::set_field);
     ///
+    /// # #[cfg(not(feature = "no_index"))]
     /// assert_eq!(
     ///     engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?.fields[2],
     ///     42
@@ -777,6 +780,7 @@ impl Engine {
     ///     // Register an indexer.
     ///     .register_indexer_set_result(TestStruct::set_field);
     ///
+    /// # #[cfg(not(feature = "no_index"))]
     /// assert_eq!(
     ///     engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?.fields[2],
     ///     42
@@ -851,6 +855,7 @@ impl Engine {
     ///     // Register an indexer.
     ///     .register_indexer_get_set(TestStruct::get_field, TestStruct::set_field);
     ///
+    /// # #[cfg(not(feature = "no_index"))]
     /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a[2] = 42; a[2]")?, 42);
     /// # Ok(())
     /// # }
