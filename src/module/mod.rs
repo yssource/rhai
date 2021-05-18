@@ -156,20 +156,7 @@ pub struct Module {
 impl Default for Module {
     #[inline(always)]
     fn default() -> Self {
-        Self {
-            id: None,
-            internal: false,
-            modules: Default::default(),
-            variables: Default::default(),
-            all_variables: Default::default(),
-            functions: Default::default(),
-            all_functions: Default::default(),
-            type_iterators: Default::default(),
-            all_type_iterators: Default::default(),
-            indexed: true,
-            contains_indexed_global_functions: false,
-            identifiers: Default::default(),
-        }
+        Self::new()
     }
 }
 
@@ -257,7 +244,20 @@ impl Module {
     /// ```
     #[inline(always)]
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            id: None,
+            internal: false,
+            modules: Default::default(),
+            variables: Default::default(),
+            all_variables: Default::default(),
+            functions: Default::default(),
+            all_functions: Default::default(),
+            type_iterators: Default::default(),
+            all_type_iterators: Default::default(),
+            indexed: true,
+            contains_indexed_global_functions: false,
+            identifiers: Default::default(),
+        }
     }
 
     /// Get the ID of the [`Module`], if any.

@@ -31,8 +31,8 @@ impl DummyModuleResolver {
     /// engine.set_module_resolver(resolver);
     /// ```
     #[inline(always)]
-    pub fn new() -> Self {
-        Default::default()
+    pub const fn new() -> Self {
+        Self
     }
 }
 

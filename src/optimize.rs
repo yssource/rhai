@@ -31,24 +31,14 @@ pub enum OptimizationLevel {
     Full,
 }
 
-impl OptimizationLevel {
-    /// Is the `OptimizationLevel` [`None`][OptimizationLevel::None]?
-    #[allow(dead_code)]
+impl Default for OptimizationLevel {
     #[inline(always)]
-    pub fn is_none(self) -> bool {
-        self == Self::None
-    }
-    /// Is the `OptimizationLevel` [`Simple`][OptimizationLevel::Simple]?
-    #[allow(dead_code)]
-    #[inline(always)]
-    pub fn is_simple(self) -> bool {
-        self == Self::Simple
-    }
-    /// Is the `OptimizationLevel` [`Full`][OptimizationLevel::Full]?
-    #[allow(dead_code)]
-    #[inline(always)]
-    pub fn is_full(self) -> bool {
-        self == Self::Full
+    fn default() -> Self {
+        if cfg!(feature = "no_optimize") {
+            Self::None
+        } else {
+            Self::Simple
+        }
     }
 }
 
@@ -1078,7 +1068,7 @@ pub fn optimize_into_ast(
     optimization_level: OptimizationLevel,
 ) -> AST {
     let level = if cfg!(feature = "no_optimize") {
-        OptimizationLevel::None
+        Default::default()
     } else {
         optimization_level
     };
@@ -1087,7 +1077,7 @@ pub fn optimize_into_ast(
     let lib = {
         let mut module = Module::new();
 
-        if !level.is_none() {
+        if level != OptimizationLevel::None {
             // We only need the script library's signatures for optimization purposes
             let mut lib2 = Module::new();
 

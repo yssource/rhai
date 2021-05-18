@@ -19,7 +19,7 @@ Breaking changes
 New features
 ------------
 
-* Each `Dynamic` value can now contain arbitrary data (type `i16`) in the form of a _tag_. This is to use up otherwise wasted space in the `Dynamic` type.
+* Each `Dynamic` value can now contain arbitrary data (type `i32`) in the form of a _tag_. This is to use up otherwise wasted space in the `Dynamic` type.
 * A new internal feature `no_smartstring` to turn off `SmartString` for those rare cases that it is needed.
 * `DynamicReadLock` and `DynamicWriteLoc` are exposed under `internals`.
 * `From<Shared<Locked<Dynamic>>>` is added for `Dynamic` mapping directly to a shared value, together with support for `Dynamic::from`.

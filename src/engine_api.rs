@@ -477,9 +477,7 @@ impl Engine {
         set_fn: impl Fn(&mut T, V) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
         use crate::engine::make_setter;
-        self.register_result_fn(&make_setter(name), move |obj: &mut T, value: V| {
-            set_fn(obj, value)
-        })
+        self.register_result_fn(&make_setter(name), set_fn)
     }
     /// Short-hand for registering both getter and setter functions
     /// of a registered type with the [`Engine`].
@@ -807,12 +805,9 @@ impl Engine {
             panic!("Cannot register indexer for strings.");
         }
 
-        self.register_result_fn(
-            crate::engine::FN_IDX_SET,
-            move |obj: &mut T, index: X, value: V| set_fn(obj, index, value),
-        )
+        self.register_result_fn(crate::engine::FN_IDX_SET, set_fn)
     }
-    /// Short-hand for register both index getter and setter functions for a custom type with the [`Engine`].
+    /// Short-hand for registering both index getter and setter functions for a custom type with the [`Engine`].
     ///
     /// Not available under `no_index`.
     ///

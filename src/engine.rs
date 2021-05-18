@@ -899,11 +899,7 @@ impl Engine {
             progress: None,
 
             // optimization level
-            optimization_level: if cfg!(feature = "no_optimize") {
-                OptimizationLevel::None
-            } else {
-                OptimizationLevel::Simple
-            },
+            optimization_level: Default::default(),
 
             #[cfg(not(feature = "unchecked"))]
             limits: Limits {
@@ -956,11 +952,7 @@ impl Engine {
             #[cfg(not(feature = "unchecked"))]
             progress: None,
 
-            optimization_level: if cfg!(feature = "no_optimize") {
-                OptimizationLevel::None
-            } else {
-                OptimizationLevel::Simple
-            },
+            optimization_level: Default::default(),
 
             #[cfg(not(feature = "unchecked"))]
             limits: Limits {

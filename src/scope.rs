@@ -62,10 +62,7 @@ pub struct Scope<'a> {
 impl Default for Scope<'_> {
     #[inline(always)]
     fn default() -> Self {
-        Self {
-            values: Default::default(),
-            names: Vec::with_capacity(SCOPE_SIZE),
-        }
+        Self::new()
     }
 }
 
@@ -99,7 +96,10 @@ impl<'a> Scope<'a> {
     /// ```
     #[inline(always)]
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            values: Default::default(),
+            names: Vec::with_capacity(SCOPE_SIZE),
+        }
     }
     /// Empty the [`Scope`].
     ///
