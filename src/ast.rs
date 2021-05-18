@@ -2128,7 +2128,7 @@ mod tests {
                 96
             }
         );
-        assert_eq!(size_of::<Scope>(), 288);
+        assert_eq!(size_of::<Scope>(), 160);
         assert_eq!(size_of::<LexError>(), 56);
         assert_eq!(
             size_of::<ParseError>(),

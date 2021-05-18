@@ -7,7 +7,7 @@ use std::prelude::v1::*;
 use std::{borrow::Cow, iter::Extend};
 
 /// Keep a number of entries inline (since [`Dynamic`] is usually small enough).
-const SCOPE_SIZE: usize = 16;
+const SCOPE_SIZE: usize = 8;
 
 /// Type containing information about the current scope.
 /// Useful for keeping state between [`Engine`][crate::Engine] evaluation runs.
@@ -98,7 +98,7 @@ impl<'a> Scope<'a> {
     pub fn new() -> Self {
         Self {
             values: Default::default(),
-            names: Vec::with_capacity(SCOPE_SIZE),
+            names: Default::default(),
         }
     }
     /// Empty the [`Scope`].
