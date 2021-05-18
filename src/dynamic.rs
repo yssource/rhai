@@ -141,6 +141,11 @@ pub enum AccessMode {
 }
 
 /// Arbitrary data attached to a [`Dynamic`] value.
+#[cfg(target_pointer_width = "64")]
+pub type Tag = i32;
+
+/// Arbitrary data attached to a [`Dynamic`] value.
+#[cfg(target_pointer_width = "32")]
 pub type Tag = i16;
 
 /// Default tag value for [`Dynamic`].
