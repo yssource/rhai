@@ -1154,7 +1154,7 @@ impl Engine {
                         let idx_pos = x.lhs.position();
                         let idx_val = idx_val.as_index_value();
                         let obj_ptr = &mut self.get_indexed_mut(
-                            mods, state, lib, target, idx_val, idx_pos, false, is_ref, true, level,
+                            mods, state, lib, target, idx_val, idx_pos, false, true, level,
                         )?;
                         let rhs_chain = rhs_chain.unwrap();
 
@@ -1173,7 +1173,7 @@ impl Engine {
 
                         // `call_setter` is introduced to bypass double mutable borrowing of target
                         let _call_setter = match self.get_indexed_mut(
-                            mods, state, lib, target, idx_val, pos, true, is_ref, false, level,
+                            mods, state, lib, target, idx_val, pos, true, false, level,
                         ) {
                             // Indexed value is a reference - update directly
                             Ok(obj_ptr) => {
@@ -1193,7 +1193,6 @@ impl Engine {
                             },
                         };
 
-                        #[cfg(not(feature = "no_index"))]
                         if let Some(mut new_val) = _call_setter {
                             let val_type_name = target.type_name();
                             let ((_, val_pos), _) = new_val;
@@ -1228,7 +1227,7 @@ impl Engine {
                     _ => {
                         let idx_val = idx_val.as_index_value();
                         self.get_indexed_mut(
-                            mods, state, lib, target, idx_val, pos, false, is_ref, true, level,
+                            mods, state, lib, target, idx_val, pos, false, true, level,
                         )
                         .map(|v| (v.take_or_clone(), false))
                     }
@@ -1259,7 +1258,7 @@ impl Engine {
                         let (name, pos) = &x.2;
                         let index = name.into();
                         let val = self.get_indexed_mut(
-                            mods, state, lib, target, index, *pos, true, is_ref, false, level,
+                            mods, state, lib, target, index, *pos, true, false, level,
                         )?;
                         let ((new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
                         self.eval_op_assignment(
@@ -1272,7 +1271,7 @@ impl Engine {
                         let (name, pos) = &x.2;
                         let index = name.into();
                         let val = self.get_indexed_mut(
-                            mods, state, lib, target, index, *pos, false, is_ref, false, level,
+                            mods, state, lib, target, index, *pos, false, false, level,
                         )?;
 
                         Ok((val.take_or_clone(), false))
@@ -1285,10 +1284,29 @@ impl Engine {
                         if op_info.is_some() {
                             let hash = FnCallHashes::from_native(*hash_get);
                             let mut args = [target.as_mut()];
-                            let (mut orig_val, _) = self.exec_fn_call(
-                                mods, state, lib, getter, hash, &mut args, is_ref, true, *pos,
-                                None, level,
-                            )?;
+                            let (mut orig_val, _) = self
+                                .exec_fn_call(
+                                    mods, state, lib, getter, hash, &mut args, is_ref, true, *pos,
+                                    None, level,
+                                )
+                                .or_else(|err| match *err {
+                                    // Try an indexer if property does not exist
+                                    EvalAltResult::ErrorDotExpr(_, _) => {
+                                        let prop = name.into();
+                                        self.get_indexed_mut(
+                                            mods, state, lib, target, prop, *pos, false, true,
+                                            level,
+                                        )
+                                        .map(|v| (v.take_or_clone(), false))
+                                        .map_err(
+                                            |idx_err| match *idx_err {
+                                                EvalAltResult::ErrorIndexingType(_, _) => err,
+                                                _ => idx_err,
+                                            },
+                                        )
+                                    }
+                                    _ => Err(err),
+                                })?;
                             let obj_ptr = (&mut orig_val).into();
                             self.eval_op_assignment(
                                 mods, state, lib, op_info, op_pos, obj_ptr, root, new_val, new_pos,
@@ -1341,8 +1359,7 @@ impl Engine {
                                 EvalAltResult::ErrorDotExpr(_, _) => {
                                     let prop = name.into();
                                     self.get_indexed_mut(
-                                        mods, state, lib, target, prop, *pos, false, is_ref, true,
-                                        level,
+                                        mods, state, lib, target, prop, *pos, false, true, level,
                                     )
                                     .map(|v| (v.take_or_clone(), false))
                                     .map_err(|idx_err| {
@@ -1364,8 +1381,7 @@ impl Engine {
                                 let (name, pos) = &p.2;
                                 let index = name.into();
                                 self.get_indexed_mut(
-                                    mods, state, lib, target, index, *pos, false, is_ref, true,
-                                    level,
+                                    mods, state, lib, target, index, *pos, false, true, level,
                                 )?
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
@@ -1414,8 +1430,8 @@ impl Engine {
                                         EvalAltResult::ErrorDotExpr(_, _) => {
                                             let prop = name.into();
                                             self.get_indexed_mut(
-                                                mods, state, lib, target, prop, *pos, false,
-                                                is_ref, true, level,
+                                                mods, state, lib, target, prop, *pos, false, true,
+                                                level,
                                             )
                                             .map(|v| (v.take_or_clone(), false))
                                             .map_err(
@@ -1717,16 +1733,15 @@ impl Engine {
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn get_indexed_mut<'t>(
         &self,
-        _mods: &mut Imports,
+        mods: &mut Imports,
         state: &mut State,
-        _lib: &[&Module],
+        lib: &[&Module],
         target: &'t mut Dynamic,
-        mut _idx: Dynamic,
+        mut idx: Dynamic,
         idx_pos: Position,
         _create: bool,
-        _is_ref: bool,
-        _indexers: bool,
-        _level: usize,
+        indexers: bool,
+        level: usize,
     ) -> Result<Target<'t>, Box<EvalAltResult>> {
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(state, Position::NONE)?;
@@ -1735,7 +1750,7 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Array(arr, _, _)) => {
                 // val_array[idx]
-                let index = _idx
+                let index = idx
                     .as_int()
                     .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
 
@@ -1777,8 +1792,8 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(map, _, _)) => {
                 // val_map[idx]
-                let index = &*_idx.read_lock::<ImmutableString>().ok_or_else(|| {
-                    self.make_type_mismatch_err::<ImmutableString>(_idx.type_name(), idx_pos)
+                let index = &*idx.read_lock::<ImmutableString>().ok_or_else(|| {
+                    self.make_type_mismatch_err::<ImmutableString>(idx.type_name(), idx_pos)
                 })?;
 
                 if _create && !map.contains_key(index.as_str()) {
@@ -1794,7 +1809,7 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Str(s, _, _)) => {
                 // val_string[idx]
-                let index = _idx
+                let index = idx
                     .as_int()
                     .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
 
@@ -1825,15 +1840,16 @@ impl Engine {
                 Ok(Target::StringChar(target, offset, ch.into()))
             }
 
-            #[cfg(not(feature = "no_index"))]
-            _ if _indexers => {
-                let args = &mut [target, &mut _idx];
-                let hash_get =
-                    FnCallHashes::from_native(calc_fn_hash(std::iter::empty(), FN_IDX_GET, 2));
+            _ if indexers => {
+                let args = &mut [target, &mut idx];
+                let hash_get = FnCallHashes::from_native(crate::calc_fn_hash(
+                    std::iter::empty(),
+                    FN_IDX_GET,
+                    2,
+                ));
 
                 self.exec_fn_call(
-                    _mods, state, _lib, FN_IDX_GET, hash_get, args, _is_ref, true, idx_pos, None,
-                    _level,
+                    mods, state, lib, FN_IDX_GET, hash_get, args, true, true, idx_pos, None, level,
                 )
                 .map(|(v, _)| v.into())
             }

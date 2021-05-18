@@ -371,7 +371,7 @@ impl Engine {
 
         match fn_name {
             // index getter function not found?
-            #[cfg(not(feature = "no_index"))]
+            #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
             crate::engine::FN_IDX_GET => {
                 assert!(args.len() == 2);
 
@@ -383,7 +383,7 @@ impl Engine {
             }
 
             // index setter function not found?
-            #[cfg(not(feature = "no_index"))]
+            #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
             crate::engine::FN_IDX_SET => {
                 assert!(args.len() == 3);
 
