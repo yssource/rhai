@@ -7,8 +7,8 @@ use crate::fn_register::RegisterNativeFunction;
 use crate::token::Token;
 use crate::utils::IdentifierBuilder;
 use crate::{
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, EvalAltResult, Identifier,
-    ImmutableString, NativeCallContext, Position, Shared, StaticVec,
+    calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, EvalAltResult,
+    Identifier, ImmutableString, NativeCallContext, Position, Shared, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -116,7 +116,7 @@ fn calc_native_fn_hash<'a>(
     fn_name: impl AsRef<str>,
     params: &[TypeId],
 ) -> u64 {
-    let hash_script = calc_fn_hash(modules, fn_name, params.len());
+    let hash_script = calc_qualified_fn_hash(modules, fn_name, params.len());
     let hash_params = calc_fn_params_hash(params.iter().cloned());
     combine_hashes(hash_script, hash_params)
 }
@@ -440,7 +440,7 @@ impl Module {
         let value = Dynamic::from(value);
 
         if self.indexed {
-            let hash_var = crate::calc_fn_hash(once(""), &ident, 0);
+            let hash_var = crate::calc_qualified_fn_hash(once(""), &ident, 0);
             self.all_variables.insert(hash_var, value.clone());
         }
         self.variables.insert(ident, value);
@@ -466,7 +466,7 @@ impl Module {
 
         // None + function name + number of arguments.
         let num_params = fn_def.params.len();
-        let hash_script = crate::calc_fn_hash(empty(), &fn_def.name, num_params);
+        let hash_script = crate::calc_fn_hash(&fn_def.name, num_params);
         let mut param_names = fn_def.params.clone();
         param_names.push("Dynamic".into());
         self.functions.insert(
@@ -1491,7 +1491,7 @@ impl Module {
 
             // Index all variables
             module.variables.iter().for_each(|(var_name, value)| {
-                let hash_var = crate::calc_fn_hash(path.iter().map(|&v| v), var_name, 0);
+                let hash_var = crate::calc_qualified_fn_hash(path.iter().map(|&v| v), var_name, 0);
                 variables.insert(hash_var, value.clone());
             });
 
@@ -1521,8 +1521,11 @@ impl Module {
                         calc_native_fn_hash(path.iter().cloned(), f.name.as_str(), &f.param_types);
                     functions.insert(hash_qualified_fn, f.func.clone());
                 } else if cfg!(not(feature = "no_function")) {
-                    let hash_qualified_script =
-                        crate::calc_fn_hash(path.iter().cloned(), f.name.as_str(), f.params);
+                    let hash_qualified_script = crate::calc_qualified_fn_hash(
+                        path.iter().cloned(),
+                        f.name.as_str(),
+                        f.params,
+                    );
                     functions.insert(hash_qualified_script, f.func.clone());
                 }
             });

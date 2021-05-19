@@ -15,7 +15,6 @@ use std::prelude::v1::*;
 use std::{
     any::TypeId,
     hash::{Hash, Hasher},
-    iter::empty,
     mem,
 };
 
@@ -147,7 +146,7 @@ fn call_fn_with_constant_arguments(
             &mut Default::default(),
             state.lib,
             fn_name,
-            calc_fn_hash(empty(), fn_name, arg_values.len()),
+            calc_fn_hash(fn_name, arg_values.len()),
             arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
             false,
             false,

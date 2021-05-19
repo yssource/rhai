@@ -10,7 +10,7 @@ use std::{
     cmp::Ordering,
     fmt,
     hash::{BuildHasher, Hash, Hasher},
-    iter::FromIterator,
+    iter::{empty, FromIterator},
     ops::{Add, AddAssign, Deref, Sub, SubAssign},
     str::FromStr,
 };
@@ -58,9 +58,8 @@ pub fn get_hasher() -> ahash::AHasher {
     Default::default()
 }
 
-/// _(INTERNALS)_ Calculate a [`u64`] hash key from a namespace-qualified function name
+/// Calculate a [`u64`] hash key from a namespace-qualified function name
 /// and the number of parameters, but no parameter types.
-/// Exported under the `internals` feature only.
 ///
 /// Module names are passed in via `&str` references from an iterator.
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
@@ -68,8 +67,8 @@ pub fn get_hasher() -> ahash::AHasher {
 /// # Note
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
-#[inline(always)]
-pub fn calc_fn_hash<'a>(
+#[inline]
+pub fn calc_qualified_fn_hash<'a>(
     modules: impl Iterator<Item = &'a str>,
     fn_name: impl AsRef<str>,
     num: usize,
@@ -88,11 +87,19 @@ pub fn calc_fn_hash<'a>(
     s.finish()
 }
 
-/// _(INTERNALS)_ Calculate a [`u64`] hash key from a list of parameter types.
-/// Exported under the `internals` feature only.
+/// Calculate a [`u64`] hash key from a non-namespace-qualified function name
+/// and the number of parameters, but no parameter types.
 ///
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
 #[inline(always)]
+pub fn calc_fn_hash(fn_name: impl AsRef<str>, num: usize) -> u64 {
+    calc_qualified_fn_hash(empty(), fn_name, num)
+}
+
+/// Calculate a [`u64`] hash key from a list of parameter types.
+///
+/// Parameter types are passed in via [`TypeId`] values from an iterator.
+#[inline]
 pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
     let s = &mut get_hasher();
     let mut len = 0;

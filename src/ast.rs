@@ -13,7 +13,6 @@ use std::{
     collections::BTreeMap,
     fmt,
     hash::Hash,
-    iter::empty,
     mem,
     num::{NonZeroU8, NonZeroUsize},
     ops::{Add, AddAssign, Deref, DerefMut},
@@ -1404,8 +1403,8 @@ impl OpAssignment {
         let op_assignment = op.keyword_syntax();
 
         Self {
-            hash_op_assign: calc_fn_hash(empty(), op_assignment, 2),
-            hash_op: calc_fn_hash(empty(), op_raw, 2),
+            hash_op_assign: calc_fn_hash(op_assignment, 2),
+            hash_op: calc_fn_hash(op_raw, 2),
             op: op_assignment,
         }
     }

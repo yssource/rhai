@@ -24,7 +24,7 @@ use std::prelude::v1::*;
 use std::{
     any::{type_name, TypeId},
     convert::TryFrom,
-    iter::{empty, once},
+    iter::once,
     mem,
 };
 
@@ -653,7 +653,7 @@ impl Engine {
                     if num_params < 0 {
                         Dynamic::FALSE
                     } else {
-                        let hash_script = calc_fn_hash(empty(), fn_name, num_params as usize);
+                        let hash_script = calc_fn_hash(fn_name, num_params as usize);
                         self.has_script_fn(Some(mods), state, lib, hash_script)
                             .into()
                     },
@@ -911,7 +911,7 @@ impl Engine {
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hashes
-                let new_hash = FnCallHashes::from_script(calc_fn_hash(empty(), fn_name, args_len));
+                let new_hash = FnCallHashes::from_script(calc_fn_hash(fn_name, args_len));
                 // Arguments are passed as-is, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
                 let mut args = curry
@@ -947,8 +947,8 @@ impl Engine {
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hash
                 let new_hash = FnCallHashes::from_script_and_native(
-                    calc_fn_hash(empty(), fn_name, args_len),
-                    calc_fn_hash(empty(), fn_name, args_len + 1),
+                    calc_fn_hash(fn_name, args_len),
+                    calc_fn_hash(fn_name, args_len + 1),
                 );
                 // Replace the first argument with the object pointer, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
@@ -1021,8 +1021,8 @@ impl Engine {
                                 });
                             // Recalculate the hash based on the new function name and new arguments
                             hash = FnCallHashes::from_script_and_native(
-                                calc_fn_hash(empty(), fn_name, call_args.len()),
-                                calc_fn_hash(empty(), fn_name, call_args.len() + 1),
+                                calc_fn_hash(fn_name, call_args.len()),
+                                calc_fn_hash(fn_name, call_args.len() + 1),
                             );
                         }
                     }
@@ -1107,9 +1107,9 @@ impl Engine {
                 // Recalculate hash
                 let args_len = total_args + curry.len();
                 hashes = if !hashes.is_native_only() {
-                    FnCallHashes::from_script(calc_fn_hash(empty(), name, args_len))
+                    FnCallHashes::from_script(calc_fn_hash(name, args_len))
                 } else {
-                    FnCallHashes::from_native(calc_fn_hash(empty(), name, args_len))
+                    FnCallHashes::from_native(calc_fn_hash(name, args_len))
                 };
             }
             // Handle Fn()
@@ -1206,7 +1206,7 @@ impl Engine {
                 return Ok(if num_params < 0 {
                     Dynamic::FALSE
                 } else {
-                    let hash_script = calc_fn_hash(empty(), &fn_name, num_params as usize);
+                    let hash_script = calc_fn_hash(&fn_name, num_params as usize);
                     self.has_script_fn(Some(mods), state, lib, hash_script)
                         .into()
                 });

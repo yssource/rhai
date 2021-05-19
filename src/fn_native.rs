@@ -13,7 +13,7 @@ use std::prelude::v1::*;
 use std::{
     convert::{TryFrom, TryInto},
     fmt,
-    iter::{empty, once},
+    iter::once,
     mem,
 };
 
@@ -202,11 +202,11 @@ impl<'a> NativeCallContext<'a> {
 
         let hash = if is_method {
             FnCallHashes::from_script_and_native(
-                calc_fn_hash(empty(), fn_name, args.len() - 1),
-                calc_fn_hash(empty(), fn_name, args.len()),
+                calc_fn_hash(fn_name, args.len() - 1),
+                calc_fn_hash(fn_name, args.len()),
             )
         } else {
-            FnCallHashes::from_script(calc_fn_hash(empty(), fn_name, args.len()))
+            FnCallHashes::from_script(calc_fn_hash(fn_name, args.len()))
         };
 
         self.engine()

@@ -29,7 +29,7 @@ use std::{
 };
 
 #[cfg(not(feature = "no_index"))]
-use crate::{calc_fn_hash, Array};
+use crate::Array;
 
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
@@ -1166,60 +1166,39 @@ impl Engine {
                     }
                     // xxx[rhs] op= new_val
                     _ if new_val.is_some() => {
+                        let ((mut new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
                         let idx_val = idx_val.as_index_value();
 
                         #[cfg(not(feature = "no_index"))]
-                        let mut idx_val2 = idx_val.clone();
+                        let mut idx_val_for_setter = idx_val.clone();
 
-                        // `call_setter` is introduced to bypass double mutable borrowing of target
-                        let _call_setter = match self.get_indexed_mut(
+                        match self.get_indexed_mut(
                             mods, state, lib, target, idx_val, pos, true, false, level,
                         ) {
                             // Indexed value is a reference - update directly
                             Ok(obj_ptr) => {
-                                let ((new_val, new_pos), (op_info, op_pos)) = new_val.unwrap();
                                 self.eval_op_assignment(
                                     mods, state, lib, op_info, op_pos, obj_ptr, root, new_val,
                                     new_pos,
                                 )?;
-                                None
+                                return Ok((Dynamic::UNIT, true));
                             }
-                            Err(err) => match *err {
-                                // No index getter - try to call an index setter
-                                #[cfg(not(feature = "no_index"))]
-                                EvalAltResult::ErrorIndexingType(_, _) => Some(new_val.unwrap()),
-                                // Any other error - return
-                                err => return err.into(),
-                            },
-                        };
-
-                        if let Some(mut new_val) = _call_setter {
-                            let val_type_name = target.type_name();
-                            let ((_, val_pos), _) = new_val;
-
-                            let hash_set = FnCallHashes::from_native(calc_fn_hash(
-                                std::iter::empty(),
-                                FN_IDX_SET,
-                                3,
-                            ));
-                            let args = &mut [target, &mut idx_val2, &mut (new_val.0).0];
-
-                            self.exec_fn_call(
-                                mods, state, lib, FN_IDX_SET, hash_set, args, is_ref, true,
-                                val_pos, None, level,
-                            )
-                            .map_err(|err| match *err {
-                                EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                                    if fn_sig.ends_with("]=") =>
-                                {
-                                    EvalAltResult::ErrorIndexingType(
-                                        self.map_type_name(val_type_name).into(),
-                                        Position::NONE,
-                                    )
-                                }
-                                err => err,
-                            })?;
+                            // Can't index - try to call an index setter
+                            #[cfg(not(feature = "no_index"))]
+                            Err(err) if matches!(*err, EvalAltResult::ErrorIndexingType(_, _)) => {}
+                            // Any other error
+                            Err(err) => return Err(err),
                         }
+
+                        // Try to call index setter
+                        let hash_set =
+                            FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_SET, 3));
+                        let args = &mut [target, &mut idx_val_for_setter, &mut new_val];
+
+                        self.exec_fn_call(
+                            mods, state, lib, FN_IDX_SET, hash_set, args, is_ref, true, new_pos,
+                            None, level,
+                        )?;
 
                         Ok((Dynamic::UNIT, true))
                     }
@@ -1325,11 +1304,8 @@ impl Engine {
                             EvalAltResult::ErrorDotExpr(_, _) => {
                                 let mut prop = name.into();
                                 let args = &mut [target, &mut prop, &mut new_val];
-                                let hash_set = FnCallHashes::from_native(crate::calc_fn_hash(
-                                    std::iter::empty(),
-                                    FN_IDX_SET,
-                                    3,
-                                ));
+                                let hash_set =
+                                    FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_SET, 3));
                                 self.exec_fn_call(
                                     mods, state, lib, FN_IDX_SET, hash_set, args, is_ref, true,
                                     *pos, None, level,
@@ -1477,12 +1453,9 @@ impl Engine {
                                             EvalAltResult::ErrorDotExpr(_, _) => {
                                                 let mut prop = name.into();
                                                 let args = &mut [target.as_mut(), &mut prop, val];
-                                                let hash_set =
-                                                    FnCallHashes::from_native(crate::calc_fn_hash(
-                                                        std::iter::empty(),
-                                                        FN_IDX_SET,
-                                                        3,
-                                                    ));
+                                                let hash_set = FnCallHashes::from_native(
+                                                    crate::calc_fn_hash(FN_IDX_SET, 3),
+                                                );
                                                 self.exec_fn_call(
                                                     mods, state, lib, FN_IDX_SET, hash_set, args,
                                                     is_ref, true, *pos, None, level,
@@ -1842,11 +1815,7 @@ impl Engine {
 
             _ if indexers => {
                 let args = &mut [target, &mut idx];
-                let hash_get = FnCallHashes::from_native(crate::calc_fn_hash(
-                    std::iter::empty(),
-                    FN_IDX_GET,
-                    2,
-                ));
+                let hash_get = FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_GET, 2));
 
                 self.exec_fn_call(
                     mods, state, lib, FN_IDX_GET, hash_get, args, true, true, idx_pos, None, level,

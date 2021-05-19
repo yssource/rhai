@@ -15,15 +15,14 @@ use crate::token::{
 };
 use crate::utils::{get_hasher, IdentifierBuilder};
 use crate::{
-    calc_fn_hash, Dynamic, Engine, FnPtr, Identifier, LexError, ParseError, ParseErrorType,
-    Position, Scope, Shared, StaticVec, AST,
+    calc_fn_hash, calc_qualified_fn_hash, Dynamic, Engine, FnPtr, Identifier, LexError, ParseError,
+    ParseErrorType, Position, Scope, Shared, StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
     collections::BTreeMap,
     hash::{Hash, Hasher},
-    iter::empty,
     num::{NonZeroU8, NonZeroUsize},
 };
 
@@ -225,9 +224,9 @@ impl Expr {
             Self::Variable(_, pos, x) if x.1.is_none() => {
                 let ident = x.2;
                 let getter = state.get_identifier(crate::engine::make_getter(&ident));
-                let hash_get = calc_fn_hash(empty(), &getter, 1);
+                let hash_get = calc_fn_hash(&getter, 1);
                 let setter = state.get_identifier(crate::engine::make_setter(&ident));
-                let hash_set = calc_fn_hash(empty(), &setter, 2);
+                let hash_set = calc_fn_hash(&setter, 2);
 
                 Self::Property(Box::new((
                     (getter, hash_get),
@@ -334,9 +333,9 @@ fn parse_fn_call(
                 #[cfg(not(feature = "no_module"))]
                 modules.set_index(state.find_module(&modules[0].name));
 
-                calc_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, 0)
+                calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, 0)
             } else {
-                calc_fn_hash(empty(), &id, 0)
+                calc_fn_hash(&id, 0)
             };
 
             let hashes = if is_valid_identifier(id.chars()) {
@@ -381,9 +380,9 @@ fn parse_fn_call(
                     #[cfg(not(feature = "no_module"))]
                     modules.set_index(state.find_module(&modules[0].name));
 
-                    calc_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, args.len())
+                    calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, args.len())
                 } else {
-                    calc_fn_hash(empty(), &id, args.len())
+                    calc_fn_hash(&id, args.len())
                 };
 
                 let hashes = if is_valid_identifier(id.chars()) {
@@ -1016,7 +1015,7 @@ fn parse_primary(
                 state.access_var(closure, *pos);
             });
 
-            let hash_script = calc_fn_hash(empty(), &func.name, func.params.len());
+            let hash_script = calc_fn_hash(&func.name, func.params.len());
             lib.insert(hash_script, func.into());
 
             expr
@@ -1295,7 +1294,7 @@ fn parse_primary(
     }
     .map(|x| match x.as_mut() {
         (_, Some((hash, namespace)), name) => {
-            *hash = calc_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0);
+            *hash = calc_qualified_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0);
 
             #[cfg(not(feature = "no_module"))]
             namespace.set_index(state.find_module(&namespace[0].name));
@@ -1351,7 +1350,7 @@ fn parse_unary(
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
                             name: state.get_identifier("-"),
-                            hashes: FnCallHashes::from_native(calc_fn_hash(empty(), "-", 1)),
+                            hashes: FnCallHashes::from_native(calc_fn_hash("-", 1)),
                             args,
                             ..Default::default()
                         }),
@@ -1378,7 +1377,7 @@ fn parse_unary(
                     Ok(Expr::FnCall(
                         Box::new(FnCallExpr {
                             name: state.get_identifier("+"),
-                            hashes: FnCallHashes::from_native(calc_fn_hash(empty(), "+", 1)),
+                            hashes: FnCallHashes::from_native(calc_fn_hash("+", 1)),
                             args,
                             ..Default::default()
                         }),
@@ -1397,7 +1396,7 @@ fn parse_unary(
             Ok(Expr::FnCall(
                 Box::new(FnCallExpr {
                     name: state.get_identifier("!"),
-                    hashes: FnCallHashes::from_native(calc_fn_hash(empty(), "!", 1)),
+                    hashes: FnCallHashes::from_native(calc_fn_hash("!", 1)),
                     args,
                     ..Default::default()
                 }),
@@ -1531,9 +1530,9 @@ fn make_dot_expr(
         (lhs, Expr::Variable(_, var_pos, x)) if x.1.is_none() => {
             let ident = x.2;
             let getter = state.get_identifier(crate::engine::make_getter(&ident));
-            let hash_get = calc_fn_hash(empty(), &getter, 1);
+            let hash_get = calc_fn_hash(&getter, 1);
             let setter = state.get_identifier(crate::engine::make_setter(&ident));
-            let hash_set = calc_fn_hash(empty(), &setter, 2);
+            let hash_set = calc_fn_hash(&setter, 2);
 
             let rhs = Expr::Property(Box::new((
                 (getter, hash_get),
@@ -1566,8 +1565,8 @@ fn make_dot_expr(
             Expr::FnCall(mut func, func_pos) => {
                 // Recalculate hash
                 func.hashes = FnCallHashes::from_script_and_native(
-                    calc_fn_hash(empty(), &func.name, func.args_count()),
-                    calc_fn_hash(empty(), &func.name, func.args_count() + 1),
+                    calc_fn_hash(&func.name, func.args_count()),
+                    calc_fn_hash(&func.name, func.args_count() + 1),
                 );
 
                 let rhs = Expr::Dot(
@@ -1622,8 +1621,8 @@ fn make_dot_expr(
         (lhs, Expr::FnCall(mut func, func_pos)) => {
             // Recalculate hash
             func.hashes = FnCallHashes::from_script_and_native(
-                calc_fn_hash(empty(), &func.name, func.args_count()),
-                calc_fn_hash(empty(), &func.name, func.args_count() + 1),
+                calc_fn_hash(&func.name, func.args_count()),
+                calc_fn_hash(&func.name, func.args_count() + 1),
             );
             let rhs = Expr::FnCall(func, func_pos);
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
@@ -1705,7 +1704,7 @@ fn parse_binary_op(
         settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
         let op = op_token.syntax();
-        let hash = calc_fn_hash(empty(), &op, 2);
+        let hash = calc_fn_hash(&op, 2);
 
         let op_base = FnCallExpr {
             name: state.get_identifier(op.as_ref()),
@@ -1773,7 +1772,7 @@ fn parse_binary_op(
                 args.shrink_to_fit();
 
                 // Convert into a call to `contains`
-                let hash = calc_fn_hash(empty(), OP_CONTAINS, 2);
+                let hash = calc_fn_hash(OP_CONTAINS, 2);
                 Expr::FnCall(
                     Box::new(FnCallExpr {
                         hashes: FnCallHashes::from_script(hash),
@@ -1792,7 +1791,7 @@ fn parse_binary_op(
                     .get(s.as_str())
                     .map_or(false, Option::is_some) =>
             {
-                let hash = calc_fn_hash(empty(), &s, 2);
+                let hash = calc_fn_hash(&s, 2);
 
                 Expr::FnCall(
                     Box::new(FnCallExpr {
@@ -2580,7 +2579,7 @@ fn parse_stmt(
                         comments,
                     )?;
 
-                    let hash = calc_fn_hash(empty(), &func.name, func.params.len());
+                    let hash = calc_fn_hash(&func.name, func.params.len());
 
                     if lib.contains_key(&hash) {
                         return Err(PERR::FnDuplicatedDefinition(
@@ -2863,7 +2862,6 @@ fn make_curry_from_externals(
         Box::new(FnCallExpr {
             name: state.get_identifier(crate::engine::KEYWORD_FN_PTR_CURRY),
             hashes: FnCallHashes::from_native(calc_fn_hash(
-                empty(),
                 crate::engine::KEYWORD_FN_PTR_CURRY,
                 num_externals + 1,
             )),
