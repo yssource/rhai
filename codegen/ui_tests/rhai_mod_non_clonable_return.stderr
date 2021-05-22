@@ -1,10 +1,10 @@
 error[E0277]: the trait bound `NonClonable: Clone` is not satisfied
-   --> $DIR/rhai_mod_non_clonable_return.rs:12:12
-    |
-12  |     pub fn test_fn(input: f32) -> NonClonable {
-    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `NonClonable`
-    |
-   ::: $WORKSPACE/src/dynamic.rs
-    |
-    |     pub fn from<T: Variant + Clone>(mut value: T) -> Self {
-    |                              ----- required by this bound in `rhai::Dynamic::from`
+    --> $DIR/rhai_mod_non_clonable_return.rs:12:12
+     |
+12   |     pub fn test_fn(input: f32) -> NonClonable {
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `NonClonable`
+     |
+    ::: $WORKSPACE/src/dynamic.rs
+     |
+     |     pub fn from<T: Variant + Clone>(mut value: T) -> Self {
+     |                              ----- required by this bound in `rhai::Dynamic::from`

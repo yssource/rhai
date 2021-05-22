@@ -2509,7 +2509,7 @@ fn parse_stmt(
         let mut comments_pos = Position::NONE;
 
         // Handle doc-comments.
-        while let (Token::Comment(ref comment), pos) = input.peek().expect(INPUT_NEVER_ENDS) {
+        while let (Token::Comment(ref comment), pos) = input.peek().expect(NEVER_ENDS) {
             if comments_pos.is_none() {
                 comments_pos = *pos;
             }
@@ -2526,7 +2526,7 @@ fn parse_stmt(
                 Token::Comment(comment) => {
                     comments.push(comment);
 
-                    match input.peek().expect(INPUT_NEVER_ENDS) {
+                    match input.peek().expect(NEVER_ENDS) {
                         (Token::Fn, _) | (Token::Private, _) => break,
                         (Token::Comment(_), _) => (),
                         _ => return Err(PERR::WrongDocComment.into_err(comments_pos)),
