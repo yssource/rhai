@@ -1415,7 +1415,10 @@ impl Module {
             match aliases.len() {
                 0 => (),
                 1 => {
-                    module.set_var(aliases.pop().unwrap(), value);
+                    let alias = aliases
+                        .pop()
+                        .expect("never fails because the list has one item");
+                    module.set_var(alias, value);
                 }
                 _ => aliases.into_iter().for_each(|alias| {
                     module.set_var(alias, value.clone());

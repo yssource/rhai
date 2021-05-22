@@ -36,6 +36,8 @@ type PERR = ParseErrorType;
 
 type FunctionsLib = BTreeMap<u64, Shared<ScriptFnDef>>;
 
+const NEVER_ENDS: &str = "never fails because `TokenStream` never ends";
+
 /// A type that encapsulates the current state of the parser.
 #[derive(Debug)]
 pub struct ParseState<'e> {
@@ -241,7 +243,7 @@ impl Expr {
 
 /// Consume a particular [token][Token], checking that it is the expected one.
 fn eat_token(input: &mut TokenStream, token: Token) -> Position {
-    let (t, pos) = input.next().unwrap();
+    let (t, pos) = input.next().expect(NEVER_ENDS);
 
     if t != token {
         unreachable!(
@@ -256,7 +258,7 @@ fn eat_token(input: &mut TokenStream, token: Token) -> Position {
 
 /// Match a particular [token][Token], consuming it if matched.
 fn match_token(input: &mut TokenStream, token: Token) -> (bool, Position) {
-    let (t, pos) = input.peek().unwrap();
+    let (t, pos) = input.peek().expect(NEVER_ENDS);
     if *t == token {
         (true, eat_token(input, token))
     } else {
@@ -283,7 +285,7 @@ fn parse_paren_expr(
 
     let expr = parse_expr(input, state, lib, settings.level_up())?;
 
-    match input.next().unwrap() {
+    match input.next().expect(NEVER_ENDS) {
         // ( xxx )
         (Token::RightParen, _) => Ok(expr),
         // ( <error>
@@ -310,7 +312,7 @@ fn parse_fn_call(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let (token, token_pos) = input.peek().unwrap();
+    let (token, token_pos) = input.peek().expect(NEVER_ENDS);
 
     let mut args = StaticVec::new();
 
@@ -365,13 +367,13 @@ fn parse_fn_call(
     let settings = settings.level_up();
 
     loop {
-        match input.peek().unwrap() {
+        match input.peek().expect(NEVER_ENDS) {
             // id(...args, ) - handle trailing comma
             (Token::RightParen, _) => (),
             _ => args.push(parse_expr(input, state, lib, settings)?),
         }
 
-        match input.peek().unwrap() {
+        match input.peek().expect(NEVER_ENDS) {
             // id(...args)
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
@@ -554,12 +556,12 @@ fn parse_index_chain(
     }
 
     // Check if there is a closing bracket
-    match input.peek().unwrap() {
+    match input.peek().expect(NEVER_ENDS) {
         (Token::RightBracket, _) => {
             eat_token(input, Token::RightBracket);
 
             // Any more indexing following?
-            match input.peek().unwrap() {
+            match input.peek().expect(NEVER_ENDS) {
                 // If another indexing level, right-bind it
                 (Token::LeftBracket, _) => {
                     let prev_pos = settings.pos;
@@ -614,10 +616,10 @@ fn parse_array_literal(
                 "Size of array literal".to_string(),
                 state.engine.max_array_size(),
             )
-            .into_err(input.peek().unwrap().1));
+            .into_err(input.peek().expect(NEVER_ENDS).1));
         }
 
-        match input.peek().unwrap() {
+        match input.peek().expect(NEVER_ENDS) {
             (Token::RightBracket, _) => {
                 eat_token(input, Token::RightBracket);
                 break;
@@ -634,7 +636,7 @@ fn parse_array_literal(
             }
         }
 
-        match input.peek().unwrap() {
+        match input.peek().expect(NEVER_ENDS) {
             (Token::Comma, _) => {
                 eat_token(input, Token::Comma);
             }
@@ -681,7 +683,7 @@ fn parse_map_literal(
     loop {
         const MISSING_RBRACE: &str = "to end this object map literal";
 
-        match input.peek().unwrap() {
+        match input.peek().expect(NEVER_ENDS) {
             (Token::RightBrace, _) => {
                 eat_token(input, Token::RightBrace);
                 break;
@@ -695,7 +697,7 @@ fn parse_map_literal(
             _ => (),
         }
 
-        let (name, pos) = match input.next().unwrap() {
+        let (name, pos) = match input.next().expect(NEVER_ENDS) {
             (Token::Identifier(s), pos) | (Token::StringConstant(s), pos) => {
                 if map.iter().any(|(p, _)| p.name == s) {
                     return Err(PERR::DuplicatedProperty(s).into_err(pos));
@@ -722,7 +724,7 @@ fn parse_map_literal(
             (_, pos) => return Err(PERR::PropertyExpected.into_err(pos)),
         };
 
-        match input.next().unwrap() {
+        match input.next().expect(NEVER_ENDS) {
             (Token::Colon, _) => (),
             (Token::LexError(err), pos) => return Err(err.into_err(pos)),
             (_, pos) => {
@@ -743,7 +745,7 @@ fn parse_map_literal(
                 "Number of properties in object map literal".to_string(),
                 state.engine.max_map_size(),
             )
-            .into_err(input.peek().unwrap().1));
+            .into_err(input.peek().expect(NEVER_ENDS).1));
         }
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
@@ -751,7 +753,7 @@ fn parse_map_literal(
         template.insert(name.clone().into(), Default::default());
         map.push((Ident { name, pos }, expr));
 
-        match input.peek().unwrap() {
+        match input.peek().expect(NEVER_ENDS) {
             (Token::Comma, _) => {
                 eat_token(input, Token::Comma);
             }
@@ -793,7 +795,7 @@ fn parse_switch(
 
     let item = parse_expr(input, state, lib, settings.level_up())?;
 
-    match input.next().unwrap() {
+    match input.next().expect(NEVER_ENDS) {
         (Token::LeftBrace, _) => (),
         (Token::LexError(err), pos) => return Err(err.into_err(pos)),
         (_, pos) => {
@@ -812,7 +814,7 @@ fn parse_switch(
     loop {
         const MISSING_RBRACE: &str = "to end this switch block";
 
-        let (expr, condition) = match input.peek().unwrap() {
+        let (expr, condition) = match input.peek().expect(NEVER_ENDS) {
             (Token::RightBrace, _) => {
                 eat_token(input, Token::RightBrace);
                 break;
@@ -868,7 +870,7 @@ fn parse_switch(
             None
         };
 
-        match input.next().unwrap() {
+        match input.next().expect(NEVER_ENDS) {
             (Token::DoubleArrow, _) => (),
             (Token::LexError(err), pos) => return Err(err.into_err(pos)),
             (_, pos) => {
@@ -891,7 +893,7 @@ fn parse_switch(
             Some(stmt.into())
         };
 
-        match input.peek().unwrap() {
+        match input.peek().expect(NEVER_ENDS) {
             (Token::Comma, _) => {
                 eat_token(input, Token::Comma);
             }
@@ -934,7 +936,7 @@ fn parse_primary(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let (token, token_pos) = input.peek().unwrap();
+    let (token, token_pos) = input.peek().expect(NEVER_ENDS);
     settings.pos = *token_pos;
 
     let mut root_expr = match token {
@@ -944,7 +946,7 @@ fn parse_primary(
         | Token::CharConstant(_)
         | Token::StringConstant(_)
         | Token::True
-        | Token::False => match input.next().unwrap().0 {
+        | Token::False => match input.next().expect(NEVER_ENDS).0 {
             Token::IntegerConstant(x) => Expr::IntegerConstant(x, settings.pos),
             Token::CharConstant(c) => Expr::CharConstant(c, settings.pos),
             Token::StringConstant(s) => {
@@ -957,13 +959,13 @@ fn parse_primary(
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => {
             let x = (*x).into();
-            input.next().unwrap();
+            input.next().expect(NEVER_ENDS);
             Expr::FloatConstant(x, settings.pos)
         }
         #[cfg(feature = "decimal")]
         Token::DecimalConstant(x) => {
             let x = (*x).into();
-            input.next().unwrap();
+            input.next().expect(NEVER_ENDS);
             Expr::DynamicConstant(Box::new(x), settings.pos)
         }
 
@@ -1025,7 +1027,7 @@ fn parse_primary(
         Token::InterpolatedString(_) => {
             let mut segments: StaticVec<Expr> = Default::default();
 
-            if let (Token::InterpolatedString(s), pos) = input.next().unwrap() {
+            if let (Token::InterpolatedString(s), pos) = input.next().expect(NEVER_ENDS) {
                 segments.push(Expr::StringConstant(s.into(), pos));
             } else {
                 unreachable!();
@@ -1043,7 +1045,7 @@ fn parse_primary(
                 control.is_within_text = true;
                 state.tokenizer_control.set(control);
 
-                match input.next().unwrap() {
+                match input.next().expect(NEVER_ENDS) {
                     (Token::StringConstant(s), pos) => {
                         if !s.is_empty() {
                             segments.push(Expr::StringConstant(s.into(), pos));
@@ -1080,12 +1082,12 @@ fn parse_primary(
 
         // Identifier
         Token::Identifier(_) => {
-            let s = match input.next().unwrap() {
+            let s = match input.next().expect(NEVER_ENDS) {
                 (Token::Identifier(s), _) => s,
                 _ => unreachable!(),
             };
 
-            match input.peek().unwrap().0 {
+            match input.peek().expect(NEVER_ENDS).0 {
                 // Function call
                 Token::LeftParen | Token::Bang => {
                     #[cfg(not(feature = "no_closure"))]
@@ -1134,12 +1136,12 @@ fn parse_primary(
 
         // Reserved keyword or symbol
         Token::Reserved(_) => {
-            let s = match input.next().unwrap() {
+            let s = match input.next().expect(NEVER_ENDS) {
                 (Token::Reserved(s), _) => s,
                 _ => unreachable!(),
             };
 
-            match input.peek().unwrap().0 {
+            match input.peek().expect(NEVER_ENDS).0 {
                 // Function call is allowed to have reserved keyword
                 Token::LeftParen | Token::Bang if is_keyword_function(&s) => Expr::Variable(
                     None,
@@ -1164,7 +1166,7 @@ fn parse_primary(
             }
         }
 
-        Token::LexError(_) => match input.next().unwrap() {
+        Token::LexError(_) => match input.next().expect(NEVER_ENDS) {
             (Token::LexError(err), _) => return Err(err.into_err(settings.pos)),
             _ => unreachable!(),
         },
@@ -1176,13 +1178,13 @@ fn parse_primary(
 
     // Tail processing all possible postfix operators
     loop {
-        let (tail_token, _) = input.peek().unwrap();
+        let (tail_token, _) = input.peek().expect(NEVER_ENDS);
 
         if !root_expr.is_valid_postfix(tail_token) {
             break;
         }
 
-        let (tail_token, tail_pos) = input.next().unwrap();
+        let (tail_token, tail_pos) = input.next().expect(NEVER_ENDS);
         settings.pos = tail_pos;
 
         root_expr = match (root_expr, tail_token) {
@@ -1222,33 +1224,35 @@ fn parse_primary(
                 parse_fn_call(input, state, lib, name, false, ns, settings.level_up())?
             }
             // module access
-            (Expr::Variable(_, var_pos, x), Token::DoubleColon) => match input.next().unwrap() {
-                (Token::Identifier(id2), pos2) => {
-                    let (_, mut namespace, var_name) = *x;
-                    let var_name_def = Ident {
-                        name: var_name,
-                        pos: var_pos,
-                    };
+            (Expr::Variable(_, var_pos, x), Token::DoubleColon) => {
+                match input.next().expect(NEVER_ENDS) {
+                    (Token::Identifier(id2), pos2) => {
+                        let (_, mut namespace, var_name) = *x;
+                        let var_name_def = Ident {
+                            name: var_name,
+                            pos: var_pos,
+                        };
 
-                    if let Some((_, ref mut namespace)) = namespace {
-                        namespace.push(var_name_def);
-                    } else {
-                        let mut ns: NamespaceRef = Default::default();
-                        ns.push(var_name_def);
-                        namespace = Some((42, ns));
+                        if let Some((_, ref mut namespace)) = namespace {
+                            namespace.push(var_name_def);
+                        } else {
+                            let mut ns: NamespaceRef = Default::default();
+                            ns.push(var_name_def);
+                            namespace = Some((42, ns));
+                        }
+
+                        Expr::Variable(
+                            None,
+                            pos2,
+                            Box::new((None, namespace, state.get_identifier(id2))),
+                        )
                     }
-
-                    Expr::Variable(
-                        None,
-                        pos2,
-                        Box::new((None, namespace, state.get_identifier(id2))),
-                    )
+                    (Token::Reserved(id2), pos2) if is_valid_identifier(id2.chars()) => {
+                        return Err(PERR::Reserved(id2).into_err(pos2));
+                    }
+                    (_, pos2) => return Err(PERR::VariableExpected.into_err(pos2)),
                 }
-                (Token::Reserved(id2), pos2) if is_valid_identifier(id2.chars()) => {
-                    return Err(PERR::Reserved(id2).into_err(pos2));
-                }
-                (_, pos2) => return Err(PERR::VariableExpected.into_err(pos2)),
-            },
+            }
             // Indexing
             #[cfg(not(feature = "no_index"))]
             (expr, Token::LeftBracket) => {
@@ -1258,7 +1262,7 @@ fn parse_primary(
             #[cfg(not(feature = "no_object"))]
             (expr, Token::Period) => {
                 // Expression after dot must start with an identifier
-                match input.peek().unwrap() {
+                match input.peek().expect(NEVER_ENDS) {
                     (Token::Identifier(_), _) => {
                         #[cfg(not(feature = "no_closure"))]
                         {
@@ -1313,7 +1317,7 @@ fn parse_unary(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
-    let (token, token_pos) = input.peek().unwrap();
+    let (token, token_pos) = input.peek().expect(NEVER_ENDS);
     settings.pos = *token_pos;
 
     #[cfg(not(feature = "unchecked"))]
@@ -1449,7 +1453,16 @@ fn make_assignment_stmt<'a>(
         // var (indexed) = rhs
         Expr::Variable(i, var_pos, x) => {
             let (index, _, name) = x.as_ref();
-            let index = i.map_or_else(|| index.unwrap().get(), |n| n.get() as usize);
+            let index = i.map_or_else(
+                || {
+                    index
+                        .expect(
+                            "never fails because the long index is `Some` when the short index is `None`",
+                        )
+                        .get()
+                },
+                |n| n.get() as usize,
+            );
             match state.stack[state.stack.len() - index].1 {
                 AccessMode::ReadWrite => {
                     Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
@@ -1498,12 +1511,15 @@ fn parse_op_assignment_stmt(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let (token, token_pos) = input.peek().unwrap();
+    let (token, token_pos) = input.peek().expect(NEVER_ENDS);
     settings.pos = *token_pos;
 
     let (op, pos) = match token {
-        Token::Equals => (None, input.next().unwrap().1),
-        _ if token.is_op_assignment() => input.next().map(|(op, pos)| (Some(op), pos)).unwrap(),
+        Token::Equals => (None, input.next().expect(NEVER_ENDS).1),
+        _ if token.is_op_assignment() => input
+            .next()
+            .map(|(op, pos)| (Some(op), pos))
+            .expect(NEVER_ENDS),
         _ => return Ok(Stmt::Expr(lhs)),
     };
 
@@ -1544,7 +1560,8 @@ fn make_dot_expr(
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(_, _, x)) if x.1.is_some() => {
-            return Err(PERR::PropertyExpected.into_err(x.1.unwrap().1[0].pos))
+            return Err(PERR::PropertyExpected
+                .into_err(x.1.expect("never fails because the namespace is `Some`").1[0].pos))
         }
         // lhs.prop
         (lhs, prop @ Expr::Property(_)) => {
@@ -1649,7 +1666,7 @@ fn parse_binary_op(
     let mut root = lhs;
 
     loop {
-        let (current_op, current_pos) = input.peek().unwrap();
+        let (current_op, current_pos) = input.peek().expect(NEVER_ENDS);
         let precedence = match current_op {
             Token::Custom(c) => state
                 .engine
@@ -1670,11 +1687,11 @@ fn parse_binary_op(
             return Ok(root);
         }
 
-        let (op_token, pos) = input.next().unwrap();
+        let (op_token, pos) = input.next().expect(NEVER_ENDS);
 
         let rhs = parse_unary(input, state, lib, settings)?;
 
-        let (next_op, next_pos) = input.peek().unwrap();
+        let (next_op, next_pos) = input.peek().expect(NEVER_ENDS);
         let next_precedence = match next_op {
             Token::Custom(c) => state
                 .engine
@@ -1744,8 +1761,12 @@ fn parse_binary_op(
             }
 
             Token::Or => {
-                let rhs = args.pop().unwrap();
-                let current_lhs = args.pop().unwrap();
+                let rhs = args
+                    .pop()
+                    .expect("never fails because `||` has two arguments");
+                let current_lhs = args
+                    .pop()
+                    .expect("never fails because `||` has two arguments");
                 Expr::Or(
                     Box::new(BinaryExpr {
                         lhs: current_lhs,
@@ -1755,8 +1776,12 @@ fn parse_binary_op(
                 )
             }
             Token::And => {
-                let rhs = args.pop().unwrap();
-                let current_lhs = args.pop().unwrap();
+                let rhs = args
+                    .pop()
+                    .expect("never fails because `&&` has two arguments");
+                let current_lhs = args
+                    .pop()
+                    .expect("never fails because `&&` has two arguments");
                 Expr::And(
                     Box::new(BinaryExpr {
                         lhs: current_lhs,
@@ -1841,7 +1866,7 @@ fn parse_custom_syntax(
     tokens.push(key.into());
 
     loop {
-        let (fwd_token, fwd_pos) = input.peek().unwrap();
+        let (fwd_token, fwd_pos) = input.peek().expect(NEVER_ENDS);
         settings.pos = *fwd_pos;
         let settings = settings.level_up();
 
@@ -1854,7 +1879,7 @@ fn parse_custom_syntax(
         };
 
         match required_token.as_str() {
-            MARKER_IDENT => match input.next().unwrap() {
+            MARKER_IDENT => match input.next().expect(NEVER_ENDS) {
                 (Token::Identifier(s), pos) => {
                     let name = state.get_identifier(s);
                     segments.push(name.clone().into());
@@ -1881,7 +1906,7 @@ fn parse_custom_syntax(
                 }
                 stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
             },
-            s => match input.next().unwrap() {
+            s => match input.next().expect(NEVER_ENDS) {
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                 (t, _) if t.syntax().as_ref() == s => {
                     segments.push(required_token.clone());
@@ -1921,18 +1946,18 @@ fn parse_expr(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    settings.pos = input.peek().unwrap().1;
+    settings.pos = input.peek().expect(NEVER_ENDS).1;
 
     // Check if it is a custom syntax.
     if !state.engine.custom_syntax.is_empty() {
-        let (token, pos) = input.peek().unwrap();
+        let (token, pos) = input.peek().expect(NEVER_ENDS);
         let token_pos = *pos;
 
         match token {
             Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key) => {
                 match state.engine.custom_syntax.get_key_value(key.as_str()) {
                     Some((key, syntax)) => {
-                        input.next().unwrap();
+                        input.next().expect(NEVER_ENDS);
                         return parse_custom_syntax(
                             input, state, lib, settings, key, syntax, token_pos,
                         );
@@ -1958,7 +1983,7 @@ fn parse_expr(
 
 /// Make sure that the expression is not a statement expression (i.e. wrapped in `{}`).
 fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result<(), ParseError> {
-    match input.peek().unwrap() {
+    match input.peek().expect(NEVER_ENDS) {
         // Disallow statement expressions
         (Token::LeftBrace, pos) | (Token::EOF, pos) => {
             Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos))
@@ -1970,7 +1995,7 @@ fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result
 
 /// Make sure that the expression is not a mis-typed assignment (i.e. `a = b` instead of `a == b`).
 fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
-    match input.peek().unwrap() {
+    match input.peek().expect(NEVER_ENDS) {
         (Token::Equals, pos) => Err(LexError::ImproperSymbol(
             "=".to_string(),
             "Possibly a typo of '=='?".to_string(),
@@ -2017,7 +2042,7 @@ fn parse_if(
 
     // if guard { if_body } else ...
     let else_body = if match_token(input, Token::Else).0 {
-        if let (Token::If, _) = input.peek().unwrap() {
+        if let (Token::If, _) = input.peek().expect(NEVER_ENDS) {
             // if guard { if_body } else if ...
             parse_if(input, state, lib, settings.level_up())?
         } else {
@@ -2046,7 +2071,7 @@ fn parse_while_loop(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // while|loops ...
-    let (guard, token_pos) = match input.next().unwrap() {
+    let (guard, token_pos) = match input.next().expect(NEVER_ENDS) {
         (Token::While, pos) => {
             ensure_not_statement_expr(input, "a boolean")?;
             let expr = parse_expr(input, state, lib, settings.level_up())?;
@@ -2081,7 +2106,7 @@ fn parse_do(
     settings.is_breakable = true;
     let body = parse_block(input, state, lib, settings.level_up())?;
 
-    let is_while = match input.next().unwrap() {
+    let is_while = match input.next().expect(NEVER_ENDS) {
         (Token::While, _) => true,
         (Token::Until, _) => false,
         (_, pos) => {
@@ -2119,7 +2144,7 @@ fn parse_for(
     settings.pos = eat_token(input, Token::For);
 
     // for name ...
-    let (name, name_pos) = match input.next().unwrap() {
+    let (name, name_pos) = match input.next().expect(NEVER_ENDS) {
         // Variable name
         (Token::Identifier(s), pos) => (s, pos),
         // Reserved keyword
@@ -2133,7 +2158,7 @@ fn parse_for(
     };
 
     // for name in ...
-    match input.next().unwrap() {
+    match input.next().expect(NEVER_ENDS) {
         (Token::In, _) => (),
         (Token::LexError(err), pos) => return Err(err.into_err(pos)),
         (_, pos) => {
@@ -2183,10 +2208,10 @@ fn parse_let(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     // let/const... (specified in `var_type`)
-    settings.pos = input.next().unwrap().1;
+    settings.pos = input.next().expect(NEVER_ENDS).1;
 
     // let name ...
-    let (name, pos) = match input.next().unwrap() {
+    let (name, pos) = match input.next().expect(NEVER_ENDS) {
         (Token::Identifier(s), pos) => (s, pos),
         (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
             return Err(PERR::Reserved(s).into_err(pos));
@@ -2242,7 +2267,7 @@ fn parse_import(
     }
 
     // import expr as name ...
-    let (name, name_pos) = match input.next().unwrap() {
+    let (name, name_pos) = match input.next().expect(NEVER_ENDS) {
         (Token::Identifier(s), pos) => (s, pos),
         (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
             return Err(PERR::Reserved(s).into_err(pos));
@@ -2280,7 +2305,7 @@ fn parse_export(
 
     settings.pos = eat_token(input, Token::Export);
 
-    match input.peek().unwrap() {
+    match input.peek().expect(NEVER_ENDS) {
         (Token::Let, pos) => {
             let pos = *pos;
             let mut stmt = parse_let(input, state, lib, AccessMode::ReadWrite, true, settings)?;
@@ -2299,7 +2324,7 @@ fn parse_export(
     let mut exports = Vec::with_capacity(4);
 
     loop {
-        let (id, id_pos) = match input.next().unwrap() {
+        let (id, id_pos) = match input.next().expect(NEVER_ENDS) {
             (Token::Identifier(s), pos) => (s.clone(), pos),
             (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                 return Err(PERR::Reserved(s).into_err(pos));
@@ -2309,7 +2334,7 @@ fn parse_export(
         };
 
         let rename = if match_token(input, Token::As).0 {
-            match input.next().unwrap() {
+            match input.next().expect(NEVER_ENDS) {
                 (Token::Identifier(s), pos) => Some(Ident {
                     name: state.get_identifier(s),
                     pos,
@@ -2332,7 +2357,7 @@ fn parse_export(
             rename,
         ));
 
-        match input.peek().unwrap() {
+        match input.peek().expect(NEVER_ENDS) {
             (Token::Comma, _) => {
                 eat_token(input, Token::Comma);
             }
@@ -2358,7 +2383,7 @@ fn parse_block(
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     // Must start with {
-    settings.pos = match input.next().unwrap() {
+    settings.pos = match input.next().expect(NEVER_ENDS) {
         (Token::LeftBrace, pos) => pos,
         (Token::LexError(err), pos) => return Err(err.into_err(pos)),
         (_, pos) => {
@@ -2383,7 +2408,7 @@ fn parse_block(
 
     loop {
         // Terminated?
-        match input.peek().unwrap() {
+        match input.peek().expect(NEVER_ENDS) {
             (Token::RightBrace, _) => {
                 eat_token(input, Token::RightBrace);
                 break;
@@ -2412,7 +2437,7 @@ fn parse_block(
 
         statements.push(stmt);
 
-        match input.peek().unwrap() {
+        match input.peek().expect(NEVER_ENDS) {
             // { ... stmt }
             (Token::RightBrace, _) => {
                 eat_token(input, Token::RightBrace);
@@ -2461,7 +2486,7 @@ fn parse_expr_stmt(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    settings.pos = input.peek().unwrap().1;
+    settings.pos = input.peek().expect(NEVER_ENDS).1;
 
     let expr = parse_expr(input, state, lib, settings.level_up())?;
     let stmt = parse_op_assignment_stmt(input, state, lib, expr, settings.level_up())?;
@@ -2484,7 +2509,7 @@ fn parse_stmt(
         let mut comments_pos = Position::NONE;
 
         // Handle doc-comments.
-        while let (Token::Comment(ref comment), pos) = input.peek().unwrap() {
+        while let (Token::Comment(ref comment), pos) = input.peek().expect(INPUT_NEVER_ENDS) {
             if comments_pos.is_none() {
                 comments_pos = *pos;
             }
@@ -2497,11 +2522,11 @@ fn parse_stmt(
                 return Err(PERR::WrongDocComment.into_err(comments_pos));
             }
 
-            match input.next().unwrap().0 {
+            match input.next().expect(NEVER_ENDS).0 {
                 Token::Comment(comment) => {
                     comments.push(comment);
 
-                    match input.peek().unwrap() {
+                    match input.peek().expect(INPUT_NEVER_ENDS) {
                         (Token::Fn, _) | (Token::Private, _) => break,
                         (Token::Comment(_), _) => (),
                         _ => return Err(PERR::WrongDocComment.into_err(comments_pos)),
@@ -2514,7 +2539,7 @@ fn parse_stmt(
         comments
     };
 
-    let (token, token_pos) = match input.peek().unwrap() {
+    let (token, token_pos) = match input.peek().expect(NEVER_ENDS) {
         (Token::EOF, pos) => return Ok(Stmt::Noop(*pos)),
         x => x,
     };
@@ -2546,7 +2571,7 @@ fn parse_stmt(
                 FnAccess::Public
             };
 
-            match input.next().unwrap() {
+            match input.next().expect(NEVER_ENDS) {
                 (Token::Fn, pos) => {
                     let mut new_state =
                         ParseState::new(state.engine, state.tokenizer_control.clone());
@@ -2631,9 +2656,9 @@ fn parse_stmt(
                         pos,
                     )
                 })
-                .unwrap();
+                .expect(NEVER_ENDS);
 
-            match input.peek().unwrap() {
+            match input.peek().expect(NEVER_ENDS) {
                 // `return`/`throw` at <EOF>
                 (Token::EOF, _) => Ok(Stmt::Return(return_type, None, token_pos)),
                 // `return;` or `throw;`
@@ -2692,7 +2717,7 @@ fn parse_try_catch(
 
     // try { body } catch (
     let var_def = if match_token(input, Token::LeftParen).0 {
-        let id = match input.next().unwrap() {
+        let id = match input.next().expect(NEVER_ENDS) {
             (Token::Identifier(s), pos) => Ident {
                 name: state.get_identifier(s),
                 pos,
@@ -2740,7 +2765,7 @@ fn parse_fn(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let (token, pos) = input.next().unwrap();
+    let (token, pos) = input.next().expect(NEVER_ENDS);
 
     let name = token
         .into_function_name_for_override()
@@ -2749,7 +2774,7 @@ fn parse_fn(
             _ => PERR::FnMissingName.into_err(pos),
         })?;
 
-    match input.peek().unwrap() {
+    match input.peek().expect(NEVER_ENDS) {
         (Token::LeftParen, _) => eat_token(input, Token::LeftParen),
         (_, pos) => return Err(PERR::FnMissingParams(name).into_err(*pos)),
     };
@@ -2760,7 +2785,7 @@ fn parse_fn(
         let sep_err = format!("to separate the parameters of function '{}'", name);
 
         loop {
-            match input.next().unwrap() {
+            match input.next().expect(NEVER_ENDS) {
                 (Token::RightParen, _) => break,
                 (Token::Identifier(s), pos) => {
                     if params.iter().any(|(p, _)| p == &s) {
@@ -2780,7 +2805,7 @@ fn parse_fn(
                 }
             }
 
-            match input.next().unwrap() {
+            match input.next().expect(NEVER_ENDS) {
                 (Token::RightParen, _) => break,
                 (Token::Comma, _) => (),
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
@@ -2792,7 +2817,7 @@ fn parse_fn(
     }
 
     // Parse function body
-    let body = match input.peek().unwrap() {
+    let body = match input.peek().expect(NEVER_ENDS) {
         (Token::LeftBrace, _) => {
             settings.is_breakable = false;
             parse_block(input, state, lib, settings.level_up())?
@@ -2892,10 +2917,10 @@ fn parse_anon_fn(
 
     let mut params: StaticVec<_> = Default::default();
 
-    if input.next().unwrap().0 != Token::Or {
+    if input.next().expect(NEVER_ENDS).0 != Token::Or {
         if !match_token(input, Token::Pipe).0 {
             loop {
-                match input.next().unwrap() {
+                match input.next().expect(NEVER_ENDS) {
                     (Token::Pipe, _) => break,
                     (Token::Identifier(s), pos) => {
                         if params.iter().any(|(p, _)| p == &s) {
@@ -2915,7 +2940,7 @@ fn parse_anon_fn(
                     }
                 }
 
-                match input.next().unwrap() {
+                match input.next().expect(NEVER_ENDS) {
                     (Token::Pipe, _) => break,
                     (Token::Comma, _) => (),
                     (Token::LexError(err), pos) => return Err(err.into_err(pos)),
@@ -3019,7 +3044,7 @@ impl Engine {
 
         assert!(functions.is_empty());
 
-        match input.peek().unwrap() {
+        match input.peek().expect(NEVER_ENDS) {
             (Token::EOF, _) => (),
             // Return error if the expression doesn't end
             (token, pos) => {
@@ -3044,7 +3069,7 @@ impl Engine {
         let mut statements = Vec::with_capacity(16);
         let mut functions = BTreeMap::new();
 
-        while !input.peek().unwrap().0.is_eof() {
+        while !input.peek().expect(NEVER_ENDS).0.is_eof() {
             let settings = ParseSettings {
                 allow_if_expr: true,
                 allow_switch_expr: true,
@@ -3067,7 +3092,7 @@ impl Engine {
 
             statements.push(stmt);
 
-            match input.peek().unwrap() {
+            match input.peek().expect(NEVER_ENDS) {
                 // EOF
                 (Token::EOF, _) => break,
                 // stmt ;

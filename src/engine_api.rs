@@ -951,8 +951,14 @@ impl Engine {
                 }
             } else {
                 let mut iter = name.as_ref().splitn(2, separator.as_ref());
-                let sub_module = iter.next().unwrap().trim();
-                let remainder = iter.next().unwrap().trim();
+                let sub_module = iter
+                    .next()
+                    .expect("never fails because the name contains a separator")
+                    .trim();
+                let remainder = iter
+                    .next()
+                    .expect("never fails because the name contains a separator")
+                    .trim();
 
                 if !root.contains_key(sub_module) {
                     let mut m: Module = Default::default();
@@ -960,7 +966,9 @@ impl Engine {
                     m.build_index();
                     root.insert(sub_module.into(), m.into());
                 } else {
-                    let m = root.remove(sub_module).unwrap();
+                    let m = root
+                        .remove(sub_module)
+                        .expect("never fails because the root contains the sub-module");
                     let mut m = crate::fn_native::shared_take_or_clone(m);
                     register_static_module_raw(m.sub_modules_mut(), remainder, module);
                     m.build_index();
@@ -1078,7 +1086,10 @@ impl Engine {
             resolver: &StaticModuleResolver,
             imports: &mut BTreeSet<Identifier>,
         ) {
-            ast.walk(&mut |path| match path.last().unwrap() {
+            ast.walk(&mut |path| match path
+                .last()
+                .expect("never fails because `path` always contains the current node")
+            {
                 // Collect all `import` statements with a string constant path
                 ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
                     if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>

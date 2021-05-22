@@ -909,6 +909,7 @@ impl DerefMut for StmtBlock {
 impl fmt::Debug for StmtBlock {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Block")?;
         fmt::Debug::fmt(&self.0, f)?;
         self.1.debug_print(f)
     }
@@ -1225,6 +1226,7 @@ impl Stmt {
         path: &mut Vec<ASTNode<'a>>,
         on_node: &mut impl FnMut(&[ASTNode]) -> bool,
     ) -> bool {
+        // Push the current node onto the path
         path.push(self.into());
 
         if !on_node(path) {
@@ -1340,7 +1342,8 @@ impl Stmt {
             _ => (),
         }
 
-        path.pop().unwrap();
+        path.pop()
+            .expect("never fails because `path` always contains the current node");
 
         true
     }
@@ -1398,7 +1401,7 @@ impl OpAssignment {
     pub fn new(op: Token) -> Self {
         let op_raw = op
             .map_op_assignment()
-            .expect("token must be an op-assignment operator")
+            .expect("never fails because token must be an op-assignment operator")
             .keyword_syntax();
         let op_assignment = op.keyword_syntax();
 
@@ -1492,13 +1495,9 @@ impl FnCallHashes {
         self.script.is_none()
     }
     /// Get the script function hash from this [`FnCallHashes`].
-    ///
-    /// # Panics
-    ///
-    /// Panics if the [`FnCallHashes`] is native Rust only.
     #[inline(always)]
-    pub fn script_hash(&self) -> u64 {
-        self.script.unwrap()
+    pub fn script_hash(&self) -> Option<u64> {
+        self.script
     }
     /// Get the naive Rust function hash from this [`FnCallHashes`].
     #[inline(always)]
@@ -1787,7 +1786,7 @@ impl fmt::Debug for Expr {
             }
             Self::Property(x) => write!(f, "Property({})", (x.2).0),
             Self::Stmt(x) => {
-                f.write_str("Stmt")?;
+                f.write_str("ExprStmtBlock")?;
                 f.debug_list().entries(x.0.iter()).finish()
             }
             Self::FnCall(x, _) => {
@@ -1848,7 +1847,10 @@ impl Expr {
             #[cfg(not(feature = "no_index"))]
             Self::Array(x, _) if self.is_constant() => {
                 let mut arr = Array::with_capacity(x.len());
-                arr.extend(x.iter().map(|v| v.get_constant_value().unwrap()));
+                arr.extend(x.iter().map(|v| {
+                    v.get_constant_value()
+                        .expect("never fails because a constant array always has a constant value")
+                }));
                 Dynamic::from_array(arr)
             }
 
@@ -1856,7 +1858,10 @@ impl Expr {
             Self::Map(x, _) if self.is_constant() => {
                 let mut map = x.1.clone();
                 x.0.iter().for_each(|(k, v)| {
-                    *map.get_mut(k.name.as_str()).unwrap() = v.get_constant_value().unwrap()
+                    *map.get_mut(k.name.as_str())
+                        .expect("never fails because the template should contain all the keys") = v
+                        .get_constant_value()
+                        .expect("never fails because a constant map always has a constant value")
                 });
                 Dynamic::from_map(map)
             }
@@ -1899,7 +1904,12 @@ impl Expr {
             | Self::FnCall(_, pos)
             | Self::Custom(_, pos) => *pos,
 
-            Self::InterpolatedString(x) => x.first().unwrap().position(),
+            Self::InterpolatedString(x) => x
+                .first()
+                .expect(
+                    "never fails because an interpolated string always contains at least one item",
+                )
+                .position(),
 
             Self::Property(x) => (x.2).1,
             Self::Stmt(x) => x.1,
@@ -1933,7 +1943,9 @@ impl Expr {
             | Self::Custom(_, pos) => *pos = new_pos,
 
             Self::InterpolatedString(x) => {
-                x.first_mut().unwrap().set_position(new_pos);
+                x.first_mut()
+                    .expect("never fails because an interpolated string always contains at least one item")
+                    .set_position(new_pos);
             }
 
             Self::Property(x) => (x.2).1 = new_pos,
@@ -2050,6 +2062,7 @@ impl Expr {
         path: &mut Vec<ASTNode<'a>>,
         on_node: &mut impl FnMut(&[ASTNode]) -> bool,
     ) -> bool {
+        // Push the current node onto the path
         path.push(self.into());
 
         if !on_node(path) {
@@ -2103,7 +2116,8 @@ impl Expr {
             _ => (),
         }
 
-        path.pop().unwrap();
+        path.pop()
+            .expect("never fails because `path` always contains the current node");
 
         true
     }

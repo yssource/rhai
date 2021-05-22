@@ -4,10 +4,16 @@ Rhai Release Notes
 Version 0.20.2
 ==============
 
+This version adds a number of convenience features:
+
+* Ability for a `Dynamic` to hold an `i32` _tag_ of arbitrary data
+
+* Simplifies dynamic properties access by falling back to an indexer (passing the name of the property as a string) when a property is not found.
+
 Bug fixes
 ---------
 
-* Constant propagation during optimization for constants held in a custom scope now works properly instead of always replacing by `()`.
+* Propagation of constants held in a custom scope now works properly instead of always replacing by `()`.
 
 Breaking changes
 ----------------

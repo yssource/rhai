@@ -1181,7 +1181,10 @@ pub fn parse_string_literal(
 
                 #[cfg(not(feature = "no_position"))]
                 {
-                    skip_whitespace_until = start.position().unwrap() + 1;
+                    let start_position = start
+                        .position()
+                        .expect("never fails because the string must have a starting position");
+                    skip_whitespace_until = start_position + 1;
                 }
             }
 
@@ -1201,7 +1204,11 @@ pub fn parse_string_literal(
 
             // Whitespace to skip
             #[cfg(not(feature = "no_position"))]
-            _ if next_char.is_whitespace() && pos.position().unwrap() < skip_whitespace_until => {}
+            _ if next_char.is_whitespace()
+                && pos
+                    .position()
+                    .expect("never fails because a character must have a position")
+                    < skip_whitespace_until => {}
 
             // All other characters
             _ => {
@@ -1237,12 +1244,14 @@ fn scan_block_comment(
     stream: &mut impl InputStream,
     mut level: usize,
     pos: &mut Position,
-    comment: &mut Option<String>,
+    mut comment: Option<&mut String>,
 ) -> usize {
+    let comment = &mut comment;
+
     while let Some(c) = stream.get_next() {
         pos.advance();
 
-        if let Some(ref mut comment) = comment {
+        if let Some(comment) = comment {
             comment.push(c);
         }
 
@@ -1251,7 +1260,7 @@ fn scan_block_comment(
                 if let Some(c2) = stream.peek_next() {
                     if c2 == '*' {
                         eat_next(stream, pos);
-                        if let Some(ref mut comment) = comment {
+                        if let Some(comment) = comment {
                             comment.push(c2);
                         }
                         level += 1;
@@ -1262,7 +1271,7 @@ fn scan_block_comment(
                 if let Some(c2) = stream.peek_next() {
                     if c2 == '/' {
                         eat_next(stream, pos);
-                        if let Some(ref mut comment) = comment {
+                        if let Some(comment) = comment {
                             comment.push(c2);
                         }
                         level -= 1;
@@ -1347,21 +1356,27 @@ fn get_next_token_inner(
             None
         };
 
-        state.comment_level = scan_block_comment(stream, state.comment_level, pos, &mut comment);
+        state.comment_level =
+            scan_block_comment(stream, state.comment_level, pos, comment.as_mut());
 
-        let include_comments = state.include_comments;
+        let return_comment = state.include_comments;
 
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
-        let include_comments = if is_doc_comment(comment.as_ref().unwrap()) {
-            true
-        } else {
-            include_comments
-        };
+        let return_comment = return_comment
+            || is_doc_comment(
+                comment
+                    .as_ref()
+                    .expect("never fails because `include_comments` is true"),
+            );
 
-        if include_comments {
-            return Some((Token::Comment(comment.unwrap()), start_pos));
-        } else if state.comment_level > 0 {
+        if return_comment {
+            return Some((
+                Token::Comment(comment.expect("never fails because `return_comment` is true")),
+                start_pos,
+            ));
+        }
+        if state.comment_level > 0 {
             // Reached EOF without ending comment block
             return None;
         }
@@ -1409,7 +1424,7 @@ fn get_next_token_inner(
                         }
                         #[cfg(any(not(feature = "no_float"), feature = "decimal"))]
                         '.' => {
-                            stream.get_next().unwrap();
+                            stream.get_next().expect("never fails because it is `.`");
 
                             // Check if followed by digits or something that cannot start a property name
                             match stream.peek_next().unwrap_or('\0') {
@@ -1443,7 +1458,7 @@ fn get_next_token_inner(
                         }
                         #[cfg(not(feature = "no_float"))]
                         'e' => {
-                            stream.get_next().unwrap();
+                            stream.get_next().expect("never fails it is `e`");
 
                             // Check if followed by digits or +/-
                             match stream.peek_next().unwrap_or('\0') {
@@ -1456,7 +1471,11 @@ fn get_next_token_inner(
                                 '+' | '-' => {
                                     result.push(next_char);
                                     pos.advance();
-                                    result.push(stream.get_next().unwrap());
+                                    result.push(
+                                        stream
+                                            .get_next()
+                                            .expect("never fails because it is `+` or `-`"),
+                                    );
                                     pos.advance();
                                 }
                                 // Not a floating-point number
@@ -1749,7 +1768,7 @@ fn get_next_token_inner(
                 };
 
                 state.comment_level =
-                    scan_block_comment(stream, state.comment_level, pos, &mut comment);
+                    scan_block_comment(stream, state.comment_level, pos, comment.as_mut());
 
                 if let Some(comment) = comment {
                     return Some((Token::Comment(comment), start_pos));

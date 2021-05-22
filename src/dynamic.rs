@@ -242,7 +242,9 @@ impl<'d, T: Any + Clone> Deref for DynamicReadLock<'d, T> {
             DynamicReadLockInner::Reference(reference) => *reference,
             // Unwrapping is safe because all checking is already done in its constructor
             #[cfg(not(feature = "no_closure"))]
-            DynamicReadLockInner::Guard(guard) => guard.downcast_ref().unwrap(),
+            DynamicReadLockInner::Guard(guard) => guard.downcast_ref().expect(
+                "never fails because the read guard was created after checking the data type",
+            ),
         }
     }
 }
@@ -284,7 +286,9 @@ impl<'d, T: Any + Clone> Deref for DynamicWriteLock<'d, T> {
             DynamicWriteLockInner::Reference(reference) => *reference,
             // Unwrapping is safe because all checking is already done in its constructor
             #[cfg(not(feature = "no_closure"))]
-            DynamicWriteLockInner::Guard(guard) => guard.downcast_ref().unwrap(),
+            DynamicWriteLockInner::Guard(guard) => guard.downcast_ref().expect(
+                "never fails because the read guard was created after checking the data type",
+            ),
         }
     }
 }
@@ -296,7 +300,9 @@ impl<'d, T: Any + Clone> DerefMut for DynamicWriteLock<'d, T> {
             DynamicWriteLockInner::Reference(reference) => *reference,
             // Unwrapping is safe because all checking is already done in its constructor
             #[cfg(not(feature = "no_closure"))]
-            DynamicWriteLockInner::Guard(guard) => guard.downcast_mut().unwrap(),
+            DynamicWriteLockInner::Guard(guard) => guard.downcast_mut().expect(
+                "never fails because the write guard was created after checking the data type",
+            ),
         }
     }
 }
@@ -573,38 +579,88 @@ impl fmt::Display for Dynamic {
             Union::Variant(value, _, _) => {
                 let _type_id = (***value).type_id();
 
+                const CHECKED: &str = "never fails because the type was checked";
+
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
                 if _type_id == TypeId::of::<u8>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<u8>().unwrap());
+                    return write!(
+                        f,
+                        "{}",
+                        (**value).as_any().downcast_ref::<u8>().expect(CHECKED),
+                    );
                 } else if _type_id == TypeId::of::<u16>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<u16>().unwrap());
+                    return write!(
+                        f,
+                        "{}",
+                        (**value).as_any().downcast_ref::<u16>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<u32>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<u32>().unwrap());
+                    return write!(
+                        f,
+                        "{}",
+                        (**value).as_any().downcast_ref::<u32>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<u64>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<u64>().unwrap());
+                    return write!(
+                        f,
+                        "{}",
+                        (**value).as_any().downcast_ref::<u64>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<i8>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<i8>().unwrap());
+                    return write!(
+                        f,
+                        "{}",
+                        (**value).as_any().downcast_ref::<i8>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<i16>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<i16>().unwrap());
+                    return write!(
+                        f,
+                        "{}",
+                        (**value).as_any().downcast_ref::<i16>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<i32>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<i32>().unwrap());
+                    return write!(
+                        f,
+                        "{}",
+                        (**value).as_any().downcast_ref::<i32>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<i64>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<i64>().unwrap());
+                    return write!(
+                        f,
+                        "{}",
+                        (**value).as_any().downcast_ref::<i64>().expect(CHECKED)
+                    );
                 }
 
                 #[cfg(not(feature = "no_float"))]
                 if _type_id == TypeId::of::<f32>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<f32>().unwrap());
+                    return write!(
+                        f,
+                        "{}",
+                        (**value).as_any().downcast_ref::<f32>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<f64>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<f64>().unwrap());
+                    return write!(
+                        f,
+                        "{}",
+                        (**value).as_any().downcast_ref::<f64>().expect(CHECKED)
+                    );
                 }
 
                 #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
                 if _type_id == TypeId::of::<u128>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<u128>().unwrap());
+                    return write!(
+                        f,
+                        "{}",
+                        (**value).as_any().downcast_ref::<u128>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<i128>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<i128>().unwrap());
+                    return write!(
+                        f,
+                        "{}",
+                        (**value).as_any().downcast_ref::<i128>().expect(CHECKED)
+                    );
                 }
 
                 f.write_str((***value).type_name())
@@ -652,31 +708,73 @@ impl fmt::Debug for Dynamic {
             Union::Variant(value, _, _) => {
                 let _type_id = (***value).type_id();
 
+                const CHECKED: &str = "never fails because the type was checked";
+
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
                 if _type_id == TypeId::of::<u8>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<u8>().unwrap());
+                    return write!(
+                        f,
+                        "{:?}",
+                        (**value).as_any().downcast_ref::<u8>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<u16>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<u16>().unwrap());
+                    return write!(
+                        f,
+                        "{:?}",
+                        (**value).as_any().downcast_ref::<u16>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<u32>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<u32>().unwrap());
+                    return write!(
+                        f,
+                        "{:?}",
+                        (**value).as_any().downcast_ref::<u32>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<u64>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<u64>().unwrap());
+                    return write!(
+                        f,
+                        "{:?}",
+                        (**value).as_any().downcast_ref::<u64>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<i8>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<i8>().unwrap());
+                    return write!(
+                        f,
+                        "{:?}",
+                        (**value).as_any().downcast_ref::<i8>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<i16>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<i16>().unwrap());
+                    return write!(
+                        f,
+                        "{:?}",
+                        (**value).as_any().downcast_ref::<i16>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<i32>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<i32>().unwrap());
+                    return write!(
+                        f,
+                        "{:?}",
+                        (**value).as_any().downcast_ref::<i32>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<i64>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<i64>().unwrap());
+                    return write!(
+                        f,
+                        "{:?}",
+                        (**value).as_any().downcast_ref::<i64>().expect(CHECKED)
+                    );
                 }
 
                 #[cfg(not(feature = "no_float"))]
                 if _type_id == TypeId::of::<f32>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<f32>().unwrap());
+                    return write!(
+                        f,
+                        "{}",
+                        (**value).as_any().downcast_ref::<f32>().expect(CHECKED)
+                    );
                 } else if _type_id == TypeId::of::<f64>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<f64>().unwrap());
+                    return write!(
+                        f,
+                        "{}",
+                        (**value).as_any().downcast_ref::<f64>().expect(CHECKED)
+                    );
                 }
 
                 #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
@@ -684,13 +782,13 @@ impl fmt::Debug for Dynamic {
                     return write!(
                         f,
                         "{:?}",
-                        (**value).as_any().downcast_ref::<u128>().unwrap()
+                        (**value).as_any().downcast_ref::<u128>().expect(CHECKED)
                     );
                 } else if _type_id == TypeId::of::<i128>() {
                     return write!(
                         f,
                         "{:?}",
-                        (**value).as_any().downcast_ref::<i128>().unwrap()
+                        (**value).as_any().downcast_ref::<i128>().expect(CHECKED)
                     );
                 }
 
@@ -985,51 +1083,53 @@ impl Dynamic {
     pub fn from<T: Variant + Clone>(mut value: T) -> Self {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
+        const CHECKED: &str = "never fails because the type was checked";
+
         if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
-            return unsafe_try_cast::<_, Dynamic>(value).ok().unwrap();
+            return unsafe_try_cast::<_, Dynamic>(value).ok().expect(CHECKED);
         }
 
         if TypeId::of::<T>() == TypeId::of::<INT>() {
             return <dyn Any>::downcast_ref::<INT>(&value)
-                .unwrap()
+                .expect(CHECKED)
                 .clone()
                 .into();
         }
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
             return <dyn Any>::downcast_ref::<FLOAT>(&value)
-                .unwrap()
+                .expect(CHECKED)
                 .clone()
                 .into();
         }
         #[cfg(feature = "decimal")]
         if TypeId::of::<T>() == TypeId::of::<Decimal>() {
             return <dyn Any>::downcast_ref::<Decimal>(&value)
-                .unwrap()
+                .expect(CHECKED)
                 .clone()
                 .into();
         }
         if TypeId::of::<T>() == TypeId::of::<bool>() {
             return <dyn Any>::downcast_ref::<bool>(&value)
-                .unwrap()
+                .expect(CHECKED)
                 .clone()
                 .into();
         }
         if TypeId::of::<T>() == TypeId::of::<char>() {
             return <dyn Any>::downcast_ref::<char>(&value)
-                .unwrap()
+                .expect(CHECKED)
                 .clone()
                 .into();
         }
         if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
             return <dyn Any>::downcast_ref::<ImmutableString>(&value)
-                .unwrap()
+                .expect(CHECKED)
                 .clone()
                 .into();
         }
         if TypeId::of::<T>() == TypeId::of::<&str>() {
             return <dyn Any>::downcast_ref::<&str>(&value)
-                .unwrap()
+                .expect(CHECKED)
                 .deref()
                 .into();
         }
@@ -1455,9 +1555,9 @@ impl Dynamic {
                 #[cfg(feature = "sync")]
                 let value = cell.read().unwrap();
 
-                let type_id = (*value).type_id();
-
-                if type_id != TypeId::of::<T>() && TypeId::of::<Dynamic>() != TypeId::of::<T>() {
+                if (*value).type_id() != TypeId::of::<T>()
+                    && TypeId::of::<Dynamic>() != TypeId::of::<T>()
+                {
                     return None;
                 } else {
                     return Some(DynamicReadLock(DynamicReadLockInner::Guard(value)));
@@ -1488,9 +1588,9 @@ impl Dynamic {
                 #[cfg(feature = "sync")]
                 let value = cell.write().unwrap();
 
-                let type_id = (*value).type_id();
-
-                if type_id != TypeId::of::<T>() && TypeId::of::<Dynamic>() != TypeId::of::<T>() {
+                if (*value).type_id() != TypeId::of::<T>()
+                    && TypeId::of::<Dynamic>() != TypeId::of::<T>()
+                {
                     return None;
                 } else {
                     return Some(DynamicWriteLock(DynamicWriteLockInner::Guard(value)));

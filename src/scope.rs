@@ -373,7 +373,11 @@ impl<'a> Scope<'a> {
             }
             Some((_, AccessMode::ReadOnly)) => panic!("variable {} is constant", name),
             Some((index, AccessMode::ReadWrite)) => {
-                *self.values.get_mut(index).unwrap() = Dynamic::from(value);
+                let value_ref = self
+                    .values
+                    .get_mut(index)
+                    .expect("never fails because the index is returned by `get_index`");
+                *value_ref = Dynamic::from(value);
             }
         }
         self
@@ -406,24 +410,38 @@ impl<'a> Scope<'a> {
             })
     }
     /// Get a mutable reference to an entry in the [`Scope`] based on the index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out of bounds.
     #[inline(always)]
     pub(crate) fn get_mut_by_index(&mut self, index: usize) -> &mut Dynamic {
-        self.values.get_mut(index).expect("invalid index in Scope")
+        self.values
+            .get_mut(index)
+            .expect("never fails unless the index is out of bounds")
     }
     /// Update the access type of an entry in the [`Scope`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out of bounds.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    pub(crate) fn add_entry_alias(
-        &mut self,
-        index: usize,
-        alias: impl Into<Identifier> + PartialEq<Identifier>,
-    ) -> &mut Self {
-        let entry = self.names.get_mut(index).expect("invalid index in Scope");
+    pub(crate) fn add_entry_alias(&mut self, index: usize, alias: Identifier) -> &mut Self {
+        let entry = self
+            .names
+            .get_mut(index)
+            .expect("never fails unless the index is out of bounds");
         if entry.1.is_none() {
+            // Initialize the alias list if it is empty.
             entry.1 = Some(Default::default());
         }
-        if !entry.1.as_ref().unwrap().iter().any(|a| &alias == a) {
-            entry.1.as_mut().unwrap().push(alias.into());
+        let list = entry
+            .1
+            .as_mut()
+            .expect("never fails because the list is initialized");
+        if !list.iter().any(|a| &alias == a) {
+            list.push(alias);
         }
         self
     }

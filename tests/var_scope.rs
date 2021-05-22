@@ -61,7 +61,7 @@ fn test_scope_eval() -> Result<(), Box<EvalAltResult>> {
     // First invocation
     engine
         .eval_with_scope::<()>(&mut scope, " let x = 4 + 5 - y + z; y = 1;")
-        .expect("y and z not found?");
+        .expect("variables y and z should exist");
 
     // Second invocation using the same state
     let result = engine.eval_with_scope::<INT>(&mut scope, "x")?;

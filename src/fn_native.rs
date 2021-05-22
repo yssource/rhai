@@ -253,7 +253,9 @@ pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
 /// Panics if the resource is shared (i.e. has other outstanding references).
 #[inline(always)]
 pub fn shared_take<T>(value: Shared<T>) -> T {
-    shared_try_take(value).map_err(|_| ()).unwrap()
+    shared_try_take(value)
+        .ok()
+        .expect("resource should have no outstanding references")
 }
 
 /// Arguments to a function call, which is a list of [`&mut Dynamic`][Dynamic].

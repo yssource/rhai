@@ -311,12 +311,8 @@ mod decimal_functions {
 
     #[rhai_fn(return_raw)]
     pub fn sqrt(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
-        if cfg!(not(feature = "unchecked")) {
-            x.sqrt()
-                .ok_or_else(|| make_err(format!("Error taking the square root of {}", x,)))
-        } else {
-            Ok(x.sqrt().unwrap())
-        }
+        x.sqrt()
+            .ok_or_else(|| make_err(format!("Error taking the square root of {}", x,)))
     }
     #[rhai_fn(return_raw)]
     pub fn exp(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
