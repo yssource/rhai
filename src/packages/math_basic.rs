@@ -319,6 +319,8 @@ mod decimal_functions {
         if cfg!(not(feature = "unchecked")) {
             if x > Decimal::from_parts(117578, 0, 0, false, 4) {
                 Err(make_err(format!("Exponential overflow: e ** {}", x,)))
+            } else if x < Decimal::from_parts(8, 0, 0, true, 0) {
+                Err(make_err(format!("Exponential underflow: e ** {}", x,)))
             } else {
                 Ok(x.exp())
             }
