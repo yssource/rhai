@@ -253,12 +253,11 @@ impl AST {
     /// Set the source.
     #[inline(always)]
     pub fn set_source(&mut self, source: impl Into<Identifier>) -> &mut Self {
-        self.source = Some(source.into());
-
-        if let Some(module) = Shared::get_mut(&mut self.functions) {
-            module.set_id(self.source.clone());
-        }
-
+        let source = Some(source.into());
+        Shared::get_mut(&mut self.functions)
+            .as_mut()
+            .map(|m| m.set_id(source.clone()));
+        self.source = source;
         self
     }
     /// Clear the source.
@@ -1791,9 +1790,7 @@ impl fmt::Debug for Expr {
             }
             Self::FnCall(x, _) => {
                 let mut ff = f.debug_struct("FnCall");
-                if let Some(ref ns) = x.namespace {
-                    ff.field("namespace", ns);
-                }
+                x.namespace.as_ref().map(|ns| ff.field("namespace", ns));
                 ff.field("name", &x.name)
                     .field("hash", &x.hashes)
                     .field("args", &x.args);

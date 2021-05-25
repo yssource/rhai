@@ -70,7 +70,7 @@ impl<'a> ArgBackup<'a> {
         //
         // We can do this here because, before the end of this scope, we'd restore the original reference
         // via `restore_first_arg`. Therefore this shorter lifetime does not leak.
-        self.orig_mut = Some(mem::replace(args.get_mut(0).unwrap(), unsafe {
+        self.orig_mut = Some(mem::replace(&mut args[0], unsafe {
             mem::transmute(&mut self.value_copy)
         }));
     }
@@ -82,9 +82,7 @@ impl<'a> ArgBackup<'a> {
     /// the current scope.  Otherwise it is undefined behavior as the shorter lifetime will leak.
     #[inline(always)]
     fn restore_first_arg(mut self, args: &mut FnCallArgs<'a>) {
-        if let Some(this_pointer) = self.orig_mut.take() {
-            args[0] = this_pointer;
-        }
+        self.orig_mut.take().map(|p| args[0] = p);
     }
 }
 
@@ -167,12 +165,10 @@ impl Engine {
         allow_dynamic: bool,
         is_op_assignment: bool,
     ) -> &'s Option<Box<FnResolutionCacheEntry>> {
-        let mut hash = if let Some(ref args) = args {
+        let mut hash = args.as_ref().map_or(hash_script, |args| {
             let hash_params = calc_fn_params_hash(args.iter().map(|a| a.type_id()));
             combine_hashes(hash_script, hash_params)
-        } else {
-            hash_script
-        };
+        });
 
         &*state
             .fn_resolution_cache_mut()
@@ -328,7 +324,7 @@ impl Engine {
             let mut backup: Option<ArgBackup> = None;
             if is_ref && func.is_pure() && !args.is_empty() {
                 backup = Some(Default::default());
-                backup.as_mut().unwrap().change_first_arg_to_copy(args);
+                backup.as_mut().map(|bk| bk.change_first_arg_to_copy(args));
             }
 
             // Run external function
@@ -344,9 +340,7 @@ impl Engine {
             };
 
             // Restore the original reference
-            if let Some(backup) = backup {
-                backup.restore_first_arg(args);
-            }
+            backup.map(|bk| bk.restore_first_arg(args));
 
             let result = result.map_err(|err| err.fill_position(pos))?;
 
@@ -737,16 +731,16 @@ impl Engine {
 
             // Move captured variables into scope
             #[cfg(not(feature = "no_closure"))]
-            if let Some(captured) = _capture_scope {
-                if !func.externals.is_empty() {
+            if !func.externals.is_empty() {
+                _capture_scope.map(|captured| {
                     captured
                         .into_iter()
                         .filter(|(name, _, _)| func.externals.contains(name.as_ref()))
                         .for_each(|(name, value, _)| {
                             // Consume the scope values.
                             scope.push_dynamic(name, value);
-                        });
-                }
+                        })
+                });
             }
 
             let result = if _is_method {
@@ -782,7 +776,7 @@ impl Engine {
                 let mut backup: Option<ArgBackup> = None;
                 if is_ref && !args.is_empty() {
                     backup = Some(Default::default());
-                    backup.as_mut().unwrap().change_first_arg_to_copy(args);
+                    backup.as_mut().map(|bk| bk.change_first_arg_to_copy(args));
                 }
 
                 let orig_source = state.source.take();
@@ -797,9 +791,7 @@ impl Engine {
                 state.source = orig_source;
 
                 // Restore the original reference
-                if let Some(backup) = backup {
-                    backup.restore_first_arg(args);
-                }
+                backup.map(|bk| bk.restore_first_arg(args));
 
                 result?
             };
@@ -1055,10 +1047,9 @@ impl Engine {
 
         // Propagate the changed value back to the source if necessary
         if updated {
-            target.propagate_changed_value().map_err(|mut err| {
-                err.set_position(pos);
-                err
-            })?;
+            target
+                .propagate_changed_value()
+                .map_err(|err| err.fill_position(pos))?;
         }
 
         Ok((result, updated))
@@ -1467,12 +1458,11 @@ impl Engine {
         };
 
         // Clone first argument if the function is not a method after-all
-        if let Some(first) = first_arg_value {
-            if !func.map(|f| f.is_method()).unwrap_or(true) {
-                let first_val = args[0].clone();
+        if !func.map(|f| f.is_method()).unwrap_or(true) {
+            first_arg_value.map(|first| {
+                *first = args[0].clone();
                 args[0] = first;
-                *args[0] = first_val;
-            }
+            });
         }
 
         match func {

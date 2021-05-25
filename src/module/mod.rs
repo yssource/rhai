@@ -163,9 +163,7 @@ impl fmt::Debug for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut d = f.debug_struct("Module");
 
-        if let Some(ref id) = self.id {
-            d.field("id", id);
-        }
+        self.id.as_ref().map(|id| d.field("id", id));
 
         if !self.modules.is_empty() {
             d.field(
@@ -621,9 +619,10 @@ impl Module {
             .map(|&name| self.identifiers.get(name))
             .collect();
 
-        if let Some(f) = self.functions.get_mut(&hash_fn) {
-            f.param_names = param_names;
-        }
+        self.functions
+            .get_mut(&hash_fn)
+            .map(|f| f.param_names = param_names);
+
         self
     }
 

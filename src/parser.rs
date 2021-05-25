@@ -207,10 +207,8 @@ impl ParseSettings {
         &self,
         limit: Option<NonZeroUsize>,
     ) -> Result<(), ParseError> {
-        if let Some(limit) = limit {
-            if self.level > limit.get() {
-                return Err(PERR::ExprTooDeep.into_err(self.pos));
-            }
+        if limit.map(|limit| self.level > limit.get()).unwrap_or(false) {
+            return Err(PERR::ExprTooDeep.into_err(self.pos));
         }
         Ok(())
     }
@@ -331,14 +329,15 @@ fn parse_fn_call(
         Token::RightParen => {
             eat_token(input, Token::RightParen);
 
-            let hash = if let Some(ref mut modules) = namespace {
-                #[cfg(not(feature = "no_module"))]
-                modules.set_index(state.find_module(&modules[0].name));
+            let hash = namespace.as_mut().map_or_else(
+                || calc_fn_hash(&id, 0),
+                |modules| {
+                    #[cfg(not(feature = "no_module"))]
+                    modules.set_index(state.find_module(&modules[0].name));
 
-                calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, 0)
-            } else {
-                calc_fn_hash(&id, 0)
-            };
+                    calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, 0)
+                },
+            );
 
             let hashes = if is_valid_identifier(id.chars()) {
                 FnCallHashes::from_script(hash)
@@ -378,14 +377,19 @@ fn parse_fn_call(
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
 
-                let hash = if let Some(ref mut modules) = namespace {
-                    #[cfg(not(feature = "no_module"))]
-                    modules.set_index(state.find_module(&modules[0].name));
+                let hash = namespace.as_mut().map_or_else(
+                    || calc_fn_hash(&id, args.len()),
+                    |modules| {
+                        #[cfg(not(feature = "no_module"))]
+                        modules.set_index(state.find_module(&modules[0].name));
 
-                    calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, args.len())
-                } else {
-                    calc_fn_hash(&id, args.len())
-                };
+                        calc_qualified_fn_hash(
+                            modules.iter().map(|m| m.name.as_str()),
+                            &id,
+                            args.len(),
+                        )
+                    },
+                );
 
                 let hashes = if is_valid_identifier(id.chars()) {
                     FnCallHashes::from_script(hash)

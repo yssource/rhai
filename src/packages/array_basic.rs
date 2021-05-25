@@ -604,27 +604,13 @@ mod array_functions {
                 .call_dynamic(&ctx, None, [x.clone(), y.clone()])
                 .ok()
                 .and_then(|v| v.as_int().ok())
-                .map(|v| {
-                    if v > 0 {
-                        Ordering::Greater
-                    } else if v < 0 {
-                        Ordering::Less
-                    } else {
-                        Ordering::Equal
-                    }
+                .map(|v| match v {
+                    v if v > 0 => Ordering::Greater,
+                    v if v < 0 => Ordering::Less,
+                    0 => Ordering::Equal,
+                    _ => unreachable!(),
                 })
-                .unwrap_or_else(|| {
-                    let x_type_id = x.type_id();
-                    let y_type_id = y.type_id();
-
-                    if x_type_id > y_type_id {
-                        Ordering::Greater
-                    } else if x_type_id < y_type_id {
-                        Ordering::Less
-                    } else {
-                        Ordering::Equal
-                    }
-                })
+                .unwrap_or_else(|| x.type_id().cmp(&y.type_id()))
         });
 
         Ok(())

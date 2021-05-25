@@ -1251,32 +1251,22 @@ fn scan_block_comment(
     while let Some(c) = stream.get_next() {
         pos.advance();
 
-        if let Some(comment) = comment {
-            comment.push(c);
-        }
+        comment.as_mut().map(|comment| comment.push(c));
 
         match c {
             '/' => {
-                if let Some(c2) = stream.peek_next() {
-                    if c2 == '*' {
-                        eat_next(stream, pos);
-                        if let Some(comment) = comment {
-                            comment.push(c2);
-                        }
-                        level += 1;
-                    }
-                }
+                stream.peek_next().filter(|&c2| c2 == '*').map(|c2| {
+                    eat_next(stream, pos);
+                    comment.as_mut().map(|comment| comment.push(c2));
+                    level += 1;
+                });
             }
             '*' => {
-                if let Some(c2) = stream.peek_next() {
-                    if c2 == '/' {
-                        eat_next(stream, pos);
-                        if let Some(comment) = comment {
-                            comment.push(c2);
-                        }
-                        level -= 1;
-                    }
-                }
+                stream.peek_next().filter(|&c2| c2 == '/').map(|c2| {
+                    eat_next(stream, pos);
+                    comment.as_mut().map(|comment| comment.push(c2));
+                    level -= 1;
+                });
             }
             '\n' => pos.new_line(),
             _ => (),
@@ -1511,12 +1501,10 @@ fn get_next_token_inner(
                     }
                 }
 
-                let num_pos = if let Some(negated_pos) = negated {
+                let num_pos = negated.map_or(start_pos, |negated_pos| {
                     result.insert(0, '-');
                     negated_pos
-                } else {
-                    start_pos
-                };
+                });
 
                 // Parse number
                 return Some((
@@ -1737,9 +1725,7 @@ fn get_next_token_inner(
                         pos.new_line();
                         break;
                     }
-                    if let Some(ref mut comment) = comment {
-                        comment.push(c);
-                    }
+                    comment.as_mut().map(|comment| comment.push(c));
                     pos.advance();
                 }
 
@@ -2198,8 +2184,8 @@ impl<'a> Iterator for TokenIterator<'a> {
         };
 
         // Run the mapper, if any
-        let token = if let Some(map) = self.map {
-            map(token)
+        let token = if let Some(map_func) = self.map {
+            map_func(token)
         } else {
             token
         };

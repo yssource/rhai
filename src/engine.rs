@@ -2603,9 +2603,10 @@ impl Engine {
 
                                 err_map.insert("message".into(), err.to_string().into());
 
-                                if let Some(ref source) = state.source {
-                                    err_map.insert("source".into(), source.into());
-                                }
+                                state
+                                    .source
+                                    .as_ref()
+                                    .map(|source| err_map.insert("source".into(), source.into()));
 
                                 if err_pos.is_none() {
                                     // No position info
@@ -2628,9 +2629,9 @@ impl Engine {
                         let orig_scope_len = scope.len();
                         state.scope_level += 1;
 
-                        if let Some(Ident { name, .. }) = err_var {
-                            scope.push(unsafe_cast_var_name_to_lifetime(&name), err_value);
-                        }
+                        err_var.as_ref().map(|Ident { name, .. }| {
+                            scope.push(unsafe_cast_var_name_to_lifetime(name), err_value)
+                        });
 
                         let result = self.eval_stmt_block(
                             scope, mods, state, lib, this_ptr, catch_stmt, true, level,
@@ -2716,9 +2717,9 @@ impl Engine {
                         };
 
                         if let Some(global) = global {
-                            let global = Shared::get_mut(global)
-                                .expect("never fails because the global module is never shared");
-                            global.set_var(name.clone(), value.clone());
+                            Shared::get_mut(global)
+                                .expect("never fails because the global module is never shared")
+                                .set_var(name.clone(), value.clone());
                         }
                     }
 
@@ -2735,9 +2736,8 @@ impl Engine {
                 scope.push_dynamic_value(var_name, entry_type, value);
 
                 #[cfg(not(feature = "no_module"))]
-                if let Some(alias) = _alias {
-                    scope.add_entry_alias(scope.len() - 1, alias);
-                }
+                _alias.map(|alias| scope.add_entry_alias(scope.len() - 1, alias));
+
                 Ok(Dynamic::UNIT)
             }
 
@@ -2773,7 +2773,7 @@ impl Engine {
                             self.module_resolver.resolve(self, source, &path, expr_pos)
                         })?;
 
-                    if let Some(name) = export.as_ref().map(|x| x.name.clone()) {
+                    export.as_ref().map(|x| x.name.clone()).map(|name| {
                         if !module.is_indexed() {
                             // Index the module (making a clone copy if necessary) if it is not indexed
                             let mut module = crate::fn_native::shared_take_or_clone(module);
@@ -2782,7 +2782,7 @@ impl Engine {
                         } else {
                             mods.push(name, module);
                         }
-                    }
+                    });
 
                     state.modules += 1;
 
@@ -2810,14 +2810,14 @@ impl Engine {
             // Share statement
             #[cfg(not(feature = "no_closure"))]
             Stmt::Share(name) => {
-                if let Some((index, _)) = scope.get_index(name) {
+                scope.get_index(name).map(|(index, _)| {
                     let val = scope.get_mut_by_index(index);
 
                     if !val.is_shared() {
                         // Replace the variable with a shared value.
                         *val = std::mem::take(val).into_shared();
                     }
-                }
+                });
                 Ok(Dynamic::UNIT)
             }
         };
@@ -2961,7 +2961,7 @@ impl Engine {
         }
 
         // Report progress - only in steps
-        if let Some(progress) = &self.progress {
+        if let Some(ref progress) = self.progress {
             if let Some(token) = progress(state.operations) {
                 // Terminate script if progress returns a termination token
                 return EvalAltResult::ErrorTerminated(token, pos).into();

@@ -504,12 +504,13 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         Stmt::Switch(match_expr, x, _) => {
             optimize_expr(match_expr, state);
             x.0.values_mut().for_each(|block| {
-                let condition = if let Some(mut condition) = mem::take(&mut block.0) {
-                    optimize_expr(&mut condition, state);
-                    condition
-                } else {
-                    Expr::Unit(Position::NONE)
-                };
+                let condition = mem::take(&mut block.0).map_or_else(
+                    || Expr::Unit(Position::NONE),
+                    |mut condition| {
+                        optimize_expr(&mut condition, state);
+                        condition
+                    },
+                );
 
                 match condition {
                     Expr::Unit(_) | Expr::BoolConstant(true, _) => (),
