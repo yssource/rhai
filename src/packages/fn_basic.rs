@@ -45,29 +45,31 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
         namespace: Option<Identifier>,
         f: &ScriptFnDef,
     ) -> Map {
+        const DICT: &str = "never fails because the dictionary is pre-filled with all the keys";
+
         let mut map = Map::new();
 
         if let Some(ns) = namespace {
-            map.insert(dict.get("namespace").unwrap().clone().into(), ns.into());
+            map.insert(dict.get("namespace").expect(DICT).clone().into(), ns.into());
         }
         map.insert(
-            dict.get("name").unwrap().clone().into(),
+            dict.get("name").expect(DICT).clone().into(),
             f.name.clone().into(),
         );
         map.insert(
-            dict.get("access").unwrap().clone().into(),
+            dict.get("access").expect(DICT).clone().into(),
             match f.access {
-                FnAccess::Public => dict.get("public").unwrap().clone(),
-                FnAccess::Private => dict.get("private").unwrap().clone(),
+                FnAccess::Public => dict.get("public").expect(DICT).clone(),
+                FnAccess::Private => dict.get("private").expect(DICT).clone(),
             }
             .into(),
         );
         map.insert(
-            dict.get("is_anonymous").unwrap().clone().into(),
+            dict.get("is_anonymous").expect(DICT).clone().into(),
             f.name.starts_with(crate::engine::FN_ANONYMOUS).into(),
         );
         map.insert(
-            dict.get("params").unwrap().clone().into(),
+            dict.get("params").expect(DICT).clone().into(),
             f.params
                 .iter()
                 .cloned()

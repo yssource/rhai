@@ -6,7 +6,7 @@ const REPEAT = 5;
 
 fn fib(n) {
     if n < 2 {
-         n
+        n
     } else {
         fib(n-1) + fib(n-2)
     }
@@ -19,7 +19,7 @@ let result;
 let now = timestamp();
 
 for n in range(0, REPEAT) {
-	result = fib(TARGET);
+    result = fib(TARGET);
 }
 
 print(`Finished. Run time = ${now.elapsed} seconds.`);

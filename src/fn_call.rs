@@ -24,7 +24,7 @@ use std::prelude::v1::*;
 use std::{
     any::{type_name, TypeId},
     convert::TryFrom,
-    iter::{empty, once},
+    iter::once,
     mem,
 };
 
@@ -49,7 +49,12 @@ impl<'a> ArgBackup<'a> {
     ///
     /// This method blindly casts a reference to another lifetime, which saves allocation and string cloning.
     ///
-    /// If `restore_first_arg` is called before the end of the scope, the shorter lifetime will not leak.
+    /// As long as `restore_first_arg` is called before the end of the scope, the shorter lifetime
+    /// will not leak.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `args` is empty.
     #[inline(always)]
     fn change_first_arg_to_copy(&mut self, args: &mut FnCallArgs<'a>) {
         // Clone the original value.
@@ -65,7 +70,7 @@ impl<'a> ArgBackup<'a> {
         //
         // We can do this here because, before the end of this scope, we'd restore the original reference
         // via `restore_first_arg`. Therefore this shorter lifetime does not leak.
-        self.orig_mut = Some(mem::replace(args.get_mut(0).unwrap(), unsafe {
+        self.orig_mut = Some(mem::replace(&mut args[0], unsafe {
             mem::transmute(&mut self.value_copy)
         }));
     }
@@ -77,9 +82,7 @@ impl<'a> ArgBackup<'a> {
     /// the current scope.  Otherwise it is undefined behavior as the shorter lifetime will leak.
     #[inline(always)]
     fn restore_first_arg(mut self, args: &mut FnCallArgs<'a>) {
-        if let Some(this_pointer) = self.orig_mut.take() {
-            args[0] = this_pointer;
-        }
+        self.orig_mut.take().map(|p| args[0] = p);
     }
 }
 
@@ -162,12 +165,10 @@ impl Engine {
         allow_dynamic: bool,
         is_op_assignment: bool,
     ) -> &'s Option<Box<FnResolutionCacheEntry>> {
-        let mut hash = if let Some(ref args) = args {
+        let mut hash = args.as_ref().map_or(hash_script, |args| {
             let hash_params = calc_fn_params_hash(args.iter().map(|a| a.type_id()));
             combine_hashes(hash_script, hash_params)
-        } else {
-            hash_script
-        };
+        });
 
         &*state
             .fn_resolution_cache_mut()
@@ -239,7 +240,8 @@ impl Engine {
                                         FnResolutionCacheEntry { func, source: None }
                                     })
                                 } else {
-                                    let (first, second) = args.split_first().unwrap();
+                                    let (first, second) = args.split_first()
+                                                              .expect("never fails because an op-assignment must have two arguments");
 
                                     get_builtin_op_assignment_fn(fn_name, *first, second[0]).map(
                                         |f| {
@@ -257,7 +259,9 @@ impl Engine {
                         // Try all permutations with `Dynamic` wildcards
                         None => {
                             let hash_params = calc_fn_params_hash(
-                                args.as_ref().unwrap().iter().enumerate().map(|(i, a)| {
+                                args.as_ref().expect("never fails because there are no permutations if there are no arguments")
+                                        .iter().enumerate().map(|(i, a)|
+                                {
                                     let mask = 1usize << (num_args - i - 1);
                                     if bitmask & mask != 0 {
                                         // Replace with `Dynamic`
@@ -320,7 +324,7 @@ impl Engine {
             let mut backup: Option<ArgBackup> = None;
             if is_ref && func.is_pure() && !args.is_empty() {
                 backup = Some(Default::default());
-                backup.as_mut().unwrap().change_first_arg_to_copy(args);
+                backup.as_mut().map(|bk| bk.change_first_arg_to_copy(args));
             }
 
             // Run external function
@@ -336,9 +340,7 @@ impl Engine {
             };
 
             // Restore the original reference
-            if let Some(backup) = backup {
-                backup.restore_first_arg(args);
-            }
+            backup.map(|bk| bk.restore_first_arg(args));
 
             let result = result.map_err(|err| err.fill_position(pos))?;
 
@@ -371,32 +373,24 @@ impl Engine {
 
         match fn_name {
             // index getter function not found?
-            #[cfg(not(feature = "no_index"))]
+            #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
             crate::engine::FN_IDX_GET => {
                 assert!(args.len() == 2);
 
-                EvalAltResult::ErrorFunctionNotFound(
-                    format!(
-                        "{} [{}]",
-                        self.map_type_name(args[0].type_name()),
-                        self.map_type_name(args[1].type_name()),
-                    ),
+                EvalAltResult::ErrorIndexingType(
+                    self.map_type_name(args[0].type_name()).to_string(),
                     pos,
                 )
                 .into()
             }
 
             // index setter function not found?
-            #[cfg(not(feature = "no_index"))]
+            #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
             crate::engine::FN_IDX_SET => {
                 assert!(args.len() == 3);
 
-                EvalAltResult::ErrorFunctionNotFound(
-                    format!(
-                        "{} [{}]=",
-                        self.map_type_name(args[0].type_name()),
-                        self.map_type_name(args[1].type_name()),
-                    ),
+                EvalAltResult::ErrorIndexingType(
+                    self.map_type_name(args[0].type_name()).to_string(),
                     pos,
                 )
                 .into()
@@ -654,14 +648,18 @@ impl Engine {
             crate::engine::KEYWORD_IS_DEF_FN
                 if args.len() == 2 && args[0].is::<FnPtr>() && args[1].is::<crate::INT>() =>
             {
-                let fn_name = &*args[0].read_lock::<ImmutableString>().unwrap();
-                let num_params = args[1].as_int().unwrap();
+                let fn_name = &*args[0]
+                    .read_lock::<ImmutableString>()
+                    .expect("never fails because `args[0]` is `FnPtr`");
+                let num_params = args[1]
+                    .as_int()
+                    .expect("never fails because `args[1]` is `INT`");
 
                 return Ok((
                     if num_params < 0 {
                         Dynamic::FALSE
                     } else {
-                        let hash_script = calc_fn_hash(empty(), fn_name, num_params as usize);
+                        let hash_script = calc_fn_hash(fn_name, num_params as usize);
                         self.has_script_fn(Some(mods), state, lib, hash_script)
                             .into()
                     },
@@ -712,11 +710,7 @@ impl Engine {
 
         // Scripted function call?
         #[cfg(not(feature = "no_function"))]
-        let hash_script = if hash.is_native_only() {
-            None
-        } else {
-            Some(hash.script_hash())
-        };
+        let hash_script = hash.script_hash();
 
         #[cfg(not(feature = "no_function"))]
         if let Some(f) = hash_script.and_then(|hash| {
@@ -737,21 +731,23 @@ impl Engine {
 
             // Move captured variables into scope
             #[cfg(not(feature = "no_closure"))]
-            if let Some(captured) = _capture_scope {
-                if !func.externals.is_empty() {
+            if !func.externals.is_empty() {
+                _capture_scope.map(|captured| {
                     captured
                         .into_iter()
                         .filter(|(name, _, _)| func.externals.contains(name.as_ref()))
                         .for_each(|(name, value, _)| {
                             // Consume the scope values.
                             scope.push_dynamic(name, value);
-                        });
-                }
+                        })
+                });
             }
 
             let result = if _is_method {
                 // Method call of script function - map first argument to `this`
-                let (first, rest) = args.split_first_mut().unwrap();
+                let (first, rest) = args
+                    .split_first_mut()
+                    .expect("never fails because a method call always has a first parameter");
 
                 let orig_source = state.source.take();
                 state.source = source;
@@ -780,7 +776,7 @@ impl Engine {
                 let mut backup: Option<ArgBackup> = None;
                 if is_ref && !args.is_empty() {
                     backup = Some(Default::default());
-                    backup.as_mut().unwrap().change_first_arg_to_copy(args);
+                    backup.as_mut().map(|bk| bk.change_first_arg_to_copy(args));
                 }
 
                 let orig_source = state.source.take();
@@ -795,9 +791,7 @@ impl Engine {
                 state.source = orig_source;
 
                 // Restore the original reference
-                if let Some(backup) = backup {
-                    backup.restore_first_arg(args);
-                }
+                backup.map(|bk| bk.restore_first_arg(args));
 
                 result?
             };
@@ -914,12 +908,14 @@ impl Engine {
         let (result, updated) = match fn_name {
             KEYWORD_FN_PTR_CALL if obj.is::<FnPtr>() => {
                 // FnPtr call
-                let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
+                let fn_ptr = obj
+                    .read_lock::<FnPtr>()
+                    .expect("never fails because `obj` is `FnPtr`");
                 // Redirect function name
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hashes
-                let new_hash = FnCallHashes::from_script(calc_fn_hash(empty(), fn_name, args_len));
+                let new_hash = FnCallHashes::from_script(calc_fn_hash(fn_name, args_len));
                 // Arguments are passed as-is, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
                 let mut args = curry
@@ -955,8 +951,8 @@ impl Engine {
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hash
                 let new_hash = FnCallHashes::from_script_and_native(
-                    calc_fn_hash(empty(), fn_name, args_len),
-                    calc_fn_hash(empty(), fn_name, args_len + 1),
+                    calc_fn_hash(fn_name, args_len),
+                    calc_fn_hash(fn_name, args_len + 1),
                 );
                 // Replace the first argument with the object pointer, adding the curried arguments
                 let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
@@ -978,7 +974,9 @@ impl Engine {
                     ));
                 }
 
-                let fn_ptr = obj.read_lock::<FnPtr>().unwrap();
+                let fn_ptr = obj
+                    .read_lock::<FnPtr>()
+                    .expect("never fails because `obj` is `FnPtr`");
 
                 // Curry call
                 Ok((
@@ -1029,8 +1027,8 @@ impl Engine {
                                 });
                             // Recalculate the hash based on the new function name and new arguments
                             hash = FnCallHashes::from_script_and_native(
-                                calc_fn_hash(empty(), fn_name, call_args.len()),
-                                calc_fn_hash(empty(), fn_name, call_args.len() + 1),
+                                calc_fn_hash(fn_name, call_args.len()),
+                                calc_fn_hash(fn_name, call_args.len() + 1),
                             );
                         }
                     }
@@ -1049,7 +1047,9 @@ impl Engine {
 
         // Propagate the changed value back to the source if necessary
         if updated {
-            target.propagate_changed_value();
+            target
+                .propagate_changed_value()
+                .map_err(|err| err.fill_position(pos))?;
         }
 
         Ok((result, updated))
@@ -1115,9 +1115,9 @@ impl Engine {
                 // Recalculate hash
                 let args_len = total_args + curry.len();
                 hashes = if !hashes.is_native_only() {
-                    FnCallHashes::from_script(calc_fn_hash(empty(), name, args_len))
+                    FnCallHashes::from_script(calc_fn_hash(name, args_len))
                 } else {
-                    FnCallHashes::from_native(calc_fn_hash(empty(), name, args_len))
+                    FnCallHashes::from_native(calc_fn_hash(name, args_len))
                 };
             }
             // Handle Fn()
@@ -1214,7 +1214,7 @@ impl Engine {
                 return Ok(if num_params < 0 {
                     Dynamic::FALSE
                 } else {
-                    let hash_script = calc_fn_hash(empty(), &fn_name, num_params as usize);
+                    let hash_script = calc_fn_hash(&fn_name, num_params as usize);
                     self.has_script_fn(Some(mods), state, lib, hash_script)
                         .into()
                 });
@@ -1332,9 +1332,8 @@ impl Engine {
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
                     is_ref = true;
-                    once(target.take_ref().unwrap())
-                        .chain(arg_values.iter_mut())
-                        .collect()
+                    let obj_ref = target.take_ref().expect("never fails because `target` is a reference if it is not a value and not shared");
+                    once(obj_ref).chain(arg_values.iter_mut()).collect()
                 };
             } else {
                 // func(..., ...)
@@ -1365,7 +1364,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        namespace: Option<&NamespaceRef>,
+        namespace: &NamespaceRef,
         fn_name: &str,
         args_expr: &[Expr],
         literal_args: &[(Dynamic, Position)],
@@ -1373,7 +1372,6 @@ impl Engine {
         pos: Position,
         level: usize,
     ) -> RhaiResult {
-        let namespace = namespace.unwrap();
         let mut arg_values: StaticVec<_>;
         let mut first_arg_value = None;
         let mut args: StaticVec<_>;
@@ -1418,11 +1416,12 @@ impl Engine {
                     arg_values[0] = target.take_or_clone().flatten();
                     args = arg_values.iter_mut().collect();
                 } else {
-                    let (first, rest) = arg_values.split_first_mut().unwrap();
+                    let (first, rest) = arg_values
+                        .split_first_mut()
+                        .expect("never fails because the arguments list is not empty");
                     first_arg_value = Some(first);
-                    args = once(target.take_ref().unwrap())
-                        .chain(rest.iter_mut())
-                        .collect();
+                    let obj_ref = target.take_ref().expect("never fails because `target` is a reference if it is not a value and not shared");
+                    args = once(obj_ref).chain(rest.iter_mut()).collect();
                 }
             } else {
                 // func(..., ...) or func(mod::x, ...)
@@ -1459,12 +1458,11 @@ impl Engine {
         };
 
         // Clone first argument if the function is not a method after-all
-        if let Some(first) = first_arg_value {
-            if !func.map(|f| f.is_method()).unwrap_or(true) {
-                let first_val = args[0].clone();
+        if !func.map(|f| f.is_method()).unwrap_or(true) {
+            first_arg_value.map(|first| {
+                *first = args[0].clone();
                 args[0] = first;
-                *args[0] = first_val;
-            }
+            });
         }
 
         match func {

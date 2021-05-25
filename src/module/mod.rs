@@ -7,8 +7,8 @@ use crate::fn_register::RegisterNativeFunction;
 use crate::token::Token;
 use crate::utils::IdentifierBuilder;
 use crate::{
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, EvalAltResult, Identifier,
-    ImmutableString, NativeCallContext, Position, Shared, StaticVec,
+    calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, EvalAltResult,
+    Identifier, ImmutableString, NativeCallContext, Position, Shared, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -24,7 +24,6 @@ use std::{
 #[cfg(not(feature = "no_index"))]
 use crate::Array;
 
-#[cfg(not(feature = "no_index"))]
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
 
@@ -117,7 +116,7 @@ fn calc_native_fn_hash<'a>(
     fn_name: impl AsRef<str>,
     params: &[TypeId],
 ) -> u64 {
-    let hash_script = calc_fn_hash(modules, fn_name, params.len());
+    let hash_script = calc_qualified_fn_hash(modules, fn_name, params.len());
     let hash_params = calc_fn_params_hash(params.iter().cloned());
     combine_hashes(hash_script, hash_params)
 }
@@ -156,20 +155,7 @@ pub struct Module {
 impl Default for Module {
     #[inline(always)]
     fn default() -> Self {
-        Self {
-            id: None,
-            internal: false,
-            modules: Default::default(),
-            variables: Default::default(),
-            all_variables: Default::default(),
-            functions: Default::default(),
-            all_functions: Default::default(),
-            type_iterators: Default::default(),
-            all_type_iterators: Default::default(),
-            indexed: true,
-            contains_indexed_global_functions: false,
-            identifiers: Default::default(),
-        }
+        Self::new()
     }
 }
 
@@ -177,9 +163,7 @@ impl fmt::Debug for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut d = f.debug_struct("Module");
 
-        if let Some(ref id) = self.id {
-            d.field("id", id);
-        }
+        self.id.as_ref().map(|id| d.field("id", id));
 
         if !self.modules.is_empty() {
             d.field(
@@ -257,7 +241,20 @@ impl Module {
     /// ```
     #[inline(always)]
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            id: None,
+            internal: false,
+            modules: Default::default(),
+            variables: Default::default(),
+            all_variables: Default::default(),
+            functions: Default::default(),
+            all_functions: Default::default(),
+            type_iterators: Default::default(),
+            all_type_iterators: Default::default(),
+            indexed: true,
+            contains_indexed_global_functions: false,
+            identifiers: Default::default(),
+        }
     }
 
     /// Get the ID of the [`Module`], if any.
@@ -441,7 +438,7 @@ impl Module {
         let value = Dynamic::from(value);
 
         if self.indexed {
-            let hash_var = crate::calc_fn_hash(once(""), &ident, 0);
+            let hash_var = crate::calc_qualified_fn_hash(once(""), &ident, 0);
             self.all_variables.insert(hash_var, value.clone());
         }
         self.variables.insert(ident, value);
@@ -467,7 +464,7 @@ impl Module {
 
         // None + function name + number of arguments.
         let num_params = fn_def.params.len();
-        let hash_script = crate::calc_fn_hash(empty(), &fn_def.name, num_params);
+        let hash_script = crate::calc_fn_hash(&fn_def.name, num_params);
         let mut param_names = fn_def.params.clone();
         param_names.push("Dynamic".into());
         self.functions.insert(
@@ -622,9 +619,10 @@ impl Module {
             .map(|&name| self.identifiers.get(name))
             .collect();
 
-        if let Some(f) = self.functions.get_mut(&hash_fn) {
-            f.param_names = param_names;
-        }
+        self.functions
+            .get_mut(&hash_fn)
+            .map(|f| f.param_names = param_names);
+
         self
     }
 
@@ -956,7 +954,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash));
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn set_indexer_get_fn<ARGS, A, B, T, F>(&mut self, func: F) -> u64
     where
@@ -966,6 +964,7 @@ impl Module {
         F: RegisterNativeFunction<ARGS, Result<T, Box<EvalAltResult>>>,
         F: Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     {
+        #[cfg(not(feature = "no_index"))]
         if TypeId::of::<A>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -1016,7 +1015,7 @@ impl Module {
     /// });
     /// assert!(module.contains_fn(hash));
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn set_indexer_set_fn<ARGS, A, B, C, F>(&mut self, func: F) -> u64
     where
@@ -1026,6 +1025,7 @@ impl Module {
         F: RegisterNativeFunction<ARGS, Result<(), Box<EvalAltResult>>>,
         F: Fn(&mut A, B, C) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     {
+        #[cfg(not(feature = "no_index"))]
         if TypeId::of::<A>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -1082,7 +1082,7 @@ impl Module {
     /// assert!(module.contains_fn(hash_get));
     /// assert!(module.contains_fn(hash_set));
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn set_indexer_get_set_fn<A, B, T>(
         &mut self,
@@ -1414,7 +1414,10 @@ impl Module {
             match aliases.len() {
                 0 => (),
                 1 => {
-                    module.set_var(aliases.pop().unwrap(), value);
+                    let alias = aliases
+                        .pop()
+                        .expect("never fails because the list has one item");
+                    module.set_var(alias, value);
                 }
                 _ => aliases.into_iter().for_each(|alias| {
                     module.set_var(alias, value.clone());
@@ -1490,7 +1493,7 @@ impl Module {
 
             // Index all variables
             module.variables.iter().for_each(|(var_name, value)| {
-                let hash_var = crate::calc_fn_hash(path.iter().map(|&v| v), var_name, 0);
+                let hash_var = crate::calc_qualified_fn_hash(path.iter().map(|&v| v), var_name, 0);
                 variables.insert(hash_var, value.clone());
             });
 
@@ -1520,8 +1523,11 @@ impl Module {
                         calc_native_fn_hash(path.iter().cloned(), f.name.as_str(), &f.param_types);
                     functions.insert(hash_qualified_fn, f.func.clone());
                 } else if cfg!(not(feature = "no_function")) {
-                    let hash_qualified_script =
-                        crate::calc_fn_hash(path.iter().cloned(), f.name.as_str(), f.params);
+                    let hash_qualified_script = crate::calc_qualified_fn_hash(
+                        path.iter().cloned(),
+                        f.name.as_str(),
+                        f.params,
+                    );
                     functions.insert(hash_qualified_script, f.func.clone());
                 }
             });

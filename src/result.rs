@@ -181,7 +181,9 @@ impl fmt::Display for EvalAltResult {
             | Self::ErrorTerminated(_, _) => f.write_str(desc)?,
 
             Self::ErrorRuntime(d, _) if d.is::<ImmutableString>() => {
-                let s = &*d.read_lock::<ImmutableString>().unwrap();
+                let s = &*d
+                    .read_lock::<ImmutableString>()
+                    .expect("never fails because the type was checked");
                 write!(f, "{}: {}", desc, if s.is_empty() { desc } else { s })?
             }
             Self::ErrorRuntime(d, _) if d.is::<()>() => f.write_str(desc)?,
@@ -336,7 +338,11 @@ impl EvalAltResult {
     pub(crate) fn dump_fields(&self, map: &mut crate::Map) {
         map.insert(
             "error".into(),
-            format!("{:?}", self).split('(').next().unwrap().into(),
+            format!("{:?}", self)
+                .split('(')
+                .next()
+                .expect("never fails because the debug format of an error is `ErrorXXX(...)`")
+                .into(),
         );
 
         match self {

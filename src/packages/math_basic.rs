@@ -311,21 +311,14 @@ mod decimal_functions {
 
     #[rhai_fn(return_raw)]
     pub fn sqrt(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
-        if cfg!(not(feature = "unchecked")) {
-            x.sqrt()
-                .ok_or_else(|| make_err(format!("Error taking the square root of {}", x,)))
-        } else {
-            Ok(x.sqrt().unwrap())
-        }
+        x.sqrt()
+            .ok_or_else(|| make_err(format!("Error taking the square root of {}", x,)))
     }
     #[rhai_fn(return_raw)]
     pub fn exp(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) {
-            if x > Decimal::from_parts(117578, 0, 0, false, 4) {
-                Err(make_err(format!("Exponential overflow: e ** {}", x,)))
-            } else {
-                Ok(x.exp())
-            }
+            x.checked_exp()
+                .ok_or_else(|| make_err(format!("Exponential overflow: e ** {}", x,)))
         } else {
             Ok(x.exp())
         }
@@ -348,14 +341,14 @@ mod decimal_functions {
     #[rhai_fn(name = "round", return_raw)]
     pub fn round_dp(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) {
-            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
-                return Ok(x);
-            }
             if dp < 0 {
                 return Err(make_err(format!(
-                    "Decimal value {} round to a negative index: {}",
-                    x, dp
+                    "Invalid number of digits for rounding: {}",
+                    dp
                 )));
+            }
+            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
+                return Ok(x);
             }
         }
 
@@ -364,14 +357,14 @@ mod decimal_functions {
     #[rhai_fn(return_raw)]
     pub fn round_up(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) {
-            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
-                return Ok(x);
-            }
             if dp < 0 {
                 return Err(make_err(format!(
-                    "Decimal value {} round to a negative index: {}",
-                    x, dp
+                    "Invalid number of digits for rounding: {}",
+                    dp
                 )));
+            }
+            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
+                return Ok(x);
             }
         }
 
@@ -380,14 +373,14 @@ mod decimal_functions {
     #[rhai_fn(return_raw)]
     pub fn round_down(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) {
-            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
-                return Ok(x);
-            }
             if dp < 0 {
                 return Err(make_err(format!(
-                    "Decimal value {} round to a negative index: {}",
-                    x, dp
+                    "Invalid number of digits for rounding: {}",
+                    dp
                 )));
+            }
+            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
+                return Ok(x);
             }
         }
 
@@ -396,14 +389,14 @@ mod decimal_functions {
     #[rhai_fn(return_raw)]
     pub fn round_half_up(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) {
-            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
-                return Ok(x);
-            }
             if dp < 0 {
                 return Err(make_err(format!(
-                    "Decimal value {} round to a negative index: {}",
-                    x, dp
+                    "Invalid number of digits for rounding: {}",
+                    dp
                 )));
+            }
+            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
+                return Ok(x);
             }
         }
 
@@ -412,14 +405,14 @@ mod decimal_functions {
     #[rhai_fn(return_raw)]
     pub fn round_half_down(x: Decimal, dp: INT) -> Result<Decimal, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) {
-            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
-                return Ok(x);
-            }
             if dp < 0 {
                 return Err(make_err(format!(
-                    "Decimal value {} round to a negative index: {}",
-                    x, dp
+                    "Invalid number of digits for rounding: {}",
+                    dp
                 )));
+            }
+            if cfg!(not(feature = "only_i32")) && dp > (u32::MAX as INT) {
+                return Ok(x);
             }
         }
 

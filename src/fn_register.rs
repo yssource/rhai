@@ -32,7 +32,8 @@ pub struct Mut<T>(T);
 #[inline(always)]
 pub fn by_ref<T: Variant + Clone>(data: &mut Dynamic) -> DynamicWriteLock<T> {
     // Directly cast the &mut Dynamic into DynamicWriteLock to access the underlying data.
-    data.write_lock::<T>().unwrap()
+    data.write_lock::<T>()
+        .expect("never fails because the type was checked")
 }
 
 /// Dereference into value.
@@ -43,12 +44,15 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
         data.flatten_in_place();
         let ref_str = data
             .as_str_ref()
-            .expect("argument passed by value should not be shared");
+            .expect("never fails because argument passed by value should not be shared");
         let ref_t = unsafe { mem::transmute::<_, &T>(&ref_str) };
         ref_t.clone()
     } else if TypeId::of::<T>() == TypeId::of::<String>() {
         // If T is `String`, data must be `ImmutableString`, so map directly to it
-        unsafe_try_cast(mem::take(data).take_string().unwrap()).unwrap()
+        let value = mem::take(data)
+            .take_string()
+            .expect("never fails because the type was checked");
+        unsafe_try_cast(value).expect("never fails because the type was checked")
     } else {
         // We consume the argument and then replace it with () - the argument is not supposed to be used again.
         // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
@@ -118,7 +122,7 @@ macro_rules! def_register {
 
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
-                    $($let $par = ($clone)(_drain.next().unwrap()); )*
+                    $($let $par = ($clone)(_drain.next().expect("never fails because arguments list is fixed")); )*
 
                     // Call the function with each argument value
                     let r = self($($arg),*);
@@ -146,7 +150,7 @@ macro_rules! def_register {
 
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
-                    $($let $par = ($clone)(_drain.next().unwrap()); )*
+                    $($let $par = ($clone)(_drain.next().expect("never fails because arguments list is fixed")); )*
 
                     // Call the function with each argument value
                     let r = self(ctx, $($arg),*);
@@ -174,7 +178,7 @@ macro_rules! def_register {
 
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
-                    $($let $par = ($clone)(_drain.next().unwrap()); )*
+                    $($let $par = ($clone)(_drain.next().expect("never fails because arguments list is fixed")); )*
 
                     // Call the function with each argument value
                     self($($arg),*).map(Dynamic::from)
@@ -199,7 +203,7 @@ macro_rules! def_register {
 
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
-                    $($let $par = ($clone)(_drain.next().unwrap()); )*
+                    $($let $par = ($clone)(_drain.next().expect("never fails because arguments list is fixed")); )*
 
                     // Call the function with each argument value
                     self(ctx, $($arg),*).map(Dynamic::from)

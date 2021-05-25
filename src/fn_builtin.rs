@@ -13,6 +13,8 @@ use crate::FLOAT;
 #[cfg(feature = "decimal")]
 use rust_decimal::Decimal;
 
+const BUILTIN: &str = "never fails because this is built-in code and the type is already checked";
+
 /// Is the type a numeric type?
 #[inline(always)]
 fn is_numeric(type_id: TypeId) -> bool {
@@ -75,22 +77,22 @@ pub fn get_builtin_binary_op_fn(
     macro_rules! impl_op {
         ($xx:ident $op:tt $yy:ident) => {
             return Some(|_, args| {
-                let x = &*args[0].read_lock::<$xx>().unwrap();
-                let y = &*args[1].read_lock::<$yy>().unwrap();
+                let x = &*args[0].read_lock::<$xx>().expect(BUILTIN);
+                let y = &*args[1].read_lock::<$yy>().expect(BUILTIN);
                 Ok((x $op y).into())
             })
         };
         ($xx:ident . $func:ident ( $yy:ty )) => {
             return Some(|_, args| {
-                let x = &*args[0].read_lock::<$xx>().unwrap();
-                let y = &*args[1].read_lock::<$yy>().unwrap();
+                let x = &*args[0].read_lock::<$xx>().expect(BUILTIN);
+                let y = &*args[1].read_lock::<$yy>().expect(BUILTIN);
                 Ok(x.$func(y).into())
             })
         };
         ($xx:ident . $func:ident ( $yy:ident . $yyy:ident () )) => {
             return Some(|_, args| {
-                let x = &*args[0].read_lock::<$xx>().unwrap();
-                let y = &*args[1].read_lock::<$yy>().unwrap();
+                let x = &*args[0].read_lock::<$xx>().expect(BUILTIN);
+                let y = &*args[1].read_lock::<$yy>().expect(BUILTIN);
                 Ok(x.$func(y.$yyy()).into())
             })
         };
@@ -102,43 +104,43 @@ pub fn get_builtin_binary_op_fn(
         };
         ($base:ty => $xx:ident $op:tt $yy:ident) => {
             return Some(|_, args| {
-                let x = args[0].$xx().unwrap() as $base;
-                let y = args[1].$yy().unwrap() as $base;
+                let x = args[0].$xx().expect(BUILTIN) as $base;
+                let y = args[1].$yy().expect(BUILTIN) as $base;
                 Ok((x $op y).into())
             })
         };
         ($base:ty => $xx:ident . $func:ident ( $yy:ident as $yyy:ty)) => {
             return Some(|_, args| {
-                let x = args[0].$xx().unwrap() as $base;
-                let y = args[1].$yy().unwrap() as $base;
+                let x = args[0].$xx().expect(BUILTIN) as $base;
+                let y = args[1].$yy().expect(BUILTIN) as $base;
                 Ok(x.$func(y as $yyy).into())
             })
         };
         ($base:ty => $func:ident ( $xx:ident, $yy:ident )) => {
             return Some(|_, args| {
-                let x = args[0].$xx().unwrap() as $base;
-                let y = args[1].$yy().unwrap() as $base;
+                let x = args[0].$xx().expect(BUILTIN) as $base;
+                let y = args[1].$yy().expect(BUILTIN) as $base;
                 $func(x, y).map(Into::<Dynamic>::into)
             })
         };
         (from $base:ty => $xx:ident $op:tt $yy:ident) => {
             return Some(|_, args| {
-                let x = <$base>::from(args[0].$xx().unwrap());
-                let y = <$base>::from(args[1].$yy().unwrap());
+                let x = <$base>::from(args[0].$xx().expect(BUILTIN));
+                let y = <$base>::from(args[1].$yy().expect(BUILTIN));
                 Ok((x $op y).into())
             })
         };
         (from $base:ty => $xx:ident . $func:ident ( $yy:ident )) => {
             return Some(|_, args| {
-                let x = <$base>::from(args[0].$xx().unwrap());
-                let y = <$base>::from(args[1].$yy().unwrap());
+                let x = <$base>::from(args[0].$xx().expect(BUILTIN));
+                let y = <$base>::from(args[1].$yy().expect(BUILTIN));
                 Ok(x.$func(y).into())
             })
         };
         (from $base:ty => $func:ident ( $xx:ident, $yy:ident )) => {
             return Some(|_, args| {
-                let x = <$base>::from(args[0].$xx().unwrap());
-                let y = <$base>::from(args[1].$yy().unwrap());
+                let x = <$base>::from(args[0].$xx().expect(BUILTIN));
+                let y = <$base>::from(args[1].$yy().expect(BUILTIN));
                 $func(x, y).map(Into::<Dynamic>::into)
             })
         };
@@ -175,7 +177,7 @@ pub fn get_builtin_binary_op_fn(
         ($x:ty, $xx:ident, $y:ty, $yy:ident) => {
             #[cfg(feature = "decimal")]
             if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
-                if cfg!(not(feature = "unchecked")) {
+                if cfg!(not(feature = "unBUILTIN")) {
                     use crate::packages::arithmetic::decimal_functions::*;
 
                     match op {
@@ -222,8 +224,8 @@ pub fn get_builtin_binary_op_fn(
     if types_pair == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
         #[inline(always)]
         fn get_s1s2(args: &FnCallArgs) -> ([char; 2], [char; 2]) {
-            let x = args[0].as_char().unwrap();
-            let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+            let x = args[0].as_char().expect(BUILTIN);
+            let y = &*args[1].read_lock::<ImmutableString>().expect(BUILTIN);
             let s1 = [x, '\0'];
             let mut y = y.chars();
             let s2 = [y.next().unwrap_or('\0'), y.next().unwrap_or('\0')];
@@ -233,8 +235,8 @@ pub fn get_builtin_binary_op_fn(
         match op {
             "+" => {
                 return Some(|_, args| {
-                    let x = args[0].as_char().unwrap();
-                    let y = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    let x = args[0].as_char().expect(BUILTIN);
+                    let y = &*args[1].read_lock::<ImmutableString>().expect(BUILTIN);
                     Ok(format!("{}{}", x, y).into())
                 })
             }
@@ -251,8 +253,8 @@ pub fn get_builtin_binary_op_fn(
     if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
         #[inline(always)]
         fn get_s1s2(args: &FnCallArgs) -> ([char; 2], [char; 2]) {
-            let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-            let y = args[1].as_char().unwrap();
+            let x = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
+            let y = args[1].as_char().expect(BUILTIN);
             let mut x = x.chars();
             let s1 = [x.next().unwrap_or('\0'), x.next().unwrap_or('\0')];
             let s2 = [y, '\0'];
@@ -262,15 +264,15 @@ pub fn get_builtin_binary_op_fn(
         match op {
             "+" => {
                 return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = args[1].as_char().unwrap();
+                    let x = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
+                    let y = args[1].as_char().expect(BUILTIN);
                     Ok((x + y).into())
                 })
             }
             "-" => {
                 return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let y = args[1].as_char().unwrap();
+                    let x = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
+                    let y = args[1].as_char().expect(BUILTIN);
                     Ok((x - y).into())
                 })
             }
@@ -282,8 +284,8 @@ pub fn get_builtin_binary_op_fn(
             "<=" => impl_op!(get_s1s2(<=)),
             OP_CONTAINS => {
                 return Some(|_, args| {
-                    let s = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let c = args[1].as_char().unwrap();
+                    let s = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
+                    let c = args[1].as_char().expect(BUILTIN);
                     Ok((s.contains(c)).into())
                 })
             }
@@ -314,7 +316,7 @@ pub fn get_builtin_binary_op_fn(
     // Beyond here, type1 == type2
 
     if type1 == TypeId::of::<INT>() {
-        if cfg!(not(feature = "unchecked")) {
+        if cfg!(not(feature = "unBUILTIN")) {
             use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
             match op {
@@ -383,8 +385,8 @@ pub fn get_builtin_binary_op_fn(
             "<=" => impl_op!(ImmutableString <= ImmutableString),
             OP_CONTAINS => {
                 return Some(|_, args| {
-                    let s1 = &*args[0].read_lock::<ImmutableString>().unwrap();
-                    let s2 = &*args[1].read_lock::<ImmutableString>().unwrap();
+                    let s1 = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
+                    let s2 = &*args[1].read_lock::<ImmutableString>().expect(BUILTIN);
                     Ok((s1.contains(s2.as_str())).into())
                 })
             }
@@ -396,8 +398,8 @@ pub fn get_builtin_binary_op_fn(
         match op {
             "+" => {
                 return Some(|_, args| {
-                    let x = args[0].as_char().unwrap();
-                    let y = args[1].as_char().unwrap();
+                    let x = args[0].as_char().expect(BUILTIN);
+                    let y = args[1].as_char().expect(BUILTIN);
                     Ok(format!("{}{}", x, y).into())
                 })
             }
@@ -440,55 +442,55 @@ pub fn get_builtin_op_assignment_fn(
     macro_rules! impl_op {
         ($x:ty = x $op:tt $yy:ident) => {
             return Some(|_, args| {
-                let x = args[0].$yy().unwrap();
-                let y = args[1].$yy().unwrap() as $x;
-                Ok((*args[0].write_lock::<$x>().unwrap() = x $op y).into())
+                let x = args[0].$yy().expect(BUILTIN);
+                let y = args[1].$yy().expect(BUILTIN) as $x;
+                Ok((*args[0].write_lock::<$x>().expect(BUILTIN) = x $op y).into())
             })
         };
         ($x:ident $op:tt $yy:ident) => {
             return Some(|_, args| {
-                let y = args[1].$yy().unwrap() as $x;
-                Ok((*args[0].write_lock::<$x>().unwrap() $op y).into())
+                let y = args[1].$yy().expect(BUILTIN) as $x;
+                Ok((*args[0].write_lock::<$x>().expect(BUILTIN) $op y).into())
             })
         };
         ($x:ident $op:tt $yy:ident as $yyy:ty) => {
             return Some(|_, args| {
-                let y = args[1].$yy().unwrap() as $yyy;
-                Ok((*args[0].write_lock::<$x>().unwrap() $op y).into())
+                let y = args[1].$yy().expect(BUILTIN) as $yyy;
+                Ok((*args[0].write_lock::<$x>().expect(BUILTIN) $op y).into())
             })
         };
         ($x:ty => $xx:ident . $func:ident ( $yy:ident as $yyy:ty )) => {
             return Some(|_, args| {
-                let x = args[0].$xx().unwrap();
-                let y = args[1].$yy().unwrap() as $x;
-                Ok((*args[0].write_lock::<$x>().unwrap() = x.$func(y as $yyy)).into())
+                let x = args[0].$xx().expect(BUILTIN);
+                let y = args[1].$yy().expect(BUILTIN) as $x;
+                Ok((*args[0].write_lock::<$x>().expect(BUILTIN) = x.$func(y as $yyy)).into())
             })
         };
         ($x:ty => $func:ident ( $xx:ident, $yy:ident )) => {
             return Some(|_, args| {
-                let x = args[0].$xx().unwrap();
-                let y = args[1].$yy().unwrap() as $x;
-                Ok((*args[0].write_lock().unwrap() = $func(x, y)?).into())
+                let x = args[0].$xx().expect(BUILTIN);
+                let y = args[1].$yy().expect(BUILTIN) as $x;
+                Ok((*args[0].write_lock().expect(BUILTIN) = $func(x, y)?).into())
             })
         };
         (from $x:ident $op:tt $yy:ident) => {
             return Some(|_, args| {
-                let y = <$x>::from(args[1].$yy().unwrap());
-                Ok((*args[0].write_lock::<$x>().unwrap() $op y).into())
+                let y = <$x>::from(args[1].$yy().expect(BUILTIN));
+                Ok((*args[0].write_lock::<$x>().expect(BUILTIN) $op y).into())
             })
         };
         (from $x:ty => $xx:ident . $func:ident ( $yy:ident )) => {
             return Some(|_, args| {
-                let x = args[0].$xx().unwrap();
-                let y = <$x>::from(args[1].$yy().unwrap());
-                Ok((*args[0].write_lock::<$x>().unwrap() = x.$func(y)).into())
+                let x = args[0].$xx().expect(BUILTIN);
+                let y = <$x>::from(args[1].$yy().expect(BUILTIN));
+                Ok((*args[0].write_lock::<$x>().expect(BUILTIN) = x.$func(y)).into())
             })
         };
         (from $x:ty => $func:ident ( $xx:ident, $yy:ident )) => {
             return Some(|_, args| {
-                let x = args[0].$xx().unwrap();
-                let y = <$x>::from(args[1].$yy().unwrap());
-                Ok((*args[0].write_lock().unwrap() = $func(x, y)?).into())
+                let x = args[0].$xx().expect(BUILTIN);
+                let y = <$x>::from(args[1].$yy().expect(BUILTIN));
+                Ok((*args[0].write_lock().expect(BUILTIN) = $func(x, y)?).into())
             })
         };
     }
@@ -517,7 +519,7 @@ pub fn get_builtin_op_assignment_fn(
         ($x:ident, $xx:ident, $y:ty, $yy:ident) => {
             #[cfg(feature = "decimal")]
             if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
-                if cfg!(not(feature = "unchecked")) {
+                if cfg!(not(feature = "unBUILTIN")) {
                     use crate::packages::arithmetic::decimal_functions::*;
 
                     match op {
@@ -562,10 +564,15 @@ pub fn get_builtin_op_assignment_fn(
         match op {
             "+=" => {
                 return Some(|_, args| {
-                    let mut ch = args[0].as_char().unwrap().to_string();
-                    ch.push_str(args[1].read_lock::<ImmutableString>().unwrap().as_str());
+                    let mut ch = args[0].as_char().expect(BUILTIN).to_string();
+                    ch.push_str(
+                        args[1]
+                            .read_lock::<ImmutableString>()
+                            .expect(BUILTIN)
+                            .as_str(),
+                    );
 
-                    let mut x = args[0].write_lock::<Dynamic>().unwrap();
+                    let mut x = args[0].write_lock::<Dynamic>().expect(BUILTIN);
                     Ok((*x = ch.into()).into())
                 })
             }
@@ -580,7 +587,7 @@ pub fn get_builtin_op_assignment_fn(
 
     // Beyond here, type1 == type2
     if type1 == TypeId::of::<INT>() {
-        if cfg!(not(feature = "unchecked")) {
+        if cfg!(not(feature = "unBUILTIN")) {
             use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
             match op {
@@ -628,8 +635,8 @@ pub fn get_builtin_op_assignment_fn(
         match op {
             "+=" => {
                 return Some(|_, args| {
-                    let y = args[1].as_char().unwrap();
-                    let mut x = args[0].write_lock::<Dynamic>().unwrap();
+                    let y = args[1].as_char().expect(BUILTIN);
+                    let mut x = args[0].write_lock::<Dynamic>().expect(BUILTIN);
                     Ok((*x = format!("{}{}", *x, y).into()).into())
                 })
             }
@@ -641,17 +648,17 @@ pub fn get_builtin_op_assignment_fn(
         match op {
             "+=" => {
                 return Some(|_, args| {
-                    let (first, second) = args.split_first_mut().unwrap();
-                    let mut x = first.write_lock::<ImmutableString>().unwrap();
-                    let y = &*second[0].read_lock::<ImmutableString>().unwrap();
+                    let (first, second) = args.split_first_mut().expect(BUILTIN);
+                    let mut x = first.write_lock::<ImmutableString>().expect(BUILTIN);
+                    let y = &*second[0].read_lock::<ImmutableString>().expect(BUILTIN);
                     Ok((*x += y).into())
                 })
             }
             "-=" => {
                 return Some(|_, args| {
-                    let (first, second) = args.split_first_mut().unwrap();
-                    let mut x = first.write_lock::<ImmutableString>().unwrap();
-                    let y = &*second[0].read_lock::<ImmutableString>().unwrap();
+                    let (first, second) = args.split_first_mut().expect(BUILTIN);
+                    let mut x = first.write_lock::<ImmutableString>().expect(BUILTIN);
+                    let y = &*second[0].read_lock::<ImmutableString>().expect(BUILTIN);
                     Ok((*x -= y).into())
                 })
             }

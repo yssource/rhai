@@ -92,7 +92,7 @@ default_features = false
 optional = true
 
 [dependencies.rust_decimal]
-version = "1.13"
+version = "1.14"
 default_features = false
 features = ["maths"]
 optional = true

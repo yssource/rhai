@@ -4,10 +4,16 @@ Rhai Release Notes
 Version 0.20.2
 ==============
 
+This version adds a number of convenience features:
+
+* Ability for a `Dynamic` to hold an `i32` _tag_ of arbitrary data
+
+* Simplifies dynamic properties access by falling back to an indexer (passing the name of the property as a string) when a property is not found.
+
 Bug fixes
 ---------
 
-* Constant propagation during optimization for constants held in a custom scope now works properly instead of always replacing by `()`.
+* Propagation of constants held in a custom scope now works properly instead of always replacing by `()`.
 
 Breaking changes
 ----------------
@@ -15,14 +21,17 @@ Breaking changes
 * `Engine::disable_doc_comments` is removed because doc-comments are now placed under the `metadata` feature flag.
 * Registering a custom syntax now only requires specifying whether the `Scope` is adjusted (i.e. whether variables are added or removed). There is no need to specify the number of variables added/removed.
 * Assigning to a property of a constant is now allowed and no longer raise an `EvalAltResult::ErrorAssignmentToConstant` error. This is to facilitate the Singleton pattern. Registered setter functions are automatically guarded against setters calling on constants and will continue to raise errors unless the `pure` attribute is present (for plugins).
+* If a property getter/setter is not found, an indexer with string index, if any, is tried.
+* The indexers API (`Engine::register_indexer_XXX` and `Module::set_indexer_XXX`) are now also exposed under `no_index`.
 
 New features
 ------------
 
-* Each `Dynamic` value can now contain arbitrary data (type `i16`) in the form of a _tag_. This is to use up otherwise wasted space in the `Dynamic` type.
+* Each `Dynamic` value can now contain arbitrary data (type `i32`) in the form of a _tag_. This is to use up otherwise wasted space in the `Dynamic` type.
 * A new internal feature `no_smartstring` to turn off `SmartString` for those rare cases that it is needed.
 * `DynamicReadLock` and `DynamicWriteLoc` are exposed under `internals`.
 * `From<Shared<Locked<Dynamic>>>` is added for `Dynamic` mapping directly to a shared value, together with support for `Dynamic::from`.
+* An indexer with string index acts as a _fallback_ to a property getter/setter.
 
 Enhancements
 ------------

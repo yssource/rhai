@@ -477,9 +477,7 @@ impl Engine {
         set_fn: impl Fn(&mut T, V) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
         use crate::engine::make_setter;
-        self.register_result_fn(&make_setter(name), move |obj: &mut T, value: V| {
-            set_fn(obj, value)
-        })
+        self.register_result_fn(&make_setter(name), set_fn)
     }
     /// Short-hand for registering both getter and setter functions
     /// of a registered type with the [`Engine`].
@@ -536,7 +534,7 @@ impl Engine {
     ///
     /// The function signature must start with `&mut self` and not `&self`.
     ///
-    /// Not available under `no_index`.
+    /// Not available under both `no_index` and `no_object`.
     ///
     /// # Panics
     ///
@@ -572,16 +570,18 @@ impl Engine {
     ///     // Register an indexer.
     ///     .register_indexer_get(TestStruct::get_field);
     ///
+    /// # #[cfg(not(feature = "no_index"))]
     /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a[2]")?, 3);
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn register_indexer_get<T: Variant + Clone, X: Variant + Clone, V: Variant + Clone>(
         &mut self,
         get_fn: impl Fn(&mut T, X) -> V + SendSync + 'static,
     ) -> &mut Self {
+        #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -602,7 +602,7 @@ impl Engine {
     ///
     /// The function signature must start with `&mut self` and not `&self`.
     ///
-    /// Not available under `no_index`.
+    /// Not available under both `no_index` and `no_object`.
     ///
     /// # Panics
     ///
@@ -640,11 +640,12 @@ impl Engine {
     ///     // Register an indexer.
     ///     .register_indexer_get_result(TestStruct::get_field);
     ///
+    /// # #[cfg(not(feature = "no_index"))]
     /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a[2]")?, 3);
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn register_indexer_get_result<
         T: Variant + Clone,
@@ -654,6 +655,7 @@ impl Engine {
         &mut self,
         get_fn: impl Fn(&mut T, X) -> Result<V, Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
+        #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -672,7 +674,7 @@ impl Engine {
     }
     /// Register an index setter for a custom type with the [`Engine`].
     ///
-    /// Not available under `no_index`.
+    /// Not available under both `no_index` and `no_object`.
     ///
     /// # Panics
     ///
@@ -707,6 +709,7 @@ impl Engine {
     ///     // Register an indexer.
     ///     .register_indexer_set(TestStruct::set_field);
     ///
+    /// # #[cfg(not(feature = "no_index"))]
     /// assert_eq!(
     ///     engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?.fields[2],
     ///     42
@@ -714,12 +717,13 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn register_indexer_set<T: Variant + Clone, X: Variant + Clone, V: Variant + Clone>(
         &mut self,
         set_fn: impl Fn(&mut T, X, V) + SendSync + 'static,
     ) -> &mut Self {
+        #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -738,7 +742,7 @@ impl Engine {
     }
     /// Register an index setter for a custom type with the [`Engine`].
     ///
-    /// Not available under `no_index`.
+    /// Not available under both `no_index` and `no_object`.
     ///
     /// # Panics
     ///
@@ -776,6 +780,7 @@ impl Engine {
     ///     // Register an indexer.
     ///     .register_indexer_set_result(TestStruct::set_field);
     ///
+    /// # #[cfg(not(feature = "no_index"))]
     /// assert_eq!(
     ///     engine.eval::<TestStruct>("let a = new_ts(); a[2] = 42; a")?.fields[2],
     ///     42
@@ -783,7 +788,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn register_indexer_set_result<
         T: Variant + Clone,
@@ -793,6 +798,7 @@ impl Engine {
         &mut self,
         set_fn: impl Fn(&mut T, X, V) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
+        #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             panic!("Cannot register indexer for arrays.");
         }
@@ -807,14 +813,11 @@ impl Engine {
             panic!("Cannot register indexer for strings.");
         }
 
-        self.register_result_fn(
-            crate::engine::FN_IDX_SET,
-            move |obj: &mut T, index: X, value: V| set_fn(obj, index, value),
-        )
+        self.register_result_fn(crate::engine::FN_IDX_SET, set_fn)
     }
-    /// Short-hand for register both index getter and setter functions for a custom type with the [`Engine`].
+    /// Short-hand for registering both index getter and setter functions for a custom type with the [`Engine`].
     ///
-    /// Not available under `no_index`.
+    /// Not available under both `no_index` and `no_object`.
     ///
     /// # Panics
     ///
@@ -852,11 +855,12 @@ impl Engine {
     ///     // Register an indexer.
     ///     .register_indexer_get_set(TestStruct::get_field, TestStruct::set_field);
     ///
+    /// # #[cfg(not(feature = "no_index"))]
     /// assert_eq!(engine.eval::<i64>("let a = new_ts(); a[2] = 42; a[2]")?, 42);
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_index"))]
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[inline(always)]
     pub fn register_indexer_get_set<T: Variant + Clone, X: Variant + Clone, V: Variant + Clone>(
         &mut self,
@@ -947,8 +951,14 @@ impl Engine {
                 }
             } else {
                 let mut iter = name.as_ref().splitn(2, separator.as_ref());
-                let sub_module = iter.next().unwrap().trim();
-                let remainder = iter.next().unwrap().trim();
+                let sub_module = iter
+                    .next()
+                    .expect("never fails because the name contains a separator")
+                    .trim();
+                let remainder = iter
+                    .next()
+                    .expect("never fails because the name contains a separator")
+                    .trim();
 
                 if !root.contains_key(sub_module) {
                     let mut m: Module = Default::default();
@@ -956,7 +966,9 @@ impl Engine {
                     m.build_index();
                     root.insert(sub_module.into(), m.into());
                 } else {
-                    let m = root.remove(sub_module).unwrap();
+                    let m = root
+                        .remove(sub_module)
+                        .expect("never fails because the root contains the sub-module");
                     let mut m = crate::fn_native::shared_take_or_clone(m);
                     register_static_module_raw(m.sub_modules_mut(), remainder, module);
                     m.build_index();
@@ -1074,7 +1086,10 @@ impl Engine {
             resolver: &StaticModuleResolver,
             imports: &mut BTreeSet<Identifier>,
         ) {
-            ast.walk(&mut |path| match path.last().unwrap() {
+            ast.walk(&mut |path| match path
+                .last()
+                .expect("never fails because `path` always contains the current node")
+            {
                 // Collect all `import` statements with a string constant path
                 ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
                     if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>

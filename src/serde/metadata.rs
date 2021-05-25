@@ -91,21 +91,19 @@ struct FnMetadata {
 
 impl PartialOrd for FnMetadata {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(match self.name.partial_cmp(&other.name).unwrap() {
-            Ordering::Less => Ordering::Less,
-            Ordering::Greater => Ordering::Greater,
-            Ordering::Equal => match self.num_params.partial_cmp(&other.num_params).unwrap() {
-                Ordering::Less => Ordering::Less,
-                Ordering::Greater => Ordering::Greater,
-                Ordering::Equal => self.params.partial_cmp(&other.params).unwrap(),
-            },
-        })
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for FnMetadata {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
+        match self.name.cmp(&other.name) {
+            Ordering::Equal => match self.num_params.cmp(&other.num_params) {
+                Ordering::Equal => self.params.cmp(&other.params),
+                cmp => cmp,
+            },
+            cmp => cmp,
+        }
     }
 }
 

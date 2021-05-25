@@ -141,6 +141,11 @@ pub enum AccessMode {
 }
 
 /// Arbitrary data attached to a [`Dynamic`] value.
+#[cfg(target_pointer_width = "64")]
+pub type Tag = i32;
+
+/// Arbitrary data attached to a [`Dynamic`] value.
+#[cfg(target_pointer_width = "32")]
 pub type Tag = i16;
 
 /// Default tag value for [`Dynamic`].
@@ -235,9 +240,10 @@ impl<'d, T: Any + Clone> Deref for DynamicReadLock<'d, T> {
     fn deref(&self) -> &Self::Target {
         match &self.0 {
             DynamicReadLockInner::Reference(reference) => *reference,
-            // Unwrapping is safe because all checking is already done in its constructor
             #[cfg(not(feature = "no_closure"))]
-            DynamicReadLockInner::Guard(guard) => guard.downcast_ref().unwrap(),
+            DynamicReadLockInner::Guard(guard) => guard.downcast_ref().expect(
+                "never fails because the read guard was created after checking the data type",
+            ),
         }
     }
 }
@@ -277,9 +283,10 @@ impl<'d, T: Any + Clone> Deref for DynamicWriteLock<'d, T> {
     fn deref(&self) -> &Self::Target {
         match &self.0 {
             DynamicWriteLockInner::Reference(reference) => *reference,
-            // Unwrapping is safe because all checking is already done in its constructor
             #[cfg(not(feature = "no_closure"))]
-            DynamicWriteLockInner::Guard(guard) => guard.downcast_ref().unwrap(),
+            DynamicWriteLockInner::Guard(guard) => guard.downcast_ref().expect(
+                "never fails because the write guard was created after checking the data type",
+            ),
         }
     }
 }
@@ -289,16 +296,17 @@ impl<'d, T: Any + Clone> DerefMut for DynamicWriteLock<'d, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match &mut self.0 {
             DynamicWriteLockInner::Reference(reference) => *reference,
-            // Unwrapping is safe because all checking is already done in its constructor
             #[cfg(not(feature = "no_closure"))]
-            DynamicWriteLockInner::Guard(guard) => guard.downcast_mut().unwrap(),
+            DynamicWriteLockInner::Guard(guard) => guard.downcast_mut().expect(
+                "never fails because the write guard was created after checking the data type",
+            ),
         }
     }
 }
 
 impl Dynamic {
     /// Get the arbitrary data attached to this [`Dynamic`].
-    pub fn tag(&self) -> Tag {
+    pub const fn tag(&self) -> Tag {
         match self.0 {
             Union::Unit(_, tag, _)
             | Union::Bool(_, tag, _)
@@ -350,7 +358,7 @@ impl Dynamic {
     /// Does this [`Dynamic`] hold a variant data type
     /// instead of one of the supported system primitive types?
     #[inline(always)]
-    pub fn is_variant(&self) -> bool {
+    pub const fn is_variant(&self) -> bool {
         match self.0 {
             Union::Variant(_, _, _) => true,
             _ => false,
@@ -361,7 +369,7 @@ impl Dynamic {
     /// Not available under `no_closure`.
     #[cfg(not(feature = "no_closure"))]
     #[inline(always)]
-    pub fn is_shared(&self) -> bool {
+    pub const fn is_shared(&self) -> bool {
         #[cfg(not(feature = "no_closure"))]
         match self.0 {
             Union::Shared(_, _, _) => return true,
@@ -409,7 +417,7 @@ impl Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(_, _, _) => TypeId::of::<Instant>(),
 
-            Union::Variant(value, _, _) => (***value).type_id(),
+            Union::Variant(value, _, _) => value.as_ref().as_ref().type_id(),
 
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(cell, _, _) => {
@@ -447,7 +455,7 @@ impl Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(_, _, _) => "timestamp",
 
-            Union::Variant(value, _, _) => (***value).type_name(),
+            Union::Variant(value, _, _) => value.as_ref().as_ref().type_name(),
 
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
@@ -473,17 +481,12 @@ impl Hash for Dynamic {
             #[cfg(not(feature = "no_float"))]
             Union::Float(f, _, _) => f.hash(state),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(a, _, _) => (**a).hash(state),
+            Union::Array(a, _, _) => a.as_ref().hash(state),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(m, _, _) => {
-                let mut buf: crate::StaticVec<_> = m.iter().collect();
-                buf.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-                buf.into_iter().for_each(|(key, value)| {
-                    key.hash(state);
-                    value.hash(state);
-                })
-            }
+            Union::Map(m, _, _) => m.iter().for_each(|(key, value)| {
+                key.hash(state);
+                value.hash(state);
+            }),
             Union::FnPtr(f, _, _) if f.is_curried() => {
                 unimplemented!(
                     "{} with curried arguments cannot be hashed",
@@ -566,43 +569,47 @@ impl fmt::Display for Dynamic {
             Union::TimeStamp(_, _, _) => f.write_str("<timestamp>"),
 
             Union::Variant(value, _, _) => {
-                let _type_id = (***value).type_id();
+                let value = value.as_ref().as_ref();
+                let _type_id = value.type_id();
+                let _value_any = value.as_any();
+
+                const CHECKED: &str = "never fails because the type was checked";
 
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
                 if _type_id == TypeId::of::<u8>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<u8>().unwrap());
+                    return fmt::Display::fmt(_value_any.downcast_ref::<u8>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<u16>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<u16>().unwrap());
+                    return fmt::Display::fmt(_value_any.downcast_ref::<u16>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<u32>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<u32>().unwrap());
+                    return fmt::Display::fmt(_value_any.downcast_ref::<u32>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<u64>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<u64>().unwrap());
+                    return fmt::Display::fmt(_value_any.downcast_ref::<u64>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i8>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<i8>().unwrap());
+                    return fmt::Display::fmt(_value_any.downcast_ref::<i8>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i16>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<i16>().unwrap());
+                    return fmt::Display::fmt(_value_any.downcast_ref::<i16>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i32>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<i32>().unwrap());
+                    return fmt::Display::fmt(_value_any.downcast_ref::<i32>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i64>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<i64>().unwrap());
+                    return fmt::Display::fmt(_value_any.downcast_ref::<i64>().expect(CHECKED), f);
                 }
 
                 #[cfg(not(feature = "no_float"))]
                 if _type_id == TypeId::of::<f32>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<f32>().unwrap());
+                    return fmt::Display::fmt(_value_any.downcast_ref::<f32>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<f64>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<f64>().unwrap());
+                    return fmt::Display::fmt(_value_any.downcast_ref::<f64>().expect(CHECKED), f);
                 }
 
                 #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
                 if _type_id == TypeId::of::<u128>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<u128>().unwrap());
+                    return fmt::Display::fmt(_value_any.downcast_ref::<u128>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i128>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<i128>().unwrap());
+                    return fmt::Display::fmt(_value_any.downcast_ref::<i128>().expect(CHECKED), f);
                 }
 
-                f.write_str((***value).type_name())
+                f.write_str(value.type_name())
             }
 
             #[cfg(not(feature = "no_closure"))]
@@ -645,51 +652,47 @@ impl fmt::Debug for Dynamic {
             Union::TimeStamp(_, _, _) => write!(f, "<timestamp>"),
 
             Union::Variant(value, _, _) => {
-                let _type_id = (***value).type_id();
+                let value = value.as_ref().as_ref();
+                let _type_id = value.type_id();
+                let _value_any = value.as_any();
+
+                const CHECKED: &str = "never fails because the type was checked";
 
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
                 if _type_id == TypeId::of::<u8>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<u8>().unwrap());
+                    return fmt::Debug::fmt(_value_any.downcast_ref::<u8>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<u16>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<u16>().unwrap());
+                    return fmt::Debug::fmt(_value_any.downcast_ref::<u16>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<u32>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<u32>().unwrap());
+                    return fmt::Debug::fmt(_value_any.downcast_ref::<u32>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<u64>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<u64>().unwrap());
+                    return fmt::Debug::fmt(_value_any.downcast_ref::<u64>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i8>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<i8>().unwrap());
+                    return fmt::Debug::fmt(_value_any.downcast_ref::<i8>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i16>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<i16>().unwrap());
+                    return fmt::Debug::fmt(_value_any.downcast_ref::<i16>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i32>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<i32>().unwrap());
+                    return fmt::Debug::fmt(_value_any.downcast_ref::<i32>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i64>() {
-                    return write!(f, "{:?}", (**value).as_any().downcast_ref::<i64>().unwrap());
+                    return fmt::Debug::fmt(_value_any.downcast_ref::<i64>().expect(CHECKED), f);
                 }
 
                 #[cfg(not(feature = "no_float"))]
                 if _type_id == TypeId::of::<f32>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<f32>().unwrap());
+                    return fmt::Debug::fmt(_value_any.downcast_ref::<f32>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<f64>() {
-                    return write!(f, "{}", (**value).as_any().downcast_ref::<f64>().unwrap());
+                    return fmt::Debug::fmt(_value_any.downcast_ref::<f64>().expect(CHECKED), f);
                 }
 
                 #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
                 if _type_id == TypeId::of::<u128>() {
-                    return write!(
-                        f,
-                        "{:?}",
-                        (**value).as_any().downcast_ref::<u128>().unwrap()
-                    );
+                    return fmt::Debug::fmt(_value_any.downcast_ref::<u128>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i128>() {
-                    return write!(
-                        f,
-                        "{:?}",
-                        (**value).as_any().downcast_ref::<i128>().unwrap()
-                    );
+                    return fmt::Debug::fmt(_value_any.downcast_ref::<i128>().expect(CHECKED), f);
                 }
 
-                write!(f, "{}", (*value).type_name())
+                write!(f, "{}", value.type_name())
             }
 
             #[cfg(not(feature = "no_closure"))]
@@ -746,7 +749,7 @@ impl Clone for Dynamic {
             }
 
             Union::Variant(ref value, tag, _) => {
-                let mut x = (***value).clone_into_dynamic();
+                let mut x = value.as_ref().as_ref().clone_into_dynamic();
                 x.set_tag(tag);
                 x
             }
@@ -830,7 +833,7 @@ impl Dynamic {
     ));
 
     /// Get the [`AccessMode`] for this [`Dynamic`].
-    pub(crate) fn access_mode(&self) -> AccessMode {
+    pub(crate) const fn access_mode(&self) -> AccessMode {
         match self.0 {
             Union::Unit(_, _, access)
             | Union::Bool(_, _, access)
@@ -980,53 +983,40 @@ impl Dynamic {
     pub fn from<T: Variant + Clone>(mut value: T) -> Self {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
+        const CHECKED: &str = "never fails because the type was checked";
+
         if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
-            return unsafe_try_cast::<_, Dynamic>(value).ok().unwrap();
+            return unsafe_try_cast::<_, Dynamic>(value).ok().expect(CHECKED);
         }
 
+        let val = value.as_any();
+
         if TypeId::of::<T>() == TypeId::of::<INT>() {
-            return <dyn Any>::downcast_ref::<INT>(&value)
-                .unwrap()
-                .clone()
-                .into();
+            return val.downcast_ref::<INT>().expect(CHECKED).clone().into();
         }
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
-            return <dyn Any>::downcast_ref::<FLOAT>(&value)
-                .unwrap()
-                .clone()
-                .into();
+            return val.downcast_ref::<FLOAT>().expect(CHECKED).clone().into();
         }
         #[cfg(feature = "decimal")]
         if TypeId::of::<T>() == TypeId::of::<Decimal>() {
-            return <dyn Any>::downcast_ref::<Decimal>(&value)
-                .unwrap()
-                .clone()
-                .into();
+            return val.downcast_ref::<Decimal>().expect(CHECKED).clone().into();
         }
         if TypeId::of::<T>() == TypeId::of::<bool>() {
-            return <dyn Any>::downcast_ref::<bool>(&value)
-                .unwrap()
-                .clone()
-                .into();
+            return val.downcast_ref::<bool>().expect(CHECKED).clone().into();
         }
         if TypeId::of::<T>() == TypeId::of::<char>() {
-            return <dyn Any>::downcast_ref::<char>(&value)
-                .unwrap()
-                .clone()
-                .into();
+            return val.downcast_ref::<char>().expect(CHECKED).clone().into();
         }
         if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
-            return <dyn Any>::downcast_ref::<ImmutableString>(&value)
-                .unwrap()
+            return val
+                .downcast_ref::<ImmutableString>()
+                .expect(CHECKED)
                 .clone()
                 .into();
         }
         if TypeId::of::<T>() == TypeId::of::<&str>() {
-            return <dyn Any>::downcast_ref::<&str>(&value)
-                .unwrap()
-                .deref()
-                .into();
+            return val.downcast_ref::<&str>().expect(CHECKED).deref().into();
         }
         if TypeId::of::<T>() == TypeId::of::<()>() {
             return ().into();
@@ -1450,9 +1440,9 @@ impl Dynamic {
                 #[cfg(feature = "sync")]
                 let value = cell.read().unwrap();
 
-                let type_id = (*value).type_id();
-
-                if type_id != TypeId::of::<T>() && TypeId::of::<Dynamic>() != TypeId::of::<T>() {
+                if (*value).type_id() != TypeId::of::<T>()
+                    && TypeId::of::<Dynamic>() != TypeId::of::<T>()
+                {
                     return None;
                 } else {
                     return Some(DynamicReadLock(DynamicReadLockInner::Guard(value)));
@@ -1483,9 +1473,9 @@ impl Dynamic {
                 #[cfg(feature = "sync")]
                 let value = cell.write().unwrap();
 
-                let type_id = (*value).type_id();
-
-                if type_id != TypeId::of::<T>() && TypeId::of::<Dynamic>() != TypeId::of::<T>() {
+                if (*value).type_id() != TypeId::of::<T>()
+                    && TypeId::of::<Dynamic>() != TypeId::of::<T>()
+                {
                     return None;
                 } else {
                     return Some(DynamicWriteLock(DynamicWriteLockInner::Guard(value)));
@@ -1507,77 +1497,77 @@ impl Dynamic {
 
         if TypeId::of::<T>() == TypeId::of::<INT>() {
             return match &self.0 {
-                Union::Int(value, _, _) => <dyn Any>::downcast_ref::<T>(value),
+                Union::Int(value, _, _) => value.as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
             return match &self.0 {
-                Union::Float(value, _, _) => <dyn Any>::downcast_ref::<T>(value.as_ref()),
+                Union::Float(value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         #[cfg(feature = "decimal")]
         if TypeId::of::<T>() == TypeId::of::<Decimal>() {
             return match &self.0 {
-                Union::Decimal(value, _, _) => <dyn Any>::downcast_ref::<T>(value.as_ref()),
+                Union::Decimal(value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<bool>() {
             return match &self.0 {
-                Union::Bool(value, _, _) => <dyn Any>::downcast_ref::<T>(value),
+                Union::Bool(value, _, _) => value.as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
             return match &self.0 {
-                Union::Str(value, _, _) => <dyn Any>::downcast_ref::<T>(value),
+                Union::Str(value, _, _) => value.as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<char>() {
             return match &self.0 {
-                Union::Char(value, _, _) => <dyn Any>::downcast_ref::<T>(value),
+                Union::Char(value, _, _) => value.as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             return match &self.0 {
-                Union::Array(value, _, _) => <dyn Any>::downcast_ref::<T>(value.as_ref()),
+                Union::Array(value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_object"))]
         if TypeId::of::<T>() == TypeId::of::<Map>() {
             return match &self.0 {
-                Union::Map(value, _, _) => <dyn Any>::downcast_ref::<T>(value.as_ref()),
+                Union::Map(value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<FnPtr>() {
             return match &self.0 {
-                Union::FnPtr(value, _, _) => <dyn Any>::downcast_ref::<T>(value.as_ref()),
+                Union::FnPtr(value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_std"))]
         if TypeId::of::<T>() == TypeId::of::<Instant>() {
             return match &self.0 {
-                Union::TimeStamp(value, _, _) => <dyn Any>::downcast_ref::<T>(value.as_ref()),
+                Union::TimeStamp(value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<()>() {
             return match &self.0 {
-                Union::Unit(value, _, _) => <dyn Any>::downcast_ref::<T>(value),
+                Union::Unit(value, _, _) => value.as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
-            return <dyn Any>::downcast_ref::<T>(self);
+            return self.as_any().downcast_ref::<T>();
         }
 
         match &self.0 {
@@ -1597,77 +1587,77 @@ impl Dynamic {
 
         if TypeId::of::<T>() == TypeId::of::<INT>() {
             return match &mut self.0 {
-                Union::Int(value, _, _) => <dyn Any>::downcast_mut::<T>(value),
+                Union::Int(value, _, _) => value.as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
             return match &mut self.0 {
-                Union::Float(value, _, _) => <dyn Any>::downcast_mut::<T>(value.as_mut()),
+                Union::Float(value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         #[cfg(feature = "decimal")]
         if TypeId::of::<T>() == TypeId::of::<Decimal>() {
             return match &mut self.0 {
-                Union::Decimal(value, _, _) => <dyn Any>::downcast_mut::<T>(value.as_mut()),
+                Union::Decimal(value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<bool>() {
             return match &mut self.0 {
-                Union::Bool(value, _, _) => <dyn Any>::downcast_mut::<T>(value),
+                Union::Bool(value, _, _) => value.as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
             return match &mut self.0 {
-                Union::Str(value, _, _) => <dyn Any>::downcast_mut::<T>(value),
+                Union::Str(value, _, _) => value.as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<char>() {
             return match &mut self.0 {
-                Union::Char(value, _, _) => <dyn Any>::downcast_mut::<T>(value),
+                Union::Char(value, _, _) => value.as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             return match &mut self.0 {
-                Union::Array(value, _, _) => <dyn Any>::downcast_mut::<T>(value.as_mut()),
+                Union::Array(value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_object"))]
         if TypeId::of::<T>() == TypeId::of::<Map>() {
             return match &mut self.0 {
-                Union::Map(value, _, _) => <dyn Any>::downcast_mut::<T>(value.as_mut()),
+                Union::Map(value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<FnPtr>() {
             return match &mut self.0 {
-                Union::FnPtr(value, _, _) => <dyn Any>::downcast_mut::<T>(value.as_mut()),
+                Union::FnPtr(value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_std"))]
         if TypeId::of::<T>() == TypeId::of::<Instant>() {
             return match &mut self.0 {
-                Union::TimeStamp(value, _, _) => <dyn Any>::downcast_mut::<T>(value.as_mut()),
+                Union::TimeStamp(value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<()>() {
             return match &mut self.0 {
-                Union::Unit(value, _, _) => <dyn Any>::downcast_mut::<T>(value),
+                Union::Unit(value, _, _) => value.as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<Dynamic>() {
-            return <dyn Any>::downcast_mut::<T>(self);
+            return self.as_mut_any().downcast_mut::<T>();
         }
 
         match &mut self.0 {
@@ -1720,8 +1710,8 @@ impl Dynamic {
     #[cfg(feature = "decimal")]
     #[inline(always)]
     pub fn as_decimal(&self) -> Result<Decimal, &'static str> {
-        match &self.0 {
-            Union::Decimal(n, _, _) => Ok(**n),
+        match self.0 {
+            Union::Decimal(ref n, _, _) => Ok(**n),
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _, _) => self.read_lock().map(|v| *v).ok_or_else(|| self.type_name()),
             _ => Err(self.type_name()),
@@ -1757,8 +1747,8 @@ impl Dynamic {
     /// Panics if the value is shared.
     #[inline(always)]
     pub(crate) fn as_str_ref(&self) -> Result<&str, &'static str> {
-        match &self.0 {
-            Union::Str(s, _, _) => Ok(s),
+        match self.0 {
+            Union::Str(ref s, _, _) => Ok(s),
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _, _) => panic!("as_str() cannot be called on shared values"),
             _ => Err(self.type_name()),
