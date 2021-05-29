@@ -147,7 +147,7 @@ fn call_fn_with_constant_arguments(
             state.lib,
             fn_name,
             calc_fn_hash(fn_name, arg_values.len()),
-            arg_values.iter_mut().collect::<StaticVec<_>>().as_mut(),
+            &mut arg_values.iter_mut().collect::<StaticVec<_>>(),
             false,
             false,
             Position::NONE,

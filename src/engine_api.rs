@@ -1101,38 +1101,34 @@ impl Engine {
             });
         }
 
-        let mut resolver = StaticModuleResolver::new();
         let mut ast = self.compile_scripts_with_scope(scope, &[script])?;
-        let mut imports = Default::default();
 
-        collect_imports(&ast, &mut resolver, &mut imports);
+        if let Some(ref module_resolver) = self.module_resolver {
+            let mut resolver = StaticModuleResolver::new();
+            let mut imports = Default::default();
 
-        if !imports.is_empty() {
-            while let Some(path) = imports.iter().next() {
-                let path = path.clone();
+            collect_imports(&ast, &mut resolver, &mut imports);
 
-                match self
-                    .module_resolver
-                    .resolve_ast(self, None, &path, Position::NONE)
-                {
-                    Some(Ok(module_ast)) => {
-                        collect_imports(&module_ast, &mut resolver, &mut imports)
+            if !imports.is_empty() {
+                while let Some(path) = imports.iter().next() {
+                    let path = path.clone();
+
+                    match module_resolver.resolve_ast(self, None, &path, Position::NONE) {
+                        Some(Ok(module_ast)) => {
+                            collect_imports(&module_ast, &mut resolver, &mut imports)
+                        }
+                        Some(err) => return err,
+                        None => (),
                     }
-                    Some(err) => return err,
-                    None => (),
+
+                    let module = module_resolver.resolve(self, None, &path, Position::NONE)?;
+                    let module = shared_take_or_clone(module);
+
+                    imports.remove(&path);
+                    resolver.insert(path, module);
                 }
-
-                let module = shared_take_or_clone(self.module_resolver.resolve(
-                    self,
-                    None,
-                    &path,
-                    Position::NONE,
-                )?);
-
-                imports.remove(&path);
-                resolver.insert(path, module);
+                ast.set_resolver(resolver);
             }
-            ast.set_resolver(resolver);
         }
 
         Ok(ast)

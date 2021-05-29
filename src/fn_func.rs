@@ -4,7 +4,7 @@
 #![allow(non_snake_case)]
 
 use crate::dynamic::Variant;
-use crate::{Engine, EvalAltResult, ParseError, Scope, AST};
+use crate::{Engine, EvalAltResult, ParseError, Scope, SmartString, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -98,7 +98,7 @@ macro_rules! def_anonymous_fn {
 
             #[inline(always)]
             fn create_from_ast(self, ast: AST, entry_point: &str) -> Self::Output {
-                let fn_name = entry_point.to_string();
+                let fn_name: SmartString = entry_point.into();
                 Box::new(move |$($par),*| self.call_fn(&mut Scope::new(), &ast, &fn_name, ($($par,)*)))
             }
 

@@ -1864,7 +1864,7 @@ fn parse_custom_syntax(
         state.stack.push((empty, AccessMode::ReadWrite));
     }
 
-    let parse_func = &syntax.parse;
+    let parse_func = syntax.parse.as_ref();
 
     segments.push(key.into());
     tokens.push(key.into());

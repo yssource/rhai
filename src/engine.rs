@@ -263,7 +263,7 @@ enum ChainArgument {
     Property(Position),
     /// Arguments to a dot method call.
     #[cfg(not(feature = "no_object"))]
-    MethodCallArgs(StaticVec<Dynamic>, StaticVec<Position>),
+    MethodCallArgs(StaticVec<Dynamic>, Position),
     /// Index value.
     #[cfg(not(feature = "no_index"))]
     IndexValue(Dynamic, Position),
@@ -294,7 +294,7 @@ impl ChainArgument {
     /// Panics if not `ChainArgument::MethodCallArgs`.
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
-    pub fn as_fn_call_args(self) -> (StaticVec<Dynamic>, StaticVec<Position>) {
+    pub fn as_fn_call_args(self) -> (StaticVec<Dynamic>, Position) {
         match self {
             Self::Property(_) => {
                 panic!("expecting ChainArgument::MethodCallArgs")
@@ -303,16 +303,16 @@ impl ChainArgument {
             Self::IndexValue(_, _) => {
                 panic!("expecting ChainArgument::MethodCallArgs")
             }
-            Self::MethodCallArgs(values, positions) => (values, positions),
+            Self::MethodCallArgs(values, pos) => (values, pos),
         }
     }
 }
 
 #[cfg(not(feature = "no_object"))]
-impl From<(StaticVec<Dynamic>, StaticVec<Position>)> for ChainArgument {
+impl From<(StaticVec<Dynamic>, Position)> for ChainArgument {
     #[inline(always)]
-    fn from((values, positions): (StaticVec<Dynamic>, StaticVec<Position>)) -> Self {
-        Self::MethodCallArgs(values, positions)
+    fn from((values, pos): (StaticVec<Dynamic>, Position)) -> Self {
+        Self::MethodCallArgs(values, pos)
     }
 }
 
@@ -787,7 +787,7 @@ pub struct Engine {
 
     /// A module resolution service.
     #[cfg(not(feature = "no_module"))]
-    pub(crate) module_resolver: Box<dyn crate::ModuleResolver>,
+    pub(crate) module_resolver: Option<Box<dyn crate::ModuleResolver>>,
 
     /// A map mapping type names to pretty-print names.
     pub(crate) type_names: BTreeMap<Identifier, Box<Identifier>>,
@@ -890,10 +890,10 @@ impl Engine {
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_std"))]
             #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-            module_resolver: Box::new(crate::module::resolvers::FileModuleResolver::new()),
+            module_resolver: Some(Box::new(crate::module::resolvers::FileModuleResolver::new())),
             #[cfg(not(feature = "no_module"))]
             #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
-            module_resolver: Box::new(crate::module::resolvers::DummyModuleResolver::new()),
+            module_resolver: None,
 
             type_names: Default::default(),
             empty_string: Default::default(),
@@ -950,7 +950,7 @@ impl Engine {
             global_sub_modules: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
-            module_resolver: Box::new(crate::module::resolvers::DummyModuleResolver::new()),
+            module_resolver: None,
 
             type_names: Default::default(),
             empty_string: Default::default(),
@@ -1629,24 +1629,25 @@ impl Engine {
         match expr {
             #[cfg(not(feature = "no_object"))]
             Expr::FnCall(x, _) if _parent_chain_type == ChainType::Dot && !x.is_qualified() => {
-                let mut arg_positions: StaticVec<_> = Default::default();
-
-                let mut arg_values = x
+                let arg_values = x
                     .args
                     .iter()
-                    .inspect(|arg_expr| arg_positions.push(arg_expr.position()))
                     .map(|arg_expr| {
                         self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
                             .map(Dynamic::flatten)
                     })
+                    .chain(x.literal_args.iter().map(|(v, _)| Ok(v.clone())))
                     .collect::<Result<StaticVec<_>, _>>()?;
 
-                x.literal_args
+                let pos = x
+                    .args
                     .iter()
-                    .inspect(|(_, pos)| arg_positions.push(*pos))
-                    .for_each(|(v, _)| arg_values.push(v.clone()));
+                    .map(|arg_expr| arg_expr.position())
+                    .chain(x.literal_args.iter().map(|(_, pos)| *pos))
+                    .next()
+                    .unwrap_or_default();
 
-                idx_values.push((arg_values, arg_positions).into());
+                idx_values.push((arg_values, pos).into());
             }
             #[cfg(not(feature = "no_object"))]
             Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dot => {
@@ -1674,24 +1675,25 @@ impl Engine {
                     Expr::FnCall(x, _)
                         if _parent_chain_type == ChainType::Dot && !x.is_qualified() =>
                     {
-                        let mut arg_positions: StaticVec<_> = Default::default();
-
-                        let mut arg_values = x
+                        let arg_values = x
                             .args
                             .iter()
-                            .inspect(|arg_expr| arg_positions.push(arg_expr.position()))
                             .map(|arg_expr| {
                                 self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
                                     .map(Dynamic::flatten)
                             })
+                            .chain(x.literal_args.iter().map(|(v, _)| Ok(v.clone())))
                             .collect::<Result<StaticVec<_>, _>>()?;
 
-                        x.literal_args
+                        let pos = x
+                            .args
                             .iter()
-                            .inspect(|(_, pos)| arg_positions.push(*pos))
-                            .for_each(|(v, _)| arg_values.push(v.clone()));
+                            .map(|arg_expr| arg_expr.position())
+                            .chain(x.literal_args.iter().map(|(_, pos)| *pos))
+                            .next()
+                            .unwrap_or_default();
 
-                        (arg_values, arg_positions).into()
+                        (arg_values, pos).into()
                     }
                     #[cfg(not(feature = "no_object"))]
                     Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dot => {
@@ -2037,11 +2039,7 @@ impl Engine {
             Expr::Unit(_) => Ok(Dynamic::UNIT),
 
             Expr::Custom(custom, _) => {
-                let expressions = custom
-                    .keywords
-                    .iter()
-                    .map(Into::into)
-                    .collect::<StaticVec<_>>();
+                let expressions: StaticVec<_> = custom.keywords.iter().map(Into::into).collect();
                 let key_token = custom.tokens.first().expect(
                     "never fails because a custom syntax stream must contain at least one token",
                 );
@@ -2757,20 +2755,26 @@ impl Engine {
                     use crate::ModuleResolver;
 
                     let source = state.source.as_ref().map(|s| s.as_str());
-                    let expr_pos = expr.position();
+                    let path_pos = expr.position();
 
                     let module = state
                         .resolver
                         .as_ref()
-                        .and_then(|r| match r.resolve(self, source, &path, expr_pos) {
-                            Ok(m) => return Some(Ok(m)),
-                            Err(err) => match *err {
-                                EvalAltResult::ErrorModuleNotFound(_, _) => None,
-                                _ => return Some(Err(err)),
-                            },
+                        .and_then(|r| match r.resolve(self, source, &path, path_pos) {
+                            Err(err)
+                                if matches!(*err, EvalAltResult::ErrorModuleNotFound(_, _)) =>
+                            {
+                                None
+                            }
+                            result => Some(result),
+                        })
+                        .or_else(|| {
+                            self.module_resolver
+                                .as_ref()
+                                .map(|r| r.resolve(self, source, &path, path_pos))
                         })
                         .unwrap_or_else(|| {
-                            self.module_resolver.resolve(self, source, &path, expr_pos)
+                            EvalAltResult::ErrorModuleNotFound(path.to_string(), path_pos).into()
                         })?;
 
                     export.as_ref().map(|x| x.name.clone()).map(|name| {
