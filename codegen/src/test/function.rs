@@ -286,7 +286,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
                 #[allow(unused)]
                 #[inline(always)] pub fn dynamic_result_fn() -> RhaiResult {
@@ -322,7 +321,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
                 #[allow(unused)]
                 #[inline(always)] pub fn dynamic_result_fn(x: usize) -> RhaiResult {
@@ -358,7 +356,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
                 #[allow(unused)]
                 #[inline(always)] pub fn dynamic_result_fn(context: NativeCallContext, x: usize) -> RhaiResult {
@@ -396,7 +393,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
                 #[allow(unused)]
                 #[inline(always)] pub fn dynamic_result_fn() -> RhaiResult {
@@ -428,7 +424,6 @@ mod generate_tests {
                 }
 
                 #[inline(always)] fn is_method_call(&self) -> bool { false }
-                #[inline(always)] fn is_variadic(&self) -> bool { false }
             }
         };
 
@@ -460,7 +455,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
                 #[allow(unused)]
                 #[inline(always)] pub fn dynamic_result_fn(x: usize, y: usize) -> RhaiResult {
@@ -500,7 +494,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
                 #[allow(unused)]
                 #[inline(always)] pub fn dynamic_result_fn(x: &mut usize, y: usize) -> RhaiResult {
@@ -537,7 +530,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
                 #[allow(unused)]
                 #[inline(always)] pub fn dynamic_result_fn(message: &str) -> RhaiResult {

@@ -315,7 +315,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -370,7 +369,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -424,7 +422,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -492,7 +489,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
 
                 #[allow(non_camel_case_types)]
@@ -510,7 +506,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -565,7 +560,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -627,7 +621,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -862,7 +855,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -947,7 +939,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -1001,7 +992,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { false }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -1057,7 +1047,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -1114,7 +1103,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -1174,7 +1162,6 @@ mod generate_tests {
                         }
 
                         #[inline(always)] fn is_method_call(&self) -> bool { true }
-                        #[inline(always)] fn is_variadic(&self) -> bool { false }
                     }
                 }
                 #[allow(unused_imports)]
@@ -1255,7 +1242,6 @@ mod generate_tests {
                         }
 
                         #[inline(always)] fn is_method_call(&self) -> bool { true }
-                        #[inline(always)] fn is_variadic(&self) -> bool { false }
                     }
                 }
                 #[allow(unused_imports)]
@@ -1337,7 +1323,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -1398,7 +1383,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -1457,7 +1441,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -1519,7 +1502,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -1578,7 +1560,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -1640,7 +1621,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -1700,7 +1680,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };
@@ -1763,7 +1742,6 @@ mod generate_tests {
                     }
 
                     #[inline(always)] fn is_method_call(&self) -> bool { true }
-                    #[inline(always)] fn is_variadic(&self) -> bool { false }
                 }
             }
         };

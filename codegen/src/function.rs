@@ -845,7 +845,6 @@ impl ExportedFn {
                 }
 
                 #[inline(always)] fn is_method_call(&self) -> bool { #is_method_call }
-                #[inline(always)] fn is_variadic(&self) -> bool { false }
             }
         }
     }
