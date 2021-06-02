@@ -2014,13 +2014,13 @@ impl Expr {
 
             Self::DynamicConstant(_, _)
             | Self::BoolConstant(_, _)
-            | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::And(_, _)
             | Self::Or(_, _)
             | Self::Unit(_) => false,
 
-            Self::StringConstant(_, _)
+            Self::IntegerConstant(_, _)
+            | Self::StringConstant(_, _)
             | Self::InterpolatedString(_)
             | Self::FnCall(_, _)
             | Self::Stmt(_)

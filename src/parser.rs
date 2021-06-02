@@ -455,7 +455,10 @@ fn parse_index_chain(
     // Check type of indexing - must be integer or string
     match &idx_expr {
         Expr::IntegerConstant(_, pos) => match lhs {
-            Expr::Array(_, _) | Expr::StringConstant(_, _) | Expr::InterpolatedString(_) => (),
+            Expr::IntegerConstant(_, _)
+            | Expr::Array(_, _)
+            | Expr::StringConstant(_, _)
+            | Expr::InterpolatedString(_) => (),
 
             Expr::Map(_, _) => {
                 return Err(PERR::MalformedIndexExpr(

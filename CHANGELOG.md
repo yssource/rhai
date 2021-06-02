@@ -4,6 +4,16 @@ Rhai Release Notes
 Version 0.20.3
 ==============
 
+Bug fixes
+---------
+
+* Fixed incorrect optimization regarding chain-indexing with non-numeric index.
+
+New features
+------------
+
+* An integer value can now be indexed to get/set a single bit.
+
 
 Version 0.20.2
 ==============

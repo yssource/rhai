@@ -1400,6 +1400,7 @@ impl Engine {
                     arg_values[0] = target.take_or_clone().flatten();
                     args = arg_values.iter_mut().collect();
                 } else {
+                    // Turn it into a method call only if the object is not shared and not a simple value
                     let (first, rest) = arg_values
                         .split_first_mut()
                         .expect("never fails because the arguments list is not empty");

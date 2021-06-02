@@ -336,6 +336,10 @@ pub enum Target<'a> {
     LockGuard((crate::dynamic::DynamicWriteLock<'a, Dynamic>, Dynamic)),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
     Value(Dynamic),
+    /// The target is a bit inside an [`INT`][crate::INT].
+    /// This is necessary because directly pointing to a bit inside an [`INT`][crate::INT] is impossible.
+    #[cfg(not(feature = "no_index"))]
+    BitField(&'a mut Dynamic, usize, Dynamic),
     /// The target is a character inside a String.
     /// This is necessary because directly pointing to a char inside a String is impossible.
     #[cfg(not(feature = "no_index"))]
@@ -354,6 +358,8 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => true,
             Self::Value(_) => false,
             #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, _) => false,
+            #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => false,
         }
     }
@@ -367,6 +373,8 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard(_) => false,
             Self::Value(_) => true,
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, _) => false,
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => false,
         }
@@ -382,6 +390,8 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => true,
             Self::Value(r) => r.is_shared(),
             #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, _) => false,
+            #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => false,
         }
     }
@@ -396,6 +406,8 @@ impl<'a> Target<'a> {
             Self::LockGuard((r, _)) => r.is::<T>(),
             Self::Value(r) => r.is::<T>(),
             #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, _) => TypeId::of::<T>() == TypeId::of::<bool>(),
+            #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => TypeId::of::<T>() == TypeId::of::<char>(),
         }
     }
@@ -408,6 +420,8 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard((_, orig)) => orig, // Original value is simply taken
             Self::Value(v) => v,       // Owned value is simply taken
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, value) => value, // Boolean is taken
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => ch, // Character is taken
         }
@@ -435,9 +449,14 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_closure"))]
             Self::LockGuard(_) => Ok(()),
             #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, value) => {
+                let new_val = value.clone();
+                self.set_value(new_val, Position::NONE)
+            }
+            #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => {
-                let char_value = ch.clone();
-                self.set_value(char_value, Position::NONE)
+                let new_val = ch.clone();
+                self.set_value(new_val, Position::NONE)
             }
         }
     }
@@ -453,6 +472,32 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => **r = new_val,
             Self::Value(_) => panic!("cannot update a value"),
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(value, index, _) => {
+                let value = &mut *value
+                    .write_lock::<crate::INT>()
+                    .expect("never fails because `BitField` always holds an `INT`");
+
+                // Replace the bit at the specified index position
+                let new_bit = new_val.as_bool().map_err(|err| {
+                    Box::new(EvalAltResult::ErrorMismatchDataType(
+                        "bool".to_string(),
+                        err.to_string(),
+                        _pos,
+                    ))
+                })?;
+
+                let index = *index;
+
+                if index < std::mem::size_of_val(value) * 8 {
+                    let mask = 1 << index;
+                    if new_bit {
+                        *value |= mask;
+                    } else {
+                        *value &= !mask;
+                    }
+                }
+            }
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(s, index, _) => {
                 let s = &mut *s
@@ -514,6 +559,8 @@ impl Deref for Target<'_> {
             Self::LockGuard((r, _)) => &**r,
             Self::Value(ref r) => r,
             #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, ref r) => r,
+            #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ref r) => r,
         }
     }
@@ -535,6 +582,8 @@ impl DerefMut for Target<'_> {
             #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => r.deref_mut(),
             Self::Value(ref mut r) => r,
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ref mut r) => r,
         }
@@ -1819,6 +1868,43 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
+            Dynamic(Union::Int(value, _, _)) => {
+                // val_int[idx]
+                let index = idx
+                    .as_int()
+                    .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
+
+                let bits = std::mem::size_of_val(value) * 8;
+
+                let (bit_value, offset) = if index >= 0 {
+                    let offset = index as usize;
+                    (
+                        if offset >= bits {
+                            return EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into();
+                        } else {
+                            (*value & (1 << offset)) != 0
+                        },
+                        offset,
+                    )
+                } else if let Some(abs_index) = index.checked_abs() {
+                    let offset = abs_index as usize;
+                    (
+                        // Count from end if negative
+                        if offset > bits {
+                            return EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into();
+                        } else {
+                            (*value & (1 << (bits - offset))) != 0
+                        },
+                        offset,
+                    )
+                } else {
+                    return EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into();
+                };
+
+                Ok(Target::BitField(target, offset, bit_value.into()))
+            }
+
+            #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Str(s, _, _)) => {
                 // val_string[idx]
                 let index = idx
@@ -1826,7 +1912,6 @@ impl Engine {
                     .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
 
                 let (ch, offset) = if index >= 0 {
-                    // Count from end if negative
                     let offset = index as usize;
                     (
                         s.chars().nth(offset).ok_or_else(|| {
@@ -1835,9 +1920,10 @@ impl Engine {
                         })?,
                         offset,
                     )
-                } else if let Some(index) = index.checked_abs() {
-                    let offset = index as usize;
+                } else if let Some(abs_index) = index.checked_abs() {
+                    let offset = abs_index as usize;
                     (
+                        // Count from end if negative
                         s.chars().rev().nth(offset - 1).ok_or_else(|| {
                             let chars_len = s.chars().count();
                             EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos)
@@ -2153,8 +2239,8 @@ impl Engine {
         op_pos: Position,
         mut target: Target,
         root: (&str, Position),
-        mut new_value: Dynamic,
-        new_value_pos: Position,
+        mut new_val: Dynamic,
+        new_val_pos: Position,
     ) -> Result<(), Box<EvalAltResult>> {
         if target.is_read_only() {
             // Assignment to constant variable
@@ -2167,48 +2253,51 @@ impl Engine {
             op,
         }) = op_info
         {
-            let mut lock_guard;
-            let lhs_ptr_inner;
+            {
+                let mut lock_guard;
+                let lhs_ptr_inner;
 
-            #[cfg(not(feature = "no_closure"))]
-            let target_is_shared = target.is_shared();
-            #[cfg(feature = "no_closure")]
-            let target_is_shared = false;
+                #[cfg(not(feature = "no_closure"))]
+                let target_is_shared = target.is_shared();
+                #[cfg(feature = "no_closure")]
+                let target_is_shared = false;
 
-            if target_is_shared {
-                lock_guard = target
-                    .write_lock::<Dynamic>()
-                    .expect("never fails when casting to `Dynamic`");
-                lhs_ptr_inner = &mut *lock_guard;
-            } else {
-                lhs_ptr_inner = &mut *target;
-            }
-
-            let hash = hash_op_assign;
-            let args = &mut [lhs_ptr_inner, &mut new_value];
-
-            match self.call_native_fn(mods, state, lib, op, hash, args, true, true, op_pos) {
-                Ok(_) => (),
-                Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
-                {
-                    // Expand to `var = var op rhs`
-                    let op = &op[..op.len() - 1]; // extract operator without =
-
-                    // Run function
-                    let (value, _) = self
-                        .call_native_fn(mods, state, lib, op, hash_op, args, true, false, op_pos)?;
-
-                    *args[0] = value.flatten();
+                if target_is_shared {
+                    lock_guard = target
+                        .write_lock::<Dynamic>()
+                        .expect("never fails when casting to `Dynamic`");
+                    lhs_ptr_inner = &mut *lock_guard;
+                } else {
+                    lhs_ptr_inner = &mut *target;
                 }
-                err => return err.map(|_| ()),
+
+                let hash = hash_op_assign;
+                let args = &mut [lhs_ptr_inner, &mut new_val];
+
+                match self.call_native_fn(mods, state, lib, op, hash, args, true, true, op_pos) {
+                    Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
+                    {
+                        // Expand to `var = var op rhs`
+                        let op = &op[..op.len() - 1]; // extract operator without =
+
+                        // Run function
+                        let (value, _) = self.call_native_fn(
+                            mods, state, lib, op, hash_op, args, true, false, op_pos,
+                        )?;
+
+                        *args[0] = value.flatten();
+                    }
+                    err => return err.map(|_| ()),
+                }
             }
 
-            Ok(())
+            target.propagate_changed_value()?;
         } else {
             // Normal assignment
-            target.set_value(new_value, new_value_pos)?;
-            Ok(())
+            target.set_value(new_val, new_val_pos)?;
         }
+
+        Ok(())
     }
 
     /// Evaluate a statement.
