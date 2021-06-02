@@ -1,5 +1,5 @@
 use crate::dynamic::Variant;
-use crate::{def_package, EvalAltResult, Position, INT};
+use crate::{def_package, EvalAltResult, INT};
 use std::ops::Range;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -29,9 +29,9 @@ where
                     Default::default(),
                     Box::new(EvalAltResult::ErrorArithmetic(
                         "step value cannot be zero".to_string(),
-                        Position::NONE,
+                        crate::Position::NONE,
                     )),
-                    Position::NONE,
+                    crate::Position::NONE,
                 )
                 .into();
             }
@@ -139,18 +139,21 @@ impl BitRange {
 
             #[cfg(not(feature = "unchecked"))]
             if offset >= BITS {
-                return EvalAltResult::ErrorBitFieldBounds(BITS, from, Position::NONE).into();
+                return EvalAltResult::ErrorBitFieldBounds(BITS, from, crate::Position::NONE)
+                    .into();
             }
             offset
         } else {
             #[cfg(not(feature = "unchecked"))]
             if let Some(abs_from) = from.checked_abs() {
                 if (abs_from as usize) > BITS {
-                    return EvalAltResult::ErrorBitFieldBounds(BITS, from, Position::NONE).into();
+                    return EvalAltResult::ErrorBitFieldBounds(BITS, from, crate::Position::NONE)
+                        .into();
                 }
                 BITS - (abs_from as usize)
             } else {
-                return EvalAltResult::ErrorBitFieldBounds(BITS, from, Position::NONE).into();
+                return EvalAltResult::ErrorBitFieldBounds(BITS, from, crate::Position::NONE)
+                    .into();
             }
 
             #[cfg(feature = "unchecked")]
@@ -255,8 +258,8 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
                 #[cfg(not(feature = "unchecked"))]
                 if step == 0.0 {
                     return EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
-                        Box::new(EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), Position::NONE)),
-                        Position::NONE,
+                        Box::new(EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE)),
+                        crate::Position::NONE,
                     ).into();
                 }
 
@@ -317,8 +320,8 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
                 #[cfg(not(feature = "unchecked"))]
                 if step.is_zero() {
                     return EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
-                        Box::new(EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), Position::NONE)),
-                        Position::NONE,
+                        Box::new(EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE)),
+                        crate::Position::NONE,
                     ).into();
                 }
 

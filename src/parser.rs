@@ -15,7 +15,7 @@ use crate::token::{
 };
 use crate::utils::{get_hasher, IdentifierBuilder};
 use crate::{
-    calc_fn_hash, calc_qualified_fn_hash, Dynamic, Engine, FnPtr, Identifier, LexError, ParseError,
+    calc_fn_hash, calc_qualified_fn_hash, Dynamic, Engine, Identifier, LexError, ParseError,
     ParseErrorType, Position, Scope, Shared, StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
@@ -3017,7 +3017,7 @@ fn parse_anon_fn(
         comments: Default::default(),
     };
 
-    let fn_ptr = FnPtr::new_unchecked(fn_name.into(), Default::default());
+    let fn_ptr = crate::FnPtr::new_unchecked(fn_name.into(), Default::default());
     let expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), settings.pos);
 
     #[cfg(not(feature = "no_closure"))]

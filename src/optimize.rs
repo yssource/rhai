@@ -670,7 +670,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
 }
 
 /// Optimize an [expression][Expr].
-fn optimize_expr(expr: &mut Expr, state: &mut State, indexing: bool) {
+fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
     // These keywords are handled specially
     const DONT_EVAL_KEYWORDS: &[&str] = &[
         KEYWORD_PRINT, // side effects
@@ -693,7 +693,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, indexing: bool) {
         }
         // lhs.rhs
         #[cfg(not(feature = "no_object"))]
-        Expr::Dot(x, _) if !indexing => match (&mut x.lhs, &mut x.rhs) {
+        Expr::Dot(x, _) if !_chaining => match (&mut x.lhs, &mut x.rhs) {
             // map.string
             (Expr::Map(m, pos), Expr::Property(p)) if m.0.iter().all(|(_, x)| x.is_pure()) => {
                 let prop = p.2.0.as_str();
@@ -711,11 +711,11 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, indexing: bool) {
         }
         // ....lhs.rhs
         #[cfg(not(feature = "no_object"))]
-        Expr::Dot(x, _) => { optimize_expr(&mut x.lhs, state, false); optimize_expr(&mut x.rhs, state, indexing); }
+        Expr::Dot(x, _) => { optimize_expr(&mut x.lhs, state, false); optimize_expr(&mut x.rhs, state, _chaining); }
 
         // lhs[rhs]
         #[cfg(not(feature = "no_index"))]
-        Expr::Index(x, _) if !indexing => match (&mut x.lhs, &mut x.rhs) {
+        Expr::Index(x, _) if !_chaining => match (&mut x.lhs, &mut x.rhs) {
             // array[int]
             (Expr::Array(a, pos), Expr::IntegerConstant(i, _))
                 if *i >= 0 && (*i as usize) < a.len() && a.iter().all(Expr::is_pure) =>
@@ -778,7 +778,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, indexing: bool) {
         },
         // ...[lhs][rhs]
         #[cfg(not(feature = "no_index"))]
-        Expr::Index(x, _) => { optimize_expr(&mut x.lhs, state, false); optimize_expr(&mut x.rhs, state, indexing); }
+        Expr::Index(x, _) => { optimize_expr(&mut x.lhs, state, false); optimize_expr(&mut x.rhs, state, _chaining); }
         // ``
         Expr::InterpolatedString(x) if x.is_empty() => {
             state.set_dirty();

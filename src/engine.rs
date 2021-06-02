@@ -441,7 +441,6 @@ impl<'a> Target<'a> {
     }
     /// Propagate a changed value back to the original source.
     /// This has no effect except for string indexing.
-    #[cfg(not(feature = "no_object"))]
     #[inline(always)]
     pub fn propagate_changed_value(&mut self) -> Result<(), Box<EvalAltResult>> {
         match self {
