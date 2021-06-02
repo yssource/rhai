@@ -332,7 +332,6 @@ pub enum Target<'a> {
     /// The target is a mutable reference to a Shared `Dynamic` value.
     /// It holds both the access guard and the original shared value.
     #[cfg(not(feature = "no_closure"))]
-    #[cfg(not(feature = "no_object"))]
     LockGuard((crate::dynamic::DynamicWriteLock<'a, Dynamic>, Dynamic)),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
     Value(Dynamic),
@@ -354,7 +353,6 @@ impl<'a> Target<'a> {
         match self {
             Self::Ref(_) => true,
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard(_) => true,
             Self::Value(_) => false,
             #[cfg(not(feature = "no_index"))]
@@ -370,7 +368,6 @@ impl<'a> Target<'a> {
         match self {
             Self::Ref(_) => false,
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard(_) => false,
             Self::Value(_) => true,
             #[cfg(not(feature = "no_index"))]
@@ -386,7 +383,6 @@ impl<'a> Target<'a> {
         match self {
             Self::Ref(r) => r.is_shared(),
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard(_) => true,
             Self::Value(r) => r.is_shared(),
             #[cfg(not(feature = "no_index"))]
@@ -402,7 +398,6 @@ impl<'a> Target<'a> {
         match self {
             Self::Ref(r) => r.is::<T>(),
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => r.is::<T>(),
             Self::Value(r) => r.is::<T>(),
             #[cfg(not(feature = "no_index"))]
@@ -417,7 +412,6 @@ impl<'a> Target<'a> {
         match self {
             Self::Ref(r) => r.clone(), // Referenced value is cloned
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard((_, orig)) => orig, // Original value is simply taken
             Self::Value(v) => v,       // Owned value is simply taken
             #[cfg(not(feature = "no_index"))]
@@ -468,7 +462,6 @@ impl<'a> Target<'a> {
         match self {
             Self::Ref(r) => **r = new_val,
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => **r = new_val,
             Self::Value(_) => panic!("cannot update a value"),
             #[cfg(not(feature = "no_index"))]
@@ -530,7 +523,6 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
     #[inline(always)]
     fn from(value: &'a mut Dynamic) -> Self {
         #[cfg(not(feature = "no_closure"))]
-        #[cfg(not(feature = "no_object"))]
         if value.is_shared() {
             // Cloning is cheap for a shared value
             let container = value.clone();
@@ -554,7 +546,6 @@ impl Deref for Target<'_> {
         match self {
             Self::Ref(r) => *r,
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => &**r,
             Self::Value(ref r) => r,
             #[cfg(not(feature = "no_index"))]
@@ -578,7 +569,6 @@ impl DerefMut for Target<'_> {
         match self {
             Self::Ref(r) => *r,
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => r.deref_mut(),
             Self::Value(ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
