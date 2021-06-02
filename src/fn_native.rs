@@ -314,6 +314,11 @@ impl FnPtr {
     pub fn is_curried(&self) -> bool {
         !self.1.is_empty()
     }
+    /// Get the number of curried arguments.
+    #[inline(always)]
+    pub fn num_curried(&self) -> usize {
+        self.1.len()
+    }
     /// Does the function pointer refer to an anonymous function?
     ///
     /// Not available under `no_function`.
@@ -339,7 +344,7 @@ impl FnPtr {
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
-        let mut args_data;
+        let mut args_data: StaticVec<_>;
 
         let arg_values = if self.curry().is_empty() {
             arg_values.as_mut()
@@ -349,7 +354,7 @@ impl FnPtr {
                 .iter()
                 .cloned()
                 .chain(arg_values.as_mut().iter_mut().map(mem::take))
-                .collect::<StaticVec<_>>();
+                .collect();
 
             args_data.as_mut()
         };

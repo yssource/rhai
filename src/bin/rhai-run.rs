@@ -83,7 +83,7 @@ fn main() {
 
         if let Err(err) = engine
             .compile(contents)
-            .map_err(|err| Box::new(err.into()) as Box<EvalAltResult>)
+            .map_err(|err| err.into())
             .and_then(|mut ast| {
                 ast.set_source(filename.to_string_lossy().to_string());
                 engine.consume_ast(&ast)

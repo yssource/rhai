@@ -745,7 +745,7 @@ mod array_functions {
             len as usize
         };
 
-        let mut drained = array.drain(..start).collect::<Array>();
+        let mut drained: Array = array.drain(..start).collect();
         drained.extend(array.drain(len..));
 
         drained

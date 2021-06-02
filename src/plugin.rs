@@ -25,7 +25,4 @@ pub trait PluginFunction {
 
     /// Is this plugin function a method?
     fn is_method_call(&self) -> bool;
-
-    /// Is this plugin function variadic?
-    fn is_variadic(&self) -> bool;
 }

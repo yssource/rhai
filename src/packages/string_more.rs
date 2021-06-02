@@ -110,7 +110,7 @@ mod string_functions {
     pub fn index_of_char_starting_from(string: &str, character: char, start: INT) -> INT {
         let start = if start < 0 {
             if let Some(n) = start.checked_abs() {
-                let chars = string.chars().collect::<Vec<_>>();
+                let chars: Vec<_> = string.chars().collect();
                 let num_chars = chars.len();
                 if n as usize > num_chars {
                     0

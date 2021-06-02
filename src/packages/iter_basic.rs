@@ -126,6 +126,71 @@ where
     }
 }
 
+// Register range function with step
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+struct BitRange(INT, INT, usize);
+
+const BITS: usize = std::mem::size_of::<INT>() * 8;
+
+impl BitRange {
+    pub fn new(value: INT, from: INT, len: INT) -> Result<Self, Box<EvalAltResult>> {
+        let from = if from >= 0 {
+            let offset = from as usize;
+
+            #[cfg(not(feature = "unchecked"))]
+            if offset >= BITS {
+                return EvalAltResult::ErrorBitFieldBounds(BITS, from, crate::Position::NONE)
+                    .into();
+            }
+            offset
+        } else {
+            #[cfg(not(feature = "unchecked"))]
+            if let Some(abs_from) = from.checked_abs() {
+                if (abs_from as usize) > BITS {
+                    return EvalAltResult::ErrorBitFieldBounds(BITS, from, crate::Position::NONE)
+                        .into();
+                }
+                BITS - (abs_from as usize)
+            } else {
+                return EvalAltResult::ErrorBitFieldBounds(BITS, from, crate::Position::NONE)
+                    .into();
+            }
+
+            #[cfg(feature = "unchecked")]
+            {
+                BITS - (from.abs() as usize)
+            }
+        };
+
+        let len = if len < 0 {
+            0
+        } else if from + (len as usize) > BITS {
+            BITS - from
+        } else {
+            len as usize
+        };
+
+        Ok(Self(value, 1 << from, len))
+    }
+}
+
+impl Iterator for BitRange {
+    type Item = bool;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let Self(value, mask, len) = *self;
+
+        if len == 0 {
+            None
+        } else {
+            let r = (value & mask) != 0;
+            self.1 <<= 1;
+            self.2 -= 1;
+            Some(r)
+        }
+    }
+}
+
 macro_rules! reg_range {
     ($lib:ident | $x:expr => $( $y:ty ),*) => {
         $(
@@ -304,4 +369,18 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata(_hash, &["from: Decimal", "to: Decimal", "step: Decimal", "Iterator<Item=Decimal>"]);
     }
+
+    lib.set_iterator::<BitRange>();
+
+    let _hash = lib.set_native_fn("bits", |value, from, len| BitRange::new(value, from, len));
+    #[cfg(feature = "metadata")]
+    lib.update_fn_metadata(_hash, &["value: INT", "from: Decimal", "len: Decimal", "Iterator<Item=bool>"]);
+
+    let _hash = lib.set_native_fn("bits", |value, from| BitRange::new(value, from, INT::MAX));
+    #[cfg(feature = "metadata")]
+    lib.update_fn_metadata(_hash, &["value: INT", "from: Decimal", "Iterator<Item=bool>"]);
+
+    let _hash = lib.set_native_fn("bits", |value| BitRange::new(value, 0, INT::MAX));
+    #[cfg(feature = "metadata")]
+    lib.update_fn_metadata(_hash, &["value: INT", "Iterator<Item=bool>"]);
 });

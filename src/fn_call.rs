@@ -515,13 +515,11 @@ impl Engine {
         );
 
         // Merge in encapsulated environment, if any
-        let lib_merged;
+        let lib_merged: StaticVec<_>;
 
         let (unified_lib, unified) = if let Some(ref env_lib) = fn_def.lib {
             state.push_fn_resolution_cache();
-            lib_merged = once(env_lib.as_ref())
-                .chain(lib.iter().cloned())
-                .collect::<StaticVec<_>>();
+            lib_merged = once(env_lib.as_ref()).chain(lib.iter().cloned()).collect();
             (lib_merged.as_ref(), true)
         } else {
             (lib, false)
@@ -895,20 +893,16 @@ impl Engine {
         fn_name: &str,
         mut hash: FnCallHashes,
         target: &mut crate::engine::Target,
-        (call_args, call_arg_positions): &mut (StaticVec<Dynamic>, StaticVec<Position>),
+        (call_args, call_arg_pos): &mut (StaticVec<Dynamic>, Position),
         pos: Position,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         let is_ref = target.is_ref();
 
-        // Get a reference to the mutation target Dynamic
-        let obj = target.as_mut();
-        let mut fn_name = fn_name;
-
         let (result, updated) = match fn_name {
-            KEYWORD_FN_PTR_CALL if obj.is::<FnPtr>() => {
+            KEYWORD_FN_PTR_CALL if target.is::<FnPtr>() => {
                 // FnPtr call
-                let fn_ptr = obj
+                let fn_ptr = target
                     .read_lock::<FnPtr>()
                     .expect("never fails because `obj` is `FnPtr`");
                 // Redirect function name
@@ -917,11 +911,8 @@ impl Engine {
                 // Recalculate hashes
                 let new_hash = FnCallHashes::from_script(calc_fn_hash(fn_name, args_len));
                 // Arguments are passed as-is, adding the curried arguments
-                let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
-                let mut args = curry
-                    .iter_mut()
-                    .chain(call_args.iter_mut())
-                    .collect::<StaticVec<_>>();
+                let mut curry: StaticVec<_> = fn_ptr.curry().iter().cloned().collect();
+                let mut args: StaticVec<_> = curry.iter_mut().chain(call_args.iter_mut()).collect();
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
@@ -932,20 +923,19 @@ impl Engine {
                 if call_args.len() > 0 {
                     if !call_args[0].is::<FnPtr>() {
                         return Err(self.make_type_mismatch_err::<FnPtr>(
-                            self.map_type_name(obj.type_name()),
-                            call_arg_positions[0],
+                            self.map_type_name(target.type_name()),
+                            *call_arg_pos,
                         ));
                     }
                 } else {
                     return Err(self.make_type_mismatch_err::<FnPtr>(
-                        self.map_type_name(obj.type_name()),
+                        self.map_type_name(target.type_name()),
                         pos,
                     ));
                 }
 
                 // FnPtr call on object
                 let fn_ptr = call_args.remove(0).cast::<FnPtr>();
-                call_arg_positions.remove(0);
                 // Redirect function name
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
@@ -955,11 +945,11 @@ impl Engine {
                     calc_fn_hash(fn_name, args_len + 1),
                 );
                 // Replace the first argument with the object pointer, adding the curried arguments
-                let mut curry = fn_ptr.curry().iter().cloned().collect::<StaticVec<_>>();
-                let mut args = once(obj)
+                let mut curry: StaticVec<_> = fn_ptr.curry().iter().cloned().collect();
+                let mut args: StaticVec<_> = once(target.as_mut())
                     .chain(curry.iter_mut())
                     .chain(call_args.iter_mut())
-                    .collect::<StaticVec<_>>();
+                    .collect();
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
@@ -967,14 +957,14 @@ impl Engine {
                 )
             }
             KEYWORD_FN_PTR_CURRY => {
-                if !obj.is::<FnPtr>() {
+                if !target.is::<FnPtr>() {
                     return Err(self.make_type_mismatch_err::<FnPtr>(
-                        self.map_type_name(obj.type_name()),
+                        self.map_type_name(target.type_name()),
                         pos,
                     ));
                 }
 
-                let fn_ptr = obj
+                let fn_ptr = target
                     .read_lock::<FnPtr>()
                     .expect("never fails because `obj` is `FnPtr`");
 
@@ -1005,26 +995,21 @@ impl Engine {
             }
 
             _ => {
+                let mut fn_name = fn_name;
                 let _redirected;
 
                 // Check if it is a map method call in OOP style
                 #[cfg(not(feature = "no_object"))]
-                if let Some(map) = obj.read_lock::<Map>() {
+                if let Some(map) = target.read_lock::<Map>() {
                     if let Some(val) = map.get(fn_name) {
                         if let Some(fn_ptr) = val.read_lock::<FnPtr>() {
                             // Remap the function name
                             _redirected = fn_ptr.get_fn_name().clone();
                             fn_name = &_redirected;
                             // Add curried arguments
-                            fn_ptr
-                                .curry()
-                                .iter()
-                                .cloned()
-                                .enumerate()
-                                .for_each(|(i, v)| {
-                                    call_args.insert(i, v);
-                                    call_arg_positions.insert(i, Position::NONE);
-                                });
+                            if fn_ptr.is_curried() {
+                                call_args.insert_many(0, fn_ptr.curry().iter().cloned());
+                            }
                             // Recalculate the hash based on the new function name and new arguments
                             hash = FnCallHashes::from_script_and_native(
                                 calc_fn_hash(fn_name, call_args.len()),
@@ -1035,9 +1020,8 @@ impl Engine {
                 };
 
                 // Attached object pointer in front of the arguments
-                let mut args = once(obj)
-                    .chain(call_args.iter_mut())
-                    .collect::<StaticVec<_>>();
+                let mut args: StaticVec<_> =
+                    once(target.as_mut()).chain(call_args.iter_mut()).collect();
 
                 self.exec_fn_call(
                     mods, state, lib, fn_name, hash, &mut args, is_ref, true, pos, None, level,
@@ -1416,6 +1400,7 @@ impl Engine {
                     arg_values[0] = target.take_or_clone().flatten();
                     args = arg_values.iter_mut().collect();
                 } else {
+                    // Turn it into a method call only if the object is not shared and not a simple value
                     let (first, rest) = arg_values
                         .split_first_mut()
                         .expect("never fails because the arguments list is not empty");

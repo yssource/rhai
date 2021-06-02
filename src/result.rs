@@ -56,6 +56,9 @@ pub enum EvalAltResult {
     /// String indexing out-of-bounds.
     /// Wrapped values are the current number of characters in the string and the index number.
     ErrorStringBounds(usize, INT, Position),
+    /// Bit-field indexing out-of-bounds.
+    /// Wrapped values are the current number of bits in the bit-field and the index number.
+    ErrorBitFieldBounds(usize, INT, Position),
     /// Trying to index into a type that is not an array, an object map, or a string, and has no
     /// indexer function defined. Wrapped value is the type name.
     ErrorIndexingType(String, Position),
@@ -109,6 +112,7 @@ impl EvalAltResult {
             Self::ErrorArrayBounds(_, _, _) => "Array index out of bounds",
             Self::ErrorStringBounds(0, _, _) => "Empty string has nothing to index",
             Self::ErrorStringBounds(_, _, _) => "String index out of bounds",
+            Self::ErrorBitFieldBounds(_, _, _) => "Bit-field index out of bounds",
             Self::ErrorFor(_) => "For loop expects an array, object map, or range",
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
             Self::ErrorModuleNotFound(_, _) => "Module not found",
@@ -233,6 +237,11 @@ impl fmt::Display for EvalAltResult {
                 "String index {} out of bounds: only {} characters in the string",
                 index, max
             )?,
+            Self::ErrorBitFieldBounds(max, index, _) => write!(
+                f,
+                "Bit-field index {} out of bounds: only {} bits in the bit-field",
+                index, max
+            )?,
             Self::ErrorDataTooLarge(typ, _) => write!(f, "{} exceeds maximum limit", typ)?,
         }
 
@@ -289,6 +298,7 @@ impl EvalAltResult {
             | Self::ErrorMismatchDataType(_, _, _)
             | Self::ErrorArrayBounds(_, _, _)
             | Self::ErrorStringBounds(_, _, _)
+            | Self::ErrorBitFieldBounds(_, _, _)
             | Self::ErrorIndexingType(_, _)
             | Self::ErrorFor(_)
             | Self::ErrorVariableNotFound(_, _)
@@ -372,7 +382,9 @@ impl EvalAltResult {
                 map.insert("requested".into(), r.into());
                 map.insert("actual".into(), a.into());
             }
-            Self::ErrorArrayBounds(n, i, _) | Self::ErrorStringBounds(n, i, _) => {
+            Self::ErrorArrayBounds(n, i, _)
+            | Self::ErrorStringBounds(n, i, _)
+            | Self::ErrorBitFieldBounds(n, i, _) => {
                 map.insert("length".into(), (*n as INT).into());
                 map.insert("index".into(), (*i as INT).into());
             }
@@ -412,6 +424,7 @@ impl EvalAltResult {
             | Self::ErrorMismatchDataType(_, _, pos)
             | Self::ErrorArrayBounds(_, _, pos)
             | Self::ErrorStringBounds(_, _, pos)
+            | Self::ErrorBitFieldBounds(_, _, pos)
             | Self::ErrorIndexingType(_, pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)
@@ -452,6 +465,7 @@ impl EvalAltResult {
             | Self::ErrorMismatchDataType(_, _, pos)
             | Self::ErrorArrayBounds(_, _, pos)
             | Self::ErrorStringBounds(_, _, pos)
+            | Self::ErrorBitFieldBounds(_, _, pos)
             | Self::ErrorIndexingType(_, pos)
             | Self::ErrorFor(pos)
             | Self::ErrorVariableNotFound(_, pos)

@@ -263,7 +263,7 @@ enum ChainArgument {
     Property(Position),
     /// Arguments to a dot method call.
     #[cfg(not(feature = "no_object"))]
-    MethodCallArgs(StaticVec<Dynamic>, StaticVec<Position>),
+    MethodCallArgs(StaticVec<Dynamic>, Position),
     /// Index value.
     #[cfg(not(feature = "no_index"))]
     IndexValue(Dynamic, Position),
@@ -294,7 +294,7 @@ impl ChainArgument {
     /// Panics if not `ChainArgument::MethodCallArgs`.
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
-    pub fn as_fn_call_args(self) -> (StaticVec<Dynamic>, StaticVec<Position>) {
+    pub fn as_fn_call_args(self) -> (StaticVec<Dynamic>, Position) {
         match self {
             Self::Property(_) => {
                 panic!("expecting ChainArgument::MethodCallArgs")
@@ -303,16 +303,16 @@ impl ChainArgument {
             Self::IndexValue(_, _) => {
                 panic!("expecting ChainArgument::MethodCallArgs")
             }
-            Self::MethodCallArgs(values, positions) => (values, positions),
+            Self::MethodCallArgs(values, pos) => (values, pos),
         }
     }
 }
 
 #[cfg(not(feature = "no_object"))]
-impl From<(StaticVec<Dynamic>, StaticVec<Position>)> for ChainArgument {
+impl From<(StaticVec<Dynamic>, Position)> for ChainArgument {
     #[inline(always)]
-    fn from((values, positions): (StaticVec<Dynamic>, StaticVec<Position>)) -> Self {
-        Self::MethodCallArgs(values, positions)
+    fn from((values, pos): (StaticVec<Dynamic>, Position)) -> Self {
+        Self::MethodCallArgs(values, pos)
     }
 }
 
@@ -332,10 +332,13 @@ pub enum Target<'a> {
     /// The target is a mutable reference to a Shared `Dynamic` value.
     /// It holds both the access guard and the original shared value.
     #[cfg(not(feature = "no_closure"))]
-    #[cfg(not(feature = "no_object"))]
     LockGuard((crate::dynamic::DynamicWriteLock<'a, Dynamic>, Dynamic)),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
     Value(Dynamic),
+    /// The target is a bit inside an [`INT`][crate::INT].
+    /// This is necessary because directly pointing to a bit inside an [`INT`][crate::INT] is impossible.
+    #[cfg(not(feature = "no_index"))]
+    BitField(&'a mut Dynamic, usize, Dynamic),
     /// The target is a character inside a String.
     /// This is necessary because directly pointing to a char inside a String is impossible.
     #[cfg(not(feature = "no_index"))]
@@ -350,9 +353,10 @@ impl<'a> Target<'a> {
         match self {
             Self::Ref(_) => true,
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard(_) => true,
             Self::Value(_) => false,
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, _) => false,
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => false,
         }
@@ -364,9 +368,10 @@ impl<'a> Target<'a> {
         match self {
             Self::Ref(_) => false,
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard(_) => false,
             Self::Value(_) => true,
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, _) => false,
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => false,
         }
@@ -378,9 +383,10 @@ impl<'a> Target<'a> {
         match self {
             Self::Ref(r) => r.is_shared(),
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard(_) => true,
             Self::Value(r) => r.is_shared(),
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, _) => false,
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => false,
         }
@@ -392,9 +398,10 @@ impl<'a> Target<'a> {
         match self {
             Self::Ref(r) => r.is::<T>(),
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => r.is::<T>(),
             Self::Value(r) => r.is::<T>(),
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, _) => TypeId::of::<T>() == TypeId::of::<bool>(),
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => TypeId::of::<T>() == TypeId::of::<char>(),
         }
@@ -405,9 +412,10 @@ impl<'a> Target<'a> {
         match self {
             Self::Ref(r) => r.clone(), // Referenced value is cloned
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard((_, orig)) => orig, // Original value is simply taken
             Self::Value(v) => v,       // Owned value is simply taken
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, value) => value, // Boolean is taken
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => ch, // Character is taken
         }
@@ -427,7 +435,6 @@ impl<'a> Target<'a> {
     }
     /// Propagate a changed value back to the original source.
     /// This has no effect except for string indexing.
-    #[cfg(not(feature = "no_object"))]
     #[inline(always)]
     pub fn propagate_changed_value(&mut self) -> Result<(), Box<EvalAltResult>> {
         match self {
@@ -435,9 +442,14 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_closure"))]
             Self::LockGuard(_) => Ok(()),
             #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, value) => {
+                let new_val = value.clone();
+                self.set_value(new_val, Position::NONE)
+            }
+            #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => {
-                let char_value = ch.clone();
-                self.set_value(char_value, Position::NONE)
+                let new_val = ch.clone();
+                self.set_value(new_val, Position::NONE)
             }
         }
     }
@@ -450,9 +462,34 @@ impl<'a> Target<'a> {
         match self {
             Self::Ref(r) => **r = new_val,
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => **r = new_val,
             Self::Value(_) => panic!("cannot update a value"),
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(value, index, _) => {
+                let value = &mut *value
+                    .write_lock::<crate::INT>()
+                    .expect("never fails because `BitField` always holds an `INT`");
+
+                // Replace the bit at the specified index position
+                let new_bit = new_val.as_bool().map_err(|err| {
+                    Box::new(EvalAltResult::ErrorMismatchDataType(
+                        "bool".to_string(),
+                        err.to_string(),
+                        _pos,
+                    ))
+                })?;
+
+                let index = *index;
+
+                if index < std::mem::size_of_val(value) * 8 {
+                    let mask = 1 << index;
+                    if new_bit {
+                        *value |= mask;
+                    } else {
+                        *value &= !mask;
+                    }
+                }
+            }
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(s, index, _) => {
                 let s = &mut *s
@@ -486,7 +523,6 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
     #[inline(always)]
     fn from(value: &'a mut Dynamic) -> Self {
         #[cfg(not(feature = "no_closure"))]
-        #[cfg(not(feature = "no_object"))]
         if value.is_shared() {
             // Cloning is cheap for a shared value
             let container = value.clone();
@@ -510,9 +546,10 @@ impl Deref for Target<'_> {
         match self {
             Self::Ref(r) => *r,
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => &**r,
             Self::Value(ref r) => r,
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, ref r) => r,
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ref r) => r,
         }
@@ -532,9 +569,10 @@ impl DerefMut for Target<'_> {
         match self {
             Self::Ref(r) => *r,
             #[cfg(not(feature = "no_closure"))]
-            #[cfg(not(feature = "no_object"))]
             Self::LockGuard((r, _)) => r.deref_mut(),
             Self::Value(ref mut r) => r,
+            #[cfg(not(feature = "no_index"))]
+            Self::BitField(_, _, ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ref mut r) => r,
         }
@@ -787,7 +825,7 @@ pub struct Engine {
 
     /// A module resolution service.
     #[cfg(not(feature = "no_module"))]
-    pub(crate) module_resolver: Box<dyn crate::ModuleResolver>,
+    pub(crate) module_resolver: Option<Box<dyn crate::ModuleResolver>>,
 
     /// A map mapping type names to pretty-print names.
     pub(crate) type_names: BTreeMap<Identifier, Box<Identifier>>,
@@ -890,10 +928,10 @@ impl Engine {
             #[cfg(not(feature = "no_module"))]
             #[cfg(not(feature = "no_std"))]
             #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-            module_resolver: Box::new(crate::module::resolvers::FileModuleResolver::new()),
+            module_resolver: Some(Box::new(crate::module::resolvers::FileModuleResolver::new())),
             #[cfg(not(feature = "no_module"))]
             #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
-            module_resolver: Box::new(crate::module::resolvers::DummyModuleResolver::new()),
+            module_resolver: None,
 
             type_names: Default::default(),
             empty_string: Default::default(),
@@ -950,7 +988,7 @@ impl Engine {
             global_sub_modules: Default::default(),
 
             #[cfg(not(feature = "no_module"))]
-            module_resolver: Box::new(crate::module::resolvers::DummyModuleResolver::new()),
+            module_resolver: None,
 
             type_names: Default::default(),
             empty_string: Default::default(),
@@ -1629,24 +1667,25 @@ impl Engine {
         match expr {
             #[cfg(not(feature = "no_object"))]
             Expr::FnCall(x, _) if _parent_chain_type == ChainType::Dot && !x.is_qualified() => {
-                let mut arg_positions: StaticVec<_> = Default::default();
-
-                let mut arg_values = x
+                let arg_values = x
                     .args
                     .iter()
-                    .inspect(|arg_expr| arg_positions.push(arg_expr.position()))
                     .map(|arg_expr| {
                         self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
                             .map(Dynamic::flatten)
                     })
+                    .chain(x.literal_args.iter().map(|(v, _)| Ok(v.clone())))
                     .collect::<Result<StaticVec<_>, _>>()?;
 
-                x.literal_args
+                let pos = x
+                    .args
                     .iter()
-                    .inspect(|(_, pos)| arg_positions.push(*pos))
-                    .for_each(|(v, _)| arg_values.push(v.clone()));
+                    .map(|arg_expr| arg_expr.position())
+                    .chain(x.literal_args.iter().map(|(_, pos)| *pos))
+                    .next()
+                    .unwrap_or_default();
 
-                idx_values.push((arg_values, arg_positions).into());
+                idx_values.push((arg_values, pos).into());
             }
             #[cfg(not(feature = "no_object"))]
             Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dot => {
@@ -1674,24 +1713,25 @@ impl Engine {
                     Expr::FnCall(x, _)
                         if _parent_chain_type == ChainType::Dot && !x.is_qualified() =>
                     {
-                        let mut arg_positions: StaticVec<_> = Default::default();
-
-                        let mut arg_values = x
+                        let arg_values = x
                             .args
                             .iter()
-                            .inspect(|arg_expr| arg_positions.push(arg_expr.position()))
                             .map(|arg_expr| {
                                 self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
                                     .map(Dynamic::flatten)
                             })
+                            .chain(x.literal_args.iter().map(|(v, _)| Ok(v.clone())))
                             .collect::<Result<StaticVec<_>, _>>()?;
 
-                        x.literal_args
+                        let pos = x
+                            .args
                             .iter()
-                            .inspect(|(_, pos)| arg_positions.push(*pos))
-                            .for_each(|(v, _)| arg_values.push(v.clone()));
+                            .map(|arg_expr| arg_expr.position())
+                            .chain(x.literal_args.iter().map(|(_, pos)| *pos))
+                            .next()
+                            .unwrap_or_default();
 
-                        (arg_values, arg_positions).into()
+                        (arg_values, pos).into()
                     }
                     #[cfg(not(feature = "no_object"))]
                     Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dot => {
@@ -1817,6 +1857,43 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
+            Dynamic(Union::Int(value, _, _)) => {
+                // val_int[idx]
+                let index = idx
+                    .as_int()
+                    .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
+
+                let bits = std::mem::size_of_val(value) * 8;
+
+                let (bit_value, offset) = if index >= 0 {
+                    let offset = index as usize;
+                    (
+                        if offset >= bits {
+                            return EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into();
+                        } else {
+                            (*value & (1 << offset)) != 0
+                        },
+                        offset,
+                    )
+                } else if let Some(abs_index) = index.checked_abs() {
+                    let offset = abs_index as usize;
+                    (
+                        // Count from end if negative
+                        if offset > bits {
+                            return EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into();
+                        } else {
+                            (*value & (1 << (bits - offset))) != 0
+                        },
+                        offset,
+                    )
+                } else {
+                    return EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into();
+                };
+
+                Ok(Target::BitField(target, offset, bit_value.into()))
+            }
+
+            #[cfg(not(feature = "no_index"))]
             Dynamic(Union::Str(s, _, _)) => {
                 // val_string[idx]
                 let index = idx
@@ -1824,7 +1901,6 @@ impl Engine {
                     .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
 
                 let (ch, offset) = if index >= 0 {
-                    // Count from end if negative
                     let offset = index as usize;
                     (
                         s.chars().nth(offset).ok_or_else(|| {
@@ -1833,9 +1909,10 @@ impl Engine {
                         })?,
                         offset,
                     )
-                } else if let Some(index) = index.checked_abs() {
-                    let offset = index as usize;
+                } else if let Some(abs_index) = index.checked_abs() {
+                    let offset = abs_index as usize;
                     (
+                        // Count from end if negative
                         s.chars().rev().nth(offset - 1).ok_or_else(|| {
                             let chars_len = s.chars().count();
                             EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos)
@@ -2037,11 +2114,7 @@ impl Engine {
             Expr::Unit(_) => Ok(Dynamic::UNIT),
 
             Expr::Custom(custom, _) => {
-                let expressions = custom
-                    .keywords
-                    .iter()
-                    .map(Into::into)
-                    .collect::<StaticVec<_>>();
+                let expressions: StaticVec<_> = custom.keywords.iter().map(Into::into).collect();
                 let key_token = custom.tokens.first().expect(
                     "never fails because a custom syntax stream must contain at least one token",
                 );
@@ -2155,8 +2228,8 @@ impl Engine {
         op_pos: Position,
         mut target: Target,
         root: (&str, Position),
-        mut new_value: Dynamic,
-        new_value_pos: Position,
+        mut new_val: Dynamic,
+        new_val_pos: Position,
     ) -> Result<(), Box<EvalAltResult>> {
         if target.is_read_only() {
             // Assignment to constant variable
@@ -2169,48 +2242,51 @@ impl Engine {
             op,
         }) = op_info
         {
-            let mut lock_guard;
-            let lhs_ptr_inner;
+            {
+                let mut lock_guard;
+                let lhs_ptr_inner;
 
-            #[cfg(not(feature = "no_closure"))]
-            let target_is_shared = target.is_shared();
-            #[cfg(feature = "no_closure")]
-            let target_is_shared = false;
+                #[cfg(not(feature = "no_closure"))]
+                let target_is_shared = target.is_shared();
+                #[cfg(feature = "no_closure")]
+                let target_is_shared = false;
 
-            if target_is_shared {
-                lock_guard = target
-                    .write_lock::<Dynamic>()
-                    .expect("never fails when casting to `Dynamic`");
-                lhs_ptr_inner = &mut *lock_guard;
-            } else {
-                lhs_ptr_inner = &mut *target;
-            }
-
-            let hash = hash_op_assign;
-            let args = &mut [lhs_ptr_inner, &mut new_value];
-
-            match self.call_native_fn(mods, state, lib, op, hash, args, true, true, op_pos) {
-                Ok(_) => (),
-                Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
-                {
-                    // Expand to `var = var op rhs`
-                    let op = &op[..op.len() - 1]; // extract operator without =
-
-                    // Run function
-                    let (value, _) = self
-                        .call_native_fn(mods, state, lib, op, hash_op, args, true, false, op_pos)?;
-
-                    *args[0] = value.flatten();
+                if target_is_shared {
+                    lock_guard = target
+                        .write_lock::<Dynamic>()
+                        .expect("never fails when casting to `Dynamic`");
+                    lhs_ptr_inner = &mut *lock_guard;
+                } else {
+                    lhs_ptr_inner = &mut *target;
                 }
-                err => return err.map(|_| ()),
+
+                let hash = hash_op_assign;
+                let args = &mut [lhs_ptr_inner, &mut new_val];
+
+                match self.call_native_fn(mods, state, lib, op, hash, args, true, true, op_pos) {
+                    Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
+                    {
+                        // Expand to `var = var op rhs`
+                        let op = &op[..op.len() - 1]; // extract operator without =
+
+                        // Run function
+                        let (value, _) = self.call_native_fn(
+                            mods, state, lib, op, hash_op, args, true, false, op_pos,
+                        )?;
+
+                        *args[0] = value.flatten();
+                    }
+                    err => return err.map(|_| ()),
+                }
             }
 
-            Ok(())
+            target.propagate_changed_value()?;
         } else {
             // Normal assignment
-            target.set_value(new_value, new_value_pos)?;
-            Ok(())
+            target.set_value(new_val, new_val_pos)?;
         }
+
+        Ok(())
     }
 
     /// Evaluate a statement.
@@ -2757,20 +2833,26 @@ impl Engine {
                     use crate::ModuleResolver;
 
                     let source = state.source.as_ref().map(|s| s.as_str());
-                    let expr_pos = expr.position();
+                    let path_pos = expr.position();
 
                     let module = state
                         .resolver
                         .as_ref()
-                        .and_then(|r| match r.resolve(self, source, &path, expr_pos) {
-                            Ok(m) => return Some(Ok(m)),
-                            Err(err) => match *err {
-                                EvalAltResult::ErrorModuleNotFound(_, _) => None,
-                                _ => return Some(Err(err)),
-                            },
+                        .and_then(|r| match r.resolve(self, source, &path, path_pos) {
+                            Err(err)
+                                if matches!(*err, EvalAltResult::ErrorModuleNotFound(_, _)) =>
+                            {
+                                None
+                            }
+                            result => Some(result),
+                        })
+                        .or_else(|| {
+                            self.module_resolver
+                                .as_ref()
+                                .map(|r| r.resolve(self, source, &path, path_pos))
                         })
                         .unwrap_or_else(|| {
-                            self.module_resolver.resolve(self, source, &path, expr_pos)
+                            EvalAltResult::ErrorModuleNotFound(path.to_string(), path_pos).into()
                         })?;
 
                     export.as_ref().map(|x| x.name.clone()).map(|name| {

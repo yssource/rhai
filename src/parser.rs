@@ -15,7 +15,7 @@ use crate::token::{
 };
 use crate::utils::{get_hasher, IdentifierBuilder};
 use crate::{
-    calc_fn_hash, calc_qualified_fn_hash, Dynamic, Engine, FnPtr, Identifier, LexError, ParseError,
+    calc_fn_hash, calc_qualified_fn_hash, Dynamic, Engine, Identifier, LexError, ParseError,
     ParseErrorType, Position, Scope, Shared, StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
@@ -455,7 +455,10 @@ fn parse_index_chain(
     // Check type of indexing - must be integer or string
     match &idx_expr {
         Expr::IntegerConstant(_, pos) => match lhs {
-            Expr::Array(_, _) | Expr::StringConstant(_, _) | Expr::InterpolatedString(_) => (),
+            Expr::IntegerConstant(_, _)
+            | Expr::Array(_, _)
+            | Expr::StringConstant(_, _)
+            | Expr::InterpolatedString(_) => (),
 
             Expr::Map(_, _) => {
                 return Err(PERR::MalformedIndexExpr(
@@ -1864,7 +1867,7 @@ fn parse_custom_syntax(
         state.stack.push((empty, AccessMode::ReadWrite));
     }
 
-    let parse_func = &syntax.parse;
+    let parse_func = syntax.parse.as_ref();
 
     segments.push(key.into());
     tokens.push(key.into());
@@ -3014,7 +3017,7 @@ fn parse_anon_fn(
         comments: Default::default(),
     };
 
-    let fn_ptr = FnPtr::new_unchecked(fn_name.into(), Default::default());
+    let fn_ptr = crate::FnPtr::new_unchecked(fn_name.into(), Default::default());
     let expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), settings.pos);
 
     #[cfg(not(feature = "no_closure"))]

@@ -188,7 +188,7 @@ impl Engine {
         &mut self,
         resolver: impl crate::ModuleResolver + 'static,
     ) -> &mut Self {
-        self.module_resolver = Box::new(resolver);
+        self.module_resolver = Some(Box::new(resolver));
         self
     }
     /// Disable a particular keyword or operator in the language.
