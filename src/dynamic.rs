@@ -692,7 +692,7 @@ impl fmt::Debug for Dynamic {
                     return fmt::Debug::fmt(_value_any.downcast_ref::<i128>().expect(CHECKED), f);
                 }
 
-                write!(f, "{}", value.type_name())
+                f.write_str(value.type_name())
             }
 
             #[cfg(not(feature = "no_closure"))]

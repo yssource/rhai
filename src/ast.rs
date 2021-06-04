@@ -1776,7 +1776,7 @@ impl fmt::Debug for Expr {
                     Some((_, ref namespace)) => write!(f, "{}", namespace)?,
                     _ => (),
                 }
-                write!(f, "{}", x.2)?;
+                f.write_str(&x.2)?;
                 match i.map_or_else(|| x.0, |n| NonZeroUsize::new(n.get() as usize)) {
                     Some(n) => write!(f, ", {}", n)?,
                     _ => (),

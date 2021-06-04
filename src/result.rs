@@ -172,7 +172,7 @@ impl fmt::Display for EvalAltResult {
 
             Self::ErrorModuleNotFound(s, _) => write!(f, "{}: '{}'", desc, s)?,
 
-            Self::ErrorDotExpr(s, _) if !s.is_empty() => write!(f, "{}", s)?,
+            Self::ErrorDotExpr(s, _) if !s.is_empty() => f.write_str(s)?,
 
             Self::ErrorIndexingType(s, _) => write!(f, "Indexer not registered for type '{}'", s)?,
 
