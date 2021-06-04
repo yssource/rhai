@@ -538,8 +538,9 @@ impl Engine {
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`], [`Map`], [`String`], [`ImmutableString`][crate::ImmutableString] or `&str`.
-    /// Indexers for arrays, object maps and strings cannot be registered.
+    /// Panics if the type is [`Array`], [`Map`], [`String`],
+    /// [`ImmutableString`][crate::ImmutableString], `&str` or [`INT`][crate::INT].
+    /// Indexers for arrays, object maps, strings and integers cannot be registered.
     ///
     /// # Example
     ///
@@ -595,6 +596,9 @@ impl Engine {
         {
             panic!("Cannot register indexer for strings.");
         }
+        if TypeId::of::<T>() == TypeId::of::<crate::INT>() {
+            panic!("Cannot register indexer for integers.");
+        }
 
         self.register_fn(crate::engine::FN_IDX_GET, get_fn)
     }
@@ -606,8 +610,9 @@ impl Engine {
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`], [`Map`], [`String`], [`ImmutableString`][crate::ImmutableString] or `&str`.
-    /// Indexers for arrays, object maps and strings cannot be registered.
+    /// Panics if the type is [`Array`], [`Map`], [`String`],
+    /// [`ImmutableString`][crate::ImmutableString], `&str` or [`INT`][crate::INT].
+    /// Indexers for arrays, object maps, strings and integers cannot be registered.
     ///
     /// # Example
     ///
@@ -669,6 +674,9 @@ impl Engine {
         {
             panic!("Cannot register indexer for strings.");
         }
+        if TypeId::of::<T>() == TypeId::of::<crate::INT>() {
+            panic!("Cannot register indexer for integers.");
+        }
 
         self.register_result_fn(crate::engine::FN_IDX_GET, get_fn)
     }
@@ -678,8 +686,9 @@ impl Engine {
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`], [`Map`], [`String`], [`ImmutableString`][crate::ImmutableString] or `&str`.
-    /// Indexers for arrays, object maps and strings cannot be registered.
+    /// Panics if the type is [`Array`], [`Map`], [`String`],
+    /// [`ImmutableString`][crate::ImmutableString], `&str` or [`INT`][crate::INT].
+    /// Indexers for arrays, object maps, strings and integers cannot be registered.
     ///
     /// # Example
     ///
@@ -737,6 +746,9 @@ impl Engine {
         {
             panic!("Cannot register indexer for strings.");
         }
+        if TypeId::of::<T>() == TypeId::of::<crate::INT>() {
+            panic!("Cannot register indexer for integers.");
+        }
 
         self.register_fn(crate::engine::FN_IDX_SET, set_fn)
     }
@@ -746,8 +758,9 @@ impl Engine {
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`], [`Map`], [`String`], [`ImmutableString`][crate::ImmutableString] or `&str`.
-    /// Indexers for arrays, object maps and strings cannot be registered.
+    /// Panics if the type is [`Array`], [`Map`], [`String`],
+    /// [`ImmutableString`][crate::ImmutableString], `&str` or [`INT`][crate::INT].
+    /// Indexers for arrays, object maps, strings and integers cannot be registered.
     ///
     /// # Example
     ///
@@ -812,6 +825,9 @@ impl Engine {
         {
             panic!("Cannot register indexer for strings.");
         }
+        if TypeId::of::<T>() == TypeId::of::<crate::INT>() {
+            panic!("Cannot register indexer for integers.");
+        }
 
         self.register_result_fn(crate::engine::FN_IDX_SET, set_fn)
     }
@@ -821,8 +837,9 @@ impl Engine {
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`], [`Map`], [`String`], [`ImmutableString`][crate::ImmutableString] or `&str`.
-    /// Indexers for arrays, object maps and strings cannot be registered.
+    /// Panics if the type is [`Array`], [`Map`], [`String`],
+    /// [`ImmutableString`][crate::ImmutableString], `&str` or [`INT`][crate::INT].
+    /// Indexers for arrays, object maps, strings and integers cannot be registered.
     ///
     /// # Example
     ///
@@ -1876,7 +1893,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
         name: impl AsRef<str>,
-        args: impl crate::fn_args::FuncArgs,
+        args: impl crate::FuncArgs,
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values: crate::StaticVec<_> = Default::default();
         args.parse(&mut arg_values);
@@ -1886,14 +1903,14 @@ impl Engine {
 
         let typ = self.map_type_name(result.type_name());
 
-        return result.try_cast().ok_or_else(|| {
+        result.try_cast().ok_or_else(|| {
             EvalAltResult::ErrorMismatchOutputType(
                 self.map_type_name(type_name::<T>()).into(),
                 typ.into(),
                 Position::NONE,
             )
             .into()
-        });
+        })
     }
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments
     /// and optionally a value for binding to the `this` pointer.
