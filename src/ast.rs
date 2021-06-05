@@ -417,15 +417,15 @@ impl AST {
     ///
     /// let engine = Engine::new();
     ///
-    /// let ast1 = engine.compile(r#"
-    ///                 fn foo(x) { 42 + x }
-    ///                 foo(1)
-    ///             "#)?;
+    /// let ast1 = engine.compile("
+    ///     fn foo(x) { 42 + x }
+    ///     foo(1)
+    /// ")?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { `hello${n}` }
-    ///                 foo("!")
-    ///             "#)?;
+    ///     fn foo(n) { `hello${n}` }
+    ///     foo("!")
+    /// "#)?;
     ///
     /// let ast = ast1.merge(&ast2);    // Merge 'ast2' into 'ast1'
     ///
@@ -469,15 +469,15 @@ impl AST {
     ///
     /// let engine = Engine::new();
     ///
-    /// let mut ast1 = engine.compile(r#"
-    ///                     fn foo(x) { 42 + x }
-    ///                     foo(1)
-    ///                 "#)?;
+    /// let mut ast1 = engine.compile("
+    ///     fn foo(x) { 42 + x }
+    ///     foo(1)
+    /// ")?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { `hello${n}` }
-    ///                 foo("!")
-    ///             "#)?;
+    ///     fn foo(n) { `hello${n}` }
+    ///     foo("!")
+    /// "#)?;
     ///
     /// ast1.combine(ast2);    // Combine 'ast2' into 'ast1'
     ///
@@ -523,16 +523,16 @@ impl AST {
     ///
     /// let engine = Engine::new();
     ///
-    /// let ast1 = engine.compile(r#"
-    ///                 fn foo(x) { 42 + x }
-    ///                 foo(1)
-    ///             "#)?;
+    /// let ast1 = engine.compile("
+    ///     fn foo(x) { 42 + x }
+    ///     foo(1)
+    /// ")?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { `hello${n}` }
-    ///                 fn error() { 0 }
-    ///                 foo("!")
-    ///             "#)?;
+    ///     fn foo(n) { `hello${n}` }
+    ///     fn error() { 0 }
+    ///     foo("!")
+    /// "#)?;
     ///
     /// // Merge 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
     /// let ast = ast1.merge_filtered(&ast2, |_, _, script, name, params|
@@ -606,16 +606,16 @@ impl AST {
     ///
     /// let engine = Engine::new();
     ///
-    /// let mut ast1 = engine.compile(r#"
-    ///                     fn foo(x) { 42 + x }
-    ///                     foo(1)
-    ///                 "#)?;
+    /// let mut ast1 = engine.compile("
+    ///     fn foo(x) { 42 + x }
+    ///     foo(1)
+    /// ")?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { `hello${n}` }
-    ///                 fn error() { 0 }
-    ///                 foo("!")
-    ///             "#)?;
+    ///     fn foo(n) { `hello${n}` }
+    ///     fn error() { 0 }
+    ///     foo("!")
+    /// "#)?;
     ///
     /// // Combine 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
     /// ast1.combine_filtered(ast2, |_, _, script, name, params|
@@ -664,9 +664,9 @@ impl AST {
     /// let engine = Engine::new();
     ///
     /// let mut ast = engine.compile(r#"
-    ///                         fn foo(n) { n + 1 }
-    ///                         fn bar() { print("hello"); }
-    ///                     "#)?;
+    ///     fn foo(n) { n + 1 }
+    ///     fn bar() { print("hello"); }
+    /// "#)?;
     ///
     /// // Remove all functions except 'foo(_)'
     /// ast.retain_functions(|_, _, name, params| name == "foo" && params == 1);

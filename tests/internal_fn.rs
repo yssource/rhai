@@ -210,28 +210,28 @@ fn test_internal_fn_captures() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r#"
+            "
                 fn foo(y) { x += y; x }
 
                 let x = 41;
                 let y = 999;
 
                 foo!(1) + x
-            "#
+            "
         )?,
         83
     );
 
     assert!(engine
         .eval::<INT>(
-            r#"
+            "
                 fn foo(y) { x += y; x }
 
                 let x = 41;
                 let y = 999;
 
                 foo(1) + x
-            "#
+            "
         )
         .is_err());
 
@@ -239,14 +239,14 @@ fn test_internal_fn_captures() -> Result<(), Box<EvalAltResult>> {
     assert!(matches!(
         *engine
             .compile(
-                r#"
+                "
                     fn foo() { this += x; }
 
                     let x = 41;
                     let y = 999;
 
                     y.foo!();
-                "#
+                "
             )
             .expect_err("should error")
             .0,

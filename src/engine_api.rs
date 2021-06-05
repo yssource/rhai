@@ -1354,7 +1354,8 @@ impl Engine {
     ///
     /// let map = engine.parse_json(
     ///     r#"{"a":123, "b":42, "c":{"x":false, "y":true}, "d":null}"#
-    ///         .replace("{", "#{").as_str(), true)?;
+    ///         .replace("{", "#{").as_str(),
+    /// true)?;
     ///
     /// assert_eq!(map.len(), 4);
     /// assert_eq!(map["a"].as_int().unwrap(), 123);

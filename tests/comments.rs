@@ -11,12 +11,12 @@ fn test_comments() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r#"
+            "
                 let /* I am a
                     multi-line
                         comment, yay!
                     */ x = 42; x
-            "#
+            "
         )?,
         42
     );
