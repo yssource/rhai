@@ -263,7 +263,7 @@ pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
 /// A general function pointer, which may carry additional (i.e. curried) argument values
 /// to be passed onto a function during a call.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct FnPtr(Identifier, StaticVec<Dynamic>);
 
 impl FnPtr {
