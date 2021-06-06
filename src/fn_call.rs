@@ -140,7 +140,7 @@ impl Engine {
                 } else {
                     self.map_type_name((*a).type_name())
                 })
-                .collect::<Vec<_>>()
+                .collect::<StaticVec<_>>()
                 .join(", ")
         )
     }

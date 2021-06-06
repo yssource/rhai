@@ -90,7 +90,7 @@ impl fmt::Display for ScriptFnDef {
             self.params
                 .iter()
                 .map(|s| s.as_str())
-                .collect::<Vec<_>>()
+                .collect::<StaticVec<_>>()
                 .join(", ")
         )
     }
@@ -138,7 +138,11 @@ impl fmt::Display for ScriptFnMetadata<'_> {
                 FnAccess::Private => "private ",
             },
             self.name,
-            self.params.iter().cloned().collect::<Vec<_>>().join(", ")
+            self.params
+                .iter()
+                .cloned()
+                .collect::<StaticVec<_>>()
+                .join(", ")
         )
     }
 }
@@ -215,10 +219,9 @@ impl AST {
         statements: impl IntoIterator<Item = Stmt>,
         functions: impl Into<Shared<Module>>,
     ) -> Self {
-        let statements: StaticVec<_> = statements.into_iter().collect();
         Self {
             source: None,
-            body: StmtBlock::new(statements, Position::NONE),
+            body: StmtBlock::new(statements.into_iter().collect(), Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -231,10 +234,9 @@ impl AST {
         functions: impl Into<Shared<Module>>,
         source: impl Into<Identifier>,
     ) -> Self {
-        let statements: StaticVec<_> = statements.into_iter().collect();
         Self {
             source: Some(source.into()),
-            body: StmtBlock::new(statements, Position::NONE),
+            body: StmtBlock::new(statements.into_iter().collect(), Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -866,8 +868,7 @@ pub struct StmtBlock(StaticVec<Stmt>, Position);
 
 impl StmtBlock {
     /// Create a new [`StmtBlock`].
-    pub fn new(statements: impl Into<StaticVec<Stmt>>, pos: Position) -> Self {
-        let mut statements = statements.into();
+    pub fn new(mut statements: StaticVec<Stmt>, pos: Position) -> Self {
         statements.shrink_to_fit();
         Self(statements, pos)
     }
@@ -1000,9 +1001,7 @@ impl From<Stmt> for StmtBlock {
     #[inline(always)]
     fn from(stmt: Stmt) -> Self {
         match stmt {
-            Stmt::Block(mut block, pos) => {
-                Self(block.iter_mut().map(|v| mem::take(v)).collect(), pos)
-            }
+            Stmt::Block(mut block, pos) => Self(block.iter_mut().map(mem::take).collect(), pos),
             Stmt::Noop(pos) => Self(Default::default(), pos),
             _ => {
                 let pos = stmt.position();
