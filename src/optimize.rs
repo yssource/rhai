@@ -594,8 +594,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         // for id in expr { block }
         Stmt::For(iterable, x, _) => {
             optimize_expr(iterable, state, false);
-            let body = mem::take(x.1.statements()).into_vec();
-            *x.1.statements() = optimize_stmt_block(body, state, false, true, false).into();
+            let body = mem::take(x.2.statements()).into_vec();
+            *x.2.statements() = optimize_stmt_block(body, state, false, true, false).into();
         }
         // let id = expr;
         Stmt::Let(expr, _, _, _) => optimize_expr(expr, state, false),

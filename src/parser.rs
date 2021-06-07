@@ -2144,6 +2144,21 @@ fn parse_for(
     lib: &mut FunctionsLib,
     mut settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
+    fn get_name_pos(input: &mut TokenStream) -> Result<(String, Position), ParseError> {
+        match input.next().expect(NEVER_ENDS) {
+            // Variable name
+            (Token::Identifier(s), pos) => Ok((s, pos)),
+            // Reserved keyword
+            (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
+                Err(PERR::Reserved(s).into_err(pos))
+            }
+            // Bad identifier
+            (Token::LexError(err), pos) => Err(err.into_err(pos)),
+            // Not a variable name
+            (_, pos) => Err(PERR::VariableExpected.into_err(pos)),
+        }
+    }
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2151,17 +2166,36 @@ fn parse_for(
     settings.pos = eat_token(input, Token::For);
 
     // for name ...
-    let (name, name_pos) = match input.next().expect(NEVER_ENDS) {
-        // Variable name
-        (Token::Identifier(s), pos) => (s, pos),
-        // Reserved keyword
-        (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
-            return Err(PERR::Reserved(s).into_err(pos));
+    let (name, name_pos, counter_name, counter_pos) = if match_token(input, Token::LeftParen).0 {
+        // ( name, counter )
+        let (name, name_pos) = get_name_pos(input)?;
+        let (has_comma, pos) = match_token(input, Token::Comma);
+        if !has_comma {
+            return Err(PERR::MissingToken(
+                Token::Comma.into(),
+                "after the iteration variable name".into(),
+            )
+            .into_err(pos));
         }
-        // Bad identifier
-        (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-        // Not a variable name
-        (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
+        let (counter_name, counter_pos) = get_name_pos(input)?;
+
+        if counter_name == name {
+            return Err(PERR::DuplicatedVariable(counter_name).into_err(counter_pos));
+        }
+
+        let (has_close_paren, pos) = match_token(input, Token::RightParen);
+        if !has_close_paren {
+            return Err(PERR::MissingToken(
+                Token::RightParen.into(),
+                "to close the iteration variable".into(),
+            )
+            .into_err(pos));
+        }
+        (name, name_pos, Some(counter_name), Some(counter_pos))
+    } else {
+        // name
+        let (name, name_pos) = get_name_pos(input)?;
+        (name, name_pos, None, None)
     };
 
     // for name in ...
@@ -2180,8 +2214,18 @@ fn parse_for(
     ensure_not_statement_expr(input, "a boolean")?;
     let expr = parse_expr(input, state, lib, settings.level_up())?;
 
-    let loop_var = state.get_identifier(name);
     let prev_stack_len = state.stack.len();
+
+    let counter_var = if let Some(name) = counter_name {
+        let counter_var = state.get_identifier(name);
+        state
+            .stack
+            .push((counter_var.clone(), AccessMode::ReadWrite));
+        Some(counter_var)
+    } else {
+        None
+    };
+    let loop_var = state.get_identifier(name);
     state.stack.push((loop_var.clone(), AccessMode::ReadWrite));
 
     settings.is_breakable = true;
@@ -2196,6 +2240,10 @@ fn parse_for(
                 name: loop_var,
                 pos: name_pos,
             },
+            counter_var.map(|name| Ident {
+                name,
+                pos: counter_pos.expect("never fails because `counter_var` is `Some`"),
+            }),
             body.into(),
         )),
         settings.pos,
@@ -2342,10 +2390,19 @@ fn parse_export(
 
         let rename = if match_token(input, Token::As).0 {
             match input.next().expect(NEVER_ENDS) {
-                (Token::Identifier(s), pos) => Some(Ident {
-                    name: state.get_identifier(s),
-                    pos,
-                }),
+                (Token::Identifier(s), pos) => {
+                    if exports.iter().any(|(_, alias)| match alias {
+                        Some(Ident { name, .. }) if name == &s => true,
+                        _ => false,
+                    }) {
+                        return Err(PERR::DuplicatedVariable(s).into_err(pos));
+                    }
+
+                    Some(Ident {
+                        name: state.get_identifier(s),
+                        pos,
+                    })
+                }
                 (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
                     return Err(PERR::Reserved(s).into_err(pos));
                 }

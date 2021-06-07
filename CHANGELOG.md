@@ -17,6 +17,7 @@ Breaking changes
 New features
 ------------
 
+* New syntax for `for` statement to include counter variable.
 * An integer value can now be indexed to get/set a single bit.
 * The `bits` method of an integer can be used to iterate through its bits.
 

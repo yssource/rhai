@@ -116,6 +116,8 @@ pub enum ParseErrorType {
     DuplicatedProperty(String),
     /// A `switch` case is duplicated.
     DuplicatedSwitchCase,
+    /// A variable name is duplicated. Wrapped value is the variable name.
+    DuplicatedVariable(String),
     /// The default case of a `switch` statement is not the last.
     WrongSwitchDefaultCase,
     /// The case condition of a `switch` statement is not appropriate.
@@ -200,6 +202,7 @@ impl ParseErrorType {
             Self::MalformedCapture(_) => "Invalid capturing",
             Self::DuplicatedProperty(_) => "Duplicated property in object map literal",
             Self::DuplicatedSwitchCase => "Duplicated switch case",
+            Self::DuplicatedVariable(_) => "Duplicated variable name",
             Self::WrongSwitchDefaultCase => "Default switch case is not the last",
             Self::WrongSwitchCaseCondition => "Default switch case cannot have condition",
             Self::PropertyExpected => "Expecting name of a property",
@@ -247,6 +250,7 @@ impl fmt::Display for ParseErrorType {
                 write!(f, "Duplicated property '{}' for object map literal", s)
             }
             Self::DuplicatedSwitchCase => f.write_str(self.desc()),
+            Self::DuplicatedVariable(s) => write!(f, "Duplicated variable name '{}'", s),
 
             Self::ExprExpected(s) => write!(f, "Expecting {} expression", s),
 

@@ -944,8 +944,8 @@ pub enum Stmt {
     While(Expr, Box<StmtBlock>, Position),
     /// `do` `{` stmt `}` `while`|`until` expr
     Do(Box<StmtBlock>, Expr, bool, Position),
-    /// `for` id `in` expr `{` stmt `}`
-    For(Expr, Box<(Ident, StmtBlock)>, Position),
+    /// `for` `(` id `,` counter `)` `in` expr `{` stmt `}`
+    For(Expr, Box<(Ident, Option<Ident>, StmtBlock)>, Position),
     /// \[`export`\] `let` id `=` expr
     Let(Expr, Box<Ident>, bool, Position),
     /// \[`export`\] `const` id `=` expr
@@ -1166,7 +1166,7 @@ impl Stmt {
             Self::While(condition, block, _) | Self::Do(block, condition, _, _) => {
                 condition.is_pure() && block.0.iter().all(Stmt::is_pure)
             }
-            Self::For(iterable, x, _) => iterable.is_pure() && (x.1).0.iter().all(Stmt::is_pure),
+            Self::For(iterable, x, _) => iterable.is_pure() && (x.2).0.iter().all(Stmt::is_pure),
             Self::Let(_, _, _, _)
             | Self::Const(_, _, _, _)
             | Self::Assignment(_, _)
@@ -1286,7 +1286,7 @@ impl Stmt {
                 if !e.walk(path, on_node) {
                     return false;
                 }
-                for s in &(x.1).0 {
+                for s in &(x.2).0 {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -1777,7 +1777,7 @@ impl fmt::Debug for Expr {
                 }
                 f.write_str(&x.2)?;
                 match i.map_or_else(|| x.0, |n| NonZeroUsize::new(n.get() as usize)) {
-                    Some(n) => write!(f, ", {}", n)?,
+                    Some(n) => write!(f, " #{}", n)?,
                     _ => (),
                 }
                 f.write_str(")")

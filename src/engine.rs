@@ -14,7 +14,7 @@ use crate::token::Token;
 use crate::utils::get_hasher;
 use crate::{
     Dynamic, EvalAltResult, Identifier, ImmutableString, Module, Position, RhaiResult, Scope,
-    Shared, StaticVec,
+    Shared, StaticVec, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -2521,7 +2521,7 @@ impl Engine {
 
             // For loop
             Stmt::For(expr, x, _) => {
-                let (Ident { name, .. }, statements) = x.as_ref();
+                let (Ident { name, .. }, counter, statements) = x.as_ref();
                 let iter_obj = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten();
@@ -2550,17 +2550,40 @@ impl Engine {
                     });
 
                 if let Some(func) = func {
-                    // Add the loop variable
-                    let var_name: Cow<'_, str> = if state.is_global() {
-                        name.to_string().into()
+                    // Add the loop variables
+                    let orig_scope_len = scope.len();
+                    let counter_index = if let Some(Ident { name, .. }) = counter {
+                        scope.push(unsafe_cast_var_name_to_lifetime(name), 0 as INT);
+                        Some(scope.len() - 1)
                     } else {
-                        unsafe_cast_var_name_to_lifetime(name).into()
+                        None
                     };
-                    scope.push(var_name, ());
+                    scope.push(unsafe_cast_var_name_to_lifetime(name), ());
                     let index = scope.len() - 1;
                     state.scope_level += 1;
 
-                    for iter_value in func(iter_obj) {
+                    for (x, iter_value) in func(iter_obj).enumerate() {
+                        // Increment counter
+                        if let Some(c) = counter_index {
+                            #[cfg(not(feature = "unchecked"))]
+                            if x > INT::MAX as usize {
+                                return EvalAltResult::ErrorArithmetic(
+                                    format!("for-loop counter overflow: {}", x),
+                                    counter
+                                        .as_ref()
+                                        .expect("never fails because `counter` is `Some`")
+                                        .pos,
+                                )
+                                .into();
+                            }
+
+                            let mut counter_var = scope
+                                .get_mut_by_index(c)
+                                .write_lock::<INT>()
+                                .expect("never fails because the counter always holds an `INT`");
+                            *counter_var = x as INT;
+                        }
+
                         let loop_var = scope.get_mut_by_index(index);
                         let value = iter_value.flatten();
 
@@ -2600,7 +2623,7 @@ impl Engine {
                     }
 
                     state.scope_level -= 1;
-                    scope.rewind(scope.len() - 1);
+                    scope.rewind(orig_scope_len);
                     Ok(Dynamic::UNIT)
                 } else {
                     EvalAltResult::ErrorFor(expr.position()).into()
@@ -2672,8 +2695,6 @@ impl Engine {
                             }
                             #[cfg(not(feature = "no_object"))]
                             _ => {
-                                use crate::INT;
-
                                 let mut err_map: Map = Default::default();
                                 let err_pos = err.take_position();
 
