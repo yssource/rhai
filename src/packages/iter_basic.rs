@@ -229,7 +229,7 @@ impl CharsStream {
                 .chars()
                 .skip(from as usize)
                 .take(len as usize)
-                .collect,
+                .collect(),
             0,
         );
     }
