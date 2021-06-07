@@ -9,10 +9,16 @@ Bug fixes
 
 * Fixed incorrect optimization regarding chain-indexing with non-numeric index.
 
+Breaking changes
+----------------
+
+* To keep the API consistent, strings are no longer iterable by default.  Use the `chars` method to iterator the characters in a string.
+
 New features
 ------------
 
 * An integer value can now be indexed to get/set a single bit.
+* The `bits` method of an integer can be used to iterate through its bits.
 
 
 Version 0.20.2

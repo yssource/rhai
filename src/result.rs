@@ -113,7 +113,7 @@ impl EvalAltResult {
             Self::ErrorStringBounds(0, _, _) => "Empty string has nothing to index",
             Self::ErrorStringBounds(_, _, _) => "String index out of bounds",
             Self::ErrorBitFieldBounds(_, _, _) => "Bit-field index out of bounds",
-            Self::ErrorFor(_) => "For loop expects an array, object map, or range",
+            Self::ErrorFor(_) => "For loop expects a type with an iterator defined",
             Self::ErrorVariableNotFound(_, _) => "Variable not found",
             Self::ErrorModuleNotFound(_, _) => "Module not found",
             Self::ErrorDataRace(_, _) => "Data race detected when accessing variable",

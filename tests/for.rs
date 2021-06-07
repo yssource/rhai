@@ -235,7 +235,7 @@ fn test_for_string() -> Result<(), Box<EvalAltResult>> {
         let s = "hello";
         let sum = 0;
 
-        for ch in s {
+        for ch in s.chars() {
             sum += to_int(ch);
         }
 
