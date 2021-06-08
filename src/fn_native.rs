@@ -12,9 +12,7 @@ use crate::{
 use std::prelude::v1::*;
 use std::{
     convert::{TryFrom, TryInto},
-    fmt,
-    iter::once,
-    mem,
+    fmt, mem,
 };
 
 /// Trait that maps to `Send + Sync` only under the `sync` feature.
