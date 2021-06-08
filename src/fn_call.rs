@@ -24,7 +24,6 @@ use std::prelude::v1::*;
 use std::{
     any::{type_name, TypeId},
     convert::TryFrom,
-    iter::once,
     mem,
 };
 
@@ -515,11 +514,12 @@ impl Engine {
         );
 
         // Merge in encapsulated environment, if any
-        let lib_merged: StaticVec<_>;
+        let mut lib_merged = StaticVec::with_capacity(lib.len() + 1);
 
         let (unified_lib, unified) = if let Some(ref env_lib) = fn_def.lib {
             state.push_fn_resolution_cache();
-            lib_merged = once(env_lib.as_ref()).chain(lib.iter().cloned()).collect();
+            lib_merged.push(env_lib.as_ref());
+            lib_merged.extend(lib.iter().cloned());
             (lib_merged.as_ref(), true)
         } else {
             (lib, false)
@@ -911,8 +911,11 @@ impl Engine {
                 // Recalculate hashes
                 let new_hash = FnCallHashes::from_script(calc_fn_hash(fn_name, args_len));
                 // Arguments are passed as-is, adding the curried arguments
-                let mut curry: StaticVec<_> = fn_ptr.curry().iter().cloned().collect();
-                let mut args: StaticVec<_> = curry.iter_mut().chain(call_args.iter_mut()).collect();
+                let mut curry = StaticVec::with_capacity(fn_ptr.num_curried());
+                curry.extend(fn_ptr.curry().iter().cloned());
+                let mut args = StaticVec::with_capacity(curry.len() + call_args.len());
+                args.extend(curry.iter_mut());
+                args.extend(call_args.iter_mut());
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
@@ -945,11 +948,12 @@ impl Engine {
                     calc_fn_hash(fn_name, args_len + 1),
                 );
                 // Replace the first argument with the object pointer, adding the curried arguments
-                let mut curry: StaticVec<_> = fn_ptr.curry().iter().cloned().collect();
-                let mut args: StaticVec<_> = once(target.as_mut())
-                    .chain(curry.iter_mut())
-                    .chain(call_args.iter_mut())
-                    .collect();
+                let mut curry = StaticVec::with_capacity(fn_ptr.num_curried());
+                curry.extend(fn_ptr.curry().iter().cloned());
+                let mut args = StaticVec::with_capacity(curry.len() + call_args.len() + 1);
+                args.push(target.as_mut());
+                args.extend(curry.iter_mut());
+                args.extend(call_args.iter_mut());
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
@@ -1020,8 +1024,9 @@ impl Engine {
                 };
 
                 // Attached object pointer in front of the arguments
-                let mut args: StaticVec<_> =
-                    once(target.as_mut()).chain(call_args.iter_mut()).collect();
+                let mut args = StaticVec::with_capacity(call_args.len() + 1);
+                args.push(target.as_mut());
+                args.extend(call_args.iter_mut());
 
                 self.exec_fn_call(
                     mods, state, lib, fn_name, hash, &mut args, is_ref, true, pos, None, level,
@@ -1039,8 +1044,9 @@ impl Engine {
         Ok((result, updated))
     }
 
+    /// Evaluate an argument.
     #[inline(always)]
-    fn get_arg_value(
+    pub(crate) fn get_arg_value(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
@@ -1147,12 +1153,12 @@ impl Engine {
                 let (name, mut fn_curry) = arg.cast::<FnPtr>().take_data();
 
                 // Append the new curried arguments to the existing list.
-                args_expr.iter().skip(1).try_for_each(|expr| match expr {
-                    Expr::Stack(slot, _) => Ok(fn_curry.push(constants[*slot].clone())),
-                    _ => self
-                        .eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                        .map(|value| fn_curry.push(value)),
-                })?;
+                for index in 1..args_expr.len() {
+                    let (value, _) = self.get_arg_value(
+                        scope, mods, state, lib, this_ptr, level, args_expr, constants, index,
+                    )?;
+                    fn_curry.push(value);
+                }
 
                 return Ok(FnPtr::new_unchecked(name, fn_curry).into());
             }
@@ -1249,8 +1255,8 @@ impl Engine {
         }
 
         // Normal function call - except for Fn, curry, call and eval (handled above)
-        let mut arg_values: StaticVec<_>;
-        let mut args: StaticVec<_>;
+        let mut arg_values = StaticVec::with_capacity(args_expr.len());
+        let mut args = StaticVec::with_capacity(args_expr.len() + curry.len());
         let mut is_ref = false;
         let capture = if capture_scope && !scope.is_empty() {
             Some(scope.clone_visible())
@@ -1260,23 +1266,18 @@ impl Engine {
 
         if args_expr.is_empty() && curry.is_empty() {
             // No arguments
-            args = Default::default();
         } else {
             // If the first argument is a variable, and there is no curried arguments,
             // convert to method-call style in order to leverage potential &mut first argument and
             // avoid cloning the value
             if curry.is_empty() && !args_expr.is_empty() && args_expr[0].is_variable_access(false) {
                 // func(x, ...) -> x.func(...)
-                arg_values = args_expr
-                    .iter()
-                    .skip(1)
-                    .map(|expr| match expr {
-                        Expr::Stack(slot, _) => Ok(constants[*slot].clone()),
-                        _ => self
-                            .eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                            .map(Dynamic::flatten),
-                    })
-                    .collect::<Result<_, _>>()?;
+                for index in 1..args_expr.len() {
+                    let (value, _) = self.get_arg_value(
+                        scope, mods, state, lib, this_ptr, level, args_expr, constants, index,
+                    )?;
+                    arg_values.push(value.flatten());
+                }
 
                 let (mut target, _pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, &args_expr[0])?;
@@ -1293,28 +1294,26 @@ impl Engine {
                 #[cfg(feature = "no_closure")]
                 let target_is_shared = false;
 
-                args = if target_is_shared || target.is_value() {
+                if target_is_shared || target.is_value() {
                     arg_values.insert(0, target.take_or_clone().flatten());
-                    arg_values.iter_mut().collect()
+                    args.extend(arg_values.iter_mut())
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
                     is_ref = true;
                     let obj_ref = target.take_ref().expect("never fails because `target` is a reference if it is not a value and not shared");
-                    once(obj_ref).chain(arg_values.iter_mut()).collect()
-                };
+                    args.push(obj_ref);
+                    args.extend(arg_values.iter_mut());
+                }
             } else {
                 // func(..., ...)
-                arg_values = args_expr
-                    .iter()
-                    .map(|expr| match expr {
-                        Expr::Stack(slot, _) => Ok(constants[*slot].clone()),
-                        _ => self
-                            .eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                            .map(Dynamic::flatten),
-                    })
-                    .collect::<Result<_, _>>()?;
-
-                args = curry.iter_mut().chain(arg_values.iter_mut()).collect();
+                for index in 0..args_expr.len() {
+                    let (value, _) = self.get_arg_value(
+                        scope, mods, state, lib, this_ptr, level, args_expr, constants, index,
+                    )?;
+                    arg_values.push(value.flatten());
+                }
+                args.extend(curry.iter_mut());
+                args.extend(arg_values.iter_mut());
             }
         }
 
@@ -1340,35 +1339,28 @@ impl Engine {
         pos: Position,
         level: usize,
     ) -> RhaiResult {
-        let mut arg_values: StaticVec<_>;
+        let mut arg_values = StaticVec::with_capacity(args_expr.len());
+        let mut args = StaticVec::with_capacity(args_expr.len());
         let mut first_arg_value = None;
-        let mut args: StaticVec<_>;
 
         if args_expr.is_empty() {
             // No arguments
-            args = Default::default();
         } else {
             // See if the first argument is a variable (not namespace-qualified).
             // If so, convert to method-call style in order to leverage potential
             // &mut first argument and avoid cloning the value
             if !args_expr.is_empty() && args_expr[0].is_variable_access(true) {
                 // func(x, ...) -> x.func(...)
-                arg_values = args_expr
-                    .iter()
-                    .enumerate()
-                    .map(|(i, expr)| {
-                        // Skip the first argument
-                        if i == 0 {
-                            return Ok(Default::default());
-                        }
-                        match expr {
-                            Expr::Stack(slot, _) => Ok(constants[*slot].clone()),
-                            _ => self
-                                .eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                                .map(Dynamic::flatten),
-                        }
-                    })
-                    .collect::<Result<_, _>>()?;
+                for index in 0..args_expr.len() {
+                    if index == 0 {
+                        arg_values.push(Default::default());
+                    } else {
+                        let (value, _) = self.get_arg_value(
+                            scope, mods, state, lib, this_ptr, level, args_expr, constants, index,
+                        )?;
+                        arg_values.push(value.flatten());
+                    }
+                }
 
                 // Get target reference to first argument
                 let (target, _pos) =
@@ -1384,7 +1376,7 @@ impl Engine {
 
                 if target_is_shared || target.is_value() {
                     arg_values[0] = target.take_or_clone().flatten();
-                    args = arg_values.iter_mut().collect();
+                    args.extend(arg_values.iter_mut());
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
                     let (first, rest) = arg_values
@@ -1392,21 +1384,18 @@ impl Engine {
                         .expect("never fails because the arguments list is not empty");
                     first_arg_value = Some(first);
                     let obj_ref = target.take_ref().expect("never fails because `target` is a reference if it is not a value and not shared");
-                    args = once(obj_ref).chain(rest.iter_mut()).collect();
+                    args.push(obj_ref);
+                    args.extend(rest.iter_mut());
                 }
             } else {
                 // func(..., ...) or func(mod::x, ...)
-                arg_values = args_expr
-                    .iter()
-                    .map(|expr| match expr {
-                        Expr::Stack(slot, _) => Ok(constants[*slot].clone()),
-                        _ => self
-                            .eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                            .map(Dynamic::flatten),
-                    })
-                    .collect::<Result<_, _>>()?;
-
-                args = arg_values.iter_mut().collect();
+                for index in 0..args_expr.len() {
+                    let (value, _) = self.get_arg_value(
+                        scope, mods, state, lib, this_ptr, level, args_expr, constants, index,
+                    )?;
+                    arg_values.push(value.flatten());
+                }
+                args.extend(arg_values.iter_mut());
             }
         }
 

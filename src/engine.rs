@@ -1667,22 +1667,19 @@ impl Engine {
         match expr {
             #[cfg(not(feature = "no_object"))]
             Expr::FnCall(x, _) if _parent_chain_type == ChainType::Dot && !x.is_qualified() => {
-                let arg_values = x
-                    .args
-                    .iter()
-                    .map(|arg_expr| match arg_expr {
-                        Expr::Stack(slot, _) => Ok(x.constants[*slot].clone()),
-                        _ => self
-                            .eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
-                            .map(Dynamic::flatten),
-                    })
-                    .collect::<Result<StaticVec<_>, _>>()?;
+                let crate::ast::FnCallExpr {
+                    args, constants, ..
+                } = x.as_ref();
+                let mut arg_values = StaticVec::with_capacity(args.len());
 
-                let pos = x
-                    .args
-                    .get(0)
-                    .map(|arg_expr| arg_expr.position())
-                    .unwrap_or_default();
+                for index in 0..args.len() {
+                    let (value, _) = self.get_arg_value(
+                        scope, mods, state, lib, this_ptr, level, args, constants, index,
+                    )?;
+                    arg_values.push(value.flatten());
+                }
+
+                let pos = x.args.get(0).map(Expr::position).unwrap_or_default();
 
                 idx_values.push((arg_values, pos).into());
             }
@@ -1712,22 +1709,19 @@ impl Engine {
                     Expr::FnCall(x, _)
                         if _parent_chain_type == ChainType::Dot && !x.is_qualified() =>
                     {
-                        let arg_values = x
-                            .args
-                            .iter()
-                            .map(|arg_expr| match arg_expr {
-                                Expr::Stack(slot, _) => Ok(x.constants[*slot].clone()),
-                                _ => self
-                                    .eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
-                                    .map(Dynamic::flatten),
-                            })
-                            .collect::<Result<StaticVec<_>, _>>()?;
+                        let crate::ast::FnCallExpr {
+                            args, constants, ..
+                        } = x.as_ref();
+                        let mut arg_values = StaticVec::with_capacity(args.len());
 
-                        let pos = x
-                            .args
-                            .get(0)
-                            .map(|arg_expr| arg_expr.position())
-                            .unwrap_or_default();
+                        for index in 0..args.len() {
+                            let (value, _) = self.get_arg_value(
+                                scope, mods, state, lib, this_ptr, level, args, constants, index,
+                            )?;
+                            arg_values.push(value.flatten());
+                        }
+
+                        let pos = x.args.get(0).map(Expr::position).unwrap_or_default();
 
                         (arg_values, pos).into()
                     }

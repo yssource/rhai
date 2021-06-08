@@ -344,28 +344,23 @@ impl FnPtr {
         this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
-        let mut args_data: StaticVec<_>;
+        let mut arg_values = arg_values.as_mut();
+        let mut args_data;
 
-        let arg_values = if self.curry().is_empty() {
-            arg_values.as_mut()
-        } else {
-            args_data = self
-                .curry()
-                .iter()
-                .cloned()
-                .chain(arg_values.as_mut().iter_mut().map(mem::take))
-                .collect();
-
-            args_data.as_mut()
+        if self.num_curried() > 0 {
+            args_data = StaticVec::with_capacity(self.num_curried() + arg_values.len());
+            args_data.extend(self.curry().iter().cloned());
+            args_data.extend(arg_values.iter_mut().map(mem::take));
+            arg_values = args_data.as_mut();
         };
 
         let is_method = this_ptr.is_some();
 
-        let mut args: StaticVec<_> = if let Some(obj) = this_ptr {
-            once(obj).chain(arg_values.iter_mut()).collect()
-        } else {
-            arg_values.iter_mut().collect()
-        };
+        let mut args = StaticVec::with_capacity(arg_values.len() + 1);
+        if let Some(obj) = this_ptr {
+            args.push(obj);
+        }
+        args.extend(arg_values.iter_mut());
 
         ctx.call_fn_dynamic_raw(self.fn_name(), is_method, &mut args)
     }
