@@ -17,7 +17,7 @@ use crate::{
 };
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, EvalAltResult, FnPtr,
-    ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec,
+    Identifier, ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -627,6 +627,12 @@ impl Engine {
         _capture_scope: Option<Scope>,
         _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+        #[inline(always)]
+        fn no_method_err(name: &str, pos: Position) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+            let msg = format!("'{0}' should not be called this way. Try {0}(...);", name);
+            EvalAltResult::ErrorRuntime(msg.into(), pos).into()
+        }
+
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
         ensure_no_data_race(fn_name, args, is_ref)?;
@@ -638,7 +644,7 @@ impl Engine {
                 return Ok((
                     self.map_type_name(args[0].type_name()).to_string().into(),
                     false,
-                ));
+                ))
             }
 
             // Handle is_def_fn()
@@ -668,39 +674,15 @@ impl Engine {
             // Handle is_shared()
             #[cfg(not(feature = "no_closure"))]
             crate::engine::KEYWORD_IS_SHARED if args.len() == 1 => {
-                return EvalAltResult::ErrorRuntime(
-                    format!(
-                        "'{}' should not be called this way. Try {}(...);",
-                        fn_name, fn_name
-                    )
-                    .into(),
-                    pos,
-                )
-                .into()
+                return no_method_err(fn_name, pos)
             }
 
             KEYWORD_FN_PTR | KEYWORD_EVAL | KEYWORD_IS_DEF_VAR if args.len() == 1 => {
-                return EvalAltResult::ErrorRuntime(
-                    format!(
-                        "'{}' should not be called this way. Try {}(...);",
-                        fn_name, fn_name
-                    )
-                    .into(),
-                    pos,
-                )
-                .into()
+                return no_method_err(fn_name, pos)
             }
 
             KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY if !args.is_empty() => {
-                return EvalAltResult::ErrorRuntime(
-                    format!(
-                        "'{}' should not be called this way. Try {}(...);",
-                        fn_name, fn_name
-                    )
-                    .into(),
-                    pos,
-                )
-                .into()
+                return no_method_err(fn_name, pos)
             }
 
             _ => (),
@@ -798,17 +780,8 @@ impl Engine {
         }
 
         // Native function call
-        self.call_native_fn(
-            mods,
-            state,
-            lib,
-            fn_name,
-            hash.native_hash(),
-            args,
-            is_ref,
-            false,
-            pos,
-        )
+        let hash = hash.native_hash();
+        self.call_native_fn(mods, state, lib, fn_name, hash, args, is_ref, false, pos)
     }
 
     /// Evaluate a list of statements with no `this` pointer.
@@ -983,7 +956,7 @@ impl Engine {
                                 .curry()
                                 .iter()
                                 .cloned()
-                                .chain(call_args.iter_mut().map(|v| mem::take(v)))
+                                .chain(call_args.iter_mut().map(mem::take))
                                 .collect(),
                         )
                     }
@@ -1215,21 +1188,14 @@ impl Engine {
             KEYWORD_EVAL if total_args == 1 => {
                 // eval - only in function call style
                 let prev_len = scope.len();
-                let (script, script_pos) = self.get_arg_value(
+                let (value, pos) = self.get_arg_value(
                     scope, mods, state, lib, this_ptr, level, args_expr, constants, 0,
                 )?;
-                let script = script.take_immutable_string().map_err(|typ| {
-                    self.make_type_mismatch_err::<ImmutableString>(typ, script_pos)
-                })?;
-                let result = self.eval_script_expr_in_place(
-                    scope,
-                    mods,
-                    state,
-                    lib,
-                    &script,
-                    script_pos,
-                    level + 1,
-                );
+                let script = &value
+                    .take_immutable_string()
+                    .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, pos))?;
+                let result =
+                    self.eval_script_expr_in_place(scope, mods, state, lib, script, pos, level + 1);
 
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
@@ -1243,7 +1209,7 @@ impl Engine {
                         state
                             .source
                             .as_ref()
-                            .map(|s| s.to_string())
+                            .map(Identifier::to_string)
                             .unwrap_or_default(),
                         err,
                         pos,
@@ -1294,7 +1260,7 @@ impl Engine {
                 #[cfg(feature = "no_closure")]
                 let target_is_shared = false;
 
-                if target_is_shared || target.is_value() {
+                if target_is_shared || target.is_temp_value() {
                     arg_values.insert(0, target.take_or_clone().flatten());
                     args.extend(arg_values.iter_mut())
                 } else {
@@ -1374,7 +1340,7 @@ impl Engine {
                 #[cfg(feature = "no_closure")]
                 let target_is_shared = false;
 
-                if target_is_shared || target.is_value() {
+                if target_is_shared || target.is_temp_value() {
                     arg_values[0] = target.take_or_clone().flatten();
                     args.extend(arg_values.iter_mut());
                 } else {
