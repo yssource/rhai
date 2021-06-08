@@ -328,13 +328,13 @@ impl From<(Dynamic, Position)> for ChainArgument {
 #[derive(Debug)]
 pub enum Target<'a> {
     /// The target is a mutable reference to a `Dynamic` value somewhere.
-    Ref(&'a mut Dynamic),
+    RefMut(&'a mut Dynamic),
     /// The target is a mutable reference to a Shared `Dynamic` value.
     /// It holds both the access guard and the original shared value.
     #[cfg(not(feature = "no_closure"))]
     LockGuard((crate::dynamic::DynamicWriteLock<'a, Dynamic>, Dynamic)),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
-    Value(Dynamic),
+    TempValue(Dynamic),
     /// The target is a bit inside an [`INT`][crate::INT].
     /// This is necessary because directly pointing to a bit inside an [`INT`][crate::INT] is impossible.
     #[cfg(not(feature = "no_index"))]
@@ -351,25 +351,24 @@ impl<'a> Target<'a> {
     #[inline(always)]
     pub fn is_ref(&self) -> bool {
         match self {
-            Self::Ref(_) => true,
+            Self::RefMut(_) => true,
             #[cfg(not(feature = "no_closure"))]
             Self::LockGuard(_) => true,
-            Self::Value(_) => false,
+            Self::TempValue(_) => false,
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, _) => false,
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => false,
         }
     }
-    /// Is the `Target` an owned value?
-    #[allow(dead_code)]
+    /// Is the `Target` a temp value?
     #[inline(always)]
-    pub fn is_value(&self) -> bool {
+    pub fn is_temp_value(&self) -> bool {
         match self {
-            Self::Ref(_) => false,
+            Self::RefMut(_) => false,
             #[cfg(not(feature = "no_closure"))]
             Self::LockGuard(_) => false,
-            Self::Value(_) => true,
+            Self::TempValue(_) => true,
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, _) => false,
             #[cfg(not(feature = "no_index"))]
@@ -381,10 +380,10 @@ impl<'a> Target<'a> {
     #[inline(always)]
     pub fn is_shared(&self) -> bool {
         match self {
-            Self::Ref(r) => r.is_shared(),
+            Self::RefMut(r) => r.is_shared(),
             #[cfg(not(feature = "no_closure"))]
             Self::LockGuard(_) => true,
-            Self::Value(r) => r.is_shared(),
+            Self::TempValue(r) => r.is_shared(),
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, _) => false,
             #[cfg(not(feature = "no_index"))]
@@ -396,10 +395,10 @@ impl<'a> Target<'a> {
     #[inline(always)]
     pub fn is<T: Variant + Clone>(&self) -> bool {
         match self {
-            Self::Ref(r) => r.is::<T>(),
+            Self::RefMut(r) => r.is::<T>(),
             #[cfg(not(feature = "no_closure"))]
             Self::LockGuard((r, _)) => r.is::<T>(),
-            Self::Value(r) => r.is::<T>(),
+            Self::TempValue(r) => r.is::<T>(),
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, _) => TypeId::of::<T>() == TypeId::of::<bool>(),
             #[cfg(not(feature = "no_index"))]
@@ -410,10 +409,10 @@ impl<'a> Target<'a> {
     #[inline(always)]
     pub fn take_or_clone(self) -> Dynamic {
         match self {
-            Self::Ref(r) => r.clone(), // Referenced value is cloned
+            Self::RefMut(r) => r.clone(), // Referenced value is cloned
             #[cfg(not(feature = "no_closure"))]
             Self::LockGuard((_, orig)) => orig, // Original value is simply taken
-            Self::Value(v) => v,       // Owned value is simply taken
+            Self::TempValue(v) => v,      // Owned value is simply taken
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, value) => value, // Boolean is taken
             #[cfg(not(feature = "no_index"))]
@@ -424,7 +423,7 @@ impl<'a> Target<'a> {
     #[inline(always)]
     pub fn take_ref(self) -> Option<&'a mut Dynamic> {
         match self {
-            Self::Ref(r) => Some(r),
+            Self::RefMut(r) => Some(r),
             _ => None,
         }
     }
@@ -438,32 +437,28 @@ impl<'a> Target<'a> {
     #[inline(always)]
     pub fn propagate_changed_value(&mut self) -> Result<(), Box<EvalAltResult>> {
         match self {
-            Self::Ref(_) | Self::Value(_) => Ok(()),
+            Self::RefMut(_) | Self::TempValue(_) => Ok(()),
             #[cfg(not(feature = "no_closure"))]
             Self::LockGuard(_) => Ok(()),
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, value) => {
                 let new_val = value.clone();
-                self.set_value(new_val, Position::NONE)
+                self.set_value(new_val)
             }
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => {
                 let new_val = ch.clone();
-                self.set_value(new_val, Position::NONE)
+                self.set_value(new_val)
             }
         }
     }
     /// Update the value of the `Target`.
-    pub fn set_value(
-        &mut self,
-        new_val: Dynamic,
-        _pos: Position,
-    ) -> Result<(), Box<EvalAltResult>> {
+    fn set_value(&mut self, new_val: Dynamic) -> Result<(), Box<EvalAltResult>> {
         match self {
-            Self::Ref(r) => **r = new_val,
+            Self::RefMut(r) => **r = new_val,
             #[cfg(not(feature = "no_closure"))]
             Self::LockGuard((r, _)) => **r = new_val,
-            Self::Value(_) => panic!("cannot update a value"),
+            Self::TempValue(_) => panic!("cannot update a value"),
             #[cfg(not(feature = "no_index"))]
             Self::BitField(value, index, _) => {
                 let value = &mut *value
@@ -475,7 +470,7 @@ impl<'a> Target<'a> {
                     Box::new(EvalAltResult::ErrorMismatchDataType(
                         "bool".to_string(),
                         err.to_string(),
-                        _pos,
+                        Position::NONE,
                     ))
                 })?;
 
@@ -501,7 +496,7 @@ impl<'a> Target<'a> {
                     Box::new(EvalAltResult::ErrorMismatchDataType(
                         "char".to_string(),
                         err.to_string(),
-                        _pos,
+                        Position::NONE,
                     ))
                 })?;
 
@@ -534,7 +529,7 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
             ));
         }
 
-        Self::Ref(value)
+        Self::RefMut(value)
     }
 }
 
@@ -544,10 +539,10 @@ impl Deref for Target<'_> {
     #[inline(always)]
     fn deref(&self) -> &Dynamic {
         match self {
-            Self::Ref(r) => *r,
+            Self::RefMut(r) => *r,
             #[cfg(not(feature = "no_closure"))]
             Self::LockGuard((r, _)) => &**r,
-            Self::Value(ref r) => r,
+            Self::TempValue(ref r) => r,
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, ref r) => r,
             #[cfg(not(feature = "no_index"))]
@@ -567,10 +562,10 @@ impl DerefMut for Target<'_> {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Dynamic {
         match self {
-            Self::Ref(r) => *r,
+            Self::RefMut(r) => *r,
             #[cfg(not(feature = "no_closure"))]
             Self::LockGuard((r, _)) => r.deref_mut(),
-            Self::Value(ref mut r) => r,
+            Self::TempValue(ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
@@ -589,7 +584,7 @@ impl AsMut<Dynamic> for Target<'_> {
 impl<T: Into<Dynamic>> From<T> for Target<'_> {
     #[inline(always)]
     fn from(value: T) -> Self {
-        Self::Value(value.into())
+        Self::TempValue(value.into())
     }
 }
 
@@ -1252,8 +1247,8 @@ impl Engine {
                             Ok(obj_ptr) => {
                                 self.eval_op_assignment(
                                     mods, state, lib, op_info, op_pos, obj_ptr, root, new_val,
-                                    new_pos,
-                                )?;
+                                )
+                                .map_err(|err| err.fill_position(new_pos))?;
                                 return Ok((Dynamic::UNIT, true));
                             }
                             // Can't index - try to call an index setter
@@ -1315,8 +1310,9 @@ impl Engine {
                         let ((new_val, new_pos), (op_info, op_pos)) =
                             new_val.expect("never fails because `new_val` is `Some`");
                         self.eval_op_assignment(
-                            mods, state, lib, op_info, op_pos, val, root, new_val, new_pos,
-                        )?;
+                            mods, state, lib, op_info, op_pos, val, root, new_val,
+                        )
+                        .map_err(|err| err.fill_position(new_pos))?;
                         Ok((Dynamic::UNIT, true))
                     }
                     // {xxx:map}.id
@@ -1363,8 +1359,9 @@ impl Engine {
                                 })?;
                             let obj_ptr = (&mut orig_val).into();
                             self.eval_op_assignment(
-                                mods, state, lib, op_info, op_pos, obj_ptr, root, new_val, new_pos,
-                            )?;
+                                mods, state, lib, op_info, op_pos, obj_ptr, root, new_val,
+                            )
+                            .map_err(|err| err.fill_position(new_pos))?;
                             new_val = orig_val;
                         }
 
@@ -1771,7 +1768,7 @@ impl Engine {
     }
 
     /// Get the value at the indexed position of a base type.
-    /// [`Position`] in [`EvalAltResult`] may be None and should be set afterwards.
+    /// [`Position`] in [`EvalAltResult`] may be [`NONE`][Position::NONE] and should be set afterwards.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn get_indexed_mut<'t>(
         &self,
@@ -2001,8 +1998,8 @@ impl Engine {
                         (&mut result).into(),
                         ("", Position::NONE),
                         item,
-                        expr.position(),
-                    )?;
+                    )
+                    .map_err(|err| err.fill_position(expr.position()))?;
                     pos = expr.position();
                 }
 
@@ -2211,6 +2208,8 @@ impl Engine {
         result
     }
 
+    /// Evaluate an op-assignment statement.
+    /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and should be set afterwards.
     pub(crate) fn eval_op_assignment(
         &self,
         mods: &mut Imports,
@@ -2221,7 +2220,6 @@ impl Engine {
         mut target: Target,
         root: (&str, Position),
         mut new_val: Dynamic,
-        new_val_pos: Position,
     ) -> Result<(), Box<EvalAltResult>> {
         if target.is_read_only() {
             // Assignment to constant variable
@@ -2271,14 +2269,12 @@ impl Engine {
                     err => return err.map(|_| ()),
                 }
             }
-
-            target.propagate_changed_value()?;
         } else {
             // Normal assignment
-            target.set_value(new_val, new_val_pos)?;
+            *target.as_mut() = new_val;
         }
 
-        Ok(())
+        target.propagate_changed_value()
     }
 
     /// Evaluate a statement.
@@ -2339,8 +2335,9 @@ impl Engine {
                     lhs_ptr,
                     (var_name, pos),
                     rhs_val,
-                    rhs_expr.position(),
-                )?;
+                )
+                .map_err(|err| err.fill_position(rhs_expr.position()))?;
+
                 Ok(Dynamic::UNIT)
             }
 
