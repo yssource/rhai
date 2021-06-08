@@ -1,5 +1,6 @@
 //! Module defining the AST (abstract syntax tree).
 
+use crate::dynamic::Union;
 use crate::fn_native::shared_make_mut;
 use crate::module::NamespaceRef;
 use crate::token::Token;
@@ -1519,7 +1520,7 @@ pub struct FnCallExpr {
     /// List of function call argument expressions.
     pub args: StaticVec<Expr>,
     /// List of function call arguments that are constants.
-    pub literal_args: smallvec::SmallVec<[(Dynamic, Position); 2]>,
+    pub constants: smallvec::SmallVec<[Dynamic; 2]>,
     /// Function name.
     pub name: Identifier,
     /// Does this function call capture the parent scope?
@@ -1531,16 +1532,6 @@ impl FnCallExpr {
     #[inline(always)]
     pub fn is_qualified(&self) -> bool {
         self.namespace.is_some()
-    }
-    /// Are there no arguments to this function call?
-    #[inline(always)]
-    pub fn is_args_empty(&self) -> bool {
-        self.args.is_empty() && self.literal_args.is_empty()
-    }
-    /// Get the number of arguments to this function call.
-    #[inline(always)]
-    pub fn args_count(&self) -> usize {
-        self.args.len() + self.literal_args.len()
     }
 }
 
@@ -1718,6 +1709,8 @@ pub enum Expr {
             (ImmutableString, Position),
         )>,
     ),
+    /// Stack slot
+    Stack(usize, Position),
     /// { [statement][Stmt] ... }
     Stmt(Box<StmtBlock>),
     /// func `(` expr `,` ... `)`
@@ -1783,6 +1776,7 @@ impl fmt::Debug for Expr {
                 f.write_str(")")
             }
             Self::Property(x) => write!(f, "Property({})", (x.2).0),
+            Self::Stack(x, _) => write!(f, "StackSlot({})", x),
             Self::Stmt(x) => {
                 f.write_str("ExprStmtBlock")?;
                 f.debug_list().entries(x.0.iter()).finish()
@@ -1793,8 +1787,8 @@ impl fmt::Debug for Expr {
                 ff.field("name", &x.name)
                     .field("hash", &x.hashes)
                     .field("args", &x.args);
-                if !x.literal_args.is_empty() {
-                    ff.field("literal_args", &x.literal_args);
+                if !x.constants.is_empty() {
+                    ff.field("constants", &x.constants);
                 }
                 if x.capture {
                     ff.field("capture", &x.capture);
@@ -1865,6 +1859,22 @@ impl Expr {
             _ => return None,
         })
     }
+    /// Create an [`Expr`] from a [`Dynamic`] value.
+    #[inline]
+    pub fn from_dynamic(value: Dynamic, pos: Position) -> Self {
+        match value.0 {
+            Union::Unit(_, _, _) => Self::Unit(pos),
+            Union::Bool(b, _, _) => Self::BoolConstant(b, pos),
+            Union::Str(s, _, _) => Self::StringConstant(s, pos),
+            Union::Char(c, _, _) => Self::CharConstant(c, pos),
+            Union::Int(i, _, _) => Self::IntegerConstant(i, pos),
+
+            #[cfg(not(feature = "no_float"))]
+            Union::Float(f, _, _) => Self::FloatConstant(f, pos),
+
+            _ => Self::DynamicConstant(Box::new(value), pos),
+        }
+    }
     /// Is the expression a simple variable access?
     #[inline(always)]
     pub(crate) fn is_variable_access(&self, non_qualified: bool) -> bool {
@@ -1897,6 +1907,7 @@ impl Expr {
             | Self::Array(_, pos)
             | Self::Map(_, pos)
             | Self::Variable(_, pos, _)
+            | Self::Stack(_, pos)
             | Self::FnCall(_, pos)
             | Self::Custom(_, pos) => *pos,
 
@@ -1935,6 +1946,7 @@ impl Expr {
             | Self::Dot(_, pos)
             | Self::Index(_, pos)
             | Self::Variable(_, pos, _)
+            | Self::Stack(_, pos)
             | Self::FnCall(_, pos)
             | Self::Custom(_, pos) => *pos = new_pos,
 
@@ -1964,7 +1976,7 @@ impl Expr {
 
             Self::Stmt(x) => x.0.iter().all(Stmt::is_pure),
 
-            Self::Variable(_, _, _) => true,
+            Self::Variable(_, _, _) | Self::Stack(_, _) => true,
 
             _ => self.is_constant(),
         }
@@ -1989,7 +2001,8 @@ impl Expr {
             | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::StringConstant(_, _)
-            | Self::Unit(_) => true,
+            | Self::Unit(_)
+            | Self::Stack(_, _) => true,
 
             Self::InterpolatedString(x) | Self::Array(x, _) => x.iter().all(Self::is_constant),
 
@@ -2049,6 +2062,8 @@ impl Expr {
             },
 
             Self::Custom(_, _) => false,
+
+            Self::Stack(_, _) => unreachable!("Expr::Stack should not occur naturally"),
         }
     }
     /// Recursively walk this expression.

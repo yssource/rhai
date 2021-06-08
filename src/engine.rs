@@ -1670,19 +1670,18 @@ impl Engine {
                 let arg_values = x
                     .args
                     .iter()
-                    .map(|arg_expr| {
-                        self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
-                            .map(Dynamic::flatten)
+                    .map(|arg_expr| match arg_expr {
+                        Expr::Stack(slot, _) => Ok(x.constants[*slot].clone()),
+                        _ => self
+                            .eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
+                            .map(Dynamic::flatten),
                     })
-                    .chain(x.literal_args.iter().map(|(v, _)| Ok(v.clone())))
                     .collect::<Result<StaticVec<_>, _>>()?;
 
                 let pos = x
                     .args
-                    .iter()
+                    .get(0)
                     .map(|arg_expr| arg_expr.position())
-                    .chain(x.literal_args.iter().map(|(_, pos)| *pos))
-                    .next()
                     .unwrap_or_default();
 
                 idx_values.push((arg_values, pos).into());
@@ -1716,19 +1715,18 @@ impl Engine {
                         let arg_values = x
                             .args
                             .iter()
-                            .map(|arg_expr| {
-                                self.eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
-                                    .map(Dynamic::flatten)
+                            .map(|arg_expr| match arg_expr {
+                                Expr::Stack(slot, _) => Ok(x.constants[*slot].clone()),
+                                _ => self
+                                    .eval_expr(scope, mods, state, lib, this_ptr, arg_expr, level)
+                                    .map(Dynamic::flatten),
                             })
-                            .chain(x.literal_args.iter().map(|(v, _)| Ok(v.clone())))
                             .collect::<Result<StaticVec<_>, _>>()?;
 
                         let pos = x
                             .args
-                            .iter()
+                            .get(0)
                             .map(|arg_expr| arg_expr.position())
-                            .chain(x.literal_args.iter().map(|(_, pos)| *pos))
-                            .next()
                             .unwrap_or_default();
 
                         (arg_values, pos).into()
@@ -2055,7 +2053,7 @@ impl Engine {
                     namespace,
                     hashes,
                     args,
-                    literal_args: c_args,
+                    constants,
                     ..
                 } = x.as_ref();
                 let namespace = namespace
@@ -2063,8 +2061,8 @@ impl Engine {
                     .expect("never fails because function call is qualified");
                 let hash = hashes.native_hash();
                 self.make_qualified_function_call(
-                    scope, mods, state, lib, this_ptr, namespace, name, args, c_args, hash, *pos,
-                    level,
+                    scope, mods, state, lib, this_ptr, namespace, name, args, constants, hash,
+                    *pos, level,
                 )
             }
 
@@ -2075,12 +2073,12 @@ impl Engine {
                     capture,
                     hashes,
                     args,
-                    literal_args: c_args,
+                    constants,
                     ..
                 } = x.as_ref();
                 self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args, c_args, *hashes, *pos, *capture,
-                    level,
+                    scope, mods, state, lib, this_ptr, name, args, constants, *hashes, *pos,
+                    *capture, level,
                 )
             }
 
@@ -2643,7 +2641,7 @@ impl Engine {
                     namespace,
                     hashes,
                     args,
-                    literal_args: c_args,
+                    constants,
                     ..
                 } = x.as_ref();
                 let namespace = namespace
@@ -2651,8 +2649,8 @@ impl Engine {
                     .expect("never fails because function call is qualified");
                 let hash = hashes.native_hash();
                 self.make_qualified_function_call(
-                    scope, mods, state, lib, this_ptr, namespace, name, args, c_args, hash, *pos,
-                    level,
+                    scope, mods, state, lib, this_ptr, namespace, name, args, constants, hash,
+                    *pos, level,
                 )
             }
 
@@ -2663,12 +2661,12 @@ impl Engine {
                     capture,
                     hashes,
                     args,
-                    literal_args: c_args,
+                    constants,
                     ..
                 } = x.as_ref();
                 self.make_function_call(
-                    scope, mods, state, lib, this_ptr, name, args, c_args, *hashes, *pos, *capture,
-                    level,
+                    scope, mods, state, lib, this_ptr, name, args, constants, *hashes, *pos,
+                    *capture, level,
                 )
             }
 
