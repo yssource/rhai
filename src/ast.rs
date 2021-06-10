@@ -1819,11 +1819,11 @@ impl fmt::Debug for Expr {
 }
 
 impl Expr {
-    /// Get the [`Dynamic`] value of a constant expression.
+    /// Get the [`Dynamic`] value of a literal constant expression.
     ///
-    /// Returns [`None`] if the expression is not constant.
+    /// Returns [`None`] if the expression is not a literal constant.
     #[inline]
-    pub fn get_constant_value(&self) -> Option<Dynamic> {
+    pub fn get_literal_value(&self) -> Option<Dynamic> {
         Some(match self {
             Self::DynamicConstant(x, _) => x.as_ref().clone(),
             Self::IntegerConstant(x, _) => (*x).into(),
@@ -1838,7 +1838,7 @@ impl Expr {
             Self::Array(x, _) if self.is_constant() => {
                 let mut arr = Array::with_capacity(x.len());
                 arr.extend(x.iter().map(|v| {
-                    v.get_constant_value()
+                    v.get_literal_value()
                         .expect("never fails because a constant array always has a constant value")
                 }));
                 Dynamic::from_array(arr)
@@ -1850,7 +1850,7 @@ impl Expr {
                 x.0.iter().for_each(|(k, v)| {
                     *map.get_mut(k.name.as_str())
                         .expect("never fails because the template should contain all the keys") = v
-                        .get_constant_value()
+                        .get_literal_value()
                         .expect("never fails because a constant map always has a constant value")
                 });
                 Dynamic::from_map(map)

@@ -9,7 +9,10 @@ use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::module::NamespaceRef;
 use crate::optimize::optimize_into_ast;
 use crate::optimize::OptimizationLevel;
-use crate::syntax::{CustomSyntax, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+use crate::syntax::{
+    CustomSyntax, MARKER_BLOCK, MARKER_BOOL, MARKER_EXPR, MARKER_IDENT, MARKER_INT, MARKER_STRING,
+};
+
 use crate::token::{
     is_keyword_function, is_valid_identifier, Token, TokenStream, TokenizerControl,
 };
@@ -27,7 +30,7 @@ use std::{
 };
 
 #[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
+use crate::{syntax::MARKER_FLOAT, FLOAT};
 
 #[cfg(not(feature = "no_function"))]
 use crate::FnAccess;
@@ -876,7 +879,7 @@ fn parse_switch(
         };
 
         let hash = if let Some(expr) = expr {
-            if let Some(value) = expr.get_constant_value() {
+            if let Some(value) = expr.get_literal_value() {
                 let hasher = &mut get_hasher();
                 value.hash(hasher);
                 let hash = hasher.finish();
@@ -1916,6 +1919,60 @@ fn parse_custom_syntax(
                     tokens.push(keyword);
                 }
                 stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
+            },
+            MARKER_BOOL => match input.next().expect(NEVER_ENDS) {
+                (b @ Token::True, pos) | (b @ Token::False, pos) => {
+                    keywords.push(Expr::BoolConstant(b == Token::True, pos));
+                    let keyword = state.get_identifier(MARKER_BOOL);
+                    segments.push(keyword.clone().into());
+                    tokens.push(keyword);
+                }
+                (_, pos) => {
+                    return Err(
+                        PERR::MissingSymbol("Expecting 'true' or 'false'".to_string())
+                            .into_err(pos),
+                    )
+                }
+            },
+            MARKER_INT => match input.next().expect(NEVER_ENDS) {
+                (Token::IntegerConstant(i), pos) => {
+                    keywords.push(Expr::IntegerConstant(i, pos));
+                    let keyword = state.get_identifier(MARKER_INT);
+                    segments.push(keyword.clone().into());
+                    tokens.push(keyword);
+                }
+                (_, pos) => {
+                    return Err(
+                        PERR::MissingSymbol("Expecting an integer number".to_string())
+                            .into_err(pos),
+                    )
+                }
+            },
+            #[cfg(not(feature = "no_float"))]
+            MARKER_FLOAT => match input.next().expect(NEVER_ENDS) {
+                (Token::FloatConstant(f), pos) => {
+                    keywords.push(Expr::FloatConstant(f, pos));
+                    let keyword = state.get_identifier(MARKER_FLOAT);
+                    segments.push(keyword.clone().into());
+                    tokens.push(keyword);
+                }
+                (_, pos) => {
+                    return Err(PERR::MissingSymbol(
+                        "Expecting a floating-point number".to_string(),
+                    )
+                    .into_err(pos))
+                }
+            },
+            MARKER_STRING => match input.next().expect(NEVER_ENDS) {
+                (Token::StringConstant(s), pos) => {
+                    keywords.push(Expr::StringConstant(state.get_identifier(s).into(), pos));
+                    let keyword = state.get_identifier(MARKER_STRING);
+                    segments.push(keyword.clone().into());
+                    tokens.push(keyword);
+                }
+                (_, pos) => {
+                    return Err(PERR::MissingSymbol("Expecting a string".to_string()).into_err(pos))
+                }
             },
             s => match input.next().expect(NEVER_ENDS) {
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),

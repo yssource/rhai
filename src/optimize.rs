@@ -208,7 +208,7 @@ fn optimize_stmt_block(
                         state.push_var(
                             &x.name,
                             AccessMode::ReadOnly,
-                            value_expr.get_constant_value(),
+                            value_expr.get_literal_value(),
                         );
                     }
                 }
@@ -454,7 +454,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
 
         // switch const { ... }
         Stmt::Switch(match_expr, x, pos) if match_expr.is_constant() => {
-            let value = match_expr.get_constant_value().unwrap();
+            let value = match_expr.get_literal_value().unwrap();
             let hasher = &mut get_hasher();
             value.hash(hasher);
             let hash = hasher.finish();
@@ -841,7 +841,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
         #[cfg(not(feature = "no_index"))]
         Expr::Array(_, _) if expr.is_constant() => {
             state.set_dirty();
-            *expr = Expr::DynamicConstant(Box::new(expr.get_constant_value().unwrap()), expr.position());
+            *expr = Expr::DynamicConstant(Box::new(expr.get_literal_value().unwrap()), expr.position());
         }
         // [ items .. ]
         #[cfg(not(feature = "no_index"))]
@@ -850,7 +850,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
         #[cfg(not(feature = "no_object"))]
         Expr::Map(_, _) if expr.is_constant() => {
             state.set_dirty();
-            *expr = Expr::DynamicConstant(Box::new(expr.get_constant_value().unwrap()), expr.position());
+            *expr = Expr::DynamicConstant(Box::new(expr.get_literal_value().unwrap()), expr.position());
         }
         // #{ key:value, .. }
         #[cfg(not(feature = "no_object"))]
@@ -942,7 +942,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
         => {
             let mut arg_values: StaticVec<_> = x.args.iter().map(|e| match e {
                                                                     Expr::Stack(slot, _) => x.constants[*slot].clone(),
-                                                                    _ => e.get_constant_value().unwrap()
+                                                                    _ => e.get_literal_value().unwrap()
                                                                 }).collect();
 
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
@@ -968,7 +968,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
 
             // Move constant arguments
             for arg in x.args.iter_mut() {
-                if let Some(value) = arg.get_constant_value() {
+                if let Some(value) = arg.get_literal_value() {
                     state.set_dirty();
                     x.constants.push(value);
                     *arg = Expr::Stack(x.constants.len()-1, arg.position());
@@ -991,7 +991,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
             if !has_script_fn {
                 let mut arg_values: StaticVec<_> = x.args.iter().map(|e| match e {
                                                                         Expr::Stack(slot, _) => x.constants[*slot].clone(),
-                                                                        _ => e.get_constant_value().unwrap()
+                                                                        _ => e.get_literal_value().unwrap()
                                                                     }).collect();
 
                 // Save the typename of the first argument if it is `type_of()`
@@ -1025,7 +1025,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
             optimize_expr(arg, state, false);
 
             // Move constant arguments
-            if let Some(value) = arg.get_constant_value() {
+            if let Some(value) = arg.get_literal_value() {
                 state.set_dirty();
                 x.constants.push(value);
                 *arg = Expr::Stack(x.constants.len()-1, arg.position());

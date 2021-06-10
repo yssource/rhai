@@ -93,6 +93,8 @@ pub enum ParseErrorType {
     UnknownOperator(String),
     /// Expecting a particular token but not finding one. Wrapped values are the token and description.
     MissingToken(String, String),
+    /// Expecting a particular symbol but not finding one. Wrapped value is the description.
+    MissingSymbol(String),
     /// An expression in function call arguments `()` has syntax error. Wrapped value is the error
     /// description (if any).
     MalformedCallExpr(String),
@@ -196,6 +198,7 @@ impl ParseErrorType {
             Self::BadInput(err) => err.desc(),
             Self::UnknownOperator(_) => "Unknown operator",
             Self::MissingToken(_, _) => "Expecting a certain token that is missing",
+            Self::MissingSymbol(_) => "Expecting a certain symbol that is missing",
             Self::MalformedCallExpr(_) => "Invalid expression in function call arguments",
             Self::MalformedIndexExpr(_) => "Invalid index in indexing expression",
             Self::MalformedInExpr(_) => "Invalid 'in' expression",
@@ -268,6 +271,7 @@ impl fmt::Display for ParseErrorType {
             }
 
             Self::MissingToken(token, s) => write!(f, "Expecting '{}' {}", token, s),
+            Self::MissingSymbol(s) => f.write_str(s),
 
             Self::AssignmentToConstant(s) if s.is_empty() => f.write_str(self.desc()),
             Self::AssignmentToConstant(s) => write!(f, "Cannot assign to constant '{}'", s),

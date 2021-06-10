@@ -19,19 +19,24 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
 
     engine.register_custom_syntax(
         &[
-            "exec", "[", "$ident$", "]", "->", "$block$", "while", "$expr$",
+            "exec", "[", "$ident$", ";", "$int$", "]", "->", "$block$", "while", "$expr$",
         ],
         true,
         |context, inputs| {
             let var_name = inputs[0].get_variable_name().unwrap().to_string();
-            let stmt = inputs.get(1).unwrap();
-            let condition = inputs.get(2).unwrap();
+            let max = inputs[1].get_literal_value().unwrap().as_int().unwrap();
+            let stmt = inputs.get(2).unwrap();
+            let condition = inputs.get(3).unwrap();
 
             context.scope_mut().push(var_name.clone(), 0 as INT);
 
             let mut count: INT = 0;
 
             loop {
+                if count >= max {
+                    break;
+                }
+
                 context.eval_expression_tree(stmt)?;
                 count += 1;
 
@@ -63,17 +68,17 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<INT>(
             "
                 let x = 0;
-                let foo = (exec [x] -> { x += 2 } while x < 42) * 10;
+                let foo = (exec [x;15] -> { x += 2 } while x < 42) * 10;
                 foo
             "
         )?,
-        210
+        150
     );
     assert_eq!(
         engine.eval::<INT>(
             "
                 let x = 0;
-                exec [x] -> { x += 1 } while x < 42;
+                exec [x;100] -> { x += 1 } while x < 42;
                 x
             "
         )?,
@@ -82,7 +87,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval::<INT>(
             "
-                exec [x] -> { x += 1 } while x < 42;
+                exec [x;100] -> { x += 1 } while x < 42;
                 x
             "
         )?,
@@ -92,11 +97,11 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<INT>(
             "
                 let foo = 123;
-                exec [x] -> { x += 1 } while x < 42;
+                exec [x;15] -> { x += 1 } while x < 42;
                 foo + x + x1 + x2 + x3
             "
         )?,
-        171
+        144
     );
 
     // The first symbol must be an identifier
