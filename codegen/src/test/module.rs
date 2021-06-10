@@ -934,7 +934,7 @@ mod generate_tests {
                 impl PluginFunction for print_out_to_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        let arg0 = mem::take(args[0usize]).take_immutable_string().unwrap();
+                        let arg0 = mem::take(args[0usize]).as_immutable_string().unwrap();
                         Ok(Dynamic::from(print_out_to(&arg0)))
                     }
 
@@ -987,7 +987,7 @@ mod generate_tests {
                 impl PluginFunction for print_out_to_token {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
-                        let arg0 = mem::take(args[0usize]).take_string().unwrap();
+                        let arg0 = mem::take(args[0usize]).as_string().unwrap();
                         Ok(Dynamic::from(print_out_to(arg0)))
                     }
 

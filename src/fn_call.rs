@@ -346,7 +346,7 @@ impl Engine {
             // See if the function match print/debug (which requires special processing)
             return Ok(match fn_name {
                 KEYWORD_PRINT => {
-                    let text = result.take_immutable_string().map_err(|typ| {
+                    let text = result.as_immutable_string().map_err(|typ| {
                         EvalAltResult::ErrorMismatchOutputType(
                             self.map_type_name(type_name::<ImmutableString>()).into(),
                             typ.into(),
@@ -356,7 +356,7 @@ impl Engine {
                     ((self.print)(&text).into(), false)
                 }
                 KEYWORD_DEBUG => {
-                    let text = result.take_immutable_string().map_err(|typ| {
+                    let text = result.as_immutable_string().map_err(|typ| {
                         EvalAltResult::ErrorMismatchOutputType(
                             self.map_type_name(type_name::<ImmutableString>()).into(),
                             typ.into(),
@@ -1103,7 +1103,7 @@ impl Engine {
 
                 // Fn - only in function call style
                 return arg
-                    .take_immutable_string()
+                    .as_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))
                     .and_then(|s| FnPtr::try_from(s))
                     .map(Into::<Dynamic>::into)
@@ -1153,7 +1153,7 @@ impl Engine {
                 )?;
 
                 let fn_name = arg
-                    .take_immutable_string()
+                    .as_immutable_string()
                     .map_err(|err| self.make_type_mismatch_err::<ImmutableString>(err, arg_pos))?;
 
                 let (arg, arg_pos) = self.get_arg_value(
@@ -1179,7 +1179,7 @@ impl Engine {
                     scope, mods, state, lib, this_ptr, level, args_expr, constants, 0,
                 )?;
                 let var_name = arg
-                    .take_immutable_string()
+                    .as_immutable_string()
                     .map_err(|err| self.make_type_mismatch_err::<ImmutableString>(err, arg_pos))?;
                 return Ok(scope.contains(&var_name).into());
             }
@@ -1192,7 +1192,7 @@ impl Engine {
                     scope, mods, state, lib, this_ptr, level, args_expr, constants, 0,
                 )?;
                 let script = &value
-                    .take_immutable_string()
+                    .as_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, pos))?;
                 let result =
                     self.eval_script_expr_in_place(scope, mods, state, lib, script, pos, level + 1);

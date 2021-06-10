@@ -13,6 +13,7 @@ Breaking changes
 ----------------
 
 * To keep the API consistent, strings are no longer iterable by default.  Use the `chars` method to iterator the characters in a string.
+* `Dynamic::take_string` and `Dynamic::take_immutable_string` are renamed to `Dynamic::as_string` and `Dynamic::as_immutable_string` respectively.
 
 New features
 ------------
