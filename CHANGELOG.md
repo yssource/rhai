@@ -8,6 +8,7 @@ Bug fixes
 ---------
 
 * Fixed incorrect optimization regarding chain-indexing with non-numeric index.
+* Variable values are checked for over-sized violations after assignments and setters.
 
 Breaking changes
 ----------------

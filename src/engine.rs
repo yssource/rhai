@@ -1233,40 +1233,47 @@ impl Engine {
                     }
                     // xxx[rhs] op= new_val
                     _ if new_val.is_some() => {
-                        let ((mut new_val, new_pos), (op_info, op_pos)) =
+                        let ((new_val, new_pos), (op_info, op_pos)) =
                             new_val.expect("never fails because `new_val` is `Some`");
                         let idx_val = idx_val.as_index_value();
 
                         #[cfg(not(feature = "no_index"))]
                         let mut idx_val_for_setter = idx_val.clone();
 
-                        match self.get_indexed_mut(
+                        let try_setter = match self.get_indexed_mut(
                             mods, state, lib, target, idx_val, pos, true, false, level,
                         ) {
                             // Indexed value is a reference - update directly
-                            Ok(obj_ptr) => {
+                            Ok(ref mut obj_ptr) => {
                                 self.eval_op_assignment(
                                     mods, state, lib, op_info, op_pos, obj_ptr, root, new_val,
                                 )
                                 .map_err(|err| err.fill_position(new_pos))?;
-                                return Ok((Dynamic::UNIT, true));
+                                None
                             }
                             // Can't index - try to call an index setter
                             #[cfg(not(feature = "no_index"))]
-                            Err(err) if matches!(*err, EvalAltResult::ErrorIndexingType(_, _)) => {}
+                            Err(err) if matches!(*err, EvalAltResult::ErrorIndexingType(_, _)) => {
+                                Some(new_val)
+                            }
                             // Any other error
                             Err(err) => return Err(err),
+                        };
+
+                        if let Some(mut new_val) = try_setter {
+                            // Try to call index setter
+                            let hash_set =
+                                FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_SET, 3));
+                            let args = &mut [target, &mut idx_val_for_setter, &mut new_val];
+
+                            self.exec_fn_call(
+                                mods, state, lib, FN_IDX_SET, hash_set, args, is_ref, true,
+                                new_pos, None, level,
+                            )?;
                         }
 
-                        // Try to call index setter
-                        let hash_set =
-                            FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_SET, 3));
-                        let args = &mut [target, &mut idx_val_for_setter, &mut new_val];
-
-                        self.exec_fn_call(
-                            mods, state, lib, FN_IDX_SET, hash_set, args, is_ref, true, new_pos,
-                            None, level,
-                        )?;
+                        self.check_data_size(target.as_ref())
+                            .map_err(|err| err.fill_position(root.1))?;
 
                         Ok((Dynamic::UNIT, true))
                     }
@@ -1304,15 +1311,19 @@ impl Engine {
                     Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
                         let (name, pos) = &x.2;
                         let index = name.into();
-                        let val = self.get_indexed_mut(
-                            mods, state, lib, target, index, *pos, true, false, level,
-                        )?;
-                        let ((new_val, new_pos), (op_info, op_pos)) =
-                            new_val.expect("never fails because `new_val` is `Some`");
-                        self.eval_op_assignment(
-                            mods, state, lib, op_info, op_pos, val, root, new_val,
-                        )
-                        .map_err(|err| err.fill_position(new_pos))?;
+                        {
+                            let mut val = self.get_indexed_mut(
+                                mods, state, lib, target, index, *pos, true, false, level,
+                            )?;
+                            let ((new_val, new_pos), (op_info, op_pos)) =
+                                new_val.expect("never fails because `new_val` is `Some`");
+                            self.eval_op_assignment(
+                                mods, state, lib, op_info, op_pos, &mut val, root, new_val,
+                            )
+                            .map_err(|err| err.fill_position(new_pos))?;
+                        }
+                        self.check_data_size(target.as_ref())
+                            .map_err(|err| err.fill_position(root.1))?;
                         Ok((Dynamic::UNIT, true))
                     }
                     // {xxx:map}.id
@@ -1322,7 +1333,6 @@ impl Engine {
                         let val = self.get_indexed_mut(
                             mods, state, lib, target, index, *pos, false, false, level,
                         )?;
-
                         Ok((val.take_or_clone(), false))
                     }
                     // xxx.id op= ???
@@ -1357,11 +1367,22 @@ impl Engine {
                                     }
                                     _ => Err(err),
                                 })?;
-                            let obj_ptr = (&mut orig_val).into();
+
                             self.eval_op_assignment(
-                                mods, state, lib, op_info, op_pos, obj_ptr, root, new_val,
+                                mods,
+                                state,
+                                lib,
+                                op_info,
+                                op_pos,
+                                &mut (&mut orig_val).into(),
+                                root,
+                                new_val,
                             )
                             .map_err(|err| err.fill_position(new_pos))?;
+
+                            self.check_data_size(target.as_ref())
+                                .map_err(|err| err.fill_position(root.1))?;
+
                             new_val = orig_val;
                         }
 
@@ -1544,6 +1565,8 @@ impl Engine {
                                             _ => Err(err),
                                         },
                                     )?;
+                                    self.check_data_size(target.as_ref())
+                                        .map_err(|err| err.fill_position(root.1))?;
                                 }
 
                                 Ok((result, may_be_changed))
@@ -1989,18 +2012,23 @@ impl Engine {
 
                 for expr in x.iter() {
                     let item = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
+
                     self.eval_op_assignment(
                         mods,
                         state,
                         lib,
                         Some(OpAssignment::new(TOKEN_OP_CONCAT)),
                         pos,
-                        (&mut result).into(),
+                        &mut (&mut result).into(),
                         ("", Position::NONE),
                         item,
                     )
                     .map_err(|err| err.fill_position(expr.position()))?;
+
                     pos = expr.position();
+
+                    self.check_data_size(&result)
+                        .map_err(|err| err.fill_position(pos))?;
                 }
 
                 assert!(
@@ -2125,11 +2153,8 @@ impl Engine {
             _ => unreachable!("expression cannot be evaluated: {:?}", expr),
         };
 
-        #[cfg(not(feature = "unchecked"))]
-        self.check_data_size(&result)
-            .map_err(|err| err.fill_position(expr.position()))?;
-
-        result
+        self.check_return_value(result)
+            .map_err(|err| err.fill_position(expr.position()))
     }
 
     /// Evaluate a statements block.
@@ -2217,7 +2242,7 @@ impl Engine {
         lib: &[&Module],
         op_info: Option<OpAssignment>,
         op_pos: Position,
-        mut target: Target,
+        target: &mut Target,
         root: (&str, Position),
         mut new_val: Dynamic,
     ) -> Result<(), Box<EvalAltResult>> {
@@ -2311,7 +2336,7 @@ impl Engine {
                 let rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
                     .flatten();
-                let (lhs_ptr, pos) =
+                let (mut lhs_ptr, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, lhs_expr)?;
 
                 let var_name = lhs_expr
@@ -2332,11 +2357,14 @@ impl Engine {
                     lib,
                     op_info.clone(),
                     *op_pos,
-                    lhs_ptr,
+                    &mut lhs_ptr,
                     (var_name, pos),
                     rhs_val,
                 )
                 .map_err(|err| err.fill_position(rhs_expr.position()))?;
+
+                self.check_data_size(lhs_ptr.as_ref())
+                    .map_err(|err| err.fill_position(lhs_expr.position()))?;
 
                 Ok(Dynamic::UNIT)
             }
@@ -2914,36 +2942,25 @@ impl Engine {
             }
         };
 
-        #[cfg(not(feature = "unchecked"))]
-        self.check_data_size(&result)
-            .map_err(|err| err.fill_position(stmt.position()))?;
+        self.check_return_value(result)
+            .map_err(|err| err.fill_position(stmt.position()))
+    }
 
+    /// Check a result to ensure that the data size is within allowable limit.
+    #[cfg(feature = "unchecked")]
+    #[inline(always)]
+    fn check_return_value(&self, result: RhaiResult) -> RhaiResult {
         result
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
     #[cfg(not(feature = "unchecked"))]
-    fn check_data_size(&self, result: &RhaiResult) -> Result<(), Box<EvalAltResult>> {
-        let result = match result {
-            Err(_) => return Ok(()),
-            Ok(r) => r,
-        };
+    #[inline(always)]
+    fn check_return_value(&self, result: RhaiResult) -> RhaiResult {
+        result.and_then(|r| self.check_data_size(&r).map(|_| r))
+    }
 
-        // If no data size limits, just return
-        let mut _has_limit = self.limits.max_string_size.is_some();
-        #[cfg(not(feature = "no_index"))]
-        {
-            _has_limit = _has_limit || self.limits.max_array_size.is_some();
-        }
-        #[cfg(not(feature = "no_object"))]
-        {
-            _has_limit = _has_limit || self.limits.max_map_size.is_some();
-        }
-
-        if !_has_limit {
-            return Ok(());
-        }
-
+    fn check_data_size(&self, value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
         // Recursively calculate the size of a value (especially `Array` and `Map`)
         fn calc_size(value: &Dynamic) -> (usize, usize, usize) {
             match value {
@@ -2996,7 +3013,22 @@ impl Engine {
             }
         }
 
-        let (_arr, _map, s) = calc_size(result);
+        // If no data size limits, just return
+        let mut _has_limit = self.limits.max_string_size.is_some();
+        #[cfg(not(feature = "no_index"))]
+        {
+            _has_limit = _has_limit || self.limits.max_array_size.is_some();
+        }
+        #[cfg(not(feature = "no_object"))]
+        {
+            _has_limit = _has_limit || self.limits.max_map_size.is_some();
+        }
+
+        if !_has_limit {
+            return Ok(());
+        }
+
+        let (_arr, _map, s) = calc_size(value);
 
         if s > self
             .limits

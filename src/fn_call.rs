@@ -331,6 +331,7 @@ impl Engine {
                 .as_ref()
                 .or_else(|| state_source.as_ref())
                 .map(|s| s.as_str());
+
             let result = if func.is_plugin_fn() {
                 func.get_plugin_fn()
                     .call((self, fn_name, source, mods, lib).into(), args)
