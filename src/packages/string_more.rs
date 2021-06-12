@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, Dynamic, ImmutableString, StaticVec, INT};
+use crate::{def_package, Dynamic, StaticVec, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, mem};
@@ -10,12 +10,6 @@ use super::string_basic::{print_with_func, FUNC_TO_STRING};
 
 def_package!(crate:MoreStringPackage:"Additional string utilities, including string building.", lib, {
     combine_with_exported_module!(lib, "string", string_functions);
-
-    // Register string iterator
-    lib.set_iter(
-        TypeId::of::<ImmutableString>(),
-        |string| Box::new(string.cast::<ImmutableString>().chars().collect::<Vec<_>>().into_iter().map(Into::into))
-    );
 });
 
 #[export_module]

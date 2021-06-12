@@ -71,7 +71,7 @@ impl FuncInfo {
         let mut sig = format!("{}(", self.name);
 
         if !self.param_names.is_empty() {
-            let mut params: Vec<String> =
+            let mut params: StaticVec<String> =
                 self.param_names.iter().map(|s| s.as_str().into()).collect();
             let return_type = params.pop().unwrap_or_else(|| "()".into());
             sig.push_str(&params.join(", "));
@@ -1649,7 +1649,7 @@ impl fmt::Debug for NamespaceRef {
                 .path
                 .iter()
                 .map(|Ident { name, .. }| name.as_str())
-                .collect::<Vec<_>>()
+                .collect::<StaticVec<_>>()
                 .join("::"),
         )
     }

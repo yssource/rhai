@@ -5,8 +5,8 @@ use crate::engine::EvalContext;
 use crate::fn_native::SendSync;
 use crate::token::{is_valid_identifier, Token};
 use crate::{
-    Engine, Identifier, ImmutableString, LexError, ParseError, Position, RhaiResult, Shared,
-    StaticVec,
+    Dynamic, Engine, Identifier, ImmutableString, LexError, ParseError, Position, RhaiResult,
+    Shared, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -14,6 +14,11 @@ use std::prelude::v1::*;
 pub const MARKER_EXPR: &str = "$expr$";
 pub const MARKER_BLOCK: &str = "$block$";
 pub const MARKER_IDENT: &str = "$ident$";
+pub const MARKER_STRING: &str = "$string$";
+pub const MARKER_INT: &str = "$int$";
+#[cfg(not(feature = "no_float"))]
+pub const MARKER_FLOAT: &str = "$float$";
+pub const MARKER_BOOL: &str = "$bool$";
 
 /// A general expression evaluation trait object.
 #[cfg(not(feature = "sync"))]
@@ -57,6 +62,11 @@ impl Expression<'_> {
     #[inline(always)]
     pub fn position(&self) -> Position {
         self.0.position()
+    }
+    /// Get the value of this expression if it is a literal constant.
+    #[inline(always)]
+    pub fn get_literal_value(&self) -> Option<Dynamic> {
+        self.0.get_literal_value()
     }
 }
 
@@ -132,7 +142,15 @@ impl Engine {
 
             let seg = match s {
                 // Markers not in first position
-                MARKER_IDENT | MARKER_EXPR | MARKER_BLOCK if !segments.is_empty() => s.into(),
+                MARKER_IDENT | MARKER_EXPR | MARKER_BLOCK | MARKER_BOOL | MARKER_INT
+                | MARKER_STRING
+                    if !segments.is_empty() =>
+                {
+                    s.into()
+                }
+                // Markers not in first position
+                #[cfg(not(feature = "no_float"))]
+                MARKER_FLOAT if !segments.is_empty() => s.into(),
                 // Standard or reserved keyword/symbol not in first position
                 s if !segments.is_empty() && token.is_some() => {
                     // Make it a custom keyword/symbol if it is disabled or reserved

@@ -10,7 +10,7 @@ use num_traits::{CheckedAdd as Add, CheckedSub as Sub};
 #[cfg(feature = "unchecked")]
 use std::ops::{Add, Sub};
 
-// Register range function with step
+// Range iterator with step
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 struct StepRange<T>(T, T, T)
 where
@@ -126,7 +126,7 @@ where
     }
 }
 
-// Register range function with step
+// Bit-field iterator with step
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 struct BitRange(INT, INT, usize);
 
@@ -187,6 +187,64 @@ impl Iterator for BitRange {
             self.1 <<= 1;
             self.2 -= 1;
             Some(r)
+        }
+    }
+}
+
+// String iterator over characters
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+struct CharsStream(Vec<char>, usize);
+
+impl CharsStream {
+    pub fn new(string: &str, from: INT, len: INT) -> Self {
+        if len <= 0 {
+            return Self(Default::default(), 0);
+        }
+        if from >= 0 {
+            return Self(
+                string
+                    .chars()
+                    .skip(from as usize)
+                    .take(len as usize)
+                    .collect(),
+                0,
+            );
+        }
+        #[cfg(not(feature = "unchecked"))]
+        return if let Some(abs_from) = from.checked_abs() {
+            let num_chars = string.chars().count();
+            let offset = if num_chars < (abs_from as usize) {
+                0
+            } else {
+                num_chars - (abs_from as usize)
+            };
+            Self(string.chars().skip(offset).take(len as usize).collect(), 0)
+        } else {
+            Self(string.chars().skip(0).take(len as usize).collect(), 0)
+        };
+
+        #[cfg(feature = "unchecked")]
+        return Self(
+            string
+                .chars()
+                .skip(from as usize)
+                .take(len as usize)
+                .collect(),
+            0,
+        );
+    }
+}
+
+impl Iterator for CharsStream {
+    type Item = char;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.1 >= self.0.len() {
+            None
+        } else {
+            let ch = self.0[self.1];
+            self.1 += 1;
+            Some(ch)
         }
     }
 }
@@ -370,15 +428,31 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
         lib.update_fn_metadata(_hash, &["from: Decimal", "to: Decimal", "step: Decimal", "Iterator<Item=Decimal>"]);
     }
 
+    // Register string iterator
+    lib.set_iterator::<CharsStream>();
+
+    let _hash = lib.set_native_fn("chars", |string, from,len| Ok(CharsStream::new(string, from, len)));
+    #[cfg(feature = "metadata")]
+    lib.update_fn_metadata(_hash, &["string: &str", "from: INT", "len: INT", "Iterator<Item=char>"]);
+
+    let _hash = lib.set_native_fn("chars", |string, from| Ok(CharsStream::new(string, from, INT::MAX)));
+    #[cfg(feature = "metadata")]
+    lib.update_fn_metadata(_hash, &["string: &str", "from: INT", "Iterator<Item=char>"]);
+
+    let _hash = lib.set_native_fn("chars", |string| Ok(CharsStream::new(string, 0, INT::MAX)));
+    #[cfg(feature = "metadata")]
+    lib.update_fn_metadata(_hash, &["string: &str", "Iterator<Item=char>"]);
+
+    // Register bit-field iterator
     lib.set_iterator::<BitRange>();
 
     let _hash = lib.set_native_fn("bits", |value, from, len| BitRange::new(value, from, len));
     #[cfg(feature = "metadata")]
-    lib.update_fn_metadata(_hash, &["value: INT", "from: Decimal", "len: Decimal", "Iterator<Item=bool>"]);
+    lib.update_fn_metadata(_hash, &["value: INT", "from: INT", "len: INT", "Iterator<Item=bool>"]);
 
     let _hash = lib.set_native_fn("bits", |value, from| BitRange::new(value, from, INT::MAX));
     #[cfg(feature = "metadata")]
-    lib.update_fn_metadata(_hash, &["value: INT", "from: Decimal", "Iterator<Item=bool>"]);
+    lib.update_fn_metadata(_hash, &["value: INT", "from: INT", "Iterator<Item=bool>"]);
 
     let _hash = lib.set_native_fn("bits", |value| BitRange::new(value, 0, INT::MAX));
     #[cfg(feature = "metadata")]

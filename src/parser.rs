@@ -9,7 +9,10 @@ use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::module::NamespaceRef;
 use crate::optimize::optimize_into_ast;
 use crate::optimize::OptimizationLevel;
-use crate::syntax::{CustomSyntax, MARKER_BLOCK, MARKER_EXPR, MARKER_IDENT};
+use crate::syntax::{
+    CustomSyntax, MARKER_BLOCK, MARKER_BOOL, MARKER_EXPR, MARKER_IDENT, MARKER_INT, MARKER_STRING,
+};
+
 use crate::token::{
     is_keyword_function, is_valid_identifier, Token, TokenStream, TokenizerControl,
 };
@@ -27,7 +30,7 @@ use std::{
 };
 
 #[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
+use crate::{syntax::MARKER_FLOAT, FLOAT};
 
 #[cfg(not(feature = "no_function"))]
 use crate::FnAccess;
@@ -261,6 +264,22 @@ fn match_token(input: &mut TokenStream, token: Token) -> (bool, Position) {
         (true, eat_token(input, token))
     } else {
         (false, *pos)
+    }
+}
+
+/// Parse a variable name.
+fn parse_var_name(input: &mut TokenStream) -> Result<(String, Position), ParseError> {
+    match input.next().expect(NEVER_ENDS) {
+        // Variable name
+        (Token::Identifier(s), pos) => Ok((s, pos)),
+        // Reserved keyword
+        (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
+            Err(PERR::Reserved(s).into_err(pos))
+        }
+        // Bad identifier
+        (Token::LexError(err), pos) => Err(err.into_err(pos)),
+        // Not a variable name
+        (_, pos) => Err(PERR::VariableExpected.into_err(pos)),
     }
 }
 
@@ -860,7 +879,7 @@ fn parse_switch(
         };
 
         let hash = if let Some(expr) = expr {
-            if let Some(value) = expr.get_constant_value() {
+            if let Some(value) = expr.get_literal_value() {
                 let hasher = &mut get_hasher();
                 value.hash(hasher);
                 let hash = hasher.finish();
@@ -1232,33 +1251,26 @@ fn parse_primary(
             }
             // module access
             (Expr::Variable(_, var_pos, x), Token::DoubleColon) => {
-                match input.next().expect(NEVER_ENDS) {
-                    (Token::Identifier(id2), pos2) => {
-                        let (_, mut namespace, var_name) = *x;
-                        let var_name_def = Ident {
-                            name: var_name,
-                            pos: var_pos,
-                        };
+                let (id2, pos2) = parse_var_name(input)?;
+                let (_, mut namespace, var_name) = *x;
+                let var_name_def = Ident {
+                    name: var_name,
+                    pos: var_pos,
+                };
 
-                        if let Some((_, ref mut namespace)) = namespace {
-                            namespace.push(var_name_def);
-                        } else {
-                            let mut ns: NamespaceRef = Default::default();
-                            ns.push(var_name_def);
-                            namespace = Some((42, ns));
-                        }
-
-                        Expr::Variable(
-                            None,
-                            pos2,
-                            Box::new((None, namespace, state.get_identifier(id2))),
-                        )
-                    }
-                    (Token::Reserved(id2), pos2) if is_valid_identifier(id2.chars()) => {
-                        return Err(PERR::Reserved(id2).into_err(pos2));
-                    }
-                    (_, pos2) => return Err(PERR::VariableExpected.into_err(pos2)),
+                if let Some((_, ref mut namespace)) = namespace {
+                    namespace.push(var_name_def);
+                } else {
+                    let mut ns: NamespaceRef = Default::default();
+                    ns.push(var_name_def);
+                    namespace = Some((42, ns));
                 }
+
+                Expr::Variable(
+                    None,
+                    pos2,
+                    Box::new((None, namespace, state.get_identifier(id2))),
+                )
             }
             // Indexing
             #[cfg(not(feature = "no_index"))]
@@ -1589,8 +1601,8 @@ fn make_dot_expr(
             Expr::FnCall(mut func, func_pos) => {
                 // Recalculate hash
                 func.hashes = FnCallHashes::from_script_and_native(
-                    calc_fn_hash(&func.name, func.args_count()),
-                    calc_fn_hash(&func.name, func.args_count() + 1),
+                    calc_fn_hash(&func.name, func.args.len()),
+                    calc_fn_hash(&func.name, func.args.len() + 1),
                 );
 
                 let rhs = Expr::Dot(
@@ -1621,7 +1633,7 @@ fn make_dot_expr(
         }
         // lhs.Fn() or lhs.eval()
         (_, Expr::FnCall(x, pos))
-            if x.is_args_empty()
+            if x.args.is_empty()
                 && [crate::engine::KEYWORD_FN_PTR, crate::engine::KEYWORD_EVAL]
                     .contains(&x.name.as_ref()) =>
         {
@@ -1645,8 +1657,8 @@ fn make_dot_expr(
         (lhs, Expr::FnCall(mut func, func_pos)) => {
             // Recalculate hash
             func.hashes = FnCallHashes::from_script_and_native(
-                calc_fn_hash(&func.name, func.args_count()),
-                calc_fn_hash(&func.name, func.args_count() + 1),
+                calc_fn_hash(&func.name, func.args.len()),
+                calc_fn_hash(&func.name, func.args.len() + 1),
             );
             let rhs = Expr::FnCall(func, func_pos);
             Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
@@ -1886,18 +1898,13 @@ fn parse_custom_syntax(
         };
 
         match required_token.as_str() {
-            MARKER_IDENT => match input.next().expect(NEVER_ENDS) {
-                (Token::Identifier(s), pos) => {
-                    let name = state.get_identifier(s);
-                    segments.push(name.clone().into());
-                    tokens.push(state.get_identifier(MARKER_IDENT));
-                    keywords.push(Expr::Variable(None, pos, Box::new((None, None, name))));
-                }
-                (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
-                    return Err(PERR::Reserved(s).into_err(pos));
-                }
-                (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
-            },
+            MARKER_IDENT => {
+                let (name, pos) = parse_var_name(input)?;
+                let name = state.get_identifier(name);
+                segments.push(name.clone().into());
+                tokens.push(state.get_identifier(MARKER_IDENT));
+                keywords.push(Expr::Variable(None, pos, Box::new((None, None, name))));
+            }
             MARKER_EXPR => {
                 keywords.push(parse_expr(input, state, lib, settings)?);
                 let keyword = state.get_identifier(MARKER_EXPR);
@@ -1912,6 +1919,60 @@ fn parse_custom_syntax(
                     tokens.push(keyword);
                 }
                 stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
+            },
+            MARKER_BOOL => match input.next().expect(NEVER_ENDS) {
+                (b @ Token::True, pos) | (b @ Token::False, pos) => {
+                    keywords.push(Expr::BoolConstant(b == Token::True, pos));
+                    let keyword = state.get_identifier(MARKER_BOOL);
+                    segments.push(keyword.clone().into());
+                    tokens.push(keyword);
+                }
+                (_, pos) => {
+                    return Err(
+                        PERR::MissingSymbol("Expecting 'true' or 'false'".to_string())
+                            .into_err(pos),
+                    )
+                }
+            },
+            MARKER_INT => match input.next().expect(NEVER_ENDS) {
+                (Token::IntegerConstant(i), pos) => {
+                    keywords.push(Expr::IntegerConstant(i, pos));
+                    let keyword = state.get_identifier(MARKER_INT);
+                    segments.push(keyword.clone().into());
+                    tokens.push(keyword);
+                }
+                (_, pos) => {
+                    return Err(
+                        PERR::MissingSymbol("Expecting an integer number".to_string())
+                            .into_err(pos),
+                    )
+                }
+            },
+            #[cfg(not(feature = "no_float"))]
+            MARKER_FLOAT => match input.next().expect(NEVER_ENDS) {
+                (Token::FloatConstant(f), pos) => {
+                    keywords.push(Expr::FloatConstant(f, pos));
+                    let keyword = state.get_identifier(MARKER_FLOAT);
+                    segments.push(keyword.clone().into());
+                    tokens.push(keyword);
+                }
+                (_, pos) => {
+                    return Err(PERR::MissingSymbol(
+                        "Expecting a floating-point number".to_string(),
+                    )
+                    .into_err(pos))
+                }
+            },
+            MARKER_STRING => match input.next().expect(NEVER_ENDS) {
+                (Token::StringConstant(s), pos) => {
+                    keywords.push(Expr::StringConstant(state.get_identifier(s).into(), pos));
+                    let keyword = state.get_identifier(MARKER_STRING);
+                    segments.push(keyword.clone().into());
+                    tokens.push(keyword);
+                }
+                (_, pos) => {
+                    return Err(PERR::MissingSymbol("Expecting a string".to_string()).into_err(pos))
+                }
             },
             s => match input.next().expect(NEVER_ENDS) {
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
@@ -2151,17 +2212,36 @@ fn parse_for(
     settings.pos = eat_token(input, Token::For);
 
     // for name ...
-    let (name, name_pos) = match input.next().expect(NEVER_ENDS) {
-        // Variable name
-        (Token::Identifier(s), pos) => (s, pos),
-        // Reserved keyword
-        (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
-            return Err(PERR::Reserved(s).into_err(pos));
+    let (name, name_pos, counter_name, counter_pos) = if match_token(input, Token::LeftParen).0 {
+        // ( name, counter )
+        let (name, name_pos) = parse_var_name(input)?;
+        let (has_comma, pos) = match_token(input, Token::Comma);
+        if !has_comma {
+            return Err(PERR::MissingToken(
+                Token::Comma.into(),
+                "after the iteration variable name".into(),
+            )
+            .into_err(pos));
         }
-        // Bad identifier
-        (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-        // Not a variable name
-        (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
+        let (counter_name, counter_pos) = parse_var_name(input)?;
+
+        if counter_name == name {
+            return Err(PERR::DuplicatedVariable(counter_name).into_err(counter_pos));
+        }
+
+        let (has_close_paren, pos) = match_token(input, Token::RightParen);
+        if !has_close_paren {
+            return Err(PERR::MissingToken(
+                Token::RightParen.into(),
+                "to close the iteration variable".into(),
+            )
+            .into_err(pos));
+        }
+        (name, name_pos, Some(counter_name), Some(counter_pos))
+    } else {
+        // name
+        let (name, name_pos) = parse_var_name(input)?;
+        (name, name_pos, None, None)
     };
 
     // for name in ...
@@ -2180,8 +2260,18 @@ fn parse_for(
     ensure_not_statement_expr(input, "a boolean")?;
     let expr = parse_expr(input, state, lib, settings.level_up())?;
 
-    let loop_var = state.get_identifier(name);
     let prev_stack_len = state.stack.len();
+
+    let counter_var = if let Some(name) = counter_name {
+        let counter_var = state.get_identifier(name);
+        state
+            .stack
+            .push((counter_var.clone(), AccessMode::ReadWrite));
+        Some(counter_var)
+    } else {
+        None
+    };
+    let loop_var = state.get_identifier(name);
     state.stack.push((loop_var.clone(), AccessMode::ReadWrite));
 
     settings.is_breakable = true;
@@ -2196,6 +2286,10 @@ fn parse_for(
                 name: loop_var,
                 pos: name_pos,
             },
+            counter_var.map(|name| Ident {
+                name,
+                pos: counter_pos.expect("never fails because `counter_var` is `Some`"),
+            }),
             body.into(),
         )),
         settings.pos,
@@ -2218,14 +2312,7 @@ fn parse_let(
     settings.pos = input.next().expect(NEVER_ENDS).1;
 
     // let name ...
-    let (name, pos) = match input.next().expect(NEVER_ENDS) {
-        (Token::Identifier(s), pos) => (s, pos),
-        (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
-            return Err(PERR::Reserved(s).into_err(pos));
-        }
-        (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-        (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
-    };
+    let (name, pos) = parse_var_name(input)?;
 
     let name = state.get_identifier(name);
     let var_def = Ident {
@@ -2274,15 +2361,7 @@ fn parse_import(
     }
 
     // import expr as name ...
-    let (name, name_pos) = match input.next().expect(NEVER_ENDS) {
-        (Token::Identifier(s), pos) => (s, pos),
-        (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
-            return Err(PERR::Reserved(s).into_err(pos));
-        }
-        (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-        (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
-    };
-
+    let (name, name_pos) = parse_var_name(input)?;
     let name = state.get_identifier(name);
     state.modules.push(name.clone());
 
@@ -2331,27 +2410,18 @@ fn parse_export(
     let mut exports = Vec::with_capacity(4);
 
     loop {
-        let (id, id_pos) = match input.next().expect(NEVER_ENDS) {
-            (Token::Identifier(s), pos) => (s.clone(), pos),
-            (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
-                return Err(PERR::Reserved(s).into_err(pos));
-            }
-            (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-            (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
-        };
+        let (id, id_pos) = parse_var_name(input)?;
 
         let rename = if match_token(input, Token::As).0 {
-            match input.next().expect(NEVER_ENDS) {
-                (Token::Identifier(s), pos) => Some(Ident {
-                    name: state.get_identifier(s),
-                    pos,
-                }),
-                (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
-                    return Err(PERR::Reserved(s).into_err(pos));
-                }
-                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-                (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
+            let (name, pos) = parse_var_name(input)?;
+            if exports.iter().any(|(_, alias)| match alias {
+                Some(Ident { name: alias, .. }) if alias == &name => true,
+                _ => false,
+            }) {
+                return Err(PERR::DuplicatedVariable(name).into_err(pos));
             }
+            let name = state.get_identifier(name);
+            Some(Ident { name, pos })
         } else {
             None
         };
@@ -2724,25 +2794,19 @@ fn parse_try_catch(
 
     // try { body } catch (
     let var_def = if match_token(input, Token::LeftParen).0 {
-        let id = match input.next().expect(NEVER_ENDS) {
-            (Token::Identifier(s), pos) => Ident {
-                name: state.get_identifier(s),
-                pos,
-            },
-            (_, pos) => return Err(PERR::VariableExpected.into_err(pos)),
-        };
-
-        let (matched, pos) = match_token(input, Token::RightParen);
+        let (name, pos) = parse_var_name(input)?;
+        let (matched, err_pos) = match_token(input, Token::RightParen);
 
         if !matched {
             return Err(PERR::MissingToken(
                 Token::RightParen.into(),
                 "to enclose the catch variable".into(),
             )
-            .into_err(pos));
+            .into_err(err_pos));
         }
 
-        Some(id)
+        let name = state.get_identifier(name);
+        Some(Ident { name, pos })
     } else {
         None
     };

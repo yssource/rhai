@@ -50,7 +50,7 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
     } else if TypeId::of::<T>() == TypeId::of::<String>() {
         // If T is `String`, data must be `ImmutableString`, so map directly to it
         let value = mem::take(data)
-            .take_string()
+            .as_string()
             .expect("never fails because the type was checked");
         unsafe_try_cast(value).expect("never fails because the type was checked")
     } else {

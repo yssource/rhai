@@ -79,11 +79,11 @@ fn test_call_fn_args() -> Result<(), Box<EvalAltResult>> {
     let mut scope = Scope::new();
 
     let ast = engine.compile(
-        r#"
+        "
             fn hello(x, y, z) {
                 if x { `hello ${y}` } else { y + z }
             }
-        "#,
+        ",
     )?;
 
     let result: String = engine.call_fn(&mut scope, &ast, "hello", options)?;

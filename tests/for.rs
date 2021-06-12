@@ -37,6 +37,22 @@ fn test_for_loop() -> Result<(), Box<EvalAltResult>> {
         35
     );
 
+    #[cfg(not(feature = "no_index"))]
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                let sum = 0;
+                let inputs = [1, 2, 3, 4, 5];
+
+                for (x, i) in inputs {
+                    sum += x * (i + 1);
+                }
+                sum
+            "
+        )?,
+        55
+    );
+
     assert_eq!(
         engine.eval::<INT>(
             "
@@ -235,7 +251,7 @@ fn test_for_string() -> Result<(), Box<EvalAltResult>> {
         let s = "hello";
         let sum = 0;
 
-        for ch in s {
+        for ch in chars(s) {
             sum += to_int(ch);
         }
 

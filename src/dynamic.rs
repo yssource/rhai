@@ -33,6 +33,8 @@ use fmt::Debug;
 #[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
 use instant::Instant;
 
+const CHECKED: &str = "never fails because the type was checked";
+
 mod private {
     use crate::fn_native::SendSync;
     use std::any::Any;
@@ -471,29 +473,27 @@ impl Dynamic {
 }
 
 impl Hash for Dynamic {
+    /// Hash the [`Dynamic`] value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the [`Dynamic`] value contains an unrecognized trait object.
     fn hash<H: Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(&self.0).hash(state);
+
         match &self.0 {
             Union::Unit(_, _, _) => ().hash(state),
-            Union::Bool(value, _, _) => value.hash(state),
+            Union::Bool(b, _, _) => b.hash(state),
             Union::Str(s, _, _) => s.hash(state),
-            Union::Char(ch, _, _) => ch.hash(state),
+            Union::Char(c, _, _) => c.hash(state),
             Union::Int(i, _, _) => i.hash(state),
             #[cfg(not(feature = "no_float"))]
             Union::Float(f, _, _) => f.hash(state),
             #[cfg(not(feature = "no_index"))]
             Union::Array(a, _, _) => a.as_ref().hash(state),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(m, _, _) => m.iter().for_each(|(key, value)| {
-                key.hash(state);
-                value.hash(state);
-            }),
-            Union::FnPtr(f, _, _) if f.is_curried() => {
-                unimplemented!(
-                    "{} with curried arguments cannot be hashed",
-                    self.type_name()
-                )
-            }
-            Union::FnPtr(f, _, _) => f.fn_name().hash(state),
+            Union::Map(m, _, _) => m.as_ref().hash(state),
+            Union::FnPtr(f, _, _) => f.hash(state),
 
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(cell, _, _) => {
@@ -503,6 +503,55 @@ impl Hash for Dynamic {
                 let value = cell.read().unwrap();
 
                 (*value).hash(state)
+            }
+
+            #[cfg(not(feature = "only_i32"))]
+            #[cfg(not(feature = "only_i64"))]
+            Union::Variant(value, _, _) => {
+                let value = value.as_ref().as_ref();
+                let _type_id = value.type_id();
+                let _value_any = value.as_any();
+
+                if _type_id == TypeId::of::<u8>() {
+                    TypeId::of::<u8>().hash(state);
+                    _value_any.downcast_ref::<u8>().expect(CHECKED).hash(state);
+                } else if _type_id == TypeId::of::<u16>() {
+                    TypeId::of::<u16>().hash(state);
+                    _value_any.downcast_ref::<u16>().expect(CHECKED).hash(state);
+                } else if _type_id == TypeId::of::<u32>() {
+                    TypeId::of::<u32>().hash(state);
+                    _value_any.downcast_ref::<u32>().expect(CHECKED).hash(state);
+                } else if _type_id == TypeId::of::<u64>() {
+                    TypeId::of::<u64>().hash(state);
+                    _value_any.downcast_ref::<u64>().expect(CHECKED).hash(state);
+                } else if _type_id == TypeId::of::<i8>() {
+                    TypeId::of::<i8>().hash(state);
+                    _value_any.downcast_ref::<i8>().expect(CHECKED).hash(state);
+                } else if _type_id == TypeId::of::<i16>() {
+                    TypeId::of::<i16>().hash(state);
+                    _value_any.downcast_ref::<i16>().expect(CHECKED).hash(state);
+                } else if _type_id == TypeId::of::<i32>() {
+                    TypeId::of::<i32>().hash(state);
+                    _value_any.downcast_ref::<i32>().expect(CHECKED).hash(state);
+                } else if _type_id == TypeId::of::<i64>() {
+                    TypeId::of::<i64>().hash(state);
+                    _value_any.downcast_ref::<i64>().expect(CHECKED).hash(state);
+                }
+
+                #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+                if _type_id == TypeId::of::<u128>() {
+                    TypeId::of::<u128>().hash(state);
+                    _value_any
+                        .downcast_ref::<u128>()
+                        .expect(CHECKED)
+                        .hash(state);
+                } else if _type_id == TypeId::of::<i128>() {
+                    TypeId::of::<i128>().hash(state);
+                    _value_any
+                        .downcast_ref::<i128>()
+                        .expect(CHECKED)
+                        .hash(state);
+                }
             }
 
             _ => unimplemented!("{} cannot be hashed", self.type_name()),
@@ -572,8 +621,6 @@ impl fmt::Display for Dynamic {
                 let value = value.as_ref().as_ref();
                 let _type_id = value.type_id();
                 let _value_any = value.as_any();
-
-                const CHECKED: &str = "never fails because the type was checked";
 
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
@@ -692,7 +739,7 @@ impl fmt::Debug for Dynamic {
                     return fmt::Debug::fmt(_value_any.downcast_ref::<i128>().expect(CHECKED), f);
                 }
 
-                write!(f, "{}", value.type_name())
+                f.write_str(value.type_name())
             }
 
             #[cfg(not(feature = "no_closure"))]
@@ -1749,15 +1796,45 @@ impl Dynamic {
     /// Convert the [`Dynamic`] into a [`String`] and return it.
     /// If there are other references to the same string, a cloned copy is returned.
     /// Returns the name of the actual type if the cast fails.
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated and will be removed in the future.
+    /// Use [`as_string`][Dynamic::as_string] instead.
     #[inline(always)]
+    #[deprecated(
+        since = "0.20.3",
+        note = "this method is deprecated and will be removed in the future"
+    )]
     pub fn take_string(self) -> Result<String, &'static str> {
-        self.take_immutable_string()
-            .map(ImmutableString::into_owned)
+        self.as_string()
+    }
+    /// Convert the [`Dynamic`] into a [`String`] and return it.
+    /// If there are other references to the same string, a cloned copy is returned.
+    /// Returns the name of the actual type if the cast fails.
+    #[inline(always)]
+    pub fn as_string(self) -> Result<String, &'static str> {
+        self.as_immutable_string().map(ImmutableString::into_owned)
+    }
+    /// Convert the [`Dynamic`] into an [`ImmutableString`] and return it.
+    /// Returns the name of the actual type if the cast fails.
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated and will be removed in the future.
+    /// Use [`as_immutable_string`][Dynamic::as_immutable_string] instead.
+    #[inline(always)]
+    #[deprecated(
+        since = "0.20.3",
+        note = "this method is deprecated and will be removed in the future"
+    )]
+    pub fn take_immutable_string(self) -> Result<ImmutableString, &'static str> {
+        self.as_immutable_string()
     }
     /// Convert the [`Dynamic`] into an [`ImmutableString`] and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
-    pub fn take_immutable_string(self) -> Result<ImmutableString, &'static str> {
+    pub fn as_immutable_string(self) -> Result<ImmutableString, &'static str> {
         match self.0 {
             Union::Str(s, _, _) => Ok(s),
             #[cfg(not(feature = "no_closure"))]

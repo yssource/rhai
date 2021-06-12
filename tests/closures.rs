@@ -25,12 +25,12 @@ fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_object"))]
     assert_eq!(
         engine.eval::<INT>(
-            r#"
+            "
                 let addition = |x, y| { x + y };
                 let curried = addition.curry(2);
 
                 call_with_arg(curried, 40)
-            "#
+            "
         )?,
         42
     );
@@ -65,7 +65,7 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r#"
+            "
                 let x = 8;
 
                 let res = |y, z| {
@@ -75,55 +75,55 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
                 }.curry(15).call(2);
 
                 res + (|| x - 3).call()
-            "#
+            "
         )?,
         42
     );
 
     assert_eq!(
         engine.eval::<INT>(
-            r#"
+            "
                 let a = 41;
                 let foo = |x| { a += x };
                 foo.call(1);
                 a
-            "#
+            "
         )?,
         42
     );
 
     assert!(engine.eval::<bool>(
-        r#"
+        "
             let a = 41;
             let foo = |x| { a += x };
             a.is_shared()
-        "#
+        "
     )?);
 
     assert!(engine.eval::<bool>(
-        r#"
+        "
             let a = 41;
             let foo = |x| { a += x };
             is_shared(a)
-        "#
+        "
     )?);
 
     engine.register_fn("plus_one", |x: INT| x + 1);
 
     assert_eq!(
         engine.eval::<INT>(
-            r#"
+            "
                 let a = 41;
                 let f = || plus_one(a);
                 f.call()
-            "#
+            "
         )?,
         42
     );
 
     assert_eq!(
         engine.eval::<INT>(
-            r#"
+            "
                 let a = 40;
                 let f = |x| {
                     let f = |x| {
@@ -133,19 +133,19 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
                     f.call(x)
                 };
                 f.call(1)
-            "#
+            "
         )?,
         42
     );
 
     assert_eq!(
         engine.eval::<INT>(
-            r#"
+            "
                 let a = 21;
                 let f = |x| a += x;
                 f.call(a);
                 a
-            "#
+            "
         )?,
         42
     );
@@ -163,13 +163,13 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r#"
+            "
                 let a = 41;
                 let b = 0;
                 let f = || b.custom_call(|| a + 1);
                 
                 f.call()
-            "#
+            "
         )?,
         42
     );
@@ -231,13 +231,13 @@ fn test_closures_data_race() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(
         engine.eval::<INT>(
-            r#"
+            "
                 let a = 1;
                 let b = 40;
                 let foo = |x| { this += a + x };
                 b.call(foo, 1);
                 b
-            "#
+            "
         )?,
         42
     );
@@ -245,12 +245,12 @@ fn test_closures_data_race() -> Result<(), Box<EvalAltResult>> {
     assert!(matches!(
         *engine
             .eval::<INT>(
-                r#"
+                "
                     let a = 20;
                     let foo = |x| { this += a + x };
                     a.call(foo, 1);
                     a
-                "#
+                "
             )
             .expect_err("should error"),
         EvalAltResult::ErrorDataRace(_, _)
@@ -343,7 +343,7 @@ fn test_closures_external() -> Result<(), Box<EvalAltResult>> {
     // Closure  'f' captures: the engine, the AST, and the curried function pointer
     let f = move |x: INT| fn_ptr.call_dynamic(&context, None, [x.into()]);
 
-    assert_eq!(f(42)?.take_string(), Ok("hello42".to_string()));
+    assert_eq!(f(42)?.as_string(), Ok("hello42".to_string()));
 
     Ok(())
 }

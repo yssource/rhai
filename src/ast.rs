@@ -1,5 +1,6 @@
 //! Module defining the AST (abstract syntax tree).
 
+use crate::dynamic::Union;
 use crate::fn_native::shared_make_mut;
 use crate::module::NamespaceRef;
 use crate::token::Token;
@@ -90,7 +91,7 @@ impl fmt::Display for ScriptFnDef {
             self.params
                 .iter()
                 .map(|s| s.as_str())
-                .collect::<Vec<_>>()
+                .collect::<StaticVec<_>>()
                 .join(", ")
         )
     }
@@ -138,7 +139,11 @@ impl fmt::Display for ScriptFnMetadata<'_> {
                 FnAccess::Private => "private ",
             },
             self.name,
-            self.params.iter().cloned().collect::<Vec<_>>().join(", ")
+            self.params
+                .iter()
+                .cloned()
+                .collect::<StaticVec<_>>()
+                .join(", ")
         )
     }
 }
@@ -215,10 +220,9 @@ impl AST {
         statements: impl IntoIterator<Item = Stmt>,
         functions: impl Into<Shared<Module>>,
     ) -> Self {
-        let statements: StaticVec<_> = statements.into_iter().collect();
         Self {
             source: None,
-            body: StmtBlock::new(statements, Position::NONE),
+            body: StmtBlock::new(statements.into_iter().collect(), Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -231,10 +235,9 @@ impl AST {
         functions: impl Into<Shared<Module>>,
         source: impl Into<Identifier>,
     ) -> Self {
-        let statements: StaticVec<_> = statements.into_iter().collect();
         Self {
             source: Some(source.into()),
-            body: StmtBlock::new(statements, Position::NONE),
+            body: StmtBlock::new(statements.into_iter().collect(), Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -417,15 +420,15 @@ impl AST {
     ///
     /// let engine = Engine::new();
     ///
-    /// let ast1 = engine.compile(r#"
-    ///                 fn foo(x) { 42 + x }
-    ///                 foo(1)
-    ///             "#)?;
+    /// let ast1 = engine.compile("
+    ///     fn foo(x) { 42 + x }
+    ///     foo(1)
+    /// ")?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { `hello${n}` }
-    ///                 foo("!")
-    ///             "#)?;
+    ///     fn foo(n) { `hello${n}` }
+    ///     foo("!")
+    /// "#)?;
     ///
     /// let ast = ast1.merge(&ast2);    // Merge 'ast2' into 'ast1'
     ///
@@ -469,15 +472,15 @@ impl AST {
     ///
     /// let engine = Engine::new();
     ///
-    /// let mut ast1 = engine.compile(r#"
-    ///                     fn foo(x) { 42 + x }
-    ///                     foo(1)
-    ///                 "#)?;
+    /// let mut ast1 = engine.compile("
+    ///     fn foo(x) { 42 + x }
+    ///     foo(1)
+    /// ")?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { `hello${n}` }
-    ///                 foo("!")
-    ///             "#)?;
+    ///     fn foo(n) { `hello${n}` }
+    ///     foo("!")
+    /// "#)?;
     ///
     /// ast1.combine(ast2);    // Combine 'ast2' into 'ast1'
     ///
@@ -523,16 +526,16 @@ impl AST {
     ///
     /// let engine = Engine::new();
     ///
-    /// let ast1 = engine.compile(r#"
-    ///                 fn foo(x) { 42 + x }
-    ///                 foo(1)
-    ///             "#)?;
+    /// let ast1 = engine.compile("
+    ///     fn foo(x) { 42 + x }
+    ///     foo(1)
+    /// ")?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { `hello${n}` }
-    ///                 fn error() { 0 }
-    ///                 foo("!")
-    ///             "#)?;
+    ///     fn foo(n) { `hello${n}` }
+    ///     fn error() { 0 }
+    ///     foo("!")
+    /// "#)?;
     ///
     /// // Merge 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
     /// let ast = ast1.merge_filtered(&ast2, |_, _, script, name, params|
@@ -606,16 +609,16 @@ impl AST {
     ///
     /// let engine = Engine::new();
     ///
-    /// let mut ast1 = engine.compile(r#"
-    ///                     fn foo(x) { 42 + x }
-    ///                     foo(1)
-    ///                 "#)?;
+    /// let mut ast1 = engine.compile("
+    ///     fn foo(x) { 42 + x }
+    ///     foo(1)
+    /// ")?;
     ///
     /// let ast2 = engine.compile(r#"
-    ///                 fn foo(n) { `hello${n}` }
-    ///                 fn error() { 0 }
-    ///                 foo("!")
-    ///             "#)?;
+    ///     fn foo(n) { `hello${n}` }
+    ///     fn error() { 0 }
+    ///     foo("!")
+    /// "#)?;
     ///
     /// // Combine 'ast2', picking only 'error()' but not 'foo(_)', into 'ast1'
     /// ast1.combine_filtered(ast2, |_, _, script, name, params|
@@ -664,9 +667,9 @@ impl AST {
     /// let engine = Engine::new();
     ///
     /// let mut ast = engine.compile(r#"
-    ///                         fn foo(n) { n + 1 }
-    ///                         fn bar() { print("hello"); }
-    ///                     "#)?;
+    ///     fn foo(n) { n + 1 }
+    ///     fn bar() { print("hello"); }
+    /// "#)?;
     ///
     /// // Remove all functions except 'foo(_)'
     /// ast.retain_functions(|_, _, name, params| name == "foo" && params == 1);
@@ -866,8 +869,7 @@ pub struct StmtBlock(StaticVec<Stmt>, Position);
 
 impl StmtBlock {
     /// Create a new [`StmtBlock`].
-    pub fn new(statements: impl Into<StaticVec<Stmt>>, pos: Position) -> Self {
-        let mut statements = statements.into();
+    pub fn new(mut statements: StaticVec<Stmt>, pos: Position) -> Self {
         statements.shrink_to_fit();
         Self(statements, pos)
     }
@@ -943,14 +945,14 @@ pub enum Stmt {
     While(Expr, Box<StmtBlock>, Position),
     /// `do` `{` stmt `}` `while`|`until` expr
     Do(Box<StmtBlock>, Expr, bool, Position),
-    /// `for` id `in` expr `{` stmt `}`
-    For(Expr, Box<(Ident, StmtBlock)>, Position),
+    /// `for` `(` id `,` counter `)` `in` expr `{` stmt `}`
+    For(Expr, Box<(Ident, Option<Ident>, StmtBlock)>, Position),
     /// \[`export`\] `let` id `=` expr
     Let(Expr, Box<Ident>, bool, Position),
     /// \[`export`\] `const` id `=` expr
     Const(Expr, Box<Ident>, bool, Position),
     /// expr op`=` expr
-    Assignment(Box<(Expr, Option<OpAssignment>, Expr)>, Position),
+    Assignment(Box<(Expr, Option<OpAssignment<'static>>, Expr)>, Position),
     /// func `(` expr `,` ... `)`
     ///
     /// Note - this is a duplicate of [`Expr::FnCall`] to cover the very common pattern of a single
@@ -1000,9 +1002,7 @@ impl From<Stmt> for StmtBlock {
     #[inline(always)]
     fn from(stmt: Stmt) -> Self {
         match stmt {
-            Stmt::Block(mut block, pos) => {
-                Self(block.iter_mut().map(|v| mem::take(v)).collect(), pos)
-            }
+            Stmt::Block(mut block, pos) => Self(block.iter_mut().map(mem::take).collect(), pos),
             Stmt::Noop(pos) => Self(Default::default(), pos),
             _ => {
                 let pos = stmt.position();
@@ -1167,7 +1167,7 @@ impl Stmt {
             Self::While(condition, block, _) | Self::Do(block, condition, _, _) => {
                 condition.is_pure() && block.0.iter().all(Stmt::is_pure)
             }
-            Self::For(iterable, x, _) => iterable.is_pure() && (x.1).0.iter().all(Stmt::is_pure),
+            Self::For(iterable, x, _) => iterable.is_pure() && (x.2).0.iter().all(Stmt::is_pure),
             Self::Let(_, _, _, _)
             | Self::Const(_, _, _, _)
             | Self::Assignment(_, _)
@@ -1287,7 +1287,7 @@ impl Stmt {
                 if !e.walk(path, on_node) {
                     return false;
                 }
-                for s in &(x.1).0 {
+                for s in &(x.2).0 {
                     if !s.walk(path, on_node) {
                         return false;
                     }
@@ -1384,14 +1384,14 @@ pub struct BinaryExpr {
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct OpAssignment {
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct OpAssignment<'a> {
     pub hash_op_assign: u64,
     pub hash_op: u64,
-    pub op: &'static str,
+    pub op: &'a str,
 }
 
-impl OpAssignment {
+impl OpAssignment<'_> {
     /// Create a new [`OpAssignment`].
     ///
     /// # Panics
@@ -1520,7 +1520,7 @@ pub struct FnCallExpr {
     /// List of function call argument expressions.
     pub args: StaticVec<Expr>,
     /// List of function call arguments that are constants.
-    pub literal_args: smallvec::SmallVec<[(Dynamic, Position); 2]>,
+    pub constants: smallvec::SmallVec<[Dynamic; 2]>,
     /// Function name.
     pub name: Identifier,
     /// Does this function call capture the parent scope?
@@ -1532,16 +1532,6 @@ impl FnCallExpr {
     #[inline(always)]
     pub fn is_qualified(&self) -> bool {
         self.namespace.is_some()
-    }
-    /// Are there no arguments to this function call?
-    #[inline(always)]
-    pub fn is_args_empty(&self) -> bool {
-        self.args.is_empty() && self.literal_args.is_empty()
-    }
-    /// Get the number of arguments to this function call.
-    #[inline(always)]
-    pub fn args_count(&self) -> usize {
-        self.args.len() + self.literal_args.len()
     }
 }
 
@@ -1719,6 +1709,8 @@ pub enum Expr {
             (ImmutableString, Position),
         )>,
     ),
+    /// Stack slot
+    Stack(usize, Position),
     /// { [statement][Stmt] ... }
     Stmt(Box<StmtBlock>),
     /// func `(` expr `,` ... `)`
@@ -1776,14 +1768,15 @@ impl fmt::Debug for Expr {
                     Some((_, ref namespace)) => write!(f, "{}", namespace)?,
                     _ => (),
                 }
-                write!(f, "{}", x.2)?;
+                f.write_str(&x.2)?;
                 match i.map_or_else(|| x.0, |n| NonZeroUsize::new(n.get() as usize)) {
-                    Some(n) => write!(f, ", {}", n)?,
+                    Some(n) => write!(f, " #{}", n)?,
                     _ => (),
                 }
                 f.write_str(")")
             }
             Self::Property(x) => write!(f, "Property({})", (x.2).0),
+            Self::Stack(x, _) => write!(f, "StackSlot({})", x),
             Self::Stmt(x) => {
                 f.write_str("ExprStmtBlock")?;
                 f.debug_list().entries(x.0.iter()).finish()
@@ -1794,8 +1787,8 @@ impl fmt::Debug for Expr {
                 ff.field("name", &x.name)
                     .field("hash", &x.hashes)
                     .field("args", &x.args);
-                if !x.literal_args.is_empty() {
-                    ff.field("literal_args", &x.literal_args);
+                if !x.constants.is_empty() {
+                    ff.field("constants", &x.constants);
                 }
                 if x.capture {
                     ff.field("capture", &x.capture);
@@ -1826,11 +1819,11 @@ impl fmt::Debug for Expr {
 }
 
 impl Expr {
-    /// Get the [`Dynamic`] value of a constant expression.
+    /// Get the [`Dynamic`] value of a literal constant expression.
     ///
-    /// Returns [`None`] if the expression is not constant.
+    /// Returns [`None`] if the expression is not a literal constant.
     #[inline]
-    pub fn get_constant_value(&self) -> Option<Dynamic> {
+    pub fn get_literal_value(&self) -> Option<Dynamic> {
         Some(match self {
             Self::DynamicConstant(x, _) => x.as_ref().clone(),
             Self::IntegerConstant(x, _) => (*x).into(),
@@ -1845,7 +1838,7 @@ impl Expr {
             Self::Array(x, _) if self.is_constant() => {
                 let mut arr = Array::with_capacity(x.len());
                 arr.extend(x.iter().map(|v| {
-                    v.get_constant_value()
+                    v.get_literal_value()
                         .expect("never fails because a constant array always has a constant value")
                 }));
                 Dynamic::from_array(arr)
@@ -1857,7 +1850,7 @@ impl Expr {
                 x.0.iter().for_each(|(k, v)| {
                     *map.get_mut(k.name.as_str())
                         .expect("never fails because the template should contain all the keys") = v
-                        .get_constant_value()
+                        .get_literal_value()
                         .expect("never fails because a constant map always has a constant value")
                 });
                 Dynamic::from_map(map)
@@ -1865,6 +1858,22 @@ impl Expr {
 
             _ => return None,
         })
+    }
+    /// Create an [`Expr`] from a [`Dynamic`] value.
+    #[inline]
+    pub fn from_dynamic(value: Dynamic, pos: Position) -> Self {
+        match value.0 {
+            Union::Unit(_, _, _) => Self::Unit(pos),
+            Union::Bool(b, _, _) => Self::BoolConstant(b, pos),
+            Union::Str(s, _, _) => Self::StringConstant(s, pos),
+            Union::Char(c, _, _) => Self::CharConstant(c, pos),
+            Union::Int(i, _, _) => Self::IntegerConstant(i, pos),
+
+            #[cfg(not(feature = "no_float"))]
+            Union::Float(f, _, _) => Self::FloatConstant(f, pos),
+
+            _ => Self::DynamicConstant(Box::new(value), pos),
+        }
     }
     /// Is the expression a simple variable access?
     #[inline(always)]
@@ -1898,6 +1907,7 @@ impl Expr {
             | Self::Array(_, pos)
             | Self::Map(_, pos)
             | Self::Variable(_, pos, _)
+            | Self::Stack(_, pos)
             | Self::FnCall(_, pos)
             | Self::Custom(_, pos) => *pos,
 
@@ -1936,6 +1946,7 @@ impl Expr {
             | Self::Dot(_, pos)
             | Self::Index(_, pos)
             | Self::Variable(_, pos, _)
+            | Self::Stack(_, pos)
             | Self::FnCall(_, pos)
             | Self::Custom(_, pos) => *pos = new_pos,
 
@@ -1965,7 +1976,7 @@ impl Expr {
 
             Self::Stmt(x) => x.0.iter().all(Stmt::is_pure),
 
-            Self::Variable(_, _, _) => true,
+            Self::Variable(_, _, _) | Self::Stack(_, _) => true,
 
             _ => self.is_constant(),
         }
@@ -1990,7 +2001,8 @@ impl Expr {
             | Self::IntegerConstant(_, _)
             | Self::CharConstant(_, _)
             | Self::StringConstant(_, _)
-            | Self::Unit(_) => true,
+            | Self::Unit(_)
+            | Self::Stack(_, _) => true,
 
             Self::InterpolatedString(x) | Self::Array(x, _) => x.iter().all(Self::is_constant),
 
@@ -2050,6 +2062,8 @@ impl Expr {
             },
 
             Self::Custom(_, _) => false,
+
+            Self::Stack(_, _) => unreachable!("Expr::Stack should not occur naturally"),
         }
     }
     /// Recursively walk this expression.

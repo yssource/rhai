@@ -8,11 +8,21 @@ Bug fixes
 ---------
 
 * Fixed incorrect optimization regarding chain-indexing with non-numeric index.
+* Variable values are checked for over-sized violations after assignments and setters.
+
+Breaking changes
+----------------
+
+* To keep the API consistent, strings are no longer iterable by default.  Use the `chars` method to iterator the characters in a string.
+* `Dynamic::take_string` and `Dynamic::take_immutable_string` are renamed to `Dynamic::as_string` and `Dynamic::as_immutable_string` respectively.
 
 New features
 ------------
 
+* New syntax for `for` statement to include counter variable.
 * An integer value can now be indexed to get/set a single bit.
+* The `bits` method of an integer can be used to iterate through its bits.
+* New `$bool$`, `$int$`, `$float$` and `$string$` expression types for custom syntax.
 
 
 Version 0.20.2
