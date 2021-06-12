@@ -437,34 +437,11 @@ impl<'a> Target<'a> {
     #[inline(always)]
     pub fn propagate_changed_value(&mut self) -> Result<(), Box<EvalAltResult>> {
         match self {
-            Self::RefMut(_) | Self::TempValue(_) => Ok(()),
+            Self::RefMut(_) | Self::TempValue(_) => (),
             #[cfg(not(feature = "no_closure"))]
-            Self::LockGuard(_) => Ok(()),
+            Self::LockGuard(_) => (),
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, value) => {
-                let new_val = value.clone();
-                self.set_value(new_val)
-            }
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, ch) => {
-                let new_val = ch.clone();
-                self.set_value(new_val)
-            }
-        }
-    }
-    /// Update the value of the `Target`.
-    fn set_value(&mut self, new_val: Dynamic) -> Result<(), Box<EvalAltResult>> {
-        match self {
-            Self::RefMut(r) => **r = new_val,
-            #[cfg(not(feature = "no_closure"))]
-            Self::LockGuard((r, _)) => **r = new_val,
-            Self::TempValue(_) => panic!("cannot update a value"),
-            #[cfg(not(feature = "no_index"))]
-            Self::BitField(value, index, _) => {
-                let value = &mut *value
-                    .write_lock::<crate::INT>()
-                    .expect("never fails because `BitField` always holds an `INT`");
-
+            Self::BitField(value, index, new_val) => {
                 // Replace the bit at the specified index position
                 let new_bit = new_val.as_bool().map_err(|err| {
                     Box::new(EvalAltResult::ErrorMismatchDataType(
@@ -473,6 +450,10 @@ impl<'a> Target<'a> {
                         Position::NONE,
                     ))
                 })?;
+
+                let value = &mut *value
+                    .write_lock::<crate::INT>()
+                    .expect("never fails because `BitField` always holds an `INT`");
 
                 let index = *index;
 
@@ -483,14 +464,12 @@ impl<'a> Target<'a> {
                     } else {
                         *value &= !mask;
                     }
+                } else {
+                    unreachable!("bit-field index out of bounds: {}", index);
                 }
             }
             #[cfg(not(feature = "no_index"))]
-            Self::StringChar(s, index, _) => {
-                let s = &mut *s
-                    .write_lock::<ImmutableString>()
-                    .expect("never fails because `StringChar` always holds an `ImmutableString`");
-
+            Self::StringChar(s, index, new_val) => {
                 // Replace the character at the specified index position
                 let new_ch = new_val.as_char().map_err(|err| {
                     Box::new(EvalAltResult::ErrorMismatchDataType(
@@ -499,6 +478,10 @@ impl<'a> Target<'a> {
                         Position::NONE,
                     ))
                 })?;
+
+                let s = &mut *s
+                    .write_lock::<ImmutableString>()
+                    .expect("never fails because `StringChar` always holds an `ImmutableString`");
 
                 let index = *index;
 
@@ -1236,8 +1219,6 @@ impl Engine {
                         let ((new_val, new_pos), (op_info, op_pos)) =
                             new_val.expect("never fails because `new_val` is `Some`");
                         let idx_val = idx_val.as_index_value();
-
-                        #[cfg(not(feature = "no_index"))]
                         let mut idx_val_for_setter = idx_val.clone();
 
                         let try_setter = match self.get_indexed_mut(
@@ -1310,13 +1291,13 @@ impl Engine {
                     // {xxx:map}.id op= ???
                     Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
                         let (name, pos) = &x.2;
+                        let ((new_val, new_pos), (op_info, op_pos)) =
+                            new_val.expect("never fails because `new_val` is `Some`");
                         let index = name.into();
                         {
                             let mut val = self.get_indexed_mut(
                                 mods, state, lib, target, index, *pos, true, false, level,
                             )?;
-                            let ((new_val, new_pos), (op_info, op_pos)) =
-                                new_val.expect("never fails because `new_val` is `Some`");
                             self.eval_op_assignment(
                                 mods, state, lib, op_info, op_pos, &mut val, root, new_val,
                             )
@@ -2355,7 +2336,7 @@ impl Engine {
                     mods,
                     state,
                     lib,
-                    op_info.clone(),
+                    *op_info,
                     *op_pos,
                     &mut lhs_ptr,
                     (var_name, pos),
@@ -2363,8 +2344,10 @@ impl Engine {
                 )
                 .map_err(|err| err.fill_position(rhs_expr.position()))?;
 
-                self.check_data_size(lhs_ptr.as_ref())
-                    .map_err(|err| err.fill_position(lhs_expr.position()))?;
+                if op_info.is_some() {
+                    self.check_data_size(lhs_ptr.as_ref())
+                        .map_err(|err| err.fill_position(lhs_expr.position()))?;
+                }
 
                 Ok(Dynamic::UNIT)
             }
@@ -2960,55 +2943,52 @@ impl Engine {
         result.and_then(|r| self.check_data_size(&r).map(|_| r))
     }
 
+    #[cfg(feature = "unchecked")]
+    #[inline(always)]
+    fn check_data_size(&self, _value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
+        Ok(())
+    }
+
+    #[cfg(not(feature = "unchecked"))]
     fn check_data_size(&self, value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
         // Recursively calculate the size of a value (especially `Array` and `Map`)
         fn calc_size(value: &Dynamic) -> (usize, usize, usize) {
-            match value {
+            match value.0 {
                 #[cfg(not(feature = "no_index"))]
-                Dynamic(Union::Array(arr, _, _)) => {
-                    let mut arrays = 0;
-                    let mut maps = 0;
-
-                    arr.iter().for_each(|value| match value {
-                        Dynamic(Union::Array(_, _, _)) => {
-                            let (a, m, _) = calc_size(value);
-                            arrays += a;
-                            maps += m;
-                        }
-                        #[cfg(not(feature = "no_object"))]
-                        Dynamic(Union::Map(_, _, _)) => {
-                            let (a, m, _) = calc_size(value);
-                            arrays += a;
-                            maps += m;
-                        }
-                        _ => arrays += 1,
-                    });
-
-                    (arrays, maps, 0)
+                Union::Array(ref arr, _, _) => {
+                    arr.iter()
+                        .fold((0, 0, 0), |(arrays, maps, strings), value| match value.0 {
+                            Union::Array(_, _, _) => {
+                                let (a, m, s) = calc_size(value);
+                                (arrays + a + 1, maps + m, strings + s)
+                            }
+                            #[cfg(not(feature = "no_object"))]
+                            Union::Map(_, _, _) => {
+                                let (a, m, s) = calc_size(value);
+                                (arrays + a + 1, maps + m, strings + s)
+                            }
+                            Union::Str(ref s, _, _) => (arrays + 1, maps, strings + s.len()),
+                            _ => (arrays + 1, maps, strings),
+                        })
                 }
                 #[cfg(not(feature = "no_object"))]
-                Dynamic(Union::Map(map, _, _)) => {
-                    let mut arrays = 0;
-                    let mut maps = 0;
-
-                    map.values().for_each(|value| match value {
-                        #[cfg(not(feature = "no_index"))]
-                        Dynamic(Union::Array(_, _, _)) => {
-                            let (a, m, _) = calc_size(value);
-                            arrays += a;
-                            maps += m;
-                        }
-                        Dynamic(Union::Map(_, _, _)) => {
-                            let (a, m, _) = calc_size(value);
-                            arrays += a;
-                            maps += m;
-                        }
-                        _ => maps += 1,
-                    });
-
-                    (arrays, maps, 0)
+                Union::Map(ref map, _, _) => {
+                    map.values()
+                        .fold((0, 0, 0), |(arrays, maps, strings), value| match value.0 {
+                            #[cfg(not(feature = "no_index"))]
+                            Union::Array(_, _, _) => {
+                                let (a, m, s) = calc_size(value);
+                                (arrays + a, maps + m + 1, strings + s)
+                            }
+                            Union::Map(_, _, _) => {
+                                let (a, m, s) = calc_size(value);
+                                (arrays + a, maps + m + 1, strings + s)
+                            }
+                            Union::Str(ref s, _, _) => (arrays, maps + 1, strings + s.len()),
+                            _ => (arrays, maps + 1, strings),
+                        })
                 }
-                Dynamic(Union::Str(s, _, _)) => (0, 0, s.len()),
+                Union::Str(ref s, _, _) => (0, 0, s.len()),
                 _ => (0, 0, 0),
             }
         }

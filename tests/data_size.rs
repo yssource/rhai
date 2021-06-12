@@ -208,6 +208,18 @@ fn test_max_map_size() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
+            .consume(
+                "
+                    let x = #{};
+                    loop { x.a = x; }
+                "
+            )
+            .expect_err("should error"),
+        EvalAltResult::ErrorDataTooLarge(_, _)
+    ));
+
+    assert!(matches!(
+        *engine
             .eval::<Map>(
                 "
                     let x = #{a:1,b:2,c:3,d:4,e:5,f:6};

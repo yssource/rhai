@@ -130,7 +130,7 @@ pub fn generate_body(
             let mut namespace = FnNamespaceAccess::Internal;
 
             match function.params().special {
-                FnSpecialAccess::None => {}
+                FnSpecialAccess::None => (),
                 FnSpecialAccess::Index(_) | FnSpecialAccess::Property(_) => {
                     let reg_name = fn_literal.value();
                     if reg_name.starts_with(FN_GET)

@@ -952,7 +952,7 @@ pub enum Stmt {
     /// \[`export`\] `const` id `=` expr
     Const(Expr, Box<Ident>, bool, Position),
     /// expr op`=` expr
-    Assignment(Box<(Expr, Option<OpAssignment>, Expr)>, Position),
+    Assignment(Box<(Expr, Option<OpAssignment<'static>>, Expr)>, Position),
     /// func `(` expr `,` ... `)`
     ///
     /// Note - this is a duplicate of [`Expr::FnCall`] to cover the very common pattern of a single
@@ -1384,14 +1384,14 @@ pub struct BinaryExpr {
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct OpAssignment {
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct OpAssignment<'a> {
     pub hash_op_assign: u64,
     pub hash_op: u64,
-    pub op: &'static str,
+    pub op: &'a str,
 }
 
-impl OpAssignment {
+impl OpAssignment<'_> {
     /// Create a new [`OpAssignment`].
     ///
     /// # Panics

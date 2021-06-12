@@ -297,7 +297,7 @@ fn optimize_stmt_block(
                             Stmt::Noop(*pos)
                         };
                     }
-                    [.., second_last_stmt, Stmt::Noop(_)] if second_last_stmt.returns_value() => {}
+                    [.., second_last_stmt, Stmt::Noop(_)] if second_last_stmt.returns_value() => (),
                     [.., second_last_stmt, last_stmt]
                         if !last_stmt.returns_value() && is_pure(last_stmt) =>
                     {
