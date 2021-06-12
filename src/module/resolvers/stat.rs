@@ -41,6 +41,7 @@ impl StaticModuleResolver {
     /// engine.set_module_resolver(resolver);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn new() -> Self {
         Default::default()
     }
@@ -57,38 +58,45 @@ impl StaticModuleResolver {
     }
     /// Does the path exist?
     #[inline(always)]
+    #[must_use]
     pub fn contains_path(&self, path: &str) -> bool {
         self.0.contains_key(path)
     }
     /// Get an iterator of all the [modules][Module].
     #[inline(always)]
+    #[must_use]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Shared<Module>)> {
         self.0.iter().map(|(k, v)| (k.as_str(), v))
     }
     /// Get a mutable iterator of all the [modules][Module].
     #[inline(always)]
+    #[must_use]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&str, &mut Shared<Module>)> {
         self.0.iter_mut().map(|(k, v)| (k.as_str(), v))
     }
     /// Get a mutable iterator of all the modules.
     #[inline(always)]
+    #[must_use]
     pub fn into_iter(self) -> impl Iterator<Item = (Identifier, Shared<Module>)> {
         self.0.into_iter()
     }
     /// Get an iterator of all the [module][Module] paths.
     #[inline(always)]
+    #[must_use]
     pub fn paths(&self) -> impl Iterator<Item = &str> {
         self.0.keys().map(|s| s.as_str())
     }
     /// Get an iterator of all the [modules][Module].
     #[inline(always)]
+    #[must_use]
     pub fn values(&self) -> impl Iterator<Item = &Shared<Module>> {
         self.0.values().map(|m| m)
     }
     /// Remove all [modules][Module].
     #[inline(always)]
-    pub fn clear(&mut self) {
+    pub fn clear(&mut self) -> &mut Self {
         self.0.clear();
+        self
     }
     /// Is this [`StaticModuleResolver`] empty?
     #[inline(always)]
@@ -97,6 +105,7 @@ impl StaticModuleResolver {
     }
     /// Get the number of [modules][Module] in this [`StaticModuleResolver`].
     #[inline(always)]
+    #[must_use]
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -105,10 +114,11 @@ impl StaticModuleResolver {
     ///
     /// Existing modules of the same path name are overwritten.
     #[inline(always)]
-    pub fn merge(&mut self, other: Self) {
+    pub fn merge(&mut self, other: Self) -> &mut Self {
         if !other.is_empty() {
             self.0.extend(other.0.into_iter());
         }
+        self
     }
 }
 

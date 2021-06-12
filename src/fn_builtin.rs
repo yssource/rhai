@@ -17,6 +17,7 @@ const BUILTIN: &str = "never fails because this is built-in code and the type is
 
 /// Is the type a numeric type?
 #[inline(always)]
+#[must_use]
 fn is_numeric(type_id: TypeId) -> bool {
     let result = type_id == TypeId::of::<u8>()
         || type_id == TypeId::of::<u16>()
@@ -40,6 +41,7 @@ fn is_numeric(type_id: TypeId) -> bool {
 }
 
 /// Build in common binary operator implementations to avoid the cost of calling a registered function.
+#[must_use]
 pub fn get_builtin_binary_op_fn(
     op: &str,
     x: &Dynamic,
@@ -425,6 +427,7 @@ pub fn get_builtin_binary_op_fn(
 }
 
 /// Build in common operator assignment implementations to avoid the cost of calling a registered function.
+#[must_use]
 pub fn get_builtin_op_assignment_fn(
     op: &str,
     x: &Dynamic,

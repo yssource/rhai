@@ -64,27 +64,32 @@ pub struct Imports {
 impl Imports {
     /// Get the length of this stack of imported [modules][Module].
     #[inline(always)]
+    #[must_use]
     pub fn len(&self) -> usize {
         self.keys.len()
     }
     /// Is this stack of imported [modules][Module] empty?
     #[inline(always)]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.keys.is_empty()
     }
     /// Get the imported [modules][Module] at a particular index.
     #[inline(always)]
+    #[must_use]
     pub fn get(&self, index: usize) -> Option<Shared<Module>> {
         self.modules.get(index).cloned()
     }
     /// Get the imported [modules][Module] at a particular index.
     #[allow(dead_code)]
     #[inline(always)]
+    #[must_use]
     pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut Shared<Module>> {
         self.modules.get_mut(index)
     }
     /// Get the index of an imported [modules][Module] by name.
     #[inline(always)]
+    #[must_use]
     pub fn find(&self, name: &str) -> Option<usize> {
         self.keys
             .iter()
@@ -107,6 +112,7 @@ impl Imports {
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     #[inline(always)]
+    #[must_use]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.keys
             .iter()
@@ -117,17 +123,20 @@ impl Imports {
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     #[inline(always)]
+    #[must_use]
     pub(crate) fn iter_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.keys.iter().rev().zip(self.modules.iter().rev())
     }
     /// Get an iterator to this stack of imported [modules][Module] in forward order.
     #[allow(dead_code)]
     #[inline(always)]
+    #[must_use]
     pub(crate) fn scan_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.keys.iter().zip(self.modules.iter())
     }
     /// Get a consuming iterator to this stack of imported [modules][Module] in reverse order.
     #[inline(always)]
+    #[must_use]
     pub fn into_iter(self) -> impl Iterator<Item = (Identifier, Shared<Module>)> {
         self.keys
             .into_iter()
@@ -137,11 +146,13 @@ impl Imports {
     /// Does the specified function hash key exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
     #[inline(always)]
+    #[must_use]
     pub fn contains_fn(&self, hash: u64) -> bool {
         self.modules.iter().any(|m| m.contains_qualified_fn(hash))
     }
     /// Get specified function via its hash key.
     #[inline(always)]
+    #[must_use]
     pub fn get_fn(&self, hash: u64) -> Option<(&CallableFunction, Option<&Identifier>)> {
         self.modules
             .iter()
@@ -152,11 +163,13 @@ impl Imports {
     /// imported [modules][Module]?
     #[allow(dead_code)]
     #[inline(always)]
+    #[must_use]
     pub fn contains_iter(&self, id: TypeId) -> bool {
         self.modules.iter().any(|m| m.contains_qualified_iter(id))
     }
     /// Get the specified [`TypeId`][std::any::TypeId] iterator.
     #[inline(always)]
+    #[must_use]
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.modules
             .iter()
@@ -278,6 +291,7 @@ impl ChainArgument {
     /// Panics if not `ChainArgument::IndexValue`.
     #[inline(always)]
     #[cfg(not(feature = "no_index"))]
+    #[must_use]
     pub fn as_index_value(self) -> Dynamic {
         match self {
             #[cfg(not(feature = "no_object"))]
@@ -294,6 +308,7 @@ impl ChainArgument {
     /// Panics if not `ChainArgument::MethodCallArgs`.
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
+    #[must_use]
     pub fn as_fn_call_args(self) -> (StaticVec<Dynamic>, Position) {
         match self {
             Self::Property(_) => {
@@ -349,6 +364,7 @@ impl<'a> Target<'a> {
     /// Is the `Target` a reference pointing to other data?
     #[allow(dead_code)]
     #[inline(always)]
+    #[must_use]
     pub fn is_ref(&self) -> bool {
         match self {
             Self::RefMut(_) => true,
@@ -363,6 +379,7 @@ impl<'a> Target<'a> {
     }
     /// Is the `Target` a temp value?
     #[inline(always)]
+    #[must_use]
     pub fn is_temp_value(&self) -> bool {
         match self {
             Self::RefMut(_) => false,
@@ -378,6 +395,7 @@ impl<'a> Target<'a> {
     /// Is the `Target` a shared value?
     #[cfg(not(feature = "no_closure"))]
     #[inline(always)]
+    #[must_use]
     pub fn is_shared(&self) -> bool {
         match self {
             Self::RefMut(r) => r.is_shared(),
@@ -393,6 +411,7 @@ impl<'a> Target<'a> {
     /// Is the `Target` a specific type?
     #[allow(dead_code)]
     #[inline(always)]
+    #[must_use]
     pub fn is<T: Variant + Clone>(&self) -> bool {
         match self {
             Self::RefMut(r) => r.is::<T>(),
@@ -407,6 +426,7 @@ impl<'a> Target<'a> {
     }
     /// Get the value of the `Target` as a `Dynamic`, cloning a referenced value if necessary.
     #[inline(always)]
+    #[must_use]
     pub fn take_or_clone(self) -> Dynamic {
         match self {
             Self::RefMut(r) => r.clone(), // Referenced value is cloned
@@ -421,6 +441,7 @@ impl<'a> Target<'a> {
     }
     /// Take a `&mut Dynamic` reference from the `Target`.
     #[inline(always)]
+    #[must_use]
     pub fn take_ref(self) -> Option<&'a mut Dynamic> {
         match self {
             Self::RefMut(r) => Some(r),
@@ -429,12 +450,14 @@ impl<'a> Target<'a> {
     }
     /// Convert a shared or reference `Target` into a target with an owned value.
     #[inline(always)]
+    #[must_use]
     pub fn into_owned(self) -> Target<'static> {
         self.take_or_clone().into()
     }
     /// Propagate a changed value back to the original source.
     /// This has no effect except for string indexing.
     #[inline(always)]
+    #[must_use]
     pub fn propagate_changed_value(&mut self) -> Result<(), Box<EvalAltResult>> {
         match self {
             Self::RefMut(_) | Self::TempValue(_) => (),
@@ -566,6 +589,7 @@ impl AsMut<Dynamic> for Target<'_> {
 
 impl<T: Into<Dynamic>> From<T> for Target<'_> {
     #[inline(always)]
+    #[must_use]
     fn from(value: T) -> Self {
         Self::TempValue(value.into())
     }
@@ -614,11 +638,13 @@ pub struct State {
 impl State {
     /// Is the state currently at global (root) level?
     #[inline(always)]
+    #[must_use]
     pub fn is_global(&self) -> bool {
         self.scope_level == 0
     }
     /// Get a mutable reference to the current function resolution cache.
     #[inline(always)]
+    #[must_use]
     pub fn fn_resolution_cache_mut(&mut self) -> &mut FnResolutionCache {
         if self.fn_resolution_caches.0.is_empty() {
             // Push a new function resolution cache if the stack is empty
@@ -714,27 +740,32 @@ pub struct EvalContext<'a, 'x, 'px, 'm, 's, 't, 'pt> {
 impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
     /// The current [`Engine`].
     #[inline(always)]
+    #[must_use]
     pub fn engine(&self) -> &Engine {
         self.engine
     }
     /// The current source.
     #[inline(always)]
+    #[must_use]
     pub fn source(&self) -> Option<&str> {
         self.state.source.as_ref().map(|s| s.as_str())
     }
     /// The current [`Scope`].
     #[inline(always)]
+    #[must_use]
     pub fn scope(&self) -> &Scope {
         self.scope
     }
     /// Mutable reference to the current [`Scope`].
     #[inline(always)]
+    #[must_use]
     pub fn scope_mut(&mut self) -> &mut &'x mut Scope<'px> {
         &mut self.scope
     }
     /// Get an iterator over the current set of modules imported via `import` statements.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
+    #[must_use]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.mods.iter()
     }
@@ -743,11 +774,13 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
+    #[must_use]
     pub fn imports(&self) -> &Imports {
         self.mods
     }
     /// Get an iterator over the namespaces containing definition of all script-defined functions.
     #[inline(always)]
+    #[must_use]
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
     }
@@ -755,16 +788,19 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]
+    #[must_use]
     pub fn namespaces(&self) -> &[&Module] {
         self.lib
     }
     /// The current bound `this` pointer, if any.
     #[inline(always)]
+    #[must_use]
     pub fn this_ptr(&self) -> Option<&Dynamic> {
         self.this_ptr.as_ref().map(|v| &**v)
     }
     /// The current nesting level of function calls.
     #[inline(always)]
+    #[must_use]
     pub fn call_level(&self) -> usize {
         self.level
     }
@@ -853,6 +889,7 @@ impl Default for Engine {
 /// Make getter function
 #[cfg(not(feature = "no_object"))]
 #[inline(always)]
+#[must_use]
 pub fn make_getter(id: &str) -> String {
     format!("{}{}", FN_GET, id)
 }
@@ -860,6 +897,7 @@ pub fn make_getter(id: &str) -> String {
 /// Make setter function
 #[cfg(not(feature = "no_object"))]
 #[inline(always)]
+#[must_use]
 pub fn make_setter(id: &str) -> String {
     format!("{}{}", FN_SET, id)
 }
@@ -867,6 +905,7 @@ pub fn make_setter(id: &str) -> String {
 /// Is this function an anonymous function?
 #[cfg(not(feature = "no_function"))]
 #[inline(always)]
+#[must_use]
 pub fn is_anonymous_fn(fn_name: &str) -> bool {
     fn_name.starts_with(FN_ANONYMOUS)
 }
@@ -896,6 +935,7 @@ fn default_debug(_s: &str, _source: Option<&str>, _pos: Position) {
 impl Engine {
     /// Create a new [`Engine`]
     #[inline]
+    #[must_use]
     pub fn new() -> Self {
         // Create the new scripting Engine
         let mut engine = Self {
@@ -959,6 +999,7 @@ impl Engine {
     ///
     /// Use [`register_global_module`][Engine::register_global_module] to add packages of functions.
     #[inline(always)]
+    #[must_use]
     pub fn new_raw() -> Self {
         let mut engine = Self {
             global_namespace: Default::default(),
@@ -1009,6 +1050,7 @@ impl Engine {
 
     /// Search for a module within an imports stack.
     #[inline]
+    #[must_use]
     pub(crate) fn search_imports(
         &self,
         mods: &Imports,
@@ -1042,6 +1084,7 @@ impl Engine {
 
     /// Search for a variable within the scope or within imports,
     /// depending on whether the variable name is namespace-qualified.
+    #[must_use]
     pub(crate) fn search_namespace<'s>(
         &self,
         scope: &'s mut Scope,
@@ -1091,6 +1134,7 @@ impl Engine {
     /// # Panics
     ///
     /// Panics if `expr` is not [`Expr::Variable`].
+    #[must_use]
     pub(crate) fn search_scope_only<'s>(
         &self,
         scope: &'s mut Scope,
@@ -1162,6 +1206,7 @@ impl Engine {
     /// Chain-evaluate a dot/index chain.
     /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and must be set afterwards.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+    #[must_use]
     fn eval_dot_index_chain_helper(
         &self,
         mods: &mut Imports,
@@ -1586,6 +1631,8 @@ impl Engine {
 
     /// Evaluate a dot/index chain.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+    #[must_use]
+    #[must_use]
     fn eval_dot_index_chain(
         &self,
         scope: &mut Scope,
@@ -1649,6 +1696,7 @@ impl Engine {
     /// [`StaticVec`] is used to avoid an allocation in the overwhelming cases of
     /// just a few levels of indexing.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+    #[must_use]
     fn eval_indexed_chain(
         &self,
         scope: &mut Scope,
@@ -1774,6 +1822,7 @@ impl Engine {
     /// Get the value at the indexed position of a base type.
     /// [`Position`] in [`EvalAltResult`] may be [`NONE`][Position::NONE] and should be set afterwards.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+    #[must_use]
     fn get_indexed_mut<'t>(
         &self,
         mods: &mut Imports,
@@ -1795,7 +1844,7 @@ impl Engine {
                 // val_array[idx]
                 let index = idx
                     .as_int()
-                    .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
+                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, idx_pos))?;
 
                 let arr_len = arr.len();
 
@@ -1854,7 +1903,7 @@ impl Engine {
                 // val_int[idx]
                 let index = idx
                     .as_int()
-                    .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
+                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, idx_pos))?;
 
                 let bits = std::mem::size_of_val(value) * 8;
 
@@ -1891,7 +1940,7 @@ impl Engine {
                 // val_string[idx]
                 let index = idx
                     .as_int()
-                    .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, idx_pos))?;
+                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, idx_pos))?;
 
                 let (ch, offset) = if index >= 0 {
                     let offset = index as usize;
@@ -1939,6 +1988,7 @@ impl Engine {
     }
 
     /// Evaluate an expression.
+    #[must_use]
     pub(crate) fn eval_expr(
         &self,
         scope: &mut Scope,
@@ -2086,12 +2136,12 @@ impl Engine {
                 Ok((self
                     .eval_expr(scope, mods, state, lib, this_ptr, &x.lhs, level)?
                     .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, x.lhs.position()))?
+                    .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, x.lhs.position()))?
                     && // Short-circuit using &&
                 self
                     .eval_expr(scope, mods, state, lib, this_ptr, &x.rhs, level)?
                     .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, x.rhs.position()))?)
+                    .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, x.rhs.position()))?)
                 .into())
             }
 
@@ -2099,12 +2149,12 @@ impl Engine {
                 Ok((self
                     .eval_expr(scope, mods, state, lib, this_ptr, &x.lhs, level)?
                     .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, x.lhs.position()))?
+                    .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, x.lhs.position()))?
                     || // Short-circuit using ||
                 self
                     .eval_expr(scope, mods, state, lib, this_ptr, &x.rhs, level)?
                     .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, x.rhs.position()))?)
+                    .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, x.rhs.position()))?)
                 .into())
             }
 
@@ -2139,6 +2189,7 @@ impl Engine {
     }
 
     /// Evaluate a statements block.
+    #[must_use]
     pub(crate) fn eval_stmt_block(
         &self,
         scope: &mut Scope,
@@ -2216,6 +2267,7 @@ impl Engine {
 
     /// Evaluate an op-assignment statement.
     /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and should be set afterwards.
+    #[must_use]
     pub(crate) fn eval_op_assignment(
         &self,
         mods: &mut Imports,
@@ -2289,6 +2341,7 @@ impl Engine {
     ///
     /// This method uses some unsafe code, mainly for avoiding cloning of local variable names via
     /// direct lifetime casting.
+    #[must_use]
     pub(crate) fn eval_stmt(
         &self,
         scope: &mut Scope,
@@ -2397,7 +2450,7 @@ impl Engine {
                 let guard_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?;
+                    .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, expr.position()))?;
 
                 if guard_val {
                     if !x.0.is_empty() {
@@ -2430,9 +2483,9 @@ impl Engine {
                             match self
                                 .eval_expr(scope, mods, state, lib, this_ptr, &condition, level)
                                 .and_then(|v| {
-                                    v.as_bool().map_err(|err| {
+                                    v.as_bool().map_err(|typ| {
                                         self.make_type_mismatch_err::<bool>(
-                                            err,
+                                            typ,
                                             condition.position(),
                                         )
                                     })
@@ -2474,7 +2527,7 @@ impl Engine {
                 let condition = if !expr.is_unit() {
                     self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                         .as_bool()
-                        .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?
+                        .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, expr.position()))?
                 } else {
                     true
                 };
@@ -2512,7 +2565,7 @@ impl Engine {
                 let condition = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .as_bool()
-                    .map_err(|err| self.make_type_mismatch_err::<bool>(err, expr.position()))?;
+                    .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, expr.position()))?;
 
                 if condition ^ *is_while {
                     return Ok(Dynamic::UNIT);
@@ -2932,6 +2985,7 @@ impl Engine {
     /// Check a result to ensure that the data size is within allowable limit.
     #[cfg(feature = "unchecked")]
     #[inline(always)]
+    #[must_use]
     fn check_return_value(&self, result: RhaiResult) -> RhaiResult {
         result
     }
@@ -2939,17 +2993,20 @@ impl Engine {
     /// Check a result to ensure that the data size is within allowable limit.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
+    #[must_use]
     fn check_return_value(&self, result: RhaiResult) -> RhaiResult {
         result.and_then(|r| self.check_data_size(&r).map(|_| r))
     }
 
     #[cfg(feature = "unchecked")]
     #[inline(always)]
+    #[must_use]
     fn check_data_size(&self, _value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
         Ok(())
     }
 
     #[cfg(not(feature = "unchecked"))]
+    #[must_use]
     fn check_data_size(&self, value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
         // Recursively calculate the size of a value (especially `Array` and `Map`)
         fn calc_size(value: &Dynamic) -> (usize, usize, usize) {
@@ -3052,6 +3109,7 @@ impl Engine {
 
     /// Check if the number of operations stay within limit.
     #[cfg(not(feature = "unchecked"))]
+    #[must_use]
     pub(crate) fn inc_operations(
         &self,
         state: &mut State,
@@ -3080,6 +3138,7 @@ impl Engine {
     /// If a type is registered via [`register_type_with_name`][Engine::register_type_with_name],
     /// the type name provided for the registration will be used.
     #[inline(always)]
+    #[must_use]
     pub fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
             .get(name)
@@ -3089,6 +3148,7 @@ impl Engine {
 
     /// Make a `Box<`[`EvalAltResult<ErrorMismatchDataType>`][EvalAltResult::ErrorMismatchDataType]`>`.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
         EvalAltResult::ErrorMismatchDataType(
             self.map_type_name(type_name::<T>()).into(),

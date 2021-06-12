@@ -9,6 +9,7 @@ use std::{
 
 /// Cast a type into another type.
 #[inline(always)]
+#[must_use]
 pub fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Result<B, A> {
     if TypeId::of::<B>() == a.type_id() {
         // SAFETY: Just checked we have the right type. We explicitly forget the
@@ -26,6 +27,7 @@ pub fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Result<B, A> {
 
 /// Cast a Boxed type into another type.
 #[inline(always)]
+#[must_use]
 pub fn unsafe_cast_box<X: Any, T: Any>(item: Box<X>) -> Result<Box<T>, Box<X>> {
     // Only allow casting to the exact same type
     if TypeId::of::<X>() == TypeId::of::<T>() {
@@ -50,6 +52,7 @@ pub fn unsafe_cast_box<X: Any, T: Any>(item: Box<X>) -> Result<Box<T>, Box<X>> {
 /// Force-casting a local variable's lifetime to the current [`Scope`][crate::Scope]'s larger lifetime saves
 /// on allocations and string cloning, thus avoids us having to maintain a chain of [`Scope`][crate::Scope]'s.
 #[inline(always)]
+#[must_use]
 pub fn unsafe_cast_var_name_to_lifetime<'s>(name: &str) -> &'s str {
     // WARNING - force-cast the variable name into the scope's lifetime to avoid cloning it
     //           this is safe because all local variables are cleared at the end of the block

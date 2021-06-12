@@ -23,6 +23,7 @@ pub use stat::StaticModuleResolver;
 /// Trait that encapsulates a module resolution service.
 pub trait ModuleResolver: SendSync {
     /// Resolve a module based on a path string.
+    #[must_use]
     fn resolve(
         &self,
         engine: &Engine,
@@ -41,6 +42,7 @@ pub trait ModuleResolver: SendSync {
     /// Override the default implementation of this method if the module resolver
     /// serves modules based on compiled Rhai scripts.
     #[allow(unused_variables)]
+    #[must_use]
     fn resolve_ast(
         &self,
         engine: &Engine,

@@ -59,8 +59,8 @@ pub struct ParseState<'e> {
     external_vars: BTreeMap<Identifier, Position>,
     /// An indicator that disables variable capturing into externals one single time
     /// up until the nearest consumed Identifier token.
-    /// If set to false the next call to `access_var` will not capture the variable.
-    /// All consequent calls to `access_var` will not be affected
+    /// If set to false the next call to [`access_var`][ParseState::access_var] will not capture the variable.
+    /// All consequent calls to [`access_var`][ParseState::access_var] will not be affected
     #[cfg(not(feature = "no_closure"))]
     allow_capture: bool,
     /// Encapsulates a local stack with imported [module][crate::Module] names.
@@ -78,6 +78,7 @@ pub struct ParseState<'e> {
 impl<'e> ParseState<'e> {
     /// Create a new [`ParseState`].
     #[inline(always)]
+    #[must_use]
     pub fn new(engine: &'e Engine, tokenizer_control: TokenizerControl) -> Self {
         Self {
             engine,
@@ -103,8 +104,8 @@ impl<'e> ParseState<'e> {
     ///
     /// If the variable is not present in the scope adds it to the list of external variables
     ///
-    /// The return value is the offset to be deducted from `Stack::len`,
-    /// i.e. the top element of the [`ParseState`] is offset 1.
+    /// The return value is the offset to be deducted from `ParseState::stack::len`,
+    /// i.e. the top element of [`ParseState`]'s variables stack is offset 1.
     ///
     /// Return `None` when the variable name is not found in the `stack`.
     #[inline(always)]
@@ -155,6 +156,7 @@ impl<'e> ParseState<'e> {
     /// Panics when called under `no_module`.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
+    #[must_use]
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
         self.modules
             .iter()
@@ -166,6 +168,7 @@ impl<'e> ParseState<'e> {
 
     /// Get an interned string, creating one if it is not yet interned.
     #[inline(always)]
+    #[must_use]
     pub fn get_identifier(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
         self.interned_strings.get(text)
     }
@@ -197,6 +200,7 @@ struct ParseSettings {
 impl ParseSettings {
     /// Create a new `ParseSettings` with one higher expression level.
     #[inline(always)]
+    #[must_use]
     pub fn level_up(&self) -> Self {
         Self {
             level: self.level + 1,
@@ -206,6 +210,7 @@ impl ParseSettings {
     /// Make sure that the current level of expression nesting is within the maximum limit.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
+    #[must_use]
     pub fn ensure_level_within_max_limit(
         &self,
         limit: Option<NonZeroUsize>,
@@ -222,6 +227,7 @@ impl Expr {
     /// All other variants are untouched.
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
+    #[must_use]
     fn into_property(self, state: &mut ParseState) -> Self {
         match self {
             Self::Variable(_, pos, x) if x.1.is_none() => {
@@ -1441,6 +1447,7 @@ fn make_assignment_stmt<'a>(
     rhs: Expr,
     op_pos: Position,
 ) -> Result<Stmt, ParseError> {
+    #[must_use]
     fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Option<Position> {
         match expr {
             Expr::Index(x, _) | Expr::Dot(x, _) if parent_is_dot => match x.lhs {
@@ -3091,6 +3098,8 @@ fn parse_anon_fn(
 }
 
 impl Engine {
+    /// Parse a global level expression.
+    #[must_use]
     pub(crate) fn parse_global_expr(
         &self,
         input: &mut TokenStream,
@@ -3132,6 +3141,7 @@ impl Engine {
     }
 
     /// Parse the global level statements.
+    #[must_use]
     fn parse_global_level(
         &self,
         input: &mut TokenStream,
@@ -3193,6 +3203,7 @@ impl Engine {
 
     /// Run the parser on an input stream, returning an AST.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn parse(
         &self,
         input: &mut TokenStream,

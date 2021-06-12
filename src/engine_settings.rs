@@ -28,6 +28,7 @@ impl Engine {
     /// Not available under `no_optimize`.
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
+    #[must_use]
     pub fn optimization_level(&self) -> crate::OptimizationLevel {
         self.optimization_level
     }
@@ -48,6 +49,7 @@ impl Engine {
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[must_use]
     pub fn max_call_levels(&self) -> usize {
         self.limits.max_call_stack_depth
     }
@@ -66,6 +68,7 @@ impl Engine {
     /// Not available under `unchecked`.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
+    #[must_use]
     pub fn max_operations(&self) -> u64 {
         self.limits.max_operations.map_or(0, NonZeroU64::get)
     }
@@ -85,6 +88,7 @@ impl Engine {
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
+    #[must_use]
     pub fn max_modules(&self) -> usize {
         self.limits.max_modules
     }
@@ -110,6 +114,7 @@ impl Engine {
     /// Not available under `unchecked`.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
+    #[must_use]
     pub fn max_expr_depth(&self) -> usize {
         self.limits.max_expr_depth.map_or(0, NonZeroUsize::get)
     }
@@ -119,6 +124,7 @@ impl Engine {
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[must_use]
     pub fn max_function_expr_depth(&self) -> usize {
         self.limits
             .max_function_expr_depth
@@ -138,6 +144,7 @@ impl Engine {
     /// Not available under `unchecked`.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
+    #[must_use]
     pub fn max_string_size(&self) -> usize {
         self.limits.max_string_size.map_or(0, NonZeroUsize::get)
     }
@@ -157,6 +164,7 @@ impl Engine {
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
+    #[must_use]
     pub fn max_array_size(&self) -> usize {
         self.limits.max_array_size.map_or(0, NonZeroUsize::get)
     }
@@ -176,6 +184,7 @@ impl Engine {
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
+    #[must_use]
     pub fn max_map_size(&self) -> usize {
         self.limits.max_map_size.map_or(0, NonZeroUsize::get)
     }
@@ -260,6 +269,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
+    #[must_use]
     pub fn register_custom_operator(
         &mut self,
         keyword: impl AsRef<str> + Into<Identifier>,

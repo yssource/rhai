@@ -89,6 +89,7 @@ impl Position {
     ///
     /// Panics if `line` is zero.
     #[inline(always)]
+    #[must_use]
     pub fn new(line: u16, _position: u16) -> Self {
         assert!(line != 0, "line cannot be zero");
 
@@ -101,6 +102,7 @@ impl Position {
     }
     /// Get the line number (1-based), or [`None`] if there is no position.
     #[inline(always)]
+    #[must_use]
     pub fn line(self) -> Option<usize> {
         if self.is_none() {
             None
@@ -113,6 +115,7 @@ impl Position {
     }
     /// Get the character position (1-based), or [`None`] if at beginning of a line.
     #[inline(always)]
+    #[must_use]
     pub fn position(self) -> Option<usize> {
         if self.is_none() {
             None
@@ -171,6 +174,7 @@ impl Position {
     }
     /// Is this [`Position`] at the beginning of a line?
     #[inline(always)]
+    #[must_use]
     pub fn is_beginning_of_line(self) -> bool {
         #[cfg(not(feature = "no_position"))]
         return self.pos == 0 && !self.is_none();
@@ -179,6 +183,7 @@ impl Position {
     }
     /// Is there no [`Position`]?
     #[inline(always)]
+    #[must_use]
     pub fn is_none(self) -> bool {
         #[cfg(not(feature = "no_position"))]
         return self == Self::NONE;
@@ -187,6 +192,7 @@ impl Position {
     }
     /// Print this [`Position`] for debug purposes.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn debug_print(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(not(feature = "no_position"))]
         if !self.is_none() {
@@ -465,6 +471,7 @@ impl Token {
     /// # Panics
     ///
     /// Panics if the token is not a keyword.
+    #[must_use]
     pub fn keyword_syntax(&self) -> &'static str {
         use Token::*;
 
@@ -554,6 +561,7 @@ impl Token {
     }
 
     /// Get the syntax of the token.
+    #[must_use]
     pub fn syntax(&self) -> Cow<'static, str> {
         use Token::*;
 
@@ -580,6 +588,7 @@ impl Token {
 
     /// Is this token an op-assignment operator?
     #[inline]
+    #[must_use]
     pub fn is_op_assignment(&self) -> bool {
         match self {
             Self::PlusAssign
@@ -598,6 +607,7 @@ impl Token {
     }
 
     /// Get the corresponding operator of the token if it is an op-assignment operator.
+    #[must_use]
     pub fn map_op_assignment(&self) -> Option<Self> {
         Some(match self {
             Self::PlusAssign => Self::Plus,
@@ -617,6 +627,7 @@ impl Token {
 
     /// Has this token a corresponding op-assignment operator?
     #[inline]
+    #[must_use]
     pub fn has_op_assignment(&self) -> bool {
         match self {
             Self::Plus
@@ -635,6 +646,7 @@ impl Token {
     }
 
     /// Get the corresponding op-assignment operator of the token.
+    #[must_use]
     pub fn make_op_assignment(&self) -> Option<Self> {
         Some(match self {
             Self::Plus => Self::PlusAssign,
@@ -653,6 +665,7 @@ impl Token {
     }
 
     /// Reverse lookup a token from a piece of syntax.
+    #[must_use]
     pub fn lookup_from_syntax(syntax: &str) -> Option<Self> {
         use Token::*;
 
@@ -763,6 +776,7 @@ impl Token {
 
     // Is this token [`EOF`][Token::EOF]?
     #[inline(always)]
+    #[must_use]
     pub fn is_eof(&self) -> bool {
         use Token::*;
 
@@ -774,6 +788,7 @@ impl Token {
 
     // If another operator is after these, it's probably an unary operator
     // (not sure about `fn` name).
+    #[must_use]
     pub fn is_next_unary(&self) -> bool {
         use Token::*;
 
@@ -834,6 +849,7 @@ impl Token {
     }
 
     /// Get the precedence number of the token.
+    #[must_use]
     pub fn precedence(&self) -> Option<Precedence> {
         use Token::*;
 
@@ -868,6 +884,7 @@ impl Token {
     }
 
     /// Does an expression bind to the right (instead of left)?
+    #[must_use]
     pub fn is_bind_right(&self) -> bool {
         use Token::*;
 
@@ -888,6 +905,7 @@ impl Token {
     }
 
     /// Is this token a standard symbol used in the language?
+    #[must_use]
     pub fn is_symbol(&self) -> bool {
         use Token::*;
 
@@ -905,6 +923,7 @@ impl Token {
     }
 
     /// Is this token an active standard keyword?
+    #[must_use]
     pub fn is_keyword(&self) -> bool {
         use Token::*;
 
@@ -924,6 +943,7 @@ impl Token {
 
     /// Is this token a reserved symbol?
     #[inline(always)]
+    #[must_use]
     pub fn is_reserved(&self) -> bool {
         match self {
             Self::Reserved(_) => true,
@@ -933,6 +953,7 @@ impl Token {
 
     /// Convert a token into a function name, if possible.
     #[cfg(not(feature = "no_function"))]
+    #[must_use]
     pub(crate) fn into_function_name_for_override(self) -> Result<String, Self> {
         match self {
             Self::Custom(s) | Self::Identifier(s) if is_valid_identifier(s.chars()) => Ok(s),
@@ -942,6 +963,7 @@ impl Token {
 
     /// Is this token a custom keyword?
     #[inline(always)]
+    #[must_use]
     pub fn is_custom(&self) -> bool {
         match self {
             Self::Custom(_) => true,
@@ -991,6 +1013,7 @@ pub trait InputStream {
     /// Get the next character from the `InputStream`.
     fn get_next(&mut self) -> Option<char>;
     /// Peek the next character in the `InputStream`.
+    #[must_use]
     fn peek_next(&mut self) -> Option<char>;
 }
 
@@ -1028,6 +1051,7 @@ pub trait InputStream {
 /// # Volatile API
 ///
 /// This function is volatile and may change.
+#[must_use]
 pub fn parse_string_literal(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
@@ -1287,6 +1311,7 @@ fn scan_block_comment(
 ///
 /// This function is volatile and may change.
 #[inline(always)]
+#[must_use]
 pub fn get_next_token(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
@@ -1326,12 +1351,14 @@ fn is_numeric_digit(c: char) -> bool {
 #[cfg(not(feature = "no_function"))]
 #[cfg(feature = "metadata")]
 #[inline(always)]
+#[must_use]
 pub fn is_doc_comment(comment: &str) -> bool {
     (comment.starts_with("///") && !comment.starts_with("////"))
         || (comment.starts_with("/**") && !comment.starts_with("/***"))
 }
 
 /// Get the next token.
+#[must_use]
 fn get_next_token_inner(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
@@ -1962,6 +1989,7 @@ fn get_identifier(
 
 /// Is this keyword allowed as a function?
 #[inline(always)]
+#[must_use]
 pub fn is_keyword_function(name: &str) -> bool {
     match name {
         KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
@@ -1975,6 +2003,7 @@ pub fn is_keyword_function(name: &str) -> bool {
 }
 
 /// Is a text string a valid identifier?
+#[must_use]
 pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     let mut first_alphabetic = false;
 
@@ -1994,6 +2023,7 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
 /// Is a character valid to start an identifier?
 #[cfg(feature = "unicode-xid-ident")]
 #[inline(always)]
+#[must_use]
 pub fn is_id_first_alphabetic(x: char) -> bool {
     unicode_xid::UnicodeXID::is_xid_start(x)
 }
@@ -2001,6 +2031,7 @@ pub fn is_id_first_alphabetic(x: char) -> bool {
 /// Is a character valid for an identifier?
 #[cfg(feature = "unicode-xid-ident")]
 #[inline(always)]
+#[must_use]
 pub fn is_id_continue(x: char) -> bool {
     unicode_xid::UnicodeXID::is_xid_continue(x)
 }
@@ -2008,6 +2039,7 @@ pub fn is_id_continue(x: char) -> bool {
 /// Is a character valid to start an identifier?
 #[cfg(not(feature = "unicode-xid-ident"))]
 #[inline(always)]
+#[must_use]
 pub fn is_id_first_alphabetic(x: char) -> bool {
     x.is_ascii_alphabetic()
 }
@@ -2015,6 +2047,7 @@ pub fn is_id_first_alphabetic(x: char) -> bool {
 /// Is a character valid for an identifier?
 #[cfg(not(feature = "unicode-xid-ident"))]
 #[inline(always)]
+#[must_use]
 pub fn is_id_continue(x: char) -> bool {
     x.is_ascii_alphanumeric() || x == '_'
 }
@@ -2201,6 +2234,7 @@ impl Engine {
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]
+    #[must_use]
     pub fn lex<'a>(
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
@@ -2211,6 +2245,7 @@ impl Engine {
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]
+    #[must_use]
     pub fn lex_with_map<'a>(
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
@@ -2220,6 +2255,7 @@ impl Engine {
     }
     /// Tokenize an input text stream with an optional mapping function.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn lex_raw<'a>(
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,

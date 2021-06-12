@@ -55,21 +55,27 @@ mod private {
 #[cfg(not(feature = "sync"))]
 pub trait Variant: Any + private::Sealed {
     /// Convert this [`Variant`] trait object to [`&dyn Any`][Any].
+    #[must_use]
     fn as_any(&self) -> &dyn Any;
 
     /// Convert this [`Variant`] trait object to [`&mut dyn Any`][Any].
+    #[must_use]
     fn as_mut_any(&mut self) -> &mut dyn Any;
 
     /// Convert this [`Variant`] trait object to an [`Any`] trait object.
+    #[must_use]
     fn as_box_any(self: Box<Self>) -> Box<dyn Any>;
 
     /// Get the name of this type.
+    #[must_use]
     fn type_name(&self) -> &'static str;
 
     /// Convert into [`Dynamic`].
+    #[must_use]
     fn into_dynamic(self) -> Dynamic;
 
     /// Clone into [`Dynamic`].
+    #[must_use]
     fn clone_into_dynamic(&self) -> Dynamic;
 }
 
@@ -80,21 +86,27 @@ pub trait Variant: Any + private::Sealed {
 #[cfg(feature = "sync")]
 pub trait Variant: Any + Send + Sync + private::Sealed {
     /// Convert this [`Variant`] trait object to [`&dyn Any`][Any].
+    #[must_use]
     fn as_any(&self) -> &dyn Any;
 
     /// Convert this [`Variant`] trait object to [`&mut dyn Any`][Any].
+    #[must_use]
     fn as_mut_any(&mut self) -> &mut dyn Any;
 
     /// Convert this [`Variant`] trait object to an [`Any`] trait object.
+    #[must_use]
     fn as_box_any(self: Box<Self>) -> Box<dyn Any>;
 
     /// Get the name of this type.
+    #[must_use]
     fn type_name(&self) -> &'static str;
 
     /// Convert into [`Dynamic`].
+    #[must_use]
     fn into_dynamic(self) -> Dynamic;
 
     /// Clone into [`Dynamic`].
+    #[must_use]
     fn clone_into_dynamic(&self) -> Dynamic;
 }
 
@@ -128,6 +140,7 @@ impl<T: Any + Clone + SendSync> Variant for T {
 impl dyn Variant {
     /// Is this [`Variant`] a specific type?
     #[inline(always)]
+    #[must_use]
     pub fn is<T: Any>(&self) -> bool {
         TypeId::of::<T>() == self.type_id()
     }
@@ -308,6 +321,7 @@ impl<'d, T: Any + Clone> DerefMut for DynamicWriteLock<'d, T> {
 
 impl Dynamic {
     /// Get the arbitrary data attached to this [`Dynamic`].
+    #[must_use]
     pub const fn tag(&self) -> Tag {
         match self.0 {
             Union::Unit(_, tag, _)
@@ -333,7 +347,7 @@ impl Dynamic {
         }
     }
     /// Attach arbitrary data to this [`Dynamic`].
-    pub fn set_tag(&mut self, value: Tag) {
+    pub fn set_tag(&mut self, value: Tag) -> &mut Self {
         match &mut self.0 {
             Union::Unit(_, tag, _)
             | Union::Bool(_, tag, _)
@@ -356,10 +370,12 @@ impl Dynamic {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, tag, _) => *tag = value,
         }
+        self
     }
     /// Does this [`Dynamic`] hold a variant data type
     /// instead of one of the supported system primitive types?
     #[inline(always)]
+    #[must_use]
     pub const fn is_variant(&self) -> bool {
         match self.0 {
             Union::Variant(_, _, _) => true,
@@ -371,6 +387,7 @@ impl Dynamic {
     /// Not available under `no_closure`.
     #[cfg(not(feature = "no_closure"))]
     #[inline(always)]
+    #[must_use]
     pub const fn is_shared(&self) -> bool {
         #[cfg(not(feature = "no_closure"))]
         match self.0 {
@@ -385,6 +402,7 @@ impl Dynamic {
     /// If the [`Dynamic`] is a shared variant checking is performed on
     /// top of its internal value.
     #[inline(always)]
+    #[must_use]
     pub fn is<T: Any + Clone>(&self) -> bool {
         let mut target_type_id = TypeId::of::<T>();
 
@@ -400,6 +418,7 @@ impl Dynamic {
     ///
     /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
+    #[must_use]
     pub fn type_id(&self) -> TypeId {
         match &self.0 {
             Union::Unit(_, _, _) => TypeId::of::<()>(),
@@ -438,6 +457,7 @@ impl Dynamic {
     ///
     /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
+    #[must_use]
     pub fn type_name(&self) -> &'static str {
         match &self.0 {
             Union::Unit(_, _, _) => "()",
@@ -561,6 +581,7 @@ impl Hash for Dynamic {
 
 /// Map the name of a standard type into a friendly form.
 #[inline(always)]
+#[must_use]
 pub(crate) fn map_std_type_name(name: &str) -> &str {
     if name == type_name::<String>() {
         return "string";
@@ -803,6 +824,7 @@ impl Clone for Dynamic {
 
 impl Default for Dynamic {
     #[inline(always)]
+    #[must_use]
     fn default() -> Self {
         Self::UNIT
     }
@@ -872,6 +894,7 @@ impl Dynamic {
     ));
 
     /// Get the [`AccessMode`] for this [`Dynamic`].
+    #[must_use]
     pub(crate) const fn access_mode(&self) -> AccessMode {
         match self.0 {
             Union::Unit(_, _, access)
@@ -897,7 +920,7 @@ impl Dynamic {
         }
     }
     /// Set the [`AccessMode`] for this [`Dynamic`].
-    pub(crate) fn set_access_mode(&mut self, typ: AccessMode) {
+    pub(crate) fn set_access_mode(&mut self, typ: AccessMode) -> &mut Self {
         match &mut self.0 {
             Union::Unit(_, _, access)
             | Union::Bool(_, _, access)
@@ -914,18 +937,23 @@ impl Dynamic {
             #[cfg(not(feature = "no_index"))]
             Union::Array(a, _, access) => {
                 *access = typ;
-                a.iter_mut().for_each(|v| v.set_access_mode(typ));
+                a.iter_mut().for_each(|v| {
+                    v.set_access_mode(typ);
+                });
             }
             #[cfg(not(feature = "no_object"))]
             Union::Map(m, _, access) => {
                 *access = typ;
-                m.values_mut().for_each(|v| v.set_access_mode(typ));
+                m.values_mut().for_each(|v| {
+                    v.set_access_mode(typ);
+                });
             }
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(_, _, access) => *access = typ,
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _, access) => *access = typ,
         }
+        self
     }
     /// Is this [`Dynamic`] read-only?
     ///
@@ -934,6 +962,7 @@ impl Dynamic {
     /// [`ErrorAssignmentToConstant`][crate::EvalAltResult::ErrorAssignmentToConstant]
     /// if its value is going to be modified. This safe-guards constant values from being modified
     /// from within Rust functions.
+    #[must_use]
     pub fn is_read_only(&self) -> bool {
         #[cfg(not(feature = "no_closure"))]
         match self.0 {
@@ -958,6 +987,7 @@ impl Dynamic {
         }
     }
     /// Can this [`Dynamic`] be hashed?
+    #[must_use]
     pub(crate) fn is_hashable(&self) -> bool {
         match &self.0 {
             Union::Unit(_, _, _)
@@ -1019,6 +1049,7 @@ impl Dynamic {
     /// assert_eq!(new_result.to_string(), "hello");
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn from<T: Variant + Clone>(mut value: T) -> Self {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
@@ -1124,6 +1155,7 @@ impl Dynamic {
     /// If the [`Dynamic`] value is already shared, this method returns itself.
     #[cfg(not(feature = "no_closure"))]
     #[inline(always)]
+    #[must_use]
     pub fn into_shared(self) -> Self {
         let _access = self.access_mode();
 
@@ -1160,6 +1192,7 @@ impl Dynamic {
     /// assert_eq!(x.try_cast::<u32>().unwrap(), 42);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn try_cast<T: Any>(self) -> Option<T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
@@ -1295,6 +1328,7 @@ impl Dynamic {
     /// assert_eq!(x.cast::<u32>(), 42);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn cast<T: Any + Clone>(self) -> T {
         #[cfg(not(feature = "no_closure"))]
         let self_type_name = if self.is_shared() {
@@ -1342,6 +1376,7 @@ impl Dynamic {
     /// assert_eq!(y.clone_cast::<u32>(), 42);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn clone_cast<T: Any + Clone>(&self) -> T {
         self.flatten_clone().cast::<T>()
     }
@@ -1351,6 +1386,7 @@ impl Dynamic {
     ///
     /// If the [`Dynamic`] is a shared value, it returns a cloned copy of the shared value.
     #[inline(always)]
+    #[must_use]
     pub fn flatten_clone(&self) -> Self {
         #[cfg(not(feature = "no_closure"))]
         match &self.0 {
@@ -1374,6 +1410,7 @@ impl Dynamic {
     /// If the [`Dynamic`] is a shared value, it returns the shared value if there are no
     /// outstanding references, or a cloned copy.
     #[inline(always)]
+    #[must_use]
     pub fn flatten(self) -> Self {
         #[cfg(not(feature = "no_closure"))]
         match self.0 {
@@ -1407,7 +1444,7 @@ impl Dynamic {
     /// If the [`Dynamic`] is a shared value, it is set to the shared value if there are no
     /// outstanding references, or a cloned copy otherwise.
     #[inline(always)]
-    pub(crate) fn flatten_in_place(&mut self) {
+    pub(crate) fn flatten_in_place(&mut self) -> &mut Self {
         #[cfg(not(feature = "no_closure"))]
         match self.0 {
             Union::Shared(_, _, _) => match std::mem::take(self).0 {
@@ -1433,6 +1470,7 @@ impl Dynamic {
             },
             _ => (),
         }
+        self
     }
     /// Is the [`Dynamic`] a shared value that is locked?
     ///
@@ -1445,6 +1483,7 @@ impl Dynamic {
     /// So this method always returns [`false`] under [`Sync`].
     #[cfg(not(feature = "no_closure"))]
     #[inline(always)]
+    #[must_use]
     pub fn is_locked(&self) -> bool {
         #[cfg(not(feature = "no_closure"))]
         match self.0 {
@@ -1470,6 +1509,7 @@ impl Dynamic {
     /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     #[inline(always)]
+    #[must_use]
     pub fn read_lock<T: Any + Clone>(&self) -> Option<DynamicReadLock<T>> {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
@@ -1503,6 +1543,7 @@ impl Dynamic {
     /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
     #[inline(always)]
+    #[must_use]
     pub fn write_lock<T: Any + Clone>(&mut self) -> Option<DynamicWriteLock<T>> {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
@@ -1531,6 +1572,7 @@ impl Dynamic {
     ///
     /// Returns [`None`] if the cast fails, or if the value is shared.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn downcast_ref<T: Any + Clone + ?Sized>(&self) -> Option<&T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
@@ -1621,6 +1663,7 @@ impl Dynamic {
     ///
     /// Returns [`None`] if the cast fails, or if the value is shared.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn downcast_mut<T: Any + Clone>(&mut self) -> Option<&mut T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
@@ -1709,6 +1752,7 @@ impl Dynamic {
     /// Cast the [`Dynamic`] as a unit `()` and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
+    #[must_use]
     pub fn as_unit(&self) -> Result<(), &'static str> {
         match self.0 {
             Union::Unit(value, _, _) => Ok(value),
@@ -1720,6 +1764,7 @@ impl Dynamic {
     /// Cast the [`Dynamic`] as the system integer type [`INT`] and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
+    #[must_use]
     pub fn as_int(&self) -> Result<INT, &'static str> {
         match self.0 {
             Union::Int(n, _, _) => Ok(n),
@@ -1734,6 +1779,7 @@ impl Dynamic {
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     #[inline(always)]
+    #[must_use]
     pub fn as_float(&self) -> Result<FLOAT, &'static str> {
         match self.0 {
             Union::Float(n, _, _) => Ok(*n),
@@ -1748,6 +1794,7 @@ impl Dynamic {
     /// Exported under the `decimal` feature only.
     #[cfg(feature = "decimal")]
     #[inline(always)]
+    #[must_use]
     pub fn as_decimal(&self) -> Result<Decimal, &'static str> {
         match self.0 {
             Union::Decimal(ref n, _, _) => Ok(**n),
@@ -1759,6 +1806,7 @@ impl Dynamic {
     /// Cast the [`Dynamic`] as a [`bool`] and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
+    #[must_use]
     pub fn as_bool(&self) -> Result<bool, &'static str> {
         match self.0 {
             Union::Bool(b, _, _) => Ok(b),
@@ -1770,6 +1818,7 @@ impl Dynamic {
     /// Cast the [`Dynamic`] as a [`char`] and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
+    #[must_use]
     pub fn as_char(&self) -> Result<char, &'static str> {
         match self.0 {
             Union::Char(n, _, _) => Ok(n),
@@ -1785,6 +1834,7 @@ impl Dynamic {
     ///
     /// Panics if the value is shared.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn as_str_ref(&self) -> Result<&str, &'static str> {
         match self.0 {
             Union::Str(ref s, _, _) => Ok(s),
@@ -1802,6 +1852,7 @@ impl Dynamic {
     /// This method is deprecated and will be removed in the future.
     /// Use [`as_string`][Dynamic::as_string] instead.
     #[inline(always)]
+    #[must_use]
     #[deprecated(
         since = "0.20.3",
         note = "this method is deprecated and will be removed in the future"
@@ -1813,6 +1864,7 @@ impl Dynamic {
     /// If there are other references to the same string, a cloned copy is returned.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
+    #[must_use]
     pub fn as_string(self) -> Result<String, &'static str> {
         self.as_immutable_string().map(ImmutableString::into_owned)
     }
@@ -1824,6 +1876,7 @@ impl Dynamic {
     /// This method is deprecated and will be removed in the future.
     /// Use [`as_immutable_string`][Dynamic::as_immutable_string] instead.
     #[inline(always)]
+    #[must_use]
     #[deprecated(
         since = "0.20.3",
         note = "this method is deprecated and will be removed in the future"
@@ -1834,6 +1887,7 @@ impl Dynamic {
     /// Convert the [`Dynamic`] into an [`ImmutableString`] and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
+    #[must_use]
     pub fn as_immutable_string(self) -> Result<ImmutableString, &'static str> {
         match self.0 {
             Union::Str(s, _, _) => Ok(s),

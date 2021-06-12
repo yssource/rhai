@@ -95,6 +95,7 @@ impl<'a> Scope<'a> {
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn new() -> Self {
         Self {
             values: Default::default(),
@@ -121,6 +122,7 @@ impl<'a> Scope<'a> {
     /// assert!(my_scope.is_empty());
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn clear(&mut self) -> &mut Self {
         self.names.clear();
         self.values.clear();
@@ -140,6 +142,7 @@ impl<'a> Scope<'a> {
     /// assert_eq!(my_scope.len(), 1);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn len(&self) -> usize {
         self.values.len()
     }
@@ -157,6 +160,7 @@ impl<'a> Scope<'a> {
     /// assert!(!my_scope.is_empty());
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.values.len() == 0
     }
@@ -301,6 +305,7 @@ impl<'a> Scope<'a> {
     /// assert!(!my_scope.contains("y"));
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn contains(&self, name: &str) -> bool {
         self.names
             .iter()
@@ -309,6 +314,7 @@ impl<'a> Scope<'a> {
     }
     /// Find an entry in the [`Scope`], starting from the last.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn get_index(&self, name: &str) -> Option<(usize, AccessMode)> {
         self.names
             .iter()
@@ -335,6 +341,7 @@ impl<'a> Scope<'a> {
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn get_value<T: Variant + Clone>(&self, name: &str) -> Option<T> {
         self.names
             .iter()
@@ -402,6 +409,7 @@ impl<'a> Scope<'a> {
     ///
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 123);
     /// ```
+    #[must_use]
     pub fn get_mut(&mut self, name: &str) -> Option<&mut Dynamic> {
         self.get_index(name)
             .and_then(move |(index, access)| match access {
@@ -415,6 +423,7 @@ impl<'a> Scope<'a> {
     ///
     /// Panics if the index is out of bounds.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn get_mut_by_index(&mut self, index: usize) -> &mut Dynamic {
         self.values
             .get_mut(index)
@@ -448,6 +457,7 @@ impl<'a> Scope<'a> {
     /// Clone the [`Scope`], keeping only the last instances of each variable name.
     /// Shadowed variables are omitted in the copy.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn clone_visible(&self) -> Self {
         let mut entries: Self = Default::default();
 
@@ -467,6 +477,7 @@ impl<'a> Scope<'a> {
     /// Get an iterator to entries in the [`Scope`].
     #[inline(always)]
     #[allow(dead_code)]
+    #[must_use]
     pub(crate) fn into_iter(
         self,
     ) -> impl Iterator<Item = (Cow<'a, str>, Dynamic, Vec<Identifier>)> {
@@ -503,6 +514,7 @@ impl<'a> Scope<'a> {
     /// assert_eq!(value.cast::<String>(), "hello");
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn iter(&self) -> impl Iterator<Item = (&str, bool, Dynamic)> {
         self.iter_raw()
             .map(|(name, constant, value)| (name, constant, value.flatten_clone()))
@@ -510,6 +522,7 @@ impl<'a> Scope<'a> {
     /// Get an iterator to entries in the [`Scope`].
     /// Shared values are not expanded.
     #[inline(always)]
+    #[must_use]
     pub fn iter_raw(&self) -> impl Iterator<Item = (&str, bool, &Dynamic)> {
         self.names
             .iter()

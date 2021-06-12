@@ -54,6 +54,7 @@ impl BuildHasher for StraightHasherBuilder {
 
 /// Create an instance of the default hasher.
 #[inline(always)]
+#[must_use]
 pub fn get_hasher() -> ahash::AHasher {
     Default::default()
 }
@@ -68,6 +69,7 @@ pub fn get_hasher() -> ahash::AHasher {
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline]
+#[must_use]
 pub fn calc_qualified_fn_hash<'a>(
     modules: impl Iterator<Item = &'a str>,
     fn_name: impl AsRef<str>,
@@ -92,6 +94,7 @@ pub fn calc_qualified_fn_hash<'a>(
 ///
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
 #[inline(always)]
+#[must_use]
 pub fn calc_fn_hash(fn_name: impl AsRef<str>, num: usize) -> u64 {
     calc_qualified_fn_hash(empty(), fn_name, num)
 }
@@ -100,6 +103,7 @@ pub fn calc_fn_hash(fn_name: impl AsRef<str>, num: usize) -> u64 {
 ///
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
 #[inline]
+#[must_use]
 pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
     let s = &mut get_hasher();
     let mut len = 0;
@@ -110,6 +114,7 @@ pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
 
 /// Combine two [`u64`] hashes by taking the XOR of them.
 #[inline(always)]
+#[must_use]
 pub(crate) fn combine_hashes(a: u64, b: u64) -> u64 {
     a ^ b
 }
@@ -640,6 +645,7 @@ pub struct IdentifierBuilder(
 impl IdentifierBuilder {
     /// Get an identifier from a text string.
     #[inline(always)]
+    #[must_use]
     pub fn get(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
         #[cfg(not(feature = "no_smartstring"))]
         return text.as_ref().into();

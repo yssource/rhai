@@ -25,6 +25,7 @@ struct DynamicSerializer {
 
 impl DynamicSerializer {
     /// Create a [`DynamicSerializer`] from a [`Dynamic`][crate::Dynamic] value.
+    #[must_use]
     pub fn new(_value: Dynamic) -> Self {
         Self {
             _key: Default::default(),
@@ -81,6 +82,7 @@ impl DynamicSerializer {
 /// # Ok(())
 /// # }
 /// ```
+#[must_use]
 pub fn to_dynamic<T: Serialize>(value: T) -> RhaiResult {
     let mut s = DynamicSerializer::new(Default::default());
     value.serialize(&mut s)

@@ -50,21 +50,25 @@ impl<'a> From<&'a Expr> for Expression<'a> {
 impl Expression<'_> {
     /// If this expression is a variable name, return it.  Otherwise [`None`].
     #[inline(always)]
+    #[must_use]
     pub fn get_variable_name(&self) -> Option<&str> {
         self.0.get_variable_name(true)
     }
     /// Get the expression.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn expr(&self) -> &Expr {
         &self.0
     }
     /// Get the position of this expression.
     #[inline(always)]
+    #[must_use]
     pub fn position(&self) -> Position {
         self.0.position()
     }
     /// Get the value of this expression if it is a literal constant.
     #[inline(always)]
+    #[must_use]
     pub fn get_literal_value(&self) -> Option<Dynamic> {
         self.0.get_literal_value()
     }
@@ -77,6 +81,7 @@ impl EvalContext<'_, '_, '_, '_, '_, '_, '_> {
     ///
     /// This function is very low level.  It evaluates an expression from an [`AST`][crate::AST].
     #[inline(always)]
+    #[must_use]
     pub fn eval_expression_tree(&mut self, expr: &Expression) -> RhaiResult {
         self.engine.eval_expr(
             self.scope,
@@ -120,6 +125,7 @@ impl Engine {
     /// since they all go away at the end of the block.
     ///
     /// Variables in parent blocks should be left untouched as they persist beyond the current block.
+    #[must_use]
     pub fn register_custom_syntax<S: AsRef<str> + Into<Identifier>>(
         &mut self,
         keywords: &[S],

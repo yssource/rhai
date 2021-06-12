@@ -216,6 +216,7 @@ impl Default for AST {
 impl AST {
     /// Create a new [`AST`].
     #[inline(always)]
+    #[must_use]
     pub fn new(
         statements: impl IntoIterator<Item = Stmt>,
         functions: impl Into<Shared<Module>>,
@@ -230,6 +231,7 @@ impl AST {
     }
     /// Create a new [`AST`] with a source name.
     #[inline(always)]
+    #[must_use]
     pub fn new_with_source(
         statements: impl IntoIterator<Item = Stmt>,
         functions: impl Into<Shared<Module>>,
@@ -245,11 +247,13 @@ impl AST {
     }
     /// Get the source, if any.
     #[inline(always)]
+    #[must_use]
     pub fn source(&self) -> Option<&str> {
         self.source.as_ref().map(|s| s.as_str())
     }
     /// Clone the source, if any.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn clone_source(&self) -> Option<Identifier> {
         self.source.clone()
     }
@@ -272,6 +276,7 @@ impl AST {
     /// Get the statements.
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
+    #[must_use]
     pub(crate) fn statements(&self) -> &[Stmt] {
         &self.body.0
     }
@@ -280,12 +285,14 @@ impl AST {
     #[cfg(feature = "internals")]
     #[deprecated = "this method is volatile and may change"]
     #[inline(always)]
+    #[must_use]
     pub fn statements(&self) -> &[Stmt] {
         &self.body.0
     }
     /// Get a mutable reference to the statements.
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
+    #[must_use]
     pub(crate) fn statements_mut(&mut self) -> &mut StaticVec<Stmt> {
         &mut self.body.0
     }
@@ -294,6 +301,7 @@ impl AST {
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[must_use]
     pub(crate) fn shared_lib(&self) -> Shared<Module> {
         self.functions.clone()
     }
@@ -306,12 +314,14 @@ impl AST {
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[must_use]
     pub fn shared_lib(&self) -> Shared<Module> {
         self.functions.clone()
     }
     /// Get the internal [`Module`] containing all script-defined functions.
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
+    #[must_use]
     pub(crate) fn lib(&self) -> &Module {
         &self.functions
     }
@@ -322,6 +332,7 @@ impl AST {
     #[cfg(feature = "internals")]
     #[deprecated = "this method is volatile and may change"]
     #[inline(always)]
+    #[must_use]
     pub fn lib(&self) -> &Module {
         &self.functions
     }
@@ -329,6 +340,7 @@ impl AST {
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
+    #[must_use]
     pub(crate) fn resolver(
         &self,
     ) -> Option<Shared<crate::module::resolvers::StaticModuleResolver>> {
@@ -341,6 +353,7 @@ impl AST {
     #[cfg(not(feature = "no_module"))]
     #[cfg(feature = "internals")]
     #[inline(always)]
+    #[must_use]
     pub fn resolver(&self) -> Option<Shared<crate::module::resolvers::StaticModuleResolver>> {
         self.resolver.clone()
     }
@@ -362,6 +375,7 @@ impl AST {
     /// This operation is cheap because functions are shared.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[must_use]
     pub fn clone_functions_only(&self) -> Self {
         self.clone_functions_only_filtered(|_, _, _, _, _| true)
     }
@@ -373,6 +387,7 @@ impl AST {
     /// This operation is cheap because functions are shared.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[must_use]
     pub fn clone_functions_only_filtered(
         &self,
         filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
@@ -390,6 +405,7 @@ impl AST {
     /// Clone the [`AST`]'s script statements into a new [`AST`].
     /// No functions are cloned.
     #[inline(always)]
+    #[must_use]
     pub fn clone_statements_only(&self) -> Self {
         Self {
             source: self.source.clone(),
@@ -449,6 +465,7 @@ impl AST {
     /// # }
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn merge(&self, other: &Self) -> Self {
         self.merge_filtered(other, |_, _, _, _, _| true)
     }
@@ -557,6 +574,7 @@ impl AST {
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn merge_filtered(
         &self,
         other: &Self,
@@ -694,6 +712,7 @@ impl AST {
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
+    #[must_use]
     pub(crate) fn iter_fn_def(&self) -> impl Iterator<Item = &ScriptFnDef> {
         self.functions
             .iter_script_fn()
@@ -704,6 +723,7 @@ impl AST {
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[must_use]
     pub fn iter_functions<'a>(&'a self) -> impl Iterator<Item = ScriptFnMetadata> + 'a {
         self.functions
             .iter_script_fn()
@@ -714,13 +734,15 @@ impl AST {
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
-    pub fn clear_functions(&mut self) {
+    pub fn clear_functions(&mut self) -> &mut Self {
         self.functions = Default::default();
+        self
     }
     /// Clear all statements in the [`AST`], leaving only function definitions.
     #[inline(always)]
-    pub fn clear_statements(&mut self) {
+    pub fn clear_statements(&mut self) -> &mut Self {
         self.body = Default::default();
+        self
     }
     /// Recursively walk the [`AST`], including function bodies (if any).
     /// Return `false` from the callback to terminate the walk.
@@ -869,25 +891,32 @@ pub struct StmtBlock(StaticVec<Stmt>, Position);
 
 impl StmtBlock {
     /// Create a new [`StmtBlock`].
+    #[must_use]
     pub fn new(mut statements: StaticVec<Stmt>, pos: Position) -> Self {
         statements.shrink_to_fit();
         Self(statements, pos)
     }
     /// Is this statements block empty?
     #[inline(always)]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
     /// Number of statements in this statements block.
     #[inline(always)]
+    #[must_use]
     pub fn len(&self) -> usize {
         self.0.len()
     }
     /// Get the position of this statements block.
+    #[inline(always)]
+    #[must_use]
     pub fn position(&self) -> Position {
         self.1
     }
     /// Get the statements of this statements block.
+    #[inline(always)]
+    #[must_use]
     pub fn statements(&mut self) -> &mut StaticVec<Stmt> {
         &mut self.0
     }
@@ -896,12 +925,14 @@ impl StmtBlock {
 impl Deref for StmtBlock {
     type Target = StaticVec<Stmt>;
 
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl DerefMut for StmtBlock {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -917,6 +948,7 @@ impl fmt::Debug for StmtBlock {
 }
 
 impl From<StmtBlock> for Stmt {
+    #[inline(always)]
     fn from(block: StmtBlock) -> Self {
         let block_pos = block.position();
         Self::Block(block.0.into_boxed_slice(), block_pos)
@@ -1015,6 +1047,7 @@ impl From<Stmt> for StmtBlock {
 impl Stmt {
     /// Is this statement [`Noop`][Stmt::Noop]?
     #[inline(always)]
+    #[must_use]
     pub fn is_noop(&self) -> bool {
         match self {
             Self::Noop(_) => true,
@@ -1022,6 +1055,7 @@ impl Stmt {
         }
     }
     /// Get the [position][Position] of this statement.
+    #[must_use]
     pub fn position(&self) -> Position {
         match self {
             Self::Noop(pos)
@@ -1086,6 +1120,7 @@ impl Stmt {
         self
     }
     /// Does this statement return a value?
+    #[must_use]
     pub fn returns_value(&self) -> bool {
         match self {
             Self::If(_, _, _)
@@ -1115,6 +1150,7 @@ impl Stmt {
         }
     }
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
+    #[must_use]
     pub fn is_self_terminated(&self) -> bool {
         match self {
             Self::If(_, _, _)
@@ -1147,6 +1183,7 @@ impl Stmt {
     /// Is this statement _pure_?
     ///
     /// A pure statement has no side effects.
+    #[must_use]
     pub fn is_pure(&self) -> bool {
         match self {
             Self::Noop(_) => true,
@@ -1194,6 +1231,7 @@ impl Stmt {
     /// Only variable declarations (i.e. `let` and `const`) and `import`/`export` statements
     /// are internally pure.
     #[inline(always)]
+    #[must_use]
     pub fn is_internally_pure(&self) -> bool {
         match self {
             Self::Let(expr, _, _, _) | Self::Const(expr, _, _, _) => expr.is_pure(),
@@ -1212,6 +1250,7 @@ impl Stmt {
     ///
     /// All statements following this statement will essentially be dead code.
     #[inline(always)]
+    #[must_use]
     pub fn is_control_flow_break(&self) -> bool {
         match self {
             Self::Return(_, _, _) | Self::Break(_) | Self::Continue(_) => true,
@@ -1397,6 +1436,7 @@ impl OpAssignment<'_> {
     /// # Panics
     ///
     /// Panics if the operator name is not an op-assignment operator.
+    #[must_use]
     pub fn new(op: Token) -> Self {
         let op_raw = op
             .map_op_assignment()
@@ -1466,6 +1506,7 @@ impl fmt::Debug for FnCallHashes {
 impl FnCallHashes {
     /// Create a [`FnCallHashes`] with only the native Rust hash.
     #[inline(always)]
+    #[must_use]
     pub fn from_native(hash: u64) -> Self {
         Self {
             script: None,
@@ -1474,6 +1515,7 @@ impl FnCallHashes {
     }
     /// Create a [`FnCallHashes`] with both native Rust and script function hashes set to the same value.
     #[inline(always)]
+    #[must_use]
     pub fn from_script(hash: u64) -> Self {
         Self {
             script: Some(hash),
@@ -1482,6 +1524,7 @@ impl FnCallHashes {
     }
     /// Create a [`FnCallHashes`] with both native Rust and script function hashes.
     #[inline(always)]
+    #[must_use]
     pub fn from_script_and_native(script: u64, native: u64) -> Self {
         Self {
             script: Some(script),
@@ -1490,16 +1533,19 @@ impl FnCallHashes {
     }
     /// Is this [`FnCallHashes`] native Rust only?
     #[inline(always)]
+    #[must_use]
     pub fn is_native_only(&self) -> bool {
         self.script.is_none()
     }
     /// Get the script function hash from this [`FnCallHashes`].
     #[inline(always)]
+    #[must_use]
     pub fn script_hash(&self) -> Option<u64> {
         self.script
     }
     /// Get the naive Rust function hash from this [`FnCallHashes`].
     #[inline(always)]
+    #[must_use]
     pub fn native_hash(&self) -> u64 {
         self.native
     }
@@ -1530,6 +1576,7 @@ pub struct FnCallExpr {
 impl FnCallExpr {
     /// Does this function call contain a qualified namespace?
     #[inline(always)]
+    #[must_use]
     pub fn is_qualified(&self) -> bool {
         self.namespace.is_some()
     }
@@ -1638,6 +1685,7 @@ impl<F: Float> FloatWrapper<F> {
     pub const MIN_NATURAL_FLOAT_FOR_DISPLAY: f32 = 0.0000000000001;
 
     #[inline(always)]
+    #[must_use]
     pub fn new(value: F) -> Self {
         Self(value)
     }
@@ -1646,6 +1694,7 @@ impl<F: Float> FloatWrapper<F> {
 #[cfg(not(feature = "no_float"))]
 impl FloatWrapper<FLOAT> {
     #[inline(always)]
+    #[must_use]
     pub(crate) const fn const_new(value: FLOAT) -> Self {
         Self(value)
     }
@@ -1823,6 +1872,7 @@ impl Expr {
     ///
     /// Returns [`None`] if the expression is not a literal constant.
     #[inline]
+    #[must_use]
     pub fn get_literal_value(&self) -> Option<Dynamic> {
         Some(match self {
             Self::DynamicConstant(x, _) => x.as_ref().clone(),
@@ -1861,6 +1911,7 @@ impl Expr {
     }
     /// Create an [`Expr`] from a [`Dynamic`] value.
     #[inline]
+    #[must_use]
     pub fn from_dynamic(value: Dynamic, pos: Position) -> Self {
         match value.0 {
             Union::Unit(_, _, _) => Self::Unit(pos),
@@ -1877,6 +1928,7 @@ impl Expr {
     }
     /// Is the expression a simple variable access?
     #[inline(always)]
+    #[must_use]
     pub(crate) fn is_variable_access(&self, non_qualified: bool) -> bool {
         match self {
             Self::Variable(_, _, x) => !non_qualified || x.1.is_none(),
@@ -1885,6 +1937,7 @@ impl Expr {
     }
     /// Return the variable name if the expression a simple variable access.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn get_variable_name(&self, non_qualified: bool) -> Option<&str> {
         match self {
             Self::Variable(_, _, x) if !non_qualified || x.1.is_none() => Some(x.2.as_str()),
@@ -1893,6 +1946,7 @@ impl Expr {
     }
     /// Get the [position][Position] of the expression.
     #[inline]
+    #[must_use]
     pub fn position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_float"))]
@@ -1966,6 +2020,7 @@ impl Expr {
     ///
     /// A pure expression has no side effects.
     #[inline]
+    #[must_use]
     pub fn is_pure(&self) -> bool {
         match self {
             Self::InterpolatedString(x) | Self::Array(x, _) => x.iter().all(Self::is_pure),
@@ -1983,6 +2038,7 @@ impl Expr {
     }
     /// Is the expression the unit `()` literal?
     #[inline(always)]
+    #[must_use]
     pub fn is_unit(&self) -> bool {
         match self {
             Self::Unit(_) => true,
@@ -1991,6 +2047,7 @@ impl Expr {
     }
     /// Is the expression a constant?
     #[inline]
+    #[must_use]
     pub fn is_constant(&self) -> bool {
         match self {
             #[cfg(not(feature = "no_float"))]
@@ -2013,6 +2070,7 @@ impl Expr {
     }
     /// Is a particular [token][Token] allowed as a postfix operator to this expression?
     #[inline]
+    #[must_use]
     pub fn is_valid_postfix(&self, token: &Token) -> bool {
         match token {
             #[cfg(not(feature = "no_object"))]

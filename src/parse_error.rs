@@ -58,6 +58,7 @@ impl fmt::Display for LexError {
 }
 
 impl LexError {
+    #[must_use]
     pub(crate) fn desc(&self) -> &str {
         match self {
             Self::UnexpectedInput(_) => "Unexpected character encountered",
@@ -72,6 +73,7 @@ impl LexError {
     }
     /// Convert a [`LexError`] into a [`ParseError`].
     #[inline(always)]
+    #[must_use]
     pub fn into_err(self, pos: Position) -> ParseError {
         ParseError(Box::new(self.into()), pos)
     }
@@ -188,10 +190,12 @@ pub enum ParseErrorType {
 impl ParseErrorType {
     /// Make a [`ParseError`] using the current type and position.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn into_err(self, pos: Position) -> ParseError {
         ParseError(Box::new(self), pos)
     }
 
+    #[must_use]
     pub(crate) fn desc(&self) -> &str {
         match self {
             Self::UnexpectedEOF => "Script is incomplete",

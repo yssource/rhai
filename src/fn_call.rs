@@ -98,6 +98,7 @@ impl Drop for ArgBackup<'_> {
 
 #[cfg(not(feature = "no_closure"))]
 #[inline(always)]
+#[must_use]
 pub fn ensure_no_data_race(
     fn_name: &str,
     args: &FnCallArgs,
@@ -123,6 +124,7 @@ pub fn ensure_no_data_race(
 impl Engine {
     /// Generate the signature for a function call.
     #[inline]
+    #[must_use]
     fn gen_call_signature(
         &self,
         namespace: Option<&NamespaceRef>,
@@ -153,7 +155,8 @@ impl Engine {
     /// 4) Imported modules - functions marked with global namespace
     /// 5) Global sub-modules - functions marked with global namespace
     #[inline(always)]
-    fn resolve_function<'s>(
+    #[must_use]
+    fn resolve_fn<'s>(
         &self,
         mods: &Imports,
         state: &'s mut State,
@@ -286,16 +289,17 @@ impl Engine {
     /// Function call arguments be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
+    #[must_use]
     pub(crate) fn call_native_fn(
         &self,
         mods: &Imports,
         state: &mut State,
         lib: &[&Module],
-        fn_name: &str,
-        hash_native: u64,
+        name: &str,
+        hash: u64,
         args: &mut FnCallArgs,
         is_ref: bool,
-        is_op_assignment: bool,
+        is_op_assign: bool,
         pos: Position,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         #[cfg(not(feature = "unchecked"))]
@@ -304,16 +308,7 @@ impl Engine {
         let state_source = state.source.clone();
 
         // Check if function access already in the cache
-        let func = self.resolve_function(
-            mods,
-            state,
-            lib,
-            fn_name,
-            hash_native,
-            Some(args),
-            true,
-            is_op_assignment,
-        );
+        let func = self.resolve_fn(mods, state, lib, name, hash, Some(args), true, is_op_assign);
 
         if let Some(f) = func {
             let FnResolutionCacheEntry { func, source } = f.as_ref();
@@ -334,9 +329,9 @@ impl Engine {
 
             let result = if func.is_plugin_fn() {
                 func.get_plugin_fn()
-                    .call((self, fn_name, source, mods, lib).into(), args)
+                    .call((self, name, source, mods, lib).into(), args)
             } else {
-                func.get_native_fn()((self, fn_name, source, mods, lib).into(), args)
+                func.get_native_fn()((self, name, source, mods, lib).into(), args)
             };
 
             // Restore the original reference
@@ -345,7 +340,7 @@ impl Engine {
             let result = result.map_err(|err| err.fill_position(pos))?;
 
             // See if the function match print/debug (which requires special processing)
-            return Ok(match fn_name {
+            return Ok(match name {
                 KEYWORD_PRINT => {
                     let text = result.as_immutable_string().map_err(|typ| {
                         EvalAltResult::ErrorMismatchOutputType(
@@ -371,7 +366,7 @@ impl Engine {
             });
         }
 
-        match fn_name {
+        match name {
             // index getter function not found?
             #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
             crate::engine::FN_IDX_GET => {
@@ -398,13 +393,13 @@ impl Engine {
 
             // Getter function not found?
             #[cfg(not(feature = "no_object"))]
-            _ if fn_name.starts_with(crate::engine::FN_GET) => {
+            _ if name.starts_with(crate::engine::FN_GET) => {
                 assert!(args.len() == 1);
 
                 EvalAltResult::ErrorDotExpr(
                     format!(
                         "Unknown property '{}' - a getter is not registered for type '{}'",
-                        &fn_name[crate::engine::FN_GET.len()..],
+                        &name[crate::engine::FN_GET.len()..],
                         self.map_type_name(args[0].type_name())
                     ),
                     pos,
@@ -414,13 +409,13 @@ impl Engine {
 
             // Setter function not found?
             #[cfg(not(feature = "no_object"))]
-            _ if fn_name.starts_with(crate::engine::FN_SET) => {
+            _ if name.starts_with(crate::engine::FN_SET) => {
                 assert!(args.len() == 2);
 
                 EvalAltResult::ErrorDotExpr(
                     format!(
                         "No writable property '{}' - a setter is not registered for type '{}' to handle '{}'",
-                        &fn_name[crate::engine::FN_SET.len()..],
+                        &name[crate::engine::FN_SET.len()..],
                         self.map_type_name(args[0].type_name()),
                         self.map_type_name(args[1].type_name()),
                     ),
@@ -431,7 +426,7 @@ impl Engine {
 
             // Raise error
             _ => EvalAltResult::ErrorFunctionNotFound(
-                self.gen_call_signature(None, fn_name, args.as_ref()),
+                self.gen_call_signature(None, name, args.as_ref()),
                 pos,
             )
             .into(),
@@ -446,6 +441,7 @@ impl Engine {
     /// All function arguments not in the first position are always passed by value and thus consumed.
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     #[cfg(not(feature = "no_function"))]
+    #[must_use]
     pub(crate) fn call_script_fn(
         &self,
         scope: &mut Scope,
@@ -576,6 +572,7 @@ impl Engine {
     // Does a scripted function exist?
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[must_use]
     pub(crate) fn has_script_fn(
         &self,
         mods: Option<&Imports>,
@@ -614,6 +611,7 @@ impl Engine {
     /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
+    #[must_use]
     pub(crate) fn exec_fn_call(
         &self,
         mods: &mut Imports,
@@ -695,7 +693,7 @@ impl Engine {
 
         #[cfg(not(feature = "no_function"))]
         if let Some(f) = hash_script.and_then(|hash| {
-            self.resolve_function(mods, state, lib, fn_name, hash, None, false, false)
+            self.resolve_fn(mods, state, lib, fn_name, hash, None, false, false)
                 .clone()
         }) {
             let FnResolutionCacheEntry { func, source } = *f;
@@ -788,6 +786,7 @@ impl Engine {
     /// Evaluate a list of statements with no `this` pointer.
     /// This is commonly used to evaluate a list of statements in an [`AST`] or a script function body.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn eval_global_statements(
         &self,
         scope: &mut Scope,
@@ -808,6 +807,7 @@ impl Engine {
     }
 
     /// Evaluate a text script in place - used primarily for 'eval'.
+    #[must_use]
     fn eval_script_expr_in_place(
         &self,
         scope: &mut Scope,
@@ -859,6 +859,7 @@ impl Engine {
 
     /// Call a dot method.
     #[cfg(not(feature = "no_object"))]
+    #[must_use]
     pub(crate) fn make_method_call(
         &self,
         mods: &mut Imports,
@@ -900,7 +901,7 @@ impl Engine {
                 if call_args.len() > 0 {
                     if !call_args[0].is::<FnPtr>() {
                         return Err(self.make_type_mismatch_err::<FnPtr>(
-                            self.map_type_name(target.type_name()),
+                            self.map_type_name(call_args[0].type_name()),
                             *call_arg_pos,
                         ));
                     }
@@ -1020,6 +1021,7 @@ impl Engine {
 
     /// Evaluate an argument.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn get_arg_value(
         &self,
         scope: &mut Scope,
@@ -1041,6 +1043,7 @@ impl Engine {
     }
 
     /// Call a function in normal function-call style.
+    #[must_use]
     pub(crate) fn make_function_call(
         &self,
         scope: &mut Scope,
@@ -1155,7 +1158,7 @@ impl Engine {
 
                 let fn_name = arg
                     .as_immutable_string()
-                    .map_err(|err| self.make_type_mismatch_err::<ImmutableString>(err, arg_pos))?;
+                    .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))?;
 
                 let (arg, arg_pos) = self.get_arg_value(
                     scope, mods, state, lib, this_ptr, level, args_expr, constants, 1,
@@ -1163,7 +1166,7 @@ impl Engine {
 
                 let num_params = arg
                     .as_int()
-                    .map_err(|err| self.make_type_mismatch_err::<crate::INT>(err, arg_pos))?;
+                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, arg_pos))?;
 
                 return Ok(if num_params < 0 {
                     Dynamic::FALSE
@@ -1181,7 +1184,7 @@ impl Engine {
                 )?;
                 let var_name = arg
                     .as_immutable_string()
-                    .map_err(|err| self.make_type_mismatch_err::<ImmutableString>(err, arg_pos))?;
+                    .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))?;
                 return Ok(scope.contains(&var_name).into());
             }
 
@@ -1291,6 +1294,7 @@ impl Engine {
     }
 
     /// Call a namespace-qualified function in normal function-call style.
+    #[must_use]
     pub(crate) fn make_qualified_function_call(
         &self,
         scope: &mut Scope,

@@ -13,10 +13,12 @@ pub struct StringSliceDeserializer<'a> {
 
 impl<'a> StringSliceDeserializer<'a> {
     /// Create an `ImmutableStringDeserializer` from an `&str` reference.
+    #[must_use]
     pub fn from_str(value: &'a str) -> Self {
         Self { value }
     }
     /// Shortcut for a type conversion error.
+    #[must_use]
     fn type_error<T>(&self) -> Result<T, Box<EvalAltResult>> {
         EvalAltResult::ErrorMismatchOutputType(
             type_name::<T>().into(),
