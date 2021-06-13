@@ -253,10 +253,10 @@ impl<'d, T: Any + Clone> Deref for DynamicReadLock<'d, T> {
 
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
-        match &self.0 {
-            DynamicReadLockInner::Reference(reference) => *reference,
+        match self.0 {
+            DynamicReadLockInner::Reference(ref reference) => *reference,
             #[cfg(not(feature = "no_closure"))]
-            DynamicReadLockInner::Guard(guard) => guard.downcast_ref().expect(
+            DynamicReadLockInner::Guard(ref guard) => guard.downcast_ref().expect(
                 "never fails because the read guard was created after checking the data type",
             ),
         }
@@ -296,10 +296,10 @@ impl<'d, T: Any + Clone> Deref for DynamicWriteLock<'d, T> {
 
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
-        match &self.0 {
-            DynamicWriteLockInner::Reference(reference) => *reference,
+        match self.0 {
+            DynamicWriteLockInner::Reference(ref reference) => *reference,
             #[cfg(not(feature = "no_closure"))]
-            DynamicWriteLockInner::Guard(guard) => guard.downcast_ref().expect(
+            DynamicWriteLockInner::Guard(ref guard) => guard.downcast_ref().expect(
                 "never fails because the write guard was created after checking the data type",
             ),
         }
@@ -309,10 +309,10 @@ impl<'d, T: Any + Clone> Deref for DynamicWriteLock<'d, T> {
 impl<'d, T: Any + Clone> DerefMut for DynamicWriteLock<'d, T> {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        match &mut self.0 {
-            DynamicWriteLockInner::Reference(reference) => *reference,
+        match self.0 {
+            DynamicWriteLockInner::Reference(ref mut reference) => *reference,
             #[cfg(not(feature = "no_closure"))]
-            DynamicWriteLockInner::Guard(guard) => guard.downcast_mut().expect(
+            DynamicWriteLockInner::Guard(ref mut guard) => guard.downcast_mut().expect(
                 "never fails because the write guard was created after checking the data type",
             ),
         }
@@ -348,27 +348,27 @@ impl Dynamic {
     }
     /// Attach arbitrary data to this [`Dynamic`].
     pub fn set_tag(&mut self, value: Tag) -> &mut Self {
-        match &mut self.0 {
-            Union::Unit(_, tag, _)
-            | Union::Bool(_, tag, _)
-            | Union::Str(_, tag, _)
-            | Union::Char(_, tag, _)
-            | Union::Int(_, tag, _)
-            | Union::FnPtr(_, tag, _)
-            | Union::Variant(_, tag, _) => *tag = value,
+        match self.0 {
+            Union::Unit(_, ref mut tag, _)
+            | Union::Bool(_, ref mut tag, _)
+            | Union::Str(_, ref mut tag, _)
+            | Union::Char(_, ref mut tag, _)
+            | Union::Int(_, ref mut tag, _)
+            | Union::FnPtr(_, ref mut tag, _)
+            | Union::Variant(_, ref mut tag, _) => *tag = value,
 
             #[cfg(not(feature = "no_float"))]
-            Union::Float(_, tag, _) => *tag = value,
+            Union::Float(_, ref mut tag, _) => *tag = value,
             #[cfg(feature = "decimal")]
-            Union::Decimal(_, tag, _) => *tag = value,
+            Union::Decimal(_, ref mut tag, _) => *tag = value,
             #[cfg(not(feature = "no_index"))]
-            Union::Array(_, tag, _) => *tag = value,
+            Union::Array(_, ref mut tag, _) => *tag = value,
             #[cfg(not(feature = "no_object"))]
-            Union::Map(_, tag, _) => *tag = value,
+            Union::Map(_, ref mut tag, _) => *tag = value,
             #[cfg(not(feature = "no_std"))]
-            Union::TimeStamp(_, tag, _) => *tag = value,
+            Union::TimeStamp(_, ref mut tag, _) => *tag = value,
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_, tag, _) => *tag = value,
+            Union::Shared(_, ref mut tag, _) => *tag = value,
         }
         self
     }
@@ -420,7 +420,7 @@ impl Dynamic {
     /// Otherwise, this call panics if the data is currently borrowed for write.
     #[must_use]
     pub fn type_id(&self) -> TypeId {
-        match &self.0 {
+        match self.0 {
             Union::Unit(_, _, _) => TypeId::of::<()>(),
             Union::Bool(_, _, _) => TypeId::of::<bool>(),
             Union::Str(_, _, _) => TypeId::of::<ImmutableString>(),
@@ -438,17 +438,15 @@ impl Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(_, _, _) => TypeId::of::<Instant>(),
 
-            Union::Variant(value, _, _) => value.as_ref().as_ref().type_id(),
+            Union::Variant(ref value, _, _) => (***value).type_id(),
 
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(cell, _, _) => {
-                #[cfg(not(feature = "sync"))]
-                let value = cell.borrow();
-                #[cfg(feature = "sync")]
-                let value = cell.read().unwrap();
+            #[cfg(not(feature = "sync"))]
+            Union::Shared(ref cell, _, _) => (*cell.borrow()).type_id(),
 
-                (*value).type_id()
-            }
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(feature = "sync")]
+            Union::Shared(ref cell, _, _) => (*cell.read().unwrap()).type_id(),
         }
     }
     /// Get the name of the type of the value held by this [`Dynamic`].
@@ -459,7 +457,7 @@ impl Dynamic {
     /// Otherwise, this call panics if the data is currently borrowed for write.
     #[must_use]
     pub fn type_name(&self) -> &'static str {
-        match &self.0 {
+        match self.0 {
             Union::Unit(_, _, _) => "()",
             Union::Bool(_, _, _) => "bool",
             Union::Str(_, _, _) => "string",
@@ -477,17 +475,17 @@ impl Dynamic {
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(_, _, _) => "timestamp",
 
-            Union::Variant(value, _, _) => value.as_ref().as_ref().type_name(),
+            Union::Variant(ref value, _, _) => (***value).type_name(),
 
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
-            Union::Shared(cell, _, _) => cell
+            Union::Shared(ref cell, _, _) => cell
                 .try_borrow()
                 .map(|v| (*v).type_name())
                 .unwrap_or("<shared>"),
             #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
-            Union::Shared(cell, _, _) => (*cell.read().unwrap()).type_name(),
+            Union::Shared(ref cell, _, _) => (*cell.read().unwrap()).type_name(),
         }
     }
 }
@@ -501,76 +499,67 @@ impl Hash for Dynamic {
     fn hash<H: Hasher>(&self, state: &mut H) {
         std::mem::discriminant(&self.0).hash(state);
 
-        match &self.0 {
+        match self.0 {
             Union::Unit(_, _, _) => ().hash(state),
-            Union::Bool(b, _, _) => b.hash(state),
-            Union::Str(s, _, _) => s.hash(state),
-            Union::Char(c, _, _) => c.hash(state),
-            Union::Int(i, _, _) => i.hash(state),
+            Union::Bool(ref b, _, _) => b.hash(state),
+            Union::Str(ref s, _, _) => s.hash(state),
+            Union::Char(ref c, _, _) => c.hash(state),
+            Union::Int(ref i, _, _) => i.hash(state),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(f, _, _) => f.hash(state),
+            Union::Float(ref f, _, _) => f.hash(state),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(a, _, _) => a.as_ref().hash(state),
+            Union::Array(ref a, _, _) => a.as_ref().hash(state),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(m, _, _) => m.as_ref().hash(state),
-            Union::FnPtr(f, _, _) => f.hash(state),
+            Union::Map(ref m, _, _) => m.as_ref().hash(state),
+            Union::FnPtr(ref f, _, _) => f.hash(state),
 
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(cell, _, _) => {
-                #[cfg(not(feature = "sync"))]
-                let value = cell.borrow();
-                #[cfg(feature = "sync")]
-                let value = cell.read().unwrap();
+            #[cfg(not(feature = "sync"))]
+            Union::Shared(ref cell, _, _) => (*cell.borrow()).hash(state),
 
-                (*value).hash(state)
-            }
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(feature = "sync")]
+            Union::Shared(ref cell, _, _) => (*cell.read().unwrap()).hash(state),
 
             #[cfg(not(feature = "only_i32"))]
             #[cfg(not(feature = "only_i64"))]
-            Union::Variant(value, _, _) => {
-                let value = value.as_ref().as_ref();
-                let _type_id = value.type_id();
-                let _value_any = value.as_any();
+            Union::Variant(ref value, _, _) => {
+                let value_any = (***value).as_any();
+                let type_id = value_any.type_id();
 
-                if _type_id == TypeId::of::<u8>() {
+                if type_id == TypeId::of::<u8>() {
                     TypeId::of::<u8>().hash(state);
-                    _value_any.downcast_ref::<u8>().expect(CHECKED).hash(state);
-                } else if _type_id == TypeId::of::<u16>() {
+                    value_any.downcast_ref::<u8>().expect(CHECKED).hash(state);
+                } else if type_id == TypeId::of::<u16>() {
                     TypeId::of::<u16>().hash(state);
-                    _value_any.downcast_ref::<u16>().expect(CHECKED).hash(state);
-                } else if _type_id == TypeId::of::<u32>() {
+                    value_any.downcast_ref::<u16>().expect(CHECKED).hash(state);
+                } else if type_id == TypeId::of::<u32>() {
                     TypeId::of::<u32>().hash(state);
-                    _value_any.downcast_ref::<u32>().expect(CHECKED).hash(state);
-                } else if _type_id == TypeId::of::<u64>() {
+                    value_any.downcast_ref::<u32>().expect(CHECKED).hash(state);
+                } else if type_id == TypeId::of::<u64>() {
                     TypeId::of::<u64>().hash(state);
-                    _value_any.downcast_ref::<u64>().expect(CHECKED).hash(state);
-                } else if _type_id == TypeId::of::<i8>() {
+                    value_any.downcast_ref::<u64>().expect(CHECKED).hash(state);
+                } else if type_id == TypeId::of::<i8>() {
                     TypeId::of::<i8>().hash(state);
-                    _value_any.downcast_ref::<i8>().expect(CHECKED).hash(state);
-                } else if _type_id == TypeId::of::<i16>() {
+                    value_any.downcast_ref::<i8>().expect(CHECKED).hash(state);
+                } else if type_id == TypeId::of::<i16>() {
                     TypeId::of::<i16>().hash(state);
-                    _value_any.downcast_ref::<i16>().expect(CHECKED).hash(state);
-                } else if _type_id == TypeId::of::<i32>() {
+                    value_any.downcast_ref::<i16>().expect(CHECKED).hash(state);
+                } else if type_id == TypeId::of::<i32>() {
                     TypeId::of::<i32>().hash(state);
-                    _value_any.downcast_ref::<i32>().expect(CHECKED).hash(state);
-                } else if _type_id == TypeId::of::<i64>() {
+                    value_any.downcast_ref::<i32>().expect(CHECKED).hash(state);
+                } else if type_id == TypeId::of::<i64>() {
                     TypeId::of::<i64>().hash(state);
-                    _value_any.downcast_ref::<i64>().expect(CHECKED).hash(state);
+                    value_any.downcast_ref::<i64>().expect(CHECKED).hash(state);
                 }
 
                 #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-                if _type_id == TypeId::of::<u128>() {
+                if type_id == TypeId::of::<u128>() {
                     TypeId::of::<u128>().hash(state);
-                    _value_any
-                        .downcast_ref::<u128>()
-                        .expect(CHECKED)
-                        .hash(state);
-                } else if _type_id == TypeId::of::<i128>() {
+                    value_any.downcast_ref::<u128>().expect(CHECKED).hash(state);
+                } else if type_id == TypeId::of::<i128>() {
                     TypeId::of::<i128>().hash(state);
-                    _value_any
-                        .downcast_ref::<i128>()
-                        .expect(CHECKED)
-                        .hash(state);
+                    value_any.downcast_ref::<i128>().expect(CHECKED).hash(state);
                 }
             }
 
@@ -617,31 +606,30 @@ pub(crate) fn map_std_type_name(name: &str) -> &str {
 
 impl fmt::Display for Dynamic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.0 {
+        match self.0 {
             Union::Unit(_, _, _) => write!(f, ""),
-            Union::Bool(value, _, _) => fmt::Display::fmt(value, f),
-            Union::Str(value, _, _) => fmt::Display::fmt(value, f),
-            Union::Char(value, _, _) => fmt::Display::fmt(value, f),
-            Union::Int(value, _, _) => fmt::Display::fmt(value, f),
+            Union::Bool(ref value, _, _) => fmt::Display::fmt(value, f),
+            Union::Str(ref value, _, _) => fmt::Display::fmt(value, f),
+            Union::Char(ref value, _, _) => fmt::Display::fmt(value, f),
+            Union::Int(ref value, _, _) => fmt::Display::fmt(value, f),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(value, _, _) => fmt::Display::fmt(value, f),
+            Union::Float(ref value, _, _) => fmt::Display::fmt(value, f),
             #[cfg(feature = "decimal")]
-            Union::Decimal(value, _, _) => fmt::Display::fmt(value, f),
+            Union::Decimal(ref value, _, _) => fmt::Display::fmt(value, f),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(value, _, _) => fmt::Debug::fmt(value, f),
+            Union::Array(ref value, _, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(value, _, _) => {
+            Union::Map(ref value, _, _) => {
                 f.write_str("#")?;
                 fmt::Debug::fmt(value, f)
             }
-            Union::FnPtr(value, _, _) => fmt::Display::fmt(value, f),
+            Union::FnPtr(ref value, _, _) => fmt::Display::fmt(value, f),
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(_, _, _) => f.write_str("<timestamp>"),
 
-            Union::Variant(value, _, _) => {
-                let value = value.as_ref().as_ref();
-                let _type_id = value.type_id();
-                let _value_any = value.as_any();
+            Union::Variant(ref value, _, _) => {
+                let _value_any = (***value).as_any();
+                let _type_id = _value_any.type_id();
 
                 #[cfg(not(feature = "only_i32"))]
                 #[cfg(not(feature = "only_i64"))]
@@ -677,12 +665,12 @@ impl fmt::Display for Dynamic {
                     return fmt::Display::fmt(_value_any.downcast_ref::<i128>().expect(CHECKED), f);
                 }
 
-                f.write_str(value.type_name())
+                f.write_str((***value).type_name())
             }
 
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
-            Union::Shared(cell, _, _) => {
+            Union::Shared(ref cell, _, _) => {
                 if let Ok(v) = cell.try_borrow() {
                     fmt::Display::fmt(&*v, f)
                 } else {
@@ -691,38 +679,37 @@ impl fmt::Display for Dynamic {
             }
             #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
-            Union::Shared(cell, _, _) => fmt::Display::fmt(&*cell.read().unwrap(), f),
+            Union::Shared(ref cell, _, _) => fmt::Display::fmt(&*cell.read().unwrap(), f),
         }
     }
 }
 
 impl fmt::Debug for Dynamic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.0 {
-            Union::Unit(value, _, _) => fmt::Debug::fmt(value, f),
-            Union::Bool(value, _, _) => fmt::Debug::fmt(value, f),
-            Union::Str(value, _, _) => fmt::Debug::fmt(value, f),
-            Union::Char(value, _, _) => fmt::Debug::fmt(value, f),
-            Union::Int(value, _, _) => fmt::Debug::fmt(value, f),
+        match self.0 {
+            Union::Unit(ref value, _, _) => fmt::Debug::fmt(value, f),
+            Union::Bool(ref value, _, _) => fmt::Debug::fmt(value, f),
+            Union::Str(ref value, _, _) => fmt::Debug::fmt(value, f),
+            Union::Char(ref value, _, _) => fmt::Debug::fmt(value, f),
+            Union::Int(ref value, _, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(value, _, _) => fmt::Debug::fmt(value, f),
+            Union::Float(ref value, _, _) => fmt::Debug::fmt(value, f),
             #[cfg(feature = "decimal")]
-            Union::Decimal(value, _, _) => fmt::Debug::fmt(value, f),
+            Union::Decimal(ref value, _, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(value, _, _) => fmt::Debug::fmt(value, f),
+            Union::Array(ref value, _, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(value, _, _) => {
+            Union::Map(ref value, _, _) => {
                 f.write_str("#")?;
                 fmt::Debug::fmt(value, f)
             }
-            Union::FnPtr(value, _, _) => fmt::Debug::fmt(value, f),
+            Union::FnPtr(ref value, _, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(_, _, _) => write!(f, "<timestamp>"),
 
-            Union::Variant(value, _, _) => {
-                let value = value.as_ref().as_ref();
-                let _type_id = value.type_id();
-                let _value_any = value.as_any();
+            Union::Variant(ref value, _, _) => {
+                let _value_any = (***value).as_any();
+                let _type_id = _value_any.type_id();
 
                 const CHECKED: &str = "never fails because the type was checked";
 
@@ -760,12 +747,12 @@ impl fmt::Debug for Dynamic {
                     return fmt::Debug::fmt(_value_any.downcast_ref::<i128>().expect(CHECKED), f);
                 }
 
-                f.write_str(value.type_name())
+                f.write_str((***value).type_name())
             }
 
             #[cfg(not(feature = "no_closure"))]
             #[cfg(not(feature = "sync"))]
-            Union::Shared(cell, _, _) => {
+            Union::Shared(ref cell, _, _) => {
                 if let Ok(v) = cell.try_borrow() {
                     write!(f, "{:?} (shared)", *v)
                 } else {
@@ -774,7 +761,7 @@ impl fmt::Debug for Dynamic {
             }
             #[cfg(not(feature = "no_closure"))]
             #[cfg(feature = "sync")]
-            Union::Shared(cell, _, _) => fmt::Debug::fmt(&*cell.read().unwrap(), f),
+            Union::Shared(ref cell, _, _) => fmt::Debug::fmt(&*cell.read().unwrap(), f),
         }
     }
 }
@@ -921,37 +908,37 @@ impl Dynamic {
     }
     /// Set the [`AccessMode`] for this [`Dynamic`].
     pub(crate) fn set_access_mode(&mut self, typ: AccessMode) -> &mut Self {
-        match &mut self.0 {
-            Union::Unit(_, _, access)
-            | Union::Bool(_, _, access)
-            | Union::Str(_, _, access)
-            | Union::Char(_, _, access)
-            | Union::Int(_, _, access)
-            | Union::FnPtr(_, _, access)
-            | Union::Variant(_, _, access) => *access = typ,
+        match self.0 {
+            Union::Unit(_, _, ref mut access)
+            | Union::Bool(_, _, ref mut access)
+            | Union::Str(_, _, ref mut access)
+            | Union::Char(_, _, ref mut access)
+            | Union::Int(_, _, ref mut access)
+            | Union::FnPtr(_, _, ref mut access)
+            | Union::Variant(_, _, ref mut access) => *access = typ,
 
             #[cfg(not(feature = "no_float"))]
-            Union::Float(_, _, access) => *access = typ,
+            Union::Float(_, _, ref mut access) => *access = typ,
             #[cfg(feature = "decimal")]
-            Union::Decimal(_, _, access) => *access = typ,
+            Union::Decimal(_, _, ref mut access) => *access = typ,
             #[cfg(not(feature = "no_index"))]
-            Union::Array(a, _, access) => {
+            Union::Array(ref mut a, _, ref mut access) => {
                 *access = typ;
                 a.iter_mut().for_each(|v| {
                     v.set_access_mode(typ);
                 });
             }
             #[cfg(not(feature = "no_object"))]
-            Union::Map(m, _, access) => {
+            Union::Map(ref mut m, _, ref mut access) => {
                 *access = typ;
                 m.values_mut().for_each(|v| {
                     v.set_access_mode(typ);
                 });
             }
             #[cfg(not(feature = "no_std"))]
-            Union::TimeStamp(_, _, access) => *access = typ,
+            Union::TimeStamp(_, _, ref mut access) => *access = typ,
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_, _, access) => *access = typ,
+            Union::Shared(_, _, ref mut access) => *access = typ,
         }
         self
     }
@@ -967,17 +954,22 @@ impl Dynamic {
         #[cfg(not(feature = "no_closure"))]
         match self.0 {
             Union::Shared(_, _, ReadOnly) => return true,
-            Union::Shared(ref cell, _, _) => {
-                #[cfg(not(feature = "sync"))]
-                let value = cell.borrow();
-                #[cfg(feature = "sync")]
-                let value = cell.read().unwrap();
 
-                return match value.access_mode() {
+            #[cfg(not(feature = "sync"))]
+            Union::Shared(ref cell, _, _) => {
+                return match cell.borrow().access_mode() {
                     ReadWrite => false,
                     ReadOnly => true,
-                };
+                }
             }
+            #[cfg(feature = "sync")]
+            Union::Shared(ref cell, _, _) => {
+                return match cell.read().unwrap().access_mode() {
+                    ReadWrite => false,
+                    ReadOnly => true,
+                }
+            }
+
             _ => (),
         }
 
@@ -989,7 +981,7 @@ impl Dynamic {
     /// Can this [`Dynamic`] be hashed?
     #[must_use]
     pub(crate) fn is_hashable(&self) -> bool {
-        match &self.0 {
+        match self.0 {
             Union::Unit(_, _, _)
             | Union::Bool(_, _, _)
             | Union::Str(_, _, _)
@@ -1004,14 +996,12 @@ impl Dynamic {
             Union::Map(_, _, _) => true,
 
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(cell, _, _) => {
-                #[cfg(not(feature = "sync"))]
-                let value = cell.borrow();
-                #[cfg(feature = "sync")]
-                let value = cell.read().unwrap();
+            #[cfg(not(feature = "sync"))]
+            Union::Shared(ref cell, _, _) => cell.borrow().is_hashable(),
 
-                value.is_hashable()
-            }
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(feature = "sync")]
+            Union::Shared(ref cell, _, _) => cell.read().unwrap().is_hashable(),
 
             _ => false,
         }
@@ -1388,20 +1378,15 @@ impl Dynamic {
     #[inline(always)]
     #[must_use]
     pub fn flatten_clone(&self) -> Self {
-        #[cfg(not(feature = "no_closure"))]
-        match &self.0 {
-            Union::Shared(cell, _, _) => {
-                #[cfg(not(feature = "sync"))]
-                let value = cell.borrow();
-                #[cfg(feature = "sync")]
-                let value = cell.read().unwrap();
-
-                return value.clone();
-            }
-            _ => (),
+        match self.0 {
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(not(feature = "sync"))]
+            Union::Shared(ref cell, _, _) => cell.borrow().clone(),
+            #[cfg(not(feature = "no_closure"))]
+            #[cfg(feature = "sync")]
+            Union::Shared(ref cell, _, _) => cell.read().unwrap().clone(),
+            _ => self.clone(),
         }
-
-        self.clone()
     }
     /// Flatten the [`Dynamic`].
     ///
@@ -1412,30 +1397,20 @@ impl Dynamic {
     #[inline(always)]
     #[must_use]
     pub fn flatten(self) -> Self {
-        #[cfg(not(feature = "no_closure"))]
         match self.0 {
-            Union::Shared(cell, _, _) => {
-                return crate::fn_native::shared_try_take(cell).map_or_else(
-                    |cell| {
-                        #[cfg(not(feature = "sync"))]
-                        let value = cell.borrow();
-                        #[cfg(feature = "sync")]
-                        let value = cell.read().unwrap();
-
-                        value.clone()
-                    },
-                    |value| {
-                        #[cfg(not(feature = "sync"))]
-                        return value.into_inner();
-                        #[cfg(feature = "sync")]
-                        return value.into_inner().unwrap();
-                    },
-                )
-            }
-            _ => (),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(cell, _, _) => crate::fn_native::shared_try_take(cell).map_or_else(
+                #[cfg(not(feature = "sync"))]
+                |cell| cell.borrow().clone(),
+                #[cfg(feature = "sync")]
+                |cell| cell.read().unwrap().clone(),
+                #[cfg(not(feature = "sync"))]
+                |value| value.into_inner(),
+                #[cfg(feature = "sync")]
+                |value| value.into_inner().unwrap(),
+            ),
+            _ => self,
         }
-
-        self
     }
     /// Flatten the [`Dynamic`] in place.
     ///
@@ -1445,26 +1420,20 @@ impl Dynamic {
     /// outstanding references, or a cloned copy otherwise.
     #[inline(always)]
     pub(crate) fn flatten_in_place(&mut self) -> &mut Self {
-        #[cfg(not(feature = "no_closure"))]
         match self.0 {
+            #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _, _) => match std::mem::take(self).0 {
                 Union::Shared(cell, _, _) => {
                     *self = crate::fn_native::shared_try_take(cell).map_or_else(
-                        |cell| {
-                            #[cfg(not(feature = "sync"))]
-                            let value = cell.borrow();
-                            #[cfg(feature = "sync")]
-                            let value = cell.read().unwrap();
-
-                            value.clone()
-                        },
-                        |value| {
-                            #[cfg(not(feature = "sync"))]
-                            return value.into_inner();
-                            #[cfg(feature = "sync")]
-                            return value.into_inner().unwrap();
-                        },
-                    )
+                        #[cfg(not(feature = "sync"))]
+                        |cell| cell.borrow().clone(),
+                        #[cfg(feature = "sync")]
+                        |cell| cell.read().unwrap().clone(),
+                        #[cfg(not(feature = "sync"))]
+                        |value| value.into_inner(),
+                        #[cfg(feature = "sync")]
+                        |value| value.into_inner().unwrap(),
+                    );
                 }
                 _ => unreachable!(),
             },
@@ -1577,73 +1546,73 @@ impl Dynamic {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
         if TypeId::of::<T>() == TypeId::of::<INT>() {
-            return match &self.0 {
-                Union::Int(value, _, _) => value.as_any().downcast_ref::<T>(),
+            return match self.0 {
+                Union::Int(ref value, _, _) => value.as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
-            return match &self.0 {
-                Union::Float(value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
+            return match self.0 {
+                Union::Float(ref value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         #[cfg(feature = "decimal")]
         if TypeId::of::<T>() == TypeId::of::<Decimal>() {
-            return match &self.0 {
-                Union::Decimal(value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
+            return match self.0 {
+                Union::Decimal(ref value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<bool>() {
-            return match &self.0 {
-                Union::Bool(value, _, _) => value.as_any().downcast_ref::<T>(),
+            return match self.0 {
+                Union::Bool(ref value, _, _) => value.as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
-            return match &self.0 {
-                Union::Str(value, _, _) => value.as_any().downcast_ref::<T>(),
+            return match self.0 {
+                Union::Str(ref value, _, _) => value.as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<char>() {
-            return match &self.0 {
-                Union::Char(value, _, _) => value.as_any().downcast_ref::<T>(),
+            return match self.0 {
+                Union::Char(ref value, _, _) => value.as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<Array>() {
-            return match &self.0 {
-                Union::Array(value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
+            return match self.0 {
+                Union::Array(ref value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_object"))]
         if TypeId::of::<T>() == TypeId::of::<Map>() {
-            return match &self.0 {
-                Union::Map(value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
+            return match self.0 {
+                Union::Map(ref value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<FnPtr>() {
-            return match &self.0 {
-                Union::FnPtr(value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
+            return match self.0 {
+                Union::FnPtr(ref value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_std"))]
         if TypeId::of::<T>() == TypeId::of::<Instant>() {
-            return match &self.0 {
-                Union::TimeStamp(value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
+            return match self.0 {
+                Union::TimeStamp(ref value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<()>() {
-            return match &self.0 {
-                Union::Unit(value, _, _) => value.as_any().downcast_ref::<T>(),
+            return match self.0 {
+                Union::Unit(ref value, _, _) => value.as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
@@ -1651,8 +1620,8 @@ impl Dynamic {
             return self.as_any().downcast_ref::<T>();
         }
 
-        match &self.0 {
-            Union::Variant(value, _, _) => value.as_ref().as_ref().as_any().downcast_ref::<T>(),
+        match self.0 {
+            Union::Variant(ref value, _, _) => (***value).as_any().downcast_ref::<T>(),
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _, _) => None,
             _ => None,
@@ -1668,73 +1637,83 @@ impl Dynamic {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
 
         if TypeId::of::<T>() == TypeId::of::<INT>() {
-            return match &mut self.0 {
-                Union::Int(value, _, _) => value.as_mut_any().downcast_mut::<T>(),
+            return match self.0 {
+                Union::Int(ref mut value, _, _) => value.as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
-            return match &mut self.0 {
-                Union::Float(value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
+            return match self.0 {
+                Union::Float(ref mut value, _, _) => {
+                    value.as_mut().as_mut_any().downcast_mut::<T>()
+                }
                 _ => None,
             };
         }
         #[cfg(feature = "decimal")]
         if TypeId::of::<T>() == TypeId::of::<Decimal>() {
-            return match &mut self.0 {
-                Union::Decimal(value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
+            return match self.0 {
+                Union::Decimal(ref mut value, _, _) => {
+                    value.as_mut().as_mut_any().downcast_mut::<T>()
+                }
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<bool>() {
-            return match &mut self.0 {
-                Union::Bool(value, _, _) => value.as_mut_any().downcast_mut::<T>(),
+            return match self.0 {
+                Union::Bool(ref mut value, _, _) => value.as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
-            return match &mut self.0 {
-                Union::Str(value, _, _) => value.as_mut_any().downcast_mut::<T>(),
+            return match self.0 {
+                Union::Str(ref mut value, _, _) => value.as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<char>() {
-            return match &mut self.0 {
-                Union::Char(value, _, _) => value.as_mut_any().downcast_mut::<T>(),
+            return match self.0 {
+                Union::Char(ref mut value, _, _) => value.as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_index"))]
         if TypeId::of::<T>() == TypeId::of::<Array>() {
-            return match &mut self.0 {
-                Union::Array(value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
+            return match self.0 {
+                Union::Array(ref mut value, _, _) => {
+                    value.as_mut().as_mut_any().downcast_mut::<T>()
+                }
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_object"))]
         if TypeId::of::<T>() == TypeId::of::<Map>() {
-            return match &mut self.0 {
-                Union::Map(value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
+            return match self.0 {
+                Union::Map(ref mut value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<FnPtr>() {
-            return match &mut self.0 {
-                Union::FnPtr(value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
+            return match self.0 {
+                Union::FnPtr(ref mut value, _, _) => {
+                    value.as_mut().as_mut_any().downcast_mut::<T>()
+                }
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_std"))]
         if TypeId::of::<T>() == TypeId::of::<Instant>() {
-            return match &mut self.0 {
-                Union::TimeStamp(value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
+            return match self.0 {
+                Union::TimeStamp(ref mut value, _, _) => {
+                    value.as_mut().as_mut_any().downcast_mut::<T>()
+                }
                 _ => None,
             };
         }
         if TypeId::of::<T>() == TypeId::of::<()>() {
-            return match &mut self.0 {
-                Union::Unit(value, _, _) => value.as_mut_any().downcast_mut::<T>(),
+            return match self.0 {
+                Union::Unit(ref mut value, _, _) => value.as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
@@ -1742,8 +1721,8 @@ impl Dynamic {
             return self.as_mut_any().downcast_mut::<T>();
         }
 
-        match &mut self.0 {
-            Union::Variant(value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
+        match self.0 {
+            Union::Variant(ref mut value, _, _) => (***value).as_mut_any().downcast_mut::<T>(),
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _, _) => None,
             _ => None,
@@ -1898,8 +1877,8 @@ impl Dynamic {
                 #[cfg(feature = "sync")]
                 let value = cell.read().unwrap();
 
-                match &value.0 {
-                    Union::Str(s, _, _) => Ok(s.clone()),
+                match value.0 {
+                    Union::Str(ref s, _, _) => Ok(s.clone()),
                     _ => Err((*value).type_name()),
                 }
             }

@@ -1320,9 +1320,9 @@ impl Engine {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x, pos) if !x.is_qualified() && new_val.is_none() => {
                         let FnCallExpr { name, hashes, .. } = x.as_ref();
-                        let mut args = idx_val.as_fn_call_args();
+                        let args = &mut idx_val.as_fn_call_args();
                         self.make_method_call(
-                            mods, state, lib, name, *hashes, target, &mut args, *pos, level,
+                            mods, state, lib, name, *hashes, target, args, *pos, level,
                         )
                     }
                     // xxx.fn_name(...) = ???
@@ -1340,11 +1340,11 @@ impl Engine {
                             new_val.expect("never fails because `new_val` is `Some`");
                         let index = name.into();
                         {
-                            let mut val = self.get_indexed_mut(
+                            let val_target = &mut self.get_indexed_mut(
                                 mods, state, lib, target, index, *pos, true, false, level,
                             )?;
                             self.eval_op_assignment(
-                                mods, state, lib, op_info, op_pos, &mut val, root, new_val,
+                                mods, state, lib, op_info, op_pos, val_target, root, new_val,
                             )
                             .map_err(|err| err.fill_position(new_pos))?;
                         }
@@ -1369,11 +1369,11 @@ impl Engine {
 
                         if op_info.is_some() {
                             let hash = FnCallHashes::from_native(*hash_get);
-                            let mut args = [target.as_mut()];
+                            let args = &mut [target.as_mut()];
                             let (mut orig_val, _) = self
                                 .exec_fn_call(
-                                    mods, state, lib, getter, hash, &mut args, is_ref, true, *pos,
-                                    None, level,
+                                    mods, state, lib, getter, hash, args, is_ref, true, *pos, None,
+                                    level,
                                 )
                                 .or_else(|err| match *err {
                                     // Try an indexer if property does not exist
@@ -1413,16 +1413,14 @@ impl Engine {
                         }
 
                         let hash = FnCallHashes::from_native(*hash_set);
-                        let mut args = [target.as_mut(), &mut new_val];
+                        let args = &mut [target.as_mut(), &mut new_val];
                         self.exec_fn_call(
-                            mods, state, lib, setter, hash, &mut args, is_ref, true, *pos, None,
-                            level,
+                            mods, state, lib, setter, hash, args, is_ref, true, *pos, None, level,
                         )
                         .or_else(|err| match *err {
                             // Try an indexer if property does not exist
                             EvalAltResult::ErrorDotExpr(_, _) => {
-                                let mut prop = name.into();
-                                let args = &mut [target, &mut prop, &mut new_val];
+                                let args = &mut [target, &mut name.into(), &mut new_val];
                                 let hash_set =
                                     FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_SET, 3));
                                 self.exec_fn_call(
@@ -1443,10 +1441,9 @@ impl Engine {
                     Expr::Property(x) => {
                         let ((getter, hash_get), _, (name, pos)) = x.as_ref();
                         let hash = FnCallHashes::from_native(*hash_get);
-                        let mut args = [target.as_mut()];
+                        let args = &mut [target.as_mut()];
                         self.exec_fn_call(
-                            mods, state, lib, getter, hash, &mut args, is_ref, true, *pos, None,
-                            level,
+                            mods, state, lib, getter, hash, args, is_ref, true, *pos, None, level,
                         )
                         .map_or_else(
                             |err| match *err {
@@ -1471,8 +1468,8 @@ impl Engine {
                     }
                     // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
                     Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target.is::<Map>() => {
-                        let mut val = match &x.lhs {
-                            Expr::Property(p) => {
+                        let val_target = &mut match x.lhs {
+                            Expr::Property(ref p) => {
                                 let (name, pos) = &p.2;
                                 let index = name.into();
                                 self.get_indexed_mut(
@@ -1480,11 +1477,11 @@ impl Engine {
                                 )?
                             }
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
-                            Expr::FnCall(x, pos) if !x.is_qualified() => {
+                            Expr::FnCall(ref x, pos) if !x.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = x.as_ref();
-                                let mut args = idx_val.as_fn_call_args();
+                                let args = &mut idx_val.as_fn_call_args();
                                 let (val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hashes, target, &mut args, *pos, level,
+                                    mods, state, lib, name, *hashes, target, args, pos, level,
                                 )?;
                                 val.into()
                             }
@@ -1493,21 +1490,21 @@ impl Engine {
                                 "function call in dot chain should not be namespace-qualified"
                             ),
                             // Others - syntax error
-                            expr => unreachable!("invalid dot expression: {:?}", expr),
+                            ref expr => unreachable!("invalid dot expression: {:?}", expr),
                         };
                         let rhs_chain = match_chain_type(rhs);
 
                         self.eval_dot_index_chain_helper(
-                            mods, state, lib, this_ptr, &mut val, root, &x.rhs, idx_values,
+                            mods, state, lib, this_ptr, val_target, root, &x.rhs, idx_values,
                             rhs_chain, level, new_val,
                         )
                         .map_err(|err| err.fill_position(*x_pos))
                     }
                     // xxx.sub_lhs[expr] | xxx.sub_lhs.expr
                     Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) => {
-                        match &x.lhs {
+                        match x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
-                            Expr::Property(p) => {
+                            Expr::Property(ref p) => {
                                 let ((getter, hash_get), (setter, hash_set), (name, pos)) =
                                     p.as_ref();
                                 let rhs_chain = match_chain_type(rhs);
@@ -1570,8 +1567,8 @@ impl Engine {
                                         |err| match *err {
                                             // Try an indexer if property does not exist
                                             EvalAltResult::ErrorDotExpr(_, _) => {
-                                                let mut prop = name.into();
-                                                let args = &mut [target.as_mut(), &mut prop, val];
+                                                let args =
+                                                    &mut [target.as_mut(), &mut name.into(), val];
                                                 let hash_set = FnCallHashes::from_native(
                                                     crate::calc_fn_hash(FN_IDX_SET, 3),
                                                 );
@@ -1598,12 +1595,12 @@ impl Engine {
                                 Ok((result, may_be_changed))
                             }
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
-                            Expr::FnCall(f, pos) if !f.is_qualified() => {
+                            Expr::FnCall(ref f, pos) if !f.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = f.as_ref();
                                 let rhs_chain = match_chain_type(rhs);
-                                let mut args = idx_val.as_fn_call_args();
+                                let args = &mut idx_val.as_fn_call_args();
                                 let (mut val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hashes, target, &mut args, *pos, level,
+                                    mods, state, lib, name, *hashes, target, args, pos, level,
                                 )?;
                                 let val = &mut val;
                                 let target = &mut val.into();
@@ -1612,14 +1609,14 @@ impl Engine {
                                     mods, state, lib, this_ptr, target, root, &x.rhs, idx_values,
                                     rhs_chain, level, new_val,
                                 )
-                                .map_err(|err| err.fill_position(*pos))
+                                .map_err(|err| err.fill_position(pos))
                             }
                             // xxx.module::fn_name(...) - syntax error
                             Expr::FnCall(_, _) => unreachable!(
                                 "function call in dot chain should not be namespace-qualified"
                             ),
                             // Others - syntax error
-                            expr => unreachable!("invalid dot expression: {:?}", expr),
+                            ref expr => unreachable!("invalid dot expression: {:?}", expr),
                         }
                     }
                     // Syntax error
@@ -2109,7 +2106,7 @@ impl Engine {
                 let namespace = namespace
                     .as_ref()
                     .expect("never fails because function call is qualified");
-                let hash = hashes.native_hash();
+                let hash = hashes.native;
                 self.make_qualified_function_call(
                     scope, mods, state, lib, this_ptr, namespace, name, args, constants, hash,
                     *pos, level,
@@ -2702,7 +2699,7 @@ impl Engine {
                 let namespace = namespace
                     .as_ref()
                     .expect("never fails because function call is qualified");
-                let hash = hashes.native_hash();
+                let hash = hashes.native;
                 self.make_qualified_function_call(
                     scope, mods, state, lib, this_ptr, namespace, name, args, constants, hash,
                     *pos, level,

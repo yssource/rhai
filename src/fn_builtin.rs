@@ -56,91 +56,89 @@ pub fn get_builtin_binary_op_fn(
 
     // One of the operands is a custom type, so it is never built-in
     if x.is_variant() || y.is_variant() {
-        if is_numeric(type1) && is_numeric(type2) {
+        return if is_numeric(type1) && is_numeric(type2) {
             // Disallow comparisons between different numeric types
-            return None;
-        }
-
-        // If the types are not the same, default to not compare
-        if type1 != type2 {
-            return match op {
+            None
+        } else if type1 != type2 {
+            // If the types are not the same, default to not compare
+            match op {
                 "!=" => Some(|_, _| Ok(Dynamic::TRUE)),
                 "==" | ">" | ">=" | "<" | "<=" => Some(|_, _| Ok(Dynamic::FALSE)),
                 _ => None,
-            };
-        }
-
-        // Disallow comparisons between the same type
-        return None;
+            }
+        } else {
+            // Disallow comparisons between the same type
+            None
+        };
     }
 
     let types_pair = (type1, type2);
 
     macro_rules! impl_op {
         ($xx:ident $op:tt $yy:ident) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let x = &*args[0].read_lock::<$xx>().expect(BUILTIN);
                 let y = &*args[1].read_lock::<$yy>().expect(BUILTIN);
                 Ok((x $op y).into())
             })
         };
         ($xx:ident . $func:ident ( $yy:ty )) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let x = &*args[0].read_lock::<$xx>().expect(BUILTIN);
                 let y = &*args[1].read_lock::<$yy>().expect(BUILTIN);
                 Ok(x.$func(y).into())
             })
         };
         ($xx:ident . $func:ident ( $yy:ident . $yyy:ident () )) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let x = &*args[0].read_lock::<$xx>().expect(BUILTIN);
                 let y = &*args[1].read_lock::<$yy>().expect(BUILTIN);
                 Ok(x.$func(y.$yyy()).into())
             })
         };
         ($func:ident ( $op:tt )) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let (x, y) = $func(args);
                 Ok((x $op y).into())
             })
         };
         ($base:ty => $xx:ident $op:tt $yy:ident) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let x = args[0].$xx().expect(BUILTIN) as $base;
                 let y = args[1].$yy().expect(BUILTIN) as $base;
                 Ok((x $op y).into())
             })
         };
         ($base:ty => $xx:ident . $func:ident ( $yy:ident as $yyy:ty)) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let x = args[0].$xx().expect(BUILTIN) as $base;
                 let y = args[1].$yy().expect(BUILTIN) as $base;
                 Ok(x.$func(y as $yyy).into())
             })
         };
         ($base:ty => $func:ident ( $xx:ident, $yy:ident )) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let x = args[0].$xx().expect(BUILTIN) as $base;
                 let y = args[1].$yy().expect(BUILTIN) as $base;
                 $func(x, y).map(Into::<Dynamic>::into)
             })
         };
         (from $base:ty => $xx:ident $op:tt $yy:ident) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let x = <$base>::from(args[0].$xx().expect(BUILTIN));
                 let y = <$base>::from(args[1].$yy().expect(BUILTIN));
                 Ok((x $op y).into())
             })
         };
         (from $base:ty => $xx:ident . $func:ident ( $yy:ident )) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let x = <$base>::from(args[0].$xx().expect(BUILTIN));
                 let y = <$base>::from(args[1].$yy().expect(BUILTIN));
                 Ok(x.$func(y).into())
             })
         };
         (from $base:ty => $func:ident ( $xx:ident, $yy:ident )) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let x = <$base>::from(args[0].$xx().expect(BUILTIN));
                 let y = <$base>::from(args[1].$yy().expect(BUILTIN));
                 $func(x, y).map(Into::<Dynamic>::into)
@@ -152,7 +150,7 @@ pub fn get_builtin_binary_op_fn(
         ($x:ty, $xx:ident, $y:ty, $yy:ident) => {
             #[cfg(not(feature = "no_float"))]
             if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
-                match op {
+                return match op {
                     "+" => impl_op!(FLOAT => $xx + $yy),
                     "-" => impl_op!(FLOAT => $xx - $yy),
                     "*" => impl_op!(FLOAT => $xx * $yy),
@@ -165,8 +163,8 @@ pub fn get_builtin_binary_op_fn(
                     ">=" => impl_op!(FLOAT => $xx >= $yy),
                     "<" => impl_op!(FLOAT => $xx < $yy),
                     "<=" => impl_op!(FLOAT => $xx <= $yy),
-                    _ => return None,
-                }
+                    _ => None,
+                };
             }
         };
     }
@@ -179,41 +177,43 @@ pub fn get_builtin_binary_op_fn(
         ($x:ty, $xx:ident, $y:ty, $yy:ident) => {
             #[cfg(feature = "decimal")]
             if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
-                if cfg!(not(feature = "unBUILTIN")) {
-                    use crate::packages::arithmetic::decimal_functions::*;
+                #[cfg(not(feature = "unchecked"))]
+                use crate::packages::arithmetic::decimal_functions::*;
 
-                    match op {
-                        "+" => impl_op!(from Decimal => add($xx, $yy)),
-                        "-" => impl_op!(from Decimal => subtract($xx, $yy)),
-                        "*" => impl_op!(from Decimal => multiply($xx, $yy)),
-                        "/" => impl_op!(from Decimal => divide($xx, $yy)),
-                        "%" => impl_op!(from Decimal => modulo($xx, $yy)),
-                        "**" => impl_op!(from Decimal => power($xx, $yy)),
-                        _ => ()
-                    }
-                } else {
-                    use rust_decimal::MathematicalOps;
-
-                    match op {
-                        "+" => impl_op!(from Decimal => $xx + $yy),
-                        "-" => impl_op!(from Decimal => $xx - $yy),
-                        "*" => impl_op!(from Decimal => $xx * $yy),
-                        "/" => impl_op!(from Decimal => $xx / $yy),
-                        "%" => impl_op!(from Decimal => $xx % $yy),
-                        "**" => impl_op!(from Decimal => $xx.powd($yy)),
-                        _ => ()
-                    }
+                #[cfg(not(feature = "unchecked"))]
+                match op {
+                    "+" => return impl_op!(from Decimal => add($xx, $yy)),
+                    "-" => return impl_op!(from Decimal => subtract($xx, $yy)),
+                    "*" => return impl_op!(from Decimal => multiply($xx, $yy)),
+                    "/" => return impl_op!(from Decimal => divide($xx, $yy)),
+                    "%" => return impl_op!(from Decimal => modulo($xx, $yy)),
+                    "**" => return impl_op!(from Decimal => power($xx, $yy)),
+                    _ => ()
                 }
 
+                #[cfg(feature = "unchecked")]
+                use rust_decimal::MathematicalOps;
+
+                #[cfg(feature = "unchecked")]
                 match op {
+                    "+" => return impl_op!(from Decimal => $xx + $yy),
+                    "-" => return impl_op!(from Decimal => $xx - $yy),
+                    "*" => return impl_op!(from Decimal => $xx * $yy),
+                    "/" => return impl_op!(from Decimal => $xx / $yy),
+                    "%" => return impl_op!(from Decimal => $xx % $yy),
+                    "**" => return impl_op!(from Decimal => $xx.powd($yy)),
+                    _ => ()
+                }
+
+                return match op {
                     "==" => impl_op!(from Decimal => $xx == $yy),
                     "!=" => impl_op!(from Decimal => $xx != $yy),
                     ">" => impl_op!(from Decimal => $xx > $yy),
                     ">=" => impl_op!(from Decimal => $xx >= $yy),
                     "<" => impl_op!(from Decimal => $xx < $yy),
                     "<=" => impl_op!(from Decimal => $xx <= $yy),
-                    _ => return None
-                }
+                    _ =>  None
+                };
             }
         };
     }
@@ -234,22 +234,20 @@ pub fn get_builtin_binary_op_fn(
             (s1, s2)
         }
 
-        match op {
-            "+" => {
-                return Some(|_, args| {
-                    let x = args[0].as_char().expect(BUILTIN);
-                    let y = &*args[1].read_lock::<ImmutableString>().expect(BUILTIN);
-                    Ok(format!("{}{}", x, y).into())
-                })
-            }
+        return match op {
+            "+" => Some(|_, args| {
+                let x = args[0].as_char().expect(BUILTIN);
+                let y = &*args[1].read_lock::<ImmutableString>().expect(BUILTIN);
+                Ok(format!("{}{}", x, y).into())
+            }),
             "==" => impl_op!(get_s1s2(==)),
             "!=" => impl_op!(get_s1s2(!=)),
             ">" => impl_op!(get_s1s2(>)),
             ">=" => impl_op!(get_s1s2(>=)),
             "<" => impl_op!(get_s1s2(<)),
             "<=" => impl_op!(get_s1s2(<=)),
-            _ => return None,
-        }
+            _ => None,
+        };
     }
     // string op char
     if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
@@ -263,36 +261,30 @@ pub fn get_builtin_binary_op_fn(
             (s1, s2)
         }
 
-        match op {
-            "+" => {
-                return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
-                    let y = args[1].as_char().expect(BUILTIN);
-                    Ok((x + y).into())
-                })
-            }
-            "-" => {
-                return Some(|_, args| {
-                    let x = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
-                    let y = args[1].as_char().expect(BUILTIN);
-                    Ok((x - y).into())
-                })
-            }
+        return match op {
+            "+" => Some(|_, args| {
+                let x = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
+                let y = args[1].as_char().expect(BUILTIN);
+                Ok((x + y).into())
+            }),
+            "-" => Some(|_, args| {
+                let x = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
+                let y = args[1].as_char().expect(BUILTIN);
+                Ok((x - y).into())
+            }),
             "==" => impl_op!(get_s1s2(==)),
             "!=" => impl_op!(get_s1s2(!=)),
             ">" => impl_op!(get_s1s2(>)),
             ">=" => impl_op!(get_s1s2(>=)),
             "<" => impl_op!(get_s1s2(<)),
             "<=" => impl_op!(get_s1s2(<=)),
-            OP_CONTAINS => {
-                return Some(|_, args| {
-                    let s = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
-                    let c = args[1].as_char().expect(BUILTIN);
-                    Ok((s.contains(c)).into())
-                })
-            }
-            _ => return None,
-        }
+            OP_CONTAINS => Some(|_, args| {
+                let s = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
+                let c = args[1].as_char().expect(BUILTIN);
+                Ok((s.contains(c)).into())
+            }),
+            _ => None,
+        };
     }
 
     // map op string
@@ -300,10 +292,10 @@ pub fn get_builtin_binary_op_fn(
     if types_pair == (TypeId::of::<crate::Map>(), TypeId::of::<ImmutableString>()) {
         use crate::Map;
 
-        match op {
+        return match op {
             OP_CONTAINS => impl_op!(Map.contains_key(ImmutableString.as_str())),
-            _ => return None,
-        }
+            _ => None,
+        };
     }
 
     // Default comparison operators for different types
@@ -318,35 +310,36 @@ pub fn get_builtin_binary_op_fn(
     // Beyond here, type1 == type2
 
     if type1 == TypeId::of::<INT>() {
-        if cfg!(not(feature = "unBUILTIN")) {
-            use crate::packages::arithmetic::arith_basic::INT::functions::*;
+        #[cfg(not(feature = "unchecked"))]
+        use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
-            match op {
-                "+" => impl_op!(INT => add(as_int, as_int)),
-                "-" => impl_op!(INT => subtract(as_int, as_int)),
-                "*" => impl_op!(INT => multiply(as_int, as_int)),
-                "/" => impl_op!(INT => divide(as_int, as_int)),
-                "%" => impl_op!(INT => modulo(as_int, as_int)),
-                "**" => impl_op!(INT => power(as_int, as_int)),
-                ">>" => impl_op!(INT => shift_right(as_int, as_int)),
-                "<<" => impl_op!(INT => shift_left(as_int, as_int)),
-                _ => (),
-            }
-        } else {
-            match op {
-                "+" => impl_op!(INT => as_int + as_int),
-                "-" => impl_op!(INT => as_int - as_int),
-                "*" => impl_op!(INT => as_int * as_int),
-                "/" => impl_op!(INT => as_int / as_int),
-                "%" => impl_op!(INT => as_int % as_int),
-                "**" => impl_op!(INT => as_int.pow(as_int as u32)),
-                ">>" => impl_op!(INT => as_int >> as_int),
-                "<<" => impl_op!(INT => as_int << as_int),
-                _ => (),
-            }
+        #[cfg(not(feature = "unchecked"))]
+        match op {
+            "+" => return impl_op!(INT => add(as_int, as_int)),
+            "-" => return impl_op!(INT => subtract(as_int, as_int)),
+            "*" => return impl_op!(INT => multiply(as_int, as_int)),
+            "/" => return impl_op!(INT => divide(as_int, as_int)),
+            "%" => return impl_op!(INT => modulo(as_int, as_int)),
+            "**" => return impl_op!(INT => power(as_int, as_int)),
+            ">>" => return impl_op!(INT => shift_right(as_int, as_int)),
+            "<<" => return impl_op!(INT => shift_left(as_int, as_int)),
+            _ => (),
         }
 
+        #[cfg(feature = "unchecked")]
         match op {
+            "+" => return impl_op!(INT => as_int + as_int),
+            "-" => return impl_op!(INT => as_int - as_int),
+            "*" => return impl_op!(INT => as_int * as_int),
+            "/" => return impl_op!(INT => as_int / as_int),
+            "%" => return impl_op!(INT => as_int % as_int),
+            "**" => return impl_op!(INT => as_int.pow(as_int as u32)),
+            ">>" => return impl_op!(INT => as_int >> as_int),
+            "<<" => return impl_op!(INT => as_int << as_int),
+            _ => (),
+        }
+
+        return match op {
             "==" => impl_op!(INT => as_int == as_int),
             "!=" => impl_op!(INT => as_int != as_int),
             ">" => impl_op!(INT => as_int > as_int),
@@ -356,12 +349,12 @@ pub fn get_builtin_binary_op_fn(
             "&" => impl_op!(INT => as_int & as_int),
             "|" => impl_op!(INT => as_int | as_int),
             "^" => impl_op!(INT => as_int ^ as_int),
-            _ => return None,
-        }
+            _ => None,
+        };
     }
 
     if type1 == TypeId::of::<bool>() {
-        match op {
+        return match op {
             "==" => impl_op!(bool => as_bool == as_bool),
             "!=" => impl_op!(bool => as_bool != as_bool),
             ">" => impl_op!(bool => as_bool > as_bool),
@@ -371,12 +364,12 @@ pub fn get_builtin_binary_op_fn(
             "&" => impl_op!(bool => as_bool & as_bool),
             "|" => impl_op!(bool => as_bool | as_bool),
             "^" => impl_op!(bool => as_bool ^ as_bool),
-            _ => return None,
-        }
+            _ => None,
+        };
     }
 
     if type1 == TypeId::of::<ImmutableString>() {
-        match op {
+        return match op {
             "+" => impl_op!(ImmutableString + ImmutableString),
             "-" => impl_op!(ImmutableString - ImmutableString),
             "==" => impl_op!(ImmutableString == ImmutableString),
@@ -385,42 +378,38 @@ pub fn get_builtin_binary_op_fn(
             ">=" => impl_op!(ImmutableString >= ImmutableString),
             "<" => impl_op!(ImmutableString < ImmutableString),
             "<=" => impl_op!(ImmutableString <= ImmutableString),
-            OP_CONTAINS => {
-                return Some(|_, args| {
-                    let s1 = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
-                    let s2 = &*args[1].read_lock::<ImmutableString>().expect(BUILTIN);
-                    Ok((s1.contains(s2.as_str())).into())
-                })
-            }
-            _ => return None,
-        }
+            OP_CONTAINS => Some(|_, args| {
+                let s1 = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
+                let s2 = &*args[1].read_lock::<ImmutableString>().expect(BUILTIN);
+                Ok((s1.contains(s2.as_str())).into())
+            }),
+            _ => None,
+        };
     }
 
     if type1 == TypeId::of::<char>() {
-        match op {
-            "+" => {
-                return Some(|_, args| {
-                    let x = args[0].as_char().expect(BUILTIN);
-                    let y = args[1].as_char().expect(BUILTIN);
-                    Ok(format!("{}{}", x, y).into())
-                })
-            }
+        return match op {
+            "+" => Some(|_, args| {
+                let x = args[0].as_char().expect(BUILTIN);
+                let y = args[1].as_char().expect(BUILTIN);
+                Ok(format!("{}{}", x, y).into())
+            }),
             "==" => impl_op!(char => as_char == as_char),
             "!=" => impl_op!(char => as_char != as_char),
             ">" => impl_op!(char => as_char > as_char),
             ">=" => impl_op!(char => as_char >= as_char),
             "<" => impl_op!(char => as_char < as_char),
             "<=" => impl_op!(char => as_char <= as_char),
-            _ => return None,
-        }
+            _ => None,
+        };
     }
 
     if type1 == TypeId::of::<()>() {
-        match op {
-            "==" => return Some(|_, _| Ok(Dynamic::TRUE)),
-            "!=" | ">" | ">=" | "<" | "<=" => return Some(|_, _| Ok(Dynamic::FALSE)),
-            _ => return None,
-        }
+        return match op {
+            "==" => Some(|_, _| Ok(Dynamic::TRUE)),
+            "!=" | ">" | ">=" | "<" | "<=" => Some(|_, _| Ok(Dynamic::FALSE)),
+            _ => None,
+        };
     }
 
     None
@@ -444,53 +433,53 @@ pub fn get_builtin_op_assignment_fn(
 
     macro_rules! impl_op {
         ($x:ty = x $op:tt $yy:ident) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let x = args[0].$yy().expect(BUILTIN);
                 let y = args[1].$yy().expect(BUILTIN) as $x;
                 Ok((*args[0].write_lock::<$x>().expect(BUILTIN) = x $op y).into())
             })
         };
         ($x:ident $op:tt $yy:ident) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let y = args[1].$yy().expect(BUILTIN) as $x;
                 Ok((*args[0].write_lock::<$x>().expect(BUILTIN) $op y).into())
             })
         };
         ($x:ident $op:tt $yy:ident as $yyy:ty) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let y = args[1].$yy().expect(BUILTIN) as $yyy;
                 Ok((*args[0].write_lock::<$x>().expect(BUILTIN) $op y).into())
             })
         };
         ($x:ty => $xx:ident . $func:ident ( $yy:ident as $yyy:ty )) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let x = args[0].$xx().expect(BUILTIN);
                 let y = args[1].$yy().expect(BUILTIN) as $x;
                 Ok((*args[0].write_lock::<$x>().expect(BUILTIN) = x.$func(y as $yyy)).into())
             })
         };
         ($x:ty => $func:ident ( $xx:ident, $yy:ident )) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let x = args[0].$xx().expect(BUILTIN);
                 let y = args[1].$yy().expect(BUILTIN) as $x;
                 Ok((*args[0].write_lock().expect(BUILTIN) = $func(x, y)?).into())
             })
         };
         (from $x:ident $op:tt $yy:ident) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let y = <$x>::from(args[1].$yy().expect(BUILTIN));
                 Ok((*args[0].write_lock::<$x>().expect(BUILTIN) $op y).into())
             })
         };
         (from $x:ty => $xx:ident . $func:ident ( $yy:ident )) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let x = args[0].$xx().expect(BUILTIN);
                 let y = <$x>::from(args[1].$yy().expect(BUILTIN));
                 Ok((*args[0].write_lock::<$x>().expect(BUILTIN) = x.$func(y)).into())
             })
         };
         (from $x:ty => $func:ident ( $xx:ident, $yy:ident )) => {
-            return Some(|_, args| {
+             Some(|_, args| {
                 let x = args[0].$xx().expect(BUILTIN);
                 let y = <$x>::from(args[1].$yy().expect(BUILTIN));
                 Ok((*args[0].write_lock().expect(BUILTIN) = $func(x, y)?).into())
@@ -502,15 +491,15 @@ pub fn get_builtin_op_assignment_fn(
         ($x:ident, $xx:ident, $y:ty, $yy:ident) => {
             #[cfg(not(feature = "no_float"))]
             if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
-                match op {
+                return match op {
                     "+=" => impl_op!($x += $yy),
                     "-=" => impl_op!($x -= $yy),
                     "*=" => impl_op!($x *= $yy),
                     "/=" => impl_op!($x /= $yy),
                     "%=" => impl_op!($x %= $yy),
                     "**=" => impl_op!($x => $xx.powf($yy as $x)),
-                    _ => return None,
-                }
+                    _ => None,
+                };
             }
         }
     }
@@ -522,31 +511,33 @@ pub fn get_builtin_op_assignment_fn(
         ($x:ident, $xx:ident, $y:ty, $yy:ident) => {
             #[cfg(feature = "decimal")]
             if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
-                if cfg!(not(feature = "unBUILTIN")) {
-                    use crate::packages::arithmetic::decimal_functions::*;
+                #[cfg(not(feature = "unchecked"))]
+                use crate::packages::arithmetic::decimal_functions::*;
 
-                    match op {
-                        "+=" => impl_op!(from $x => add($xx, $yy)),
-                        "-=" => impl_op!(from $x => subtract($xx, $yy)),
-                        "*=" => impl_op!(from $x => multiply($xx, $yy)),
-                        "/=" => impl_op!(from $x => divide($xx, $yy)),
-                        "%=" => impl_op!(from $x => modulo($xx, $yy)),
-                        "**=" => impl_op!(from $x => power($xx, $yy)),
-                        _ => return None,
-                    }
-                } else {
-                    use rust_decimal::MathematicalOps;
+                #[cfg(not(feature = "unchecked"))]
+                return match op {
+                    "+=" => impl_op!(from $x => add($xx, $yy)),
+                    "-=" => impl_op!(from $x => subtract($xx, $yy)),
+                    "*=" => impl_op!(from $x => multiply($xx, $yy)),
+                    "/=" => impl_op!(from $x => divide($xx, $yy)),
+                    "%=" => impl_op!(from $x => modulo($xx, $yy)),
+                    "**=" => impl_op!(from $x => power($xx, $yy)),
+                    _ => None,
+                };
 
-                    match op {
-                        "+=" => impl_op!(from $x += $yy),
-                        "-=" => impl_op!(from $x -= $yy),
-                        "*=" => impl_op!(from $x *= $yy),
-                        "/=" => impl_op!(from $x /= $yy),
-                        "%=" => impl_op!(from $x %= $yy),
-                        "**=" => impl_op!(from $x => $xx.powd($yy)),
-                        _ => return None,
-                    }
-                }
+                #[cfg(feature = "unchecked")]
+                use rust_decimal::MathematicalOps;
+
+                #[cfg(feature = "unchecked")]
+                return match op {
+                    "+=" => impl_op!(from $x += $yy),
+                    "-=" => impl_op!(from $x -= $yy),
+                    "*=" => impl_op!(from $x *= $yy),
+                    "/=" => impl_op!(from $x /= $yy),
+                    "%=" => impl_op!(from $x %= $yy),
+                    "**=" => impl_op!(from $x => $xx.powd($yy)),
+                    _ =>  None,
+                };
             }
         };
     }
@@ -556,31 +547,29 @@ pub fn get_builtin_op_assignment_fn(
 
     // string op= char
     if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
-        match op {
+        return match op {
             "+=" => impl_op!(ImmutableString += as_char as char),
             "-=" => impl_op!(ImmutableString -= as_char as char),
-            _ => return None,
-        }
+            _ => None,
+        };
     }
     // char op= string
     if types_pair == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
-        match op {
-            "+=" => {
-                return Some(|_, args| {
-                    let mut ch = args[0].as_char().expect(BUILTIN).to_string();
-                    ch.push_str(
-                        args[1]
-                            .read_lock::<ImmutableString>()
-                            .expect(BUILTIN)
-                            .as_str(),
-                    );
+        return match op {
+            "+=" => Some(|_, args| {
+                let mut ch = args[0].as_char().expect(BUILTIN).to_string();
+                ch.push_str(
+                    args[1]
+                        .read_lock::<ImmutableString>()
+                        .expect(BUILTIN)
+                        .as_str(),
+                );
 
-                    let mut x = args[0].write_lock::<Dynamic>().expect(BUILTIN);
-                    Ok((*x = ch.into()).into())
-                })
-            }
-            _ => return None,
-        }
+                let mut x = args[0].write_lock::<Dynamic>().expect(BUILTIN);
+                Ok((*x = ch.into()).into())
+            }),
+            _ => None,
+        };
     }
 
     // No built-in op-assignments for different types.
@@ -590,83 +579,78 @@ pub fn get_builtin_op_assignment_fn(
 
     // Beyond here, type1 == type2
     if type1 == TypeId::of::<INT>() {
-        if cfg!(not(feature = "unBUILTIN")) {
-            use crate::packages::arithmetic::arith_basic::INT::functions::*;
+        #[cfg(not(feature = "unchecked"))]
+        use crate::packages::arithmetic::arith_basic::INT::functions::*;
 
-            match op {
-                "+=" => impl_op!(INT => add(as_int, as_int)),
-                "-=" => impl_op!(INT => subtract(as_int, as_int)),
-                "*=" => impl_op!(INT => multiply(as_int, as_int)),
-                "/=" => impl_op!(INT => divide(as_int, as_int)),
-                "%=" => impl_op!(INT => modulo(as_int, as_int)),
-                "**=" => impl_op!(INT => power(as_int, as_int)),
-                ">>=" => impl_op!(INT => shift_right(as_int, as_int)),
-                "<<=" => impl_op!(INT => shift_left(as_int, as_int)),
-                _ => (),
-            }
-        } else {
-            match op {
-                "+=" => impl_op!(INT += as_int),
-                "-=" => impl_op!(INT -= as_int),
-                "*=" => impl_op!(INT *= as_int),
-                "/=" => impl_op!(INT /= as_int),
-                "%=" => impl_op!(INT %= as_int),
-                "**=" => impl_op!(INT => as_int.pow(as_int as u32)),
-                ">>=" => impl_op!(INT >>= as_int),
-                "<<=" => impl_op!(INT <<= as_int),
-                _ => (),
-            }
+        #[cfg(not(feature = "unchecked"))]
+        match op {
+            "+=" => return impl_op!(INT => add(as_int, as_int)),
+            "-=" => return impl_op!(INT => subtract(as_int, as_int)),
+            "*=" => return impl_op!(INT => multiply(as_int, as_int)),
+            "/=" => return impl_op!(INT => divide(as_int, as_int)),
+            "%=" => return impl_op!(INT => modulo(as_int, as_int)),
+            "**=" => return impl_op!(INT => power(as_int, as_int)),
+            ">>=" => return impl_op!(INT => shift_right(as_int, as_int)),
+            "<<=" => return impl_op!(INT => shift_left(as_int, as_int)),
+            _ => (),
         }
 
+        #[cfg(feature = "unchecked")]
         match op {
+            "+=" => return impl_op!(INT += as_int),
+            "-=" => return impl_op!(INT -= as_int),
+            "*=" => return impl_op!(INT *= as_int),
+            "/=" => return impl_op!(INT /= as_int),
+            "%=" => return impl_op!(INT %= as_int),
+            "**=" => return impl_op!(INT => as_int.pow(as_int as u32)),
+            ">>=" => return impl_op!(INT >>= as_int),
+            "<<=" => return impl_op!(INT <<= as_int),
+            _ => (),
+        }
+
+        return match op {
             "&=" => impl_op!(INT &= as_int),
             "|=" => impl_op!(INT |= as_int),
             "^=" => impl_op!(INT ^= as_int),
-            _ => (),
-        }
+            _ => None,
+        };
     }
 
     if type1 == TypeId::of::<bool>() {
-        match op {
+        return match op {
             "&=" => impl_op!(bool = x && as_bool),
             "|=" => impl_op!(bool = x || as_bool),
-            _ => return None,
-        }
+            _ => None,
+        };
     }
 
     if type1 == TypeId::of::<char>() {
-        match op {
-            "+=" => {
-                return Some(|_, args| {
-                    let y = args[1].as_char().expect(BUILTIN);
-                    let mut x = args[0].write_lock::<Dynamic>().expect(BUILTIN);
-                    Ok((*x = format!("{}{}", *x, y).into()).into())
-                })
-            }
-            _ => return None,
-        }
+        return match op {
+            "+=" => Some(|_, args| {
+                let y = args[1].as_char().expect(BUILTIN);
+                let mut x = args[0].write_lock::<Dynamic>().expect(BUILTIN);
+                Ok((*x = format!("{}{}", *x, y).into()).into())
+            }),
+            _ => None,
+        };
     }
 
     if type1 == TypeId::of::<ImmutableString>() {
-        match op {
-            "+=" => {
-                return Some(|_, args| {
-                    let (first, second) = args.split_first_mut().expect(BUILTIN);
-                    let mut x = first.write_lock::<ImmutableString>().expect(BUILTIN);
-                    let y = &*second[0].read_lock::<ImmutableString>().expect(BUILTIN);
-                    Ok((*x += y).into())
-                })
-            }
-            "-=" => {
-                return Some(|_, args| {
-                    let (first, second) = args.split_first_mut().expect(BUILTIN);
-                    let mut x = first.write_lock::<ImmutableString>().expect(BUILTIN);
-                    let y = &*second[0].read_lock::<ImmutableString>().expect(BUILTIN);
-                    Ok((*x -= y).into())
-                })
-            }
-            _ => return None,
-        }
+        return match op {
+            "+=" => Some(|_, args| {
+                let (first, second) = args.split_first_mut().expect(BUILTIN);
+                let mut x = first.write_lock::<ImmutableString>().expect(BUILTIN);
+                let y = &*second[0].read_lock::<ImmutableString>().expect(BUILTIN);
+                Ok((*x += y).into())
+            }),
+            "-=" => Some(|_, args| {
+                let (first, second) = args.split_first_mut().expect(BUILTIN);
+                let mut x = first.write_lock::<ImmutableString>().expect(BUILTIN);
+                let y = &*second[0].read_lock::<ImmutableString>().expect(BUILTIN);
+                Ok((*x -= y).into())
+            }),
+            _ => None,
+        };
     }
 
     None

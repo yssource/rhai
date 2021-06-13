@@ -917,7 +917,7 @@ impl StmtBlock {
     /// Get the statements of this statements block.
     #[inline(always)]
     #[must_use]
-    pub fn statements(&mut self) -> &mut StaticVec<Stmt> {
+    pub fn statements_mut(&mut self) -> &mut StaticVec<Stmt> {
         &mut self.0
     }
 }
@@ -1536,18 +1536,6 @@ impl FnCallHashes {
     #[must_use]
     pub fn is_native_only(&self) -> bool {
         self.script.is_none()
-    }
-    /// Get the script function hash from this [`FnCallHashes`].
-    #[inline(always)]
-    #[must_use]
-    pub fn script_hash(&self) -> Option<u64> {
-        self.script
-    }
-    /// Get the naive Rust function hash from this [`FnCallHashes`].
-    #[inline(always)]
-    #[must_use]
-    pub fn native_hash(&self) -> u64 {
-        self.native
     }
 }
 

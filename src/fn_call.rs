@@ -618,7 +618,7 @@ impl Engine {
         state: &mut State,
         lib: &[&Module],
         fn_name: &str,
-        hash: FnCallHashes,
+        hashes: FnCallHashes,
         args: &mut FnCallArgs,
         is_ref: bool,
         _is_method: bool,
@@ -689,7 +689,7 @@ impl Engine {
 
         // Scripted function call?
         #[cfg(not(feature = "no_function"))]
-        let hash_script = hash.script_hash();
+        let hash_script = hashes.script;
 
         #[cfg(not(feature = "no_function"))]
         if let Some(f) = hash_script.and_then(|hash| {
@@ -779,7 +779,7 @@ impl Engine {
         }
 
         // Native function call
-        let hash = hash.native_hash();
+        let hash = hashes.native;
         self.call_native_fn(mods, state, lib, fn_name, hash, args, is_ref, false, pos)
     }
 

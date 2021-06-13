@@ -478,7 +478,7 @@ fn parse_index_chain(
     let idx_expr = parse_expr(input, state, lib, settings.level_up())?;
 
     // Check type of indexing - must be integer or string
-    match &idx_expr {
+    match idx_expr {
         Expr::IntegerConstant(_, pos) => match lhs {
             Expr::IntegerConstant(_, _)
             | Expr::Array(_, _)
@@ -489,7 +489,7 @@ fn parse_index_chain(
                 return Err(PERR::MalformedIndexExpr(
                     "Object map access expects string index, not a number".into(),
                 )
-                .into_err(*pos))
+                .into_err(pos))
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -1314,14 +1314,14 @@ fn parse_primary(
 
     // Cache the hash key for namespace-qualified variables
     match root_expr {
-        Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x),
-        Expr::Index(ref mut x, _) | Expr::Dot(ref mut x, _) => match &mut x.lhs {
-            Expr::Variable(_, _, x) if x.1.is_some() => Some(x),
+        Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
+        Expr::Index(ref mut x, _) | Expr::Dot(ref mut x, _) => match x.lhs {
+            Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
             _ => None,
         },
         _ => None,
     }
-    .map(|x| match x.as_mut() {
+    .map(|x| match x {
         (_, Some((hash, namespace)), name) => {
             *hash = calc_qualified_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0);
 
@@ -1467,17 +1467,17 @@ fn make_assignment_stmt<'a>(
 
     let op_info = op.map(|v| OpAssignment::new(v));
 
-    match &lhs {
+    match lhs {
         // const_expr = rhs
-        expr if expr.is_constant() => {
+        ref expr if expr.is_constant() => {
             Err(PERR::AssignmentToConstant("".into()).into_err(lhs.position()))
         }
         // var (non-indexed) = rhs
-        Expr::Variable(None, _, x) if x.0.is_none() => {
+        Expr::Variable(None, _, ref x) if x.0.is_none() => {
             Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
         }
         // var (indexed) = rhs
-        Expr::Variable(i, var_pos, x) => {
+        Expr::Variable(i, var_pos, ref x) => {
             let (index, _, name) = x.as_ref();
             let index = i.map_or_else(
                 || {
@@ -1495,20 +1495,20 @@ fn make_assignment_stmt<'a>(
                 }
                 // Constant values cannot be assigned to
                 AccessMode::ReadOnly => {
-                    Err(PERR::AssignmentToConstant(name.to_string()).into_err(*var_pos))
+                    Err(PERR::AssignmentToConstant(name.to_string()).into_err(var_pos))
                 }
             }
         }
         // xxx[???]... = rhs, xxx.prop... = rhs
-        Expr::Index(x, _) | Expr::Dot(x, _) => {
+        Expr::Index(ref x, _) | Expr::Dot(ref x, _) => {
             match check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _))) {
-                None => match &x.lhs {
+                None => match x.lhs {
                     // var[???] = rhs, var.??? = rhs
                     Expr::Variable(_, _, _) => {
                         Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
                     }
                     // expr[???] = rhs, expr.??? = rhs
-                    expr => {
+                    ref expr => {
                         Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(expr.position()))
                     }
                 },
@@ -2993,7 +2993,7 @@ fn parse_anon_fn(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let mut params: StaticVec<_> = Default::default();
+    let mut params_list: StaticVec<_> = Default::default();
 
     if input.next().expect(NEVER_ENDS).0 != Token::Or {
         if !match_token(input, Token::Pipe).0 {
@@ -3001,12 +3001,12 @@ fn parse_anon_fn(
                 match input.next().expect(NEVER_ENDS) {
                     (Token::Pipe, _) => break,
                     (Token::Identifier(s), pos) => {
-                        if params.iter().any(|(p, _)| p == &s) {
+                        if params_list.iter().any(|(p, _)| p == &s) {
                             return Err(PERR::FnDuplicatedParam("".to_string(), s).into_err(pos));
                         }
                         let s = state.get_identifier(s);
                         state.stack.push((s.clone(), AccessMode::ReadWrite));
-                        params.push((s, pos))
+                        params_list.push((s, pos))
                     }
                     (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                     (_, pos) => {
@@ -3040,29 +3040,26 @@ fn parse_anon_fn(
 
     // External variables may need to be processed in a consistent order,
     // so extract them into a list.
-    let externals: StaticVec<Identifier> = {
-        #[cfg(not(feature = "no_closure"))]
-        {
-            state
-                .external_vars
-                .iter()
-                .map(|(name, _)| name.clone())
-                .collect()
-        }
-        #[cfg(feature = "no_closure")]
-        Default::default()
-    };
+    #[cfg(not(feature = "no_closure"))]
+    let externals: StaticVec<Identifier> = state
+        .external_vars
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
 
-    let mut params: StaticVec<_> = if cfg!(not(feature = "no_closure")) {
-        externals
-            .iter()
-            .cloned()
-            .chain(params.into_iter().map(|(v, _)| v))
-            .collect()
-    } else {
-        params.into_iter().map(|(v, _)| v).collect()
-    };
-    params.shrink_to_fit();
+    let mut params = StaticVec::with_capacity(
+        params_list.len()
+            + if cfg!(not(feature = "no_closure")) {
+                externals.len()
+            } else {
+                0
+            },
+    );
+
+    #[cfg(not(feature = "no_closure"))]
+    params.extend(externals.iter().cloned());
+
+    params.extend(params_list.into_iter().map(|(v, _)| v));
 
     // Create unique function name by hashing the script body plus the parameters.
     let hasher = &mut get_hasher();
