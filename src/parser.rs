@@ -3001,12 +3001,12 @@ fn parse_anon_fn(
                 match input.next().expect(NEVER_ENDS) {
                     (Token::Pipe, _) => break,
                     (Token::Identifier(s), pos) => {
-                        if params_list.iter().any(|(p, _)| p == &s) {
+                        if params_list.iter().any(|p| p == &s) {
                             return Err(PERR::FnDuplicatedParam("".to_string(), s).into_err(pos));
                         }
                         let s = state.get_identifier(s);
                         state.stack.push((s.clone(), AccessMode::ReadWrite));
-                        params_list.push((s, pos))
+                        params_list.push(s)
                     }
                     (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                     (_, pos) => {
@@ -3047,19 +3047,15 @@ fn parse_anon_fn(
         .map(|(name, _)| name.clone())
         .collect();
 
-    let mut params = StaticVec::with_capacity(
-        params_list.len()
-            + if cfg!(not(feature = "no_closure")) {
-                externals.len()
-            } else {
-                0
-            },
-    );
+    #[cfg(not(feature = "no_closure"))]
+    let mut params = StaticVec::with_capacity(params_list.len() + externals.len());
+    #[cfg(feature = "no_closure")]
+    let mut params = StaticVec::with_capacity(params_list.len());
 
     #[cfg(not(feature = "no_closure"))]
     params.extend(externals.iter().cloned());
 
-    params.extend(params_list.into_iter().map(|(v, _)| v));
+    params.append(&mut params_list);
 
     // Create unique function name by hashing the script body plus the parameters.
     let hasher = &mut get_hasher();
