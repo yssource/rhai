@@ -248,12 +248,12 @@ fn optimize_stmt_block(
             if preserve_result && index >= statements.len() - 1 {
                 break;
             } else {
-                match &statements[index] {
-                    stmt if is_pure(stmt) && index >= first_non_constant => {
+                match statements[index] {
+                    ref stmt if is_pure(stmt) && index >= first_non_constant => {
                         state.set_dirty();
                         statements.remove(index);
                     }
-                    stmt if stmt.is_pure() => {
+                    ref stmt if stmt.is_pure() => {
                         state.set_dirty();
                         if index < first_non_constant {
                             first_non_constant -= 1;
@@ -269,36 +269,37 @@ fn optimize_stmt_block(
         // We cannot remove anything for non-pure statements due to potential side-effects.
         if preserve_result {
             loop {
-                match &mut statements[..] {
+                match statements[..] {
                     // { return; } -> {}
                     [Stmt::Return(crate::ast::ReturnType::Return, None, _)] if reduce_return => {
                         state.set_dirty();
                         statements.clear();
                     }
-                    [stmt] if !stmt.returns_value() && is_pure(stmt) => {
+                    [ref stmt] if !stmt.returns_value() && is_pure(stmt) => {
                         state.set_dirty();
                         statements.clear();
                     }
                     // { ...; return; } -> { ... }
-                    [.., last_stmt, Stmt::Return(crate::ast::ReturnType::Return, None, _)]
+                    [.., ref last_stmt, Stmt::Return(crate::ast::ReturnType::Return, None, _)]
                         if reduce_return && !last_stmt.returns_value() =>
                     {
                         state.set_dirty();
                         statements.pop().unwrap();
                     }
                     // { ...; return val; } -> { ...; val }
-                    [.., Stmt::Return(crate::ast::ReturnType::Return, expr, pos)]
+                    [.., Stmt::Return(crate::ast::ReturnType::Return, ref mut expr, pos)]
                         if reduce_return =>
                     {
                         state.set_dirty();
                         *statements.last_mut().unwrap() = if let Some(expr) = expr {
                             Stmt::Expr(mem::take(expr))
                         } else {
-                            Stmt::Noop(*pos)
+                            Stmt::Noop(pos)
                         };
                     }
-                    [.., second_last_stmt, Stmt::Noop(_)] if second_last_stmt.returns_value() => (),
-                    [.., second_last_stmt, last_stmt]
+                    [.., ref second_last_stmt, Stmt::Noop(_)]
+                        if second_last_stmt.returns_value() => {}
+                    [.., ref second_last_stmt, ref last_stmt]
                         if !last_stmt.returns_value() && is_pure(last_stmt) =>
                     {
                         state.set_dirty();
@@ -313,8 +314,8 @@ fn optimize_stmt_block(
             }
         } else {
             loop {
-                match &statements[..] {
-                    [stmt] if is_pure(stmt) => {
+                match statements[..] {
+                    [ref stmt] if is_pure(stmt) => {
                         state.set_dirty();
                         statements.clear();
                     }
@@ -326,13 +327,13 @@ fn optimize_stmt_block(
                         statements.pop().unwrap();
                     }
                     // { ...; return pure_val; } -> { ... }
-                    [.., Stmt::Return(crate::ast::ReturnType::Return, Some(expr), _)]
+                    [.., Stmt::Return(crate::ast::ReturnType::Return, Some(ref expr), _)]
                         if reduce_return && expr.is_pure() =>
                     {
                         state.set_dirty();
                         statements.pop().unwrap();
                     }
-                    [.., last_stmt] if is_pure(last_stmt) => {
+                    [.., ref last_stmt] if is_pure(last_stmt) => {
                         state.set_dirty();
                         statements.pop().unwrap();
                     }
@@ -373,8 +374,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                         && x2.args[0].get_variable_name(true) == x.0.get_variable_name(true)
                 ) =>
         {
-            match &mut x.2 {
-                Expr::FnCall(x2, _) => {
+            match x.2 {
+                Expr::FnCall(ref mut x2, _) => {
                     state.set_dirty();
                     let op = Token::lookup_from_syntax(&x2.name).unwrap();
                     let op_assignment = op.make_op_assignment().unwrap();

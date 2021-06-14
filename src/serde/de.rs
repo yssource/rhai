@@ -130,7 +130,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
     type Error = Box<EvalAltResult>;
 
     fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
-        match &self.value.0 {
+        match self.value.0 {
             Union::Unit(_, _, _) => self.deserialize_unit(visitor),
             Union::Bool(_, _, _) => self.deserialize_bool(visitor),
             Union::Str(_, _, _) => self.deserialize_str(visitor),
@@ -163,16 +163,16 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             #[cfg(not(feature = "no_std"))]
             Union::TimeStamp(_, _, _) => self.type_error(),
 
-            Union::Variant(value, _, _) if value.is::<i8>() => self.deserialize_i8(visitor),
-            Union::Variant(value, _, _) if value.is::<i16>() => self.deserialize_i16(visitor),
-            Union::Variant(value, _, _) if value.is::<i32>() => self.deserialize_i32(visitor),
-            Union::Variant(value, _, _) if value.is::<i64>() => self.deserialize_i64(visitor),
-            Union::Variant(value, _, _) if value.is::<i128>() => self.deserialize_i128(visitor),
-            Union::Variant(value, _, _) if value.is::<u8>() => self.deserialize_u8(visitor),
-            Union::Variant(value, _, _) if value.is::<u16>() => self.deserialize_u16(visitor),
-            Union::Variant(value, _, _) if value.is::<u32>() => self.deserialize_u32(visitor),
-            Union::Variant(value, _, _) if value.is::<u64>() => self.deserialize_u64(visitor),
-            Union::Variant(value, _, _) if value.is::<u128>() => self.deserialize_u128(visitor),
+            Union::Variant(ref value, _, _) if value.is::<i8>() => self.deserialize_i8(visitor),
+            Union::Variant(ref value, _, _) if value.is::<i16>() => self.deserialize_i16(visitor),
+            Union::Variant(ref value, _, _) if value.is::<i32>() => self.deserialize_i32(visitor),
+            Union::Variant(ref value, _, _) if value.is::<i64>() => self.deserialize_i64(visitor),
+            Union::Variant(ref value, _, _) if value.is::<i128>() => self.deserialize_i128(visitor),
+            Union::Variant(ref value, _, _) if value.is::<u8>() => self.deserialize_u8(visitor),
+            Union::Variant(ref value, _, _) if value.is::<u16>() => self.deserialize_u16(visitor),
+            Union::Variant(ref value, _, _) if value.is::<u32>() => self.deserialize_u32(visitor),
+            Union::Variant(ref value, _, _) if value.is::<u64>() => self.deserialize_u64(visitor),
+            Union::Variant(ref value, _, _) if value.is::<u128>() => self.deserialize_u128(visitor),
 
             Union::Variant(_, _, _) => self.type_error(),
 
