@@ -325,16 +325,11 @@ type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 #[cfg(feature = "internals")]
 pub type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 
-#[cfg(not(feature = "internals"))]
 #[cfg(not(feature = "no_smartstring"))]
 pub(crate) type SmartString = smartstring::SmartString<smartstring::Compact>;
 
 #[cfg(feature = "no_smartstring")]
 pub(crate) type SmartString = String;
-
-#[cfg(feature = "internals")]
-#[cfg(not(feature = "no_smartstring"))]
-pub type SmartString = smartstring::SmartString<smartstring::Compact>;
 
 // Compiler guards against mutually-exclusive feature flags
 
