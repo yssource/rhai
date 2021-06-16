@@ -993,11 +993,7 @@ pub enum Stmt {
     /// `{` stmt`;` ... `}`
     Block(Box<[Stmt]>, Position),
     /// `try` `{` stmt; ... `}` `catch` `(` var `)` `{` stmt; ... `}`
-    TryCatch(
-        Box<(StmtBlock, Option<Ident>, StmtBlock)>,
-        Position,
-        Position,
-    ),
+    TryCatch(Box<(StmtBlock, Option<Ident>, StmtBlock)>, Position),
     /// [expression][Expr]
     Expr(Expr),
     /// `continue`
@@ -1072,7 +1068,7 @@ impl Stmt {
             | Self::Return(_, _, pos)
             | Self::Let(_, _, _, pos)
             | Self::Const(_, _, _, pos)
-            | Self::TryCatch(_, pos, _) => *pos,
+            | Self::TryCatch(_, pos) => *pos,
 
             Self::Expr(x) => x.position(),
 
@@ -1102,7 +1098,7 @@ impl Stmt {
             | Self::Return(_, _, pos)
             | Self::Let(_, _, _, pos)
             | Self::Const(_, _, _, pos)
-            | Self::TryCatch(_, pos, _) => *pos = new_pos,
+            | Self::TryCatch(_, pos) => *pos = new_pos,
 
             Self::Expr(x) => {
                 x.set_position(new_pos);
@@ -1133,7 +1129,7 @@ impl Stmt {
             | Self::While(_, _, _)
             | Self::Do(_, _, _, _)
             | Self::For(_, _, _)
-            | Self::TryCatch(_, _, _) => false,
+            | Self::TryCatch(_, _) => false,
 
             Self::Let(_, _, _, _)
             | Self::Const(_, _, _, _)
@@ -1158,7 +1154,7 @@ impl Stmt {
             | Self::While(_, _, _)
             | Self::For(_, _, _)
             | Self::Block(_, _)
-            | Self::TryCatch(_, _, _) => true,
+            | Self::TryCatch(_, _) => true,
 
             // A No-op requires a semicolon in order to know it is an empty statement!
             Self::Noop(_) => false,
@@ -1211,7 +1207,7 @@ impl Stmt {
             | Self::FnCall(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::Return(_, _, _) => false,
-            Self::TryCatch(x, _, _) => {
+            Self::TryCatch(x, _) => {
                 (x.0).0.iter().all(Stmt::is_pure) && (x.2).0.iter().all(Stmt::is_pure)
             }
 
@@ -1354,7 +1350,7 @@ impl Stmt {
                     }
                 }
             }
-            Self::TryCatch(x, _, _) => {
+            Self::TryCatch(x, _) => {
                 for s in &(x.0).0 {
                     if !s.walk(path, on_node) {
                         return false;

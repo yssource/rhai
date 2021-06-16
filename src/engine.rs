@@ -1172,16 +1172,18 @@ impl Engine {
                 this_ptr,
                 level: 0,
             };
-            if let Some(mut result) = resolve_var(
+            match resolve_var(
                 expr.get_variable_name(true)
                     .expect("`expr` should be `Variable`"),
                 index,
                 &context,
-            )
-            .map_err(|err| err.fill_position(var_pos))?
-            {
-                result.set_access_mode(AccessMode::ReadOnly);
-                return Ok((result.into(), var_pos));
+            ) {
+                Ok(Some(mut result)) => {
+                    result.set_access_mode(AccessMode::ReadOnly);
+                    return Ok((result.into(), var_pos));
+                }
+                Ok(None) => (),
+                Err(err) => return Err(err.fill_position(var_pos)),
             }
         }
 
@@ -1423,6 +1425,7 @@ impl Engine {
                                 let args = &mut [target, &mut name.into(), &mut new_val];
                                 let hash_set =
                                     FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_SET, 3));
+
                                 self.exec_fn_call(
                                     mods, state, lib, FN_IDX_SET, hash_set, args, is_ref, true,
                                     *pos, None, level,
@@ -2723,7 +2726,7 @@ impl Engine {
             }
 
             // Try/Catch statement
-            Stmt::TryCatch(x, _, _) => {
+            Stmt::TryCatch(x, _) => {
                 let (try_stmt, err_var, catch_stmt) = x.as_ref();
 
                 let result = self

@@ -625,7 +625,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             }
         }
         // try { pure try_block } catch ( var ) { catch_block } -> try_block
-        Stmt::TryCatch(x, _, _) if x.0.iter().all(Stmt::is_pure) => {
+        Stmt::TryCatch(x, _) if x.0.iter().all(Stmt::is_pure) => {
             // If try block is pure, there will never be any exceptions
             state.set_dirty();
             let try_pos = x.0.position();
@@ -636,7 +636,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             );
         }
         // try { try_block } catch ( var ) { catch_block }
-        Stmt::TryCatch(x, _, _) => {
+        Stmt::TryCatch(x, _) => {
             let try_block = mem::take(x.0.statements_mut()).into_vec();
             *x.0.statements_mut() =
                 optimize_stmt_block(try_block, state, false, true, false).into();

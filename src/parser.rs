@@ -1896,12 +1896,10 @@ fn parse_custom_syntax(
         settings.pos = *fwd_pos;
         let settings = settings.level_up();
 
-        let required_token = if let Some(seg) = parse_func(&segments, fwd_token.syntax().as_ref())
-            .map_err(|err| err.0.into_err(settings.pos))?
-        {
-            seg
-        } else {
-            break;
+        let required_token = match parse_func(&segments, fwd_token.syntax().as_ref()) {
+            Ok(Some(seg)) => seg,
+            Ok(None) => break,
+            Err(err) => return Err(err.0.into_err(settings.pos)),
         };
 
         match required_token.as_str() {
@@ -2824,7 +2822,6 @@ fn parse_try_catch(
     Ok(Stmt::TryCatch(
         Box::new((body.into(), var_def, catch_body.into())),
         settings.pos,
-        catch_pos,
     ))
 }
 
@@ -2845,12 +2842,11 @@ fn parse_fn(
 
     let (token, pos) = input.next().expect(NEVER_ENDS);
 
-    let name = token
-        .into_function_name_for_override()
-        .map_err(|t| match t {
-            Token::Reserved(s) => PERR::Reserved(s).into_err(pos),
-            _ => PERR::FnMissingName.into_err(pos),
-        })?;
+    let name = match token.into_function_name_for_override() {
+        Ok(r) => r,
+        Err(Token::Reserved(s)) => return Err(PERR::Reserved(s).into_err(pos)),
+        Err(_) => return Err(PERR::FnMissingName.into_err(pos)),
+    };
 
     match input.peek().expect(NEVER_ENDS) {
         (Token::LeftParen, _) => eat_token(input, Token::LeftParen),
