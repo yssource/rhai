@@ -1,13 +1,16 @@
 //! Module implementing custom syntax for [`Engine`].
 
 use crate::ast::Expr;
+use crate::dynamic::Variant;
 use crate::engine::EvalContext;
 use crate::fn_native::SendSync;
+use crate::r#unsafe::unsafe_try_cast;
 use crate::token::{is_valid_identifier, Token};
 use crate::{
-    Dynamic, Engine, Identifier, ImmutableString, LexError, ParseError, Position, RhaiResult,
-    Shared, StaticVec,
+    Engine, Identifier, ImmutableString, LexError, ParseError, Position, RhaiResult, Shared,
+    StaticVec, INT,
 };
+use std::any::TypeId;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -67,10 +70,53 @@ impl Expression<'_> {
         self.0.position()
     }
     /// Get the value of this expression if it is a literal constant.
+    /// Supports [`INT`][crate::INT], [`FLOAT`][crate::FLOAT], `()`, `char`, `bool` and
+    /// [`ImmutableString`][crate::ImmutableString].
+    ///
+    /// Returns [`None`] also if the constant is not of the specified type.
     #[inline(always)]
     #[must_use]
-    pub fn get_literal_value(&self) -> Option<Dynamic> {
-        self.0.get_literal_value()
+    pub fn get_literal_value<T: Variant>(&self) -> Option<T> {
+        // Coded this way in order to maximally leverage potentials for dead-code removal.
+
+        if TypeId::of::<T>() == TypeId::of::<INT>() {
+            return match self.0 {
+                Expr::IntegerConstant(x, _) => unsafe_try_cast(*x).ok(),
+                _ => None,
+            };
+        }
+        #[cfg(not(feature = "no_float"))]
+        if TypeId::of::<T>() == TypeId::of::<crate::FLOAT>() {
+            return match self.0 {
+                Expr::FloatConstant(x, _) => unsafe_try_cast(*x).ok(),
+                _ => None,
+            };
+        }
+        if TypeId::of::<T>() == TypeId::of::<char>() {
+            return match self.0 {
+                Expr::CharConstant(x, _) => unsafe_try_cast(*x).ok(),
+                _ => None,
+            };
+        }
+        if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
+            return match self.0 {
+                Expr::StringConstant(x, _) => unsafe_try_cast(x.clone()).ok(),
+                _ => None,
+            };
+        }
+        if TypeId::of::<T>() == TypeId::of::<bool>() {
+            return match self.0 {
+                Expr::BoolConstant(x, _) => unsafe_try_cast(*x).ok(),
+                _ => None,
+            };
+        }
+        if TypeId::of::<T>() == TypeId::of::<()>() {
+            return match self.0 {
+                Expr::Unit(_) => unsafe_try_cast(()).ok(),
+                _ => None,
+            };
+        }
+        None
     }
 }
 

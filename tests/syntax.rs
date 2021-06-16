@@ -24,7 +24,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
         true,
         |context, inputs| {
             let var_name = inputs[0].get_variable_name().unwrap().to_string();
-            let max = inputs[1].get_literal_value().unwrap().as_int().unwrap();
+            let max = inputs[1].get_literal_value::<INT>().unwrap();
             let stmt = inputs.get(2).unwrap();
             let condition = inputs.get(3).unwrap();
 
