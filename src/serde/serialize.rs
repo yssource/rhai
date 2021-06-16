@@ -31,7 +31,7 @@ impl Serialize for Dynamic {
 
             #[cfg(feature = "decimal")]
             #[cfg(not(feature = "f32_float"))]
-            Union::Decimal(x, _, _) => {
+            Union::Decimal(ref x, _, _) => {
                 use rust_decimal::prelude::ToPrimitive;
 
                 if let Some(v) = x.to_f64() {
@@ -42,7 +42,7 @@ impl Serialize for Dynamic {
             }
             #[cfg(feature = "decimal")]
             #[cfg(feature = "f32_float")]
-            Union::Decimal(x, _, _) => {
+            Union::Decimal(ref x, _, _) => {
                 use rust_decimal::prelude::ToPrimitive;
 
                 if let Some(v) = x.to_f32() {
