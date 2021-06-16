@@ -59,8 +59,7 @@ pub enum EvalAltResult {
     /// Bit-field indexing out-of-bounds.
     /// Wrapped values are the current number of bits in the bit-field and the index number.
     ErrorBitFieldBounds(usize, INT, Position),
-    /// Trying to index into a type that is not an array, an object map, or a string, and has no
-    /// indexer function defined. Wrapped value is the type name.
+    /// Trying to index into a type that has no indexer function defined. Wrapped value is the type name.
     ErrorIndexingType(String, Position),
     /// The `for` statement encounters a type that is not an iterator.
     ErrorFor(Position),
@@ -101,14 +100,12 @@ impl EvalAltResult {
             #[allow(deprecated)]
             Self::ErrorSystem(_, s) => s.description(),
             Self::ErrorParsing(p, _) => p.desc(),
-            Self::ErrorInFunctionCall(_,_, _, _) => "Error in called function",
+            Self::ErrorInFunctionCall(_, _, _, _) => "Error in called function",
             Self::ErrorInModule(_, _, _) => "Error in module",
             Self::ErrorFunctionNotFound(_, _) => "Function not found",
             Self::ErrorUnboundThis(_) => "'this' is not bound",
             Self::ErrorMismatchDataType(_, _, _) => "Data type is incorrect",
-            Self::ErrorIndexingType(_, _) => {
-                "Indexing can only be performed on an array, an object map, a string, or a type with an indexer function defined"
-            }
+            Self::ErrorIndexingType(_, _) => "No indexer of the appropriate types defined",
             Self::ErrorArrayBounds(0, _, _) => "Empty array has nothing to access",
             Self::ErrorArrayBounds(_, _, _) => "Array index out of bounds",
             Self::ErrorStringBounds(0, _, _) => "Empty string has nothing to index",
@@ -126,7 +123,7 @@ impl EvalAltResult {
             Self::ErrorTooManyModules(_) => "Too many modules imported",
             Self::ErrorStackOverflow(_) => "Stack overflow",
             Self::ErrorDataTooLarge(_, _) => "Data size exceeds maximum limit",
-            Self::ErrorTerminated(_,_) => "Script terminated.",
+            Self::ErrorTerminated(_, _) => "Script terminated.",
             Self::ErrorRuntime(_, _) => "Runtime error",
             Self::LoopBreak(true, _) => "Break statement not inside a loop",
             Self::LoopBreak(false, _) => "Continue statement not inside a loop",
@@ -175,7 +172,7 @@ impl fmt::Display for EvalAltResult {
 
             Self::ErrorDotExpr(s, _) if !s.is_empty() => f.write_str(s)?,
 
-            Self::ErrorIndexingType(s, _) => write!(f, "Indexer not registered for type '{}'", s)?,
+            Self::ErrorIndexingType(s, _) => write!(f, "Indexer not registered for '{}'", s)?,
 
             Self::ErrorUnboundThis(_)
             | Self::ErrorFor(_)

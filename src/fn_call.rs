@@ -373,7 +373,11 @@ impl Engine {
                 assert!(args.len() == 2);
 
                 EvalAltResult::ErrorIndexingType(
-                    self.map_type_name(args[0].type_name()).to_string(),
+                    format!(
+                        "{} [{}]",
+                        self.map_type_name(args[0].type_name()),
+                        self.map_type_name(args[1].type_name())
+                    ),
                     pos,
                 )
                 .into()
@@ -385,7 +389,12 @@ impl Engine {
                 assert!(args.len() == 3);
 
                 EvalAltResult::ErrorIndexingType(
-                    self.map_type_name(args[0].type_name()).to_string(),
+                    format!(
+                        "{} [{}] = {}",
+                        self.map_type_name(args[0].type_name()),
+                        self.map_type_name(args[1].type_name()),
+                        self.map_type_name(args[2].type_name())
+                    ),
                     pos,
                 )
                 .into()
