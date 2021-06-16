@@ -214,6 +214,7 @@ impl Engine {
     /// 2) Functions registered into the global namespace
     /// 3) Functions in static modules
     /// 4) Functions in global modules (optional)
+    #[must_use]
     pub fn gen_fn_metadata_with_ast_to_json(
         &self,
         ast: &AST,
@@ -253,6 +254,7 @@ impl Engine {
     /// 1) Functions registered into the global namespace
     /// 2) Functions in static modules
     /// 3) Functions in global modules (optional)
+    #[must_use]
     pub fn gen_fn_metadata_to_json(&self, include_global: bool) -> serde_json::Result<String> {
         self.gen_fn_metadata_with_ast_to_json(&Default::default(), include_global)
     }

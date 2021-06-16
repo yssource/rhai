@@ -9,7 +9,7 @@ use std::prelude::v1::*;
 use crate::FLOAT;
 
 #[cfg(not(feature = "no_float"))]
-use crate::result::EvalAltResult;
+use crate::error::EvalAltResult;
 
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]

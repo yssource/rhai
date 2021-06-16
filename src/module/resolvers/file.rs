@@ -77,6 +77,7 @@ impl FileModuleResolver {
     /// engine.set_module_resolver(resolver);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn new() -> Self {
         Self::new_with_extension(RHAI_SCRIPT_EXTENSION)
     }
@@ -99,6 +100,7 @@ impl FileModuleResolver {
     /// engine.set_module_resolver(resolver);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn new_with_path(path: impl Into<PathBuf>) -> Self {
         Self::new_with_path_and_extension(path, RHAI_SCRIPT_EXTENSION)
     }
@@ -118,6 +120,7 @@ impl FileModuleResolver {
     /// engine.set_module_resolver(resolver);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn new_with_extension(extension: impl Into<Identifier>) -> Self {
         Self {
             base_path: None,
@@ -143,6 +146,7 @@ impl FileModuleResolver {
     /// engine.set_module_resolver(resolver);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn new_with_path_and_extension(
         path: impl Into<PathBuf>,
         extension: impl Into<Identifier>,
@@ -157,6 +161,7 @@ impl FileModuleResolver {
 
     /// Get the base path for script files.
     #[inline(always)]
+    #[must_use]
     pub fn base_path(&self) -> Option<&Path> {
         self.base_path.as_ref().map(PathBuf::as_ref)
     }
@@ -169,6 +174,7 @@ impl FileModuleResolver {
 
     /// Get the script file extension.
     #[inline(always)]
+    #[must_use]
     pub fn extension(&self) -> &str {
         &self.extension
     }
@@ -188,12 +194,14 @@ impl FileModuleResolver {
     }
     /// Is the cache enabled?
     #[inline(always)]
+    #[must_use]
     pub fn is_cache_enabled(&self) -> bool {
         self.cache_enabled
     }
 
     /// Is a particular path cached?
     #[inline(always)]
+    #[must_use]
     pub fn is_cached(&self, path: &str, source_path: Option<&str>) -> bool {
         if !self.cache_enabled {
             return false;
@@ -208,16 +216,19 @@ impl FileModuleResolver {
     }
     /// Empty the internal cache.
     #[inline(always)]
-    pub fn clear_cache(&mut self) {
+    pub fn clear_cache(&mut self) -> &mut Self {
         #[cfg(not(feature = "sync"))]
         self.cache.borrow_mut().clear();
         #[cfg(feature = "sync")]
         self.cache.write().unwrap().clear();
+
+        self
     }
     /// Remove the specified path from internal cache.
     ///
     /// The next time this path is resolved, the script file will be loaded once again.
     #[inline(always)]
+    #[must_use]
     pub fn clear_cache_for_path(
         &mut self,
         path: &str,
@@ -240,6 +251,8 @@ impl FileModuleResolver {
             .map(|(_, v)| v);
     }
     /// Construct a full file path.
+    #[must_use]
+    #[must_use]
     fn get_file_path(&self, path: &str, source_path: Option<&str>) -> PathBuf {
         let path = Path::new(path);
 

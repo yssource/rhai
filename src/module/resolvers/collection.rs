@@ -41,6 +41,7 @@ impl ModuleResolversCollection {
     /// engine.set_module_resolver(collection);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn new() -> Self {
         Default::default()
     }
@@ -76,11 +77,13 @@ impl ModuleResolversCollection {
     }
     /// Get an iterator of all the [module resolvers][ModuleResolver].
     #[inline(always)]
+    #[must_use]
     pub fn iter(&self) -> impl Iterator<Item = &dyn ModuleResolver> {
         self.0.iter().map(|v| v.as_ref())
     }
     /// Get a mutable iterator of all the [module resolvers][ModuleResolver].
     #[inline(always)]
+    #[must_use]
     pub fn into_iter(self) -> impl Iterator<Item = Box<dyn ModuleResolver>> {
         self.0.into_iter()
     }
@@ -92,11 +95,13 @@ impl ModuleResolversCollection {
     }
     /// Is this [`ModuleResolversCollection`] empty?
     #[inline(always)]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
     /// Get the number of [module resolvers][ModuleResolver] in this [`ModuleResolversCollection`].
     #[inline(always)]
+    #[must_use]
     pub fn len(&self) -> usize {
         self.0.len()
     }

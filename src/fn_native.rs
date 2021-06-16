@@ -92,6 +92,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized> From<(&'a Engine, &'a str, &'a M)>
 impl<'a> NativeCallContext<'a> {
     /// Create a new [`NativeCallContext`].
     #[inline(always)]
+    #[must_use]
     pub fn new(engine: &'a Engine, fn_name: &'a str, lib: &'a [&Module]) -> Self {
         Self {
             engine,
@@ -108,6 +109,7 @@ impl<'a> NativeCallContext<'a> {
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
+    #[must_use]
     pub fn new_with_all_fields(
         engine: &'a Engine,
         fn_name: &'a str,
@@ -125,16 +127,19 @@ impl<'a> NativeCallContext<'a> {
     }
     /// The current [`Engine`].
     #[inline(always)]
+    #[must_use]
     pub fn engine(&self) -> &Engine {
         self.engine
     }
     /// Name of the function called.
     #[inline(always)]
+    #[must_use]
     pub fn fn_name(&self) -> &str {
         self.fn_name
     }
     /// The current source.
     #[inline(always)]
+    #[must_use]
     pub fn source(&self) -> Option<&str> {
         self.source
     }
@@ -143,6 +148,7 @@ impl<'a> NativeCallContext<'a> {
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
+    #[must_use]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.mods.iter().flat_map(|&m| m.iter())
     }
@@ -150,6 +156,7 @@ impl<'a> NativeCallContext<'a> {
     #[cfg(not(feature = "no_module"))]
     #[allow(dead_code)]
     #[inline(always)]
+    #[must_use]
     pub(crate) fn iter_imports_raw(
         &self,
     ) -> impl Iterator<Item = (&crate::Identifier, &Shared<Module>)> {
@@ -162,11 +169,13 @@ impl<'a> NativeCallContext<'a> {
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
+    #[must_use]
     pub fn imports(&self) -> Option<&Imports> {
         self.mods
     }
     /// Get an iterator over the namespaces containing definitions of all script-defined functions.
     #[inline(always)]
+    #[must_use]
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
     }
@@ -174,6 +183,7 @@ impl<'a> NativeCallContext<'a> {
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]
+    #[must_use]
     pub fn namespaces(&self) -> &[&Module] {
         self.lib
     }
@@ -190,6 +200,7 @@ impl<'a> NativeCallContext<'a> {
     /// If `is_method` is [`true`], the first argument is assumed to be passed
     /// by reference and is not consumed.
     #[inline(always)]
+    #[must_use]
     pub fn call_fn_dynamic_raw(
         &self,
         fn_name: impl AsRef<str>,
@@ -228,18 +239,21 @@ impl<'a> NativeCallContext<'a> {
 /// Consume a [`Shared`] resource and return a mutable reference to the wrapped value.
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
 #[inline(always)]
+#[must_use]
 pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
     Shared::make_mut(value)
 }
 
 /// Consume a [`Shared`] resource if is unique (i.e. not shared), or clone it otherwise.
 #[inline(always)]
+#[must_use]
 pub fn shared_take_or_clone<T: Clone>(value: Shared<T>) -> T {
     shared_try_take(value).unwrap_or_else(|v| v.as_ref().clone())
 }
 
 /// Consume a [`Shared`] resource if is unique (i.e. not shared).
 #[inline(always)]
+#[must_use]
 pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
     Shared::try_unwrap(value)
 }
@@ -250,6 +264,7 @@ pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
 ///
 /// Panics if the resource is shared (i.e. has other outstanding references).
 #[inline(always)]
+#[must_use]
 pub fn shared_take<T>(value: Shared<T>) -> T {
     shared_try_take(value)
         .ok()
@@ -267,31 +282,37 @@ pub struct FnPtr(Identifier, StaticVec<Dynamic>);
 impl FnPtr {
     /// Create a new function pointer.
     #[inline(always)]
+    #[must_use]
     pub fn new(name: impl Into<Identifier>) -> Result<Self, Box<EvalAltResult>> {
         name.into().try_into()
     }
     /// Create a new function pointer without checking its parameters.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn new_unchecked(name: Identifier, curry: StaticVec<Dynamic>) -> Self {
         Self(name.into(), curry)
     }
     /// Get the name of the function.
     #[inline(always)]
+    #[must_use]
     pub fn fn_name(&self) -> &str {
         self.get_fn_name().as_ref()
     }
     /// Get the name of the function.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn get_fn_name(&self) -> &Identifier {
         &self.0
     }
     /// Get the underlying data of the function pointer.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn take_data(self) -> (Identifier, StaticVec<Dynamic>) {
         (self.0, self.1)
     }
     /// Get the curried arguments.
     #[inline(always)]
+    #[must_use]
     pub fn curry(&self) -> &[Dynamic] {
         self.1.as_ref()
     }
@@ -309,11 +330,13 @@ impl FnPtr {
     }
     /// Is the function pointer curried?
     #[inline(always)]
+    #[must_use]
     pub fn is_curried(&self) -> bool {
         !self.1.is_empty()
     }
     /// Get the number of curried arguments.
     #[inline(always)]
+    #[must_use]
     pub fn num_curried(&self) -> usize {
         self.1.len()
     }
@@ -322,6 +345,7 @@ impl FnPtr {
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[must_use]
     pub fn is_anonymous(&self) -> bool {
         self.0.starts_with(crate::engine::FN_ANONYMOUS)
     }
@@ -336,6 +360,7 @@ impl FnPtr {
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
     #[inline(always)]
+    #[must_use]
     pub fn call_dynamic(
         &self,
         ctx: &NativeCallContext,
@@ -518,6 +543,7 @@ impl fmt::Display for CallableFunction {
 impl CallableFunction {
     /// Is this a pure native Rust function?
     #[inline(always)]
+    #[must_use]
     pub fn is_pure(&self) -> bool {
         match self {
             Self::Pure(_) => true,
@@ -531,6 +557,7 @@ impl CallableFunction {
     }
     /// Is this a native Rust method function?
     #[inline(always)]
+    #[must_use]
     pub fn is_method(&self) -> bool {
         match self {
             Self::Method(_) => true,
@@ -544,6 +571,7 @@ impl CallableFunction {
     }
     /// Is this an iterator function?
     #[inline(always)]
+    #[must_use]
     pub fn is_iter(&self) -> bool {
         match self {
             Self::Iterator(_) => true,
@@ -555,6 +583,7 @@ impl CallableFunction {
     }
     /// Is this a Rhai-scripted function?
     #[inline(always)]
+    #[must_use]
     pub fn is_script(&self) -> bool {
         match self {
             #[cfg(not(feature = "no_function"))]
@@ -565,6 +594,7 @@ impl CallableFunction {
     }
     /// Is this a plugin function?
     #[inline(always)]
+    #[must_use]
     pub fn is_plugin_fn(&self) -> bool {
         match self {
             Self::Plugin(_) => true,
@@ -576,6 +606,7 @@ impl CallableFunction {
     }
     /// Is this a native Rust function?
     #[inline(always)]
+    #[must_use]
     pub fn is_native(&self) -> bool {
         match self {
             Self::Pure(_) | Self::Method(_) => true,
@@ -588,6 +619,7 @@ impl CallableFunction {
     }
     /// Get the access mode.
     #[inline(always)]
+    #[must_use]
     pub fn access(&self) -> FnAccess {
         match self {
             Self::Plugin(_) => FnAccess::Public,
@@ -604,6 +636,7 @@ impl CallableFunction {
     /// Panics if the [`CallableFunction`] is not [`Pure`][CallableFunction::Pure] or
     /// [`Method`][CallableFunction::Method].
     #[inline(always)]
+    #[must_use]
     pub fn get_native_fn(&self) -> &Shared<FnAny> {
         match self {
             Self::Pure(f) | Self::Method(f) => f,
@@ -622,6 +655,7 @@ impl CallableFunction {
     /// Panics if the [`CallableFunction`] is not [`Script`][CallableFunction::Script].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[must_use]
     pub fn get_fn_def(&self) -> &Shared<crate::ast::ScriptFnDef> {
         match self {
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => {
@@ -636,6 +670,7 @@ impl CallableFunction {
     ///
     /// Panics if the [`CallableFunction`] is not [`Iterator`][CallableFunction::Iterator].
     #[inline(always)]
+    #[must_use]
     pub fn get_iter_fn(&self) -> IteratorFn {
         match self {
             Self::Iterator(f) => *f,
@@ -653,6 +688,7 @@ impl CallableFunction {
     ///
     /// Panics if the [`CallableFunction`] is not [`Plugin`][CallableFunction::Plugin].
     #[inline(always)]
+    #[must_use]
     pub fn get_plugin_fn<'s>(&'s self) -> &Shared<FnPlugin> {
         match self {
             Self::Plugin(f) => f,
@@ -666,16 +702,19 @@ impl CallableFunction {
     }
     /// Create a new [`CallableFunction::Pure`].
     #[inline(always)]
+    #[must_use]
     pub fn from_pure(func: Box<FnAny>) -> Self {
         Self::Pure(func.into())
     }
     /// Create a new [`CallableFunction::Method`].
     #[inline(always)]
+    #[must_use]
     pub fn from_method(func: Box<FnAny>) -> Self {
         Self::Method(func.into())
     }
     /// Create a new [`CallableFunction::Plugin`].
     #[inline(always)]
+    #[must_use]
     pub fn from_plugin(func: impl PluginFunction + 'static + SendSync) -> Self {
         Self::Plugin((Box::new(func) as Box<FnPlugin>).into())
     }

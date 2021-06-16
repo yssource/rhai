@@ -4,8 +4,8 @@ use crate::ast::{FnAccess, Ident};
 use crate::dynamic::Variant;
 use crate::fn_native::{shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, SendSync};
 use crate::fn_register::RegisterNativeFunction;
+use crate::parse::IdentifierBuilder;
 use crate::token::Token;
-use crate::utils::IdentifierBuilder;
 use crate::{
     calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, EvalAltResult,
     Identifier, ImmutableString, NativeCallContext, Position, Shared, StaticVec,
@@ -67,6 +67,7 @@ impl FuncInfo {
     /// Generate a signature of the function.
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
+    #[must_use]
     pub fn gen_signature(&self) -> String {
         let mut sig = format!("{}(", self.name);
 
@@ -240,6 +241,7 @@ impl Module {
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn new() -> Self {
         Self {
             id: None,
@@ -269,6 +271,7 @@ impl Module {
     /// assert_eq!(module.id(), Some("hello"));
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn id(&self) -> Option<&str> {
         self.id_raw().map(|s| s.as_str())
     }
@@ -285,6 +288,7 @@ impl Module {
     /// assert_eq!(module.id_raw().map(|s| s.as_str()), Some("hello"));
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn id_raw(&self) -> Option<&Identifier> {
         self.id.as_ref()
     }
@@ -317,6 +321,7 @@ impl Module {
     /// assert!(module.is_empty());
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.functions.is_empty()
             && self.all_functions.is_empty()
@@ -349,6 +354,7 @@ impl Module {
     /// # }
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn is_indexed(&self) -> bool {
         self.indexed
     }
@@ -357,6 +363,7 @@ impl Module {
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     #[inline(always)]
+    #[must_use]
     pub fn gen_fn_signatures(&self) -> impl Iterator<Item = String> + '_ {
         self.functions
             .values()
@@ -379,6 +386,7 @@ impl Module {
     /// assert!(module.contains_var("answer"));
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn contains_var(&self, name: &str) -> bool {
         self.variables.contains_key(name)
     }
@@ -395,6 +403,7 @@ impl Module {
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn get_var_value<T: Variant + Clone>(&self, name: &str) -> Option<T> {
         self.get_var(name).and_then(Dynamic::try_cast::<T>)
     }
@@ -411,6 +420,7 @@ impl Module {
     /// assert_eq!(module.get_var("answer").unwrap().cast::<i64>(), 42);
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn get_var(&self, name: &str) -> Option<Dynamic> {
         self.variables.get(name).cloned()
     }
@@ -448,6 +458,7 @@ impl Module {
     /// Get a reference to a namespace-qualified variable.
     /// Name and Position in [`EvalAltResult`] are [`None`] and [`NONE`][Position::NONE] and must be set afterwards.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn get_qualified_var(&self, hash_var: u64) -> Result<&Dynamic, Box<EvalAltResult>> {
         self.all_variables.get(&hash_var).ok_or_else(|| {
             EvalAltResult::ErrorVariableNotFound(String::new(), Position::NONE).into()
@@ -489,6 +500,7 @@ impl Module {
     /// and number of parameters.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[must_use]
     pub fn get_script_fn(
         &self,
         name: &str,
@@ -508,6 +520,7 @@ impl Module {
     /// Thus the [`Module`] is automatically set to be non-indexed.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
+    #[must_use]
     pub(crate) fn sub_modules_mut(&mut self) -> &mut BTreeMap<Identifier, Shared<Module>> {
         // We must assume that the user has changed the sub-modules
         // (otherwise why take a mutable reference?)
@@ -533,6 +546,7 @@ impl Module {
     /// assert!(module.contains_sub_module("question"));
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn contains_sub_module(&self, name: &str) -> bool {
         self.modules.contains_key(name)
     }
@@ -550,6 +564,7 @@ impl Module {
     /// assert!(module.get_sub_module("question").is_some());
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn get_sub_module(&self, name: &str) -> Option<&Module> {
         self.modules.get(name).map(|m| m.as_ref())
     }
@@ -594,6 +609,7 @@ impl Module {
     /// assert!(module.contains_fn(hash));
     /// ```
     #[inline(always)]
+    #[must_use]
     pub fn contains_fn(&self, hash_fn: u64) -> bool {
         self.functions.contains_key(&hash_fn)
     }
@@ -641,6 +657,7 @@ impl Module {
 
     /// Remap type ID.
     #[inline(always)]
+    #[must_use]
     fn map_type(map: bool, type_id: TypeId) -> TypeId {
         if !map {
             return type_id;
@@ -1104,6 +1121,7 @@ impl Module {
     ///
     /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn get_fn(&self, hash_fn: u64) -> Option<&CallableFunction> {
         self.functions.get(&hash_fn).map(|f| f.func.as_ref())
     }
@@ -1112,6 +1130,7 @@ impl Module {
     ///
     /// The [`u64`] hash is calculated by [`build_index`][Module::build_index].
     #[inline(always)]
+    #[must_use]
     pub fn contains_qualified_fn(&self, hash_fn: u64) -> bool {
         self.all_functions.contains_key(&hash_fn)
     }
@@ -1120,6 +1139,7 @@ impl Module {
     ///
     /// The [`u64`] hash is calculated by [`build_index`][Module::build_index].
     #[inline(always)]
+    #[must_use]
     pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
         self.all_functions
             .get(&hash_qualified_fn)
@@ -1266,6 +1286,7 @@ impl Module {
 
     /// Get the number of variables, functions and type iterators in the [`Module`].
     #[inline(always)]
+    #[must_use]
     pub fn count(&self) -> (usize, usize, usize) {
         (
             self.variables.len(),
@@ -1276,12 +1297,14 @@ impl Module {
 
     /// Get an iterator to the sub-modules in the [`Module`].
     #[inline(always)]
+    #[must_use]
     pub fn iter_sub_modules(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
         self.modules.iter().map(|(k, m)| (k.as_str(), m.clone()))
     }
 
     /// Get an iterator to the variables in the [`Module`].
     #[inline(always)]
+    #[must_use]
     pub fn iter_var(&self) -> impl Iterator<Item = (&str, &Dynamic)> {
         self.variables.iter().map(|(k, v)| (k.as_str(), v))
     }
@@ -1289,6 +1312,7 @@ impl Module {
     /// Get an iterator to the functions in the [`Module`].
     #[inline(always)]
     #[allow(dead_code)]
+    #[must_use]
     pub(crate) fn iter_fn(&self) -> impl Iterator<Item = &FuncInfo> {
         self.functions.values().map(Box::as_ref)
     }
@@ -1303,6 +1327,7 @@ impl Module {
     /// 5) Shared reference to function definition [`ScriptFnDef`][crate::ast::ScriptFnDef].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
+    #[must_use]
     pub(crate) fn iter_script_fn(
         &self,
     ) -> impl Iterator<
@@ -1338,6 +1363,7 @@ impl Module {
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
+    #[must_use]
     pub fn iter_script_fn_info(
         &self,
     ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize)> {
@@ -1359,6 +1385,7 @@ impl Module {
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "internals")]
     #[inline(always)]
+    #[must_use]
     pub fn iter_script_fn_info(
         &self,
     ) -> impl Iterator<
@@ -1395,6 +1422,7 @@ impl Module {
     /// # }
     /// ```
     #[cfg(not(feature = "no_module"))]
+    #[must_use]
     pub fn eval_ast_as_new(
         mut scope: crate::Scope,
         ast: &crate::AST,
@@ -1463,6 +1491,7 @@ impl Module {
     ///
     /// Panics if the [`Module`] is not yet indexed via [`build_index`][Module::build_index].
     #[inline(always)]
+    #[must_use]
     pub fn contains_indexed_global_functions(&self) -> bool {
         self.contains_indexed_global_functions
     }
@@ -1562,12 +1591,14 @@ impl Module {
 
     /// Does a type iterator exist in the entire module tree?
     #[inline(always)]
+    #[must_use]
     pub fn contains_qualified_iter(&self, id: TypeId) -> bool {
         self.all_type_iterators.contains_key(&id)
     }
 
     /// Does a type iterator exist in the module?
     #[inline(always)]
+    #[must_use]
     pub fn contains_iter(&self, id: TypeId) -> bool {
         self.type_iterators.contains_key(&id)
     }
@@ -1609,12 +1640,14 @@ impl Module {
 
     /// Get the specified type iterator.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn get_qualified_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.all_type_iterators.get(&id).cloned()
     }
 
     /// Get the specified type iterator.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.type_iterators.get(&id).cloned()
     }
@@ -1693,6 +1726,7 @@ impl From<StaticVec<Ident>> for NamespaceRef {
 impl NamespaceRef {
     /// Get the [`Scope`][crate::Scope] index offset.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn index(&self) -> Option<NonZeroUsize> {
         self.index
     }

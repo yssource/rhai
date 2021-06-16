@@ -4,8 +4,8 @@ use crate::ast::{Expr, OpAssignment, Stmt};
 use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
+use crate::fn_hash::get_hasher;
 use crate::token::Token;
-use crate::utils::get_hasher;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, ImmutableString,
     Module, Position, Scope, StaticVec, AST,
@@ -248,12 +248,12 @@ fn optimize_stmt_block(
             if preserve_result && index >= statements.len() - 1 {
                 break;
             } else {
-                match &statements[index] {
-                    stmt if is_pure(stmt) && index >= first_non_constant => {
+                match statements[index] {
+                    ref stmt if is_pure(stmt) && index >= first_non_constant => {
                         state.set_dirty();
                         statements.remove(index);
                     }
-                    stmt if stmt.is_pure() => {
+                    ref stmt if stmt.is_pure() => {
                         state.set_dirty();
                         if index < first_non_constant {
                             first_non_constant -= 1;
@@ -269,36 +269,37 @@ fn optimize_stmt_block(
         // We cannot remove anything for non-pure statements due to potential side-effects.
         if preserve_result {
             loop {
-                match &mut statements[..] {
+                match statements[..] {
                     // { return; } -> {}
                     [Stmt::Return(crate::ast::ReturnType::Return, None, _)] if reduce_return => {
                         state.set_dirty();
                         statements.clear();
                     }
-                    [stmt] if !stmt.returns_value() && is_pure(stmt) => {
+                    [ref stmt] if !stmt.returns_value() && is_pure(stmt) => {
                         state.set_dirty();
                         statements.clear();
                     }
                     // { ...; return; } -> { ... }
-                    [.., last_stmt, Stmt::Return(crate::ast::ReturnType::Return, None, _)]
+                    [.., ref last_stmt, Stmt::Return(crate::ast::ReturnType::Return, None, _)]
                         if reduce_return && !last_stmt.returns_value() =>
                     {
                         state.set_dirty();
                         statements.pop().unwrap();
                     }
                     // { ...; return val; } -> { ...; val }
-                    [.., Stmt::Return(crate::ast::ReturnType::Return, expr, pos)]
+                    [.., Stmt::Return(crate::ast::ReturnType::Return, ref mut expr, pos)]
                         if reduce_return =>
                     {
                         state.set_dirty();
                         *statements.last_mut().unwrap() = if let Some(expr) = expr {
                             Stmt::Expr(mem::take(expr))
                         } else {
-                            Stmt::Noop(*pos)
+                            Stmt::Noop(pos)
                         };
                     }
-                    [.., second_last_stmt, Stmt::Noop(_)] if second_last_stmt.returns_value() => (),
-                    [.., second_last_stmt, last_stmt]
+                    [.., ref second_last_stmt, Stmt::Noop(_)]
+                        if second_last_stmt.returns_value() => {}
+                    [.., ref second_last_stmt, ref last_stmt]
                         if !last_stmt.returns_value() && is_pure(last_stmt) =>
                     {
                         state.set_dirty();
@@ -313,8 +314,8 @@ fn optimize_stmt_block(
             }
         } else {
             loop {
-                match &statements[..] {
-                    [stmt] if is_pure(stmt) => {
+                match statements[..] {
+                    [ref stmt] if is_pure(stmt) => {
                         state.set_dirty();
                         statements.clear();
                     }
@@ -326,13 +327,13 @@ fn optimize_stmt_block(
                         statements.pop().unwrap();
                     }
                     // { ...; return pure_val; } -> { ... }
-                    [.., Stmt::Return(crate::ast::ReturnType::Return, Some(expr), _)]
+                    [.., Stmt::Return(crate::ast::ReturnType::Return, Some(ref expr), _)]
                         if reduce_return && expr.is_pure() =>
                     {
                         state.set_dirty();
                         statements.pop().unwrap();
                     }
-                    [.., last_stmt] if is_pure(last_stmt) => {
+                    [.., ref last_stmt] if is_pure(last_stmt) => {
                         state.set_dirty();
                         statements.pop().unwrap();
                     }
@@ -373,8 +374,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                         && x2.args[0].get_variable_name(true) == x.0.get_variable_name(true)
                 ) =>
         {
-            match &mut x.2 {
-                Expr::FnCall(x2, _) => {
+            match x.2 {
+                Expr::FnCall(ref mut x2, _) => {
                     state.set_dirty();
                     let op = Token::lookup_from_syntax(&x2.name).unwrap();
                     let op_assignment = op.make_op_assignment().unwrap();
@@ -444,11 +445,11 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         // if expr { if_block } else { else_block }
         Stmt::If(condition, x, _) => {
             optimize_expr(condition, state, false);
-            let if_block = mem::take(x.0.statements()).into_vec();
-            *x.0.statements() =
+            let if_block = mem::take(x.0.statements_mut()).into_vec();
+            *x.0.statements_mut() =
                 optimize_stmt_block(if_block, state, preserve_result, true, false).into();
-            let else_block = mem::take(x.1.statements()).into_vec();
-            *x.1.statements() =
+            let else_block = mem::take(x.1.statements_mut()).into_vec();
+            *x.1.statements_mut() =
                 optimize_stmt_block(else_block, state, preserve_result, true, false).into();
         }
 
@@ -520,8 +521,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                     _ => {
                         block.0 = Some(condition);
 
-                        *block.1.statements() = optimize_stmt_block(
-                            mem::take(block.1.statements()).into_vec(),
+                        *block.1.statements_mut() = optimize_stmt_block(
+                            mem::take(block.1.statements_mut()).into_vec(),
                             state,
                             preserve_result,
                             true,
@@ -541,8 +542,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
                 x.0.remove(&key);
             }
 
-            let def_block = mem::take(x.1.statements()).into_vec();
-            *x.1.statements() =
+            let def_block = mem::take(x.1.statements_mut()).into_vec();
+            *x.1.statements_mut() =
                 optimize_stmt_block(def_block, state, preserve_result, true, false).into();
         }
 
@@ -554,8 +555,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         // while expr { block }
         Stmt::While(condition, body, _) => {
             optimize_expr(condition, state, false);
-            let block = mem::take(body.statements()).into_vec();
-            *body.statements() = optimize_stmt_block(block, state, false, true, false).into();
+            let block = mem::take(body.statements_mut()).into_vec();
+            *body.statements_mut() = optimize_stmt_block(block, state, false, true, false).into();
 
             if body.len() == 1 {
                 match body[0] {
@@ -582,7 +583,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         | Stmt::Do(body, Expr::BoolConstant(false, _), true, _) => {
             state.set_dirty();
             let block_pos = body.position();
-            let block = mem::take(body.statements()).into_vec();
+            let block = mem::take(body.statements_mut()).into_vec();
             *stmt = Stmt::Block(
                 optimize_stmt_block(block, state, false, true, false).into_boxed_slice(),
                 block_pos,
@@ -591,14 +592,14 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
         // do { block } while|until expr
         Stmt::Do(body, condition, _, _) => {
             optimize_expr(condition, state, false);
-            let block = mem::take(body.statements()).into_vec();
-            *body.statements() = optimize_stmt_block(block, state, false, true, false).into();
+            let block = mem::take(body.statements_mut()).into_vec();
+            *body.statements_mut() = optimize_stmt_block(block, state, false, true, false).into();
         }
         // for id in expr { block }
         Stmt::For(iterable, x, _) => {
             optimize_expr(iterable, state, false);
-            let body = mem::take(x.2.statements()).into_vec();
-            *x.2.statements() = optimize_stmt_block(body, state, false, true, false).into();
+            let body = mem::take(x.2.statements_mut()).into_vec();
+            *x.2.statements_mut() = optimize_stmt_block(body, state, false, true, false).into();
         }
         // let id = expr;
         Stmt::Let(expr, _, _, _) => optimize_expr(expr, state, false),
@@ -624,7 +625,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             }
         }
         // try { pure try_block } catch ( var ) { catch_block } -> try_block
-        Stmt::TryCatch(x, _, _) if x.0.iter().all(Stmt::is_pure) => {
+        Stmt::TryCatch(x, _) if x.0.iter().all(Stmt::is_pure) => {
             // If try block is pure, there will never be any exceptions
             state.set_dirty();
             let try_pos = x.0.position();
@@ -635,11 +636,13 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
             );
         }
         // try { try_block } catch ( var ) { catch_block }
-        Stmt::TryCatch(x, _, _) => {
-            let try_block = mem::take(x.0.statements()).into_vec();
-            *x.0.statements() = optimize_stmt_block(try_block, state, false, true, false).into();
-            let catch_block = mem::take(x.2.statements()).into_vec();
-            *x.2.statements() = optimize_stmt_block(catch_block, state, false, true, false).into();
+        Stmt::TryCatch(x, _) => {
+            let try_block = mem::take(x.0.statements_mut()).into_vec();
+            *x.0.statements_mut() =
+                optimize_stmt_block(try_block, state, false, true, false).into();
+            let catch_block = mem::take(x.2.statements_mut()).into_vec();
+            *x.2.statements_mut() =
+                optimize_stmt_block(catch_block, state, false, true, false).into();
         }
         // func(...)
         Stmt::Expr(expr @ Expr::FnCall(_, _)) => {
@@ -686,7 +689,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
         Expr::Stmt(x) if x.is_empty() => { state.set_dirty(); *expr = Expr::Unit(x.position()) }
         // { stmt; ... } - do not count promotion as dirty because it gets turned back into an array
         Expr::Stmt(x) => {
-            *x.statements() = optimize_stmt_block(mem::take(x.statements()).into_vec(), state, true, true, false).into();
+            *x.statements_mut() = optimize_stmt_block(mem::take(x.statements_mut()).into_vec(), state, true, true, false).into();
 
             // { Stmt(Expr) } - promote
             match x.as_mut().as_mut() {
@@ -726,7 +729,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
                 // Array literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                let mut result = a.remove(*i as usize);
+                let mut result = mem::take(&mut a[*i as usize]);
                 result.set_position(*pos);
                 *expr = result;
             }
@@ -737,7 +740,8 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
                 // Array literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                let mut result = a.remove(a.len() - i.abs() as usize);
+                let index = a.len() - i.abs() as usize;
+                let mut result = mem::take(&mut a[index]);
                 result.set_position(*pos);
                 *expr = result;
             }
@@ -794,9 +798,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
         }
         // `... ${ ... } ...`
         Expr::InterpolatedString(x) => {
-            x.iter_mut().for_each(|expr| optimize_expr(expr, state, false));
-
-            let mut n= 0;
+            let mut n = 0;
 
             // Merge consecutive strings
             while n < x.len()-1 {
@@ -948,7 +950,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
             // Search for overloaded operators (can override built-in).
-            if !has_native_fn(state, x.hashes.native_hash(), arg_types.as_ref()) {
+            if !has_native_fn(state, x.hashes.native, arg_types.as_ref()) {
                 if let Some(mut result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
                                             .and_then(|f| {
                                                 let ctx = (state.engine, x.name.as_ref(), state.lib).into();
@@ -1136,9 +1138,9 @@ pub fn optimize_into_ast(
                     // Optimize the function body
                     let state = &mut State::new(engine, lib2, level);
 
-                    let body = mem::take(fn_def.body.statements()).into_vec();
+                    let body = mem::take(fn_def.body.statements_mut()).into_vec();
 
-                    *fn_def.body.statements() =
+                    *fn_def.body.statements_mut() =
                         optimize_stmt_block(body, state, true, true, true).into();
 
                     fn_def

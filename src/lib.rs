@@ -70,28 +70,29 @@ use std::prelude::v1::*;
 // Internal modules
 
 mod ast;
+mod custom_syntax;
 mod dynamic;
 mod engine;
 mod engine_api;
 mod engine_settings;
+mod error;
+mod error_parsing;
 mod fn_args;
 mod fn_builtin;
 mod fn_call;
 mod fn_func;
+mod fn_hash;
 mod fn_native;
 mod fn_register;
+mod immutable_string;
 mod module;
 mod optimize;
 pub mod packages;
-mod parse_error;
-mod parser;
+mod parse;
 pub mod plugin;
-mod result;
 mod scope;
-mod syntax;
 mod token;
 mod r#unsafe;
-mod utils;
 
 type RhaiResult = Result<Dynamic, Box<EvalAltResult>>;
 
@@ -126,17 +127,17 @@ pub type FLOAT = f64;
 pub type FLOAT = f32;
 
 pub use ast::{FnAccess, AST};
+pub use custom_syntax::Expression;
 pub use dynamic::Dynamic;
 pub use engine::{Engine, EvalContext, OP_CONTAINS, OP_EQUALS};
+pub use error::EvalAltResult;
+pub use error_parsing::{LexError, ParseError, ParseErrorType};
 pub use fn_native::{FnPtr, NativeCallContext};
 pub use fn_register::RegisterNativeFunction;
+pub use immutable_string::ImmutableString;
 pub use module::{FnNamespace, Module};
-pub use parse_error::{LexError, ParseError, ParseErrorType};
-pub use result::EvalAltResult;
 pub use scope::Scope;
-pub use syntax::Expression;
 pub use token::Position;
-pub use utils::ImmutableString;
 
 /// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
 /// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
@@ -169,7 +170,9 @@ pub use fn_native::Shared;
 #[cfg(not(feature = "no_closure"))]
 use fn_native::Locked;
 
-pub(crate) use utils::{calc_fn_hash, calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes};
+pub(crate) use fn_hash::{
+    calc_fn_hash, calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes,
+};
 
 pub use rhai_codegen::*;
 

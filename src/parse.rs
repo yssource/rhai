@@ -4,19 +4,18 @@ use crate::ast::{
     BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ReturnType,
     ScriptFnDef, Stmt, StmtBlock,
 };
+use crate::custom_syntax::{
+    CustomSyntax, MARKER_BLOCK, MARKER_BOOL, MARKER_EXPR, MARKER_IDENT, MARKER_INT, MARKER_STRING,
+};
 use crate::dynamic::{AccessMode, Union};
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::module::NamespaceRef;
-use crate::optimize::optimize_into_ast;
-use crate::optimize::OptimizationLevel;
-use crate::syntax::{
-    CustomSyntax, MARKER_BLOCK, MARKER_BOOL, MARKER_EXPR, MARKER_IDENT, MARKER_INT, MARKER_STRING,
-};
+use crate::optimize::{optimize_into_ast, OptimizationLevel};
 
+use crate::fn_hash::get_hasher;
 use crate::token::{
     is_keyword_function, is_valid_identifier, Token, TokenStream, TokenizerControl,
 };
-use crate::utils::{get_hasher, IdentifierBuilder};
 use crate::{
     calc_fn_hash, calc_qualified_fn_hash, Dynamic, Engine, Identifier, LexError, ParseError,
     ParseErrorType, Position, Scope, Shared, StaticVec, AST,
@@ -30,7 +29,7 @@ use std::{
 };
 
 #[cfg(not(feature = "no_float"))]
-use crate::{syntax::MARKER_FLOAT, FLOAT};
+use crate::{custom_syntax::MARKER_FLOAT, FLOAT};
 
 #[cfg(not(feature = "no_function"))]
 use crate::FnAccess;
@@ -40,6 +39,36 @@ type PERR = ParseErrorType;
 type FunctionsLib = BTreeMap<u64, Shared<ScriptFnDef>>;
 
 const NEVER_ENDS: &str = "never fails because `TokenStream` never ends";
+
+/// A factory of identifiers from text strings.
+///
+/// When [`SmartString`](https://crates.io/crates/smartstring) is used as [`Identifier`],
+/// this just returns a copy because most identifiers in Rhai are short and ASCII-based.
+///
+/// When [`ImmutableString`] is used as [`Identifier`], this type acts as an interner which keeps a
+/// collection of strings and returns shared instances, only creating a new string when it is not
+/// yet interned.
+#[derive(Debug, Clone, Default, Hash)]
+pub struct IdentifierBuilder(
+    #[cfg(feature = "no_smartstring")] std::collections::BTreeSet<Identifier>,
+);
+
+impl IdentifierBuilder {
+    /// Get an identifier from a text string.
+    #[inline(always)]
+    #[must_use]
+    pub fn get(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
+        #[cfg(not(feature = "no_smartstring"))]
+        return text.into();
+
+        #[cfg(feature = "no_smartstring")]
+        return self.0.get(text.as_ref()).cloned().unwrap_or_else(|| {
+            let s: Identifier = text.into();
+            self.0.insert(s.clone());
+            s
+        });
+    }
+}
 
 /// A type that encapsulates the current state of the parser.
 #[derive(Debug)]
@@ -59,8 +88,8 @@ pub struct ParseState<'e> {
     external_vars: BTreeMap<Identifier, Position>,
     /// An indicator that disables variable capturing into externals one single time
     /// up until the nearest consumed Identifier token.
-    /// If set to false the next call to `access_var` will not capture the variable.
-    /// All consequent calls to `access_var` will not be affected
+    /// If set to false the next call to [`access_var`][ParseState::access_var] will not capture the variable.
+    /// All consequent calls to [`access_var`][ParseState::access_var] will not be affected
     #[cfg(not(feature = "no_closure"))]
     allow_capture: bool,
     /// Encapsulates a local stack with imported [module][crate::Module] names.
@@ -78,6 +107,7 @@ pub struct ParseState<'e> {
 impl<'e> ParseState<'e> {
     /// Create a new [`ParseState`].
     #[inline(always)]
+    #[must_use]
     pub fn new(engine: &'e Engine, tokenizer_control: TokenizerControl) -> Self {
         Self {
             engine,
@@ -103,8 +133,8 @@ impl<'e> ParseState<'e> {
     ///
     /// If the variable is not present in the scope adds it to the list of external variables
     ///
-    /// The return value is the offset to be deducted from `Stack::len`,
-    /// i.e. the top element of the [`ParseState`] is offset 1.
+    /// The return value is the offset to be deducted from `ParseState::stack::len`,
+    /// i.e. the top element of [`ParseState`]'s variables stack is offset 1.
     ///
     /// Return `None` when the variable name is not found in the `stack`.
     #[inline(always)]
@@ -155,6 +185,7 @@ impl<'e> ParseState<'e> {
     /// Panics when called under `no_module`.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
+    #[must_use]
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
         self.modules
             .iter()
@@ -166,6 +197,7 @@ impl<'e> ParseState<'e> {
 
     /// Get an interned string, creating one if it is not yet interned.
     #[inline(always)]
+    #[must_use]
     pub fn get_identifier(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
         self.interned_strings.get(text)
     }
@@ -197,6 +229,7 @@ struct ParseSettings {
 impl ParseSettings {
     /// Create a new `ParseSettings` with one higher expression level.
     #[inline(always)]
+    #[must_use]
     pub fn level_up(&self) -> Self {
         Self {
             level: self.level + 1,
@@ -206,6 +239,7 @@ impl ParseSettings {
     /// Make sure that the current level of expression nesting is within the maximum limit.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
+    #[must_use]
     pub fn ensure_level_within_max_limit(
         &self,
         limit: Option<NonZeroUsize>,
@@ -222,6 +256,7 @@ impl Expr {
     /// All other variants are untouched.
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
+    #[must_use]
     fn into_property(self, state: &mut ParseState) -> Self {
         match self {
             Self::Variable(_, pos, x) if x.1.is_none() => {
@@ -366,17 +401,15 @@ fn parse_fn_call(
 
             args.shrink_to_fit();
 
-            return Ok(Expr::FnCall(
-                Box::new(FnCallExpr {
-                    name: state.get_identifier(id),
-                    capture,
-                    namespace,
-                    hashes,
-                    args,
-                    ..Default::default()
-                }),
-                settings.pos,
-            ));
+            return Ok(FnCallExpr {
+                name: state.get_identifier(id),
+                capture,
+                namespace,
+                hashes,
+                args,
+                ..Default::default()
+            }
+            .into_fn_call_expr(settings.pos));
         }
         // id...
         _ => (),
@@ -418,17 +451,15 @@ fn parse_fn_call(
 
                 args.shrink_to_fit();
 
-                return Ok(Expr::FnCall(
-                    Box::new(FnCallExpr {
-                        name: state.get_identifier(id),
-                        capture,
-                        namespace,
-                        hashes,
-                        args,
-                        ..Default::default()
-                    }),
-                    settings.pos,
-                ));
+                return Ok(FnCallExpr {
+                    name: state.get_identifier(id),
+                    capture,
+                    namespace,
+                    hashes,
+                    args,
+                    ..Default::default()
+                }
+                .into_fn_call_expr(settings.pos));
             }
             // id(...args,
             (Token::Comma, _) => {
@@ -472,7 +503,7 @@ fn parse_index_chain(
     let idx_expr = parse_expr(input, state, lib, settings.level_up())?;
 
     // Check type of indexing - must be integer or string
-    match &idx_expr {
+    match idx_expr {
         Expr::IntegerConstant(_, pos) => match lhs {
             Expr::IntegerConstant(_, _)
             | Expr::Array(_, _)
@@ -483,7 +514,7 @@ fn parse_index_chain(
                 return Err(PERR::MalformedIndexExpr(
                     "Object map access expects string index, not a number".into(),
                 )
-                .into_err(*pos))
+                .into_err(pos))
             }
 
             #[cfg(not(feature = "no_float"))]
@@ -686,7 +717,7 @@ fn parse_array_literal(
 
     arr.shrink_to_fit();
 
-    Ok(Expr::Array(Box::new(arr), settings.pos))
+    Ok(Expr::Array(arr.into(), settings.pos))
 }
 
 /// Parse a map literal.
@@ -1095,7 +1126,7 @@ fn parse_primary(
             }
 
             segments.shrink_to_fit();
-            Expr::InterpolatedString(Box::new(segments))
+            Expr::InterpolatedString(segments.into())
         }
 
         // Array literal
@@ -1239,14 +1270,14 @@ fn parse_primary(
 
                 let (_, namespace, name) = *x;
                 settings.pos = var_pos;
-                let ns = namespace.map(|(_, ns)| ns);
+                let ns = namespace.map(|(ns, _)| ns);
                 parse_fn_call(input, state, lib, name, true, ns, settings.level_up())?
             }
             // Function call
             (Expr::Variable(_, var_pos, x), Token::LeftParen) => {
                 let (_, namespace, name) = *x;
                 settings.pos = var_pos;
-                let ns = namespace.map(|(_, ns)| ns);
+                let ns = namespace.map(|(ns, _)| ns);
                 parse_fn_call(input, state, lib, name, false, ns, settings.level_up())?
             }
             // module access
@@ -1258,12 +1289,12 @@ fn parse_primary(
                     pos: var_pos,
                 };
 
-                if let Some((_, ref mut namespace)) = namespace {
+                if let Some((ref mut namespace, _)) = namespace {
                     namespace.push(var_name_def);
                 } else {
                     let mut ns: NamespaceRef = Default::default();
                     ns.push(var_name_def);
-                    namespace = Some((42, ns));
+                    namespace = Some((ns, 42));
                 }
 
                 Expr::Variable(
@@ -1308,15 +1339,15 @@ fn parse_primary(
 
     // Cache the hash key for namespace-qualified variables
     match root_expr {
-        Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x),
-        Expr::Index(ref mut x, _) | Expr::Dot(ref mut x, _) => match &mut x.lhs {
-            Expr::Variable(_, _, x) if x.1.is_some() => Some(x),
+        Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
+        Expr::Index(ref mut x, _) | Expr::Dot(ref mut x, _) => match x.lhs {
+            Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
             _ => None,
         },
         _ => None,
     }
-    .map(|x| match x.as_mut() {
-        (_, Some((hash, namespace)), name) => {
+    .map(|x| match x {
+        (_, Some((namespace, hash)), name) => {
             *hash = calc_qualified_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0);
 
             #[cfg(not(feature = "no_module"))]
@@ -1370,15 +1401,13 @@ fn parse_unary(
                     args.push(expr);
                     args.shrink_to_fit();
 
-                    Ok(Expr::FnCall(
-                        Box::new(FnCallExpr {
-                            name: state.get_identifier("-"),
-                            hashes: FnCallHashes::from_native(calc_fn_hash("-", 1)),
-                            args,
-                            ..Default::default()
-                        }),
-                        pos,
-                    ))
+                    Ok(FnCallExpr {
+                        name: state.get_identifier("-"),
+                        hashes: FnCallHashes::from_native(calc_fn_hash("-", 1)),
+                        args,
+                        ..Default::default()
+                    }
+                    .into_fn_call_expr(pos))
                 }
             }
         }
@@ -1397,15 +1426,13 @@ fn parse_unary(
                     args.push(expr);
                     args.shrink_to_fit();
 
-                    Ok(Expr::FnCall(
-                        Box::new(FnCallExpr {
-                            name: state.get_identifier("+"),
-                            hashes: FnCallHashes::from_native(calc_fn_hash("+", 1)),
-                            args,
-                            ..Default::default()
-                        }),
-                        pos,
-                    ))
+                    Ok(FnCallExpr {
+                        name: state.get_identifier("+"),
+                        hashes: FnCallHashes::from_native(calc_fn_hash("+", 1)),
+                        args,
+                        ..Default::default()
+                    }
+                    .into_fn_call_expr(pos))
                 }
             }
         }
@@ -1416,15 +1443,13 @@ fn parse_unary(
             args.push(parse_unary(input, state, lib, settings.level_up())?);
             args.shrink_to_fit();
 
-            Ok(Expr::FnCall(
-                Box::new(FnCallExpr {
-                    name: state.get_identifier("!"),
-                    hashes: FnCallHashes::from_native(calc_fn_hash("!", 1)),
-                    args,
-                    ..Default::default()
-                }),
-                pos,
-            ))
+            Ok(FnCallExpr {
+                name: state.get_identifier("!"),
+                hashes: FnCallHashes::from_native(calc_fn_hash("!", 1)),
+                args,
+                ..Default::default()
+            }
+            .into_fn_call_expr(pos))
         }
         // <EOF>
         Token::EOF => Err(PERR::UnexpectedEOF.into_err(settings.pos)),
@@ -1441,6 +1466,7 @@ fn make_assignment_stmt<'a>(
     rhs: Expr,
     op_pos: Position,
 ) -> Result<Stmt, ParseError> {
+    #[must_use]
     fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Option<Position> {
         match expr {
             Expr::Index(x, _) | Expr::Dot(x, _) if parent_is_dot => match x.lhs {
@@ -1460,17 +1486,17 @@ fn make_assignment_stmt<'a>(
 
     let op_info = op.map(|v| OpAssignment::new(v));
 
-    match &lhs {
+    match lhs {
         // const_expr = rhs
-        expr if expr.is_constant() => {
+        ref expr if expr.is_constant() => {
             Err(PERR::AssignmentToConstant("".into()).into_err(lhs.position()))
         }
         // var (non-indexed) = rhs
-        Expr::Variable(None, _, x) if x.0.is_none() => {
+        Expr::Variable(None, _, ref x) if x.0.is_none() => {
             Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
         }
         // var (indexed) = rhs
-        Expr::Variable(i, var_pos, x) => {
+        Expr::Variable(i, var_pos, ref x) => {
             let (index, _, name) = x.as_ref();
             let index = i.map_or_else(
                 || {
@@ -1488,20 +1514,20 @@ fn make_assignment_stmt<'a>(
                 }
                 // Constant values cannot be assigned to
                 AccessMode::ReadOnly => {
-                    Err(PERR::AssignmentToConstant(name.to_string()).into_err(*var_pos))
+                    Err(PERR::AssignmentToConstant(name.to_string()).into_err(var_pos))
                 }
             }
         }
         // xxx[???]... = rhs, xxx.prop... = rhs
-        Expr::Index(x, _) | Expr::Dot(x, _) => {
+        Expr::Index(ref x, _) | Expr::Dot(ref x, _) => {
             match check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _))) {
-                None => match &x.lhs {
+                None => match x.lhs {
                     // var[???] = rhs, var.??? = rhs
                     Expr::Variable(_, _, _) => {
                         Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
                     }
                     // expr[???] = rhs, expr.??? = rhs
-                    expr => {
+                    ref expr => {
                         Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(expr.position()))
                     }
                 },
@@ -1580,7 +1606,7 @@ fn make_dot_expr(
         // lhs.module::id - syntax error
         (_, Expr::Variable(_, _, x)) if x.1.is_some() => {
             return Err(PERR::PropertyExpected
-                .into_err(x.1.expect("never fails because the namespace is `Some`").1[0].pos))
+                .into_err(x.1.expect("never fails because the namespace is `Some`").0[0].pos))
         }
         // lhs.prop
         (lhs, prop @ Expr::Property(_)) => {
@@ -1765,19 +1791,17 @@ fn parse_binary_op(
             | Token::PowerOf
             | Token::Ampersand
             | Token::Pipe
-            | Token::XOr => Expr::FnCall(Box::new(FnCallExpr { args, ..op_base }), pos),
+            | Token::XOr => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
 
             // '!=' defaults to true when passed invalid operands
-            Token::NotEqualsTo => Expr::FnCall(Box::new(FnCallExpr { args, ..op_base }), pos),
+            Token::NotEqualsTo => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
 
             // Comparison operators default to false when passed invalid operands
             Token::EqualsTo
             | Token::LessThan
             | Token::LessThanEqualsTo
             | Token::GreaterThan
-            | Token::GreaterThanEqualsTo => {
-                Expr::FnCall(Box::new(FnCallExpr { args, ..op_base }), pos)
-            }
+            | Token::GreaterThanEqualsTo => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
 
             Token::Or => {
                 let rhs = args
@@ -1816,16 +1840,13 @@ fn parse_binary_op(
                 args.shrink_to_fit();
 
                 // Convert into a call to `contains`
-                let hash = calc_fn_hash(OP_CONTAINS, 2);
-                Expr::FnCall(
-                    Box::new(FnCallExpr {
-                        hashes: FnCallHashes::from_script(hash),
-                        args,
-                        name: state.get_identifier(OP_CONTAINS),
-                        ..op_base
-                    }),
-                    pos,
-                )
+                FnCallExpr {
+                    hashes: FnCallHashes::from_script(calc_fn_hash(OP_CONTAINS, 2)),
+                    args,
+                    name: state.get_identifier(OP_CONTAINS),
+                    ..op_base
+                }
+                .into_fn_call_expr(pos)
             }
 
             Token::Custom(s)
@@ -1837,18 +1858,16 @@ fn parse_binary_op(
             {
                 let hash = calc_fn_hash(&s, 2);
 
-                Expr::FnCall(
-                    Box::new(FnCallExpr {
-                        hashes: if is_valid_identifier(s.chars()) {
-                            FnCallHashes::from_script(hash)
-                        } else {
-                            FnCallHashes::from_native(hash)
-                        },
-                        args,
-                        ..op_base
-                    }),
-                    pos,
-                )
+                FnCallExpr {
+                    hashes: if is_valid_identifier(s.chars()) {
+                        FnCallHashes::from_script(hash)
+                    } else {
+                        FnCallHashes::from_native(hash)
+                    },
+                    args,
+                    ..op_base
+                }
+                .into_fn_call_expr(pos)
             }
 
             op_token => return Err(PERR::UnknownOperator(op_token.into()).into_err(pos)),
@@ -1889,12 +1908,10 @@ fn parse_custom_syntax(
         settings.pos = *fwd_pos;
         let settings = settings.level_up();
 
-        let required_token = if let Some(seg) = parse_func(&segments, fwd_token.syntax().as_ref())
-            .map_err(|err| err.0.into_err(settings.pos))?
-        {
-            seg
-        } else {
-            break;
+        let required_token = match parse_func(&segments, fwd_token.syntax().as_ref()) {
+            Ok(Some(seg)) => seg,
+            Ok(None) => break,
+            Err(err) => return Err(err.0.into_err(settings.pos)),
         };
 
         match required_token.as_str() {
@@ -1994,14 +2011,12 @@ fn parse_custom_syntax(
     keywords.shrink_to_fit();
     tokens.shrink_to_fit();
 
-    Ok(Expr::Custom(
-        Box::new(CustomExpr {
-            keywords,
-            tokens,
-            scope_changed: syntax.scope_changed,
-        }),
-        pos,
-    ))
+    Ok(CustomExpr {
+        keywords,
+        tokens,
+        scope_changed: syntax.scope_changed,
+    }
+    .into_custom_syntax_expr(pos))
 }
 
 /// Parse an expression.
@@ -2407,23 +2422,19 @@ fn parse_export(
         _ => (),
     }
 
-    let mut exports = Vec::with_capacity(4);
+    let mut exports = Vec::<(Ident, Ident)>::with_capacity(4);
 
     loop {
         let (id, id_pos) = parse_var_name(input)?;
 
-        let rename = if match_token(input, Token::As).0 {
+        let (rename, rename_pos) = if match_token(input, Token::As).0 {
             let (name, pos) = parse_var_name(input)?;
-            if exports.iter().any(|(_, alias)| match alias {
-                Some(Ident { name: alias, .. }) if alias == &name => true,
-                _ => false,
-            }) {
+            if exports.iter().any(|(_, alias)| alias.name == name) {
                 return Err(PERR::DuplicatedVariable(name).into_err(pos));
             }
-            let name = state.get_identifier(name);
-            Some(Ident { name, pos })
+            (name, pos)
         } else {
-            None
+            (Default::default(), Position::NONE)
         };
 
         exports.push((
@@ -2431,7 +2442,10 @@ fn parse_export(
                 name: state.get_identifier(id),
                 pos: id_pos,
             },
-            rename,
+            Ident {
+                name: state.get_identifier(rename),
+                pos: rename_pos,
+            },
         ));
 
         match input.peek().expect(NEVER_ENDS) {
@@ -2817,7 +2831,6 @@ fn parse_try_catch(
     Ok(Stmt::TryCatch(
         Box::new((body.into(), var_def, catch_body.into())),
         settings.pos,
-        catch_pos,
     ))
 }
 
@@ -2838,12 +2851,11 @@ fn parse_fn(
 
     let (token, pos) = input.next().expect(NEVER_ENDS);
 
-    let name = token
-        .into_function_name_for_override()
-        .map_err(|t| match t {
-            Token::Reserved(s) => PERR::Reserved(s).into_err(pos),
-            _ => PERR::FnMissingName.into_err(pos),
-        })?;
+    let name = match token.into_function_name_for_override() {
+        Ok(r) => r,
+        Err(Token::Reserved(s)) => return Err(PERR::Reserved(s).into_err(pos)),
+        Err(_) => return Err(PERR::FnMissingName.into_err(pos)),
+    };
 
     match input.peek().expect(NEVER_ENDS) {
         (Token::LeftParen, _) => eat_token(input, Token::LeftParen),
@@ -2940,36 +2952,31 @@ fn make_curry_from_externals(
     }
 
     let num_externals = externals.len();
-    let mut args: StaticVec<_> = Default::default();
+    let mut args = StaticVec::with_capacity(externals.len() + 1);
 
     args.push(fn_expr);
 
-    externals.iter().for_each(|x| {
-        args.push(Expr::Variable(
-            None,
-            Position::NONE,
-            Box::new((None, None, x.clone())),
-        ));
-    });
-
-    args.shrink_to_fit();
-
-    let expr = Expr::FnCall(
-        Box::new(FnCallExpr {
-            name: state.get_identifier(crate::engine::KEYWORD_FN_PTR_CURRY),
-            hashes: FnCallHashes::from_native(calc_fn_hash(
-                crate::engine::KEYWORD_FN_PTR_CURRY,
-                num_externals + 1,
-            )),
-            args,
-            ..Default::default()
-        }),
-        pos,
+    args.extend(
+        externals
+            .iter()
+            .cloned()
+            .map(|x| Expr::Variable(None, Position::NONE, Box::new((None, None, x)))),
     );
+
+    let expr = FnCallExpr {
+        name: state.get_identifier(crate::engine::KEYWORD_FN_PTR_CURRY),
+        hashes: FnCallHashes::from_native(calc_fn_hash(
+            crate::engine::KEYWORD_FN_PTR_CURRY,
+            num_externals + 1,
+        )),
+        args,
+        ..Default::default()
+    }
+    .into_fn_call_expr(pos);
 
     // Convert the entire expression into a statement block, then insert the relevant
     // [`Share`][Stmt::Share] statements.
-    let mut statements: StaticVec<_> = Default::default();
+    let mut statements = StaticVec::with_capacity(externals.len() + 1);
     statements.extend(externals.into_iter().map(Stmt::Share));
     statements.push(Stmt::Expr(expr));
     Expr::Stmt(Box::new(StmtBlock::new(statements, pos)))
@@ -2986,7 +2993,7 @@ fn parse_anon_fn(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let mut params: StaticVec<_> = Default::default();
+    let mut params_list: StaticVec<_> = Default::default();
 
     if input.next().expect(NEVER_ENDS).0 != Token::Or {
         if !match_token(input, Token::Pipe).0 {
@@ -2994,12 +3001,12 @@ fn parse_anon_fn(
                 match input.next().expect(NEVER_ENDS) {
                     (Token::Pipe, _) => break,
                     (Token::Identifier(s), pos) => {
-                        if params.iter().any(|(p, _)| p == &s) {
+                        if params_list.iter().any(|p| p == &s) {
                             return Err(PERR::FnDuplicatedParam("".to_string(), s).into_err(pos));
                         }
                         let s = state.get_identifier(s);
                         state.stack.push((s.clone(), AccessMode::ReadWrite));
-                        params.push((s, pos))
+                        params_list.push(s)
                     }
                     (Token::LexError(err), pos) => return Err(err.into_err(pos)),
                     (_, pos) => {
@@ -3033,29 +3040,22 @@ fn parse_anon_fn(
 
     // External variables may need to be processed in a consistent order,
     // so extract them into a list.
-    let externals: StaticVec<Identifier> = {
-        #[cfg(not(feature = "no_closure"))]
-        {
-            state
-                .external_vars
-                .iter()
-                .map(|(name, _)| name.clone())
-                .collect()
-        }
-        #[cfg(feature = "no_closure")]
-        Default::default()
-    };
+    #[cfg(not(feature = "no_closure"))]
+    let externals: StaticVec<Identifier> = state
+        .external_vars
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
 
-    let mut params: StaticVec<_> = if cfg!(not(feature = "no_closure")) {
-        externals
-            .iter()
-            .cloned()
-            .chain(params.into_iter().map(|(v, _)| v))
-            .collect()
-    } else {
-        params.into_iter().map(|(v, _)| v).collect()
-    };
-    params.shrink_to_fit();
+    #[cfg(not(feature = "no_closure"))]
+    let mut params = StaticVec::with_capacity(params_list.len() + externals.len());
+    #[cfg(feature = "no_closure")]
+    let mut params = StaticVec::with_capacity(params_list.len());
+
+    #[cfg(not(feature = "no_closure"))]
+    params.extend(externals.iter().cloned());
+
+    params.append(&mut params_list);
 
     // Create unique function name by hashing the script body plus the parameters.
     let hasher = &mut get_hasher();
@@ -3091,6 +3091,8 @@ fn parse_anon_fn(
 }
 
 impl Engine {
+    /// Parse a global level expression.
+    #[must_use]
     pub(crate) fn parse_global_expr(
         &self,
         input: &mut TokenStream,
@@ -3132,6 +3134,7 @@ impl Engine {
     }
 
     /// Parse the global level statements.
+    #[must_use]
     fn parse_global_level(
         &self,
         input: &mut TokenStream,
@@ -3193,6 +3196,7 @@ impl Engine {
 
     /// Run the parser on an input stream, returning an AST.
     #[inline(always)]
+    #[must_use]
     pub(crate) fn parse(
         &self,
         input: &mut TokenStream,

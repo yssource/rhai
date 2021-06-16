@@ -95,6 +95,7 @@ pub enum EvalAltResult {
 }
 
 impl EvalAltResult {
+    #[must_use]
     pub(crate) fn desc(&self) -> &str {
         match self {
             #[allow(deprecated)]
@@ -275,6 +276,7 @@ impl EvalAltResult {
     /// Is this a pseudo error?  A pseudo error is one that does not occur naturally.
     ///
     /// [`LoopBreak`][EvalAltResult::LoopBreak] and [`Return`][EvalAltResult::Return] are pseudo errors.
+    #[must_use]
     pub fn is_pseudo_error(&self) -> bool {
         match self {
             Self::LoopBreak(_, _) | Self::Return(_, _) => true,
@@ -286,6 +288,7 @@ impl EvalAltResult {
     /// # Panics
     ///
     /// Panics when [`LoopBreak`][EvalAltResult::LoopBreak] or [`Return`][EvalAltResult::Return].
+    #[must_use]
     pub fn is_catchable(&self) -> bool {
         match self {
             Self::ErrorSystem(_, _) => false,
@@ -325,6 +328,7 @@ impl EvalAltResult {
     /// # Panics
     ///
     /// Panics when [`LoopBreak`][EvalAltResult::LoopBreak] or [`Return`][EvalAltResult::Return].
+    #[must_use]
     pub fn is_system_exception(&self) -> bool {
         match self {
             Self::ErrorSystem(_, _) => true,
@@ -412,6 +416,7 @@ impl EvalAltResult {
         };
     }
     /// Get the [position][Position] of this error.
+    #[must_use]
     pub fn position(&self) -> Position {
         match self {
             Self::ErrorSystem(_, _) => Position::NONE,
@@ -444,6 +449,12 @@ impl EvalAltResult {
             | Self::Return(_, pos) => *pos,
         }
     }
+    /// Remove the [position][Position] information from this error.
+    ///
+    /// The [position][Position] of this error is set to [`NONE`][Position::NONE] afterwards.
+    pub fn clear_position(&mut self) -> &mut Self {
+        self.set_position(Position::NONE)
+    }
     /// Remove the [position][Position] information from this error and return it.
     ///
     /// The [position][Position] of this error is set to [`NONE`][Position::NONE] afterwards.
@@ -453,7 +464,7 @@ impl EvalAltResult {
         pos
     }
     /// Override the [position][Position] of this error.
-    pub fn set_position(&mut self, new_position: Position) {
+    pub fn set_position(&mut self, new_position: Position) -> &mut Self {
         match self {
             Self::ErrorSystem(_, _) => (),
 
@@ -484,10 +495,12 @@ impl EvalAltResult {
             | Self::LoopBreak(_, pos)
             | Self::Return(_, pos) => *pos = new_position,
         }
+        self
     }
     /// Consume the current [`EvalAltResult`] and return a new one with the specified [`Position`]
     /// if the current position is [`Position::None`].
     #[inline(always)]
+    #[must_use]
     pub(crate) fn fill_position(mut self: Box<Self>, new_position: Position) -> Box<Self> {
         if self.position().is_none() {
             self.set_position(new_position);
