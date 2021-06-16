@@ -1011,7 +1011,7 @@ pub enum Stmt {
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
-    Export(Box<[(Ident, Option<Ident>)]>, Position),
+    Export(Box<[(Ident, Ident)]>, Position),
     /// Convert a variable to shared.
     ///
     /// Not available under `no_closure`.

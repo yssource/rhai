@@ -2412,23 +2412,19 @@ fn parse_export(
         _ => (),
     }
 
-    let mut exports = Vec::with_capacity(4);
+    let mut exports = Vec::<(Ident, Ident)>::with_capacity(4);
 
     loop {
         let (id, id_pos) = parse_var_name(input)?;
 
-        let rename = if match_token(input, Token::As).0 {
+        let (rename, rename_pos) = if match_token(input, Token::As).0 {
             let (name, pos) = parse_var_name(input)?;
-            if exports.iter().any(|(_, alias)| match alias {
-                Some(Ident { name: alias, .. }) if alias == &name => true,
-                _ => false,
-            }) {
+            if exports.iter().any(|(_, alias)| alias.name == name) {
                 return Err(PERR::DuplicatedVariable(name).into_err(pos));
             }
-            let name = state.get_identifier(name);
-            Some(Ident { name, pos })
+            (name, pos)
         } else {
-            None
+            (Default::default(), Position::NONE)
         };
 
         exports.push((
@@ -2436,7 +2432,10 @@ fn parse_export(
                 name: state.get_identifier(id),
                 pos: id_pos,
             },
-            rename,
+            Ident {
+                name: state.get_identifier(rename),
+                pos: rename_pos,
+            },
         ));
 
         match input.peek().expect(NEVER_ENDS) {

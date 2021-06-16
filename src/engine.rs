@@ -2951,11 +2951,13 @@ impl Engine {
             // Export statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(list, _) => {
-                for (Ident { name, pos, .. }, rename) in list.iter() {
+                for (Ident { name, pos, .. }, Ident { name: rename, .. }) in list.as_ref() {
                     // Mark scope variables as public
-                    if let Some(index) = scope.get_index(name).map(|(i, _)| i) {
-                        let alias = rename.as_ref().map(|x| &x.name).unwrap_or_else(|| name);
-                        scope.add_entry_alias(index, alias.clone());
+                    if let Some((index, _)) = scope.get_index(name) {
+                        scope.add_entry_alias(
+                            index,
+                            if rename.is_empty() { name } else { rename }.clone(),
+                        );
                     } else {
                         return EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos).into();
                     }
