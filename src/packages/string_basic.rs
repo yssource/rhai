@@ -1,7 +1,8 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, FnPtr};
+use crate::{def_package, FnPtr, INT};
+use std::fmt::{Binary, LowerHex, Octal};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -16,6 +17,7 @@ pub const FUNC_TO_DEBUG: &'static str = "to_debug";
 
 def_package!(crate:BasicStringPackage:"Basic string utilities, including printing.", lib, {
     combine_with_exported_module!(lib, "print_debug", print_debug_functions);
+    combine_with_exported_module!(lib, "number_formatting", number_formatting);
 });
 
 // Register print and debug
@@ -144,6 +146,148 @@ mod print_debug_functions {
 
             result.push_str("}");
             result.into()
+        }
+    }
+}
+
+#[export_module]
+mod number_formatting {
+    #[rhai_fn(skip)]
+    pub fn to_hex<T: LowerHex>(value: T) -> ImmutableString {
+        format!("{:x}", value).into()
+    }
+    #[rhai_fn(skip)]
+    pub fn to_octal<T: Octal>(value: T) -> ImmutableString {
+        format!("{:o}", value).into()
+    }
+    #[rhai_fn(skip)]
+    pub fn to_binary<T: Binary>(value: T) -> ImmutableString {
+        format!("{:b}", value).into()
+    }
+
+    #[rhai_fn(name = "to_hex")]
+    pub fn int_to_hex(value: INT) -> ImmutableString {
+        to_hex(value)
+    }
+    #[rhai_fn(name = "to_octal")]
+    pub fn int_to_octal(value: INT) -> ImmutableString {
+        to_octal(value)
+    }
+
+    #[cfg(not(feature = "only_i32"))]
+    #[cfg(not(feature = "only_i64"))]
+    pub mod numbers {
+        #[rhai_fn(name = "to_hex")]
+        pub fn u8_to_hex(value: u8) -> ImmutableString {
+            to_hex(value)
+        }
+        #[rhai_fn(name = "to_hex")]
+        pub fn u16_to_hex(value: u16) -> ImmutableString {
+            to_hex(value)
+        }
+        #[rhai_fn(name = "to_hex")]
+        pub fn u32_to_hex(value: u32) -> ImmutableString {
+            to_hex(value)
+        }
+        #[rhai_fn(name = "to_hex")]
+        pub fn u64_to_hex(value: u64) -> ImmutableString {
+            to_hex(value)
+        }
+        #[rhai_fn(name = "to_hex")]
+        pub fn i8_to_hex(value: i8) -> ImmutableString {
+            to_hex(value)
+        }
+        #[rhai_fn(name = "to_hex")]
+        pub fn i16_to_hex(value: i16) -> ImmutableString {
+            to_hex(value)
+        }
+        #[rhai_fn(name = "to_hex")]
+        pub fn i32_to_hex(value: i32) -> ImmutableString {
+            to_hex(value)
+        }
+        #[rhai_fn(name = "to_hex")]
+        pub fn i64_to_hex(value: i64) -> ImmutableString {
+            to_hex(value)
+        }
+        #[rhai_fn(name = "to_octal")]
+        pub fn u8_to_octal(value: u8) -> ImmutableString {
+            to_octal(value)
+        }
+        #[rhai_fn(name = "to_octal")]
+        pub fn u16_to_octal(value: u16) -> ImmutableString {
+            to_octal(value)
+        }
+        #[rhai_fn(name = "to_octal")]
+        pub fn u32_to_octal(value: u32) -> ImmutableString {
+            to_octal(value)
+        }
+        #[rhai_fn(name = "to_octal")]
+        pub fn u64_to_octal(value: u64) -> ImmutableString {
+            to_octal(value)
+        }
+        #[rhai_fn(name = "to_octal")]
+        pub fn i8_to_octal(value: i8) -> ImmutableString {
+            to_octal(value)
+        }
+        #[rhai_fn(name = "to_octal")]
+        pub fn i16_to_octal(value: i16) -> ImmutableString {
+            to_octal(value)
+        }
+        #[rhai_fn(name = "to_octal")]
+        pub fn i32_to_octal(value: i32) -> ImmutableString {
+            to_octal(value)
+        }
+        #[rhai_fn(name = "to_octal")]
+        pub fn i64_to_octal(value: i64) -> ImmutableString {
+            to_octal(value)
+        }
+        #[rhai_fn(name = "to_binary")]
+        pub fn u8_to_binary(value: u8) -> ImmutableString {
+            to_binary(value)
+        }
+        #[rhai_fn(name = "to_binary")]
+        pub fn u16_to_binary(value: u16) -> ImmutableString {
+            to_binary(value)
+        }
+        #[rhai_fn(name = "to_binary")]
+        pub fn u32_to_binary(value: u32) -> ImmutableString {
+            to_binary(value)
+        }
+        #[rhai_fn(name = "to_binary")]
+        pub fn u64_to_binary(value: u64) -> ImmutableString {
+            to_binary(value)
+        }
+        #[rhai_fn(name = "to_binary")]
+        pub fn i8_to_binary(value: i8) -> ImmutableString {
+            to_binary(value)
+        }
+        #[rhai_fn(name = "to_binary")]
+        pub fn i16_to_binary(value: i16) -> ImmutableString {
+            to_binary(value)
+        }
+        #[rhai_fn(name = "to_binary")]
+        pub fn i32_to_binary(value: i32) -> ImmutableString {
+            to_binary(value)
+        }
+        #[rhai_fn(name = "to_binary")]
+        pub fn i64_to_binary(value: i64) -> ImmutableString {
+            to_binary(value)
+        }
+
+        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+        pub mod num_128 {
+            #[rhai_fn(name = "to_hex")]
+            pub fn u128_to_hex(value: u128) -> ImmutableString {
+                to_hex(value)
+            }
+            #[rhai_fn(name = "to_octal")]
+            pub fn i128_to_octal(value: i128) -> ImmutableString {
+                to_octal(value)
+            }
+            #[rhai_fn(name = "to_binary")]
+            pub fn i128_to_binary(value: i128) -> ImmutableString {
+                to_binary(value)
+            }
         }
     }
 }

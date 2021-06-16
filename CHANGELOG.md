@@ -23,6 +23,7 @@ New features
 * An integer value can now be indexed to get/set a single bit.
 * The `bits` method of an integer can be used to iterate through its bits.
 * New `$bool$`, `$int$`, `$float$` and `$string$` expression types for custom syntax.
+* New methods `to_hex`, `to_octal` and `to_binary` for integer numbers.
 
 
 Version 0.20.2
