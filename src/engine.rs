@@ -1,7 +1,9 @@
 //! Main module defining the script evaluation [`Engine`].
 
 use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt};
+use crate::custom_syntax::CustomSyntax;
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
+use crate::fn_hash::get_hasher;
 use crate::fn_native::{
     CallableFunction, IteratorFn, OnDebugCallback, OnPrintCallback, OnVarCallback,
 };
@@ -9,9 +11,7 @@ use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
-use crate::syntax::CustomSyntax;
 use crate::token::Token;
-use crate::utils::get_hasher;
 use crate::{
     Dynamic, EvalAltResult, Identifier, ImmutableString, Module, Position, RhaiResult, Scope,
     Shared, StaticVec, INT,
@@ -1102,17 +1102,17 @@ impl Engine {
                 // Normal variable access
                 (_, None, _) => self.search_scope_only(scope, mods, state, lib, this_ptr, expr),
                 // Qualified variable
-                (_, Some((hash_var, modules)), var_name) => {
-                    let module = self.search_imports(mods, state, modules).ok_or_else(|| {
+                (_, Some((namespace, hash_var)), var_name) => {
+                    let module = self.search_imports(mods, state, namespace).ok_or_else(|| {
                         EvalAltResult::ErrorModuleNotFound(
-                            modules[0].name.to_string(),
-                            modules[0].pos,
+                            namespace[0].name.to_string(),
+                            namespace[0].pos,
                         )
                     })?;
                     let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
                         match *err {
                             EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
-                                *err_name = format!("{}{}", modules, var_name);
+                                *err_name = format!("{}{}", namespace, var_name);
                             }
                             _ => (),
                         }

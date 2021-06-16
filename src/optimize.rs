@@ -4,8 +4,8 @@ use crate::ast::{Expr, OpAssignment, Stmt};
 use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
+use crate::fn_hash::get_hasher;
 use crate::token::Token;
-use crate::utils::get_hasher;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, ImmutableString,
     Module, Position, Scope, StaticVec, AST,
@@ -729,7 +729,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
                 // Array literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                let mut result = a.remove(*i as usize);
+                let mut result = mem::take(&mut a[*i as usize]);
                 result.set_position(*pos);
                 *expr = result;
             }
@@ -740,7 +740,8 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
                 // Array literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                let mut result = a.remove(a.len() - i.abs() as usize);
+                let index = a.len() - i.abs() as usize;
+                let mut result = mem::take(&mut a[index]);
                 result.set_position(*pos);
                 *expr = result;
             }
@@ -797,9 +798,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
         }
         // `... ${ ... } ...`
         Expr::InterpolatedString(x) => {
-            x.iter_mut().for_each(|expr| optimize_expr(expr, state, false));
-
-            let mut n= 0;
+            let mut n = 0;
 
             // Merge consecutive strings
             while n < x.len()-1 {

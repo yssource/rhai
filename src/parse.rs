@@ -4,19 +4,18 @@ use crate::ast::{
     BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ReturnType,
     ScriptFnDef, Stmt, StmtBlock,
 };
+use crate::custom_syntax::{
+    CustomSyntax, MARKER_BLOCK, MARKER_BOOL, MARKER_EXPR, MARKER_IDENT, MARKER_INT, MARKER_STRING,
+};
 use crate::dynamic::{AccessMode, Union};
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::module::NamespaceRef;
-use crate::optimize::optimize_into_ast;
-use crate::optimize::OptimizationLevel;
-use crate::syntax::{
-    CustomSyntax, MARKER_BLOCK, MARKER_BOOL, MARKER_EXPR, MARKER_IDENT, MARKER_INT, MARKER_STRING,
-};
+use crate::optimize::{optimize_into_ast, OptimizationLevel};
 
+use crate::fn_hash::get_hasher;
 use crate::token::{
     is_keyword_function, is_valid_identifier, Token, TokenStream, TokenizerControl,
 };
-use crate::utils::{get_hasher, IdentifierBuilder};
 use crate::{
     calc_fn_hash, calc_qualified_fn_hash, Dynamic, Engine, Identifier, LexError, ParseError,
     ParseErrorType, Position, Scope, Shared, StaticVec, AST,
@@ -30,7 +29,7 @@ use std::{
 };
 
 #[cfg(not(feature = "no_float"))]
-use crate::{syntax::MARKER_FLOAT, FLOAT};
+use crate::{custom_syntax::MARKER_FLOAT, FLOAT};
 
 #[cfg(not(feature = "no_function"))]
 use crate::FnAccess;
@@ -40,6 +39,36 @@ type PERR = ParseErrorType;
 type FunctionsLib = BTreeMap<u64, Shared<ScriptFnDef>>;
 
 const NEVER_ENDS: &str = "never fails because `TokenStream` never ends";
+
+/// A factory of identifiers from text strings.
+///
+/// When [`SmartString`](https://crates.io/crates/smartstring) is used as [`Identifier`],
+/// this just returns a copy because most identifiers in Rhai are short and ASCII-based.
+///
+/// When [`ImmutableString`] is used as [`Identifier`], this type acts as an interner which keeps a
+/// collection of strings and returns shared instances, only creating a new string when it is not
+/// yet interned.
+#[derive(Debug, Clone, Default, Hash)]
+pub struct IdentifierBuilder(
+    #[cfg(feature = "no_smartstring")] std::collections::BTreeSet<Identifier>,
+);
+
+impl IdentifierBuilder {
+    /// Get an identifier from a text string.
+    #[inline(always)]
+    #[must_use]
+    pub fn get(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
+        #[cfg(not(feature = "no_smartstring"))]
+        return text.into();
+
+        #[cfg(feature = "no_smartstring")]
+        return self.0.get(text.as_ref()).cloned().unwrap_or_else(|| {
+            let s: Identifier = text.into();
+            self.0.insert(s.clone());
+            s
+        });
+    }
+}
 
 /// A type that encapsulates the current state of the parser.
 #[derive(Debug)]
@@ -372,17 +401,15 @@ fn parse_fn_call(
 
             args.shrink_to_fit();
 
-            return Ok(Expr::FnCall(
-                Box::new(FnCallExpr {
-                    name: state.get_identifier(id),
-                    capture,
-                    namespace,
-                    hashes,
-                    args,
-                    ..Default::default()
-                }),
-                settings.pos,
-            ));
+            return Ok(FnCallExpr {
+                name: state.get_identifier(id),
+                capture,
+                namespace,
+                hashes,
+                args,
+                ..Default::default()
+            }
+            .into_fn_call_expr(settings.pos));
         }
         // id...
         _ => (),
@@ -424,17 +451,15 @@ fn parse_fn_call(
 
                 args.shrink_to_fit();
 
-                return Ok(Expr::FnCall(
-                    Box::new(FnCallExpr {
-                        name: state.get_identifier(id),
-                        capture,
-                        namespace,
-                        hashes,
-                        args,
-                        ..Default::default()
-                    }),
-                    settings.pos,
-                ));
+                return Ok(FnCallExpr {
+                    name: state.get_identifier(id),
+                    capture,
+                    namespace,
+                    hashes,
+                    args,
+                    ..Default::default()
+                }
+                .into_fn_call_expr(settings.pos));
             }
             // id(...args,
             (Token::Comma, _) => {
@@ -692,7 +717,7 @@ fn parse_array_literal(
 
     arr.shrink_to_fit();
 
-    Ok(Expr::Array(Box::new(arr), settings.pos))
+    Ok(Expr::Array(arr.into(), settings.pos))
 }
 
 /// Parse a map literal.
@@ -1101,7 +1126,7 @@ fn parse_primary(
             }
 
             segments.shrink_to_fit();
-            Expr::InterpolatedString(Box::new(segments))
+            Expr::InterpolatedString(segments.into())
         }
 
         // Array literal
@@ -1245,14 +1270,14 @@ fn parse_primary(
 
                 let (_, namespace, name) = *x;
                 settings.pos = var_pos;
-                let ns = namespace.map(|(_, ns)| ns);
+                let ns = namespace.map(|(ns, _)| ns);
                 parse_fn_call(input, state, lib, name, true, ns, settings.level_up())?
             }
             // Function call
             (Expr::Variable(_, var_pos, x), Token::LeftParen) => {
                 let (_, namespace, name) = *x;
                 settings.pos = var_pos;
-                let ns = namespace.map(|(_, ns)| ns);
+                let ns = namespace.map(|(ns, _)| ns);
                 parse_fn_call(input, state, lib, name, false, ns, settings.level_up())?
             }
             // module access
@@ -1264,12 +1289,12 @@ fn parse_primary(
                     pos: var_pos,
                 };
 
-                if let Some((_, ref mut namespace)) = namespace {
+                if let Some((ref mut namespace, _)) = namespace {
                     namespace.push(var_name_def);
                 } else {
                     let mut ns: NamespaceRef = Default::default();
                     ns.push(var_name_def);
-                    namespace = Some((42, ns));
+                    namespace = Some((ns, 42));
                 }
 
                 Expr::Variable(
@@ -1322,7 +1347,7 @@ fn parse_primary(
         _ => None,
     }
     .map(|x| match x {
-        (_, Some((hash, namespace)), name) => {
+        (_, Some((namespace, hash)), name) => {
             *hash = calc_qualified_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0);
 
             #[cfg(not(feature = "no_module"))]
@@ -1376,15 +1401,13 @@ fn parse_unary(
                     args.push(expr);
                     args.shrink_to_fit();
 
-                    Ok(Expr::FnCall(
-                        Box::new(FnCallExpr {
-                            name: state.get_identifier("-"),
-                            hashes: FnCallHashes::from_native(calc_fn_hash("-", 1)),
-                            args,
-                            ..Default::default()
-                        }),
-                        pos,
-                    ))
+                    Ok(FnCallExpr {
+                        name: state.get_identifier("-"),
+                        hashes: FnCallHashes::from_native(calc_fn_hash("-", 1)),
+                        args,
+                        ..Default::default()
+                    }
+                    .into_fn_call_expr(pos))
                 }
             }
         }
@@ -1403,15 +1426,13 @@ fn parse_unary(
                     args.push(expr);
                     args.shrink_to_fit();
 
-                    Ok(Expr::FnCall(
-                        Box::new(FnCallExpr {
-                            name: state.get_identifier("+"),
-                            hashes: FnCallHashes::from_native(calc_fn_hash("+", 1)),
-                            args,
-                            ..Default::default()
-                        }),
-                        pos,
-                    ))
+                    Ok(FnCallExpr {
+                        name: state.get_identifier("+"),
+                        hashes: FnCallHashes::from_native(calc_fn_hash("+", 1)),
+                        args,
+                        ..Default::default()
+                    }
+                    .into_fn_call_expr(pos))
                 }
             }
         }
@@ -1422,15 +1443,13 @@ fn parse_unary(
             args.push(parse_unary(input, state, lib, settings.level_up())?);
             args.shrink_to_fit();
 
-            Ok(Expr::FnCall(
-                Box::new(FnCallExpr {
-                    name: state.get_identifier("!"),
-                    hashes: FnCallHashes::from_native(calc_fn_hash("!", 1)),
-                    args,
-                    ..Default::default()
-                }),
-                pos,
-            ))
+            Ok(FnCallExpr {
+                name: state.get_identifier("!"),
+                hashes: FnCallHashes::from_native(calc_fn_hash("!", 1)),
+                args,
+                ..Default::default()
+            }
+            .into_fn_call_expr(pos))
         }
         // <EOF>
         Token::EOF => Err(PERR::UnexpectedEOF.into_err(settings.pos)),
@@ -1587,7 +1606,7 @@ fn make_dot_expr(
         // lhs.module::id - syntax error
         (_, Expr::Variable(_, _, x)) if x.1.is_some() => {
             return Err(PERR::PropertyExpected
-                .into_err(x.1.expect("never fails because the namespace is `Some`").1[0].pos))
+                .into_err(x.1.expect("never fails because the namespace is `Some`").0[0].pos))
         }
         // lhs.prop
         (lhs, prop @ Expr::Property(_)) => {
@@ -1772,19 +1791,17 @@ fn parse_binary_op(
             | Token::PowerOf
             | Token::Ampersand
             | Token::Pipe
-            | Token::XOr => Expr::FnCall(Box::new(FnCallExpr { args, ..op_base }), pos),
+            | Token::XOr => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
 
             // '!=' defaults to true when passed invalid operands
-            Token::NotEqualsTo => Expr::FnCall(Box::new(FnCallExpr { args, ..op_base }), pos),
+            Token::NotEqualsTo => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
 
             // Comparison operators default to false when passed invalid operands
             Token::EqualsTo
             | Token::LessThan
             | Token::LessThanEqualsTo
             | Token::GreaterThan
-            | Token::GreaterThanEqualsTo => {
-                Expr::FnCall(Box::new(FnCallExpr { args, ..op_base }), pos)
-            }
+            | Token::GreaterThanEqualsTo => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
 
             Token::Or => {
                 let rhs = args
@@ -1823,16 +1840,13 @@ fn parse_binary_op(
                 args.shrink_to_fit();
 
                 // Convert into a call to `contains`
-                let hash = calc_fn_hash(OP_CONTAINS, 2);
-                Expr::FnCall(
-                    Box::new(FnCallExpr {
-                        hashes: FnCallHashes::from_script(hash),
-                        args,
-                        name: state.get_identifier(OP_CONTAINS),
-                        ..op_base
-                    }),
-                    pos,
-                )
+                FnCallExpr {
+                    hashes: FnCallHashes::from_script(calc_fn_hash(OP_CONTAINS, 2)),
+                    args,
+                    name: state.get_identifier(OP_CONTAINS),
+                    ..op_base
+                }
+                .into_fn_call_expr(pos)
             }
 
             Token::Custom(s)
@@ -1844,18 +1858,16 @@ fn parse_binary_op(
             {
                 let hash = calc_fn_hash(&s, 2);
 
-                Expr::FnCall(
-                    Box::new(FnCallExpr {
-                        hashes: if is_valid_identifier(s.chars()) {
-                            FnCallHashes::from_script(hash)
-                        } else {
-                            FnCallHashes::from_native(hash)
-                        },
-                        args,
-                        ..op_base
-                    }),
-                    pos,
-                )
+                FnCallExpr {
+                    hashes: if is_valid_identifier(s.chars()) {
+                        FnCallHashes::from_script(hash)
+                    } else {
+                        FnCallHashes::from_native(hash)
+                    },
+                    args,
+                    ..op_base
+                }
+                .into_fn_call_expr(pos)
             }
 
             op_token => return Err(PERR::UnknownOperator(op_token.into()).into_err(pos)),
@@ -1999,14 +2011,12 @@ fn parse_custom_syntax(
     keywords.shrink_to_fit();
     tokens.shrink_to_fit();
 
-    Ok(Expr::Custom(
-        Box::new(CustomExpr {
-            keywords,
-            tokens,
-            scope_changed: syntax.scope_changed,
-        }),
-        pos,
-    ))
+    Ok(CustomExpr {
+        keywords,
+        tokens,
+        scope_changed: syntax.scope_changed,
+    }
+    .into_custom_syntax_expr(pos))
 }
 
 /// Parse an expression.
@@ -2942,36 +2952,31 @@ fn make_curry_from_externals(
     }
 
     let num_externals = externals.len();
-    let mut args: StaticVec<_> = Default::default();
+    let mut args = StaticVec::with_capacity(externals.len() + 1);
 
     args.push(fn_expr);
 
-    externals.iter().for_each(|x| {
-        args.push(Expr::Variable(
-            None,
-            Position::NONE,
-            Box::new((None, None, x.clone())),
-        ));
-    });
-
-    args.shrink_to_fit();
-
-    let expr = Expr::FnCall(
-        Box::new(FnCallExpr {
-            name: state.get_identifier(crate::engine::KEYWORD_FN_PTR_CURRY),
-            hashes: FnCallHashes::from_native(calc_fn_hash(
-                crate::engine::KEYWORD_FN_PTR_CURRY,
-                num_externals + 1,
-            )),
-            args,
-            ..Default::default()
-        }),
-        pos,
+    args.extend(
+        externals
+            .iter()
+            .cloned()
+            .map(|x| Expr::Variable(None, Position::NONE, Box::new((None, None, x)))),
     );
+
+    let expr = FnCallExpr {
+        name: state.get_identifier(crate::engine::KEYWORD_FN_PTR_CURRY),
+        hashes: FnCallHashes::from_native(calc_fn_hash(
+            crate::engine::KEYWORD_FN_PTR_CURRY,
+            num_externals + 1,
+        )),
+        args,
+        ..Default::default()
+    }
+    .into_fn_call_expr(pos);
 
     // Convert the entire expression into a statement block, then insert the relevant
     // [`Share`][Stmt::Share] statements.
-    let mut statements: StaticVec<_> = Default::default();
+    let mut statements = StaticVec::with_capacity(externals.len() + 1);
     statements.extend(externals.into_iter().map(Stmt::Share));
     statements.push(Stmt::Expr(expr));
     Expr::Stmt(Box::new(StmtBlock::new(statements, pos)))

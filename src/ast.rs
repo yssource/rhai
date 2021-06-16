@@ -1,10 +1,10 @@
 //! Module defining the AST (abstract syntax tree).
 
+use crate::calc_fn_hash;
 use crate::dynamic::Union;
 use crate::fn_native::shared_make_mut;
 use crate::module::NamespaceRef;
 use crate::token::Token;
-use crate::utils::calc_fn_hash;
 use crate::{
     Dynamic, FnNamespace, Identifier, ImmutableString, Module, Position, Shared, StaticVec, INT,
 };
@@ -1399,6 +1399,15 @@ pub struct CustomExpr {
     pub tokens: StaticVec<Identifier>,
 }
 
+impl CustomExpr {
+    /// Convert this into a [`Expr::Custom`].
+    #[inline(always)]
+    #[must_use]
+    pub fn into_custom_syntax_expr(self, pos: Position) -> Expr {
+        Expr::Custom(self.into(), pos)
+    }
+}
+
 /// _(INTERNALS)_ A binary expression.
 /// Exported under the `internals` feature only.
 ///
@@ -1563,6 +1572,12 @@ impl FnCallExpr {
     #[must_use]
     pub fn is_qualified(&self) -> bool {
         self.namespace.is_some()
+    }
+    /// Convert this into a [`FnCall`][Expr::FnCall].
+    #[inline(always)]
+    #[must_use]
+    pub fn into_fn_call_expr(self, pos: Position) -> Expr {
+        Expr::FnCall(self.into(), pos)
     }
 }
 
@@ -1730,7 +1745,7 @@ pub enum Expr {
         Position,
         Box<(
             Option<NonZeroUsize>,
-            Option<(u64, NamespaceRef)>,
+            Option<(NamespaceRef, u64)>,
             Identifier,
         )>,
     ),

@@ -5,7 +5,7 @@ use crate::engine::{EvalContext, Imports, State};
 use crate::fn_native::{FnCallArgs, SendSync};
 use crate::fn_register::RegisterNativeFunction;
 use crate::optimize::OptimizationLevel;
-use crate::parser::ParseState;
+use crate::parse::ParseState;
 use crate::{
     scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Identifier, Module,
     NativeCallContext, ParseError, Position, RhaiResult, Shared, AST,

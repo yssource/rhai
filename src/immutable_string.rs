@@ -1,123 +1,18 @@
-//! Module containing various utility types and functions.
+//! The `ImmutableString` type.
 
 use crate::fn_native::{shared_make_mut, shared_take};
-use crate::{Identifier, Shared, SmartString};
+use crate::{Shared, SmartString};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
-    any::TypeId,
     borrow::Borrow,
     cmp::Ordering,
     fmt,
-    hash::{BuildHasher, Hash, Hasher},
-    iter::{empty, FromIterator},
+    hash::Hash,
+    iter::FromIterator,
     ops::{Add, AddAssign, Deref, Sub, SubAssign},
     str::FromStr,
 };
-
-/// A hasher that only takes one single [`u64`] and returns it as a hash key.
-///
-/// # Panics
-///
-/// Panics when hashing any data type other than a [`u64`].
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct StraightHasher(u64);
-
-impl Hasher for StraightHasher {
-    #[inline(always)]
-    fn finish(&self) -> u64 {
-        self.0
-    }
-    #[inline(always)]
-    fn write(&mut self, bytes: &[u8]) {
-        assert_eq!(bytes.len(), 8, "StraightHasher can only hash u64 values");
-
-        let mut key = [0_u8; 8];
-        key.copy_from_slice(bytes);
-
-        self.0 = u64::from_ne_bytes(key);
-    }
-}
-
-/// A hash builder for `StraightHasher`.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
-pub struct StraightHasherBuilder;
-
-impl BuildHasher for StraightHasherBuilder {
-    type Hasher = StraightHasher;
-
-    #[inline(always)]
-    fn build_hasher(&self) -> Self::Hasher {
-        StraightHasher(42)
-    }
-}
-
-/// Create an instance of the default hasher.
-#[inline(always)]
-#[must_use]
-pub fn get_hasher() -> ahash::AHasher {
-    Default::default()
-}
-
-/// Calculate a [`u64`] hash key from a namespace-qualified function name
-/// and the number of parameters, but no parameter types.
-///
-/// Module names are passed in via `&str` references from an iterator.
-/// Parameter types are passed in via [`TypeId`] values from an iterator.
-///
-/// # Note
-///
-/// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
-#[inline]
-#[must_use]
-pub fn calc_qualified_fn_hash<'a>(
-    modules: impl Iterator<Item = &'a str>,
-    fn_name: impl AsRef<str>,
-    num: usize,
-) -> u64 {
-    let s = &mut get_hasher();
-
-    // We always skip the first module
-    let mut len = 0;
-    modules
-        .inspect(|_| len += 1)
-        .skip(1)
-        .for_each(|m| m.hash(s));
-    len.hash(s);
-    fn_name.as_ref().hash(s);
-    num.hash(s);
-    s.finish()
-}
-
-/// Calculate a [`u64`] hash key from a non-namespace-qualified function name
-/// and the number of parameters, but no parameter types.
-///
-/// Parameter types are passed in via [`TypeId`] values from an iterator.
-#[inline(always)]
-#[must_use]
-pub fn calc_fn_hash(fn_name: impl AsRef<str>, num: usize) -> u64 {
-    calc_qualified_fn_hash(empty(), fn_name, num)
-}
-
-/// Calculate a [`u64`] hash key from a list of parameter types.
-///
-/// Parameter types are passed in via [`TypeId`] values from an iterator.
-#[inline]
-#[must_use]
-pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
-    let s = &mut get_hasher();
-    let mut len = 0;
-    params.inspect(|_| len += 1).for_each(|t| t.hash(s));
-    len.hash(s);
-    s.finish()
-}
-
-/// Combine two [`u64`] hashes by taking the XOR of them.
-#[inline(always)]
-#[must_use]
-pub(crate) fn combine_hashes(a: u64, b: u64) -> u64 {
-    a ^ b
-}
 
 /// The system immutable string type.
 ///
@@ -626,35 +521,5 @@ impl ImmutableString {
     #[inline(always)]
     pub(crate) fn make_mut(&mut self) -> &mut SmartString {
         shared_make_mut(&mut self.0)
-    }
-}
-
-/// A factory of identifiers from text strings.
-///
-/// When [`SmartString`](https://crates.io/crates/smartstring) is used as [`Identifier`],
-/// this just returns one because most identifiers in Rhai are short and ASCII-based.
-///
-/// When [`ImmutableString`] is used as [`Identifier`], this type acts as an interner which keeps a
-/// collection of strings and returns shared instances, only creating a new string when it is not
-/// yet interned.
-#[derive(Debug, Clone, Default, Hash)]
-pub struct IdentifierBuilder(
-    #[cfg(feature = "no_smartstring")] std::collections::BTreeSet<Identifier>,
-);
-
-impl IdentifierBuilder {
-    /// Get an identifier from a text string.
-    #[inline(always)]
-    #[must_use]
-    pub fn get(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
-        #[cfg(not(feature = "no_smartstring"))]
-        return text.as_ref().into();
-
-        #[cfg(feature = "no_smartstring")]
-        return self.0.get(text.as_ref()).cloned().unwrap_or_else(|| {
-            let s: Identifier = text.into();
-            self.0.insert(s.clone());
-            s
-        });
     }
 }
