@@ -139,15 +139,6 @@ pub use module::{FnNamespace, Module};
 pub use scope::Scope;
 pub use token::Position;
 
-/// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
-/// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
-#[cfg(not(feature = "no_smartstring"))]
-pub type Identifier = SmartString;
-
-/// An identifier in Rhai.
-#[cfg(feature = "no_smartstring")]
-pub type Identifier = ImmutableString;
-
 /// A trait to enable registering Rust functions.
 /// This trait is  no longer needed and will be removed in the future.
 #[deprecated(
@@ -163,6 +154,30 @@ pub trait RegisterFn {}
     note = "this trait is no longer needed and will be removed in the future"
 )]
 pub trait RegisterResultFn {}
+
+/// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
+/// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
+#[cfg(not(feature = "internals"))]
+#[cfg(not(feature = "no_smartstring"))]
+pub(crate) type Identifier = SmartString;
+
+/// An identifier in Rhai.
+#[cfg(not(feature = "internals"))]
+#[cfg(feature = "no_smartstring")]
+pub(crate) type Identifier = ImmutableString;
+
+/// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
+/// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
+#[cfg(feature = "internals")]
+#[cfg(not(feature = "no_smartstring"))]
+#[deprecated = "this type is volatile and may change"]
+pub type Identifier = SmartString;
+
+/// An identifier in Rhai.
+#[cfg(feature = "internals")]
+#[cfg(feature = "no_smartstring")]
+#[deprecated = "this type is volatile and may change"]
+pub type Identifier = ImmutableString;
 
 /// Alias to [`Rc`][std::rc::Rc] or [`Arc`][std::sync::Arc] depending on the `sync` feature flag.
 pub use fn_native::Shared;
