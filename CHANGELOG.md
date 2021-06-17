@@ -24,6 +24,7 @@ New features
 * The `bits` method of an integer can be used to iterate through its bits.
 * New `$bool$`, `$int$`, `$float$` and `$string$` expression types for custom syntax.
 * New methods `to_hex`, `to_octal` and `to_binary` for integer numbers.
+* New methods `to_upper`, `to_lower`, `make_upper`, `make_lower` for strings/characters.
 
 
 Version 0.20.2
