@@ -3,7 +3,8 @@
 #![allow(non_snake_case)]
 
 use crate::dynamic::{DynamicWriteLock, Variant};
-use crate::fn_native::{CallableFunction, FnAny, FnCallArgs, SendSync};
+use crate::fn_call::FnCallArgs;
+use crate::fn_native::{CallableFunction, FnAny, SendSync};
 use crate::r#unsafe::unsafe_try_cast;
 use crate::token::Position;
 use crate::{Dynamic, EvalAltResult, NativeCallContext};

@@ -2,7 +2,8 @@
 
 use crate::dynamic::Variant;
 use crate::engine::{EvalContext, Imports, State};
-use crate::fn_native::{FnCallArgs, SendSync};
+use crate::fn_call::FnCallArgs;
+use crate::fn_native::SendSync;
 use crate::fn_register::RegisterNativeFunction;
 use crate::optimize::OptimizationLevel;
 use crate::parse::ParseState;

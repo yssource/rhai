@@ -1,6 +1,7 @@
 //! Module defining macros for developing _plugins_.
 
-pub use crate::fn_native::{CallableFunction, FnCallArgs};
+use crate::fn_call::FnCallArgs;
+pub use crate::fn_native::CallableFunction;
 pub use crate::{
     Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, ImmutableString, Module,
     NativeCallContext, Position,
