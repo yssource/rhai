@@ -248,7 +248,6 @@ pub const FN_ANONYMOUS: &str = "anon$";
 pub const OP_EQUALS: &str = "==";
 
 /// Standard method function for containment testing.
-///
 /// The `in` operator is implemented as a call to this method.
 pub const OP_CONTAINS: &str = "contains";
 
@@ -1233,7 +1232,7 @@ impl Engine {
             }
         }
 
-        let is_ref = target.is_ref();
+        let is_ref_mut = target.is_ref();
 
         // Pop the last index value
         let idx_val = idx_values
@@ -1293,10 +1292,11 @@ impl Engine {
                             let hash_set =
                                 FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_SET, 3));
                             let args = &mut [target, &mut idx_val_for_setter, &mut new_val];
+                            let pos = Position::NONE;
 
                             self.exec_fn_call(
-                                mods, state, lib, FN_IDX_SET, hash_set, args, is_ref, true,
-                                new_pos, None, level,
+                                mods, state, lib, FN_IDX_SET, hash_set, args, is_ref_mut, true,
+                                pos, None, level,
                             )?;
                         }
 
@@ -1374,8 +1374,8 @@ impl Engine {
                             let args = &mut [target.as_mut()];
                             let (mut orig_val, _) = self
                                 .exec_fn_call(
-                                    mods, state, lib, getter, hash, args, is_ref, true, *pos, None,
-                                    level,
+                                    mods, state, lib, getter, hash, args, is_ref_mut, true, *pos,
+                                    None, level,
                                 )
                                 .or_else(|err| match *err {
                                     // Try an indexer if property does not exist
@@ -1417,7 +1417,8 @@ impl Engine {
                         let hash = FnCallHashes::from_native(*hash_set);
                         let args = &mut [target.as_mut(), &mut new_val];
                         self.exec_fn_call(
-                            mods, state, lib, setter, hash, args, is_ref, true, *pos, None, level,
+                            mods, state, lib, setter, hash, args, is_ref_mut, true, *pos, None,
+                            level,
                         )
                         .or_else(|err| match *err {
                             // Try an indexer if property does not exist
@@ -1425,10 +1426,11 @@ impl Engine {
                                 let args = &mut [target, &mut name.into(), &mut new_val];
                                 let hash_set =
                                     FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_SET, 3));
+                                let pos = Position::NONE;
 
                                 self.exec_fn_call(
-                                    mods, state, lib, FN_IDX_SET, hash_set, args, is_ref, true,
-                                    *pos, None, level,
+                                    mods, state, lib, FN_IDX_SET, hash_set, args, is_ref_mut, true,
+                                    pos, None, level,
                                 )
                                 .map_err(
                                     |idx_err| match *idx_err {
@@ -1446,7 +1448,8 @@ impl Engine {
                         let hash = FnCallHashes::from_native(*hash_get);
                         let args = &mut [target.as_mut()];
                         self.exec_fn_call(
-                            mods, state, lib, getter, hash, args, is_ref, true, *pos, None, level,
+                            mods, state, lib, getter, hash, args, is_ref_mut, true, *pos, None,
+                            level,
                         )
                         .map_or_else(
                             |err| match *err {
@@ -1517,7 +1520,7 @@ impl Engine {
                                 let args = &mut arg_values[..1];
                                 let (mut val, updated) = self
                                     .exec_fn_call(
-                                        mods, state, lib, getter, hash_get, args, is_ref, true,
+                                        mods, state, lib, getter, hash_get, args, is_ref_mut, true,
                                         *pos, None, level,
                                     )
                                     .or_else(|err| match *err {
@@ -1563,7 +1566,7 @@ impl Engine {
                                     let mut arg_values = [target.as_mut(), val];
                                     let args = &mut arg_values;
                                     self.exec_fn_call(
-                                        mods, state, lib, setter, hash_set, args, is_ref, true,
+                                        mods, state, lib, setter, hash_set, args, is_ref_mut, true,
                                         *pos, None, level,
                                     )
                                     .or_else(
@@ -1577,7 +1580,7 @@ impl Engine {
                                                 );
                                                 self.exec_fn_call(
                                                     mods, state, lib, FN_IDX_SET, hash_set, args,
-                                                    is_ref, true, *pos, None, level,
+                                                    is_ref_mut, true, *pos, None, level,
                                                 )
                                                 .or_else(|idx_err| match *idx_err {
                                                     EvalAltResult::ErrorIndexingType(_, _) => {
@@ -1972,6 +1975,7 @@ impl Engine {
             _ if indexers => {
                 let args = &mut [target, &mut idx];
                 let hash_get = FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_GET, 2));
+                let idx_pos = Position::NONE;
 
                 self.exec_fn_call(
                     mods, state, lib, FN_IDX_GET, hash_get, args, true, true, idx_pos, None, level,
@@ -1980,7 +1984,11 @@ impl Engine {
             }
 
             _ => EvalAltResult::ErrorIndexingType(
-                self.map_type_name(target.type_name()).into(),
+                format!(
+                    "{} [{}]",
+                    self.map_type_name(target.type_name()),
+                    self.map_type_name(idx.type_name())
+                ),
                 Position::NONE,
             )
             .into(),

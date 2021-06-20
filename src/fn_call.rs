@@ -7,7 +7,7 @@ use crate::engine::{
     MAX_DYNAMIC_PARAMETERS,
 };
 use crate::fn_builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
-use crate::fn_native::{FnAny, FnCallArgs};
+use crate::fn_native::FnAny;
 use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
 use crate::{
@@ -29,6 +29,9 @@ use std::{
 
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
+
+/// Arguments to a function call, which is a list of [`&mut Dynamic`][Dynamic].
+pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
 /// A type that temporarily stores a mutable reference to a `Dynamic`,
 /// replacing it with a cloned copy.
@@ -102,13 +105,13 @@ impl Drop for ArgBackup<'_> {
 pub fn ensure_no_data_race(
     fn_name: &str,
     args: &FnCallArgs,
-    is_ref: bool,
+    is_method_call: bool,
 ) -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_closure"))]
     if let Some((n, _)) = args
         .iter()
         .enumerate()
-        .skip(if is_ref { 1 } else { 0 })
+        .skip(if is_method_call { 1 } else { 0 })
         .find(|(_, a)| a.is_locked())
     {
         return EvalAltResult::ErrorDataRace(
@@ -298,7 +301,7 @@ impl Engine {
         name: &str,
         hash: u64,
         args: &mut FnCallArgs,
-        is_ref: bool,
+        is_method_call: bool,
         is_op_assign: bool,
         pos: Position,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
@@ -316,7 +319,7 @@ impl Engine {
 
             // Calling pure function but the first argument is a reference?
             let mut backup: Option<ArgBackup> = None;
-            if is_ref && func.is_pure() && !args.is_empty() {
+            if is_method_call && func.is_pure() && !args.is_empty() {
                 backup = Some(Default::default());
                 backup.as_mut().map(|bk| bk.change_first_arg_to_copy(args));
             }
@@ -373,7 +376,11 @@ impl Engine {
                 assert!(args.len() == 2);
 
                 EvalAltResult::ErrorIndexingType(
-                    self.map_type_name(args[0].type_name()).to_string(),
+                    format!(
+                        "{} [{}]",
+                        self.map_type_name(args[0].type_name()),
+                        self.map_type_name(args[1].type_name())
+                    ),
                     pos,
                 )
                 .into()
@@ -385,7 +392,12 @@ impl Engine {
                 assert!(args.len() == 3);
 
                 EvalAltResult::ErrorIndexingType(
-                    self.map_type_name(args[0].type_name()).to_string(),
+                    format!(
+                        "{} [{}] = {}",
+                        self.map_type_name(args[0].type_name()),
+                        self.map_type_name(args[1].type_name()),
+                        self.map_type_name(args[2].type_name())
+                    ),
                     pos,
                 )
                 .into()
@@ -620,8 +632,8 @@ impl Engine {
         fn_name: &str,
         hashes: FnCallHashes,
         args: &mut FnCallArgs,
-        is_ref: bool,
-        _is_method: bool,
+        is_ref_mut: bool,
+        _is_method_call: bool,
         pos: Position,
         _capture_scope: Option<Scope>,
         _level: usize,
@@ -634,7 +646,7 @@ impl Engine {
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
-        ensure_no_data_race(fn_name, args, is_ref)?;
+        ensure_no_data_race(fn_name, args, is_ref_mut)?;
 
         // These may be redirected from method style calls.
         match fn_name {
@@ -722,7 +734,7 @@ impl Engine {
                 });
             }
 
-            let result = if _is_method {
+            let result = if _is_method_call {
                 // Method call of script function - map first argument to `this`
                 let (first, rest) = args
                     .split_first_mut()
@@ -753,7 +765,7 @@ impl Engine {
                 // Normal call of script function
                 // The first argument is a reference?
                 let mut backup: Option<ArgBackup> = None;
-                if is_ref && !args.is_empty() {
+                if is_ref_mut && !args.is_empty() {
                     backup = Some(Default::default());
                     backup.as_mut().map(|bk| bk.change_first_arg_to_copy(args));
                 }
@@ -780,7 +792,9 @@ impl Engine {
 
         // Native function call
         let hash = hashes.native;
-        self.call_native_fn(mods, state, lib, fn_name, hash, args, is_ref, false, pos)
+        self.call_native_fn(
+            mods, state, lib, fn_name, hash, args, is_ref_mut, false, pos,
+        )
     }
 
     /// Evaluate a list of statements with no `this` pointer.
@@ -872,7 +886,7 @@ impl Engine {
         pos: Position,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        let is_ref = target.is_ref();
+        let is_ref_mut = target.is_ref();
 
         let (result, updated) = match fn_name {
             KEYWORD_FN_PTR_CALL if target.is::<FnPtr>() => {
@@ -932,7 +946,8 @@ impl Engine {
 
                 // Map it to name(args) in function-call style
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, new_hash, &mut args, is_ref, true, pos, None, level,
+                    mods, state, lib, fn_name, new_hash, &mut args, is_ref_mut, true, pos, None,
+                    level,
                 )
             }
             KEYWORD_FN_PTR_CURRY => {
@@ -1004,7 +1019,7 @@ impl Engine {
                 args.extend(call_args.iter_mut());
 
                 self.exec_fn_call(
-                    mods, state, lib, fn_name, hash, &mut args, is_ref, true, pos, None, level,
+                    mods, state, lib, fn_name, hash, &mut args, is_ref_mut, true, pos, None, level,
                 )
             }
         }?;
@@ -1227,7 +1242,7 @@ impl Engine {
         // Normal function call - except for Fn, curry, call and eval (handled above)
         let mut arg_values = StaticVec::with_capacity(args_expr.len());
         let mut args = StaticVec::with_capacity(args_expr.len() + curry.len());
-        let mut is_ref = false;
+        let mut is_ref_mut = false;
         let capture = if capture_scope && !scope.is_empty() {
             Some(scope.clone_visible())
         } else {
@@ -1269,7 +1284,7 @@ impl Engine {
                     args.extend(arg_values.iter_mut())
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
-                    is_ref = true;
+                    is_ref_mut = true;
                     let obj_ref = target.take_ref().expect("never fails because `target` is a reference if it is not a value and not shared");
                     args.push(obj_ref);
                     args.extend(arg_values.iter_mut());
@@ -1288,7 +1303,7 @@ impl Engine {
         }
 
         self.exec_fn_call(
-            mods, state, lib, name, hashes, &mut args, is_ref, false, pos, capture, level,
+            mods, state, lib, name, hashes, &mut args, is_ref_mut, false, pos, capture, level,
         )
         .map(|(v, _)| v)
     }

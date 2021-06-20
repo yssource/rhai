@@ -83,6 +83,7 @@ mod fn_call;
 mod fn_func;
 mod fn_hash;
 mod fn_native;
+mod fn_ptr;
 mod fn_register;
 mod immutable_string;
 mod module;
@@ -132,21 +133,13 @@ pub use dynamic::Dynamic;
 pub use engine::{Engine, EvalContext, OP_CONTAINS, OP_EQUALS};
 pub use error::EvalAltResult;
 pub use error_parsing::{LexError, ParseError, ParseErrorType};
-pub use fn_native::{FnPtr, NativeCallContext};
+pub use fn_native::NativeCallContext;
+pub use fn_ptr::FnPtr;
 pub use fn_register::RegisterNativeFunction;
 pub use immutable_string::ImmutableString;
 pub use module::{FnNamespace, Module};
 pub use scope::Scope;
 pub use token::Position;
-
-/// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
-/// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
-#[cfg(not(feature = "no_smartstring"))]
-pub type Identifier = SmartString;
-
-/// An identifier in Rhai.
-#[cfg(feature = "no_smartstring")]
-pub type Identifier = ImmutableString;
 
 /// A trait to enable registering Rust functions.
 /// This trait is  no longer needed and will be removed in the future.
@@ -163,6 +156,30 @@ pub trait RegisterFn {}
     note = "this trait is no longer needed and will be removed in the future"
 )]
 pub trait RegisterResultFn {}
+
+/// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
+/// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
+#[cfg(not(feature = "internals"))]
+#[cfg(not(feature = "no_smartstring"))]
+pub(crate) type Identifier = SmartString;
+
+/// An identifier in Rhai.
+#[cfg(not(feature = "internals"))]
+#[cfg(feature = "no_smartstring")]
+pub(crate) type Identifier = ImmutableString;
+
+/// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
+/// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
+#[cfg(feature = "internals")]
+#[cfg(not(feature = "no_smartstring"))]
+#[deprecated = "this type is volatile and may change"]
+pub type Identifier = SmartString;
+
+/// An identifier in Rhai.
+#[cfg(feature = "internals")]
+#[cfg(feature = "no_smartstring")]
+#[deprecated = "this type is volatile and may change"]
+pub type Identifier = ImmutableString;
 
 /// Alias to [`Rc`][std::rc::Rc] or [`Arc`][std::sync::Arc] depending on the `sync` feature flag.
 pub use fn_native::Shared;
@@ -310,16 +327,11 @@ type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 #[cfg(feature = "internals")]
 pub type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 
-#[cfg(not(feature = "internals"))]
 #[cfg(not(feature = "no_smartstring"))]
 pub(crate) type SmartString = smartstring::SmartString<smartstring::Compact>;
 
 #[cfg(feature = "no_smartstring")]
 pub(crate) type SmartString = String;
-
-#[cfg(feature = "internals")]
-#[cfg(not(feature = "no_smartstring"))]
-pub type SmartString = smartstring::SmartString<smartstring::Compact>;
 
 // Compiler guards against mutually-exclusive feature flags
 

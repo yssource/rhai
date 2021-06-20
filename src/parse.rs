@@ -318,7 +318,7 @@ fn parse_var_name(input: &mut TokenStream) -> Result<(String, Position), ParseEr
     }
 }
 
-/// Parse ( expr )
+/// Parse `(` expr `)`
 fn parse_paren_expr(
     input: &mut TokenStream,
     state: &mut ParseState,

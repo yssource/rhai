@@ -100,6 +100,52 @@ mod string_functions {
         }
     }
 
+    pub fn to_upper(string: &str) -> ImmutableString {
+        string.to_uppercase().into()
+    }
+    pub fn make_upper(string: &mut ImmutableString) {
+        *string = to_upper(string);
+    }
+    pub fn to_lower(string: &str) -> ImmutableString {
+        string.to_lowercase().into()
+    }
+    pub fn make_lower(string: &mut ImmutableString) {
+        *string = to_lower(string);
+    }
+
+    #[rhai_fn(name = "to_upper")]
+    pub fn to_upper_char(character: char) -> char {
+        let mut stream = character.to_uppercase();
+        let ch = stream
+            .next()
+            .expect("never fails because there should be at least one character");
+        if stream.next().is_some() {
+            character
+        } else {
+            ch
+        }
+    }
+    #[rhai_fn(name = "make_upper")]
+    pub fn make_upper_char(character: &mut char) {
+        *character = to_upper_char(*character)
+    }
+    #[rhai_fn(name = "to_lower")]
+    pub fn to_lower_char(character: char) -> char {
+        let mut stream = character.to_lowercase();
+        let ch = stream
+            .next()
+            .expect("never fails because there should be at least one character");
+        if stream.next().is_some() {
+            character
+        } else {
+            ch
+        }
+    }
+    #[rhai_fn(name = "make_lower")]
+    pub fn make_lower_char(character: &mut char) {
+        *character = to_lower_char(*character)
+    }
+
     #[rhai_fn(name = "index_of")]
     pub fn index_of_char_starting_from(string: &str, character: char, start: INT) -> INT {
         let start = if start < 0 {

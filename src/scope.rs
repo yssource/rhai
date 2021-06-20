@@ -122,7 +122,6 @@ impl<'a> Scope<'a> {
     /// assert!(my_scope.is_empty());
     /// ```
     #[inline(always)]
-    #[must_use]
     pub fn clear(&mut self) -> &mut Self {
         self.names.clear();
         self.values.clear();

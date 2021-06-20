@@ -2,7 +2,8 @@
 
 use crate::ast::{FnAccess, Ident};
 use crate::dynamic::Variant;
-use crate::fn_native::{shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, SendSync};
+use crate::fn_call::FnCallArgs;
+use crate::fn_native::{shared_take_or_clone, CallableFunction, IteratorFn, SendSync};
 use crate::fn_register::RegisterNativeFunction;
 use crate::parse::IdentifierBuilder;
 use crate::token::Token;
