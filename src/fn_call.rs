@@ -142,7 +142,7 @@ impl Engine {
                 .map(|a| if a.is::<ImmutableString>() {
                     "&str | ImmutableString | String"
                 } else {
-                    self.map_type_name((*a).type_name())
+                    self.map_type_name(a.type_name())
                 })
                 .collect::<StaticVec<_>>()
                 .join(", ")
@@ -171,8 +171,10 @@ impl Engine {
         is_op_assignment: bool,
     ) -> &'s Option<Box<FnResolutionCacheEntry>> {
         let mut hash = args.as_ref().map_or(hash_script, |args| {
-            let hash_params = calc_fn_params_hash(args.iter().map(|a| a.type_id()));
-            combine_hashes(hash_script, hash_params)
+            combine_hashes(
+                hash_script,
+                calc_fn_params_hash(args.iter().map(|a| a.type_id())),
+            )
         });
 
         &*state
@@ -188,43 +190,17 @@ impl Engine {
                 let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
 
                 loop {
-                    let func = lib
-                        .iter()
-                        .find_map(|m| {
-                            m.get_fn(hash).cloned().map(|func| {
-                                let source = m.id_raw().cloned();
-                                FnResolutionCacheEntry { func, source }
-                            })
-                        })
-                        .or_else(|| {
-                            self.global_namespace
-                                .get_fn(hash)
-                                .cloned()
-                                .map(|func| FnResolutionCacheEntry { func, source: None })
-                        })
-                        .or_else(|| {
-                            self.global_modules.iter().find_map(|m| {
-                                m.get_fn(hash).cloned().map(|func| {
-                                    let source = m.id_raw().cloned();
-                                    FnResolutionCacheEntry { func, source }
-                                })
-                            })
-                        })
-                        .or_else(|| {
-                            mods.get_fn(hash).map(|(func, source)| {
-                                let func = func.clone();
-                                let source = source.cloned();
-                                FnResolutionCacheEntry { func, source }
-                            })
-                        })
-                        .or_else(|| {
-                            self.global_sub_modules.values().find_map(|m| {
-                                m.get_qualified_fn(hash).cloned().map(|func| {
-                                    let source = m.id_raw().cloned();
-                                    FnResolutionCacheEntry { func, source }
-                                })
-                            })
-                        });
+                    let func = lib.iter().find_map(|m| m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
+                        func, source: m.id_raw().cloned()
+                    })).or_else(|| self.global_namespace.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
+                        func, source: None
+                    })).or_else(|| self.global_modules.iter().find_map(|m| m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
+                        func, source: m.id_raw().cloned()
+                    }))).or_else(|| mods.get_fn(hash).map(|(func, source)| FnResolutionCacheEntry {
+                        func: func.clone(), source: source.cloned()
+                    })).or_else(|| self.global_sub_modules.values().find_map(|m| m.get_qualified_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
+                        func, source: m.id_raw().cloned()
+                    })));
 
                     match func {
                         // Specific version found
@@ -239,23 +215,17 @@ impl Engine {
                             return args.and_then(|args| {
                                 if !is_op_assignment {
                                     get_builtin_binary_op_fn(fn_name, &args[0], &args[1]).map(|f| {
-                                        let func = CallableFunction::from_method(
+                                        FnResolutionCacheEntry { func: CallableFunction::from_method(
                                             Box::new(f) as Box<FnAny>
-                                        );
-                                        FnResolutionCacheEntry { func, source: None }
+                                        ), source: None }
                                     })
                                 } else {
                                     let (first, second) = args.split_first()
                                                               .expect("never fails because an op-assignment must have two arguments");
 
-                                    get_builtin_op_assignment_fn(fn_name, *first, second[0]).map(
-                                        |f| {
-                                            let func = CallableFunction::from_method(
-                                                Box::new(f) as Box<FnAny>
-                                            );
-                                            FnResolutionCacheEntry { func, source: None }
-                                        },
-                                    )
+                                    get_builtin_op_assignment_fn(fn_name, *first, second[0]).map(|f| FnResolutionCacheEntry {
+                                        func: CallableFunction::from_method(Box::new(f) as Box<FnAny>), source: None
+                                    })
                                 }
                                 .map(Box::new)
                             });
@@ -437,11 +407,10 @@ impl Engine {
             }
 
             // Raise error
-            _ => EvalAltResult::ErrorFunctionNotFound(
-                self.gen_call_signature(None, name, args.as_ref()),
-                pos,
-            )
-            .into(),
+            _ => {
+                EvalAltResult::ErrorFunctionNotFound(self.gen_call_signature(None, name, args), pos)
+                    .into()
+            }
         }
     }
 
@@ -1451,7 +1420,7 @@ impl Engine {
             Some(f) => unreachable!("unknown function type: {:?}", f),
 
             None => EvalAltResult::ErrorFunctionNotFound(
-                self.gen_call_signature(Some(namespace), fn_name, args.as_ref()),
+                self.gen_call_signature(Some(namespace), fn_name, &args),
                 pos,
             )
             .into(),

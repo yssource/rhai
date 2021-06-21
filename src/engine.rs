@@ -95,7 +95,7 @@ impl Imports {
             .iter()
             .enumerate()
             .rev()
-            .find_map(|(i, key)| if *key == name { Some(i) } else { None })
+            .find_map(|(i, key)| if key == name { Some(i) } else { None })
     }
     /// Push an imported [modules][Module] onto the stack.
     #[inline(always)]
