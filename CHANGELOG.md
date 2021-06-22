@@ -4,6 +4,8 @@ Rhai Release Notes
 Version 0.20.3
 ==============
 
+This version adds support to index into an integer number, treating it as a bit-field.
+
 Bug fixes
 ---------
 
@@ -13,7 +15,7 @@ Bug fixes
 Breaking changes
 ----------------
 
-* To keep the API consistent, strings are no longer iterable by default.  Use the `chars` method to iterator the characters in a string.
+* To keep the API consistent, strings are no longer iterable by default.  Use the `chars` method to iterate through the characters in a string.
 * `Dynamic::take_string` and `Dynamic::take_immutable_string` are renamed to `Dynamic::as_string` and `Dynamic::as_immutable_string` respectively.
 
 New features
