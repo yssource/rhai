@@ -1498,12 +1498,12 @@ impl fmt::Debug for FnCallHashes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(script) = self.script {
             if script == self.native {
-                write!(f, "({}=={})", script, self.native)
+                fmt::Debug::fmt(&self.native, f)
             } else {
                 write!(f, "({}, {})", script, self.native)
             }
         } else {
-            write!(f, "{}", self.native)
+            write!(f, "{} (native only)", self.native)
         }
     }
 }

@@ -448,7 +448,7 @@ impl<'a> Scope<'a> {
             .1
             .as_mut()
             .expect("never fails because the list is initialized");
-        if !list.iter().any(|a| &alias == a) {
+        if !list.iter().any(|a| a == &alias) {
             list.push(alias);
         }
         self

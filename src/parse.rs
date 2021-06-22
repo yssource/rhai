@@ -191,7 +191,7 @@ impl<'e> ParseState<'e> {
             .iter()
             .rev()
             .enumerate()
-            .find(|&(_, n)| *n == name)
+            .find(|&(_, n)| n == name)
             .and_then(|(i, _)| NonZeroUsize::new(i + 1))
     }
 
@@ -1070,8 +1070,8 @@ fn parse_primary(
             let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
 
             #[cfg(not(feature = "no_closure"))]
-            new_state.external_vars.iter().for_each(|(closure, pos)| {
-                state.access_var(closure, *pos);
+            new_state.external_vars.iter().for_each(|(closure, &pos)| {
+                state.access_var(closure, pos);
             });
 
             let hash_script = calc_fn_hash(&func.name, func.params.len());
