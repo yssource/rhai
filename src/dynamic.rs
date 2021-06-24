@@ -1825,43 +1825,10 @@ impl Dynamic {
     /// Convert the [`Dynamic`] into a [`String`] and return it.
     /// If there are other references to the same string, a cloned copy is returned.
     /// Returns the name of the actual type if the cast fails.
-    ///
-    /// # Deprecated
-    ///
-    /// This method is deprecated and will be removed in the future.
-    /// Use [`as_string`][Dynamic::as_string] instead.
-    #[inline(always)]
-    #[must_use]
-    #[deprecated(
-        since = "0.20.3",
-        note = "this method is deprecated and will be removed in the future"
-    )]
-    pub fn take_string(self) -> Result<String, &'static str> {
-        self.as_string()
-    }
-    /// Convert the [`Dynamic`] into a [`String`] and return it.
-    /// If there are other references to the same string, a cloned copy is returned.
-    /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
     #[must_use]
     pub fn as_string(self) -> Result<String, &'static str> {
         self.as_immutable_string().map(ImmutableString::into_owned)
-    }
-    /// Convert the [`Dynamic`] into an [`ImmutableString`] and return it.
-    /// Returns the name of the actual type if the cast fails.
-    ///
-    /// # Deprecated
-    ///
-    /// This method is deprecated and will be removed in the future.
-    /// Use [`as_immutable_string`][Dynamic::as_immutable_string] instead.
-    #[inline(always)]
-    #[must_use]
-    #[deprecated(
-        since = "0.20.3",
-        note = "this method is deprecated and will be removed in the future"
-    )]
-    pub fn take_immutable_string(self) -> Result<ImmutableString, &'static str> {
-        self.as_immutable_string()
     }
     /// Convert the [`Dynamic`] into an [`ImmutableString`] and return it.
     /// Returns the name of the actual type if the cast fails.

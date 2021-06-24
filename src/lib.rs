@@ -141,22 +141,6 @@ pub use module::{FnNamespace, Module};
 pub use scope::Scope;
 pub use token::Position;
 
-/// A trait to enable registering Rust functions.
-/// This trait is  no longer needed and will be removed in the future.
-#[deprecated(
-    since = "0.19.15",
-    note = "this trait is no longer needed and will be removed in the future"
-)]
-pub trait RegisterFn {}
-
-/// A trait to enable registering Rust functions.
-/// This trait is  no longer needed and will be removed in the future.
-#[deprecated(
-    since = "0.19.15",
-    note = "this trait is no longer needed and will be removed in the future"
-)]
-pub trait RegisterResultFn {}
-
 /// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
 /// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
 #[cfg(not(feature = "internals"))]

@@ -40,15 +40,6 @@ pub trait Package {
     /// Retrieve the generic package library from this package.
     #[must_use]
     fn as_shared_module(&self) -> Shared<Module>;
-
-    /// Retrieve the generic package library from this package.
-    /// This method is deprecated and will be removed in the future.
-    /// Use [`as_shared_module`][Package::as_shared_module] instead.
-    #[must_use]
-    #[deprecated(since = "0.19.9", note = "use `as_shared_module` instead")]
-    fn get(&self) -> Shared<Module> {
-        self.as_shared_module()
-    }
 }
 
 /// Macro that makes it easy to define a _package_ (which is basically a shared [module][Module])

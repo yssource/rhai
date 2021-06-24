@@ -903,14 +903,6 @@ impl Engine {
         self.global_modules.insert(0, module);
         self
     }
-    /// Register a shared [`Module`] into the global namespace of [`Engine`].
-    /// This function is deprecated and will be removed in the future.
-    /// Use [`register_global_module`][Engine::register_global_module] instead.
-    #[inline(always)]
-    #[deprecated(since = "0.19.9", note = "use `register_global_module` instead")]
-    pub fn load_package(&mut self, module: impl Into<Shared<Module>>) -> &mut Self {
-        self.register_global_module(module.into())
-    }
     /// Register a shared [`Module`] as a static module namespace with the [`Engine`].
     ///
     /// Functions marked [`FnNamespace::Global`] and type iterators are exposed to scripts without
@@ -999,19 +991,6 @@ impl Engine {
         self
     }
 
-    /// Register a shared [`Module`] as a static module namespace with the [`Engine`].
-    /// This function is deprecated and will be removed in the future.
-    /// Use [`register_static_module`][Engine::register_static_module] instead.
-    #[cfg(not(feature = "no_module"))]
-    #[inline(always)]
-    #[deprecated(since = "0.19.9", note = "use `register_static_module` instead")]
-    pub fn register_module(
-        &mut self,
-        name: impl AsRef<str> + Into<Identifier>,
-        module: impl Into<Shared<Module>>,
-    ) -> &mut Self {
-        self.register_static_module(name, module.into())
-    }
     /// Compile a string into an [`AST`], which can be used later for evaluation.
     ///
     /// # Example
