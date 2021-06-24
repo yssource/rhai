@@ -1,6 +1,14 @@
 Rhai Release Notes
 ==================
 
+Version 1.0.0
+=============
+
+The official version `1.0`.
+
+Almost the same version as `0.20.3` but with deprecated API removed.
+
+
 Version 0.20.3
 ==============
 

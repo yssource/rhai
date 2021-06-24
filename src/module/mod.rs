@@ -290,7 +290,7 @@ impl Module {
     /// ```
     #[inline(always)]
     #[must_use]
-    pub fn id_raw(&self) -> Option<&Identifier> {
+    pub(crate) fn id_raw(&self) -> Option<&Identifier> {
         self.id.as_ref()
     }
 

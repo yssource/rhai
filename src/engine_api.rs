@@ -1314,7 +1314,8 @@ impl Engine {
         Self::read_file(path).and_then(|contents| Ok(self.compile_with_scope(scope, &contents)?))
     }
     /// Parse a JSON string into an [object map][`Map`].
-    /// This is a light-weight alternative to using, say, [`serde_json`] to deserialize the JSON.
+    /// This is a light-weight alternative to using, say,
+    /// [`serde_json`](https://crates.io/crates/serde_json) to deserialize the JSON.
     ///
     /// Not available under `no_object`.
     ///
