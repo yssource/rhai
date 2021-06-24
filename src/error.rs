@@ -93,55 +93,13 @@ pub enum EvalAltResult {
     Return(Dynamic, Position),
 }
 
-impl EvalAltResult {
-    #[must_use]
-    pub(crate) fn desc(&self) -> &str {
-        match self {
-            #[allow(deprecated)]
-            Self::ErrorSystem(_, s) => s.description(),
-            Self::ErrorParsing(p, _) => p.desc(),
-            Self::ErrorInFunctionCall(_, _, _, _) => "Error in called function",
-            Self::ErrorInModule(_, _, _) => "Error in module",
-            Self::ErrorFunctionNotFound(_, _) => "Function not found",
-            Self::ErrorUnboundThis(_) => "'this' is not bound",
-            Self::ErrorMismatchDataType(_, _, _) => "Data type is incorrect",
-            Self::ErrorIndexingType(_, _) => "No indexer of the appropriate types defined",
-            Self::ErrorArrayBounds(0, _, _) => "Empty array has nothing to access",
-            Self::ErrorArrayBounds(_, _, _) => "Array index out of bounds",
-            Self::ErrorStringBounds(0, _, _) => "Empty string has nothing to index",
-            Self::ErrorStringBounds(_, _, _) => "String index out of bounds",
-            Self::ErrorBitFieldBounds(_, _, _) => "Bit-field index out of bounds",
-            Self::ErrorFor(_) => "For loop expects a type with an iterator defined",
-            Self::ErrorVariableNotFound(_, _) => "Variable not found",
-            Self::ErrorModuleNotFound(_, _) => "Module not found",
-            Self::ErrorDataRace(_, _) => "Data race detected when accessing variable",
-            Self::ErrorAssignmentToConstant(_, _) => "Cannot modify a constant",
-            Self::ErrorMismatchOutputType(_, _, _) => "Output type is incorrect",
-            Self::ErrorDotExpr(_, _) => "Malformed dot expression",
-            Self::ErrorArithmetic(_, _) => "Arithmetic error",
-            Self::ErrorTooManyOperations(_) => "Too many operations",
-            Self::ErrorTooManyModules(_) => "Too many modules imported",
-            Self::ErrorStackOverflow(_) => "Stack overflow",
-            Self::ErrorDataTooLarge(_, _) => "Data size exceeds maximum limit",
-            Self::ErrorTerminated(_, _) => "Script terminated.",
-            Self::ErrorRuntime(_, _) => "Runtime error",
-            Self::LoopBreak(true, _) => "Break statement not inside a loop",
-            Self::LoopBreak(false, _) => "Continue statement not inside a loop",
-            Self::Return(_, _) => "[Not Error] Function returns value",
-        }
-    }
-}
-
 impl Error for EvalAltResult {}
 
 impl fmt::Display for EvalAltResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let desc = self.desc();
-        let pos = self.position();
-
         match self {
-            Self::ErrorSystem(s, _) if s.is_empty() => f.write_str(desc)?,
-            Self::ErrorSystem(s, _) => write!(f, "{}: {}", s, desc)?,
+            Self::ErrorSystem(s, err) if s.is_empty() => write!(f, "{}", err)?,
+            Self::ErrorSystem(s, err) => write!(f, "{}: {}", s, err)?,
 
             Self::ErrorParsing(p, _) => write!(f, "Syntax error: {}", p)?,
 
@@ -164,32 +122,35 @@ impl fmt::Display for EvalAltResult {
             }
             Self::ErrorInModule(s, err, _) => write!(f, "Error in module '{}': {}", s, err)?,
 
-            Self::ErrorFunctionNotFound(s, _)
-            | Self::ErrorVariableNotFound(s, _)
-            | Self::ErrorDataRace(s, _) => write!(f, "{}: {}", desc, s)?,
-
-            Self::ErrorModuleNotFound(s, _) => write!(f, "{}: '{}'", desc, s)?,
-
+            Self::ErrorFunctionNotFound(s, _) => write!(f, "Function not found: {}", s)?,
+            Self::ErrorVariableNotFound(s, _) => write!(f, "Variable not found: {}", s)?,
+            Self::ErrorModuleNotFound(s, _) => write!(f, "Module not found: '{}'", s)?,
+            Self::ErrorDataRace(s, _) => {
+                write!(f, "Data race detected when accessing variable: {}", s)?
+            }
             Self::ErrorDotExpr(s, _) if !s.is_empty() => f.write_str(s)?,
-
             Self::ErrorIndexingType(s, _) => write!(f, "Indexer not registered for '{}'", s)?,
-
-            Self::ErrorUnboundThis(_)
-            | Self::ErrorFor(_)
-            | Self::ErrorDotExpr(_, _)
-            | Self::ErrorTooManyOperations(_)
-            | Self::ErrorTooManyModules(_)
-            | Self::ErrorStackOverflow(_)
-            | Self::ErrorTerminated(_, _) => f.write_str(desc)?,
+            Self::ErrorUnboundThis(_) => f.write_str("'this' is not bound")?,
+            Self::ErrorFor(_) => f.write_str("For loop expects a type with an iterator defined")?,
+            Self::ErrorDotExpr(_, _) => f.write_str("Malformed dot expression")?,
+            Self::ErrorTooManyOperations(_) => f.write_str("Too many operations")?,
+            Self::ErrorTooManyModules(_) => f.write_str("Too many modules imported")?,
+            Self::ErrorStackOverflow(_) => f.write_str("Stack overflow")?,
+            Self::ErrorTerminated(_, _) => f.write_str("Script terminated")?,
 
             Self::ErrorRuntime(d, _) if d.is::<ImmutableString>() => {
                 let s = &*d
                     .read_lock::<ImmutableString>()
                     .expect("never fails because the type was checked");
-                write!(f, "{}: {}", desc, if s.is_empty() { desc } else { s })?
+
+                if s.is_empty() {
+                    f.write_str("Runtime error")?
+                } else {
+                    write!(f, "Runtime error: {}", s)?
+                }
             }
-            Self::ErrorRuntime(d, _) if d.is::<()>() => f.write_str(desc)?,
-            Self::ErrorRuntime(d, _) => write!(f, "{}: {}", desc, d)?,
+            Self::ErrorRuntime(d, _) if d.is::<()>() => f.write_str("Runtime error")?,
+            Self::ErrorRuntime(d, _) => write!(f, "Runtime error: {}", d)?,
 
             Self::ErrorAssignmentToConstant(s, _) => write!(f, "Cannot modify constant {}", s)?,
             Self::ErrorMismatchOutputType(s, r, _) => {
@@ -206,8 +167,10 @@ impl fmt::Display for EvalAltResult {
             }
             Self::ErrorArithmetic(s, _) => f.write_str(s)?,
 
-            Self::LoopBreak(_, _) => f.write_str(desc)?,
-            Self::Return(_, _) => f.write_str(desc)?,
+            Self::LoopBreak(true, _) => f.write_str("Break statement not inside a loop")?,
+            Self::LoopBreak(false, _) => f.write_str("Continue statement not inside a loop")?,
+
+            Self::Return(_, _) => f.write_str("NOT AN ERROR - Function returns value")?,
 
             Self::ErrorArrayBounds(0, index, _) => {
                 write!(f, "Array index {} out of bounds: array is empty", index)?
@@ -244,8 +207,8 @@ impl fmt::Display for EvalAltResult {
         }
 
         // Do not write any position if None
-        if !pos.is_none() {
-            write!(f, " ({})", pos)?;
+        if !self.position().is_none() {
+            write!(f, " ({})", self.position())?;
         }
 
         Ok(())
