@@ -8,6 +8,11 @@ The official version `1.0`.
 
 Almost the same version as `0.20.3` but with deprecated API removed.
 
+Enhancements
+------------
+
+* New methods `is_odd`, `is_even` for integers, and `is_zero` for all numbers.
+
 
 Version 0.20.3
 ==============
