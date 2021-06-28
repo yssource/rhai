@@ -43,12 +43,16 @@ impl fmt::Display for LexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnexpectedInput(s) => write!(f, "Unexpected '{}'", s),
-            Self::MalformedEscapeSequence(s) => write!(f, "{}: '{}'", self.desc(), s),
-            Self::MalformedNumber(s) => write!(f, "{}: '{}'", self.desc(), s),
-            Self::MalformedChar(s) => write!(f, "{}: '{}'", self.desc(), s),
-            Self::MalformedIdentifier(s) => write!(f, "{}: '{}'", self.desc(), s),
-            Self::UnterminatedString => f.write_str(self.desc()),
-            Self::StringTooLong(max) => write!(f, "{} ({})", self.desc(), max),
+            Self::MalformedEscapeSequence(s) => write!(f, "Invalid escape sequence: '{}'", s),
+            Self::MalformedNumber(s) => write!(f, "Invalid number: '{}'", s),
+            Self::MalformedChar(s) => write!(f, "Invalid character: '{}'", s),
+            Self::MalformedIdentifier(s) => write!(f, "Variable name is not proper: '{}'", s),
+            Self::UnterminatedString => f.write_str("Open string is not terminated"),
+            Self::StringTooLong(max) => write!(
+                f,
+                "Length of string literal exceeds the maximum limit ({})",
+                max
+            ),
             Self::ImproperSymbol(s, d) if d.is_empty() => {
                 write!(f, "Invalid symbol encountered: '{}'", s)
             }
@@ -58,19 +62,6 @@ impl fmt::Display for LexError {
 }
 
 impl LexError {
-    #[must_use]
-    pub(crate) fn desc(&self) -> &str {
-        match self {
-            Self::UnexpectedInput(_) => "Unexpected character encountered",
-            Self::UnterminatedString => "Open string is not terminated",
-            Self::StringTooLong(_) => "Length of string literal exceeds the maximum limit",
-            Self::MalformedEscapeSequence(_) => "Invalid escape sequence",
-            Self::MalformedNumber(_) => "Invalid number",
-            Self::MalformedChar(_) => "Invalid character",
-            Self::MalformedIdentifier(_) => "Variable name is not proper",
-            Self::ImproperSymbol(_, _) => "Invalid symbol encountered",
-        }
-    }
     /// Convert a [`LexError`] into a [`ParseError`].
     #[inline(always)]
     #[must_use]
