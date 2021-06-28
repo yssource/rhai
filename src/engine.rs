@@ -631,7 +631,7 @@ pub struct State {
     #[cfg(not(feature = "no_module"))]
     pub resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
     /// Function resolution cache and free list.
-    fn_resolution_caches: (StaticVec<FnResolutionCache>, Vec<FnResolutionCache>),
+    fn_resolution_caches: StaticVec<FnResolutionCache>,
 }
 
 impl State {
@@ -645,11 +645,11 @@ impl State {
     #[inline(always)]
     #[must_use]
     pub fn fn_resolution_cache_mut(&mut self) -> &mut FnResolutionCache {
-        if self.fn_resolution_caches.0.is_empty() {
+        if self.fn_resolution_caches.is_empty() {
             // Push a new function resolution cache if the stack is empty
-            self.fn_resolution_caches.0.push(BTreeMap::new());
+            self.fn_resolution_caches.push(Default::default());
         }
-        self.fn_resolution_caches.0.last_mut().expect(
+        self.fn_resolution_caches.last_mut().expect(
             "never fails because there is at least one function resolution cache by this point",
         )
     }
@@ -657,9 +657,7 @@ impl State {
     #[allow(dead_code)]
     #[inline(always)]
     pub fn push_fn_resolution_cache(&mut self) {
-        self.fn_resolution_caches
-            .0
-            .push(self.fn_resolution_caches.1.pop().unwrap_or_default());
+        self.fn_resolution_caches.push(Default::default());
     }
     /// Remove the current function resolution cache from the stack and make the last one current.
     ///
@@ -668,13 +666,9 @@ impl State {
     /// Panics if there are no more function resolution cache in the stack.
     #[inline(always)]
     pub fn pop_fn_resolution_cache(&mut self) {
-        let mut cache = self
-            .fn_resolution_caches
-            .0
+        self.fn_resolution_caches
             .pop()
             .expect("there should be at least one function resolution cache");
-        cache.clear();
-        self.fn_resolution_caches.1.push(cache);
     }
 }
 
