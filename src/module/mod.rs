@@ -235,8 +235,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
@@ -265,10 +264,9 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
-    /// module.set_id(Some("hello"));
+    /// module.set_id("hello");
     /// assert_eq!(module.id(), Some("hello"));
     /// ```
     #[inline(always)]
@@ -278,16 +276,6 @@ impl Module {
     }
 
     /// Get the ID of the [`Module`] as an [`Identifier`], if any.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use rhai::Module;
-    ///
-    /// let mut module = Module::new();
-    /// module.set_id(Some("hello"));
-    /// assert_eq!(module.id_raw().map(|s| s.as_str()), Some("hello"));
-    /// ```
     #[inline(always)]
     #[must_use]
     pub(crate) fn id_raw(&self) -> Option<&Identifier> {
@@ -299,15 +287,31 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
-    /// module.set_id(Some("hello"));
+    /// module.set_id("hello");
     /// assert_eq!(module.id(), Some("hello"));
     /// ```
     #[inline(always)]
-    pub fn set_id<S: Into<Identifier>>(&mut self, id: Option<S>) -> &mut Self {
-        self.id = id.map(|s| s.into());
+    pub fn set_id(&mut self, id: impl Into<Identifier>) -> &mut Self {
+        self.id = Some(id.into());
+        self
+    }
+    /// Clear the ID of the [`Module`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use rhai::Module;
+    /// let mut module = Module::new();
+    /// module.set_id("hello");
+    /// assert_eq!(module.id(), Some("hello"));
+    /// module.clear_id();
+    /// assert_eq!(module.id(), None);
+    /// ```
+    #[inline(always)]
+    pub fn clear_id(&mut self) -> &mut Self {
+        self.id = None;
         self
     }
 
@@ -316,8 +320,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let module = Module::new();
     /// assert!(module.is_empty());
     /// ```
@@ -340,8 +343,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// assert!(module.is_indexed());
     ///
@@ -380,8 +382,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert!(module.contains_var("answer"));
@@ -397,8 +398,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
@@ -414,8 +414,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var("answer").unwrap().cast::<i64>(), 42);
@@ -433,8 +432,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
@@ -539,8 +537,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// let sub_module = Module::new();
     /// module.set_sub_module("question", sub_module);
@@ -557,8 +554,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// let sub_module = Module::new();
     /// module.set_sub_module("question", sub_module);
@@ -577,8 +573,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// let sub_module = Module::new();
     /// module.set_sub_module("question", sub_module);
@@ -603,8 +598,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// let hash = module.set_native_fn("calc", || Ok(42_i64));
     /// assert!(module.contains_fn(hash));
@@ -845,8 +839,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// let hash = module.set_native_fn("calc", || Ok(42_i64));
     /// assert!(module.contains_fn(hash));
@@ -880,8 +873,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// let hash = module.set_getter_fn("value", |x: &mut i64| { Ok(*x) });
     /// assert!(module.contains_fn(hash));
@@ -1480,7 +1472,12 @@ impl Module {
                 module.set_script_fn(func);
             });
 
-        module.set_id(ast.clone_source());
+        if let Some(s) = ast.source_raw() {
+            module.set_id(s.clone());
+        } else {
+            module.clear_id();
+        }
+
         module.build_index();
 
         Ok(module)

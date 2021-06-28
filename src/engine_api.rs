@@ -1750,7 +1750,7 @@ impl Engine {
         level: usize,
     ) -> RhaiResult {
         let mut state: State = Default::default();
-        state.source = ast.clone_source();
+        state.source = ast.source_raw().cloned();
         #[cfg(not(feature = "no_module"))]
         {
             state.resolver = ast.resolver();
@@ -1832,7 +1832,7 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         let mods = &mut Default::default();
         let mut state: State = Default::default();
-        state.source = ast.clone_source();
+        state.source = ast.source_raw().cloned();
         #[cfg(not(feature = "no_module"))]
         {
             state.resolver = ast.resolver();

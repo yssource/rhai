@@ -251,20 +251,20 @@ impl AST {
     pub fn source(&self) -> Option<&str> {
         self.source.as_ref().map(|s| s.as_str())
     }
-    /// Clone the source, if any.
+    /// Get a reference to the source.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn clone_source(&self) -> Option<Identifier> {
-        self.source.clone()
+    pub(crate) fn source_raw(&self) -> Option<&Identifier> {
+        self.source.as_ref()
     }
     /// Set the source.
     #[inline(always)]
     pub fn set_source(&mut self, source: impl Into<Identifier>) -> &mut Self {
-        let source = Some(source.into());
+        let source = source.into();
         Shared::get_mut(&mut self.functions)
             .as_mut()
             .map(|m| m.set_id(source.clone()));
-        self.source = source;
+        self.source = Some(source);
         self
     }
     /// Clear the source.

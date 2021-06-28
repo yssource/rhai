@@ -8,6 +8,12 @@ The official version `1.0`.
 
 Almost the same version as `0.20.3` but with deprecated API removed.
 
+Breaking changes
+----------------
+
+* All deprecated API's (e.g. the `RegisterFn` and `RegisterResultFn` traits) are removed.
+* `Module::set_id` is split into `Module::set_id` and `Module::clear_id` pair.
+
 Enhancements
 ------------
 
