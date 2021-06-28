@@ -146,7 +146,11 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
                 }
                 #[cfg(not(feature = "no_function"))]
                 {
-                    info.func.get_fn_def().comments.to_vec()
+                    info.func
+                        .get_script_fn_def()
+                        .expect("never fails because the function is scripted")
+                        .comments
+                        .to_vec()
                 }
             } else {
                 Default::default()

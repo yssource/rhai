@@ -1889,7 +1889,7 @@ impl From<Decimal> for Dynamic {
     fn from(value: Decimal) -> Self {
         Self(Union::Decimal(
             Box::new(value.into()),
-            DEFAULT_TAG,
+            DEFAULT_TAG_VALUE,
             ReadWrite,
         ))
     }

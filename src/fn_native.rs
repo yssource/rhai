@@ -109,14 +109,14 @@ impl<'a> NativeCallContext<'a> {
     pub const fn new_with_all_fields(
         engine: &'a Engine,
         fn_name: &'a str,
-        source: &'a Option<&str>,
+        source: Option<&'a str>,
         imports: &'a Imports,
         lib: &'a [&Module],
     ) -> Self {
         Self {
             engine,
             fn_name,
-            source: source.clone(),
+            source,
             mods: Some(imports),
             lib,
         }
