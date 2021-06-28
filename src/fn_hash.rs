@@ -108,6 +108,6 @@ pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
 /// Combine two [`u64`] hashes by taking the XOR of them.
 #[inline(always)]
 #[must_use]
-pub(crate) fn combine_hashes(a: u64, b: u64) -> u64 {
+pub(crate) const fn combine_hashes(a: u64, b: u64) -> u64 {
     a ^ b
 }

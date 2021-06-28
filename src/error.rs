@@ -237,19 +237,15 @@ impl EvalAltResult {
     ///
     /// [`LoopBreak`][EvalAltResult::LoopBreak] and [`Return`][EvalAltResult::Return] are pseudo errors.
     #[must_use]
-    pub fn is_pseudo_error(&self) -> bool {
+    pub const fn is_pseudo_error(&self) -> bool {
         match self {
             Self::LoopBreak(_, _) | Self::Return(_, _) => true,
             _ => false,
         }
     }
     /// Can this error be caught?
-    ///
-    /// # Panics
-    ///
-    /// Panics when [`LoopBreak`][EvalAltResult::LoopBreak] or [`Return`][EvalAltResult::Return].
     #[must_use]
-    pub fn is_catchable(&self) -> bool {
+    pub const fn is_catchable(&self) -> bool {
         match self {
             Self::ErrorSystem(_, _) => false,
             Self::ErrorParsing(_, _) => false,
@@ -279,17 +275,12 @@ impl EvalAltResult {
             | Self::ErrorDataTooLarge(_, _)
             | Self::ErrorTerminated(_, _) => false,
 
-            Self::LoopBreak(_, _) => panic!("EvalAltResult::LoopBreak should not occur naturally"),
-            Self::Return(_, _) => panic!("EvalAltResult::Return should not occur naturally"),
+            Self::LoopBreak(_, _) | Self::Return(_, _) => false,
         }
     }
     /// Is this error a system exception?
-    ///
-    /// # Panics
-    ///
-    /// Panics when [`LoopBreak`][EvalAltResult::LoopBreak] or [`Return`][EvalAltResult::Return].
     #[must_use]
-    pub fn is_system_exception(&self) -> bool {
+    pub const fn is_system_exception(&self) -> bool {
         match self {
             Self::ErrorSystem(_, _) => true,
             Self::ErrorParsing(_, _) => true,
@@ -300,9 +291,6 @@ impl EvalAltResult {
             | Self::ErrorDataTooLarge(_, _) => true,
 
             Self::ErrorTerminated(_, _) => true,
-
-            Self::LoopBreak(_, _) => panic!("EvalAltResult::LoopBreak should not occur naturally"),
-            Self::Return(_, _) => panic!("EvalAltResult::Return should not occur naturally"),
 
             _ => false,
         }
@@ -377,7 +365,7 @@ impl EvalAltResult {
     }
     /// Get the [position][Position] of this error.
     #[must_use]
-    pub fn position(&self) -> Position {
+    pub const fn position(&self) -> Position {
         match self {
             Self::ErrorSystem(_, _) => Position::NONE,
 

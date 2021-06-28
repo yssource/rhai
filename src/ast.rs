@@ -911,7 +911,7 @@ impl StmtBlock {
     /// Get the position of this statements block.
     #[inline(always)]
     #[must_use]
-    pub fn position(&self) -> Position {
+    pub const fn position(&self) -> Position {
         self.1
     }
     /// Get the statements of this statements block.
@@ -1044,7 +1044,7 @@ impl Stmt {
     /// Is this statement [`Noop`][Stmt::Noop]?
     #[inline(always)]
     #[must_use]
-    pub fn is_noop(&self) -> bool {
+    pub const fn is_noop(&self) -> bool {
         match self {
             Self::Noop(_) => true,
             _ => false,
@@ -1117,7 +1117,7 @@ impl Stmt {
     }
     /// Does this statement return a value?
     #[must_use]
-    pub fn returns_value(&self) -> bool {
+    pub const fn returns_value(&self) -> bool {
         match self {
             Self::If(_, _, _)
             | Self::Switch(_, _, _)
@@ -1142,12 +1142,12 @@ impl Stmt {
             Self::Import(_, _, _) | Self::Export(_, _) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => unreachable!("Stmt::Share should not be parsed"),
+            Self::Share(_) => false,
         }
     }
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     #[must_use]
-    pub fn is_self_terminated(&self) -> bool {
+    pub const fn is_self_terminated(&self) -> bool {
         match self {
             Self::If(_, _, _)
             | Self::Switch(_, _, _)
@@ -1173,7 +1173,7 @@ impl Stmt {
             Self::Import(_, _, _) | Self::Export(_, _) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => unreachable!("Stmt::Share should not be parsed"),
+            Self::Share(_) => false,
         }
     }
     /// Is this statement _pure_?
@@ -1247,7 +1247,7 @@ impl Stmt {
     /// All statements following this statement will essentially be dead code.
     #[inline(always)]
     #[must_use]
-    pub fn is_control_flow_break(&self) -> bool {
+    pub const fn is_control_flow_break(&self) -> bool {
         match self {
             Self::Return(_, _, _) | Self::Break(_) | Self::Continue(_) => true,
             _ => false,
@@ -1512,7 +1512,7 @@ impl FnCallHashes {
     /// Create a [`FnCallHashes`] with only the native Rust hash.
     #[inline(always)]
     #[must_use]
-    pub fn from_native(hash: u64) -> Self {
+    pub const fn from_native(hash: u64) -> Self {
         Self {
             script: None,
             native: hash,
@@ -1521,7 +1521,7 @@ impl FnCallHashes {
     /// Create a [`FnCallHashes`] with both native Rust and script function hashes set to the same value.
     #[inline(always)]
     #[must_use]
-    pub fn from_script(hash: u64) -> Self {
+    pub const fn from_script(hash: u64) -> Self {
         Self {
             script: Some(hash),
             native: hash,
@@ -1530,7 +1530,7 @@ impl FnCallHashes {
     /// Create a [`FnCallHashes`] with both native Rust and script function hashes.
     #[inline(always)]
     #[must_use]
-    pub fn from_script_and_native(script: u64, native: u64) -> Self {
+    pub const fn from_script_and_native(script: u64, native: u64) -> Self {
         Self {
             script: Some(script),
             native,
@@ -1539,7 +1539,7 @@ impl FnCallHashes {
     /// Is this [`FnCallHashes`] native Rust only?
     #[inline(always)]
     #[must_use]
-    pub fn is_native_only(&self) -> bool {
+    pub const fn is_native_only(&self) -> bool {
         self.script.is_none()
     }
 }
@@ -1570,7 +1570,7 @@ impl FnCallExpr {
     /// Does this function call contain a qualified namespace?
     #[inline(always)]
     #[must_use]
-    pub fn is_qualified(&self) -> bool {
+    pub const fn is_qualified(&self) -> bool {
         self.namespace.is_some()
     }
     /// Convert this into a [`FnCall`][Expr::FnCall].
@@ -1683,6 +1683,7 @@ impl<F: Float> FloatWrapper<F> {
     /// Minimum floating-point number for natural display before switching to scientific notation.
     pub const MIN_NATURAL_FLOAT_FOR_DISPLAY: f32 = 0.0000000000001;
 
+    /// Create a new [`FloatWrapper`].
     #[inline(always)]
     #[must_use]
     pub fn new(value: F) -> Self {
@@ -1692,6 +1693,7 @@ impl<F: Float> FloatWrapper<F> {
 
 #[cfg(not(feature = "no_float"))]
 impl FloatWrapper<FLOAT> {
+    /// Create a new [`FloatWrapper`].
     #[inline(always)]
     #[must_use]
     pub(crate) const fn const_new(value: FLOAT) -> Self {
@@ -1928,7 +1930,7 @@ impl Expr {
     /// Is the expression a simple variable access?
     #[inline(always)]
     #[must_use]
-    pub(crate) fn is_variable_access(&self, non_qualified: bool) -> bool {
+    pub(crate) const fn is_variable_access(&self, non_qualified: bool) -> bool {
         match self {
             Self::Variable(_, _, x) => !non_qualified || x.1.is_none(),
             _ => false,
@@ -2038,7 +2040,7 @@ impl Expr {
     /// Is the expression the unit `()` literal?
     #[inline(always)]
     #[must_use]
-    pub fn is_unit(&self) -> bool {
+    pub const fn is_unit(&self) -> bool {
         match self {
             Self::Unit(_) => true,
             _ => false,
@@ -2070,7 +2072,7 @@ impl Expr {
     /// Is a particular [token][Token] allowed as a postfix operator to this expression?
     #[inline]
     #[must_use]
-    pub fn is_valid_postfix(&self, token: &Token) -> bool {
+    pub const fn is_valid_postfix(&self, token: &Token) -> bool {
         match token {
             #[cfg(not(feature = "no_object"))]
             Token::Period => return true,
@@ -2120,7 +2122,7 @@ impl Expr {
 
             Self::Custom(_, _) => false,
 
-            Self::Stack(_, _) => unreachable!("Expr::Stack should not occur naturally"),
+            Self::Stack(_, _) => false,
         }
     }
     /// Recursively walk this expression.

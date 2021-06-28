@@ -38,7 +38,7 @@ impl FnPtr {
     /// Get the name of the function.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn get_fn_name(&self) -> &Identifier {
+    pub(crate) const fn get_fn_name(&self) -> &Identifier {
         &self.0
     }
     /// Get the underlying data of the function pointer.

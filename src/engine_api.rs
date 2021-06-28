@@ -2064,7 +2064,12 @@ impl Engine {
             .lib()
             .iter_fn()
             .filter(|f| f.func.is_script())
-            .map(|f| f.func.get_fn_def().clone())
+            .map(|f| {
+                f.func
+                    .get_script_fn_def()
+                    .expect("never fails because the function is scripted")
+                    .clone()
+            })
             .collect();
 
         #[cfg(feature = "no_function")]

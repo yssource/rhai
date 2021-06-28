@@ -61,7 +61,7 @@ struct State<'a> {
 impl<'a> State<'a> {
     /// Create a new State.
     #[inline(always)]
-    pub fn new(
+    pub const fn new(
         engine: &'a Engine,
         lib: &'a [&'a Module],
         optimization_level: OptimizationLevel,
@@ -87,7 +87,7 @@ impl<'a> State<'a> {
     }
     /// Is the [`AST`] dirty (i.e. changed)?
     #[inline(always)]
-    pub fn is_dirty(&self) -> bool {
+    pub const fn is_dirty(&self) -> bool {
         self.changed
     }
     /// Prune the list of constants back to a specified size.

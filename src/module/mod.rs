@@ -278,7 +278,7 @@ impl Module {
     /// Get the ID of the [`Module`] as an [`Identifier`], if any.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn id_raw(&self) -> Option<&Identifier> {
+    pub(crate) const fn id_raw(&self) -> Option<&Identifier> {
         self.id.as_ref()
     }
 
@@ -358,7 +358,7 @@ impl Module {
     /// ```
     #[inline(always)]
     #[must_use]
-    pub fn is_indexed(&self) -> bool {
+    pub const fn is_indexed(&self) -> bool {
         self.indexed
     }
 
@@ -508,7 +508,7 @@ impl Module {
         self.functions
             .values()
             .find(|f| f.params == num_params && f.name == name)
-            .map(|f| f.func.get_fn_def())
+            .and_then(|f| f.func.get_script_fn_def())
     }
 
     /// Get a mutable reference to the underlying [`BTreeMap`] of sub-modules.
@@ -1341,7 +1341,9 @@ impl Module {
                     f.access,
                     f.name.as_str(),
                     f.params,
-                    f.func.get_fn_def(),
+                    f.func
+                        .get_script_fn_def()
+                        .expect("never fails because the function is scripted"),
                 )
             })
     }
@@ -1466,7 +1468,12 @@ impl Module {
             .filter(|f| f.func.is_script())
             .for_each(|f| {
                 // Encapsulate AST environment
-                let mut func = f.func.get_fn_def().as_ref().clone();
+                let mut func = f
+                    .func
+                    .get_script_fn_def()
+                    .expect("never fails because the function is scripted")
+                    .as_ref()
+                    .clone();
                 func.lib = Some(ast.shared_lib());
                 func.mods = func_mods.clone();
                 module.set_script_fn(func);
@@ -1725,7 +1732,7 @@ impl NamespaceRef {
     /// Get the [`Scope`][crate::Scope] index offset.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn index(&self) -> Option<NonZeroUsize> {
+    pub(crate) const fn index(&self) -> Option<NonZeroUsize> {
         self.index
     }
     /// Set the [`Scope`][crate::Scope] index offset.

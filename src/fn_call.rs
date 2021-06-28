@@ -302,9 +302,13 @@ impl Engine {
 
             let result = if func.is_plugin_fn() {
                 func.get_plugin_fn()
+                    .expect("never fails because the function is a plugin")
                     .call((self, name, source, mods, lib).into(), args)
             } else {
-                func.get_native_fn()((self, name, source, mods, lib).into(), args)
+                let func = func
+                    .get_native_fn()
+                    .expect("never fails because the function is native");
+                func((self, name, source, mods, lib).into(), args)
             };
 
             // Restore the original reference
@@ -681,7 +685,9 @@ impl Engine {
             // Script function call
             assert!(func.is_script());
 
-            let func = func.get_fn_def();
+            let func = func
+                .get_script_fn_def()
+                .expect("never fails because the function is scripted");
 
             if func.body.is_empty() {
                 return Ok((Dynamic::UNIT, false));
@@ -1384,7 +1390,9 @@ impl Engine {
         match func {
             #[cfg(not(feature = "no_function"))]
             Some(f) if f.is_script() => {
-                let fn_def = f.get_fn_def();
+                let fn_def = f
+                    .get_script_fn_def()
+                    .expect("never fails because the function is scripted");
 
                 if fn_def.body.is_empty() {
                     Ok(Dynamic::UNIT)
@@ -1408,12 +1416,16 @@ impl Engine {
 
             Some(f) if f.is_plugin_fn() => f
                 .get_plugin_fn()
+                .expect("never fails because the function is a plugin")
                 .clone()
                 .call((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
                 .map_err(|err| err.fill_position(pos)),
 
             Some(f) if f.is_native() => {
-                f.get_native_fn()((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
+                let func = f
+                    .get_native_fn()
+                    .expect("never fails because the function is native");
+                func((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
                     .map_err(|err| err.fill_position(pos))
             }
 

@@ -7,7 +7,7 @@ use std::prelude::v1::*;
 use std::{borrow::Cow, iter::Extend};
 
 /// Keep a number of entries inline (since [`Dynamic`] is usually small enough).
-const SCOPE_SIZE: usize = 8;
+const SCOPE_ENTRIES_INLINED: usize = 8;
 
 /// Type containing information about the current scope.
 /// Useful for keeping state between [`Engine`][crate::Engine] evaluation runs.
@@ -54,7 +54,7 @@ const SCOPE_SIZE: usize = 8;
 #[derive(Debug, Clone, Hash)]
 pub struct Scope<'a> {
     /// Current value of the entry.
-    values: smallvec::SmallVec<[Dynamic; SCOPE_SIZE]>,
+    values: smallvec::SmallVec<[Dynamic; SCOPE_ENTRIES_INLINED]>,
     /// (Name, aliases) of the entry.
     names: Vec<(Cow<'a, str>, Option<Box<StaticVec<Identifier>>>)>,
 }
@@ -161,7 +161,7 @@ impl<'a> Scope<'a> {
     #[inline(always)]
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.values.len() == 0
+        self.values.is_empty()
     }
     /// Add (push) a new entry to the [`Scope`].
     ///

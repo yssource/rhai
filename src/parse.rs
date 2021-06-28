@@ -5,7 +5,8 @@ use crate::ast::{
     ScriptFnDef, Stmt, StmtBlock,
 };
 use crate::custom_syntax::{
-    CustomSyntax, MARKER_BLOCK, MARKER_BOOL, MARKER_EXPR, MARKER_IDENT, MARKER_INT, MARKER_STRING,
+    CustomSyntax, CUSTOM_SYNTAX_MARKER_BLOCK, CUSTOM_SYNTAX_MARKER_BOOL, CUSTOM_SYNTAX_MARKER_EXPR,
+    CUSTOM_SYNTAX_MARKER_IDENT, CUSTOM_SYNTAX_MARKER_INT, CUSTOM_SYNTAX_MARKER_STRING,
 };
 use crate::dynamic::{AccessMode, Union};
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
@@ -29,7 +30,7 @@ use std::{
 };
 
 #[cfg(not(feature = "no_float"))]
-use crate::{custom_syntax::MARKER_FLOAT, FLOAT};
+use crate::{custom_syntax::CUSTOM_SYNTAX_MARKER_FLOAT, FLOAT};
 
 #[cfg(not(feature = "no_function"))]
 use crate::FnAccess;
@@ -38,6 +39,10 @@ type PERR = ParseErrorType;
 
 type FunctionsLib = BTreeMap<u64, Shared<ScriptFnDef>>;
 
+/// Invalid variable name that acts as a search barrier in a [`Scope`].
+const SCOPE_SEARCH_BARRIER_MARKER: &str = "$BARRIER$";
+
+/// The message: never fails because `TokenStream` never ends
 const NEVER_ENDS: &str = "never fails because `TokenStream` never ends";
 
 /// A factory of identifiers from text strings.
@@ -147,8 +152,8 @@ impl<'e> ParseState<'e> {
             .rev()
             .enumerate()
             .find(|(_, (n, _))| {
-                if n.is_empty() {
-                    // Do not go beyond empty variable names
+                if n == SCOPE_SEARCH_BARRIER_MARKER {
+                    // Do not go beyond the barrier
                     barrier = true;
                     false
                 } else {
@@ -230,7 +235,7 @@ impl ParseSettings {
     /// Create a new `ParseSettings` with one higher expression level.
     #[inline(always)]
     #[must_use]
-    pub fn level_up(&self) -> Self {
+    pub const fn level_up(&self) -> Self {
         Self {
             level: self.level + 1,
             ..*self
@@ -244,8 +249,10 @@ impl ParseSettings {
         &self,
         limit: Option<NonZeroUsize>,
     ) -> Result<(), ParseError> {
-        if limit.map(|limit| self.level > limit.get()).unwrap_or(false) {
-            return Err(PERR::ExprTooDeep.into_err(self.pos));
+        if let Some(limit) = limit {
+            if self.level > limit.get() {
+                return Err(PERR::ExprTooDeep.into_err(self.pos));
+            }
         }
         Ok(())
     }
@@ -1894,7 +1901,7 @@ fn parse_custom_syntax(
         // Add an empty variable name to the stack.
         // Empty variable names act as a barrier so earlier variables will not be matched.
         // Variable searches stop at the first empty variable name.
-        let empty = state.get_identifier("");
+        let empty = state.get_identifier(SCOPE_SEARCH_BARRIER_MARKER);
         state.stack.push((empty, AccessMode::ReadWrite));
     }
 
@@ -1915,32 +1922,32 @@ fn parse_custom_syntax(
         };
 
         match required_token.as_str() {
-            MARKER_IDENT => {
+            CUSTOM_SYNTAX_MARKER_IDENT => {
                 let (name, pos) = parse_var_name(input)?;
                 let name = state.get_identifier(name);
                 segments.push(name.clone().into());
-                tokens.push(state.get_identifier(MARKER_IDENT));
+                tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_IDENT));
                 keywords.push(Expr::Variable(None, pos, Box::new((None, None, name))));
             }
-            MARKER_EXPR => {
+            CUSTOM_SYNTAX_MARKER_EXPR => {
                 keywords.push(parse_expr(input, state, lib, settings)?);
-                let keyword = state.get_identifier(MARKER_EXPR);
+                let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_EXPR);
                 segments.push(keyword.clone().into());
                 tokens.push(keyword);
             }
-            MARKER_BLOCK => match parse_block(input, state, lib, settings)? {
+            CUSTOM_SYNTAX_MARKER_BLOCK => match parse_block(input, state, lib, settings)? {
                 block @ Stmt::Block(_, _) => {
                     keywords.push(Expr::Stmt(Box::new(block.into())));
-                    let keyword = state.get_identifier(MARKER_BLOCK);
+                    let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_BLOCK);
                     segments.push(keyword.clone().into());
                     tokens.push(keyword);
                 }
                 stmt => unreachable!("expecting Stmt::Block, but gets {:?}", stmt),
             },
-            MARKER_BOOL => match input.next().expect(NEVER_ENDS) {
+            CUSTOM_SYNTAX_MARKER_BOOL => match input.next().expect(NEVER_ENDS) {
                 (b @ Token::True, pos) | (b @ Token::False, pos) => {
                     keywords.push(Expr::BoolConstant(b == Token::True, pos));
-                    let keyword = state.get_identifier(MARKER_BOOL);
+                    let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_BOOL);
                     segments.push(keyword.clone().into());
                     tokens.push(keyword);
                 }
@@ -1951,10 +1958,10 @@ fn parse_custom_syntax(
                     )
                 }
             },
-            MARKER_INT => match input.next().expect(NEVER_ENDS) {
+            CUSTOM_SYNTAX_MARKER_INT => match input.next().expect(NEVER_ENDS) {
                 (Token::IntegerConstant(i), pos) => {
                     keywords.push(Expr::IntegerConstant(i, pos));
-                    let keyword = state.get_identifier(MARKER_INT);
+                    let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_INT);
                     segments.push(keyword.clone().into());
                     tokens.push(keyword);
                 }
@@ -1966,10 +1973,10 @@ fn parse_custom_syntax(
                 }
             },
             #[cfg(not(feature = "no_float"))]
-            MARKER_FLOAT => match input.next().expect(NEVER_ENDS) {
+            CUSTOM_SYNTAX_MARKER_FLOAT => match input.next().expect(NEVER_ENDS) {
                 (Token::FloatConstant(f), pos) => {
                     keywords.push(Expr::FloatConstant(f, pos));
-                    let keyword = state.get_identifier(MARKER_FLOAT);
+                    let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_FLOAT);
                     segments.push(keyword.clone().into());
                     tokens.push(keyword);
                 }
@@ -1980,10 +1987,10 @@ fn parse_custom_syntax(
                     .into_err(pos))
                 }
             },
-            MARKER_STRING => match input.next().expect(NEVER_ENDS) {
+            CUSTOM_SYNTAX_MARKER_STRING => match input.next().expect(NEVER_ENDS) {
                 (Token::StringConstant(s), pos) => {
                     keywords.push(Expr::StringConstant(state.get_identifier(s).into(), pos));
-                    let keyword = state.get_identifier(MARKER_STRING);
+                    let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_STRING);
                     segments.push(keyword.clone().into());
                     tokens.push(keyword);
                 }

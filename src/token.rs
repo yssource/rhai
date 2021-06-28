@@ -41,7 +41,7 @@ pub type TokenizerControl = Rc<Cell<TokenizerControlBlock>>;
 type LERR = LexError;
 
 /// Separator character for numbers.
-const NUM_SEP: char = '_';
+const NUMBER_SEPARATOR: char = '_';
 
 /// A stream of tokens.
 pub type TokenStream<'a> = Peekable<TokenIterator<'a>>;
@@ -110,7 +110,7 @@ impl Position {
             #[cfg(not(feature = "no_position"))]
             return Some(self.line as usize);
             #[cfg(feature = "no_position")]
-            unreachable!();
+            unreachable!("there is no Position");
         }
     }
     /// Get the character position (1-based), or [`None`] if at beginning of a line.
@@ -128,7 +128,7 @@ impl Position {
             };
 
             #[cfg(feature = "no_position")]
-            unreachable!();
+            unreachable!("there is no Position");
         }
     }
     /// Advance by one character position.
@@ -175,7 +175,7 @@ impl Position {
     /// Is this [`Position`] at the beginning of a line?
     #[inline(always)]
     #[must_use]
-    pub fn is_beginning_of_line(self) -> bool {
+    pub const fn is_beginning_of_line(self) -> bool {
         #[cfg(not(feature = "no_position"))]
         return self.pos == 0 && !self.is_none();
         #[cfg(feature = "no_position")]
@@ -184,9 +184,9 @@ impl Position {
     /// Is there no [`Position`]?
     #[inline(always)]
     #[must_use]
-    pub fn is_none(self) -> bool {
+    pub const fn is_none(self) -> bool {
         #[cfg(not(feature = "no_position"))]
-        return self == Self::NONE;
+        return self.line == 0 && self.pos == 0;
         #[cfg(feature = "no_position")]
         return true;
     }
@@ -467,12 +467,8 @@ pub enum Token {
 
 impl Token {
     /// Get the syntax of the token if it is a keyword.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the token is not a keyword.
     #[must_use]
-    pub fn keyword_syntax(&self) -> &'static str {
+    pub const fn keyword_syntax(&self) -> &'static str {
         use Token::*;
 
         match self {
@@ -556,7 +552,7 @@ impl Token {
             #[cfg(not(feature = "no_module"))]
             As => "as",
 
-            t => unreachable!("{:?} is not a keyword", t),
+            _ => "ERROR: NOT A KEYWORD",
         }
     }
 
@@ -589,7 +585,7 @@ impl Token {
     /// Is this token an op-assignment operator?
     #[inline]
     #[must_use]
-    pub fn is_op_assignment(&self) -> bool {
+    pub const fn is_op_assignment(&self) -> bool {
         match self {
             Self::PlusAssign
             | Self::MinusAssign
@@ -608,7 +604,7 @@ impl Token {
 
     /// Get the corresponding operator of the token if it is an op-assignment operator.
     #[must_use]
-    pub fn map_op_assignment(&self) -> Option<Self> {
+    pub const fn map_op_assignment(&self) -> Option<Self> {
         Some(match self {
             Self::PlusAssign => Self::Plus,
             Self::MinusAssign => Self::Minus,
@@ -628,7 +624,7 @@ impl Token {
     /// Has this token a corresponding op-assignment operator?
     #[inline]
     #[must_use]
-    pub fn has_op_assignment(&self) -> bool {
+    pub const fn has_op_assignment(&self) -> bool {
         match self {
             Self::Plus
             | Self::Minus
@@ -647,7 +643,7 @@ impl Token {
 
     /// Get the corresponding op-assignment operator of the token.
     #[must_use]
-    pub fn make_op_assignment(&self) -> Option<Self> {
+    pub const fn make_op_assignment(&self) -> Option<Self> {
         Some(match self {
             Self::Plus => Self::PlusAssign,
             Self::Minus => Self::MinusAssign,
@@ -777,7 +773,7 @@ impl Token {
     // Is this token [`EOF`][Token::EOF]?
     #[inline(always)]
     #[must_use]
-    pub fn is_eof(&self) -> bool {
+    pub const fn is_eof(&self) -> bool {
         use Token::*;
 
         match self {
@@ -789,7 +785,7 @@ impl Token {
     // If another operator is after these, it's probably an unary operator
     // (not sure about `fn` name).
     #[must_use]
-    pub fn is_next_unary(&self) -> bool {
+    pub const fn is_next_unary(&self) -> bool {
         use Token::*;
 
         match self {
@@ -850,7 +846,7 @@ impl Token {
 
     /// Get the precedence number of the token.
     #[must_use]
-    pub fn precedence(&self) -> Option<Precedence> {
+    pub const fn precedence(&self) -> Option<Precedence> {
         use Token::*;
 
         Precedence::new(match self {
@@ -885,7 +881,7 @@ impl Token {
 
     /// Does an expression bind to the right (instead of left)?
     #[must_use]
-    pub fn is_bind_right(&self) -> bool {
+    pub const fn is_bind_right(&self) -> bool {
         use Token::*;
 
         match self {
@@ -906,7 +902,7 @@ impl Token {
 
     /// Is this token a standard symbol used in the language?
     #[must_use]
-    pub fn is_symbol(&self) -> bool {
+    pub const fn is_symbol(&self) -> bool {
         use Token::*;
 
         match self {
@@ -924,7 +920,7 @@ impl Token {
 
     /// Is this token an active standard keyword?
     #[must_use]
-    pub fn is_keyword(&self) -> bool {
+    pub const fn is_keyword(&self) -> bool {
         use Token::*;
 
         match self {
@@ -944,7 +940,7 @@ impl Token {
     /// Is this token a reserved symbol?
     #[inline(always)]
     #[must_use]
-    pub fn is_reserved(&self) -> bool {
+    pub const fn is_reserved(&self) -> bool {
         match self {
             Self::Reserved(_) => true,
             _ => false,
@@ -964,7 +960,7 @@ impl Token {
     /// Is this token a custom keyword?
     #[inline(always)]
     #[must_use]
-    pub fn is_custom(&self) -> bool {
+    pub const fn is_custom(&self) -> bool {
         match self {
             Self::Custom(_) => true,
             _ => false,
@@ -1435,7 +1431,7 @@ fn get_next_token_inner(
 
                 while let Some(next_char) = stream.peek_next() {
                     match next_char {
-                        ch if valid(ch) || ch == NUM_SEP => {
+                        ch if valid(ch) || ch == NUMBER_SEPARATOR => {
                             result.push(next_char);
                             eat_next(stream, pos);
                         }
@@ -1536,8 +1532,11 @@ fn get_next_token_inner(
                 // Parse number
                 return Some((
                     if let Some(radix) = radix_base {
-                        let out: String =
-                            result.iter().skip(2).filter(|&&c| c != NUM_SEP).collect();
+                        let out: String = result
+                            .iter()
+                            .skip(2)
+                            .filter(|&&c| c != NUMBER_SEPARATOR)
+                            .collect();
 
                         INT::from_str_radix(&out, radix)
                             .map(Token::IntegerConstant)
@@ -1545,7 +1544,8 @@ fn get_next_token_inner(
                                 Token::LexError(LERR::MalformedNumber(result.into_iter().collect()))
                             })
                     } else {
-                        let out: String = result.iter().filter(|&&c| c != NUM_SEP).collect();
+                        let out: String =
+                            result.iter().filter(|&&c| c != NUMBER_SEPARATOR).collect();
                         let num = INT::from_str(&out).map(Token::IntegerConstant);
 
                         // If integer parsing is unnecessary, try float instead
