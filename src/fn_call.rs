@@ -319,25 +319,33 @@ impl Engine {
             // See if the function match print/debug (which requires special processing)
             return Ok(match name {
                 KEYWORD_PRINT => {
-                    let text = result.as_immutable_string().map_err(|typ| {
-                        EvalAltResult::ErrorMismatchOutputType(
-                            self.map_type_name(type_name::<ImmutableString>()).into(),
-                            typ.into(),
-                            pos,
-                        )
-                    })?;
-                    ((self.print)(&text).into(), false)
+                    if let Some(ref print) = self.print {
+                        let text = result.as_immutable_string().map_err(|typ| {
+                            EvalAltResult::ErrorMismatchOutputType(
+                                self.map_type_name(type_name::<ImmutableString>()).into(),
+                                typ.into(),
+                                pos,
+                            )
+                        })?;
+                        (print(&text).into(), false)
+                    } else {
+                        (Dynamic::UNIT, false)
+                    }
                 }
                 KEYWORD_DEBUG => {
-                    let text = result.as_immutable_string().map_err(|typ| {
-                        EvalAltResult::ErrorMismatchOutputType(
-                            self.map_type_name(type_name::<ImmutableString>()).into(),
-                            typ.into(),
-                            pos,
-                        )
-                    })?;
-                    let source = state.source.as_ref().map(|s| s.as_str());
-                    ((self.debug)(&text, source, pos).into(), false)
+                    if let Some(ref debug) = self.debug {
+                        let text = result.as_immutable_string().map_err(|typ| {
+                            EvalAltResult::ErrorMismatchOutputType(
+                                self.map_type_name(type_name::<ImmutableString>()).into(),
+                                typ.into(),
+                                pos,
+                            )
+                        })?;
+                        let source = state.source.as_ref().map(|s| s.as_str());
+                        (debug(&text, source, pos).into(), false)
+                    } else {
+                        (Dynamic::UNIT, false)
+                    }
                 }
                 _ => (result, func.is_method()),
             });

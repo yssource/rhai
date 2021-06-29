@@ -850,9 +850,9 @@ pub struct Engine {
     pub(crate) resolve_var: Option<OnVarCallback>,
 
     /// Callback closure for implementing the `print` command.
-    pub(crate) print: OnPrintCallback,
+    pub(crate) print: Option<OnPrintCallback>,
     /// Callback closure for implementing the `debug` command.
-    pub(crate) debug: OnDebugCallback,
+    pub(crate) debug: Option<OnDebugCallback>,
     /// Callback closure for progress reporting.
     #[cfg(not(feature = "unchecked"))]
     pub(crate) progress: Option<crate::fn_native::OnProgressCallback>,
@@ -954,8 +954,8 @@ impl Engine {
             resolve_var: None,
 
             // default print/debug implementations
-            print: Box::new(default_print),
-            debug: Box::new(default_debug),
+            print: Some(Box::new(default_print)),
+            debug: Some(Box::new(default_debug)),
 
             // progress callback
             #[cfg(not(feature = "unchecked"))]
@@ -1010,8 +1010,8 @@ impl Engine {
 
             resolve_var: None,
 
-            print: Box::new(|_| {}),
-            debug: Box::new(|_, _, _| {}),
+            print: None,
+            debug: None,
 
             #[cfg(not(feature = "unchecked"))]
             progress: None,
@@ -2755,10 +2755,9 @@ impl Engine {
 
                                 err_map.insert("message".into(), err.to_string().into());
 
-                                state
-                                    .source
-                                    .as_ref()
-                                    .map(|source| err_map.insert("source".into(), source.into()));
+                                if let Some(ref source) = state.source {
+                                    err_map.insert("source".into(), source.as_str().into());
+                                }
 
                                 if err_pos.is_none() {
                                     // No position info
