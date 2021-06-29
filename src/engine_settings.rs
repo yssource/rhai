@@ -29,7 +29,7 @@ impl Engine {
     #[cfg(not(feature = "no_optimize"))]
     #[inline(always)]
     #[must_use]
-    pub fn optimization_level(&self) -> crate::OptimizationLevel {
+    pub const fn optimization_level(&self) -> crate::OptimizationLevel {
         self.optimization_level
     }
     /// Set the maximum levels of function calls allowed for a script in order to avoid
@@ -179,7 +179,7 @@ impl Engine {
     #[cfg(not(feature = "no_index"))]
     #[inline(always)]
     #[must_use]
-    pub fn max_array_size(&self) -> usize {
+    pub const fn max_array_size(&self) -> usize {
         if let Some(n) = self.limits.max_array_size {
             n.get()
         } else {

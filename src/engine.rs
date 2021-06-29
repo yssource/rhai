@@ -740,21 +740,21 @@ impl Default for Limits {
 
 /// Context of a script evaluation process.
 #[derive(Debug)]
-pub struct EvalContext<'a, 'x, 'px, 'm, 's, 't, 'pt> {
+pub struct EvalContext<'a, 'x, 'px, 'm, 's, 'b, 't, 'pt> {
     pub(crate) engine: &'a Engine,
     pub(crate) scope: &'x mut Scope<'px>,
     pub(crate) mods: &'m mut Imports,
     pub(crate) state: &'s mut State,
-    pub(crate) lib: &'a [&'a Module],
+    pub(crate) lib: &'b [&'b Module],
     pub(crate) this_ptr: &'t mut Option<&'pt mut Dynamic>,
     pub(crate) level: usize,
 }
 
-impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
+impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, '_> {
     /// The current [`Engine`].
     #[inline(always)]
     #[must_use]
-    pub fn engine(&self) -> &Engine {
+    pub const fn engine(&self) -> &Engine {
         self.engine
     }
     /// The current source.
@@ -766,7 +766,7 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
     /// The current [`Scope`].
     #[inline(always)]
     #[must_use]
-    pub fn scope(&self) -> &Scope {
+    pub const fn scope(&self) -> &Scope<'px> {
         self.scope
     }
     /// Mutable reference to the current [`Scope`].
@@ -788,7 +788,7 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[must_use]
-    pub fn imports(&self) -> &Imports {
+    pub const fn imports(&self) -> &Imports {
         self.mods
     }
     /// Get an iterator over the namespaces containing definition of all script-defined functions.
@@ -802,7 +802,7 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
     #[cfg(feature = "internals")]
     #[inline(always)]
     #[must_use]
-    pub fn namespaces(&self) -> &[&Module] {
+    pub const fn namespaces(&self) -> &[&Module] {
         self.lib
     }
     /// The current bound `this` pointer, if any.
@@ -814,7 +814,7 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
     /// The current nesting level of function calls.
     #[inline(always)]
     #[must_use]
-    pub fn call_level(&self) -> usize {
+    pub const fn call_level(&self) -> usize {
         self.level
     }
 }

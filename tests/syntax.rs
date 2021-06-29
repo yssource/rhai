@@ -1,4 +1,4 @@
-use rhai::{Dynamic, Engine, EvalAltResult, LexError, ParseError, ParseErrorType, Position, INT};
+use rhai::{Dynamic, Engine, EvalAltResult, LexError, ParseErrorType, Position, INT};
 
 #[test]
 fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {

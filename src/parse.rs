@@ -143,7 +143,7 @@ impl<'e> ParseState<'e> {
     ///
     /// Return `None` when the variable name is not found in the `stack`.
     #[inline(always)]
-    fn access_var(&mut self, name: &str, _pos: Position) -> Option<NonZeroUsize> {
+    pub fn access_var(&mut self, name: &str, _pos: Position) -> Option<NonZeroUsize> {
         let mut barrier = false;
 
         let index = self

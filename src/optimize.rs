@@ -68,7 +68,7 @@ impl<'a> State<'a> {
     ) -> Self {
         Self {
             changed: false,
-            variables: vec![],
+            variables: Vec::new(),
             propagate_constants: true,
             engine,
             lib,
