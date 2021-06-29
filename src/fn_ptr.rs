@@ -33,12 +33,12 @@ impl FnPtr {
     #[inline(always)]
     #[must_use]
     pub fn fn_name(&self) -> &str {
-        self.get_fn_name().as_ref()
+        self.fn_name_raw().as_ref()
     }
     /// Get the name of the function.
     #[inline(always)]
     #[must_use]
-    pub(crate) const fn get_fn_name(&self) -> &Identifier {
+    pub(crate) const fn fn_name_raw(&self) -> &Identifier {
         &self.0
     }
     /// Get the underlying data of the function pointer.

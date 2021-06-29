@@ -951,7 +951,7 @@ impl Engine {
                         fn_ptr.clone()
                     } else {
                         FnPtr::new_unchecked(
-                            fn_ptr.get_fn_name().clone(),
+                            fn_ptr.fn_name_raw().clone(),
                             fn_ptr
                                 .curry()
                                 .iter()
@@ -981,7 +981,7 @@ impl Engine {
                     if let Some(val) = map.get(fn_name) {
                         if let Some(fn_ptr) = val.read_lock::<FnPtr>() {
                             // Remap the function name
-                            _redirected = fn_ptr.get_fn_name().clone();
+                            _redirected = fn_ptr.fn_name_raw().clone();
                             fn_name = &_redirected;
                             // Add curried arguments
                             if fn_ptr.is_curried() {
