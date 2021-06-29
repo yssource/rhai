@@ -345,17 +345,19 @@ impl ModuleResolver for FileModuleResolver {
         let file_path = self.get_file_path(path, source_path);
 
         // Load the script file and compile it
-        match engine.compile_file(file_path).map_err(|err| match *err {
-            EvalAltResult::ErrorSystem(_, err) if err.is::<IoError>() => {
-                Box::new(EvalAltResult::ErrorModuleNotFound(path.to_string(), pos))
-            }
-            _ => Box::new(EvalAltResult::ErrorInModule(path.to_string(), err, pos)),
-        }) {
-            Ok(mut ast) => {
-                ast.set_source(path);
-                Some(Ok(ast))
-            }
-            err => Some(err),
-        }
+        Some(
+            engine
+                .compile_file(file_path)
+                .map(|mut ast| {
+                    ast.set_source(path);
+                    ast
+                })
+                .map_err(|err| match *err {
+                    EvalAltResult::ErrorSystem(_, err) if err.is::<IoError>() => {
+                        EvalAltResult::ErrorModuleNotFound(path.to_string(), pos).into()
+                    }
+                    _ => EvalAltResult::ErrorInModule(path.to_string(), err, pos).into(),
+                }),
+        )
     }
 }

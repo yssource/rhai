@@ -14,7 +14,7 @@ mod core_functions {
     #[rhai_fn(name = "set_tag", set = "tag", return_raw)]
     pub fn set_tag(value: &mut Dynamic, tag: INT) -> Result<(), Box<EvalAltResult>> {
         if tag < Tag::MIN as INT {
-            Err(Box::new(EvalAltResult::ErrorArithmetic(
+            EvalAltResult::ErrorArithmetic(
                 format!(
                     "{} is too small to fit into a tag (must be between {} and {})",
                     tag,
@@ -22,9 +22,10 @@ mod core_functions {
                     Tag::MAX
                 ),
                 Position::NONE,
-            )))
+            )
+            .into()
         } else if tag > Tag::MAX as INT {
-            Err(Box::new(EvalAltResult::ErrorArithmetic(
+            EvalAltResult::ErrorArithmetic(
                 format!(
                     "{} is too large to fit into a tag (must be between {} and {})",
                     tag,
@@ -32,7 +33,8 @@ mod core_functions {
                     Tag::MAX
                 ),
                 Position::NONE,
-            )))
+            )
+            .into()
         } else {
             value.set_tag(tag as Tag);
             Ok(())

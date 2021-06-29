@@ -27,10 +27,11 @@ where
                 return EvalAltResult::ErrorInFunctionCall(
                     "range".to_string(),
                     Default::default(),
-                    Box::new(EvalAltResult::ErrorArithmetic(
+                    EvalAltResult::ErrorArithmetic(
                         "step value cannot be zero".to_string(),
                         crate::Position::NONE,
-                    )),
+                    )
+                    .into(),
                     crate::Position::NONE,
                 )
                 .into();
@@ -314,7 +315,7 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
                 #[cfg(not(feature = "unchecked"))]
                 if step == 0.0 {
                     return EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
-                        Box::new(EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE)),
+                        EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE).into(),
                         crate::Position::NONE,
                     ).into();
                 }
@@ -376,7 +377,7 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
                 #[cfg(not(feature = "unchecked"))]
                 if step.is_zero() {
                     return EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
-                        Box::new(EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE)),
+                        EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE).into(),
                         crate::Position::NONE,
                     ).into();
                 }
