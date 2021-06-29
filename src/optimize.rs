@@ -413,7 +413,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
 
             *stmt = if preserve_result {
                 // -> { expr, Noop }
-                Stmt::Block(Box::new([Stmt::Expr(expr), Stmt::Noop(pos)]), pos)
+                Stmt::Block([Stmt::Expr(expr), Stmt::Noop(pos)].into(), pos)
             } else {
                 // -> expr
                 Stmt::Expr(expr)
@@ -843,7 +843,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
         #[cfg(not(feature = "no_index"))]
         Expr::Array(_, _) if expr.is_constant() => {
             state.set_dirty();
-            *expr = Expr::DynamicConstant(Box::new(expr.get_literal_value().unwrap()), expr.position());
+            *expr = Expr::DynamicConstant(expr.get_literal_value().unwrap().into(), expr.position());
         }
         // [ items .. ]
         #[cfg(not(feature = "no_index"))]
@@ -852,7 +852,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
         #[cfg(not(feature = "no_object"))]
         Expr::Map(_, _) if expr.is_constant() => {
             state.set_dirty();
-            *expr = Expr::DynamicConstant(Box::new(expr.get_literal_value().unwrap()), expr.position());
+            *expr = Expr::DynamicConstant(expr.get_literal_value().unwrap().into(), expr.position());
         }
         // #{ key:value, .. }
         #[cfg(not(feature = "no_object"))]

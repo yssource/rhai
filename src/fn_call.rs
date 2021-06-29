@@ -1206,7 +1206,7 @@ impl Engine {
                 }
 
                 return result.map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    EvalAltResult::ErrorInFunctionCall(
                         KEYWORD_EVAL.to_string(),
                         state
                             .source
@@ -1215,7 +1215,8 @@ impl Engine {
                             .unwrap_or_default(),
                         err,
                         pos,
-                    ))
+                    )
+                    .into()
                 });
             }
 

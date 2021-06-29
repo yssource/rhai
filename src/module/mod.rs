@@ -479,7 +479,7 @@ impl Module {
         param_names.push("Dynamic".into());
         self.functions.insert(
             hash_script,
-            Box::new(FuncInfo {
+            FuncInfo {
                 name: fn_def.name.clone(),
                 namespace: FnNamespace::Internal,
                 access: fn_def.access,
@@ -488,7 +488,8 @@ impl Module {
                 #[cfg(feature = "metadata")]
                 param_names,
                 func: Into::<CallableFunction>::into(fn_def).into(),
-            }),
+            }
+            .into(),
         );
         self.indexed = false;
         self.contains_indexed_global_functions = false;
@@ -709,7 +710,7 @@ impl Module {
 
         self.functions.insert(
             hash_fn,
-            Box::new(FuncInfo {
+            FuncInfo {
                 name: self.identifiers.get(name),
                 namespace,
                 access,
@@ -718,7 +719,8 @@ impl Module {
                 #[cfg(feature = "metadata")]
                 param_names,
                 func: func.into(),
-            }),
+            }
+            .into(),
         );
 
         self.indexed = false;

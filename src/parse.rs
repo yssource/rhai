@@ -635,13 +635,13 @@ fn parse_index_chain(
                         parse_index_chain(input, state, lib, idx_expr, settings.level_up())?;
                     // Indexing binds to right
                     Ok(Expr::Index(
-                        Box::new(BinaryExpr { lhs, rhs: idx_expr }),
+                        BinaryExpr { lhs, rhs: idx_expr }.into(),
                         prev_pos,
                     ))
                 }
                 // Otherwise terminate the indexing chain
                 _ => Ok(Expr::Index(
-                    Box::new(BinaryExpr { lhs, rhs: idx_expr }),
+                    BinaryExpr { lhs, rhs: idx_expr }.into(),
                     settings.pos,
                 )),
             }
@@ -841,7 +841,7 @@ fn parse_map_literal(
 
     map.shrink_to_fit();
 
-    Ok(Expr::Map(Box::new((map, template)), settings.pos))
+    Ok(Expr::Map((map, template).into(), settings.pos))
 }
 
 /// Parse a switch expression.
@@ -951,7 +951,7 @@ fn parse_switch(
         let need_comma = !stmt.is_self_terminated();
 
         def_stmt = if let Some(hash) = hash {
-            table.insert(hash, Box::new((condition, stmt.into())));
+            table.insert(hash, (condition, stmt.into()).into());
             None
         } else {
             Some(stmt.into())
@@ -980,12 +980,11 @@ fn parse_switch(
         }
     }
 
+    let def_stmt_block = def_stmt.unwrap_or_else(|| Stmt::Noop(Position::NONE).into());
+
     Ok(Stmt::Switch(
         item,
-        Box::new((
-            table,
-            def_stmt.unwrap_or_else(|| Stmt::Noop(Position::NONE).into()),
-        )),
+        (table, def_stmt_block).into(),
         settings.pos,
     ))
 }
@@ -1162,7 +1161,7 @@ fn parse_primary(
                     Expr::Variable(
                         None,
                         settings.pos,
-                        Box::new((None, None, state.get_identifier(s))),
+                        (None, None, state.get_identifier(s)).into(),
                     )
                 }
                 // Namespace qualification
@@ -1176,7 +1175,7 @@ fn parse_primary(
                     Expr::Variable(
                         None,
                         settings.pos,
-                        Box::new((None, None, state.get_identifier(s))),
+                        (None, None, state.get_identifier(s)).into(),
                     )
                 }
                 // Normal variable access
@@ -1192,7 +1191,7 @@ fn parse_primary(
                     Expr::Variable(
                         short_index,
                         settings.pos,
-                        Box::new((index, None, state.get_identifier(s))),
+                        (index, None, state.get_identifier(s)).into(),
                     )
                 }
             }
@@ -1210,13 +1209,13 @@ fn parse_primary(
                 Token::LeftParen | Token::Bang if is_keyword_function(&s) => Expr::Variable(
                     None,
                     settings.pos,
-                    Box::new((None, None, state.get_identifier(s))),
+                    (None, None, state.get_identifier(s)).into(),
                 ),
                 // Access to `this` as a variable is OK within a function scope
                 _ if s == KEYWORD_THIS && settings.is_function_scope => Expr::Variable(
                     None,
                     settings.pos,
-                    Box::new((None, None, state.get_identifier(s))),
+                    (None, None, state.get_identifier(s)).into(),
                 ),
                 // Cannot access to `this` as a variable not in a function scope
                 _ if s == KEYWORD_THIS => {
@@ -1307,7 +1306,7 @@ fn parse_primary(
                 Expr::Variable(
                     None,
                     pos2,
-                    Box::new((None, namespace, state.get_identifier(id2))),
+                    (None, namespace, state.get_identifier(id2)).into(),
                 )
             }
             // Indexing
@@ -1500,7 +1499,7 @@ fn make_assignment_stmt<'a>(
         }
         // var (non-indexed) = rhs
         Expr::Variable(None, _, ref x) if x.0.is_none() => {
-            Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
+            Ok(Stmt::Assignment((lhs, op_info, rhs).into(), op_pos))
         }
         // var (indexed) = rhs
         Expr::Variable(i, var_pos, ref x) => {
@@ -1516,9 +1515,7 @@ fn make_assignment_stmt<'a>(
                 |n| n.get() as usize,
             );
             match state.stack[state.stack.len() - index].1 {
-                AccessMode::ReadWrite => {
-                    Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
-                }
+                AccessMode::ReadWrite => Ok(Stmt::Assignment((lhs, op_info, rhs).into(), op_pos)),
                 // Constant values cannot be assigned to
                 AccessMode::ReadOnly => {
                     Err(PERR::AssignmentToConstant(name.to_string()).into_err(var_pos))
@@ -1531,7 +1528,7 @@ fn make_assignment_stmt<'a>(
                 None => match x.lhs {
                     // var[???] = rhs, var.??? = rhs
                     Expr::Variable(_, _, _) => {
-                        Ok(Stmt::Assignment(Box::new((lhs, op_info, rhs)), op_pos))
+                        Ok(Stmt::Assignment((lhs, op_info, rhs).into(), op_pos))
                     }
                     // expr[???] = rhs, expr.??? = rhs
                     ref expr => {
@@ -1608,7 +1605,7 @@ fn make_dot_expr(
                 (state.get_identifier(ident).into(), var_pos),
             )));
 
-            Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
+            Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(_, _, x)) if x.1.is_some() => {
@@ -1616,20 +1613,19 @@ fn make_dot_expr(
                 .into_err(x.1.expect("never fails because the namespace is `Some`").0[0].pos))
         }
         // lhs.prop
-        (lhs, prop @ Expr::Property(_)) => {
-            Expr::Dot(Box::new(BinaryExpr { lhs, rhs: prop }), op_pos)
-        }
+        (lhs, prop @ Expr::Property(_)) => Expr::Dot(BinaryExpr { lhs, rhs: prop }.into(), op_pos),
         // lhs.dot_lhs.dot_rhs
         (lhs, Expr::Dot(x, pos)) => match x.lhs {
             Expr::Variable(_, _, _) | Expr::Property(_) => {
                 let rhs = Expr::Dot(
-                    Box::new(BinaryExpr {
+                    BinaryExpr {
                         lhs: x.lhs.into_property(state),
                         rhs: x.rhs,
-                    }),
+                    }
+                    .into(),
                     pos,
                 );
-                Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
+                Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
             }
             Expr::FnCall(mut func, func_pos) => {
                 // Recalculate hash
@@ -1639,26 +1635,28 @@ fn make_dot_expr(
                 );
 
                 let rhs = Expr::Dot(
-                    Box::new(BinaryExpr {
+                    BinaryExpr {
                         lhs: Expr::FnCall(func, func_pos),
                         rhs: x.rhs,
-                    }),
+                    }
+                    .into(),
                     pos,
                 );
-                Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
+                Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
             }
             _ => unreachable!("invalid dot expression: {:?}", x.lhs),
         },
         // lhs.idx_lhs[idx_rhs]
         (lhs, Expr::Index(x, pos)) => {
             let rhs = Expr::Index(
-                Box::new(BinaryExpr {
+                BinaryExpr {
                     lhs: x.lhs.into_property(state),
                     rhs: x.rhs,
-                }),
+                }
+                .into(),
                 pos,
             );
-            Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
+            Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
         }
         // lhs.nnn::func(...)
         (_, Expr::FnCall(x, _)) if x.is_qualified() => {
@@ -1694,7 +1692,7 @@ fn make_dot_expr(
                 calc_fn_hash(&func.name, func.args.len() + 1),
             );
             let rhs = Expr::FnCall(func, func_pos);
-            Expr::Dot(Box::new(BinaryExpr { lhs, rhs }), op_pos)
+            Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
         }
         // lhs.rhs
         (_, rhs) => return Err(PERR::PropertyExpected.into_err(rhs.position())),
@@ -1818,10 +1816,11 @@ fn parse_binary_op(
                     .pop()
                     .expect("never fails because `||` has two arguments");
                 Expr::Or(
-                    Box::new(BinaryExpr {
+                    BinaryExpr {
                         lhs: current_lhs,
                         rhs,
-                    }),
+                    }
+                    .into(),
                     pos,
                 )
             }
@@ -1833,10 +1832,11 @@ fn parse_binary_op(
                     .pop()
                     .expect("never fails because `&&` has two arguments");
                 Expr::And(
-                    Box::new(BinaryExpr {
+                    BinaryExpr {
                         lhs: current_lhs,
                         rhs,
-                    }),
+                    }
+                    .into(),
                     pos,
                 )
             }
@@ -1927,7 +1927,7 @@ fn parse_custom_syntax(
                 let name = state.get_identifier(name);
                 segments.push(name.clone().into());
                 tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_IDENT));
-                keywords.push(Expr::Variable(None, pos, Box::new((None, None, name))));
+                keywords.push(Expr::Variable(None, pos, (None, None, name).into()));
             }
             CUSTOM_SYNTAX_MARKER_EXPR => {
                 keywords.push(parse_expr(input, state, lib, settings)?);
@@ -2145,7 +2145,7 @@ fn parse_if(
 
     Ok(Stmt::If(
         guard,
-        Box::new((if_body.into(), else_body.into())),
+        (if_body.into(), else_body.into()).into(),
         settings.pos,
     ))
 }
@@ -2836,7 +2836,7 @@ fn parse_try_catch(
     let catch_body = parse_block(input, state, lib, settings.level_up())?;
 
     Ok(Stmt::TryCatch(
-        Box::new((body.into(), var_def, catch_body.into())),
+        (body.into(), var_def, catch_body.into()).into(),
         settings.pos,
     ))
 }
@@ -2967,7 +2967,7 @@ fn make_curry_from_externals(
         externals
             .iter()
             .cloned()
-            .map(|x| Expr::Variable(None, Position::NONE, Box::new((None, None, x)))),
+            .map(|x| Expr::Variable(None, Position::NONE, (None, None, x).into())),
     );
 
     let expr = FnCallExpr {
@@ -2986,7 +2986,7 @@ fn make_curry_from_externals(
     let mut statements = StaticVec::with_capacity(externals.len() + 1);
     statements.extend(externals.into_iter().map(Stmt::Share));
     statements.push(Stmt::Expr(expr));
-    Expr::Stmt(Box::new(StmtBlock::new(statements, pos)))
+    Expr::Stmt(StmtBlock::new(statements, pos).into())
 }
 
 /// Parse an anonymous function definition.

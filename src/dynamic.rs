@@ -1887,11 +1887,7 @@ impl From<FloatWrapper<FLOAT>> for Dynamic {
 impl From<Decimal> for Dynamic {
     #[inline(always)]
     fn from(value: Decimal) -> Self {
-        Self(Union::Decimal(
-            Box::new(value.into()),
-            DEFAULT_TAG_VALUE,
-            ReadWrite,
-        ))
+        Self(Union::Decimal(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
 }
 impl From<char> for Dynamic {
@@ -1912,19 +1908,12 @@ impl From<&ImmutableString> for Dynamic {
         value.clone().into()
     }
 }
-#[cfg(not(feature = "no_smartstring"))]
-impl From<&crate::Identifier> for Dynamic {
-    #[inline(always)]
-    fn from(value: &crate::Identifier) -> Self {
-        value.to_string().into()
-    }
-}
 #[cfg(not(feature = "no_index"))]
 impl Dynamic {
     /// Create a [`Dynamic`] from an [`Array`].
     #[inline(always)]
     pub(crate) fn from_array(array: Array) -> Self {
-        Self(Union::Array(Box::new(array), DEFAULT_TAG_VALUE, ReadWrite))
+        Self(Union::Array(array.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
 }
 #[cfg(not(feature = "no_index"))]
@@ -1965,7 +1954,7 @@ impl Dynamic {
     /// Create a [`Dynamic`] from a [`Map`].
     #[inline(always)]
     pub(crate) fn from_map(map: Map) -> Self {
-        Self(Union::Map(Box::new(map), DEFAULT_TAG_VALUE, ReadWrite))
+        Self(Union::Map(map.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
 }
 #[cfg(not(feature = "no_object"))]
@@ -2008,7 +1997,7 @@ impl<K: Into<crate::Identifier>, T: Variant + Clone> From<std::collections::BTre
 impl From<FnPtr> for Dynamic {
     #[inline(always)]
     fn from(value: FnPtr) -> Self {
-        Self(Union::FnPtr(Box::new(value), DEFAULT_TAG_VALUE, ReadWrite))
+        Self(Union::FnPtr(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
 }
 impl From<Box<FnPtr>> for Dynamic {
@@ -2021,11 +2010,7 @@ impl From<Box<FnPtr>> for Dynamic {
 impl From<Instant> for Dynamic {
     #[inline(always)]
     fn from(value: Instant) -> Self {
-        Self(Union::TimeStamp(
-            Box::new(value),
-            DEFAULT_TAG_VALUE,
-            ReadWrite,
-        ))
+        Self(Union::TimeStamp(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
 }
 #[cfg(not(feature = "no_closure"))]

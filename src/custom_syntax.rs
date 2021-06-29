@@ -318,11 +318,12 @@ impl Engine {
     ) -> &mut Self {
         self.custom_syntax.insert(
             key.into(),
-            Box::new(CustomSyntax {
+            CustomSyntax {
                 parse: Box::new(parse),
                 func: (Box::new(func) as Box<FnCustomSyntaxEval>).into(),
                 scope_changed,
-            }),
+            }
+            .into(),
         );
         self
     }

@@ -183,7 +183,7 @@ impl ParseErrorType {
     #[inline(always)]
     #[must_use]
     pub(crate) fn into_err(self, pos: Position) -> ParseError {
-        ParseError(Box::new(self), pos)
+        ParseError(self.into(), pos)
     }
 }
 

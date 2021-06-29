@@ -1924,7 +1924,7 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Union::Float(f, _, _) => Self::FloatConstant(f, pos),
 
-            _ => Self::DynamicConstant(Box::new(value), pos),
+            _ => Self::DynamicConstant(value.into(), pos),
         }
     }
     /// Is the expression a simple variable access?
