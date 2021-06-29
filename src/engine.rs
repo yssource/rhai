@@ -718,6 +718,7 @@ pub struct Limits {
     pub max_map_size: Option<NonZeroUsize>,
 }
 
+#[cfg(not(feature = "unchecked"))]
 impl Default for Limits {
     fn default() -> Self {
         Self {
