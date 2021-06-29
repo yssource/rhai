@@ -4,7 +4,7 @@
 #![allow(non_snake_case)]
 
 use crate::dynamic::Variant;
-use crate::{Dynamic, StaticVec};
+use crate::Dynamic;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -70,13 +70,10 @@ macro_rules! impl_args {
         impl<$($p: Variant + Clone),*> FuncArgs for ($($p,)*)
         {
             #[inline(always)]
+            #[allow(unused_variables)]
             fn parse<CONTAINER: Extend<Dynamic>>(self, container: &mut CONTAINER) {
                 let ($($p,)*) = self;
-
-                let mut _v = StaticVec::new();
-                $(_v.push($p.into_dynamic());)*
-
-                container.extend(_v.into_iter());
+                $(container.extend(Some($p.into_dynamic()));)*
             }
         }
 
