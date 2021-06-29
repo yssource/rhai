@@ -718,6 +718,26 @@ pub struct Limits {
     pub max_map_size: Option<NonZeroUsize>,
 }
 
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            #[cfg(not(feature = "no_function"))]
+            max_call_stack_depth: MAX_CALL_STACK_DEPTH,
+            max_expr_depth: NonZeroUsize::new(MAX_EXPR_DEPTH),
+            #[cfg(not(feature = "no_function"))]
+            max_function_expr_depth: NonZeroUsize::new(MAX_FUNCTION_EXPR_DEPTH),
+            max_operations: None,
+            #[cfg(not(feature = "no_module"))]
+            max_modules: usize::MAX,
+            max_string_size: None,
+            #[cfg(not(feature = "no_index"))]
+            max_array_size: None,
+            #[cfg(not(feature = "no_object"))]
+            max_map_size: None,
+        }
+    }
+}
+
 /// Context of a script evaluation process.
 #[derive(Debug)]
 pub struct EvalContext<'a, 'x, 'px, 'm, 's, 't, 'pt> {
@@ -903,86 +923,50 @@ pub fn is_anonymous_fn(fn_name: &str) -> bool {
     fn_name.starts_with(FN_ANONYMOUS)
 }
 
-/// Print to stdout
+/// Print to `stdout`
 #[inline(always)]
-fn default_print(_s: &str) {
+#[allow(unused_variables)]
+fn print_to_stdout(s: &str) {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-    println!("{}", _s);
+    println!("{}", s);
 }
 
-/// Debug to stdout
+/// Debug to `stdout`
 #[inline(always)]
-fn default_debug(_s: &str, _source: Option<&str>, _pos: Position) {
+#[allow(unused_variables)]
+fn debug_to_stdout(s: &str, source: Option<&str>, pos: Position) {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-    if let Some(source) = _source {
-        println!("{}{:?} | {}", source, _pos, _s);
-    } else if _pos.is_none() {
-        println!("{}", _s);
+    if let Some(source) = source {
+        println!("{}{:?} | {}", source, pos, s);
+    } else if pos.is_none() {
+        println!("{}", s);
     } else {
-        println!("{:?} | {}", _pos, _s);
+        println!("{:?} | {}", pos, s);
     }
 }
 
 impl Engine {
-    /// Create a new [`Engine`]
+    /// Create a new [`Engine`].
     #[inline]
     #[must_use]
     pub fn new() -> Self {
         // Create the new scripting Engine
-        let mut engine = Self {
-            global_namespace: Default::default(),
-            global_modules: Default::default(),
-            global_sub_modules: Default::default(),
+        let mut engine = Self::new_raw();
 
-            #[cfg(not(feature = "no_module"))]
-            #[cfg(not(feature = "no_std"))]
-            #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-            module_resolver: Some(Box::new(crate::module::resolvers::FileModuleResolver::new())),
-            #[cfg(not(feature = "no_module"))]
-            #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
-            module_resolver: None,
+        #[cfg(not(feature = "no_module"))]
+        #[cfg(not(feature = "no_std"))]
+        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+        {
+            engine.module_resolver =
+                Some(Box::new(crate::module::resolvers::FileModuleResolver::new()));
+        }
 
-            type_names: Default::default(),
-            empty_string: Default::default(),
-            disabled_symbols: Default::default(),
-            custom_keywords: Default::default(),
-            custom_syntax: Default::default(),
+        // default print/debug implementations
+        engine.print = Some(Box::new(print_to_stdout));
+        engine.debug = Some(Box::new(debug_to_stdout));
 
-            // variable resolver
-            resolve_var: None,
-
-            // default print/debug implementations
-            print: Some(Box::new(default_print)),
-            debug: Some(Box::new(default_debug)),
-
-            // progress callback
-            #[cfg(not(feature = "unchecked"))]
-            progress: None,
-
-            // optimization level
-            optimization_level: Default::default(),
-
-            #[cfg(not(feature = "unchecked"))]
-            limits: Limits {
-                #[cfg(not(feature = "no_function"))]
-                max_call_stack_depth: MAX_CALL_STACK_DEPTH,
-                max_expr_depth: NonZeroUsize::new(MAX_EXPR_DEPTH),
-                #[cfg(not(feature = "no_function"))]
-                max_function_expr_depth: NonZeroUsize::new(MAX_FUNCTION_EXPR_DEPTH),
-                max_operations: None,
-                #[cfg(not(feature = "no_module"))]
-                max_modules: usize::MAX,
-                max_string_size: None,
-                #[cfg(not(feature = "no_index"))]
-                max_array_size: None,
-                #[cfg(not(feature = "no_object"))]
-                max_map_size: None,
-            },
-        };
-
-        engine.global_namespace.internal = true;
         engine.register_global_module(StandardPackage::new().as_shared_module());
 
         engine
@@ -1019,21 +1003,7 @@ impl Engine {
             optimization_level: Default::default(),
 
             #[cfg(not(feature = "unchecked"))]
-            limits: Limits {
-                #[cfg(not(feature = "no_function"))]
-                max_call_stack_depth: MAX_CALL_STACK_DEPTH,
-                max_expr_depth: NonZeroUsize::new(MAX_EXPR_DEPTH),
-                #[cfg(not(feature = "no_function"))]
-                max_function_expr_depth: NonZeroUsize::new(MAX_FUNCTION_EXPR_DEPTH),
-                max_operations: None,
-                #[cfg(not(feature = "no_module"))]
-                max_modules: usize::MAX,
-                max_string_size: None,
-                #[cfg(not(feature = "no_index"))]
-                max_array_size: None,
-                #[cfg(not(feature = "no_object"))]
-                max_map_size: None,
-            },
+            limits: Default::default(),
         };
 
         engine.global_namespace.internal = true;
