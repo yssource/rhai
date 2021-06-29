@@ -515,7 +515,7 @@ fn parse_index_chain(
             Expr::IntegerConstant(_, _)
             | Expr::Array(_, _)
             | Expr::StringConstant(_, _)
-            | Expr::InterpolatedString(_) => (),
+            | Expr::InterpolatedString(_, _) => (),
 
             Expr::Map(_, _) => {
                 return Err(PERR::MalformedIndexExpr(
@@ -547,10 +547,10 @@ fn parse_index_chain(
         },
 
         // lhs[string]
-        Expr::StringConstant(_, _) | Expr::InterpolatedString(_) => match lhs {
+        Expr::StringConstant(_, _) | Expr::InterpolatedString(_, _) => match lhs {
             Expr::Map(_, _) => (),
 
-            Expr::Array(_, _) | Expr::StringConstant(_, _) | Expr::InterpolatedString(_) => {
+            Expr::Array(_, _) | Expr::StringConstant(_, _) | Expr::InterpolatedString(_, _) => {
                 return Err(PERR::MalformedIndexExpr(
                     "Array or string expects numeric index, not a string".into(),
                 )
@@ -1132,7 +1132,7 @@ fn parse_primary(
             }
 
             segments.shrink_to_fit();
-            Expr::InterpolatedString(segments.into())
+            Expr::InterpolatedString(segments.into(), settings.pos)
         }
 
         // Array literal

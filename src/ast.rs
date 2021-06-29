@@ -1052,7 +1052,7 @@ impl Stmt {
     }
     /// Get the [position][Position] of this statement.
     #[must_use]
-    pub fn position(&self) -> Position {
+    pub const fn position(&self) -> Position {
         match self {
             Self::Noop(pos)
             | Self::Continue(pos)
@@ -1727,7 +1727,7 @@ pub enum Expr {
     /// [String][ImmutableString] constant.
     StringConstant(ImmutableString, Position),
     /// An interpolated [string][ImmutableString].
-    InterpolatedString(Box<StaticVec<Expr>>),
+    InterpolatedString(Box<StaticVec<Expr>>, Position),
     /// [ expr, ... ]
     Array(Box<StaticVec<Expr>>, Position),
     /// #{ name:expr, ... }
@@ -1798,7 +1798,7 @@ impl fmt::Debug for Expr {
             Self::StringConstant(value, _) => write!(f, "{:?}", value),
             Self::Unit(_) => f.write_str("()"),
 
-            Self::InterpolatedString(x) => {
+            Self::InterpolatedString(x, _) => {
                 f.write_str("InterpolatedString")?;
                 return f.debug_list().entries(x.iter()).finish();
             }
@@ -1948,7 +1948,7 @@ impl Expr {
     /// Get the [position][Position] of the expression.
     #[inline]
     #[must_use]
-    pub fn position(&self) -> Position {
+    pub const fn position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, pos) => *pos,
@@ -1964,14 +1964,8 @@ impl Expr {
             | Self::Variable(_, pos, _)
             | Self::Stack(_, pos)
             | Self::FnCall(_, pos)
-            | Self::Custom(_, pos) => *pos,
-
-            Self::InterpolatedString(x) => x
-                .first()
-                .expect(
-                    "never fails because an interpolated string always contains at least one item",
-                )
-                .position(),
+            | Self::Custom(_, pos)
+            | Self::InterpolatedString(_, pos) => *pos,
 
             Self::Property(x) => (x.2).1,
             Self::Stmt(x) => x.1,
@@ -2003,13 +1997,8 @@ impl Expr {
             | Self::Variable(_, pos, _)
             | Self::Stack(_, pos)
             | Self::FnCall(_, pos)
-            | Self::Custom(_, pos) => *pos = new_pos,
-
-            Self::InterpolatedString(x) => {
-                x.first_mut()
-                    .expect("never fails because an interpolated string always contains at least one item")
-                    .set_position(new_pos);
-            }
+            | Self::Custom(_, pos)
+            | Self::InterpolatedString(_, pos) => *pos = new_pos,
 
             Self::Property(x) => (x.2).1 = new_pos,
             Self::Stmt(x) => x.1 = new_pos,
@@ -2024,7 +2013,7 @@ impl Expr {
     #[must_use]
     pub fn is_pure(&self) -> bool {
         match self {
-            Self::InterpolatedString(x) | Self::Array(x, _) => x.iter().all(Self::is_pure),
+            Self::InterpolatedString(x, _) | Self::Array(x, _) => x.iter().all(Self::is_pure),
 
             Self::Map(x, _) => x.0.iter().map(|(_, v)| v).all(Self::is_pure),
 
@@ -2062,7 +2051,7 @@ impl Expr {
             | Self::Unit(_)
             | Self::Stack(_, _) => true,
 
-            Self::InterpolatedString(x) | Self::Array(x, _) => x.iter().all(Self::is_constant),
+            Self::InterpolatedString(x, _) | Self::Array(x, _) => x.iter().all(Self::is_constant),
 
             Self::Map(x, _) => x.0.iter().map(|(_, expr)| expr).all(Self::is_constant),
 
@@ -2092,7 +2081,7 @@ impl Expr {
 
             Self::IntegerConstant(_, _)
             | Self::StringConstant(_, _)
-            | Self::InterpolatedString(_)
+            | Self::InterpolatedString(_, _)
             | Self::FnCall(_, _)
             | Self::Stmt(_)
             | Self::Dot(_, _)
@@ -2147,7 +2136,7 @@ impl Expr {
                     }
                 }
             }
-            Self::InterpolatedString(x) | Self::Array(x, _) => {
+            Self::InterpolatedString(x, _) | Self::Array(x, _) => {
                 for e in x.as_ref() {
                     if !e.walk(path, on_node) {
                         return false;

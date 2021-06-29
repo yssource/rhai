@@ -787,17 +787,17 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
         #[cfg(not(feature = "no_index"))]
         Expr::Index(x, _) => { optimize_expr(&mut x.lhs, state, false); optimize_expr(&mut x.rhs, state, _chaining); }
         // ``
-        Expr::InterpolatedString(x) if x.is_empty() => {
+        Expr::InterpolatedString(x, pos) if x.is_empty() => {
             state.set_dirty();
-            *expr = Expr::StringConstant(state.engine.empty_string.clone(), Position::NONE);
+            *expr = Expr::StringConstant(state.engine.empty_string.clone(), *pos);
         }
         // `...`
-        Expr::InterpolatedString(x) if x.len() == 1 && matches!(x[0], Expr::StringConstant(_, _)) => {
+        Expr::InterpolatedString(x, _) if x.len() == 1 && matches!(x[0], Expr::StringConstant(_, _)) => {
             state.set_dirty();
             *expr = mem::take(&mut x[0]);
         }
         // `... ${ ... } ...`
-        Expr::InterpolatedString(x) => {
+        Expr::InterpolatedString(x, _) => {
             let mut n = 0;
 
             // Merge consecutive strings

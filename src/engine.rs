@@ -2009,8 +2009,8 @@ impl Engine {
             }
 
             // `... ${...} ...`
-            Expr::InterpolatedString(x) => {
-                let mut pos = expr.position();
+            Expr::InterpolatedString(x, pos) => {
+                let mut pos = *pos;
                 let mut result: Dynamic = self.empty_string.clone().into();
 
                 for expr in x.iter() {

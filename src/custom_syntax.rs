@@ -67,13 +67,13 @@ impl Expression<'_> {
     /// Get the expression.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn expr(&self) -> &Expr {
+    pub(crate) const fn expr(&self) -> &Expr {
         &self.0
     }
     /// Get the position of this expression.
     #[inline(always)]
     #[must_use]
-    pub fn position(&self) -> Position {
+    pub const fn position(&self) -> Position {
         self.0.position()
     }
     /// Get the value of this expression if it is a literal constant.
