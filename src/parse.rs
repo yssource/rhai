@@ -10,16 +10,15 @@ use crate::custom_syntax::{
 };
 use crate::dynamic::{AccessMode, Union};
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
+use crate::fn_hash::get_hasher;
 use crate::module::NamespaceRef;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
-
-use crate::fn_hash::get_hasher;
 use crate::token::{
     is_keyword_function, is_valid_identifier, Token, TokenStream, TokenizerControl,
 };
 use crate::{
-    calc_fn_hash, calc_qualified_fn_hash, Dynamic, Engine, Identifier, LexError, ParseError,
-    ParseErrorType, Position, Scope, Shared, StaticVec, AST,
+    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Dynamic, Engine, Identifier,
+    LexError, ParseError, ParseErrorType, Position, Scope, Shared, StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -1354,7 +1353,7 @@ fn parse_primary(
     }
     .map(|x| match x {
         (_, Some((namespace, hash)), name) => {
-            *hash = calc_qualified_fn_hash(namespace.iter().map(|v| v.name.as_str()), name, 0);
+            *hash = calc_qualified_var_hash(namespace.iter().map(|v| v.name.as_str()), name);
 
             #[cfg(not(feature = "no_module"))]
             namespace.set_index(state.find_module(&namespace[0].name));

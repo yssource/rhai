@@ -172,7 +172,8 @@ pub use fn_native::Shared;
 use fn_native::Locked;
 
 pub(crate) use fn_hash::{
-    calc_fn_hash, calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes,
+    calc_fn_hash, calc_fn_params_hash, calc_qualified_fn_hash, calc_qualified_var_hash,
+    combine_hashes,
 };
 
 pub use rhai_codegen::*;

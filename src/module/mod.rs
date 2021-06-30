@@ -447,7 +447,7 @@ impl Module {
         let value = Dynamic::from(value);
 
         if self.indexed {
-            let hash_var = crate::calc_qualified_fn_hash(once(""), &ident, 0);
+            let hash_var = crate::calc_qualified_var_hash(once(""), &ident);
             self.all_variables.insert(hash_var, value.clone());
         }
         self.variables.insert(ident, value);
@@ -1529,7 +1529,7 @@ impl Module {
 
             // Index all variables
             module.variables.iter().for_each(|(var_name, value)| {
-                let hash_var = crate::calc_qualified_fn_hash(path.iter().map(|&v| v), var_name, 0);
+                let hash_var = crate::calc_qualified_var_hash(path.iter().map(|&v| v), var_name);
                 variables.insert(hash_var, value.clone());
             });
 
