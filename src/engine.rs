@@ -274,50 +274,34 @@ enum ChainArgument {
     #[cfg(not(feature = "no_object"))]
     Property(Position),
     /// Arguments to a dot method call.
+    /// Wrapped values are the arguments plus the [position][Position] of the first argument.
     #[cfg(not(feature = "no_object"))]
     MethodCallArgs(StaticVec<Dynamic>, Position),
-    /// Index value.
+    /// Index value and [position][Position].
     #[cfg(not(feature = "no_index"))]
     IndexValue(Dynamic, Position),
 }
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl ChainArgument {
-    /// Return the `Dynamic` value.
-    ///
-    /// # Panics
-    ///
-    /// Panics if not `ChainArgument::IndexValue`.
+    /// Return the index value.
     #[inline(always)]
     #[cfg(not(feature = "no_index"))]
     #[must_use]
-    pub fn as_index_value(self) -> Dynamic {
+    pub fn as_index_value(self) -> Option<Dynamic> {
         match self {
-            #[cfg(not(feature = "no_object"))]
-            Self::Property(_) | Self::MethodCallArgs(_, _) => {
-                panic!("expecting ChainArgument::IndexValue")
-            }
-            Self::IndexValue(value, _) => value,
+            Self::IndexValue(value, _) => Some(value),
+            _ => None,
         }
     }
-    /// Return the `StaticVec<Dynamic>` value.
-    ///
-    /// # Panics
-    ///
-    /// Panics if not `ChainArgument::MethodCallArgs`.
+    /// Return the list of method call arguments.
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
     #[must_use]
-    pub fn as_fn_call_args(self) -> (StaticVec<Dynamic>, Position) {
+    pub fn as_fn_call_args(self) -> Option<(StaticVec<Dynamic>, Position)> {
         match self {
-            Self::Property(_) => {
-                panic!("expecting ChainArgument::MethodCallArgs")
-            }
-            #[cfg(not(feature = "no_index"))]
-            Self::IndexValue(_, _) => {
-                panic!("expecting ChainArgument::MethodCallArgs")
-            }
-            Self::MethodCallArgs(values, pos) => (values, pos),
+            Self::MethodCallArgs(values, pos) => Some((values, pos)),
+            _ => None,
         }
     }
 }
@@ -1208,12 +1192,14 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             ChainType::Index => {
                 let pos = rhs.position();
+                let idx_val = idx_val
+                    .as_index_value()
+                    .expect("never fails because `chain_type` is `ChainType::Index`");
 
                 match rhs {
                     // xxx[idx].expr... | xxx[idx][expr]...
                     Expr::Dot(x, x_pos) | Expr::Index(x, x_pos) => {
                         let idx_pos = x.lhs.position();
-                        let idx_val = idx_val.as_index_value();
                         let obj_ptr = &mut self.get_indexed_mut(
                             mods, state, lib, target, idx_val, idx_pos, false, true, level,
                         )?;
@@ -1229,7 +1215,6 @@ impl Engine {
                     _ if new_val.is_some() => {
                         let ((new_val, new_pos), (op_info, op_pos)) =
                             new_val.expect("never fails because `new_val` is `Some`");
-                        let idx_val = idx_val.as_index_value();
                         let mut idx_val_for_setter = idx_val.clone();
 
                         let try_setter = match self.get_indexed_mut(
@@ -1271,13 +1256,9 @@ impl Engine {
                         Ok((Dynamic::UNIT, true))
                     }
                     // xxx[rhs]
-                    _ => {
-                        let idx_val = idx_val.as_index_value();
-                        self.get_indexed_mut(
-                            mods, state, lib, target, idx_val, pos, false, true, level,
-                        )
-                        .map(|v| (v.take_or_clone(), false))
-                    }
+                    _ => self
+                        .get_indexed_mut(mods, state, lib, target, idx_val, pos, false, true, level)
+                        .map(|v| (v.take_or_clone(), false)),
                 }
             }
 
@@ -1287,9 +1268,11 @@ impl Engine {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x, pos) if !x.is_qualified() && new_val.is_none() => {
                         let FnCallExpr { name, hashes, .. } = x.as_ref();
-                        let args = &mut idx_val.as_fn_call_args();
+                        let call_args = &mut idx_val
+                            .as_fn_call_args()
+                            .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
                         self.make_method_call(
-                            mods, state, lib, name, *hashes, target, args, *pos, level,
+                            mods, state, lib, name, *hashes, target, call_args, *pos, level,
                         )
                     }
                     // xxx.fn_name(...) = ???
@@ -1450,9 +1433,11 @@ impl Engine {
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
                             Expr::FnCall(ref x, pos) if !x.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = x.as_ref();
-                                let args = &mut idx_val.as_fn_call_args();
+                                let call_args = &mut idx_val
+                                    .as_fn_call_args()
+                                    .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
                                 let (val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hashes, target, args, pos, level,
+                                    mods, state, lib, name, *hashes, target, call_args, pos, level,
                                 )?;
                                 val.into()
                             }
@@ -1569,7 +1554,9 @@ impl Engine {
                             Expr::FnCall(ref f, pos) if !f.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = f.as_ref();
                                 let rhs_chain = match_chain_type(rhs);
-                                let args = &mut idx_val.as_fn_call_args();
+                                let args = &mut idx_val
+                                    .as_fn_call_args()
+                                    .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
                                 let (mut val, _) = self.make_method_call(
                                     mods, state, lib, name, *hashes, target, args, pos, level,
                                 )?;
@@ -1688,17 +1675,19 @@ impl Engine {
                     args, constants, ..
                 } = x.as_ref();
                 let mut arg_values = StaticVec::with_capacity(args.len());
+                let mut first_arg_pos = Position::NONE;
 
                 for index in 0..args.len() {
-                    let (value, _) = self.get_arg_value(
+                    let (value, pos) = self.get_arg_value(
                         scope, mods, state, lib, this_ptr, level, args, constants, index,
                     )?;
                     arg_values.push(value.flatten());
+                    if index == 0 {
+                        first_arg_pos = pos
+                    }
                 }
 
-                let pos = x.args.get(0).map(Expr::position).unwrap_or_default();
-
-                idx_values.push((arg_values, pos).into());
+                idx_values.push((arg_values, first_arg_pos).into());
             }
             #[cfg(not(feature = "no_object"))]
             Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dot => {
@@ -1730,17 +1719,19 @@ impl Engine {
                             args, constants, ..
                         } = x.as_ref();
                         let mut arg_values = StaticVec::with_capacity(args.len());
+                        let mut first_arg_pos = Position::NONE;
 
                         for index in 0..args.len() {
-                            let (value, _) = self.get_arg_value(
+                            let (value, pos) = self.get_arg_value(
                                 scope, mods, state, lib, this_ptr, level, args, constants, index,
                             )?;
                             arg_values.push(value.flatten());
+                            if index == 0 {
+                                first_arg_pos = pos;
+                            }
                         }
 
-                        let pos = x.args.get(0).map(Expr::position).unwrap_or_default();
-
-                        (arg_values, pos).into()
+                        (arg_values, first_arg_pos).into()
                     }
                     #[cfg(not(feature = "no_object"))]
                     Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dot => {
