@@ -6,7 +6,7 @@ Version 1.0.0
 
 The official version `1.0`.
 
-Almost the same version as `0.20.3` but with deprecated API removed.
+Almost the same version as `0.20.3` but with deprecated API's removed.
 
 Breaking changes
 ----------------
@@ -18,6 +18,7 @@ Enhancements
 ------------
 
 * New methods `is_odd`, `is_even` for integers, and `is_zero` for all numbers.
+* `From<BTreeSet>` and `From<HashSet>` are added for `Dynamic`, which create object maps with `()` values.
 
 
 Version 0.20.3

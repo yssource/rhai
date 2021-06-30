@@ -191,7 +191,7 @@ pub use ast::ScriptFnMetadata;
 #[cfg(not(feature = "no_index"))]
 pub type Array = Vec<Dynamic>;
 
-/// Hash map of [`Dynamic`] values with [`ImmutableString`] keys.
+/// Hash map of [`Dynamic`] values with [`SmartString`](https://crates.io/crates/smartstring) keys.
 /// Not available under `no_object`.
 #[cfg(not(feature = "no_object"))]
 pub type Map = std::collections::BTreeMap<Identifier, Dynamic>;

@@ -1977,6 +1977,23 @@ impl<K: Into<crate::Identifier>, T: Variant + Clone> From<std::collections::Hash
     }
 }
 #[cfg(not(feature = "no_object"))]
+#[cfg(not(feature = "no_std"))]
+impl<K: Into<crate::Identifier>> From<std::collections::HashSet<K>> for Dynamic {
+    #[inline(always)]
+    fn from(value: std::collections::HashSet<K>) -> Self {
+        Self(Union::Map(
+            Box::new(
+                value
+                    .into_iter()
+                    .map(|k| (k.into(), Dynamic::UNIT))
+                    .collect(),
+            ),
+            DEFAULT_TAG_VALUE,
+            ReadWrite,
+        ))
+    }
+}
+#[cfg(not(feature = "no_object"))]
 impl<K: Into<crate::Identifier>, T: Variant + Clone> From<std::collections::BTreeMap<K, T>>
     for Dynamic
 {
@@ -1987,6 +2004,22 @@ impl<K: Into<crate::Identifier>, T: Variant + Clone> From<std::collections::BTre
                 value
                     .into_iter()
                     .map(|(k, v)| (k.into(), Dynamic::from(v)))
+                    .collect(),
+            ),
+            DEFAULT_TAG_VALUE,
+            ReadWrite,
+        ))
+    }
+}
+#[cfg(not(feature = "no_object"))]
+impl<K: Into<crate::Identifier>> From<std::collections::BTreeSet<K>> for Dynamic {
+    #[inline(always)]
+    fn from(value: std::collections::BTreeSet<K>) -> Self {
+        Self(Union::Map(
+            Box::new(
+                value
+                    .into_iter()
+                    .map(|k| (k.into(), Dynamic::UNIT))
                     .collect(),
             ),
             DEFAULT_TAG_VALUE,
