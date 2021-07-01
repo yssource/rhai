@@ -8,6 +8,11 @@ The official version `1.0`.
 
 Almost the same version as `0.20.3` but with deprecated API's removed.
 
+Bug fixes
+---------
+
+* Fixed infinite loop in certain script optimizations.
+
 Breaking changes
 ----------------
 
