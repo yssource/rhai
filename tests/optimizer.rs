@@ -3,6 +3,26 @@
 use rhai::{Engine, EvalAltResult, OptimizationLevel, INT};
 
 #[test]
+fn test_optimizer() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::Full);
+
+    #[cfg(not(feature = "no_function"))]
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                fn foo(x) { print(x); return; }
+                fn foo2(x) { if x > 0 {} return; }
+                42
+            "
+        )?,
+        42
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_optimizer_run() -> Result<(), Box<EvalAltResult>> {
     fn run_test(engine: &mut Engine) -> Result<(), Box<EvalAltResult>> {
         assert_eq!(engine.eval::<INT>("if true { 42 } else { 123 }")?, 42);

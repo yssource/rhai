@@ -7,7 +7,7 @@ use std::prelude::v1::*;
 use std::{borrow::Cow, iter::Extend};
 
 /// Keep a number of entries inline (since [`Dynamic`] is usually small enough).
-const SCOPE_SIZE: usize = 8;
+const SCOPE_ENTRIES_INLINED: usize = 8;
 
 /// Type containing information about the current scope.
 /// Useful for keeping state between [`Engine`][crate::Engine] evaluation runs.
@@ -49,14 +49,14 @@ const SCOPE_SIZE: usize = 8;
 // look up a variable.  Variable lookup is usually via direct indexing, by-passing the name altogether.
 //
 // Since [`Dynamic`] is reasonably small, packing it tightly improves cache locality when variables are accessed.
-//
-// The alias is `Box`'ed because it occurs infrequently.
 #[derive(Debug, Clone, Hash)]
 pub struct Scope<'a> {
     /// Current value of the entry.
-    values: smallvec::SmallVec<[Dynamic; SCOPE_SIZE]>,
+    values: smallvec::SmallVec<[Dynamic; SCOPE_ENTRIES_INLINED]>,
     /// (Name, aliases) of the entry.
-    names: Vec<(Cow<'a, str>, Option<Box<StaticVec<Identifier>>>)>,
+    names: smallvec::SmallVec<
+        [(Cow<'a, str>, Option<Box<StaticVec<Identifier>>>); SCOPE_ENTRIES_INLINED],
+    >,
 }
 
 impl Default for Scope<'_> {
@@ -161,7 +161,7 @@ impl<'a> Scope<'a> {
     #[inline(always)]
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.values.len() == 0
+        self.values.is_empty()
     }
     /// Add (push) a new entry to the [`Scope`].
     ///
@@ -253,7 +253,7 @@ impl<'a> Scope<'a> {
         access: AccessMode,
         mut value: Dynamic,
     ) -> &mut Self {
-        self.names.push((name.into(), None));
+        self.names.push((name.into(), Default::default()));
         value.set_access_mode(access);
         self.values.push(value.into());
         self
@@ -436,20 +436,18 @@ impl<'a> Scope<'a> {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     pub(crate) fn add_entry_alias(&mut self, index: usize, alias: Identifier) -> &mut Self {
-        let entry = self
+        let (_, aliases) = self
             .names
             .get_mut(index)
             .expect("never fails unless the index is out of bounds");
-        if entry.1.is_none() {
-            // Initialize the alias list if it is empty.
-            entry.1 = Some(Default::default());
-        }
-        let list = entry
-            .1
-            .as_mut()
-            .expect("never fails because the list is initialized");
-        if !list.iter().any(|a| a == &alias) {
-            list.push(alias);
+        match aliases {
+            None => {
+                let mut list = StaticVec::new();
+                list.push(alias);
+                *aliases = Some(list.into());
+            }
+            Some(aliases) if !aliases.iter().any(|a| a == &alias) => aliases.push(alias),
+            Some(_) => (),
         }
         self
     }
@@ -534,7 +532,7 @@ impl<'a, K: Into<Cow<'a, str>>> Extend<(K, Dynamic)> for Scope<'a> {
     #[inline(always)]
     fn extend<T: IntoIterator<Item = (K, Dynamic)>>(&mut self, iter: T) {
         iter.into_iter().for_each(|(name, value)| {
-            self.names.push((name.into(), None));
+            self.names.push((name.into(), Default::default()));
             self.values.push(value);
         });
     }

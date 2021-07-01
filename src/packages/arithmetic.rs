@@ -121,6 +121,15 @@ macro_rules! gen_arithmetic_functions {
                 pub fn binary_xor(x: $arg_type, y: $arg_type) -> $arg_type {
                     x ^ y
                 }
+                pub fn is_zero(x: $arg_type) -> bool {
+                    x == 0
+                }
+                pub fn is_odd(x: $arg_type) -> bool {
+                    x % 2 != 0
+                }
+                pub fn is_even(x: $arg_type) -> bool {
+                    x % 2 == 0
+                }
             }
         })* }
     }
@@ -174,6 +183,7 @@ macro_rules! reg_functions {
 }
 
 def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
+    combine_with_exported_module!(lib, "int", int_functions);
     reg_functions!(lib += signed_basic; INT);
 
     #[cfg(not(feature = "only_i32"))]
@@ -200,6 +210,19 @@ def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
     #[cfg(feature = "decimal")]
     combine_with_exported_module!(lib, "decimal", decimal_functions);
 });
+
+#[export_module]
+mod int_functions {
+    pub fn is_zero(x: INT) -> bool {
+        x == 0
+    }
+    pub fn is_odd(x: INT) -> bool {
+        x % 2 != 0
+    }
+    pub fn is_even(x: INT) -> bool {
+        x % 2 == 0
+    }
+}
 
 gen_arithmetic_functions!(arith_basic => INT);
 
@@ -315,6 +338,9 @@ mod f32_functions {
             1
         }
     }
+    pub fn is_zero(x: f32) -> bool {
+        x == 0.0
+    }
     #[rhai_fn(name = "**", return_raw)]
     pub fn pow_f_i(x: f32, y: INT) -> Result<f32, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && y > (i32::MAX as INT) {
@@ -420,6 +446,9 @@ mod f64_functions {
             1
         }
     }
+    pub fn is_zero(x: f64) -> bool {
+        x == 0.0
+    }
 }
 
 #[cfg(feature = "decimal")]
@@ -510,5 +539,8 @@ pub mod decimal_functions {
         } else {
             1
         }
+    }
+    pub fn is_zero(x: Decimal) -> bool {
+        x.is_zero()
     }
 }

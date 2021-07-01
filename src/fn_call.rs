@@ -302,9 +302,13 @@ impl Engine {
 
             let result = if func.is_plugin_fn() {
                 func.get_plugin_fn()
+                    .expect("never fails because the function is a plugin")
                     .call((self, name, source, mods, lib).into(), args)
             } else {
-                func.get_native_fn()((self, name, source, mods, lib).into(), args)
+                let func = func
+                    .get_native_fn()
+                    .expect("never fails because the function is native");
+                func((self, name, source, mods, lib).into(), args)
             };
 
             // Restore the original reference
@@ -315,25 +319,33 @@ impl Engine {
             // See if the function match print/debug (which requires special processing)
             return Ok(match name {
                 KEYWORD_PRINT => {
-                    let text = result.as_immutable_string().map_err(|typ| {
-                        EvalAltResult::ErrorMismatchOutputType(
-                            self.map_type_name(type_name::<ImmutableString>()).into(),
-                            typ.into(),
-                            pos,
-                        )
-                    })?;
-                    ((self.print)(&text).into(), false)
+                    if let Some(ref print) = self.print {
+                        let text = result.as_immutable_string().map_err(|typ| {
+                            EvalAltResult::ErrorMismatchOutputType(
+                                self.map_type_name(type_name::<ImmutableString>()).into(),
+                                typ.into(),
+                                pos,
+                            )
+                        })?;
+                        (print(&text).into(), false)
+                    } else {
+                        (Dynamic::UNIT, false)
+                    }
                 }
                 KEYWORD_DEBUG => {
-                    let text = result.as_immutable_string().map_err(|typ| {
-                        EvalAltResult::ErrorMismatchOutputType(
-                            self.map_type_name(type_name::<ImmutableString>()).into(),
-                            typ.into(),
-                            pos,
-                        )
-                    })?;
-                    let source = state.source.as_ref().map(|s| s.as_str());
-                    ((self.debug)(&text, source, pos).into(), false)
+                    if let Some(ref debug) = self.debug {
+                        let text = result.as_immutable_string().map_err(|typ| {
+                            EvalAltResult::ErrorMismatchOutputType(
+                                self.map_type_name(type_name::<ImmutableString>()).into(),
+                                typ.into(),
+                                pos,
+                            )
+                        })?;
+                        let source = state.source.as_ref().map(|s| s.as_str());
+                        (debug(&text, source, pos).into(), false)
+                    } else {
+                        (Dynamic::UNIT, false)
+                    }
                 }
                 _ => (result, func.is_method()),
             });
@@ -681,7 +693,9 @@ impl Engine {
             // Script function call
             assert!(func.is_script());
 
-            let func = func.get_fn_def();
+            let func = func
+                .get_script_fn_def()
+                .expect("never fails because the function is scripted");
 
             if func.body.is_empty() {
                 return Ok((Dynamic::UNIT, false));
@@ -937,7 +951,7 @@ impl Engine {
                         fn_ptr.clone()
                     } else {
                         FnPtr::new_unchecked(
-                            fn_ptr.get_fn_name().clone(),
+                            fn_ptr.fn_name_raw().clone(),
                             fn_ptr
                                 .curry()
                                 .iter()
@@ -967,7 +981,7 @@ impl Engine {
                     if let Some(val) = map.get(fn_name) {
                         if let Some(fn_ptr) = val.read_lock::<FnPtr>() {
                             // Remap the function name
-                            _redirected = fn_ptr.get_fn_name().clone();
+                            _redirected = fn_ptr.fn_name_raw().clone();
                             fn_name = &_redirected;
                             // Add curried arguments
                             if fn_ptr.is_curried() {
@@ -1192,7 +1206,7 @@ impl Engine {
                 }
 
                 return result.map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                    EvalAltResult::ErrorInFunctionCall(
                         KEYWORD_EVAL.to_string(),
                         state
                             .source
@@ -1201,7 +1215,8 @@ impl Engine {
                             .unwrap_or_default(),
                         err,
                         pos,
-                    ))
+                    )
+                    .into()
                 });
             }
 
@@ -1384,7 +1399,9 @@ impl Engine {
         match func {
             #[cfg(not(feature = "no_function"))]
             Some(f) if f.is_script() => {
-                let fn_def = f.get_fn_def();
+                let fn_def = f
+                    .get_script_fn_def()
+                    .expect("never fails because the function is scripted");
 
                 if fn_def.body.is_empty() {
                     Ok(Dynamic::UNIT)
@@ -1408,12 +1425,16 @@ impl Engine {
 
             Some(f) if f.is_plugin_fn() => f
                 .get_plugin_fn()
+                .expect("never fails because the function is a plugin")
                 .clone()
                 .call((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
                 .map_err(|err| err.fill_position(pos)),
 
             Some(f) if f.is_native() => {
-                f.get_native_fn()((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
+                let func = f
+                    .get_native_fn()
+                    .expect("never fails because the function is native");
+                func((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
                     .map_err(|err| err.fill_position(pos))
             }
 

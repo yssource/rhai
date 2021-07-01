@@ -141,22 +141,6 @@ pub use module::{FnNamespace, Module};
 pub use scope::Scope;
 pub use token::Position;
 
-/// A trait to enable registering Rust functions.
-/// This trait is  no longer needed and will be removed in the future.
-#[deprecated(
-    since = "0.19.15",
-    note = "this trait is no longer needed and will be removed in the future"
-)]
-pub trait RegisterFn {}
-
-/// A trait to enable registering Rust functions.
-/// This trait is  no longer needed and will be removed in the future.
-#[deprecated(
-    since = "0.19.15",
-    note = "this trait is no longer needed and will be removed in the future"
-)]
-pub trait RegisterResultFn {}
-
 /// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
 /// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
 #[cfg(not(feature = "internals"))]
@@ -188,7 +172,8 @@ pub use fn_native::Shared;
 use fn_native::Locked;
 
 pub(crate) use fn_hash::{
-    calc_fn_hash, calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes,
+    calc_fn_hash, calc_fn_params_hash, calc_qualified_fn_hash, calc_qualified_var_hash,
+    combine_hashes,
 };
 
 pub use rhai_codegen::*;
@@ -207,7 +192,7 @@ pub use ast::ScriptFnMetadata;
 #[cfg(not(feature = "no_index"))]
 pub type Array = Vec<Dynamic>;
 
-/// Hash map of [`Dynamic`] values with [`ImmutableString`] keys.
+/// Hash map of [`Dynamic`] values with [`SmartString`](https://crates.io/crates/smartstring) keys.
 /// Not available under `no_object`.
 #[cfg(not(feature = "no_object"))]
 pub type Map = std::collections::BTreeMap<Identifier, Dynamic>;

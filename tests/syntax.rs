@@ -1,4 +1,4 @@
-use rhai::{Dynamic, Engine, EvalAltResult, LexError, ParseError, ParseErrorType, Position, INT};
+use rhai::{Dynamic, Engine, EvalAltResult, LexError, ParseErrorType, Position, INT};
 
 #[test]
 fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
@@ -130,13 +130,9 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
             1 => Ok(Some("$ident$".into())),
             2 => match stream[1].as_str() {
                 "world" | "kitty" => Ok(None),
-                s => Err(ParseError(
-                    Box::new(ParseErrorType::BadInput(LexError::ImproperSymbol(
-                        s.to_string(),
-                        Default::default(),
-                    ))),
-                    Position::NONE,
-                )),
+                s => Err(LexError::ImproperSymbol(s.to_string(), Default::default())
+                    .into_err(Position::NONE)
+                    .into()),
             },
             _ => unreachable!(),
         },

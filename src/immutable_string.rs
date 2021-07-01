@@ -106,10 +106,23 @@ impl From<String> for ImmutableString {
     }
 }
 #[cfg(not(feature = "no_smartstring"))]
+impl From<&SmartString> for ImmutableString {
+    #[inline(always)]
+    fn from(value: &SmartString) -> Self {
+        Self(Into::<SmartString>::into(value.as_str()).into())
+    }
+}
+#[cfg(not(feature = "no_smartstring"))]
 impl From<SmartString> for ImmutableString {
     #[inline(always)]
     fn from(value: SmartString) -> Self {
         Self(value.into())
+    }
+}
+impl From<&ImmutableString> for SmartString {
+    #[inline(always)]
+    fn from(value: &ImmutableString) -> Self {
+        value.as_str().into()
     }
 }
 impl From<ImmutableString> for SmartString {

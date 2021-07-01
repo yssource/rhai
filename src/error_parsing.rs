@@ -43,12 +43,16 @@ impl fmt::Display for LexError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnexpectedInput(s) => write!(f, "Unexpected '{}'", s),
-            Self::MalformedEscapeSequence(s) => write!(f, "{}: '{}'", self.desc(), s),
-            Self::MalformedNumber(s) => write!(f, "{}: '{}'", self.desc(), s),
-            Self::MalformedChar(s) => write!(f, "{}: '{}'", self.desc(), s),
-            Self::MalformedIdentifier(s) => write!(f, "{}: '{}'", self.desc(), s),
-            Self::UnterminatedString => f.write_str(self.desc()),
-            Self::StringTooLong(max) => write!(f, "{} ({})", self.desc(), max),
+            Self::MalformedEscapeSequence(s) => write!(f, "Invalid escape sequence: '{}'", s),
+            Self::MalformedNumber(s) => write!(f, "Invalid number: '{}'", s),
+            Self::MalformedChar(s) => write!(f, "Invalid character: '{}'", s),
+            Self::MalformedIdentifier(s) => write!(f, "Variable name is not proper: '{}'", s),
+            Self::UnterminatedString => f.write_str("Open string is not terminated"),
+            Self::StringTooLong(max) => write!(
+                f,
+                "Length of string literal exceeds the maximum limit ({})",
+                max
+            ),
             Self::ImproperSymbol(s, d) if d.is_empty() => {
                 write!(f, "Invalid symbol encountered: '{}'", s)
             }
@@ -58,19 +62,6 @@ impl fmt::Display for LexError {
 }
 
 impl LexError {
-    #[must_use]
-    pub(crate) fn desc(&self) -> &str {
-        match self {
-            Self::UnexpectedInput(_) => "Unexpected character encountered",
-            Self::UnterminatedString => "Open string is not terminated",
-            Self::StringTooLong(_) => "Length of string literal exceeds the maximum limit",
-            Self::MalformedEscapeSequence(_) => "Invalid escape sequence",
-            Self::MalformedNumber(_) => "Invalid number",
-            Self::MalformedChar(_) => "Invalid character",
-            Self::MalformedIdentifier(_) => "Variable name is not proper",
-            Self::ImproperSymbol(_, _) => "Invalid symbol encountered",
-        }
-    }
     /// Convert a [`LexError`] into a [`ParseError`].
     #[inline(always)]
     #[must_use]
@@ -192,44 +183,7 @@ impl ParseErrorType {
     #[inline(always)]
     #[must_use]
     pub(crate) fn into_err(self, pos: Position) -> ParseError {
-        ParseError(Box::new(self), pos)
-    }
-
-    #[must_use]
-    pub(crate) fn desc(&self) -> &str {
-        match self {
-            Self::UnexpectedEOF => "Script is incomplete",
-            Self::BadInput(err) => err.desc(),
-            Self::UnknownOperator(_) => "Unknown operator",
-            Self::MissingToken(_, _) => "Expecting a certain token that is missing",
-            Self::MissingSymbol(_) => "Expecting a certain symbol that is missing",
-            Self::MalformedCallExpr(_) => "Invalid expression in function call arguments",
-            Self::MalformedIndexExpr(_) => "Invalid index in indexing expression",
-            Self::MalformedInExpr(_) => "Invalid 'in' expression",
-            Self::MalformedCapture(_) => "Invalid capturing",
-            Self::DuplicatedProperty(_) => "Duplicated property in object map literal",
-            Self::DuplicatedSwitchCase => "Duplicated switch case",
-            Self::DuplicatedVariable(_) => "Duplicated variable name",
-            Self::WrongSwitchDefaultCase => "Default switch case is not the last",
-            Self::WrongSwitchCaseCondition => "Default switch case cannot have condition",
-            Self::PropertyExpected => "Expecting name of a property",
-            Self::VariableExpected => "Expecting name of a variable",
-            Self::Reserved(_) => "Invalid use of reserved keyword",
-            Self::ExprExpected(_) => "Expecting an expression",
-            Self::WrongFnDefinition => "Function definitions must be at global level and cannot be inside a block or another function",
-            Self::FnDuplicatedDefinition(_, _) => "Function already exists",
-            Self::FnMissingName => "Expecting function name in function declaration",
-            Self::FnMissingParams(_) => "Expecting parameters in function declaration",
-            Self::FnDuplicatedParam(_,_) => "Duplicated parameters in function declaration",
-            Self::FnMissingBody(_) => "Expecting body statement block for function declaration",
-            Self::WrongDocComment => "Doc-comment must be followed immediately by a function definition",
-            Self::WrongExport => "Export statement can only appear at global level",
-            Self::AssignmentToConstant(_) => "Cannot assign to a constant value",
-            Self::AssignmentToInvalidLHS(_) => "Expression cannot be assigned to",
-            Self::ExprTooDeep => "Expression exceeds maximum complexity",
-            Self::LiteralTooLarge(_, _) => "Literal exceeds maximum limit",
-            Self::LoopBreak => "Break statement should only be used inside a loop"
-        }
+        ParseError(self.into(), pos)
     }
 }
 
@@ -238,12 +192,14 @@ impl fmt::Display for ParseErrorType {
         match self {
             Self::BadInput(err) => write!(f, "{}", err),
 
-            Self::MalformedCallExpr(s) => f.write_str(if s.is_empty() { self.desc() } else { s }),
-            Self::UnknownOperator(s) => write!(f, "{}: '{}'", self.desc(), s),
+            Self::UnknownOperator(s) => write!(f, "Unknown operator: '{}'", s),
 
-            Self::MalformedIndexExpr(s) | Self::MalformedInExpr(s) | Self::MalformedCapture(s) => {
-                f.write_str(if s.is_empty() { self.desc() } else { s })
-            }
+            Self::MalformedCallExpr(s) if s.is_empty() => f.write_str("Invalid expression in function call arguments"),
+            Self::MalformedIndexExpr(s) if s.is_empty() => f.write_str("Invalid index in indexing expression"),
+            Self::MalformedInExpr(s) if s.is_empty() => f.write_str("Invalid 'in' expression"),
+            Self::MalformedCapture(s) if s.is_empty() => f.write_str("Invalid capturing"),
+
+            Self::MalformedCallExpr(s) | Self::MalformedIndexExpr(s) | Self::MalformedInExpr(s) | Self::MalformedCapture(s) => f.write_str(s),
 
             Self::FnDuplicatedDefinition(s, n) => {
                 write!(f, "Function '{}' with ", s)?;
@@ -253,43 +209,39 @@ impl fmt::Display for ParseErrorType {
                     _ => write!(f, "{} parameters already exists", n),
                 }
             }
-            Self::DuplicatedProperty(s) => {
-                write!(f, "Duplicated property '{}' for object map literal", s)
-            }
-            Self::DuplicatedSwitchCase => f.write_str(self.desc()),
+
+            Self::FnMissingBody(s) if s.is_empty() => f.write_str("Expecting body statement block for anonymous function"),
+            Self::FnMissingBody(s) => write!(f, "Expecting body statement block for function '{}'", s),
+
+            Self::FnMissingParams(s) => write!(f, "Expecting parameters for function '{}'", s),
+            Self::FnDuplicatedParam(s, arg) => write!(f, "Duplicated parameter '{}' for function '{}'", arg, s),
+            Self::DuplicatedProperty(s) => write!(f, "Duplicated property '{}' for object map literal", s),
+            Self::DuplicatedSwitchCase => f.write_str("Duplicated switch case"),
             Self::DuplicatedVariable(s) => write!(f, "Duplicated variable name '{}'", s),
 
             Self::ExprExpected(s) => write!(f, "Expecting {} expression", s),
-
-            Self::FnMissingParams(s) => write!(f, "Expecting parameters for function '{}'", s),
-
-            Self::FnMissingBody(s) if s.is_empty() => {
-                f.write_str("Expecting body statement block for anonymous function")
-            }
-            Self::FnMissingBody(s) => {
-                write!(f, "Expecting body statement block for function '{}'", s)
-            }
-
-            Self::FnDuplicatedParam(s, arg) => {
-                write!(f, "Duplicated parameter '{}' for function '{}'", arg, s)
-            }
-
             Self::MissingToken(token, s) => write!(f, "Expecting '{}' {}", token, s),
             Self::MissingSymbol(s) => f.write_str(s),
 
-            Self::AssignmentToConstant(s) if s.is_empty() => f.write_str(self.desc()),
+            Self::AssignmentToConstant(s) if s.is_empty() => f.write_str("Cannot assign to a constant value"),
             Self::AssignmentToConstant(s) => write!(f, "Cannot assign to constant '{}'", s),
 
-            Self::AssignmentToInvalidLHS(s) if s.is_empty() => f.write_str(self.desc()),
+            Self::AssignmentToInvalidLHS(s) if s.is_empty() => f.write_str("Expression cannot be assigned to"),
             Self::AssignmentToInvalidLHS(s) => f.write_str(s),
 
-            Self::LiteralTooLarge(typ, max) => {
-                write!(f, "{} exceeds the maximum limit ({})", typ, max)
-            }
-
+            Self::LiteralTooLarge(typ, max) => write!(f, "{} exceeds the maximum limit ({})", typ, max),
             Self::Reserved(s) => write!(f, "'{}' is a reserved keyword", s),
-
-            _ => f.write_str(self.desc()),
+            Self::UnexpectedEOF => f.write_str("Script is incomplete"),
+            Self::WrongSwitchDefaultCase => f.write_str("Default switch case is not the last"),
+            Self::WrongSwitchCaseCondition => f.write_str("Default switch case cannot have condition"),
+            Self::PropertyExpected => f.write_str("Expecting name of a property"),
+            Self::VariableExpected => f.write_str("Expecting name of a variable"),
+            Self::WrongFnDefinition => f.write_str("Function definitions must be at global level and cannot be inside a block or another function"),
+            Self::FnMissingName => f.write_str("Expecting function name in function declaration"),
+            Self::WrongDocComment => f.write_str("Doc-comment must be followed immediately by a function definition"),
+            Self::WrongExport => f.write_str("Export statement can only appear at global level"),
+            Self::ExprTooDeep => f.write_str("Expression exceeds maximum complexity"),
+            Self::LoopBreak => f.write_str("Break statement should only be used inside a loop"),
         }
     }
 }

@@ -1,6 +1,31 @@
 Rhai Release Notes
 ==================
 
+Version 1.0.0
+=============
+
+The official version `1.0`.
+
+Almost the same version as `0.20.3` but with deprecated API's removed.
+
+Bug fixes
+---------
+
+* Fixed infinite loop in certain script optimizations.
+
+Breaking changes
+----------------
+
+* All deprecated API's (e.g. the `RegisterFn` and `RegisterResultFn` traits) are removed.
+* `Module::set_id` is split into `Module::set_id` and `Module::clear_id` pair.
+
+Enhancements
+------------
+
+* New methods `is_odd`, `is_even` for integers, and `is_zero` for all numbers.
+* `From<BTreeSet>` and `From<HashSet>` are added for `Dynamic`, which create object maps with `()` values.
+
+
 Version 0.20.3
 ==============
 

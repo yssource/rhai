@@ -14,14 +14,21 @@ use std::any::TypeId;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
-pub const MARKER_EXPR: &str = "$expr$";
-pub const MARKER_BLOCK: &str = "$block$";
-pub const MARKER_IDENT: &str = "$ident$";
-pub const MARKER_STRING: &str = "$string$";
-pub const MARKER_INT: &str = "$int$";
+/// Special marker for matching an expression.
+pub const CUSTOM_SYNTAX_MARKER_EXPR: &str = "$expr$";
+/// Special marker for matching a statements block.
+pub const CUSTOM_SYNTAX_MARKER_BLOCK: &str = "$block$";
+/// Special marker for matching an identifier.
+pub const CUSTOM_SYNTAX_MARKER_IDENT: &str = "$ident$";
+/// Special marker for matching a string literal.
+pub const CUSTOM_SYNTAX_MARKER_STRING: &str = "$string$";
+/// Special marker for matching an integer number.
+pub const CUSTOM_SYNTAX_MARKER_INT: &str = "$int$";
+/// Special marker for matching a floating-point number.
 #[cfg(not(feature = "no_float"))]
-pub const MARKER_FLOAT: &str = "$float$";
-pub const MARKER_BOOL: &str = "$bool$";
+pub const CUSTOM_SYNTAX_MARKER_FLOAT: &str = "$float$";
+/// Special marker for matching a boolean value.
+pub const CUSTOM_SYNTAX_MARKER_BOOL: &str = "$bool$";
 
 /// A general expression evaluation trait object.
 #[cfg(not(feature = "sync"))]
@@ -60,13 +67,13 @@ impl Expression<'_> {
     /// Get the expression.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn expr(&self) -> &Expr {
+    pub(crate) const fn expr(&self) -> &Expr {
         &self.0
     }
     /// Get the position of this expression.
     #[inline(always)]
     #[must_use]
-    pub fn position(&self) -> Position {
+    pub const fn position(&self) -> Position {
         self.0.position()
     }
     /// Get the value of this expression if it is a literal constant.
@@ -120,7 +127,7 @@ impl Expression<'_> {
     }
 }
 
-impl EvalContext<'_, '_, '_, '_, '_, '_, '_> {
+impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_> {
     /// Evaluate an [expression tree][Expression].
     ///
     /// # WARNING - Low Level API
@@ -185,7 +192,7 @@ impl Engine {
         for s in keywords {
             let s = s.as_ref().trim();
 
-            // skip empty keywords
+            // Skip empty keywords
             if s.is_empty() {
                 continue;
             }
@@ -194,15 +201,19 @@ impl Engine {
 
             let seg = match s {
                 // Markers not in first position
-                MARKER_IDENT | MARKER_EXPR | MARKER_BLOCK | MARKER_BOOL | MARKER_INT
-                | MARKER_STRING
+                CUSTOM_SYNTAX_MARKER_IDENT
+                | CUSTOM_SYNTAX_MARKER_EXPR
+                | CUSTOM_SYNTAX_MARKER_BLOCK
+                | CUSTOM_SYNTAX_MARKER_BOOL
+                | CUSTOM_SYNTAX_MARKER_INT
+                | CUSTOM_SYNTAX_MARKER_STRING
                     if !segments.is_empty() =>
                 {
                     s.into()
                 }
                 // Markers not in first position
                 #[cfg(not(feature = "no_float"))]
-                MARKER_FLOAT if !segments.is_empty() => s.into(),
+                CUSTOM_SYNTAX_MARKER_FLOAT if !segments.is_empty() => s.into(),
                 // Standard or reserved keyword/symbol not in first position
                 s if !segments.is_empty() && token.is_some() => {
                     // Make it a custom keyword/symbol if it is disabled or reserved
@@ -307,11 +318,12 @@ impl Engine {
     ) -> &mut Self {
         self.custom_syntax.insert(
             key.into(),
-            Box::new(CustomSyntax {
+            CustomSyntax {
                 parse: Box::new(parse),
                 func: (Box::new(func) as Box<FnCustomSyntaxEval>).into(),
                 scope_changed,
-            }),
+            }
+            .into(),
         );
         self
     }

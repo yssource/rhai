@@ -235,8 +235,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
@@ -265,10 +264,9 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
-    /// module.set_id(Some("hello"));
+    /// module.set_id("hello");
     /// assert_eq!(module.id(), Some("hello"));
     /// ```
     #[inline(always)]
@@ -278,19 +276,9 @@ impl Module {
     }
 
     /// Get the ID of the [`Module`] as an [`Identifier`], if any.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use rhai::Module;
-    ///
-    /// let mut module = Module::new();
-    /// module.set_id(Some("hello"));
-    /// assert_eq!(module.id_raw().map(|s| s.as_str()), Some("hello"));
-    /// ```
     #[inline(always)]
     #[must_use]
-    pub fn id_raw(&self) -> Option<&Identifier> {
+    pub(crate) const fn id_raw(&self) -> Option<&Identifier> {
         self.id.as_ref()
     }
 
@@ -299,15 +287,31 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
-    /// module.set_id(Some("hello"));
+    /// module.set_id("hello");
     /// assert_eq!(module.id(), Some("hello"));
     /// ```
     #[inline(always)]
-    pub fn set_id<S: Into<Identifier>>(&mut self, id: Option<S>) -> &mut Self {
-        self.id = id.map(|s| s.into());
+    pub fn set_id(&mut self, id: impl Into<Identifier>) -> &mut Self {
+        self.id = Some(id.into());
+        self
+    }
+    /// Clear the ID of the [`Module`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use rhai::Module;
+    /// let mut module = Module::new();
+    /// module.set_id("hello");
+    /// assert_eq!(module.id(), Some("hello"));
+    /// module.clear_id();
+    /// assert_eq!(module.id(), None);
+    /// ```
+    #[inline(always)]
+    pub fn clear_id(&mut self) -> &mut Self {
+        self.id = None;
         self
     }
 
@@ -316,8 +320,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let module = Module::new();
     /// assert!(module.is_empty());
     /// ```
@@ -340,8 +343,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// assert!(module.is_indexed());
     ///
@@ -356,7 +358,7 @@ impl Module {
     /// ```
     #[inline(always)]
     #[must_use]
-    pub fn is_indexed(&self) -> bool {
+    pub const fn is_indexed(&self) -> bool {
         self.indexed
     }
 
@@ -380,8 +382,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert!(module.contains_var("answer"));
@@ -397,8 +398,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
@@ -414,8 +414,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var("answer").unwrap().cast::<i64>(), 42);
@@ -433,8 +432,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
@@ -449,7 +447,7 @@ impl Module {
         let value = Dynamic::from(value);
 
         if self.indexed {
-            let hash_var = crate::calc_qualified_fn_hash(once(""), &ident, 0);
+            let hash_var = crate::calc_qualified_var_hash(once(""), &ident);
             self.all_variables.insert(hash_var, value.clone());
         }
         self.variables.insert(ident, value);
@@ -481,7 +479,7 @@ impl Module {
         param_names.push("Dynamic".into());
         self.functions.insert(
             hash_script,
-            Box::new(FuncInfo {
+            FuncInfo {
                 name: fn_def.name.clone(),
                 namespace: FnNamespace::Internal,
                 access: fn_def.access,
@@ -490,7 +488,8 @@ impl Module {
                 #[cfg(feature = "metadata")]
                 param_names,
                 func: Into::<CallableFunction>::into(fn_def).into(),
-            }),
+            }
+            .into(),
         );
         self.indexed = false;
         self.contains_indexed_global_functions = false;
@@ -510,7 +509,7 @@ impl Module {
         self.functions
             .values()
             .find(|f| f.params == num_params && f.name == name)
-            .map(|f| f.func.get_fn_def())
+            .and_then(|f| f.func.get_script_fn_def())
     }
 
     /// Get a mutable reference to the underlying [`BTreeMap`] of sub-modules.
@@ -539,8 +538,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// let sub_module = Module::new();
     /// module.set_sub_module("question", sub_module);
@@ -557,8 +555,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// let sub_module = Module::new();
     /// module.set_sub_module("question", sub_module);
@@ -577,8 +574,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// let sub_module = Module::new();
     /// module.set_sub_module("question", sub_module);
@@ -603,8 +599,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// let hash = module.set_native_fn("calc", || Ok(42_i64));
     /// assert!(module.contains_fn(hash));
@@ -715,7 +710,7 @@ impl Module {
 
         self.functions.insert(
             hash_fn,
-            Box::new(FuncInfo {
+            FuncInfo {
                 name: self.identifiers.get(name),
                 namespace,
                 access,
@@ -724,7 +719,8 @@ impl Module {
                 #[cfg(feature = "metadata")]
                 param_names,
                 func: func.into(),
-            }),
+            }
+            .into(),
         );
 
         self.indexed = false;
@@ -845,8 +841,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// let hash = module.set_native_fn("calc", || Ok(42_i64));
     /// assert!(module.contains_fn(hash));
@@ -880,8 +875,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::Module;
-    ///
+    /// # use rhai::Module;
     /// let mut module = Module::new();
     /// let hash = module.set_getter_fn("value", |x: &mut i64| { Ok(*x) });
     /// assert!(module.contains_fn(hash));
@@ -1349,7 +1343,9 @@ impl Module {
                     f.access,
                     f.name.as_str(),
                     f.params,
-                    f.func.get_fn_def(),
+                    f.func
+                        .get_script_fn_def()
+                        .expect("never fails because the function is scripted"),
                 )
             })
     }
@@ -1474,13 +1470,23 @@ impl Module {
             .filter(|f| f.func.is_script())
             .for_each(|f| {
                 // Encapsulate AST environment
-                let mut func = f.func.get_fn_def().as_ref().clone();
+                let mut func = f
+                    .func
+                    .get_script_fn_def()
+                    .expect("never fails because the function is scripted")
+                    .as_ref()
+                    .clone();
                 func.lib = Some(ast.shared_lib());
                 func.mods = func_mods.clone();
                 module.set_script_fn(func);
             });
 
-        module.set_id(ast.clone_source());
+        if let Some(s) = ast.source_raw() {
+            module.set_id(s.clone());
+        } else {
+            module.clear_id();
+        }
+
         module.build_index();
 
         Ok(module)
@@ -1523,7 +1529,7 @@ impl Module {
 
             // Index all variables
             module.variables.iter().for_each(|(var_name, value)| {
-                let hash_var = crate::calc_qualified_fn_hash(path.iter().map(|&v| v), var_name, 0);
+                let hash_var = crate::calc_qualified_var_hash(path.iter().map(|&v| v), var_name);
                 variables.insert(hash_var, value.clone());
             });
 
@@ -1728,7 +1734,7 @@ impl NamespaceRef {
     /// Get the [`Scope`][crate::Scope] index offset.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn index(&self) -> Option<NonZeroUsize> {
+    pub(crate) const fn index(&self) -> Option<NonZeroUsize> {
         self.index
     }
     /// Set the [`Scope`][crate::Scope] index offset.

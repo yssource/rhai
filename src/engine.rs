@@ -274,50 +274,34 @@ enum ChainArgument {
     #[cfg(not(feature = "no_object"))]
     Property(Position),
     /// Arguments to a dot method call.
+    /// Wrapped values are the arguments plus the [position][Position] of the first argument.
     #[cfg(not(feature = "no_object"))]
     MethodCallArgs(StaticVec<Dynamic>, Position),
-    /// Index value.
+    /// Index value and [position][Position].
     #[cfg(not(feature = "no_index"))]
     IndexValue(Dynamic, Position),
 }
 
 #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
 impl ChainArgument {
-    /// Return the `Dynamic` value.
-    ///
-    /// # Panics
-    ///
-    /// Panics if not `ChainArgument::IndexValue`.
+    /// Return the index value.
     #[inline(always)]
     #[cfg(not(feature = "no_index"))]
     #[must_use]
-    pub fn as_index_value(self) -> Dynamic {
+    pub fn as_index_value(self) -> Option<Dynamic> {
         match self {
-            #[cfg(not(feature = "no_object"))]
-            Self::Property(_) | Self::MethodCallArgs(_, _) => {
-                panic!("expecting ChainArgument::IndexValue")
-            }
-            Self::IndexValue(value, _) => value,
+            Self::IndexValue(value, _) => Some(value),
+            _ => None,
         }
     }
-    /// Return the `StaticVec<Dynamic>` value.
-    ///
-    /// # Panics
-    ///
-    /// Panics if not `ChainArgument::MethodCallArgs`.
+    /// Return the list of method call arguments.
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
     #[must_use]
-    pub fn as_fn_call_args(self) -> (StaticVec<Dynamic>, Position) {
+    pub fn as_fn_call_args(self) -> Option<(StaticVec<Dynamic>, Position)> {
         match self {
-            Self::Property(_) => {
-                panic!("expecting ChainArgument::MethodCallArgs")
-            }
-            #[cfg(not(feature = "no_index"))]
-            Self::IndexValue(_, _) => {
-                panic!("expecting ChainArgument::MethodCallArgs")
-            }
-            Self::MethodCallArgs(values, pos) => (values, pos),
+            Self::MethodCallArgs(values, pos) => Some((values, pos)),
+            _ => None,
         }
     }
 }
@@ -631,7 +615,7 @@ pub struct State {
     #[cfg(not(feature = "no_module"))]
     pub resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
     /// Function resolution cache and free list.
-    fn_resolution_caches: (StaticVec<FnResolutionCache>, Vec<FnResolutionCache>),
+    fn_resolution_caches: StaticVec<FnResolutionCache>,
 }
 
 impl State {
@@ -645,11 +629,11 @@ impl State {
     #[inline(always)]
     #[must_use]
     pub fn fn_resolution_cache_mut(&mut self) -> &mut FnResolutionCache {
-        if self.fn_resolution_caches.0.is_empty() {
+        if self.fn_resolution_caches.is_empty() {
             // Push a new function resolution cache if the stack is empty
-            self.fn_resolution_caches.0.push(BTreeMap::new());
+            self.fn_resolution_caches.push(Default::default());
         }
-        self.fn_resolution_caches.0.last_mut().expect(
+        self.fn_resolution_caches.last_mut().expect(
             "never fails because there is at least one function resolution cache by this point",
         )
     }
@@ -657,9 +641,7 @@ impl State {
     #[allow(dead_code)]
     #[inline(always)]
     pub fn push_fn_resolution_cache(&mut self) {
-        self.fn_resolution_caches
-            .0
-            .push(self.fn_resolution_caches.1.pop().unwrap_or_default());
+        self.fn_resolution_caches.push(Default::default());
     }
     /// Remove the current function resolution cache from the stack and make the last one current.
     ///
@@ -668,13 +650,9 @@ impl State {
     /// Panics if there are no more function resolution cache in the stack.
     #[inline(always)]
     pub fn pop_fn_resolution_cache(&mut self) {
-        let mut cache = self
-            .fn_resolution_caches
-            .0
+        self.fn_resolution_caches
             .pop()
             .expect("there should be at least one function resolution cache");
-        cache.clear();
-        self.fn_resolution_caches.1.push(cache);
     }
 }
 
@@ -724,23 +702,44 @@ pub struct Limits {
     pub max_map_size: Option<NonZeroUsize>,
 }
 
+#[cfg(not(feature = "unchecked"))]
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            #[cfg(not(feature = "no_function"))]
+            max_call_stack_depth: MAX_CALL_STACK_DEPTH,
+            max_expr_depth: NonZeroUsize::new(MAX_EXPR_DEPTH),
+            #[cfg(not(feature = "no_function"))]
+            max_function_expr_depth: NonZeroUsize::new(MAX_FUNCTION_EXPR_DEPTH),
+            max_operations: None,
+            #[cfg(not(feature = "no_module"))]
+            max_modules: usize::MAX,
+            max_string_size: None,
+            #[cfg(not(feature = "no_index"))]
+            max_array_size: None,
+            #[cfg(not(feature = "no_object"))]
+            max_map_size: None,
+        }
+    }
+}
+
 /// Context of a script evaluation process.
 #[derive(Debug)]
-pub struct EvalContext<'a, 'x, 'px, 'm, 's, 't, 'pt> {
+pub struct EvalContext<'a, 'x, 'px, 'm, 's, 'b, 't, 'pt> {
     pub(crate) engine: &'a Engine,
     pub(crate) scope: &'x mut Scope<'px>,
     pub(crate) mods: &'m mut Imports,
     pub(crate) state: &'s mut State,
-    pub(crate) lib: &'a [&'a Module],
+    pub(crate) lib: &'b [&'b Module],
     pub(crate) this_ptr: &'t mut Option<&'pt mut Dynamic>,
     pub(crate) level: usize,
 }
 
-impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
+impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, '_> {
     /// The current [`Engine`].
     #[inline(always)]
     #[must_use]
-    pub fn engine(&self) -> &Engine {
+    pub const fn engine(&self) -> &Engine {
         self.engine
     }
     /// The current source.
@@ -752,7 +751,7 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
     /// The current [`Scope`].
     #[inline(always)]
     #[must_use]
-    pub fn scope(&self) -> &Scope {
+    pub const fn scope(&self) -> &Scope<'px> {
         self.scope
     }
     /// Mutable reference to the current [`Scope`].
@@ -774,7 +773,7 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[must_use]
-    pub fn imports(&self) -> &Imports {
+    pub const fn imports(&self) -> &Imports {
         self.mods
     }
     /// Get an iterator over the namespaces containing definition of all script-defined functions.
@@ -788,7 +787,7 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
     #[cfg(feature = "internals")]
     #[inline(always)]
     #[must_use]
-    pub fn namespaces(&self) -> &[&Module] {
+    pub const fn namespaces(&self) -> &[&Module] {
         self.lib
     }
     /// The current bound `this` pointer, if any.
@@ -800,7 +799,7 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_> {
     /// The current nesting level of function calls.
     #[inline(always)]
     #[must_use]
-    pub fn call_level(&self) -> usize {
+    pub const fn call_level(&self) -> usize {
         self.level
     }
 }
@@ -856,9 +855,9 @@ pub struct Engine {
     pub(crate) resolve_var: Option<OnVarCallback>,
 
     /// Callback closure for implementing the `print` command.
-    pub(crate) print: OnPrintCallback,
+    pub(crate) print: Option<OnPrintCallback>,
     /// Callback closure for implementing the `debug` command.
-    pub(crate) debug: OnDebugCallback,
+    pub(crate) debug: Option<OnDebugCallback>,
     /// Callback closure for progress reporting.
     #[cfg(not(feature = "unchecked"))]
     pub(crate) progress: Option<crate::fn_native::OnProgressCallback>,
@@ -909,86 +908,50 @@ pub fn is_anonymous_fn(fn_name: &str) -> bool {
     fn_name.starts_with(FN_ANONYMOUS)
 }
 
-/// Print to stdout
+/// Print to `stdout`
 #[inline(always)]
-fn default_print(_s: &str) {
+#[allow(unused_variables)]
+fn print_to_stdout(s: &str) {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-    println!("{}", _s);
+    println!("{}", s);
 }
 
-/// Debug to stdout
+/// Debug to `stdout`
 #[inline(always)]
-fn default_debug(_s: &str, _source: Option<&str>, _pos: Position) {
+#[allow(unused_variables)]
+fn debug_to_stdout(s: &str, source: Option<&str>, pos: Position) {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-    if let Some(source) = _source {
-        println!("{}{:?} | {}", source, _pos, _s);
-    } else if _pos.is_none() {
-        println!("{}", _s);
+    if let Some(source) = source {
+        println!("{}{:?} | {}", source, pos, s);
+    } else if pos.is_none() {
+        println!("{}", s);
     } else {
-        println!("{:?} | {}", _pos, _s);
+        println!("{:?} | {}", pos, s);
     }
 }
 
 impl Engine {
-    /// Create a new [`Engine`]
+    /// Create a new [`Engine`].
     #[inline]
     #[must_use]
     pub fn new() -> Self {
         // Create the new scripting Engine
-        let mut engine = Self {
-            global_namespace: Default::default(),
-            global_modules: Default::default(),
-            global_sub_modules: Default::default(),
+        let mut engine = Self::new_raw();
 
-            #[cfg(not(feature = "no_module"))]
-            #[cfg(not(feature = "no_std"))]
-            #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-            module_resolver: Some(Box::new(crate::module::resolvers::FileModuleResolver::new())),
-            #[cfg(not(feature = "no_module"))]
-            #[cfg(any(feature = "no_std", target_arch = "wasm32",))]
-            module_resolver: None,
+        #[cfg(not(feature = "no_module"))]
+        #[cfg(not(feature = "no_std"))]
+        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+        {
+            engine.module_resolver =
+                Some(Box::new(crate::module::resolvers::FileModuleResolver::new()));
+        }
 
-            type_names: Default::default(),
-            empty_string: Default::default(),
-            disabled_symbols: Default::default(),
-            custom_keywords: Default::default(),
-            custom_syntax: Default::default(),
+        // default print/debug implementations
+        engine.print = Some(Box::new(print_to_stdout));
+        engine.debug = Some(Box::new(debug_to_stdout));
 
-            // variable resolver
-            resolve_var: None,
-
-            // default print/debug implementations
-            print: Box::new(default_print),
-            debug: Box::new(default_debug),
-
-            // progress callback
-            #[cfg(not(feature = "unchecked"))]
-            progress: None,
-
-            // optimization level
-            optimization_level: Default::default(),
-
-            #[cfg(not(feature = "unchecked"))]
-            limits: Limits {
-                #[cfg(not(feature = "no_function"))]
-                max_call_stack_depth: MAX_CALL_STACK_DEPTH,
-                max_expr_depth: NonZeroUsize::new(MAX_EXPR_DEPTH),
-                #[cfg(not(feature = "no_function"))]
-                max_function_expr_depth: NonZeroUsize::new(MAX_FUNCTION_EXPR_DEPTH),
-                max_operations: None,
-                #[cfg(not(feature = "no_module"))]
-                max_modules: usize::MAX,
-                max_string_size: None,
-                #[cfg(not(feature = "no_index"))]
-                max_array_size: None,
-                #[cfg(not(feature = "no_object"))]
-                max_map_size: None,
-            },
-        };
-
-        engine.global_namespace.internal = true;
         engine.register_global_module(StandardPackage::new().as_shared_module());
 
         engine
@@ -1016,8 +979,8 @@ impl Engine {
 
             resolve_var: None,
 
-            print: Box::new(|_| {}),
-            debug: Box::new(|_, _, _| {}),
+            print: None,
+            debug: None,
 
             #[cfg(not(feature = "unchecked"))]
             progress: None,
@@ -1025,21 +988,7 @@ impl Engine {
             optimization_level: Default::default(),
 
             #[cfg(not(feature = "unchecked"))]
-            limits: Limits {
-                #[cfg(not(feature = "no_function"))]
-                max_call_stack_depth: MAX_CALL_STACK_DEPTH,
-                max_expr_depth: NonZeroUsize::new(MAX_EXPR_DEPTH),
-                #[cfg(not(feature = "no_function"))]
-                max_function_expr_depth: NonZeroUsize::new(MAX_FUNCTION_EXPR_DEPTH),
-                max_operations: None,
-                #[cfg(not(feature = "no_module"))]
-                max_modules: usize::MAX,
-                max_string_size: None,
-                #[cfg(not(feature = "no_index"))]
-                max_array_size: None,
-                #[cfg(not(feature = "no_object"))]
-                max_map_size: None,
-            },
+            limits: Default::default(),
         };
 
         engine.global_namespace.internal = true;
@@ -1243,12 +1192,14 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             ChainType::Index => {
                 let pos = rhs.position();
+                let idx_val = idx_val
+                    .as_index_value()
+                    .expect("never fails because `chain_type` is `ChainType::Index`");
 
                 match rhs {
                     // xxx[idx].expr... | xxx[idx][expr]...
                     Expr::Dot(x, x_pos) | Expr::Index(x, x_pos) => {
                         let idx_pos = x.lhs.position();
-                        let idx_val = idx_val.as_index_value();
                         let obj_ptr = &mut self.get_indexed_mut(
                             mods, state, lib, target, idx_val, idx_pos, false, true, level,
                         )?;
@@ -1264,7 +1215,6 @@ impl Engine {
                     _ if new_val.is_some() => {
                         let ((new_val, new_pos), (op_info, op_pos)) =
                             new_val.expect("never fails because `new_val` is `Some`");
-                        let idx_val = idx_val.as_index_value();
                         let mut idx_val_for_setter = idx_val.clone();
 
                         let try_setter = match self.get_indexed_mut(
@@ -1306,13 +1256,9 @@ impl Engine {
                         Ok((Dynamic::UNIT, true))
                     }
                     // xxx[rhs]
-                    _ => {
-                        let idx_val = idx_val.as_index_value();
-                        self.get_indexed_mut(
-                            mods, state, lib, target, idx_val, pos, false, true, level,
-                        )
-                        .map(|v| (v.take_or_clone(), false))
-                    }
+                    _ => self
+                        .get_indexed_mut(mods, state, lib, target, idx_val, pos, false, true, level)
+                        .map(|v| (v.take_or_clone(), false)),
                 }
             }
 
@@ -1322,9 +1268,11 @@ impl Engine {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x, pos) if !x.is_qualified() && new_val.is_none() => {
                         let FnCallExpr { name, hashes, .. } = x.as_ref();
-                        let args = &mut idx_val.as_fn_call_args();
+                        let call_args = &mut idx_val
+                            .as_fn_call_args()
+                            .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
                         self.make_method_call(
-                            mods, state, lib, name, *hashes, target, args, *pos, level,
+                            mods, state, lib, name, *hashes, target, call_args, *pos, level,
                         )
                     }
                     // xxx.fn_name(...) = ???
@@ -1485,9 +1433,11 @@ impl Engine {
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
                             Expr::FnCall(ref x, pos) if !x.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = x.as_ref();
-                                let args = &mut idx_val.as_fn_call_args();
+                                let call_args = &mut idx_val
+                                    .as_fn_call_args()
+                                    .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
                                 let (val, _) = self.make_method_call(
-                                    mods, state, lib, name, *hashes, target, args, pos, level,
+                                    mods, state, lib, name, *hashes, target, call_args, pos, level,
                                 )?;
                                 val.into()
                             }
@@ -1604,7 +1554,9 @@ impl Engine {
                             Expr::FnCall(ref f, pos) if !f.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = f.as_ref();
                                 let rhs_chain = match_chain_type(rhs);
-                                let args = &mut idx_val.as_fn_call_args();
+                                let args = &mut idx_val
+                                    .as_fn_call_args()
+                                    .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
                                 let (mut val, _) = self.make_method_call(
                                     mods, state, lib, name, *hashes, target, args, pos, level,
                                 )?;
@@ -1723,17 +1675,19 @@ impl Engine {
                     args, constants, ..
                 } = x.as_ref();
                 let mut arg_values = StaticVec::with_capacity(args.len());
+                let mut first_arg_pos = Position::NONE;
 
                 for index in 0..args.len() {
-                    let (value, _) = self.get_arg_value(
+                    let (value, pos) = self.get_arg_value(
                         scope, mods, state, lib, this_ptr, level, args, constants, index,
                     )?;
                     arg_values.push(value.flatten());
+                    if index == 0 {
+                        first_arg_pos = pos
+                    }
                 }
 
-                let pos = x.args.get(0).map(Expr::position).unwrap_or_default();
-
-                idx_values.push((arg_values, pos).into());
+                idx_values.push((arg_values, first_arg_pos).into());
             }
             #[cfg(not(feature = "no_object"))]
             Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dot => {
@@ -1765,17 +1719,19 @@ impl Engine {
                             args, constants, ..
                         } = x.as_ref();
                         let mut arg_values = StaticVec::with_capacity(args.len());
+                        let mut first_arg_pos = Position::NONE;
 
                         for index in 0..args.len() {
-                            let (value, _) = self.get_arg_value(
+                            let (value, pos) = self.get_arg_value(
                                 scope, mods, state, lib, this_ptr, level, args, constants, index,
                             )?;
                             arg_values.push(value.flatten());
+                            if index == 0 {
+                                first_arg_pos = pos;
+                            }
                         }
 
-                        let pos = x.args.get(0).map(Expr::position).unwrap_or_default();
-
-                        (arg_values, pos).into()
+                        (arg_values, first_arg_pos).into()
                     }
                     #[cfg(not(feature = "no_object"))]
                     Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dot => {
@@ -2045,8 +2001,8 @@ impl Engine {
             }
 
             // `... ${...} ...`
-            Expr::InterpolatedString(x) => {
-                let mut pos = expr.position();
+            Expr::InterpolatedString(x, pos) => {
+                let mut pos = *pos;
                 let mut result: Dynamic = self.empty_string.clone().into();
 
                 for expr in x.iter() {
@@ -2761,10 +2717,9 @@ impl Engine {
 
                                 err_map.insert("message".into(), err.to_string().into());
 
-                                state
-                                    .source
-                                    .as_ref()
-                                    .map(|source| err_map.insert("source".into(), source.into()));
+                                if let Some(ref source) = state.source {
+                                    err_map.insert("source".into(), source.as_str().into());
+                                }
 
                                 if err_pos.is_none() {
                                     // No position info

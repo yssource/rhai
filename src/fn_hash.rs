@@ -52,6 +52,33 @@ pub fn get_hasher() -> ahash::AHasher {
     Default::default()
 }
 
+/// Calculate a [`u64`] hash key from a namespace-qualified variable name.
+///
+/// Module names are passed in via `&str` references from an iterator.
+/// Parameter types are passed in via [`TypeId`] values from an iterator.
+///
+/// # Note
+///
+/// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
+#[inline]
+#[must_use]
+pub fn calc_qualified_var_hash<'a>(
+    modules: impl Iterator<Item = &'a str>,
+    var_name: impl AsRef<str>,
+) -> u64 {
+    let s = &mut get_hasher();
+
+    // We always skip the first module
+    let mut len = 0;
+    modules
+        .inspect(|_| len += 1)
+        .skip(1)
+        .for_each(|m| m.hash(s));
+    len.hash(s);
+    var_name.as_ref().hash(s);
+    s.finish()
+}
+
 /// Calculate a [`u64`] hash key from a namespace-qualified function name
 /// and the number of parameters, but no parameter types.
 ///
@@ -108,6 +135,6 @@ pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
 /// Combine two [`u64`] hashes by taking the XOR of them.
 #[inline(always)]
 #[must_use]
-pub(crate) fn combine_hashes(a: u64, b: u64) -> u64 {
+pub(crate) const fn combine_hashes(a: u64, b: u64) -> u64 {
     a ^ b
 }

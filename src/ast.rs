@@ -251,20 +251,20 @@ impl AST {
     pub fn source(&self) -> Option<&str> {
         self.source.as_ref().map(|s| s.as_str())
     }
-    /// Clone the source, if any.
+    /// Get a reference to the source.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn clone_source(&self) -> Option<Identifier> {
-        self.source.clone()
+    pub(crate) fn source_raw(&self) -> Option<&Identifier> {
+        self.source.as_ref()
     }
     /// Set the source.
     #[inline(always)]
     pub fn set_source(&mut self, source: impl Into<Identifier>) -> &mut Self {
-        let source = Some(source.into());
+        let source = source.into();
         Shared::get_mut(&mut self.functions)
             .as_mut()
             .map(|m| m.set_id(source.clone()));
-        self.source = source;
+        self.source = Some(source);
         self
     }
     /// Clear the source.
@@ -911,7 +911,7 @@ impl StmtBlock {
     /// Get the position of this statements block.
     #[inline(always)]
     #[must_use]
-    pub fn position(&self) -> Position {
+    pub const fn position(&self) -> Position {
         self.1
     }
     /// Get the statements of this statements block.
@@ -1044,7 +1044,7 @@ impl Stmt {
     /// Is this statement [`Noop`][Stmt::Noop]?
     #[inline(always)]
     #[must_use]
-    pub fn is_noop(&self) -> bool {
+    pub const fn is_noop(&self) -> bool {
         match self {
             Self::Noop(_) => true,
             _ => false,
@@ -1052,7 +1052,7 @@ impl Stmt {
     }
     /// Get the [position][Position] of this statement.
     #[must_use]
-    pub fn position(&self) -> Position {
+    pub const fn position(&self) -> Position {
         match self {
             Self::Noop(pos)
             | Self::Continue(pos)
@@ -1117,7 +1117,7 @@ impl Stmt {
     }
     /// Does this statement return a value?
     #[must_use]
-    pub fn returns_value(&self) -> bool {
+    pub const fn returns_value(&self) -> bool {
         match self {
             Self::If(_, _, _)
             | Self::Switch(_, _, _)
@@ -1142,12 +1142,12 @@ impl Stmt {
             Self::Import(_, _, _) | Self::Export(_, _) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => unreachable!("Stmt::Share should not be parsed"),
+            Self::Share(_) => false,
         }
     }
     /// Is this statement self-terminated (i.e. no need for a semicolon terminator)?
     #[must_use]
-    pub fn is_self_terminated(&self) -> bool {
+    pub const fn is_self_terminated(&self) -> bool {
         match self {
             Self::If(_, _, _)
             | Self::Switch(_, _, _)
@@ -1173,7 +1173,7 @@ impl Stmt {
             Self::Import(_, _, _) | Self::Export(_, _) => false,
 
             #[cfg(not(feature = "no_closure"))]
-            Self::Share(_) => unreachable!("Stmt::Share should not be parsed"),
+            Self::Share(_) => false,
         }
     }
     /// Is this statement _pure_?
@@ -1247,7 +1247,7 @@ impl Stmt {
     /// All statements following this statement will essentially be dead code.
     #[inline(always)]
     #[must_use]
-    pub fn is_control_flow_break(&self) -> bool {
+    pub const fn is_control_flow_break(&self) -> bool {
         match self {
             Self::Return(_, _, _) | Self::Break(_) | Self::Continue(_) => true,
             _ => false,
@@ -1512,7 +1512,7 @@ impl FnCallHashes {
     /// Create a [`FnCallHashes`] with only the native Rust hash.
     #[inline(always)]
     #[must_use]
-    pub fn from_native(hash: u64) -> Self {
+    pub const fn from_native(hash: u64) -> Self {
         Self {
             script: None,
             native: hash,
@@ -1521,7 +1521,7 @@ impl FnCallHashes {
     /// Create a [`FnCallHashes`] with both native Rust and script function hashes set to the same value.
     #[inline(always)]
     #[must_use]
-    pub fn from_script(hash: u64) -> Self {
+    pub const fn from_script(hash: u64) -> Self {
         Self {
             script: Some(hash),
             native: hash,
@@ -1530,7 +1530,7 @@ impl FnCallHashes {
     /// Create a [`FnCallHashes`] with both native Rust and script function hashes.
     #[inline(always)]
     #[must_use]
-    pub fn from_script_and_native(script: u64, native: u64) -> Self {
+    pub const fn from_script_and_native(script: u64, native: u64) -> Self {
         Self {
             script: Some(script),
             native,
@@ -1539,7 +1539,7 @@ impl FnCallHashes {
     /// Is this [`FnCallHashes`] native Rust only?
     #[inline(always)]
     #[must_use]
-    pub fn is_native_only(&self) -> bool {
+    pub const fn is_native_only(&self) -> bool {
         self.script.is_none()
     }
 }
@@ -1570,7 +1570,7 @@ impl FnCallExpr {
     /// Does this function call contain a qualified namespace?
     #[inline(always)]
     #[must_use]
-    pub fn is_qualified(&self) -> bool {
+    pub const fn is_qualified(&self) -> bool {
         self.namespace.is_some()
     }
     /// Convert this into a [`FnCall`][Expr::FnCall].
@@ -1683,6 +1683,7 @@ impl<F: Float> FloatWrapper<F> {
     /// Minimum floating-point number for natural display before switching to scientific notation.
     pub const MIN_NATURAL_FLOAT_FOR_DISPLAY: f32 = 0.0000000000001;
 
+    /// Create a new [`FloatWrapper`].
     #[inline(always)]
     #[must_use]
     pub fn new(value: F) -> Self {
@@ -1692,6 +1693,7 @@ impl<F: Float> FloatWrapper<F> {
 
 #[cfg(not(feature = "no_float"))]
 impl FloatWrapper<FLOAT> {
+    /// Create a new [`FloatWrapper`].
     #[inline(always)]
     #[must_use]
     pub(crate) const fn const_new(value: FLOAT) -> Self {
@@ -1725,7 +1727,7 @@ pub enum Expr {
     /// [String][ImmutableString] constant.
     StringConstant(ImmutableString, Position),
     /// An interpolated [string][ImmutableString].
-    InterpolatedString(Box<StaticVec<Expr>>),
+    InterpolatedString(Box<StaticVec<Expr>>, Position),
     /// [ expr, ... ]
     Array(Box<StaticVec<Expr>>, Position),
     /// #{ name:expr, ... }
@@ -1796,7 +1798,7 @@ impl fmt::Debug for Expr {
             Self::StringConstant(value, _) => write!(f, "{:?}", value),
             Self::Unit(_) => f.write_str("()"),
 
-            Self::InterpolatedString(x) => {
+            Self::InterpolatedString(x, _) => {
                 f.write_str("InterpolatedString")?;
                 return f.debug_list().entries(x.iter()).finish();
             }
@@ -1922,13 +1924,13 @@ impl Expr {
             #[cfg(not(feature = "no_float"))]
             Union::Float(f, _, _) => Self::FloatConstant(f, pos),
 
-            _ => Self::DynamicConstant(Box::new(value), pos),
+            _ => Self::DynamicConstant(value.into(), pos),
         }
     }
     /// Is the expression a simple variable access?
     #[inline(always)]
     #[must_use]
-    pub(crate) fn is_variable_access(&self, non_qualified: bool) -> bool {
+    pub(crate) const fn is_variable_access(&self, non_qualified: bool) -> bool {
         match self {
             Self::Variable(_, _, x) => !non_qualified || x.1.is_none(),
             _ => false,
@@ -1946,7 +1948,7 @@ impl Expr {
     /// Get the [position][Position] of the expression.
     #[inline]
     #[must_use]
-    pub fn position(&self) -> Position {
+    pub const fn position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_float"))]
             Self::FloatConstant(_, pos) => *pos,
@@ -1962,14 +1964,8 @@ impl Expr {
             | Self::Variable(_, pos, _)
             | Self::Stack(_, pos)
             | Self::FnCall(_, pos)
-            | Self::Custom(_, pos) => *pos,
-
-            Self::InterpolatedString(x) => x
-                .first()
-                .expect(
-                    "never fails because an interpolated string always contains at least one item",
-                )
-                .position(),
+            | Self::Custom(_, pos)
+            | Self::InterpolatedString(_, pos) => *pos,
 
             Self::Property(x) => (x.2).1,
             Self::Stmt(x) => x.1,
@@ -2001,13 +1997,8 @@ impl Expr {
             | Self::Variable(_, pos, _)
             | Self::Stack(_, pos)
             | Self::FnCall(_, pos)
-            | Self::Custom(_, pos) => *pos = new_pos,
-
-            Self::InterpolatedString(x) => {
-                x.first_mut()
-                    .expect("never fails because an interpolated string always contains at least one item")
-                    .set_position(new_pos);
-            }
+            | Self::Custom(_, pos)
+            | Self::InterpolatedString(_, pos) => *pos = new_pos,
 
             Self::Property(x) => (x.2).1 = new_pos,
             Self::Stmt(x) => x.1 = new_pos,
@@ -2022,7 +2013,7 @@ impl Expr {
     #[must_use]
     pub fn is_pure(&self) -> bool {
         match self {
-            Self::InterpolatedString(x) | Self::Array(x, _) => x.iter().all(Self::is_pure),
+            Self::InterpolatedString(x, _) | Self::Array(x, _) => x.iter().all(Self::is_pure),
 
             Self::Map(x, _) => x.0.iter().map(|(_, v)| v).all(Self::is_pure),
 
@@ -2038,7 +2029,7 @@ impl Expr {
     /// Is the expression the unit `()` literal?
     #[inline(always)]
     #[must_use]
-    pub fn is_unit(&self) -> bool {
+    pub const fn is_unit(&self) -> bool {
         match self {
             Self::Unit(_) => true,
             _ => false,
@@ -2060,7 +2051,7 @@ impl Expr {
             | Self::Unit(_)
             | Self::Stack(_, _) => true,
 
-            Self::InterpolatedString(x) | Self::Array(x, _) => x.iter().all(Self::is_constant),
+            Self::InterpolatedString(x, _) | Self::Array(x, _) => x.iter().all(Self::is_constant),
 
             Self::Map(x, _) => x.0.iter().map(|(_, expr)| expr).all(Self::is_constant),
 
@@ -2070,7 +2061,7 @@ impl Expr {
     /// Is a particular [token][Token] allowed as a postfix operator to this expression?
     #[inline]
     #[must_use]
-    pub fn is_valid_postfix(&self, token: &Token) -> bool {
+    pub const fn is_valid_postfix(&self, token: &Token) -> bool {
         match token {
             #[cfg(not(feature = "no_object"))]
             Token::Period => return true,
@@ -2090,7 +2081,7 @@ impl Expr {
 
             Self::IntegerConstant(_, _)
             | Self::StringConstant(_, _)
-            | Self::InterpolatedString(_)
+            | Self::InterpolatedString(_, _)
             | Self::FnCall(_, _)
             | Self::Stmt(_)
             | Self::Dot(_, _)
@@ -2120,7 +2111,7 @@ impl Expr {
 
             Self::Custom(_, _) => false,
 
-            Self::Stack(_, _) => unreachable!("Expr::Stack should not occur naturally"),
+            Self::Stack(_, _) => false,
         }
     }
     /// Recursively walk this expression.
@@ -2145,7 +2136,7 @@ impl Expr {
                     }
                 }
             }
-            Self::InterpolatedString(x) | Self::Array(x, _) => {
+            Self::InterpolatedString(x, _) | Self::Array(x, _) => {
                 for e in x.as_ref() {
                     if !e.walk(path, on_node) {
                         return false;
@@ -2215,7 +2206,7 @@ mod tests {
                 96
             }
         );
-        assert_eq!(size_of::<Scope>(), 160);
+        assert_eq!(size_of::<Scope>(), 464);
         assert_eq!(size_of::<LexError>(), 56);
         assert_eq!(
             size_of::<ParseError>(),

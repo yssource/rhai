@@ -89,7 +89,7 @@ impl<'a> NativeCallContext<'a> {
     /// Create a new [`NativeCallContext`].
     #[inline(always)]
     #[must_use]
-    pub fn new(engine: &'a Engine, fn_name: &'a str, lib: &'a [&Module]) -> Self {
+    pub const fn new(engine: &'a Engine, fn_name: &'a str, lib: &'a [&Module]) -> Self {
         Self {
             engine,
             fn_name,
@@ -106,17 +106,17 @@ impl<'a> NativeCallContext<'a> {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[must_use]
-    pub fn new_with_all_fields(
+    pub const fn new_with_all_fields(
         engine: &'a Engine,
         fn_name: &'a str,
-        source: &'a Option<&str>,
+        source: Option<&'a str>,
         imports: &'a Imports,
         lib: &'a [&Module],
     ) -> Self {
         Self {
             engine,
             fn_name,
-            source: source.clone(),
+            source,
             mods: Some(imports),
             lib,
         }
@@ -124,19 +124,19 @@ impl<'a> NativeCallContext<'a> {
     /// The current [`Engine`].
     #[inline(always)]
     #[must_use]
-    pub fn engine(&self) -> &Engine {
+    pub const fn engine(&self) -> &Engine {
         self.engine
     }
     /// Name of the function called.
     #[inline(always)]
     #[must_use]
-    pub fn fn_name(&self) -> &str {
+    pub const fn fn_name(&self) -> &str {
         self.fn_name
     }
     /// The current source.
     #[inline(always)]
     #[must_use]
-    pub fn source(&self) -> Option<&str> {
+    pub const fn source(&self) -> Option<&str> {
         self.source
     }
     /// Get an iterator over the current set of modules imported via `import` statements.
@@ -166,7 +166,7 @@ impl<'a> NativeCallContext<'a> {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[must_use]
-    pub fn imports(&self) -> Option<&Imports> {
+    pub const fn imports(&self) -> Option<&Imports> {
         self.mods
     }
     /// Get an iterator over the namespaces containing definitions of all script-defined functions.
@@ -180,7 +180,7 @@ impl<'a> NativeCallContext<'a> {
     #[cfg(feature = "internals")]
     #[inline(always)]
     #[must_use]
-    pub fn namespaces(&self) -> &[&Module] {
+    pub const fn namespaces(&self) -> &[&Module] {
         self.lib
     }
     /// Call a function inside the call context.
@@ -457,74 +457,51 @@ impl CallableFunction {
         }
     }
     /// Get a shared reference to a native Rust function.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the [`CallableFunction`] is not [`Pure`][CallableFunction::Pure] or
-    /// [`Method`][CallableFunction::Method].
     #[inline(always)]
     #[must_use]
-    pub fn get_native_fn(&self) -> &Shared<FnAny> {
+    pub fn get_native_fn(&self) -> Option<&Shared<FnAny>> {
         match self {
-            Self::Pure(f) | Self::Method(f) => f,
-            Self::Iterator(_) | Self::Plugin(_) => panic!("function should be native"),
+            Self::Pure(f) | Self::Method(f) => Some(f),
+            Self::Iterator(_) | Self::Plugin(_) => None,
 
             #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => panic!("function should be native"),
+            Self::Script(_) => None,
         }
     }
     /// Get a shared reference to a script-defined function definition.
     ///
     /// Not available under `no_function`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the [`CallableFunction`] is not [`Script`][CallableFunction::Script].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     #[must_use]
-    pub fn get_fn_def(&self) -> &Shared<crate::ast::ScriptFnDef> {
+    pub const fn get_script_fn_def(&self) -> Option<&Shared<crate::ast::ScriptFnDef>> {
         match self {
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => {
-                panic!("function should be scripted")
-            }
-            Self::Script(f) => f,
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) | Self::Plugin(_) => None,
+            Self::Script(f) => Some(f),
         }
     }
     /// Get a reference to an iterator function.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the [`CallableFunction`] is not [`Iterator`][CallableFunction::Iterator].
     #[inline(always)]
     #[must_use]
-    pub fn get_iter_fn(&self) -> IteratorFn {
+    pub fn get_iter_fn(&self) -> Option<IteratorFn> {
         match self {
-            Self::Iterator(f) => *f,
-            Self::Pure(_) | Self::Method(_) | Self::Plugin(_) => {
-                panic!("function should an iterator")
-            }
+            Self::Iterator(f) => Some(*f),
+            Self::Pure(_) | Self::Method(_) | Self::Plugin(_) => None,
 
             #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => panic!("function should be an iterator"),
+            Self::Script(_) => None,
         }
     }
     /// Get a shared reference to a plugin function.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the [`CallableFunction`] is not [`Plugin`][CallableFunction::Plugin].
     #[inline(always)]
     #[must_use]
-    pub fn get_plugin_fn<'s>(&'s self) -> &Shared<FnPlugin> {
+    pub fn get_plugin_fn<'s>(&'s self) -> Option<&Shared<FnPlugin>> {
         match self {
-            Self::Plugin(f) => f,
-            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => {
-                panic!("function should a plugin")
-            }
+            Self::Plugin(f) => Some(f),
+            Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => None,
 
             #[cfg(not(feature = "no_function"))]
-            Self::Script(_) => panic!("function should a plugin"),
+            Self::Script(_) => None,
         }
     }
     /// Create a new [`CallableFunction::Pure`].

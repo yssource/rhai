@@ -61,14 +61,14 @@ struct State<'a> {
 impl<'a> State<'a> {
     /// Create a new State.
     #[inline(always)]
-    pub fn new(
+    pub const fn new(
         engine: &'a Engine,
         lib: &'a [&'a Module],
         optimization_level: OptimizationLevel,
     ) -> Self {
         Self {
             changed: false,
-            variables: vec![],
+            variables: Vec::new(),
             propagate_constants: true,
             engine,
             lib,
@@ -87,7 +87,7 @@ impl<'a> State<'a> {
     }
     /// Is the [`AST`] dirty (i.e. changed)?
     #[inline(always)]
-    pub fn is_dirty(&self) -> bool {
+    pub const fn is_dirty(&self) -> bool {
         self.changed
     }
     /// Prune the list of constants back to a specified size.
@@ -297,8 +297,14 @@ fn optimize_stmt_block(
                             Stmt::Noop(pos)
                         };
                     }
+                    // { ...; stmt; noop } -> done
                     [.., ref second_last_stmt, Stmt::Noop(_)]
-                        if second_last_stmt.returns_value() => {}
+                        if second_last_stmt.returns_value() =>
+                    {
+                        break
+                    }
+                    // { ...; stmt_that_returns; pure_non_value_stmt } -> { ...; stmt_that_returns; noop }
+                    // { ...; stmt; pure_non_value_stmt } -> { ...; stmt }
                     [.., ref second_last_stmt, ref last_stmt]
                         if !last_stmt.returns_value() && is_pure(last_stmt) =>
                     {
@@ -413,7 +419,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
 
             *stmt = if preserve_result {
                 // -> { expr, Noop }
-                Stmt::Block(Box::new([Stmt::Expr(expr), Stmt::Noop(pos)]), pos)
+                Stmt::Block([Stmt::Expr(expr), Stmt::Noop(pos)].into(), pos)
             } else {
                 // -> expr
                 Stmt::Expr(expr)
@@ -787,17 +793,17 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
         #[cfg(not(feature = "no_index"))]
         Expr::Index(x, _) => { optimize_expr(&mut x.lhs, state, false); optimize_expr(&mut x.rhs, state, _chaining); }
         // ``
-        Expr::InterpolatedString(x) if x.is_empty() => {
+        Expr::InterpolatedString(x, pos) if x.is_empty() => {
             state.set_dirty();
-            *expr = Expr::StringConstant(state.engine.empty_string.clone(), Position::NONE);
+            *expr = Expr::StringConstant(state.engine.empty_string.clone(), *pos);
         }
         // `...`
-        Expr::InterpolatedString(x) if x.len() == 1 && matches!(x[0], Expr::StringConstant(_, _)) => {
+        Expr::InterpolatedString(x, _) if x.len() == 1 && matches!(x[0], Expr::StringConstant(_, _)) => {
             state.set_dirty();
             *expr = mem::take(&mut x[0]);
         }
         // `... ${ ... } ...`
-        Expr::InterpolatedString(x) => {
+        Expr::InterpolatedString(x, _) => {
             let mut n = 0;
 
             // Merge consecutive strings
@@ -843,7 +849,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
         #[cfg(not(feature = "no_index"))]
         Expr::Array(_, _) if expr.is_constant() => {
             state.set_dirty();
-            *expr = Expr::DynamicConstant(Box::new(expr.get_literal_value().unwrap()), expr.position());
+            *expr = Expr::DynamicConstant(expr.get_literal_value().unwrap().into(), expr.position());
         }
         // [ items .. ]
         #[cfg(not(feature = "no_index"))]
@@ -852,7 +858,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
         #[cfg(not(feature = "no_object"))]
         Expr::Map(_, _) if expr.is_constant() => {
             state.set_dirty();
-            *expr = Expr::DynamicConstant(Box::new(expr.get_literal_value().unwrap()), expr.position());
+            *expr = Expr::DynamicConstant(expr.get_literal_value().unwrap().into(), expr.position());
         }
         // #{ key:value, .. }
         #[cfg(not(feature = "no_object"))]

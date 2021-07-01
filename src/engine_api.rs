@@ -903,14 +903,6 @@ impl Engine {
         self.global_modules.insert(0, module);
         self
     }
-    /// Register a shared [`Module`] into the global namespace of [`Engine`].
-    /// This function is deprecated and will be removed in the future.
-    /// Use [`register_global_module`][Engine::register_global_module] instead.
-    #[inline(always)]
-    #[deprecated(since = "0.19.9", note = "use `register_global_module` instead")]
-    pub fn load_package(&mut self, module: impl Into<Shared<Module>>) -> &mut Self {
-        self.register_global_module(module.into())
-    }
     /// Register a shared [`Module`] as a static module namespace with the [`Engine`].
     ///
     /// Functions marked [`FnNamespace::Global`] and type iterators are exposed to scripts without
@@ -999,19 +991,6 @@ impl Engine {
         self
     }
 
-    /// Register a shared [`Module`] as a static module namespace with the [`Engine`].
-    /// This function is deprecated and will be removed in the future.
-    /// Use [`register_static_module`][Engine::register_static_module] instead.
-    #[cfg(not(feature = "no_module"))]
-    #[inline(always)]
-    #[deprecated(since = "0.19.9", note = "use `register_static_module` instead")]
-    pub fn register_module(
-        &mut self,
-        name: impl AsRef<str> + Into<Identifier>,
-        module: impl Into<Shared<Module>>,
-    ) -> &mut Self {
-        self.register_static_module(name, module.into())
-    }
     /// Compile a string into an [`AST`], which can be used later for evaluation.
     ///
     /// # Example
@@ -1335,7 +1314,8 @@ impl Engine {
         Self::read_file(path).and_then(|contents| Ok(self.compile_with_scope(scope, &contents)?))
     }
     /// Parse a JSON string into an [object map][`Map`].
-    /// This is a light-weight alternative to using, say, [`serde_json`] to deserialize the JSON.
+    /// This is a light-weight alternative to using, say,
+    /// [`serde_json`](https://crates.io/crates/serde_json) to deserialize the JSON.
     ///
     /// Not available under `no_object`.
     ///
@@ -1770,7 +1750,7 @@ impl Engine {
         level: usize,
     ) -> RhaiResult {
         let mut state: State = Default::default();
-        state.source = ast.clone_source();
+        state.source = ast.source_raw().cloned();
         #[cfg(not(feature = "no_module"))]
         {
             state.resolver = ast.resolver();
@@ -1852,7 +1832,7 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         let mods = &mut Default::default();
         let mut state: State = Default::default();
-        state.source = ast.clone_source();
+        state.source = ast.source_raw().cloned();
         #[cfg(not(feature = "no_module"))]
         {
             state.resolver = ast.resolver();
@@ -2084,7 +2064,12 @@ impl Engine {
             .lib()
             .iter_fn()
             .filter(|f| f.func.is_script())
-            .map(|f| f.func.get_fn_def().clone())
+            .map(|f| {
+                f.func
+                    .get_script_fn_def()
+                    .expect("never fails because the function is scripted")
+                    .clone()
+            })
             .collect();
 
         #[cfg(feature = "no_function")]
@@ -2234,7 +2219,7 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn on_print(&mut self, callback: impl Fn(&str) + SendSync + 'static) -> &mut Self {
-        self.print = Box::new(callback);
+        self.print = Some(Box::new(callback));
         self
     }
     /// Override default action of `debug` (print to stdout using [`println!`])
@@ -2273,7 +2258,7 @@ impl Engine {
         &mut self,
         callback: impl Fn(&str, Option<&str>, Position) + SendSync + 'static,
     ) -> &mut Self {
-        self.debug = Box::new(callback);
+        self.debug = Some(Box::new(callback));
         self
     }
 }
