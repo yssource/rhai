@@ -12,6 +12,7 @@ Bug fixes
 ---------
 
 * Fixed infinite loop in certain script optimizations.
+* Building for `no-std` no longer requires patching `smartstring`.
 
 Breaking changes
 ----------------

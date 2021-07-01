@@ -23,20 +23,6 @@ opt-level = "z"             # optimize for size
 debug = false
 rpath = false
 debug-assertions = false
-codegen-units = 1
 panic = "abort"
-
-[profile.unix]
-inherits = "release"
+codegen-units = 1
 lto = true
-
-[profile.windows]
-inherits = "release"
-
-[profile.macos]
-inherits = "release"
-lto = "fat"
-
-[patch.crates-io]
-# Patch smartstring wth a PR fix because it doesn't properly handle no-std builds.
-smartstring = { git = "https://github.com/rhaiscript/smartstring" }
