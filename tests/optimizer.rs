@@ -7,6 +7,7 @@ fn test_optimizer() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
     engine.set_optimization_level(OptimizationLevel::Full);
 
+    #[cfg(not(feature = "no_function"))]
     assert_eq!(
         engine.eval::<INT>(
             "
