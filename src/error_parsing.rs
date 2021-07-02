@@ -194,12 +194,22 @@ impl fmt::Display for ParseErrorType {
 
             Self::UnknownOperator(s) => write!(f, "Unknown operator: '{}'", s),
 
-            Self::MalformedCallExpr(s) if s.is_empty() => f.write_str("Invalid expression in function call arguments"),
-            Self::MalformedIndexExpr(s) if s.is_empty() => f.write_str("Invalid index in indexing expression"),
-            Self::MalformedInExpr(s) if s.is_empty() => f.write_str("Invalid 'in' expression"),
-            Self::MalformedCapture(s) if s.is_empty() => f.write_str("Invalid capturing"),
-
-            Self::MalformedCallExpr(s) | Self::MalformedIndexExpr(s) | Self::MalformedInExpr(s) | Self::MalformedCapture(s) => f.write_str(s),
+            Self::MalformedCallExpr(s) => match s.as_str() {
+                "" => f.write_str("Invalid expression in function call arguments"),
+                s => f.write_str(s)
+            },
+            Self::MalformedIndexExpr(s) => match s.as_str() {
+                "" => f.write_str("Invalid index in indexing expression"),
+                s => f.write_str(s)
+            },
+            Self::MalformedInExpr(s) => match s.as_str() {
+                "" => f.write_str("Invalid 'in' expression"),
+                s => f.write_str(s)
+            },
+            Self::MalformedCapture(s) => match s.as_str() {
+                "" => f.write_str("Invalid capturing"),
+                s => f.write_str(s)
+            },
 
             Self::FnDuplicatedDefinition(s, n) => {
                 write!(f, "Function '{}' with ", s)?;
@@ -209,12 +219,13 @@ impl fmt::Display for ParseErrorType {
                     _ => write!(f, "{} parameters already exists", n),
                 }
             }
-
-            Self::FnMissingBody(s) if s.is_empty() => f.write_str("Expecting body statement block for anonymous function"),
-            Self::FnMissingBody(s) => write!(f, "Expecting body statement block for function '{}'", s),
-
+            Self::FnMissingBody(s) => match s.as_str() {
+                "" => f.write_str("Expecting body statement block for anonymous function"),
+                s => write!(f, "Expecting body statement block for function '{}'", s)
+            },
             Self::FnMissingParams(s) => write!(f, "Expecting parameters for function '{}'", s),
             Self::FnDuplicatedParam(s, arg) => write!(f, "Duplicated parameter '{}' for function '{}'", arg, s),
+            
             Self::DuplicatedProperty(s) => write!(f, "Duplicated property '{}' for object map literal", s),
             Self::DuplicatedSwitchCase => f.write_str("Duplicated switch case"),
             Self::DuplicatedVariable(s) => write!(f, "Duplicated variable name '{}'", s),
@@ -223,11 +234,14 @@ impl fmt::Display for ParseErrorType {
             Self::MissingToken(token, s) => write!(f, "Expecting '{}' {}", token, s),
             Self::MissingSymbol(s) => f.write_str(s),
 
-            Self::AssignmentToConstant(s) if s.is_empty() => f.write_str("Cannot assign to a constant value"),
-            Self::AssignmentToConstant(s) => write!(f, "Cannot assign to constant '{}'", s),
-
-            Self::AssignmentToInvalidLHS(s) if s.is_empty() => f.write_str("Expression cannot be assigned to"),
-            Self::AssignmentToInvalidLHS(s) => f.write_str(s),
+            Self::AssignmentToConstant(s) => match s.as_str() {
+                "" => f.write_str("Cannot assign to a constant value"),
+                s => write!(f, "Cannot assign to constant '{}'", s)
+            },
+            Self::AssignmentToInvalidLHS(s) => match s.as_str() {
+                "" => f.write_str("Expression cannot be assigned to"),
+                s => f.write_str(s)
+            },
 
             Self::LiteralTooLarge(typ, max) => write!(f, "{} exceeds the maximum limit ({})", typ, max),
             Self::Reserved(s) => write!(f, "'{}' is a reserved keyword", s),
