@@ -125,6 +125,9 @@ pub enum ParseErrorType {
     VariableExpected,
     /// An identifier is a reserved keyword.
     Reserved(String),
+    /// An expression is of the wrong type.
+    /// Wrapped values are the type requested and type of the actual result. 
+    MismatchedType(String, String),
     /// Missing an expression. Wrapped value is the expression type.
     ExprExpected(String),
     /// Defining a doc-comment in an appropriate place (e.g. not at global level).
@@ -230,6 +233,7 @@ impl fmt::Display for ParseErrorType {
             Self::DuplicatedSwitchCase => f.write_str("Duplicated switch case"),
             Self::DuplicatedVariable(s) => write!(f, "Duplicated variable name '{}'", s),
 
+            Self::MismatchedType(r, a) => write!(f, "Expecting {}, not {}", r, a),
             Self::ExprExpected(s) => write!(f, "Expecting {} expression", s),
             Self::MissingToken(token, s) => write!(f, "Expecting '{}' {}", token, s),
             Self::MissingSymbol(s) => f.write_str(s),

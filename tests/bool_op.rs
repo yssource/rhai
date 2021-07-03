@@ -25,9 +25,9 @@ fn test_bool_op3() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert!(engine.eval::<bool>("true && (false || 123)").is_err());
-    assert_eq!(engine.eval::<bool>("true && (true || 123)")?, true);
+    assert_eq!(engine.eval::<bool>("true && (true || { throw })")?, true);
     assert!(engine.eval::<bool>("123 && (false || true)").is_err());
-    assert_eq!(engine.eval::<bool>("false && (true || 123)")?, false);
+    assert_eq!(engine.eval::<bool>("false && (true || { throw })")?, false);
 
     Ok(())
 }

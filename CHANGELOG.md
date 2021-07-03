@@ -13,6 +13,7 @@ Bug fixes
 
 * Fixed infinite loop in certain script optimizations.
 * Building for `no-std` no longer requires patching `smartstring`.
+* Parsing a lone `return` or `throw` without a semicolon at the end of a block no longer raises an error.
 
 Breaking changes
 ----------------

@@ -281,6 +281,47 @@ impl Expr {
             _ => self,
         }
     }
+    /// Raise an error if the expression can never yield a boolean value.
+    fn ensure_bool_expr(self) -> Result<Expr, ParseError> {
+        let type_name = match self {
+            Expr::Unit(_) => "()",
+            Expr::DynamicConstant(ref v, _) if !v.is::<bool>() => v.type_name(),
+            Expr::IntegerConstant(_, _) => "a number",
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(_, _) => "a floating-point number",
+            Expr::CharConstant(_, _) => "a character",
+            Expr::StringConstant(_, _) => "a string",
+            Expr::InterpolatedString(_, _) => "a string",
+            Expr::Array(_, _) => "an array",
+            Expr::Map(_, _) => "an object map",
+            _ => return Ok(self),
+        };
+
+        Err(
+            PERR::MismatchedType("a boolean expression".to_string(), type_name.to_string())
+                .into_err(self.position()),
+        )
+    }
+    /// Raise an error if the expression can never yield an iterable value.
+    fn ensure_iterable(self) -> Result<Expr, ParseError> {
+        let type_name = match self {
+            Expr::Unit(_) => "()",
+            Expr::BoolConstant(_, _) => "a boolean",
+            Expr::IntegerConstant(_, _) => "a number",
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(_, _) => "a floating-point number",
+            Expr::CharConstant(_, _) => "a character",
+            Expr::StringConstant(_, _) => "a string",
+            Expr::InterpolatedString(_, _) => "a string",
+            Expr::Map(_, _) => "an object map",
+            _ => return Ok(self),
+        };
+
+        Err(
+            PERR::MismatchedType("an iterable value".to_string(), type_name.to_string())
+                .into_err(self.position()),
+        )
+    }
 }
 
 /// Consume a particular [token][Token], checking that it is the expected one.
@@ -1816,8 +1857,8 @@ fn parse_binary_op(
                     .expect("never fails because `||` has two arguments");
                 Expr::Or(
                     BinaryExpr {
-                        lhs: current_lhs,
-                        rhs,
+                        lhs: current_lhs.ensure_bool_expr()?,
+                        rhs: rhs.ensure_bool_expr()?,
                     }
                     .into(),
                     pos,
@@ -1832,8 +1873,8 @@ fn parse_binary_op(
                     .expect("never fails because `&&` has two arguments");
                 Expr::And(
                     BinaryExpr {
-                        lhs: current_lhs,
-                        rhs,
+                        lhs: current_lhs.ensure_bool_expr()?,
+                        rhs: rhs.ensure_bool_expr()?,
                     }
                     .into(),
                     pos,
@@ -1896,10 +1937,9 @@ fn parse_custom_syntax(
     let mut tokens: StaticVec<_> = Default::default();
 
     // Adjust the variables stack
-    if syntax.scope_changed {
-        // Add an empty variable name to the stack.
-        // Empty variable names act as a barrier so earlier variables will not be matched.
-        // Variable searches stop at the first empty variable name.
+    if syntax.scope_may_be_changed {
+        // Add a barrier variable to the stack so earlier variables will not be matched.
+        // Variable searches stop at the first barrier.
         let empty = state.get_identifier(SCOPE_SEARCH_BARRIER_MARKER);
         state.stack.push((empty, AccessMode::ReadWrite));
     }
@@ -2017,12 +2057,15 @@ fn parse_custom_syntax(
     keywords.shrink_to_fit();
     tokens.shrink_to_fit();
 
-    Ok(CustomExpr {
-        keywords,
-        tokens,
-        scope_changed: syntax.scope_changed,
-    }
-    .into_custom_syntax_expr(pos))
+    Ok(Expr::Custom(
+        CustomExpr {
+            keywords,
+            tokens,
+            scope_may_be_changed: syntax.scope_may_be_changed,
+        }
+        .into(),
+        pos,
+    ))
 }
 
 /// Parse an expression.
@@ -2125,7 +2168,7 @@ fn parse_if(
 
     // if guard { if_body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let guard = parse_expr(input, state, lib, settings.level_up())?;
+    let guard = parse_expr(input, state, lib, settings.level_up())?.ensure_bool_expr()?;
     ensure_not_assignment(input)?;
     let if_body = parse_block(input, state, lib, settings.level_up())?;
 
@@ -2163,7 +2206,7 @@ fn parse_while_loop(
     let (guard, token_pos) = match input.next().expect(NEVER_ENDS) {
         (Token::While, pos) => {
             ensure_not_statement_expr(input, "a boolean")?;
-            let expr = parse_expr(input, state, lib, settings.level_up())?;
+            let expr = parse_expr(input, state, lib, settings.level_up())?.ensure_bool_expr()?;
             (expr, pos)
         }
         (Token::Loop, pos) => (Expr::Unit(Position::NONE), pos),
@@ -2208,7 +2251,7 @@ fn parse_do(
 
     ensure_not_statement_expr(input, "a boolean")?;
     settings.is_breakable = false;
-    let guard = parse_expr(input, state, lib, settings.level_up())?;
+    let guard = parse_expr(input, state, lib, settings.level_up())?.ensure_bool_expr()?;
     ensure_not_assignment(input)?;
 
     Ok(Stmt::Do(
@@ -2279,7 +2322,7 @@ fn parse_for(
 
     // for name in expr { body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let expr = parse_expr(input, state, lib, settings.level_up())?;
+    let expr = parse_expr(input, state, lib, settings.level_up())?.ensure_iterable()?;
 
     let prev_stack_len = state.stack.len();
 
@@ -2758,6 +2801,10 @@ fn parse_stmt(
             match input.peek().expect(NEVER_ENDS) {
                 // `return`/`throw` at <EOF>
                 (Token::EOF, _) => Ok(Stmt::Return(return_type, None, token_pos)),
+                // `return`/`throw` at end of block
+                (Token::RightBrace, _) if !settings.is_global => {
+                    Ok(Stmt::Return(return_type, None, token_pos))
+                }
                 // `return;` or `throw;`
                 (Token::SemiColon, _) => Ok(Stmt::Return(return_type, None, token_pos)),
                 // `return` or `throw` with expression
