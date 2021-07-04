@@ -1394,7 +1394,7 @@ pub struct CustomExpr {
     /// List of keywords.
     pub keywords: StaticVec<Expr>,
     /// Is the current [`Scope`][crate::Scope] modified?
-    pub scope_changed: bool,
+    pub scope_may_be_changed: bool,
     /// List of tokens actually parsed.
     pub tokens: StaticVec<Identifier>,
 }

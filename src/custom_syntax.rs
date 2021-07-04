@@ -156,19 +156,19 @@ pub struct CustomSyntax {
     /// Custom syntax implementation function.
     pub func: Shared<FnCustomSyntaxEval>,
     /// Any variables added/removed in the scope?
-    pub scope_changed: bool,
+    pub scope_may_be_changed: bool,
 }
 
 impl Engine {
     /// Register a custom syntax with the [`Engine`].
     ///
     /// * `keywords` holds a slice of strings that define the custom syntax.  
-    /// * `scope_changed` specifies variables have been added/removed by this custom syntax.
+    /// * `scope_may_be_changed` specifies variables have been added/removed by this custom syntax.
     /// * `func` is the implementation function.
     ///
     /// # Caveat - Do not change beyond block scope
     ///
-    /// If `scope_changed` is `true`, then the current [`Scope`][crate::Scope] is assumed to be
+    /// If `scope_may_be_changed` is `true`, then the current [`Scope`][crate::Scope] is assumed to be
     /// modified by this custom syntax.
     ///
     /// Adding new variables and/or removing variables are allowed. Simply modifying the values of
@@ -182,7 +182,7 @@ impl Engine {
     pub fn register_custom_syntax<S: AsRef<str> + Into<Identifier>>(
         &mut self,
         keywords: &[S],
-        scope_changed: bool,
+        scope_may_be_changed: bool,
         func: impl Fn(&mut EvalContext, &[Expression]) -> RhaiResult + SendSync + 'static,
     ) -> Result<&mut Self, ParseError> {
         let keywords = keywords.as_ref();
@@ -289,7 +289,7 @@ impl Engine {
                     Ok(Some(segments[stream.len()].clone()))
                 }
             },
-            scope_changed,
+            scope_may_be_changed,
             func,
         );
 
@@ -301,7 +301,7 @@ impl Engine {
     ///
     /// This function is very low level.
     ///
-    /// * `scope_changed` specifies variables have been added/removed by this custom syntax.
+    /// * `scope_may_be_changed` specifies variables have been added/removed by this custom syntax.
     /// * `parse` is the parsing function.
     /// * `func` is the implementation function.
     ///
@@ -313,7 +313,7 @@ impl Engine {
         parse: impl Fn(&[ImmutableString], &str) -> Result<Option<ImmutableString>, ParseError>
             + SendSync
             + 'static,
-        scope_changed: bool,
+        scope_may_be_changed: bool,
         func: impl Fn(&mut EvalContext, &[Expression]) -> RhaiResult + SendSync + 'static,
     ) -> &mut Self {
         self.custom_syntax.insert(
@@ -321,7 +321,7 @@ impl Engine {
             CustomSyntax {
                 parse: Box::new(parse),
                 func: (Box::new(func) as Box<FnCustomSyntaxEval>).into(),
-                scope_changed,
+                scope_may_be_changed,
             }
             .into(),
         );

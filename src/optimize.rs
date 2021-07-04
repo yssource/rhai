@@ -1051,7 +1051,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
 
         // Custom syntax
         Expr::Custom(x, _) => {
-            if x.scope_changed {
+            if x.scope_may_be_changed {
                 state.propagate_constants = false;
             }
             x.keywords.iter_mut().for_each(|expr| optimize_expr(expr, state, false));
