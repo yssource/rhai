@@ -1399,15 +1399,6 @@ pub struct CustomExpr {
     pub tokens: StaticVec<Identifier>,
 }
 
-impl CustomExpr {
-    /// Convert this into a [`Expr::Custom`].
-    #[inline(always)]
-    #[must_use]
-    pub fn into_custom_syntax_expr(self, pos: Position) -> Expr {
-        Expr::Custom(self.into(), pos)
-    }
-}
-
 /// _(INTERNALS)_ A binary expression.
 /// Exported under the `internals` feature only.
 ///

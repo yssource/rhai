@@ -233,10 +233,11 @@ pub use ast::{
 
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
-pub use engine::{Imports, State as EvalState};
+pub use engine::{EvalState, FnResolutionCache, FnResolutionCacheEntry, Imports};
 
 #[cfg(feature = "internals")]
 #[cfg(not(feature = "unchecked"))]
+#[deprecated = "this type is volatile and may change"]
 pub use engine::Limits;
 
 #[cfg(feature = "internals")]

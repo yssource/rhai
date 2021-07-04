@@ -378,7 +378,7 @@ impl<'a> Target<'a> {
     #[allow(dead_code)]
     #[inline(always)]
     #[must_use]
-    pub fn is_ref(&self) -> bool {
+    pub const fn is_ref(&self) -> bool {
         match self {
             Self::RefMut(_) => true,
             #[cfg(not(feature = "no_closure"))]
@@ -393,7 +393,7 @@ impl<'a> Target<'a> {
     /// Is the `Target` a temp value?
     #[inline(always)]
     #[must_use]
-    pub fn is_temp_value(&self) -> bool {
+    pub const fn is_temp_value(&self) -> bool {
         match self {
             Self::RefMut(_) => false,
             #[cfg(not(feature = "no_closure"))]
@@ -608,7 +608,12 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
     }
 }
 
-/// An entry in a function resolution cache.
+/// _(INTERNALS)_ An entry in a function resolution cache.
+/// Exported under the `internals` feature only.
+///
+/// # Volatile Data Structure
+///
+/// This type is volatile and may change.
 #[derive(Debug, Clone)]
 pub struct FnResolutionCacheEntry {
     /// Function.
@@ -617,7 +622,12 @@ pub struct FnResolutionCacheEntry {
     pub source: Option<Identifier>,
 }
 
-/// A function resolution cache.
+/// _(INTERNALS)_ A function resolution cache.
+/// Exported under the `internals` feature only.
+///
+/// # Volatile Data Structure
+///
+/// This type is volatile and may change.
 pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
 
 /// _(INTERNALS)_ A type that holds all the current states of the [`Engine`].
@@ -627,15 +637,15 @@ pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
 ///
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Default)]
-pub struct State {
+pub struct EvalState {
     /// Source of the current context.
     pub source: Option<Identifier>,
-    /// Normally, access to variables are parsed with a relative offset into the scope to avoid a lookup.
-    /// In some situation, e.g. after running an `eval` statement, subsequent offsets become mis-aligned.
-    /// When that happens, this flag is turned on to force a scope lookup by name.
-    pub always_search: bool,
-    /// Level of the current scope.  The global (root) level is zero, a new block
-    /// (or function call) is one level higher, and so on.
+    /// Normally, access to variables are parsed with a relative offset into the [`Scope`] to avoid a lookup.
+    /// In some situation, e.g. after running an `eval` statement, subsequent offsets may become mis-aligned.
+    /// When that happens, this flag is turned on to force a [`Scope`] search by name.
+    pub always_search_scope: bool,
+    /// Level of the current scope.  The global (root) level is zero, a new block (or function call)
+    /// is one level higher, and so on.
     pub scope_level: usize,
     /// Number of operations performed.
     pub operations: u64,
@@ -644,15 +654,29 @@ pub struct State {
     /// Embedded module resolver.
     #[cfg(not(feature = "no_module"))]
     pub resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
-    /// Function resolution cache and free list.
-    fn_resolution_caches: StaticVec<FnResolutionCache>,
+    /// Stack of function resolution caches.
+    fn_resolution_caches: Vec<FnResolutionCache>,
 }
 
-impl State {
+impl EvalState {
+    /// Create a new [`EvalState`].
+    #[inline(always)]
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            source: None,
+            always_search_scope: false,
+            scope_level: 0,
+            operations: 0,
+            modules: 0,
+            resolver: None,
+            fn_resolution_caches: Vec::new(),
+        }
+    }
     /// Is the state currently at global (root) level?
     #[inline(always)]
     #[must_use]
-    pub fn is_global(&self) -> bool {
+    pub const fn is_global(&self) -> bool {
         self.scope_level == 0
     }
     /// Get a mutable reference to the current function resolution cache.
@@ -759,13 +783,13 @@ pub struct EvalContext<'a, 'x, 'px, 'm, 's, 'b, 't, 'pt> {
     pub(crate) engine: &'a Engine,
     pub(crate) scope: &'x mut Scope<'px>,
     pub(crate) mods: &'m mut Imports,
-    pub(crate) state: &'s mut State,
+    pub(crate) state: &'s mut EvalState,
     pub(crate) lib: &'b [&'b Module],
     pub(crate) this_ptr: &'t mut Option<&'pt mut Dynamic>,
     pub(crate) level: usize,
 }
 
-impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, '_> {
+impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
     /// The current [`Engine`].
     #[inline(always)]
     #[must_use]
@@ -825,6 +849,12 @@ impl<'x, 'px> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, '_> {
     #[must_use]
     pub fn this_ptr(&self) -> Option<&Dynamic> {
         self.this_ptr.as_ref().map(|v| &**v)
+    }
+    /// Mutable reference to the current bound `this` pointer, if any.
+    #[inline(always)]
+    #[must_use]
+    pub fn this_ptr_mut(&mut self) -> Option<&mut &'pt mut Dynamic> {
+        self.this_ptr.as_mut()
     }
     /// The current nesting level of function calls.
     #[inline(always)]
@@ -1032,13 +1062,13 @@ impl Engine {
     pub(crate) fn search_imports(
         &self,
         mods: &Imports,
-        state: &mut State,
+        state: &mut EvalState,
         namespace: &NamespaceRef,
     ) -> Option<Shared<Module>> {
         let root = &namespace[0].name;
 
         // Qualified - check if the root module is directly indexed
-        let index = if state.always_search {
+        let index = if state.always_search_scope {
             None
         } else {
             namespace.index()
@@ -1067,7 +1097,7 @@ impl Engine {
         &self,
         scope: &'s mut Scope,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
@@ -1117,7 +1147,7 @@ impl Engine {
         &self,
         scope: &'s mut Scope,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &'s mut Option<&mut Dynamic>,
         expr: &Expr,
@@ -1133,7 +1163,7 @@ impl Engine {
                     EvalAltResult::ErrorUnboundThis(*pos).into()
                 }
             }
-            _ if state.always_search => (0, expr.position()),
+            _ if state.always_search_scope => (0, expr.position()),
             Expr::Variable(Some(i), pos, _) => (i.get() as usize, *pos),
             Expr::Variable(None, pos, v) => (v.0.map(NonZeroUsize::get).unwrap_or(0), *pos),
             _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
@@ -1190,7 +1220,7 @@ impl Engine {
     fn eval_dot_index_chain_helper(
         &self,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         target: &mut Target,
@@ -1622,7 +1652,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
@@ -1686,7 +1716,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
@@ -1815,7 +1845,7 @@ impl Engine {
     fn get_indexed_mut<'t>(
         &self,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         target: &'t mut Dynamic,
         mut idx: Dynamic,
@@ -1873,7 +1903,7 @@ impl Engine {
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(map, _, _)) => {
                 // val_map[idx]
-                let index = &*idx.read_lock::<ImmutableString>().ok_or_else(|| {
+                let index = idx.read_lock::<ImmutableString>().ok_or_else(|| {
                     self.make_type_mismatch_err::<ImmutableString>(idx.type_name(), idx_pos)
                 })?;
 
@@ -1987,7 +2017,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
@@ -2188,7 +2218,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         statements: &[Stmt],
@@ -2200,7 +2230,7 @@ impl Engine {
         }
 
         let mut _extra_fn_resolution_cache = false;
-        let prev_always_search = state.always_search;
+        let prev_always_search_scope = state.always_search_scope;
         let prev_scope_len = scope.len();
         let prev_mods_len = mods.len();
 
@@ -2253,7 +2283,7 @@ impl Engine {
 
             // The impact of new local variables goes away at the end of a block
             // because any new variables introduced will go out of scope
-            state.always_search = prev_always_search;
+            state.always_search_scope = prev_always_search_scope;
         }
 
         result
@@ -2265,7 +2295,7 @@ impl Engine {
     pub(crate) fn eval_op_assignment(
         &self,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         op_info: Option<OpAssignment>,
         op_pos: Position,
@@ -2340,7 +2370,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         stmt: &Stmt,
@@ -3107,7 +3137,7 @@ impl Engine {
     #[must_use]
     pub(crate) fn inc_operations(
         &self,
-        state: &mut State,
+        state: &mut EvalState,
         pos: Position,
     ) -> Result<(), Box<EvalAltResult>> {
         state.operations += 1;

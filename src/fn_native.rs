@@ -399,7 +399,7 @@ impl CallableFunction {
     /// Is this an iterator function?
     #[inline(always)]
     #[must_use]
-    pub fn is_iter(&self) -> bool {
+    pub const fn is_iter(&self) -> bool {
         match self {
             Self::Iterator(_) => true,
             Self::Pure(_) | Self::Method(_) | Self::Plugin(_) => false,
@@ -411,7 +411,7 @@ impl CallableFunction {
     /// Is this a Rhai-scripted function?
     #[inline(always)]
     #[must_use]
-    pub fn is_script(&self) -> bool {
+    pub const fn is_script(&self) -> bool {
         match self {
             #[cfg(not(feature = "no_function"))]
             Self::Script(_) => true,
@@ -422,7 +422,7 @@ impl CallableFunction {
     /// Is this a plugin function?
     #[inline(always)]
     #[must_use]
-    pub fn is_plugin_fn(&self) -> bool {
+    pub const fn is_plugin_fn(&self) -> bool {
         match self {
             Self::Plugin(_) => true,
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => false,
@@ -434,7 +434,7 @@ impl CallableFunction {
     /// Is this a native Rust function?
     #[inline(always)]
     #[must_use]
-    pub fn is_native(&self) -> bool {
+    pub const fn is_native(&self) -> bool {
         match self {
             Self::Pure(_) | Self::Method(_) => true,
             Self::Plugin(_) => true,

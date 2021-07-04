@@ -564,7 +564,8 @@ impl Hash for Dynamic {
                 }
             }
 
-            _ => unimplemented!("{} cannot be hashed", self.type_name()),
+            #[cfg(not(feature = "no_std"))]
+            Union::TimeStamp(_, _, _) => unimplemented!("{} cannot be hashed", self.type_name()),
         }
     }
 }

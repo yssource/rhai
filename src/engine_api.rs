@@ -1,7 +1,7 @@
 //! Module that defines the extern API of [`Engine`].
 
 use crate::dynamic::Variant;
-use crate::engine::{EvalContext, Imports, State};
+use crate::engine::{EvalContext, EvalState, Imports};
 use crate::fn_call::FnCallArgs;
 use crate::fn_native::SendSync;
 use crate::fn_register::RegisterNativeFunction;
@@ -1749,7 +1749,7 @@ impl Engine {
         ast: &'a AST,
         level: usize,
     ) -> RhaiResult {
-        let mut state: State = Default::default();
+        let mut state = EvalState::new();
         state.source = ast.source_raw().cloned();
         #[cfg(not(feature = "no_module"))]
         {
@@ -1831,7 +1831,7 @@ impl Engine {
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
         let mods = &mut Default::default();
-        let mut state: State = Default::default();
+        let mut state = EvalState::new();
         state.source = ast.source_raw().cloned();
         #[cfg(not(feature = "no_module"))]
         {
@@ -2004,7 +2004,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         args: &mut FnCallArgs,
     ) -> RhaiResult {
-        let state = &mut Default::default();
+        let state = &mut EvalState::new();
         let mods = &mut Default::default();
         let lib = &[ast.lib()];
         let statements = ast.statements();

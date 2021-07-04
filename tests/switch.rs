@@ -160,6 +160,7 @@ mod test_switch_enum {
     use super::*;
     use rhai::Array;
     #[derive(Debug, Clone)]
+    #[allow(dead_code)]
     enum MyEnum {
         Foo,
         Bar(INT),

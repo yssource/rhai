@@ -137,7 +137,7 @@ impl<'e> ParseState<'e> {
     ///
     /// If the variable is not present in the scope adds it to the list of external variables
     ///
-    /// The return value is the offset to be deducted from `ParseState::stack::len`,
+    /// The return value is the offset to be deducted from `ParseState::stack::len()`,
     /// i.e. the top element of [`ParseState`]'s variables stack is offset 1.
     ///
     /// Return `None` when the variable name is not found in the `stack`.
@@ -156,7 +156,7 @@ impl<'e> ParseState<'e> {
                     barrier = true;
                     false
                 } else {
-                    *n == name
+                    n == name
                 }
             })
             .and_then(|(i, _)| NonZeroUsize::new(i + 1));
@@ -324,7 +324,30 @@ impl Expr {
     }
 }
 
+/// Make sure that the next expression is not a statement expression (i.e. wrapped in `{}`).
+#[inline(always)]
+fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result<(), ParseError> {
+    match input.peek().expect(NEVER_ENDS) {
+        (Token::LeftBrace, pos) => Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos)),
+        _ => Ok(()),
+    }
+}
+
+/// Make sure that the next expression is not a mis-typed assignment (i.e. `a = b` instead of `a == b`).
+#[inline(always)]
+fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
+    match input.peek().expect(NEVER_ENDS) {
+        (Token::Equals, pos) => Err(LexError::ImproperSymbol(
+            "=".to_string(),
+            "Possibly a typo of '=='?".to_string(),
+        )
+        .into_err(*pos)),
+        _ => Ok(()),
+    }
+}
+
 /// Consume a particular [token][Token], checking that it is the expected one.
+#[inline]
 fn eat_token(input: &mut TokenStream, token: Token) -> Position {
     let (t, pos) = input.next().expect(NEVER_ENDS);
 
@@ -340,6 +363,7 @@ fn eat_token(input: &mut TokenStream, token: Token) -> Position {
 }
 
 /// Match a particular [token][Token], consuming it if matched.
+#[inline]
 fn match_token(input: &mut TokenStream, token: Token) -> (bool, Position) {
     let (t, pos) = input.peek().expect(NEVER_ENDS);
     if *t == token {
@@ -2113,46 +2137,6 @@ fn parse_expr(
     )
 }
 
-/// Make sure that the expression is not a statement expression (i.e. wrapped in `{}`).
-fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result<(), ParseError> {
-    match input.peek().expect(NEVER_ENDS) {
-        // Disallow statement expressions
-        (Token::LeftBrace, pos) | (Token::EOF, pos) => {
-            Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos))
-        }
-        // No need to check for others at this time - leave it for the expr parser
-        _ => Ok(()),
-    }
-}
-
-/// Make sure that the expression is not a mis-typed assignment (i.e. `a = b` instead of `a == b`).
-fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
-    match input.peek().expect(NEVER_ENDS) {
-        (Token::Equals, pos) => Err(LexError::ImproperSymbol(
-            "=".to_string(),
-            "Possibly a typo of '=='?".to_string(),
-        )
-        .into_err(*pos)),
-        (token @ Token::PlusAssign, pos)
-        | (token @ Token::MinusAssign, pos)
-        | (token @ Token::MultiplyAssign, pos)
-        | (token @ Token::DivideAssign, pos)
-        | (token @ Token::LeftShiftAssign, pos)
-        | (token @ Token::RightShiftAssign, pos)
-        | (token @ Token::ModuloAssign, pos)
-        | (token @ Token::PowerOfAssign, pos)
-        | (token @ Token::AndAssign, pos)
-        | (token @ Token::OrAssign, pos)
-        | (token @ Token::XOrAssign, pos) => Err(LexError::ImproperSymbol(
-            token.syntax().to_string(),
-            "Expecting a boolean expression, not an assignment".to_string(),
-        )
-        .into_err(*pos)),
-
-        _ => Ok(()),
-    }
-}
-
 /// Parse an if statement.
 fn parse_if(
     input: &mut TokenStream,
@@ -2207,15 +2191,15 @@ fn parse_while_loop(
         (Token::While, pos) => {
             ensure_not_statement_expr(input, "a boolean")?;
             let expr = parse_expr(input, state, lib, settings.level_up())?.ensure_bool_expr()?;
+            ensure_not_assignment(input)?;
             (expr, pos)
         }
         (Token::Loop, pos) => (Expr::Unit(Position::NONE), pos),
         _ => unreachable!(),
     };
     settings.pos = token_pos;
-
-    ensure_not_assignment(input)?;
     settings.is_breakable = true;
+
     let body = parse_block(input, state, lib, settings.level_up())?;
 
     Ok(Stmt::While(guard, Box::new(body.into()), settings.pos))
@@ -2249,8 +2233,9 @@ fn parse_do(
         }
     };
 
-    ensure_not_statement_expr(input, "a boolean")?;
     settings.is_breakable = false;
+
+    ensure_not_statement_expr(input, "a boolean")?;
     let guard = parse_expr(input, state, lib, settings.level_up())?.ensure_bool_expr()?;
     ensure_not_assignment(input)?;
 

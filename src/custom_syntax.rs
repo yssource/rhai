@@ -163,21 +163,22 @@ impl Engine {
     /// Register a custom syntax with the [`Engine`].
     ///
     /// * `keywords` holds a slice of strings that define the custom syntax.  
-    /// * `scope_may_be_changed` specifies variables have been added/removed by this custom syntax.
+    /// * `scope_may_be_changed` specifies variables _may_ be added/removed by this custom syntax.
     /// * `func` is the implementation function.
     ///
-    /// # Caveat - Do not change beyond block scope
+    /// ## Note on `scope_may_be_changed`
     ///
-    /// If `scope_may_be_changed` is `true`, then the current [`Scope`][crate::Scope] is assumed to be
-    /// modified by this custom syntax.
+    /// If `scope_may_be_changed` is `true`, then _size_ of the current [`Scope`][crate::Scope]
+    /// _may_ be modified by this custom syntax.
     ///
-    /// Adding new variables and/or removing variables are allowed. Simply modifying the values of
-    /// variables does NOT count, so `false` should be passed in this case.
+    /// Adding new variables and/or removing variables count.
     ///
-    /// However, only variables declared within the current _block scope_ should be touched,
-    /// since they all go away at the end of the block.
+    /// Simply modifying the values of existing variables does NOT count, as the _size_ of the
+    /// current [`Scope`][crate::Scope] is unchanged, so `false` should be passed.
     ///
-    /// Variables in parent blocks should be left untouched as they persist beyond the current block.
+    /// Replacing one variable with another (i.e. adding a new variable and removing one variable at
+    /// the same time so that the total _size_ of the [`Scope`][crate::Scope] is unchanged) also
+    /// does NOT count, so `false` should be passed.
     #[must_use]
     pub fn register_custom_syntax<S: AsRef<str> + Into<Identifier>>(
         &mut self,
