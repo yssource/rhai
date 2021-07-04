@@ -23,6 +23,16 @@ opt-level = "z"             # optimize for size
 debug = false
 rpath = false
 debug-assertions = false
-panic = "abort"
 codegen-units = 1
+panic = "abort"
+
+[profile.unix]
+inherits = "release"
 lto = true
+
+[profile.windows]
+inherits = "release"
+
+[profile.macos]
+inherits = "release"
+lto = "fat"
