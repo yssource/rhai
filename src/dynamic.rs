@@ -508,6 +508,8 @@ impl Hash for Dynamic {
             Union::Int(ref i, _, _) => i.hash(state),
             #[cfg(not(feature = "no_float"))]
             Union::Float(ref f, _, _) => f.hash(state),
+            #[cfg(feature = "decimal")]
+            Union::Decimal(ref d, _, _) => d.hash(state),
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref a, _, _) => a.as_ref().hash(state),
             #[cfg(not(feature = "no_object"))]
@@ -522,46 +524,50 @@ impl Hash for Dynamic {
             #[cfg(feature = "sync")]
             Union::Shared(ref cell, _, _) => (*cell.read().unwrap()).hash(state),
 
-            #[cfg(not(feature = "only_i32"))]
-            #[cfg(not(feature = "only_i64"))]
-            Union::Variant(ref value, _, _) => {
-                let value_any = (***value).as_any();
-                let type_id = value_any.type_id();
+            Union::Variant(ref _value, _, _) => {
+                #[cfg(not(feature = "only_i32"))]
+                #[cfg(not(feature = "only_i64"))]
+                {
+                    let value_any = (***_value).as_any();
+                    let type_id = value_any.type_id();
 
-                if type_id == TypeId::of::<u8>() {
-                    TypeId::of::<u8>().hash(state);
-                    value_any.downcast_ref::<u8>().expect(CHECKED).hash(state);
-                } else if type_id == TypeId::of::<u16>() {
-                    TypeId::of::<u16>().hash(state);
-                    value_any.downcast_ref::<u16>().expect(CHECKED).hash(state);
-                } else if type_id == TypeId::of::<u32>() {
-                    TypeId::of::<u32>().hash(state);
-                    value_any.downcast_ref::<u32>().expect(CHECKED).hash(state);
-                } else if type_id == TypeId::of::<u64>() {
-                    TypeId::of::<u64>().hash(state);
-                    value_any.downcast_ref::<u64>().expect(CHECKED).hash(state);
-                } else if type_id == TypeId::of::<i8>() {
-                    TypeId::of::<i8>().hash(state);
-                    value_any.downcast_ref::<i8>().expect(CHECKED).hash(state);
-                } else if type_id == TypeId::of::<i16>() {
-                    TypeId::of::<i16>().hash(state);
-                    value_any.downcast_ref::<i16>().expect(CHECKED).hash(state);
-                } else if type_id == TypeId::of::<i32>() {
-                    TypeId::of::<i32>().hash(state);
-                    value_any.downcast_ref::<i32>().expect(CHECKED).hash(state);
-                } else if type_id == TypeId::of::<i64>() {
-                    TypeId::of::<i64>().hash(state);
-                    value_any.downcast_ref::<i64>().expect(CHECKED).hash(state);
+                    if type_id == TypeId::of::<u8>() {
+                        TypeId::of::<u8>().hash(state);
+                        value_any.downcast_ref::<u8>().expect(CHECKED).hash(state);
+                    } else if type_id == TypeId::of::<u16>() {
+                        TypeId::of::<u16>().hash(state);
+                        value_any.downcast_ref::<u16>().expect(CHECKED).hash(state);
+                    } else if type_id == TypeId::of::<u32>() {
+                        TypeId::of::<u32>().hash(state);
+                        value_any.downcast_ref::<u32>().expect(CHECKED).hash(state);
+                    } else if type_id == TypeId::of::<u64>() {
+                        TypeId::of::<u64>().hash(state);
+                        value_any.downcast_ref::<u64>().expect(CHECKED).hash(state);
+                    } else if type_id == TypeId::of::<i8>() {
+                        TypeId::of::<i8>().hash(state);
+                        value_any.downcast_ref::<i8>().expect(CHECKED).hash(state);
+                    } else if type_id == TypeId::of::<i16>() {
+                        TypeId::of::<i16>().hash(state);
+                        value_any.downcast_ref::<i16>().expect(CHECKED).hash(state);
+                    } else if type_id == TypeId::of::<i32>() {
+                        TypeId::of::<i32>().hash(state);
+                        value_any.downcast_ref::<i32>().expect(CHECKED).hash(state);
+                    } else if type_id == TypeId::of::<i64>() {
+                        TypeId::of::<i64>().hash(state);
+                        value_any.downcast_ref::<i64>().expect(CHECKED).hash(state);
+                    }
+
+                    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+                    if type_id == TypeId::of::<u128>() {
+                        TypeId::of::<u128>().hash(state);
+                        value_any.downcast_ref::<u128>().expect(CHECKED).hash(state);
+                    } else if type_id == TypeId::of::<i128>() {
+                        TypeId::of::<i128>().hash(state);
+                        value_any.downcast_ref::<i128>().expect(CHECKED).hash(state);
+                    }
                 }
 
-                #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-                if type_id == TypeId::of::<u128>() {
-                    TypeId::of::<u128>().hash(state);
-                    value_any.downcast_ref::<u128>().expect(CHECKED).hash(state);
-                } else if type_id == TypeId::of::<i128>() {
-                    TypeId::of::<i128>().hash(state);
-                    value_any.downcast_ref::<i128>().expect(CHECKED).hash(state);
-                }
+                unimplemented!("a custom type cannot be hashed")
             }
 
             #[cfg(not(feature = "no_std"))]

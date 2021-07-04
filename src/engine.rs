@@ -669,6 +669,7 @@ impl EvalState {
             scope_level: 0,
             operations: 0,
             modules: 0,
+            #[cfg(not(feature = "no_module"))]
             resolver: None,
             fn_resolution_caches: Vec::new(),
         }
