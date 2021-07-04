@@ -522,6 +522,11 @@ impl PartialOrd<ImmutableString> for String {
 }
 
 impl ImmutableString {
+    /// Create a new [`ImmutableString`].
+    #[inline(always)]
+    pub fn new() -> Self {
+        Self(SmartString::new().into())
+    }
     /// Consume the [`ImmutableString`] and convert it into a [`String`].
     /// If there are other references to the same string, a cloned copy is returned.
     #[inline(always)]

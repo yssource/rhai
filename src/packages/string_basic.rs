@@ -173,6 +173,10 @@ mod number_formatting {
     pub fn int_to_octal(value: INT) -> ImmutableString {
         to_octal(value)
     }
+    #[rhai_fn(name = "to_binary")]
+    pub fn int_to_binary(value: INT) -> ImmutableString {
+        to_binary(value)
+    }
 
     #[cfg(not(feature = "only_i32"))]
     #[cfg(not(feature = "only_i64"))]

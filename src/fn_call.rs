@@ -2,7 +2,7 @@
 
 use crate::ast::FnCallHashes;
 use crate::engine::{
-    FnResolutionCacheEntry, Imports, State, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
+    EvalState, FnResolutionCacheEntry, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
     KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
     MAX_DYNAMIC_PARAMETERS,
 };
@@ -162,7 +162,7 @@ impl Engine {
     fn resolve_fn<'s>(
         &self,
         mods: &Imports,
-        state: &'s mut State,
+        state: &'s mut EvalState,
         lib: &[&Module],
         fn_name: &str,
         hash_script: u64,
@@ -266,7 +266,7 @@ impl Engine {
     pub(crate) fn call_native_fn(
         &self,
         mods: &Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         name: &str,
         hash: u64,
@@ -439,7 +439,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         fn_def: &crate::ast::ScriptFnDef,
@@ -451,7 +451,7 @@ impl Engine {
         fn make_error(
             name: String,
             fn_def: &crate::ast::ScriptFnDef,
-            state: &State,
+            state: &EvalState,
             err: Box<EvalAltResult>,
             pos: Position,
         ) -> RhaiResult {
@@ -569,7 +569,7 @@ impl Engine {
     pub(crate) fn has_script_fn(
         &self,
         mods: Option<&Imports>,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         hash_script: u64,
     ) -> bool {
@@ -608,7 +608,7 @@ impl Engine {
     pub(crate) fn exec_fn_call(
         &self,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         fn_name: &str,
         hashes: FnCallHashes,
@@ -644,7 +644,7 @@ impl Engine {
             crate::engine::KEYWORD_IS_DEF_FN
                 if args.len() == 2 && args[0].is::<FnPtr>() && args[1].is::<crate::INT>() =>
             {
-                let fn_name = &*args[0]
+                let fn_name = args[0]
                     .read_lock::<ImmutableString>()
                     .expect("never fails because `args[0]` is `FnPtr`");
                 let num_params = args[1]
@@ -655,7 +655,7 @@ impl Engine {
                     if num_params < 0 {
                         Dynamic::FALSE
                     } else {
-                        let hash_script = calc_fn_hash(fn_name, num_params as usize);
+                        let hash_script = calc_fn_hash(fn_name.as_str(), num_params as usize);
                         self.has_script_fn(Some(mods), state, lib, hash_script)
                             .into()
                     },
@@ -788,7 +788,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         statements: &[Stmt],
         lib: &[&Module],
         level: usize,
@@ -809,7 +809,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         script: &str,
         _pos: Position,
@@ -842,7 +842,7 @@ impl Engine {
         }
 
         // Evaluate the AST
-        let mut new_state: State = Default::default();
+        let mut new_state = EvalState::new();
         new_state.source = state.source.clone();
         new_state.operations = state.operations;
 
@@ -860,7 +860,7 @@ impl Engine {
     pub(crate) fn make_method_call(
         &self,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         fn_name: &str,
         mut hash: FnCallHashes,
@@ -1024,7 +1024,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         level: usize,
@@ -1046,7 +1046,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         fn_name: &str,
@@ -1202,7 +1202,7 @@ impl Engine {
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
                 if scope.len() != prev_len {
-                    state.always_search = true;
+                    state.always_search_scope = true;
                 }
 
                 return result.map_err(|err| {
@@ -1298,7 +1298,7 @@ impl Engine {
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
-        state: &mut State,
+        state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         namespace: &NamespaceRef,

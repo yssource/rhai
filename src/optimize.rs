@@ -43,7 +43,7 @@ impl Default for OptimizationLevel {
 
 /// Mutable state throughout an optimization pass.
 #[derive(Debug, Clone)]
-struct State<'a> {
+struct OptimizerState<'a> {
     /// Has the [`AST`] been changed during this pass?
     changed: bool,
     /// Collection of constants to use for eager function evaluations.
@@ -58,7 +58,7 @@ struct State<'a> {
     optimization_level: OptimizationLevel,
 }
 
-impl<'a> State<'a> {
+impl<'a> OptimizerState<'a> {
     /// Create a new State.
     #[inline(always)]
     pub const fn new(
@@ -121,7 +121,7 @@ impl<'a> State<'a> {
 }
 
 // Has a system function a Rust-native override?
-fn has_native_fn(state: &State, hash_script: u64, arg_types: &[TypeId]) -> bool {
+fn has_native_fn(state: &OptimizerState, hash_script: u64, arg_types: &[TypeId]) -> bool {
     let hash_params = calc_fn_params_hash(arg_types.iter().cloned());
     let hash = combine_hashes(hash_script, hash_params);
 
@@ -135,7 +135,7 @@ fn has_native_fn(state: &State, hash_script: u64, arg_types: &[TypeId]) -> bool 
 
 /// Call a registered function
 fn call_fn_with_constant_arguments(
-    state: &State,
+    state: &OptimizerState,
     fn_name: &str,
     arg_values: &mut [Dynamic],
 ) -> Option<Dynamic> {
@@ -159,7 +159,7 @@ fn call_fn_with_constant_arguments(
 /// Optimize a block of [statements][Stmt].
 fn optimize_stmt_block(
     mut statements: Vec<Stmt>,
-    state: &mut State,
+    state: &mut OptimizerState,
     preserve_result: bool,
     is_internal: bool,
     reduce_return: bool,
@@ -368,7 +368,7 @@ fn optimize_stmt_block(
 }
 
 /// Optimize a [statement][Stmt].
-fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
+fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: bool) {
     match stmt {
         // var = var op expr => var op= expr
         Stmt::Assignment(x, _)
@@ -682,7 +682,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut State, preserve_result: bool) {
 }
 
 /// Optimize an [expression][Expr].
-fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
+fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
     // These keywords are handled specially
     const DONT_EVAL_KEYWORDS: &[&str] = &[
         KEYWORD_PRINT, // side effects
@@ -1051,7 +1051,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut State, _chaining: bool) {
 
         // Custom syntax
         Expr::Custom(x, _) => {
-            if x.scope_changed {
+            if x.scope_may_be_changed {
                 state.propagate_constants = false;
             }
             x.keywords.iter_mut().for_each(|expr| optimize_expr(expr, state, false));
@@ -1077,7 +1077,7 @@ fn optimize_top_level(
     }
 
     // Set up the state
-    let mut state = State::new(engine, lib, optimization_level);
+    let mut state = OptimizerState::new(engine, lib, optimization_level);
 
     // Add constants and variables from the scope
     scope.iter().for_each(|(name, constant, value)| {
@@ -1142,7 +1142,7 @@ pub fn optimize_into_ast(
                     let mut fn_def = crate::fn_native::shared_take_or_clone(fn_def);
 
                     // Optimize the function body
-                    let state = &mut State::new(engine, lib2, level);
+                    let state = &mut OptimizerState::new(engine, lib2, level);
 
                     let body = mem::take(fn_def.body.statements_mut()).into_vec();
 

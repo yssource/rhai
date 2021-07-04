@@ -205,7 +205,6 @@ impl Parse for Module {
     }
 }
 
-#[allow(dead_code)]
 impl Module {
     pub fn attrs(&self) -> &Vec<syn::Attribute> {
         &self.mod_all.attrs
@@ -300,22 +299,27 @@ impl Module {
         }
     }
 
+    #[allow(dead_code)]
     pub fn name(&self) -> &syn::Ident {
         &self.mod_all.ident
     }
 
+    #[allow(dead_code)]
     pub fn consts(&self) -> &[ExportedConst] {
         &self.consts
     }
 
+    #[allow(dead_code)]
     pub fn fns(&self) -> &[ExportedFn] {
         &self.fns
     }
 
+    #[allow(dead_code)]
     pub fn sub_modules(&self) -> &[Module] {
         &self.sub_modules
     }
 
+    #[allow(dead_code)]
     pub fn content(&self) -> Option<&Vec<syn::Item>> {
         match self.mod_all {
             syn::ItemMod {

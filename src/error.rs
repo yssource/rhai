@@ -98,8 +98,10 @@ impl Error for EvalAltResult {}
 impl fmt::Display for EvalAltResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::ErrorSystem(s, err) if s.is_empty() => write!(f, "{}", err)?,
-            Self::ErrorSystem(s, err) => write!(f, "{}: {}", s, err)?,
+            Self::ErrorSystem(s, err) => match s.as_str() {
+                "" => write!(f, "{}", err),
+                s => write!(f, "{}: {}", s, err),
+            }?,
 
             Self::ErrorParsing(p, _) => write!(f, "Syntax error: {}", p)?,
 
@@ -128,76 +130,74 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorDataRace(s, _) => {
                 write!(f, "Data race detected when accessing variable: {}", s)?
             }
-            Self::ErrorDotExpr(s, _) if !s.is_empty() => f.write_str(s)?,
+            Self::ErrorDotExpr(s, _) => match s.as_str() {
+                "" => f.write_str("Malformed dot expression"),
+                s => f.write_str(s),
+            }?,
             Self::ErrorIndexingType(s, _) => write!(f, "Indexer not registered for '{}'", s)?,
             Self::ErrorUnboundThis(_) => f.write_str("'this' is not bound")?,
             Self::ErrorFor(_) => f.write_str("For loop expects a type with an iterator defined")?,
-            Self::ErrorDotExpr(_, _) => f.write_str("Malformed dot expression")?,
             Self::ErrorTooManyOperations(_) => f.write_str("Too many operations")?,
             Self::ErrorTooManyModules(_) => f.write_str("Too many modules imported")?,
             Self::ErrorStackOverflow(_) => f.write_str("Stack overflow")?,
             Self::ErrorTerminated(_, _) => f.write_str("Script terminated")?,
 
-            Self::ErrorRuntime(d, _) if d.is::<ImmutableString>() => {
-                let s = &*d
-                    .read_lock::<ImmutableString>()
-                    .expect("never fails because the type was checked");
-
-                if s.is_empty() {
-                    f.write_str("Runtime error")?
-                } else {
-                    write!(f, "Runtime error: {}", s)?
-                }
-            }
             Self::ErrorRuntime(d, _) if d.is::<()>() => f.write_str("Runtime error")?,
+            Self::ErrorRuntime(d, _)
+                if d.read_lock::<ImmutableString>()
+                    .map_or(false, |v| v.is_empty()) =>
+            {
+                write!(f, "Runtime error")?
+            }
             Self::ErrorRuntime(d, _) => write!(f, "Runtime error: {}", d)?,
 
             Self::ErrorAssignmentToConstant(s, _) => write!(f, "Cannot modify constant {}", s)?,
-            Self::ErrorMismatchOutputType(s, r, _) => {
-                write!(f, "Output type is incorrect: {} (expecting {})", r, s)?
-            }
-            Self::ErrorMismatchDataType(s, r, _) if r.is_empty() => {
-                write!(f, "Data type is incorrect, expecting {}", s)?
-            }
-            Self::ErrorMismatchDataType(s, r, _) if s.is_empty() => {
-                write!(f, "Data type is incorrect: {}", r)?
-            }
-            Self::ErrorMismatchDataType(s, r, _) => {
-                write!(f, "Data type is incorrect: {} (expecting {})", r, s)?
-            }
-            Self::ErrorArithmetic(s, _) => f.write_str(s)?,
+            Self::ErrorMismatchOutputType(s, r, _) => match (r.as_str(), s.as_str()) {
+                ("", s) => write!(f, "Output type is incorrect, expecting {}", s),
+                (r, "") => write!(f, "Output type is incorrect: {}", r),
+                (r, s) => write!(f, "Output type is incorrect: {} (expecting {})", r, s),
+            }?,
+            Self::ErrorMismatchDataType(s, r, _) => match (r.as_str(), s.as_str()) {
+                ("", s) => write!(f, "Data type is incorrect, expecting {}", s),
+                (r, "") => write!(f, "Data type is incorrect: {}", r),
+                (r, s) => write!(f, "Data type is incorrect: {} (expecting {})", r, s),
+            }?,
+            Self::ErrorArithmetic(s, _) => match s.as_str() {
+                "" => f.write_str("Arithmetic error"),
+                s => f.write_str(s),
+            }?,
 
-            Self::LoopBreak(true, _) => f.write_str("Break statement not inside a loop")?,
-            Self::LoopBreak(false, _) => f.write_str("Continue statement not inside a loop")?,
+            Self::LoopBreak(true, _) => f.write_str("'break' not inside a loop")?,
+            Self::LoopBreak(false, _) => f.write_str("'continue' not inside a loop")?,
 
-            Self::Return(_, _) => f.write_str("NOT AN ERROR - Function returns value")?,
+            Self::Return(_, _) => f.write_str("NOT AN ERROR - function returns value")?,
 
-            Self::ErrorArrayBounds(0, index, _) => {
-                write!(f, "Array index {} out of bounds: array is empty", index)?
-            }
-            Self::ErrorArrayBounds(1, index, _) => write!(
-                f,
-                "Array index {} out of bounds: only 1 element in the array",
-                index
-            )?,
-            Self::ErrorArrayBounds(max, index, _) => write!(
-                f,
-                "Array index {} out of bounds: only {} elements in the array",
-                index, max
-            )?,
-            Self::ErrorStringBounds(0, index, _) => {
-                write!(f, "String index {} out of bounds: string is empty", index)?
-            }
-            Self::ErrorStringBounds(1, index, _) => write!(
-                f,
-                "String index {} out of bounds: only 1 character in the string",
-                index
-            )?,
-            Self::ErrorStringBounds(max, index, _) => write!(
-                f,
-                "String index {} out of bounds: only {} characters in the string",
-                index, max
-            )?,
+            Self::ErrorArrayBounds(max, index, _) => match max {
+                0 => write!(f, "Array index {} out of bounds: array is empty", index),
+                1 => write!(
+                    f,
+                    "Array index {} out of bounds: only 1 element in the array",
+                    index
+                ),
+                _ => write!(
+                    f,
+                    "Array index {} out of bounds: only {} elements in the array",
+                    index, max
+                ),
+            }?,
+            Self::ErrorStringBounds(max, index, _) => match max {
+                0 => write!(f, "String index {} out of bounds: string is empty", index),
+                1 => write!(
+                    f,
+                    "String index {} out of bounds: only 1 character in the string",
+                    index
+                ),
+                _ => write!(
+                    f,
+                    "String index {} out of bounds: only {} characters in the string",
+                    index, max
+                ),
+            }?,
             Self::ErrorBitFieldBounds(max, index, _) => write!(
                 f,
                 "Bit-field index {} out of bounds: only {} bits in the bit-field",

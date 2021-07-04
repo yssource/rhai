@@ -1731,6 +1731,12 @@ impl From<StaticVec<Ident>> for NamespaceRef {
 }
 
 impl NamespaceRef {
+    /// Create a new [`NamespaceRef`].
+    #[inline(always)]
+    #[must_use]
+    pub fn new(&self) -> Self {
+        Default::default()
+    }
     /// Get the [`Scope`][crate::Scope] index offset.
     #[inline(always)]
     #[must_use]

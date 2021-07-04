@@ -137,7 +137,7 @@ impl<'e> ParseState<'e> {
     ///
     /// If the variable is not present in the scope adds it to the list of external variables
     ///
-    /// The return value is the offset to be deducted from `ParseState::stack::len`,
+    /// The return value is the offset to be deducted from `ParseState::stack::len()`,
     /// i.e. the top element of [`ParseState`]'s variables stack is offset 1.
     ///
     /// Return `None` when the variable name is not found in the `stack`.
@@ -156,7 +156,7 @@ impl<'e> ParseState<'e> {
                     barrier = true;
                     false
                 } else {
-                    *n == name
+                    n == name
                 }
             })
             .and_then(|(i, _)| NonZeroUsize::new(i + 1));
@@ -281,9 +281,73 @@ impl Expr {
             _ => self,
         }
     }
+    /// Raise an error if the expression can never yield a boolean value.
+    fn ensure_bool_expr(self) -> Result<Expr, ParseError> {
+        let type_name = match self {
+            Expr::Unit(_) => "()",
+            Expr::DynamicConstant(ref v, _) if !v.is::<bool>() => v.type_name(),
+            Expr::IntegerConstant(_, _) => "a number",
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(_, _) => "a floating-point number",
+            Expr::CharConstant(_, _) => "a character",
+            Expr::StringConstant(_, _) => "a string",
+            Expr::InterpolatedString(_, _) => "a string",
+            Expr::Array(_, _) => "an array",
+            Expr::Map(_, _) => "an object map",
+            _ => return Ok(self),
+        };
+
+        Err(
+            PERR::MismatchedType("a boolean expression".to_string(), type_name.to_string())
+                .into_err(self.position()),
+        )
+    }
+    /// Raise an error if the expression can never yield an iterable value.
+    fn ensure_iterable(self) -> Result<Expr, ParseError> {
+        let type_name = match self {
+            Expr::Unit(_) => "()",
+            Expr::BoolConstant(_, _) => "a boolean",
+            Expr::IntegerConstant(_, _) => "a number",
+            #[cfg(not(feature = "no_float"))]
+            Expr::FloatConstant(_, _) => "a floating-point number",
+            Expr::CharConstant(_, _) => "a character",
+            Expr::StringConstant(_, _) => "a string",
+            Expr::InterpolatedString(_, _) => "a string",
+            Expr::Map(_, _) => "an object map",
+            _ => return Ok(self),
+        };
+
+        Err(
+            PERR::MismatchedType("an iterable value".to_string(), type_name.to_string())
+                .into_err(self.position()),
+        )
+    }
+}
+
+/// Make sure that the next expression is not a statement expression (i.e. wrapped in `{}`).
+#[inline(always)]
+fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result<(), ParseError> {
+    match input.peek().expect(NEVER_ENDS) {
+        (Token::LeftBrace, pos) => Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos)),
+        _ => Ok(()),
+    }
+}
+
+/// Make sure that the next expression is not a mis-typed assignment (i.e. `a = b` instead of `a == b`).
+#[inline(always)]
+fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
+    match input.peek().expect(NEVER_ENDS) {
+        (Token::Equals, pos) => Err(LexError::ImproperSymbol(
+            "=".to_string(),
+            "Possibly a typo of '=='?".to_string(),
+        )
+        .into_err(*pos)),
+        _ => Ok(()),
+    }
 }
 
 /// Consume a particular [token][Token], checking that it is the expected one.
+#[inline]
 fn eat_token(input: &mut TokenStream, token: Token) -> Position {
     let (t, pos) = input.next().expect(NEVER_ENDS);
 
@@ -299,6 +363,7 @@ fn eat_token(input: &mut TokenStream, token: Token) -> Position {
 }
 
 /// Match a particular [token][Token], consuming it if matched.
+#[inline]
 fn match_token(input: &mut TokenStream, token: Token) -> (bool, Position) {
     let (t, pos) = input.peek().expect(NEVER_ENDS);
     if *t == token {
@@ -1816,8 +1881,8 @@ fn parse_binary_op(
                     .expect("never fails because `||` has two arguments");
                 Expr::Or(
                     BinaryExpr {
-                        lhs: current_lhs,
-                        rhs,
+                        lhs: current_lhs.ensure_bool_expr()?,
+                        rhs: rhs.ensure_bool_expr()?,
                     }
                     .into(),
                     pos,
@@ -1832,8 +1897,8 @@ fn parse_binary_op(
                     .expect("never fails because `&&` has two arguments");
                 Expr::And(
                     BinaryExpr {
-                        lhs: current_lhs,
-                        rhs,
+                        lhs: current_lhs.ensure_bool_expr()?,
+                        rhs: rhs.ensure_bool_expr()?,
                     }
                     .into(),
                     pos,
@@ -1896,10 +1961,9 @@ fn parse_custom_syntax(
     let mut tokens: StaticVec<_> = Default::default();
 
     // Adjust the variables stack
-    if syntax.scope_changed {
-        // Add an empty variable name to the stack.
-        // Empty variable names act as a barrier so earlier variables will not be matched.
-        // Variable searches stop at the first empty variable name.
+    if syntax.scope_may_be_changed {
+        // Add a barrier variable to the stack so earlier variables will not be matched.
+        // Variable searches stop at the first barrier.
         let empty = state.get_identifier(SCOPE_SEARCH_BARRIER_MARKER);
         state.stack.push((empty, AccessMode::ReadWrite));
     }
@@ -2017,12 +2081,15 @@ fn parse_custom_syntax(
     keywords.shrink_to_fit();
     tokens.shrink_to_fit();
 
-    Ok(CustomExpr {
-        keywords,
-        tokens,
-        scope_changed: syntax.scope_changed,
-    }
-    .into_custom_syntax_expr(pos))
+    Ok(Expr::Custom(
+        CustomExpr {
+            keywords,
+            tokens,
+            scope_may_be_changed: syntax.scope_may_be_changed,
+        }
+        .into(),
+        pos,
+    ))
 }
 
 /// Parse an expression.
@@ -2070,46 +2137,6 @@ fn parse_expr(
     )
 }
 
-/// Make sure that the expression is not a statement expression (i.e. wrapped in `{}`).
-fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result<(), ParseError> {
-    match input.peek().expect(NEVER_ENDS) {
-        // Disallow statement expressions
-        (Token::LeftBrace, pos) | (Token::EOF, pos) => {
-            Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos))
-        }
-        // No need to check for others at this time - leave it for the expr parser
-        _ => Ok(()),
-    }
-}
-
-/// Make sure that the expression is not a mis-typed assignment (i.e. `a = b` instead of `a == b`).
-fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
-    match input.peek().expect(NEVER_ENDS) {
-        (Token::Equals, pos) => Err(LexError::ImproperSymbol(
-            "=".to_string(),
-            "Possibly a typo of '=='?".to_string(),
-        )
-        .into_err(*pos)),
-        (token @ Token::PlusAssign, pos)
-        | (token @ Token::MinusAssign, pos)
-        | (token @ Token::MultiplyAssign, pos)
-        | (token @ Token::DivideAssign, pos)
-        | (token @ Token::LeftShiftAssign, pos)
-        | (token @ Token::RightShiftAssign, pos)
-        | (token @ Token::ModuloAssign, pos)
-        | (token @ Token::PowerOfAssign, pos)
-        | (token @ Token::AndAssign, pos)
-        | (token @ Token::OrAssign, pos)
-        | (token @ Token::XOrAssign, pos) => Err(LexError::ImproperSymbol(
-            token.syntax().to_string(),
-            "Expecting a boolean expression, not an assignment".to_string(),
-        )
-        .into_err(*pos)),
-
-        _ => Ok(()),
-    }
-}
-
 /// Parse an if statement.
 fn parse_if(
     input: &mut TokenStream,
@@ -2125,7 +2152,7 @@ fn parse_if(
 
     // if guard { if_body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let guard = parse_expr(input, state, lib, settings.level_up())?;
+    let guard = parse_expr(input, state, lib, settings.level_up())?.ensure_bool_expr()?;
     ensure_not_assignment(input)?;
     let if_body = parse_block(input, state, lib, settings.level_up())?;
 
@@ -2163,16 +2190,16 @@ fn parse_while_loop(
     let (guard, token_pos) = match input.next().expect(NEVER_ENDS) {
         (Token::While, pos) => {
             ensure_not_statement_expr(input, "a boolean")?;
-            let expr = parse_expr(input, state, lib, settings.level_up())?;
+            let expr = parse_expr(input, state, lib, settings.level_up())?.ensure_bool_expr()?;
+            ensure_not_assignment(input)?;
             (expr, pos)
         }
         (Token::Loop, pos) => (Expr::Unit(Position::NONE), pos),
         _ => unreachable!(),
     };
     settings.pos = token_pos;
-
-    ensure_not_assignment(input)?;
     settings.is_breakable = true;
+
     let body = parse_block(input, state, lib, settings.level_up())?;
 
     Ok(Stmt::While(guard, Box::new(body.into()), settings.pos))
@@ -2206,9 +2233,10 @@ fn parse_do(
         }
     };
 
-    ensure_not_statement_expr(input, "a boolean")?;
     settings.is_breakable = false;
-    let guard = parse_expr(input, state, lib, settings.level_up())?;
+
+    ensure_not_statement_expr(input, "a boolean")?;
+    let guard = parse_expr(input, state, lib, settings.level_up())?.ensure_bool_expr()?;
     ensure_not_assignment(input)?;
 
     Ok(Stmt::Do(
@@ -2279,7 +2307,7 @@ fn parse_for(
 
     // for name in expr { body }
     ensure_not_statement_expr(input, "a boolean")?;
-    let expr = parse_expr(input, state, lib, settings.level_up())?;
+    let expr = parse_expr(input, state, lib, settings.level_up())?.ensure_iterable()?;
 
     let prev_stack_len = state.stack.len();
 
@@ -2758,6 +2786,10 @@ fn parse_stmt(
             match input.peek().expect(NEVER_ENDS) {
                 // `return`/`throw` at <EOF>
                 (Token::EOF, _) => Ok(Stmt::Return(return_type, None, token_pos)),
+                // `return`/`throw` at end of block
+                (Token::RightBrace, _) if !settings.is_global => {
+                    Ok(Stmt::Return(return_type, None, token_pos))
+                }
                 // `return;` or `throw;`
                 (Token::SemiColon, _) => Ok(Stmt::Return(return_type, None, token_pos)),
                 // `return` or `throw` with expression
