@@ -24,6 +24,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
     hash::{Hash, Hasher},
+    iter::{FromIterator, Rev, Zip},
     num::{NonZeroU8, NonZeroUsize},
     ops::{Deref, DerefMut},
 };
@@ -62,6 +63,12 @@ pub struct Imports {
 }
 
 impl Imports {
+    /// Create a new stack of imported [modules][Module].
+    #[inline(always)]
+    #[must_use]
+    pub fn new() -> Self {
+        Default::default()
+    }
     /// Get the length of this stack of imported [modules][Module].
     #[inline(always)]
     #[must_use]
@@ -74,20 +81,20 @@ impl Imports {
     pub fn is_empty(&self) -> bool {
         self.keys.is_empty()
     }
-    /// Get the imported [modules][Module] at a particular index.
+    /// Get the imported [module][Module] at a particular index.
     #[inline(always)]
     #[must_use]
     pub fn get(&self, index: usize) -> Option<Shared<Module>> {
         self.modules.get(index).cloned()
     }
-    /// Get the imported [modules][Module] at a particular index.
+    /// Get the imported [module][Module] at a particular index.
     #[allow(dead_code)]
     #[inline(always)]
     #[must_use]
     pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut Shared<Module>> {
         self.modules.get_mut(index)
     }
-    /// Get the index of an imported [modules][Module] by name.
+    /// Get the index of an imported [module][Module] by name.
     #[inline(always)]
     #[must_use]
     pub fn find(&self, name: &str) -> Option<usize> {
@@ -97,7 +104,7 @@ impl Imports {
             .rev()
             .find_map(|(i, key)| if key == name { Some(i) } else { None })
     }
-    /// Push an imported [modules][Module] onto the stack.
+    /// Push an imported [module][Module] onto the stack.
     #[inline(always)]
     pub fn push(&mut self, name: impl Into<Identifier>, module: impl Into<Shared<Module>>) {
         self.keys.push(name.into());
@@ -134,15 +141,6 @@ impl Imports {
     pub(crate) fn scan_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.keys.iter().zip(self.modules.iter())
     }
-    /// Get a consuming iterator to this stack of imported [modules][Module] in reverse order.
-    #[inline(always)]
-    #[must_use]
-    pub fn into_iter(self) -> impl Iterator<Item = (Identifier, Shared<Module>)> {
-        self.keys
-            .into_iter()
-            .rev()
-            .zip(self.modules.into_iter().rev())
-    }
     /// Does the specified function hash key exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
     #[inline(always)]
@@ -150,7 +148,7 @@ impl Imports {
     pub fn contains_fn(&self, hash: u64) -> bool {
         self.modules.iter().any(|m| m.contains_qualified_fn(hash))
     }
-    /// Get specified function via its hash key.
+    /// Get the specified function via its hash key from this stack of imported [modules][Module].
     #[inline(always)]
     #[must_use]
     pub fn get_fn(&self, hash: u64) -> Option<(&CallableFunction, Option<&Identifier>)> {
@@ -167,7 +165,8 @@ impl Imports {
     pub fn contains_iter(&self, id: TypeId) -> bool {
         self.modules.iter().any(|m| m.contains_qualified_iter(id))
     }
-    /// Get the specified [`TypeId`][std::any::TypeId] iterator.
+    /// Get the specified [`TypeId`][std::any::TypeId] iterator from this stack of imported
+    /// [modules][Module].
     #[inline(always)]
     #[must_use]
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
@@ -175,6 +174,37 @@ impl Imports {
             .iter()
             .rev()
             .find_map(|m| m.get_qualified_iter(id))
+    }
+}
+
+impl IntoIterator for Imports {
+    type Item = (Identifier, Shared<Module>);
+    type IntoIter =
+        Zip<Rev<smallvec::IntoIter<[Identifier; 4]>>, Rev<smallvec::IntoIter<[Shared<Module>; 4]>>>;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        self.keys
+            .into_iter()
+            .rev()
+            .zip(self.modules.into_iter().rev())
+    }
+}
+
+impl<K: Into<Identifier>, M: Into<Shared<Module>>> FromIterator<(K, M)> for Imports {
+    fn from_iter<T: IntoIterator<Item = (K, M)>>(iter: T) -> Self {
+        let mut lib = Self::new();
+        lib.extend(iter);
+        lib
+    }
+}
+
+impl<K: Into<Identifier>, M: Into<Shared<Module>>> Extend<(K, M)> for Imports {
+    fn extend<T: IntoIterator<Item = (K, M)>>(&mut self, iter: T) {
+        iter.into_iter().for_each(|(k, m)| {
+            self.keys.push(k.into());
+            self.modules.push(m.into());
+        })
     }
 }
 
