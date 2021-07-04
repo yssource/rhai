@@ -126,7 +126,7 @@ pub enum ParseErrorType {
     /// An identifier is a reserved keyword.
     Reserved(String),
     /// An expression is of the wrong type.
-    /// Wrapped values are the type requested and type of the actual result.
+    /// Wrapped values are the type requested and type of the actual result. 
     MismatchedType(String, String),
     /// Missing an expression. Wrapped value is the expression type.
     ExprExpected(String),
@@ -228,7 +228,7 @@ impl fmt::Display for ParseErrorType {
             },
             Self::FnMissingParams(s) => write!(f, "Expecting parameters for function '{}'", s),
             Self::FnDuplicatedParam(s, arg) => write!(f, "Duplicated parameter '{}' for function '{}'", arg, s),
-
+            
             Self::DuplicatedProperty(s) => write!(f, "Duplicated property '{}' for object map literal", s),
             Self::DuplicatedSwitchCase => f.write_str("Duplicated switch case"),
             Self::DuplicatedVariable(s) => write!(f, "Duplicated variable name '{}'", s),
