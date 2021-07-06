@@ -752,11 +752,9 @@ impl Token {
 
             "===" | "!==" | "->" | "<-" | ":=" | "~" | "::<" | "(*" | "*)" | "#" | "#!"
             | "public" | "protected" | "super" | "new" | "use" | "module" | "package" | "var"
-            | "static" | "begin" | "end" | "shared" | "with" | "each" | "then" | "goto"
-            | "unless" | "exit" | "match" | "case" | "default" | "void" | "null" | "nil"
-            | "spawn" | "thread" | "go" | "sync" | "async" | "await" | "yield" => {
-                Reserved(syntax.into())
-            }
+            | "static" | "shared" | "with" | "goto" | "exit" | "match" | "case" | "default"
+            | "void" | "null" | "nil" | "spawn" | "thread" | "go" | "sync" | "async" | "await"
+            | "yield" => Reserved(syntax.into()),
 
             KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
             | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_THIS | KEYWORD_IS_DEF_VAR => {
@@ -2173,7 +2171,7 @@ impl<'a> Iterator for TokenIterator<'a> {
                 ("::<", false) => Token::LexError(LERR::ImproperSymbol(s,
                     "'::<>' is not a valid symbol. This is not Rust! Should it be '::'?".to_string(),
                 )),
-                ("(*", false) | ("*)", false) | ("begin", false) | ("end", false) => Token::LexError(LERR::ImproperSymbol(s,
+                ("(*", false) | ("*)", false) => Token::LexError(LERR::ImproperSymbol(s,
                     "'(* .. *)' is not a valid comment format. This is not Pascal! Should it be '/* .. */'?".to_string(),
                 )),
                 ("#", false) => Token::LexError(LERR::ImproperSymbol(s,

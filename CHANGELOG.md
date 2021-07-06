@@ -20,6 +20,7 @@ Breaking changes
 
 * All deprecated API's (e.g. the `RegisterFn` and `RegisterResultFn` traits) are removed.
 * `Module::set_id` is split into `Module::set_id` and `Module::clear_id` pair.
+* `begin`, `end`, `each`, `then`, `unless` are no longer reserved keywords.
 
 Enhancements
 ------------

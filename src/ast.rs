@@ -1421,8 +1421,11 @@ pub struct BinaryExpr {
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct OpAssignment<'a> {
+    /// Hash of the op-assignment call.
     pub hash_op_assign: u64,
+    /// Hash of the underlying operator call.
     pub hash_op: u64,
+    /// Op-assignment operator.
     pub op: &'a str,
 }
 
