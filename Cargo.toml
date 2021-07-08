@@ -20,10 +20,10 @@ smallvec = { version = "1.6", default-features = false, features = ["union"] }
 ahash = { version = "0.7", default-features = false }
 num-traits = { version = "0.2", default-features = false }
 smartstring = { version = "0.2.6", default-features = false }
-rhai_codegen = { version = ">=0.4.0", path = "codegen", default-features = false }
+rhai_codegen = { version = "1.0", path = "codegen", default-features = false }
 
 [features]
-default = ["smartstring/std", "ahash/std", "num-traits/std"] # remove 'smartstring/std' when smartstring is updated to support no-std
+default = ["ahash/std", "num-traits/std"]
 unchecked = []                  # unchecked arithmetic
 sync = []                       # restrict to only types that implement Send + Sync
 no_position = []                # do not track position in the parser
