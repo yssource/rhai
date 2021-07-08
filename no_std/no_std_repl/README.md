@@ -6,15 +6,21 @@ This sample application is the same version as the `rhai-repl` tool, compiled fo
 [`wee_alloc`](https://crates.io/crates/wee_alloc) is used as the allocator.
 
 
-To Compile
-----------
+To Build
+--------
 
 The nightly compiler is required:
+
+```bash
+cargo +nightly build --release
+```
+
+A specific profile can also be used:
 
 ```bash
 cargo +nightly build --profile unix -Z unstable-options
 ```
 
-Available profiles are: `unix`, `windows` and `macos`.
+Three profiles are defined: `unix`, `windows` and `macos`.
 
 The release build is optimized for size.  It can be changed to optimize on speed instead.

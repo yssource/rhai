@@ -48,6 +48,8 @@ fn print_help() {
     println!("scope      => print all variables in the scope");
     #[cfg(feature = "metadata")]
     println!("functions  => print all functions defined");
+    #[cfg(feature = "metadata")]
+    println!("json       => output all functions in JSON format");
     println!("ast        => print the last AST (optimized)");
     println!("astu       => print the last raw, un-optimized AST");
     println!(r"end a line with '\' to continue to the next line.");
@@ -247,15 +249,16 @@ fn main() {
                 println!();
                 continue;
             }
-            // "json" => {
-            //     println!(
-            //         "{}",
-            //         engine
-            //             .gen_fn_metadata_with_ast_to_json(&main_ast, true)
-            //             .unwrap()
-            //     );
-            //     continue;
-            // }
+            #[cfg(feature = "metadata")]
+            "json" => {
+                println!(
+                    "{}",
+                    engine
+                        .gen_fn_metadata_with_ast_to_json(&main_ast, true)
+                        .unwrap()
+                );
+                continue;
+            }
             _ => (),
         }
 
