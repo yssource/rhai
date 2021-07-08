@@ -1,6 +1,6 @@
 //! Implementations of [`serde::Serialize`].
 
-use crate::dynamic::Union;
+use crate::dynamic::{Union, Variant};
 use crate::{Dynamic, ImmutableString};
 use serde::ser::{Serialize, Serializer};
 #[cfg(feature = "no_std")]
