@@ -405,13 +405,11 @@ impl Dynamic {
     #[inline(always)]
     #[must_use]
     pub fn is<T: Any + Clone>(&self) -> bool {
-        let mut target_type_id = TypeId::of::<T>();
-
-        if target_type_id == TypeId::of::<String>() {
-            target_type_id = TypeId::of::<ImmutableString>();
+        if TypeId::of::<T>() == TypeId::of::<String>() {
+            self.type_id() == TypeId::of::<ImmutableString>()
+        } else {
+            self.type_id() == TypeId::of::<T>()
         }
-
-        self.type_id() == target_type_id
     }
     /// Get the [`TypeId`] of the value held by this [`Dynamic`].
     ///
@@ -577,7 +575,7 @@ impl Hash for Dynamic {
 }
 
 /// Map the name of a standard type into a friendly form.
-#[inline(always)]
+#[inline]
 #[must_use]
 pub(crate) fn map_std_type_name(name: &str) -> &str {
     if name == type_name::<String>() {
@@ -1321,7 +1319,7 @@ impl Dynamic {
     ///
     /// assert_eq!(x.cast::<u32>(), 42);
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn cast<T: Any + Clone>(self) -> T {
         #[cfg(not(feature = "no_closure"))]
@@ -1481,7 +1479,7 @@ impl Dynamic {
     ///
     /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn read_lock<T: Any + Clone>(&self) -> Option<DynamicReadLock<T>> {
         match self.0 {
@@ -1515,7 +1513,7 @@ impl Dynamic {
     ///
     /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn write_lock<T: Any + Clone>(&mut self) -> Option<DynamicWriteLock<T>> {
         match self.0 {
@@ -1836,7 +1834,7 @@ impl Dynamic {
     }
     /// Convert the [`Dynamic`] into an [`ImmutableString`] and return it.
     /// Returns the name of the actual type if the cast fails.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn as_immutable_string(self) -> Result<ImmutableString, &'static str> {
         match self.0 {

@@ -96,7 +96,7 @@ impl FnPtr {
     /// This is to avoid unnecessarily cloning the arguments.
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn call_dynamic(
         &self,
@@ -127,7 +127,6 @@ impl FnPtr {
 }
 
 impl fmt::Display for FnPtr {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Fn({})", self.0)
     }
@@ -136,7 +135,7 @@ impl fmt::Display for FnPtr {
 impl TryFrom<Identifier> for FnPtr {
     type Error = Box<EvalAltResult>;
 
-    #[inline(always)]
+    #[inline]
     fn try_from(value: Identifier) -> Result<Self, Self::Error> {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, Default::default()))

@@ -21,7 +21,7 @@ impl Hasher for StraightHasher {
     fn finish(&self) -> u64 {
         self.0
     }
-    #[inline(always)]
+    #[inline]
     fn write(&mut self, bytes: &[u8]) {
         assert_eq!(bytes.len(), 8, "StraightHasher can only hash u64 values");
 

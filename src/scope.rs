@@ -49,7 +49,7 @@ const SCOPE_ENTRIES_INLINED: usize = 8;
 // look up a variable.  Variable lookup is usually via direct indexing, by-passing the name altogether.
 //
 // Since [`Dynamic`] is reasonably small, packing it tightly improves cache locality when variables are accessed.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, Default)]
 pub struct Scope<'a> {
     /// Current value of the entry.
     values: smallvec::SmallVec<[Dynamic; SCOPE_ENTRIES_INLINED]>,
@@ -57,13 +57,6 @@ pub struct Scope<'a> {
     names: smallvec::SmallVec<
         [(Cow<'a, str>, Option<Box<StaticVec<Identifier>>>); SCOPE_ENTRIES_INLINED],
     >,
-}
-
-impl Default for Scope<'_> {
-    #[inline(always)]
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl<'a> IntoIterator for Scope<'a> {
@@ -97,10 +90,7 @@ impl<'a> Scope<'a> {
     #[inline(always)]
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            values: Default::default(),
-            names: Default::default(),
-        }
+        Default::default()
     }
     /// Empty the [`Scope`].
     ///
@@ -246,7 +236,7 @@ impl<'a> Scope<'a> {
         self.push_dynamic_value(name, AccessMode::ReadOnly, value)
     }
     /// Add (push) a new entry with a [`Dynamic`] value to the [`Scope`].
-    #[inline(always)]
+    #[inline]
     pub(crate) fn push_dynamic_value(
         &mut self,
         name: impl Into<Cow<'a, str>>,
@@ -371,7 +361,7 @@ impl<'a> Scope<'a> {
     /// my_scope.set_value("x", 0_i64);
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 0);
     /// ```
-    #[inline(always)]
+    #[inline]
     pub fn set_value(&mut self, name: &'a str, value: impl Variant + Clone) -> &mut Self {
         match self.get_index(name) {
             None => {
@@ -408,6 +398,7 @@ impl<'a> Scope<'a> {
     ///
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 123);
     /// ```
+    #[inline(always)]
     #[must_use]
     pub fn get_mut(&mut self, name: &str) -> Option<&mut Dynamic> {
         self.get_index(name)
@@ -434,7 +425,7 @@ impl<'a> Scope<'a> {
     ///
     /// Panics if the index is out of bounds.
     #[cfg(not(feature = "no_module"))]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn add_entry_alias(&mut self, index: usize, alias: Identifier) -> &mut Self {
         let (_, aliases) = self
             .names
@@ -456,7 +447,7 @@ impl<'a> Scope<'a> {
     #[inline(always)]
     #[must_use]
     pub(crate) fn clone_visible(&self) -> Self {
-        let mut entries: Self = Default::default();
+        let mut entries = Self::new();
 
         self.names
             .iter()

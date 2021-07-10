@@ -59,7 +59,7 @@ pub struct IdentifierBuilder(
 
 impl IdentifierBuilder {
     /// Get an identifier from a text string.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
         #[cfg(not(feature = "no_smartstring"))]
@@ -141,7 +141,7 @@ impl<'e> ParseState<'e> {
     /// i.e. the top element of [`ParseState`]'s variables stack is offset 1.
     ///
     /// Return `None` when the variable name is not found in the `stack`.
-    #[inline(always)]
+    #[inline]
     pub fn access_var(&mut self, name: &str, _pos: Position) -> Option<NonZeroUsize> {
         let mut barrier = false;
 
@@ -242,7 +242,7 @@ impl ParseSettings {
     }
     /// Make sure that the current level of expression nesting is within the maximum limit.
     #[cfg(not(feature = "unchecked"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn ensure_level_within_max_limit(
         &self,
@@ -261,7 +261,7 @@ impl Expr {
     /// Convert a [`Variable`][Expr::Variable] into a [`Property`][Expr::Property].
     /// All other variants are untouched.
     #[cfg(not(feature = "no_object"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     fn into_property(self, state: &mut ParseState) -> Self {
         match self {

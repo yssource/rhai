@@ -100,7 +100,7 @@ impl Drop for ArgBackup<'_> {
 }
 
 #[cfg(not(feature = "no_closure"))]
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn ensure_no_data_race(
     fn_name: &str,
@@ -157,7 +157,6 @@ impl Engine {
     /// 3) Global modules - packages
     /// 4) Imported modules - functions marked with global namespace
     /// 5) Global sub-modules - functions marked with global namespace
-    #[inline(always)]
     #[must_use]
     fn resolve_fn<'s>(
         &self,
@@ -447,7 +446,6 @@ impl Engine {
         pos: Position,
         level: usize,
     ) -> RhaiResult {
-        #[inline(always)]
         fn make_error(
             name: String,
             fn_def: &crate::ast::ScriptFnDef,
@@ -564,7 +562,6 @@ impl Engine {
 
     // Does a scripted function exist?
     #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
     #[must_use]
     pub(crate) fn has_script_fn(
         &self,
@@ -619,7 +616,6 @@ impl Engine {
         _capture_scope: Option<Scope>,
         _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        #[inline(always)]
         fn no_method_err(name: &str, pos: Position) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
             let msg = format!("'{0}' should not be called this way. Try {0}(...);", name);
             EvalAltResult::ErrorRuntime(msg.into(), pos).into()
@@ -782,7 +778,7 @@ impl Engine {
 
     /// Evaluate a list of statements with no `this` pointer.
     /// This is commonly used to evaluate a list of statements in an [`AST`] or a script function body.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn eval_global_statements(
         &self,
@@ -1018,7 +1014,7 @@ impl Engine {
     }
 
     /// Evaluate an argument.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn get_arg_value(
         &self,

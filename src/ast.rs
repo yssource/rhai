@@ -78,7 +78,6 @@ pub struct ScriptFnDef {
 }
 
 impl fmt::Display for ScriptFnDef {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -129,7 +128,6 @@ pub struct ScriptFnMetadata<'a> {
 
 #[cfg(not(feature = "no_function"))]
 impl fmt::Display for ScriptFnMetadata<'_> {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -150,7 +148,7 @@ impl fmt::Display for ScriptFnMetadata<'_> {
 
 #[cfg(not(feature = "no_function"))]
 impl<'a> Into<ScriptFnMetadata<'a>> for &'a ScriptFnDef {
-    #[inline(always)]
+    #[inline]
     fn into(self) -> ScriptFnMetadata<'a> {
         ScriptFnMetadata {
             #[cfg(not(feature = "no_function"))]
@@ -215,7 +213,7 @@ impl Default for AST {
 
 impl AST {
     /// Create a new [`AST`].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new(
         statements: impl IntoIterator<Item = Stmt>,
@@ -258,7 +256,7 @@ impl AST {
         self.source.as_ref()
     }
     /// Set the source.
-    #[inline(always)]
+    #[inline]
     pub fn set_source(&mut self, source: impl Into<Identifier>) -> &mut Self {
         let source = source.into();
         Shared::get_mut(&mut self.functions)
@@ -386,7 +384,7 @@ impl AST {
     ///
     /// This operation is cheap because functions are shared.
     #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn clone_functions_only_filtered(
         &self,
@@ -657,7 +655,7 @@ impl AST {
     /// # Ok(())
     /// # }
     /// ```
-    #[inline(always)]
+    #[inline]
     pub fn combine_filtered(
         &mut self,
         other: Self,
@@ -696,7 +694,7 @@ impl AST {
     /// # }
     /// ```
     #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
+    #[inline]
     pub fn retain_functions(
         &mut self,
         filter: impl Fn(FnNamespace, FnAccess, &str, usize) -> bool,
@@ -748,7 +746,7 @@ impl AST {
     /// Return `false` from the callback to terminate the walk.
     #[cfg(not(feature = "internals"))]
     #[cfg(not(feature = "no_module"))]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn walk(&self, on_node: &mut impl FnMut(&[ASTNode]) -> bool) -> bool {
         let path = &mut Default::default();
 
@@ -770,7 +768,7 @@ impl AST {
     /// Return `false` from the callback to terminate the walk.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
-    #[inline(always)]
+    #[inline]
     pub fn walk(&self, on_node: &mut impl FnMut(&[ASTNode]) -> bool) -> bool {
         let path = &mut Default::default();
 
@@ -835,7 +833,6 @@ pub struct Ident {
 }
 
 impl fmt::Debug for Ident {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.name)?;
         self.pos.debug_print(f)
@@ -939,7 +936,6 @@ impl DerefMut for StmtBlock {
 }
 
 impl fmt::Debug for StmtBlock {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Block")?;
         fmt::Debug::fmt(&self.0, f)?;
@@ -1027,7 +1023,7 @@ impl Default for Stmt {
 }
 
 impl From<Stmt> for StmtBlock {
-    #[inline(always)]
+    #[inline]
     fn from(stmt: Stmt) -> Self {
         match stmt {
             Stmt::Block(mut block, pos) => Self(block.iter_mut().map(mem::take).collect(), pos),
@@ -1226,7 +1222,7 @@ impl Stmt {
     ///
     /// Only variable declarations (i.e. `let` and `const`) and `import`/`export` statements
     /// are internally pure.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn is_internally_pure(&self) -> bool {
         match self {
@@ -1245,7 +1241,7 @@ impl Stmt {
     /// Currently this is only true for `return`, `throw`, `break` and `continue`.
     ///
     /// All statements following this statement will essentially be dead code.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_control_flow_break(&self) -> bool {
         match self {
@@ -1634,7 +1630,6 @@ impl<F: Float + fmt::Debug> fmt::Debug for FloatWrapper<F> {
 
 #[cfg(not(feature = "no_float"))]
 impl<F: Float + fmt::Display + fmt::LowerExp + From<f32>> fmt::Display for FloatWrapper<F> {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let abs = self.0.abs();
         if abs > Self::MAX_NATURAL_FLOAT_FOR_DISPLAY.into()

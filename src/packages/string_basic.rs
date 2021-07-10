@@ -22,7 +22,7 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
 
 // Register print and debug
 
-#[inline(always)]
+#[inline]
 pub fn print_with_func(
     fn_name: &str,
     ctx: &NativeCallContext,

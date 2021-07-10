@@ -211,7 +211,6 @@ impl Default for Position {
 }
 
 impl fmt::Display for Position {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_none() {
             write!(f, "none")?;
@@ -227,7 +226,6 @@ impl fmt::Display for Position {
 }
 
 impl fmt::Debug for Position {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(not(feature = "no_position"))]
         write!(f, "{}:{}", self.line, self.pos)?;
@@ -772,10 +770,8 @@ impl Token {
     #[inline(always)]
     #[must_use]
     pub const fn is_eof(&self) -> bool {
-        use Token::*;
-
         match self {
-            EOF => true,
+            Self::EOF => true,
             _ => false,
         }
     }
@@ -917,6 +913,7 @@ impl Token {
     }
 
     /// Is this token an active standard keyword?
+    #[inline]
     #[must_use]
     pub const fn is_keyword(&self) -> bool {
         use Token::*;
@@ -947,6 +944,7 @@ impl Token {
 
     /// Convert a token into a function name, if possible.
     #[cfg(not(feature = "no_function"))]
+    #[inline]
     #[must_use]
     pub(crate) fn into_function_name_for_override(self) -> Result<String, Self> {
         match self {
@@ -1304,7 +1302,7 @@ fn scan_block_comment(
 /// # Volatile API
 ///
 /// This function is volatile and may change.
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn get_next_token(
     stream: &mut impl InputStream,
@@ -1986,7 +1984,7 @@ fn get_identifier(
 }
 
 /// Is this keyword allowed as a function?
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn is_keyword_function(name: &str) -> bool {
     match name {
@@ -2062,7 +2060,7 @@ pub struct MultiInputsStream<'a> {
 }
 
 impl InputStream for MultiInputsStream<'_> {
-    #[inline(always)]
+    #[inline]
     fn unget(&mut self, ch: char) {
         if self.buf.is_some() {
             panic!("cannot unget two characters in a row");
@@ -2252,7 +2250,7 @@ impl Engine {
         self.lex_raw(input, Some(map))
     }
     /// Tokenize an input text stream with an optional mapping function.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn lex_raw<'a>(
         &'a self,

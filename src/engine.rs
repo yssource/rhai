@@ -67,7 +67,10 @@ impl Imports {
     #[inline(always)]
     #[must_use]
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            keys: StaticVec::new(),
+            modules: StaticVec::new(),
+        }
     }
     /// Get the length of this stack of imported [modules][Module].
     #[inline(always)]
@@ -376,7 +379,7 @@ pub enum Target<'a> {
 impl<'a> Target<'a> {
     /// Is the `Target` a reference pointing to other data?
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_ref(&self) -> bool {
         match self {
@@ -391,7 +394,7 @@ impl<'a> Target<'a> {
         }
     }
     /// Is the `Target` a temp value?
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_temp_value(&self) -> bool {
         match self {
@@ -407,7 +410,7 @@ impl<'a> Target<'a> {
     }
     /// Is the `Target` a shared value?
     #[cfg(not(feature = "no_closure"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn is_shared(&self) -> bool {
         match self {
@@ -423,7 +426,7 @@ impl<'a> Target<'a> {
     }
     /// Is the `Target` a specific type?
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn is<T: Variant + Clone>(&self) -> bool {
         match self {
@@ -438,7 +441,7 @@ impl<'a> Target<'a> {
         }
     }
     /// Get the value of the `Target` as a `Dynamic`, cloning a referenced value if necessary.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn take_or_clone(self) -> Dynamic {
         match self {
@@ -469,7 +472,7 @@ impl<'a> Target<'a> {
     }
     /// Propagate a changed value back to the original source.
     /// This has no effect except for string indexing.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn propagate_changed_value(&mut self) -> Result<(), Box<EvalAltResult>> {
         match self {
@@ -534,7 +537,7 @@ impl<'a> Target<'a> {
 }
 
 impl<'a> From<&'a mut Dynamic> for Target<'a> {
-    #[inline(always)]
+    #[inline]
     fn from(value: &'a mut Dynamic) -> Self {
         #[cfg(not(feature = "no_closure"))]
         if value.is_shared() {
@@ -555,7 +558,7 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
 impl Deref for Target<'_> {
     type Target = Dynamic;
 
-    #[inline(always)]
+    #[inline]
     fn deref(&self) -> &Dynamic {
         match self {
             Self::RefMut(r) => *r,
@@ -578,7 +581,7 @@ impl AsRef<Dynamic> for Target<'_> {
 }
 
 impl DerefMut for Target<'_> {
-    #[inline(always)]
+    #[inline]
     fn deref_mut(&mut self) -> &mut Dynamic {
         match self {
             Self::RefMut(r) => *r,
@@ -947,7 +950,7 @@ impl Default for Engine {
 
 /// Make getter function
 #[cfg(not(feature = "no_object"))]
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn make_getter(id: &str) -> String {
     format!("{}{}", FN_GET, id)
@@ -955,7 +958,7 @@ pub fn make_getter(id: &str) -> String {
 
 /// Make setter function
 #[cfg(not(feature = "no_object"))]
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn make_setter(id: &str) -> String {
     format!("{}{}", FN_SET, id)
@@ -970,7 +973,7 @@ pub fn is_anonymous_fn(fn_name: &str) -> bool {
 }
 
 /// Print to `stdout`
-#[inline(always)]
+#[inline]
 #[allow(unused_variables)]
 fn print_to_stdout(s: &str) {
     #[cfg(not(feature = "no_std"))]
@@ -979,7 +982,7 @@ fn print_to_stdout(s: &str) {
 }
 
 /// Debug to `stdout`
-#[inline(always)]
+#[inline]
 #[allow(unused_variables)]
 fn debug_to_stdout(s: &str, source: Option<&str>, pos: Position) {
     #[cfg(not(feature = "no_std"))]
@@ -1021,7 +1024,7 @@ impl Engine {
     /// Create a new [`Engine`] with minimal built-in functions.
     ///
     /// Use [`register_global_module`][Engine::register_global_module] to add packages of functions.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new_raw() -> Self {
         let mut engine = Self {

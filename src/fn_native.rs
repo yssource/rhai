@@ -195,7 +195,7 @@ impl<'a> NativeCallContext<'a> {
     ///
     /// If `is_method` is [`true`], the first argument is assumed to be passed
     /// by reference and is not consumed.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn call_fn_dynamic_raw(
         &self,
@@ -338,7 +338,6 @@ pub enum CallableFunction {
 }
 
 impl fmt::Debug for CallableFunction {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Pure(_) => write!(f, "NativePureFunction"),
@@ -353,7 +352,6 @@ impl fmt::Debug for CallableFunction {
 }
 
 impl fmt::Display for CallableFunction {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Pure(_) => write!(f, "NativePureFunction"),
@@ -369,7 +367,7 @@ impl fmt::Display for CallableFunction {
 
 impl CallableFunction {
     /// Is this a pure native Rust function?
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn is_pure(&self) -> bool {
         match self {
@@ -383,7 +381,7 @@ impl CallableFunction {
         }
     }
     /// Is this a native Rust method function?
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn is_method(&self) -> bool {
         match self {
@@ -397,7 +395,7 @@ impl CallableFunction {
         }
     }
     /// Is this an iterator function?
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_iter(&self) -> bool {
         match self {
@@ -409,7 +407,7 @@ impl CallableFunction {
         }
     }
     /// Is this a Rhai-scripted function?
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_script(&self) -> bool {
         match self {
@@ -420,7 +418,7 @@ impl CallableFunction {
         }
     }
     /// Is this a plugin function?
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_plugin_fn(&self) -> bool {
         match self {
@@ -432,7 +430,7 @@ impl CallableFunction {
         }
     }
     /// Is this a native Rust function?
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_native(&self) -> bool {
         match self {
@@ -445,7 +443,7 @@ impl CallableFunction {
         }
     }
     /// Get the access mode.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn access(&self) -> FnAccess {
         match self {
@@ -457,7 +455,7 @@ impl CallableFunction {
         }
     }
     /// Get a shared reference to a native Rust function.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get_native_fn(&self) -> Option<&Shared<FnAny>> {
         match self {
@@ -472,7 +470,7 @@ impl CallableFunction {
     ///
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn get_script_fn_def(&self) -> Option<&Shared<crate::ast::ScriptFnDef>> {
         match self {
@@ -481,7 +479,7 @@ impl CallableFunction {
         }
     }
     /// Get a reference to an iterator function.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get_iter_fn(&self) -> Option<IteratorFn> {
         match self {
@@ -493,7 +491,7 @@ impl CallableFunction {
         }
     }
     /// Get a shared reference to a plugin function.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get_plugin_fn<'s>(&'s self) -> Option<&Shared<FnPlugin>> {
         match self {

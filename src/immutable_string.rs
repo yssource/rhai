@@ -322,7 +322,7 @@ impl Add<String> for &ImmutableString {
 }
 
 impl AddAssign<String> for ImmutableString {
-    #[inline(always)]
+    #[inline]
     fn add_assign(&mut self, rhs: String) {
         if !rhs.is_empty() {
             if self.is_empty() {

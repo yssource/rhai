@@ -329,8 +329,7 @@ impl Engine {
         name: &str,
         get_fn: impl Fn(&mut T) -> V + SendSync + 'static,
     ) -> &mut Self {
-        use crate::engine::make_getter;
-        self.register_fn(&make_getter(name), get_fn)
+        self.register_fn(&crate::engine::make_getter(name), get_fn)
     }
     /// Register a getter function for a member of a registered type with the [`Engine`].
     ///
@@ -378,8 +377,7 @@ impl Engine {
         name: &str,
         get_fn: impl Fn(&mut T) -> Result<V, Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
-        use crate::engine::make_getter;
-        self.register_result_fn(&make_getter(name), get_fn)
+        self.register_result_fn(&crate::engine::make_getter(name), get_fn)
     }
     /// Register a setter function for a member of a registered type with the [`Engine`].
     ///
@@ -426,8 +424,7 @@ impl Engine {
         name: &str,
         set_fn: impl Fn(&mut T, V) + SendSync + 'static,
     ) -> &mut Self {
-        use crate::engine::make_setter;
-        self.register_fn(&make_setter(name), set_fn)
+        self.register_fn(&crate::engine::make_setter(name), set_fn)
     }
     /// Register a setter function for a member of a registered type with the [`Engine`].
     ///
@@ -477,8 +474,7 @@ impl Engine {
         name: &str,
         set_fn: impl Fn(&mut T, V) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
-        use crate::engine::make_setter;
-        self.register_result_fn(&make_setter(name), set_fn)
+        self.register_result_fn(&crate::engine::make_setter(name), set_fn)
     }
     /// Short-hand for registering both getter and setter functions
     /// of a registered type with the [`Engine`].
@@ -1189,7 +1185,7 @@ impl Engine {
         self.compile_with_scope_and_optimization_level(scope, scripts, self.optimization_level)
     }
     /// Join a list of strings and compile into an [`AST`] using own scope at a specific optimization level.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn compile_with_scope_and_optimization_level(
         &self,
@@ -1476,7 +1472,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn compile_expression_with_scope(
         &self,
@@ -1644,7 +1640,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn eval_expression_with_scope<T: Variant + Clone>(
         &self,
@@ -1717,7 +1713,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn eval_ast_with_scope<T: Variant + Clone>(
         &self,
@@ -1740,7 +1736,7 @@ impl Engine {
         });
     }
     /// Evaluate an [`AST`] with own scope.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn eval_ast_with_scope_raw<'a>(
         &self,
@@ -1797,7 +1793,7 @@ impl Engine {
     }
     /// Evaluate a string with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    #[inline(always)]
+    #[inline]
     pub fn consume_with_scope(
         &self,
         scope: &mut Scope,
@@ -1824,7 +1820,7 @@ impl Engine {
     }
     /// Evaluate an [`AST`] with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    #[inline(always)]
+    #[inline]
     pub fn consume_ast_with_scope(
         &self,
         scope: &mut Scope,
@@ -1889,7 +1885,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn call_fn<T: Variant + Clone>(
         &self,
@@ -1970,7 +1966,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn call_fn_dynamic(
         &self,
@@ -1995,7 +1991,7 @@ impl Engine {
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
     #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn call_fn_dynamic_raw(
         &self,
@@ -2052,7 +2048,7 @@ impl Engine {
     /// (i.e. with [`Scope::push_constant`]).
     /// Then, the [`AST`] is cloned and the copy re-optimized before running.
     #[cfg(not(feature = "no_optimize"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn optimize_ast(
         &self,
@@ -2087,6 +2083,7 @@ impl Engine {
     /// 2) Functions in registered sub-modules
     /// 3) Functions in packages (optional)
     #[cfg(feature = "metadata")]
+    #[inline]
     #[must_use]
     pub fn gen_fn_signatures(&self, include_packages: bool) -> Vec<String> {
         let mut signatures: Vec<_> = Default::default();
