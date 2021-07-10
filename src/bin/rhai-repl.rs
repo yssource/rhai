@@ -209,7 +209,7 @@ fn main() {
                     .enumerate()
                     .for_each(|(i, (name, constant, value))| {
                         #[cfg(not(feature = "no_closure"))]
-                        let value_is_shared = if value.is_shared() { " (shared" } else { "" };
+                        let value_is_shared = if value.is_shared() { " (shared)" } else { "" };
                         #[cfg(feature = "no_closure")]
                         let value_is_shared = "";
 

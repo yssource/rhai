@@ -1901,6 +1901,7 @@ impl Engine {
         let mut arg_values: crate::StaticVec<_> = Default::default();
         args.parse(&mut arg_values);
         let mut args: crate::StaticVec<_> = arg_values.iter_mut().collect();
+        let name = name.as_ref();
 
         let result = self.call_fn_dynamic_raw(scope, ast, true, name, &mut None, &mut args)?;
 
@@ -1980,6 +1981,7 @@ impl Engine {
         mut this_ptr: Option<&mut Dynamic>,
         mut arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
+        let name = name.as_ref();
         let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
         self.call_fn_dynamic_raw(scope, ast, eval_ast, name, &mut this_ptr, &mut args)
@@ -2000,7 +2002,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
         eval_ast: bool,
-        name: impl AsRef<str>,
+        name: &str,
         this_ptr: &mut Option<&mut Dynamic>,
         args: &mut FnCallArgs,
     ) -> RhaiResult {
@@ -2008,7 +2010,6 @@ impl Engine {
         let mods = &mut Default::default();
         let lib = &[ast.lib()];
         let statements = ast.statements();
-        let name = name.as_ref();
 
         if eval_ast && !statements.is_empty() {
             self.eval_global_statements(scope, mods, state, statements, lib, 0)?;

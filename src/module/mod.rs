@@ -115,7 +115,7 @@ impl FuncInfo {
 #[inline(always)]
 fn calc_native_fn_hash<'a>(
     modules: impl Iterator<Item = &'a str>,
-    fn_name: impl AsRef<str>,
+    fn_name: &str,
     params: &[TypeId],
 ) -> u64 {
     let hash_script = calc_qualified_fn_hash(modules, fn_name, params.len());
@@ -706,7 +706,7 @@ impl Module {
         #[cfg(feature = "metadata")]
         param_names.shrink_to_fit();
 
-        let hash_fn = calc_native_fn_hash(empty(), &name, &param_types);
+        let hash_fn = calc_native_fn_hash(empty(), name.as_ref(), &param_types);
 
         self.functions.insert(
             hash_fn,

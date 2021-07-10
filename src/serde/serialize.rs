@@ -1,6 +1,6 @@
 //! Implementations of [`serde::Serialize`].
 
-use crate::dynamic::{Union, Variant};
+use crate::dynamic::Union;
 use crate::{Dynamic, ImmutableString};
 use serde::ser::{Serialize, Serializer};
 #[cfg(feature = "no_std")]
@@ -8,6 +8,9 @@ use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_object"))]
 use serde::ser::SerializeMap;
+
+#[cfg(not(feature = "no_std"))]
+use crate::dynamic::Variant;
 
 impl Serialize for Dynamic {
     fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
