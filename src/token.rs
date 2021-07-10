@@ -483,9 +483,9 @@ pub enum Token {
 }
 
 impl Token {
-    /// Get the syntax of the token if it is a keyword.
+    /// Get the literal syntax of the token.
     #[must_use]
-    pub const fn keyword_syntax(&self) -> &'static str {
+    pub const fn literal_syntax(&self) -> &'static str {
         use Token::*;
 
         match self {
@@ -595,7 +595,7 @@ impl Token {
 
             EOF => "{EOF}".into(),
 
-            token => token.keyword_syntax().into(),
+            token => token.literal_syntax().into(),
         }
     }
 
@@ -912,7 +912,7 @@ impl Token {
 
     /// Is this token a standard symbol used in the language?
     #[must_use]
-    pub const fn is_symbol(&self) -> bool {
+    pub const fn is_standard_symbol(&self) -> bool {
         use Token::*;
 
         match self {
@@ -928,10 +928,10 @@ impl Token {
         }
     }
 
-    /// Is this token an active standard keyword?
+    /// Is this token a standard keyword?
     #[inline]
     #[must_use]
-    pub const fn is_keyword(&self) -> bool {
+    pub const fn is_standard_keyword(&self) -> bool {
         use Token::*;
 
         match self {
@@ -948,7 +948,7 @@ impl Token {
         }
     }
 
-    /// Is this token a reserved symbol?
+    /// Is this token a reserved keyword or symbol?
     #[inline(always)]
     #[must_use]
     pub const fn is_reserved(&self) -> bool {

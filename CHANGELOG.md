@@ -7,6 +7,7 @@ Version 1.1.0
 Enhancements
 ------------
 
+* `$symbol$` is supported in custom syntax to match any symbol.
 * `parse_float()`, `PI()` and `E()` now defer to `Decimal` under `no_float` if `decimal` is turned on.
 
 
