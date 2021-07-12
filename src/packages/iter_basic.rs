@@ -1,5 +1,6 @@
 use crate::dynamic::Variant;
 use crate::{def_package, EvalAltResult, INT};
+use std::iter::{ExactSizeIterator, FusedIterator};
 use std::ops::Range;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -127,6 +128,11 @@ where
     }
 }
 
+impl<T> FusedIterator for StepRange<T> where
+    T: Variant + Copy + PartialOrd + Add<Output = T> + Sub<Output = T>
+{
+}
+
 // Bit-field iterator with step
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 struct BitRange(INT, INT, usize);
@@ -190,6 +196,20 @@ impl Iterator for BitRange {
             Some(r)
         }
     }
+
+    #[inline(always)]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.2, Some(self.2))
+    }
+}
+
+impl FusedIterator for BitRange {}
+
+impl ExactSizeIterator for BitRange {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        self.2
+    }
 }
 
 // String iterator over characters
@@ -247,6 +267,21 @@ impl Iterator for CharsStream {
             self.1 += 1;
             Some(ch)
         }
+    }
+
+    #[inline(always)]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.0.len() - self.1;
+        (remaining, Some(remaining))
+    }
+}
+
+impl FusedIterator for CharsStream {}
+
+impl ExactSizeIterator for CharsStream {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        self.0.len() - self.1
     }
 }
 
@@ -356,7 +391,7 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
             }
         }
 
-        impl std::iter::FusedIterator for StepFloatRange {}
+        impl FusedIterator for StepFloatRange {}
 
         lib.set_iterator::<StepFloatRange>();
 
@@ -418,7 +453,7 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
             }
         }
 
-        impl std::iter::FusedIterator for StepDecimalRange {}
+        impl FusedIterator for StepDecimalRange {}
 
         lib.set_iterator::<StepDecimalRange>();
 
