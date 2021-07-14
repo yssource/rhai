@@ -221,7 +221,7 @@ impl AST {
     ) -> Self {
         Self {
             source: None,
-            body: StmtBlock::new(statements.into_iter().collect(), Position::NONE),
+            body: StmtBlock::new(statements, Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -237,7 +237,7 @@ impl AST {
     ) -> Self {
         Self {
             source: Some(source.into()),
-            body: StmtBlock::new(statements.into_iter().collect(), Position::NONE),
+            body: StmtBlock::new(statements, Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -889,7 +889,8 @@ pub struct StmtBlock(StaticVec<Stmt>, Position);
 impl StmtBlock {
     /// Create a new [`StmtBlock`].
     #[must_use]
-    pub fn new(mut statements: StaticVec<Stmt>, pos: Position) -> Self {
+    pub fn new(statements: impl IntoIterator<Item = Stmt>, pos: Position) -> Self {
+        let mut statements: StaticVec<_> = statements.into_iter().collect();
         statements.shrink_to_fit();
         Self(statements, pos)
     }
@@ -1685,7 +1686,7 @@ impl FloatWrapper<FLOAT> {
     /// Create a new [`FloatWrapper`].
     #[inline(always)]
     #[must_use]
-    pub(crate) const fn const_new(value: FLOAT) -> Self {
+    pub const fn new_const(value: FLOAT) -> Self {
         Self(value)
     }
 }
@@ -1910,8 +1911,17 @@ impl Expr {
             Union::Char(c, _, _) => Self::CharConstant(c, pos),
             Union::Int(i, _, _) => Self::IntegerConstant(i, pos),
 
+            #[cfg(feature = "decimal")]
+            Union::Decimal(value, _, _) => Self::DynamicConstant(Box::new((*value).into()), pos),
+
             #[cfg(not(feature = "no_float"))]
             Union::Float(f, _, _) => Self::FloatConstant(f, pos),
+
+            #[cfg(not(feature = "no_index"))]
+            Union::Array(a, _, _) => Self::DynamicConstant(Box::new((*a).into()), pos),
+
+            #[cfg(not(feature = "no_object"))]
+            Union::Map(m, _, _) => Self::DynamicConstant(Box::new((*m).into()), pos),
 
             _ => Self::DynamicConstant(value.into(), pos),
         }
