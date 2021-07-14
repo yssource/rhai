@@ -83,53 +83,75 @@ impl Position {
     /// Create a new [`Position`].
     ///
     /// `line` must not be zero.
-    /// If [`Position`] is zero, then it is at the beginning of a line.
+    ///
+    /// If `position` is zero, then it is at the beginning of a line.
     ///
     /// # Panics
     ///
     /// Panics if `line` is zero.
     #[inline(always)]
     #[must_use]
-    pub fn new(line: u16, _position: u16) -> Self {
+    pub fn new(line: u16, position: u16) -> Self {
         assert!(line != 0, "line cannot be zero");
+
+        let _pos = position;
 
         Self {
             #[cfg(not(feature = "no_position"))]
             line,
             #[cfg(not(feature = "no_position"))]
-            pos: _position,
+            pos: _pos,
         }
+    }
+    /// Create a new [`Position`].
+    ///
+    /// If `line` is zero, then [`None`] is returned.
+    ///
+    /// If `position` is zero, then it is at the beginning of a line.
+    #[inline(always)]
+    #[must_use]
+    pub const fn new_const(line: u16, position: u16) -> Option<Self> {
+        if line == 0 {
+            return None;
+        }
+        let _pos = position;
+
+        Some(Self {
+            #[cfg(not(feature = "no_position"))]
+            line,
+            #[cfg(not(feature = "no_position"))]
+            pos: _pos,
+        })
     }
     /// Get the line number (1-based), or [`None`] if there is no position.
     #[inline(always)]
     #[must_use]
-    pub fn line(self) -> Option<usize> {
-        if self.is_none() {
+    pub const fn line(self) -> Option<usize> {
+        #[cfg(not(feature = "no_position"))]
+        return if self.is_none() {
             None
         } else {
-            #[cfg(not(feature = "no_position"))]
-            return Some(self.line as usize);
-            #[cfg(feature = "no_position")]
-            unreachable!("there is no Position");
-        }
+            Some(self.line as usize)
+        };
+
+        #[cfg(feature = "no_position")]
+        return None;
     }
     /// Get the character position (1-based), or [`None`] if at beginning of a line.
     #[inline(always)]
     #[must_use]
-    pub fn position(self) -> Option<usize> {
-        if self.is_none() {
+    pub const fn position(self) -> Option<usize> {
+        #[cfg(not(feature = "no_position"))]
+        return if self.is_none() {
+            None
+        } else if self.pos == 0 {
             None
         } else {
-            #[cfg(not(feature = "no_position"))]
-            return if self.pos == 0 {
-                None
-            } else {
-                Some(self.pos as usize)
-            };
+            Some(self.pos as usize)
+        };
 
-            #[cfg(feature = "no_position")]
-            unreachable!("there is no Position");
-        }
+        #[cfg(feature = "no_position")]
+        return None;
     }
     /// Advance by one character position.
     #[inline(always)]
