@@ -8,7 +8,7 @@ use crate::custom_syntax::{
     CustomSyntax, CUSTOM_SYNTAX_MARKER_BLOCK, CUSTOM_SYNTAX_MARKER_BOOL, CUSTOM_SYNTAX_MARKER_EXPR,
     CUSTOM_SYNTAX_MARKER_IDENT, CUSTOM_SYNTAX_MARKER_INT, CUSTOM_SYNTAX_MARKER_STRING,
 };
-use crate::dynamic::{AccessMode, Union};
+use crate::dynamic::AccessMode;
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::fn_hash::get_hasher;
 use crate::module::NamespaceRef;
@@ -3248,35 +3248,5 @@ impl Engine {
             // Optimize AST
             optimize_into_ast(self, scope, statements, lib, optimization_level),
         )
-    }
-}
-
-impl From<Dynamic> for Expr {
-    fn from(value: Dynamic) -> Self {
-        match value.0 {
-            #[cfg(not(feature = "no_float"))]
-            Union::Float(value, _, _) => Self::FloatConstant(value, Position::NONE),
-
-            #[cfg(feature = "decimal")]
-            Union::Decimal(value, _, _) => {
-                Self::DynamicConstant(Box::new((*value).into()), Position::NONE)
-            }
-
-            Union::Unit(_, _, _) => Self::Unit(Position::NONE),
-            Union::Int(value, _, _) => Self::IntegerConstant(value, Position::NONE),
-            Union::Char(value, _, _) => Self::CharConstant(value, Position::NONE),
-            Union::Str(value, _, _) => Self::StringConstant(value, Position::NONE),
-            Union::Bool(value, _, _) => Self::BoolConstant(value, Position::NONE),
-
-            #[cfg(not(feature = "no_index"))]
-            Union::Array(array, _, _) => {
-                Self::DynamicConstant(Box::new((*array).into()), Position::NONE)
-            }
-
-            #[cfg(not(feature = "no_object"))]
-            Union::Map(map, _, _) => Self::DynamicConstant(Box::new((*map).into()), Position::NONE),
-
-            _ => Self::DynamicConstant(Box::new(value.into()), Position::NONE),
-        }
     }
 }
