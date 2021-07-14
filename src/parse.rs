@@ -17,8 +17,8 @@ use crate::token::{
     is_keyword_function, is_valid_identifier, Token, TokenStream, TokenizerControl,
 };
 use crate::{
-    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Dynamic, Engine, Identifier,
-    LexError, ParseError, ParseErrorType, Position, Scope, Shared, StaticVec, AST,
+    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Engine, Identifier, LexError,
+    ParseError, ParseErrorType, Position, Scope, Shared, StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -806,7 +806,7 @@ fn parse_map_literal(
     settings.pos = eat_token(input, Token::MapStart);
 
     let mut map: StaticVec<(Ident, Expr)> = Default::default();
-    let mut template: BTreeMap<Identifier, Dynamic> = Default::default();
+    let mut template: BTreeMap<Identifier, crate::Dynamic> = Default::default();
 
     loop {
         const MISSING_RBRACE: &str = "to end this object map literal";

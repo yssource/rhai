@@ -2,9 +2,7 @@
 
 use crate::ast::{Expr, OpAssignment, Stmt};
 use crate::dynamic::AccessMode;
-use crate::engine::{
-    KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_IS_SHARED, KEYWORD_PRINT, KEYWORD_TYPE_OF,
-};
+use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
 use crate::fn_hash::get_hasher;
 use crate::token::Token;
@@ -19,6 +17,9 @@ use std::{
     hash::{Hash, Hasher},
     mem,
 };
+
+#[cfg(not(feature = "no_closure"))]
+use crate::engine::KEYWORD_IS_SHARED;
 
 /// Level of optimization performed.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
@@ -956,6 +957,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
 
             let result = match x.name.as_str() {
                 KEYWORD_TYPE_OF if arg_values.len() == 1 => Some(state.engine.map_type_name(arg_values[0].type_name()).into()),
+                #[cfg(not(feature = "no_closure"))]
                 KEYWORD_IS_SHARED if arg_values.len() == 1 => Some(Dynamic::FALSE),
                 // Overloaded operators can override built-in.
                 _ if x.args.len() == 2 && !state.has_native_fn(x.hashes.native, arg_types.as_ref()) => {
@@ -1007,6 +1009,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
 
                 let result = match x.name.as_str() {
                     KEYWORD_TYPE_OF if arg_values.len() == 1 => Some(state.engine.map_type_name(arg_values[0].type_name()).into()),
+                    #[cfg(not(feature = "no_closure"))]
                     KEYWORD_IS_SHARED if arg_values.len() == 1 => Some(Dynamic::FALSE),
                     _ => state.call_fn_with_constant_arguments(x.name.as_ref(), arg_values)
                 };
