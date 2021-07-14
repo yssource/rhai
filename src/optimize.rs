@@ -2,7 +2,9 @@
 
 use crate::ast::{Expr, OpAssignment, Stmt};
 use crate::dynamic::AccessMode;
-use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
+use crate::engine::{
+    KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_IS_SHARED, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+};
 use crate::fn_builtin::get_builtin_binary_op_fn;
 use crate::fn_hash::get_hasher;
 use crate::token::Token;
@@ -118,42 +120,40 @@ impl<'a> OptimizerState<'a> {
             }
         })
     }
-}
+    /// Call a registered function
+    #[inline(always)]
+    pub fn call_fn_with_constant_arguments(
+        &self,
+        fn_name: &str,
+        arg_values: &mut [Dynamic],
+    ) -> Option<Dynamic> {
+        self.engine
+            .call_native_fn(
+                &mut Default::default(),
+                &mut Default::default(),
+                self.lib,
+                fn_name,
+                calc_fn_hash(fn_name, arg_values.len()),
+                &mut arg_values.iter_mut().collect::<StaticVec<_>>(),
+                false,
+                false,
+                Position::NONE,
+            )
+            .ok()
+            .map(|(v, _)| v)
+    }
+    // Has a system function a Rust-native override?
+    pub fn has_native_fn(&self, hash_script: u64, arg_types: &[TypeId]) -> bool {
+        let hash_params = calc_fn_params_hash(arg_types.iter().cloned());
+        let hash = combine_hashes(hash_script, hash_params);
 
-// Has a system function a Rust-native override?
-fn has_native_fn(state: &OptimizerState, hash_script: u64, arg_types: &[TypeId]) -> bool {
-    let hash_params = calc_fn_params_hash(arg_types.iter().cloned());
-    let hash = combine_hashes(hash_script, hash_params);
-
-    // First check registered functions
-    state.engine.global_namespace.contains_fn(hash)
+        // First check registered functions
+        self.engine.global_namespace.contains_fn(hash)
             // Then check packages
-            || state.engine.global_modules.iter().any(|m| m.contains_fn(hash))
+            || self.engine.global_modules.iter().any(|m| m.contains_fn(hash))
             // Then check sub-modules
-            || state.engine.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash))
-}
-
-/// Call a registered function
-fn call_fn_with_constant_arguments(
-    state: &OptimizerState,
-    fn_name: &str,
-    arg_values: &mut [Dynamic],
-) -> Option<Dynamic> {
-    state
-        .engine
-        .call_native_fn(
-            &mut Default::default(),
-            &mut Default::default(),
-            state.lib,
-            fn_name,
-            calc_fn_hash(fn_name, arg_values.len()),
-            &mut arg_values.iter_mut().collect::<StaticVec<_>>(),
-            false,
-            false,
-            Position::NONE,
-        )
-        .ok()
-        .map(|(v, _)| v)
+            || self.engine.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash))
+    }
 }
 
 /// Optimize a block of [statements][Stmt].
@@ -944,32 +944,35 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
         Expr::FnCall(x, pos)
                 if !x.is_qualified() // Non-qualified
                 && state.optimization_level == OptimizationLevel::Simple // simple optimizations
-                && x.args.len() == 2 // binary call
                 && x.args.iter().all(Expr::is_constant) // all arguments are constants
                 //&& !is_valid_identifier(x.name.chars()) // cannot be scripted
         => {
-            let mut arg_values: StaticVec<_> = x.args.iter().map(|e| match e {
-                                                                    Expr::Stack(slot, _) => x.constants[*slot].clone(),
-                                                                    _ => e.get_literal_value().unwrap()
-                                                                }).collect();
+            let arg_values = &mut x.args.iter().map(|e| match e {
+                                                            Expr::Stack(slot, _) => x.constants[*slot].clone(),
+                                                            _ => e.get_literal_value().unwrap()
+                                                        }).collect::<StaticVec<_>>();
 
             let arg_types: StaticVec<_> = arg_values.iter().map(Dynamic::type_id).collect();
 
-            // Search for overloaded operators (can override built-in).
-            if !has_native_fn(state, x.hashes.native, arg_types.as_ref()) {
-                if let Some(mut result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
-                                            .and_then(|f| {
-                                                let ctx = (state.engine, x.name.as_ref(), state.lib).into();
-                                                let (first, second) = arg_values.split_first_mut().unwrap();
-                                                (f)(ctx, &mut [ first, &mut second[0] ]).ok()
-                                            })
-                                            .map(Expr::from)
-                {
-                    state.set_dirty();
-                    result.set_position(*pos);
-                    *expr = result;
-                    return;
+            let result = match x.name.as_str() {
+                KEYWORD_TYPE_OF if arg_values.len() == 1 => Some(state.engine.map_type_name(arg_values[0].type_name()).into()),
+                KEYWORD_IS_SHARED if arg_values.len() == 1 => Some(Dynamic::FALSE),
+                // Overloaded operators can override built-in.
+                _ if x.args.len() == 2 && !state.has_native_fn(x.hashes.native, arg_types.as_ref()) => {
+                    get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
+                        .and_then(|f| {
+                            let ctx = (state.engine, x.name.as_ref(), state.lib).into();
+                            let (first, second) = arg_values.split_first_mut().unwrap();
+                            (f)(ctx, &mut [ first, &mut second[0] ]).ok()
+                        })
                 }
+                _ => None
+            };
+
+            if let Some(result) = result {
+                state.set_dirty();
+                *expr = Expr::from_dynamic(result, *pos);
+                return;
             }
 
             x.args.iter_mut().for_each(|a| optimize_expr(a, state, false));
@@ -997,30 +1000,20 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
             let has_script_fn = false;
 
             if !has_script_fn {
-                let mut arg_values: StaticVec<_> = x.args.iter().map(|e| match e {
-                                                                        Expr::Stack(slot, _) => x.constants[*slot].clone(),
-                                                                        _ => e.get_literal_value().unwrap()
-                                                                    }).collect();
+                let arg_values = &mut x.args.iter().map(|e| match e {
+                                                                Expr::Stack(slot, _) => x.constants[*slot].clone(),
+                                                                _ => e.get_literal_value().unwrap()
+                                                            }).collect::<StaticVec<_>>();
 
-                // Save the typename of the first argument if it is `type_of()`
-                // This is to avoid `call_args` being passed into the closure
-                let arg_for_type_of = if x.name == KEYWORD_TYPE_OF && arg_values.len() == 1 {
-                    state.engine.map_type_name(arg_values[0].type_name())
-                } else {
-                    ""
+                let result = match x.name.as_str() {
+                    KEYWORD_TYPE_OF if arg_values.len() == 1 => Some(state.engine.map_type_name(arg_values[0].type_name()).into()),
+                    KEYWORD_IS_SHARED if arg_values.len() == 1 => Some(Dynamic::FALSE),
+                    _ => state.call_fn_with_constant_arguments(x.name.as_ref(), arg_values)
                 };
 
-                if let Some(mut result) = call_fn_with_constant_arguments(&state, x.name.as_ref(), &mut arg_values)
-                                            .or_else(|| if !arg_for_type_of.is_empty() {
-                                                // Handle `type_of()`
-                                                Some(arg_for_type_of.to_string().into())
-                                            } else {
-                                                None
-                                            }).map(Expr::from)
-                {
+                if let Some(result) = result {
                     state.set_dirty();
-                    result.set_position(*pos);
-                    *expr = result;
+                    *expr = Expr::from_dynamic(result, *pos);
                     return;
                 }
             }
@@ -1043,9 +1036,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
         // constant-name
         Expr::Variable(_, pos, x) if x.1.is_none() && state.find_constant(&x.2).is_some() => {
             // Replace constant with value
-            let pos = *pos;
-            *expr = Expr::from(state.find_constant(&x.2).unwrap().clone());
-            expr.set_position(pos);
+            *expr = Expr::from_dynamic(state.find_constant(&x.2).unwrap().clone(), *pos);
             state.set_dirty();
         }
 
