@@ -78,7 +78,12 @@ fn main() {
                     eprintln!("Error script file path: {}\n{}", filename, err);
                     exit(1);
                 }
-                Ok(f) => f,
+                Ok(f) => {
+                    match f.strip_prefix(std::env::current_dir().unwrap().canonicalize().unwrap()) {
+                        Ok(f) => f.into(),
+                        _ => f,
+                    }
+                }
             };
 
             contents.clear();
