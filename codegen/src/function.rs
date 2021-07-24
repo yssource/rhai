@@ -743,7 +743,7 @@ impl ExportedFn {
                                 is_string = true;
                                 is_ref = true;
                                 quote_spanned!(arg_type.span() =>
-                                    mem::take(args[#i]).as_immutable_string().unwrap()
+                                    mem::take(args[#i]).into_immutable_string().unwrap()
                                 )
                             }
                             _ => panic!("internal error: why wasn't this found earlier!?"),
@@ -752,7 +752,7 @@ impl ExportedFn {
                             is_string = true;
                             is_ref = false;
                             quote_spanned!(arg_type.span() =>
-                                mem::take(args[#i]).as_string().unwrap()
+                                mem::take(args[#i]).into_string().unwrap()
                             )
                         }
                         _ => {

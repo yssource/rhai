@@ -547,7 +547,7 @@ impl SerializeMap for DynamicSerializer {
         #[cfg(not(feature = "no_object"))]
         {
             let key = std::mem::take(&mut self._key)
-                .as_immutable_string()
+                .into_immutable_string()
                 .map_err(|typ| {
                     EvalAltResult::ErrorMismatchDataType(
                         "string".into(),
@@ -577,7 +577,7 @@ impl SerializeMap for DynamicSerializer {
         #[cfg(not(feature = "no_object"))]
         {
             let _key: Dynamic = _key.serialize(&mut *self)?;
-            let _key = _key.as_immutable_string().map_err(|typ| {
+            let _key = _key.into_immutable_string().map_err(|typ| {
                 EvalAltResult::ErrorMismatchDataType("string".into(), typ.into(), Position::NONE)
             })?;
             let _value = _value.serialize(&mut *self)?;

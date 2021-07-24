@@ -1816,14 +1816,48 @@ impl Dynamic {
     /// Convert the [`Dynamic`] into a [`String`] and return it.
     /// If there are other references to the same string, a cloned copy is returned.
     /// Returns the name of the actual type if the cast fails.
-    #[inline]
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`into_string`][Dynamic::into_string] instead.
+    ///
+    /// This method will be removed in the next major version.
+    #[deprecated(
+        since = "1.0.1",
+        note = "this method is deprecated; use `into_string` instead"
+    )]
+    #[inline(always)]
     pub fn as_string(self) -> Result<String, &'static str> {
-        self.as_immutable_string().map(ImmutableString::into_owned)
+        self.into_string()
+    }
+    /// Convert the [`Dynamic`] into a [`String`] and return it.
+    /// If there are other references to the same string, a cloned copy is returned.
+    /// Returns the name of the actual type if the cast fails.
+    #[inline(always)]
+    pub fn into_string(self) -> Result<String, &'static str> {
+        self.into_immutable_string()
+            .map(ImmutableString::into_owned)
+    }
+    /// Convert the [`Dynamic`] into an [`ImmutableString`] and return it.
+    /// Returns the name of the actual type if the cast fails.
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`into_immutable_string`][Dynamic::into_immutable_string] instead.
+    ///
+    /// This method will be removed in the next major version.
+    #[deprecated(
+        since = "1.0.1",
+        note = "this method is deprecated; use `into_string` instead"
+    )]
+    #[inline(always)]
+    pub fn as_immutable_string(self) -> Result<ImmutableString, &'static str> {
+        self.into_immutable_string()
     }
     /// Convert the [`Dynamic`] into an [`ImmutableString`] and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline]
-    pub fn as_immutable_string(self) -> Result<ImmutableString, &'static str> {
+    pub fn into_immutable_string(self) -> Result<ImmutableString, &'static str> {
         match self.0 {
             Union::Str(s, _, _) => Ok(s),
             #[cfg(not(feature = "no_closure"))]
