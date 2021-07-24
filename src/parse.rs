@@ -700,12 +700,14 @@ fn parse_index_chain(
                     // Indexing binds to right
                     Ok(Expr::Index(
                         BinaryExpr { lhs, rhs: idx_expr }.into(),
+                        false,
                         prev_pos,
                     ))
                 }
                 // Otherwise terminate the indexing chain
                 _ => Ok(Expr::Index(
                     BinaryExpr { lhs, rhs: idx_expr }.into(),
+                    true,
                     settings.pos,
                 )),
             }
@@ -1396,7 +1398,7 @@ fn parse_primary(
 
                 let rhs = parse_primary(input, state, lib, settings.level_up())?;
 
-                make_dot_expr(state, expr, rhs, tail_pos)?
+                make_dot_expr(state, expr, false, rhs, tail_pos)?
             }
             // Unknown postfix operator
             (expr, token) => unreachable!(
@@ -1410,7 +1412,7 @@ fn parse_primary(
     // Cache the hash key for namespace-qualified variables
     match root_expr {
         Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
-        Expr::Index(ref mut x, _) | Expr::Dot(ref mut x, _) => match x.lhs {
+        Expr::Index(ref mut x, _, _) | Expr::Dot(ref mut x, _, _) => match x.lhs {
             Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
             _ => None,
         },
@@ -1539,13 +1541,13 @@ fn make_assignment_stmt<'a>(
     #[must_use]
     fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Option<Position> {
         match expr {
-            Expr::Index(x, _) | Expr::Dot(x, _) if parent_is_dot => match x.lhs {
-                Expr::Property(_) => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _))),
+            Expr::Index(x, _, _) | Expr::Dot(x, _, _) if parent_is_dot => match x.lhs {
+                Expr::Property(_) => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _, _))),
                 ref e => Some(e.position()),
             },
-            Expr::Index(x, _) | Expr::Dot(x, _) => match x.lhs {
+            Expr::Index(x, _, _) | Expr::Dot(x, _, _) => match x.lhs {
                 Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
-                _ => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _))),
+                _ => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _, _))),
             },
             Expr::Property(_) if parent_is_dot => None,
             Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
@@ -1587,8 +1589,8 @@ fn make_assignment_stmt<'a>(
             }
         }
         // xxx[???]... = rhs, xxx.prop... = rhs
-        Expr::Index(ref x, _) | Expr::Dot(ref x, _) => {
-            match check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _))) {
+        Expr::Index(ref x, _, _) | Expr::Dot(ref x, _, _) => {
+            match check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _, _))) {
                 None => match x.lhs {
                     // var[???] = rhs, var.??? = rhs
                     Expr::Variable(_, _, _) => {
@@ -1645,41 +1647,38 @@ fn parse_op_assignment_stmt(
 fn make_dot_expr(
     state: &mut ParseState,
     lhs: Expr,
+    terminate_chaining: bool,
     rhs: Expr,
     op_pos: Position,
 ) -> Result<Expr, ParseError> {
     Ok(match (lhs, rhs) {
-        // idx_lhs[idx_expr].rhs
-        // Attach dot chain to the bottom level of indexing chain
-        (Expr::Index(mut x, pos), rhs) => {
-            x.rhs = make_dot_expr(state, x.rhs, rhs, op_pos)?;
-            Expr::Index(x, pos)
+        // lhs[???]...[???].rhs
+        (Expr::Index(mut x, false, pos), rhs) if !terminate_chaining => {
+            // Attach dot chain to the bottom level of indexing chain
+            x.rhs = make_dot_expr(state, x.rhs, false, rhs, op_pos)?;
+            Expr::Index(x, false, pos)
+        }
+        // lhs[idx_expr].rhs
+        (Expr::Index(mut x, _, pos), rhs) => {
+            x.rhs = make_dot_expr(state, x.rhs, true, rhs, op_pos)?;
+            Expr::Index(x, false, pos)
         }
         // lhs.id
-        (lhs, Expr::Variable(_, var_pos, x)) if x.1.is_none() => {
-            let ident = x.2;
-            let getter = state.get_identifier(crate::engine::make_getter(&ident));
-            let hash_get = calc_fn_hash(&getter, 1);
-            let setter = state.get_identifier(crate::engine::make_setter(&ident));
-            let hash_set = calc_fn_hash(&setter, 2);
-
-            let rhs = Expr::Property(Box::new((
-                (getter, hash_get),
-                (setter, hash_set),
-                (state.get_identifier(ident).into(), var_pos),
-            )));
-
-            Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
+        (lhs, var_expr @ Expr::Variable(_, _, _)) if var_expr.is_variable_access(true) => {
+            let rhs = var_expr.into_property(state);
+            Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
         }
         // lhs.module::id - syntax error
-        (_, Expr::Variable(_, _, x)) if x.1.is_some() => {
+        (_, Expr::Variable(_, _, x)) => {
             return Err(PERR::PropertyExpected
                 .into_err(x.1.expect("never fails because the namespace is `Some`").0[0].pos))
         }
         // lhs.prop
-        (lhs, prop @ Expr::Property(_)) => Expr::Dot(BinaryExpr { lhs, rhs: prop }.into(), op_pos),
+        (lhs, prop @ Expr::Property(_)) => {
+            Expr::Dot(BinaryExpr { lhs, rhs: prop }.into(), false, op_pos)
+        }
         // lhs.dot_lhs.dot_rhs
-        (lhs, Expr::Dot(x, pos)) => match x.lhs {
+        (lhs, Expr::Dot(x, _, pos)) => match x.lhs {
             Expr::Variable(_, _, _) | Expr::Property(_) => {
                 let rhs = Expr::Dot(
                     BinaryExpr {
@@ -1687,9 +1686,10 @@ fn make_dot_expr(
                         rhs: x.rhs,
                     }
                     .into(),
+                    false,
                     pos,
                 );
-                Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
+                Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
             }
             Expr::FnCall(mut func, func_pos) => {
                 // Recalculate hash
@@ -1704,23 +1704,25 @@ fn make_dot_expr(
                         rhs: x.rhs,
                     }
                     .into(),
+                    false,
                     pos,
                 );
-                Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
+                Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
             }
             _ => unreachable!("invalid dot expression: {:?}", x.lhs),
         },
         // lhs.idx_lhs[idx_rhs]
-        (lhs, Expr::Index(x, pos)) => {
+        (lhs, Expr::Index(x, term, pos)) => {
             let rhs = Expr::Index(
                 BinaryExpr {
                     lhs: x.lhs.into_property(state),
                     rhs: x.rhs,
                 }
                 .into(),
+                term,
                 pos,
             );
-            Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
+            Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
         }
         // lhs.nnn::func(...)
         (_, Expr::FnCall(x, _)) if x.is_qualified() => {
@@ -1756,7 +1758,7 @@ fn make_dot_expr(
                 calc_fn_hash(&func.name, func.args.len() + 1),
             );
             let rhs = Expr::FnCall(func, func_pos);
-            Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
+            Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
         }
         // lhs.rhs
         (_, rhs) => return Err(PERR::PropertyExpected.into_err(rhs.position())),

@@ -53,6 +53,18 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
             convert_to_vec::<INT>(engine.eval("let y = [1, 2, 3]; y.insert(-999, 4); y")?),
             [4, 1, 2, 3]
         );
+        assert_eq!(
+            engine.eval::<INT>("let y = [1, 2, 3]; let z = [42]; y[z.len]")?,
+            2
+        );
+        assert_eq!(
+            engine.eval::<INT>("let y = [1, 2, [3, 4, 5, 6]]; let z = [42]; y[2][z.len]")?,
+            4
+        );
+        assert_eq!(
+            engine.eval::<INT>("let y = [1, 2, 3]; let z = [2]; y[z[0]]")?,
+            3
+        );
 
         assert_eq!(
             convert_to_vec::<INT>(engine.eval(

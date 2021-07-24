@@ -1755,10 +1755,10 @@ pub enum Expr {
     Stmt(Box<StmtBlock>),
     /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
-    /// lhs `.` rhs
-    Dot(Box<BinaryExpr>, Position),
-    /// expr `[` expr `]`
-    Index(Box<BinaryExpr>, Position),
+    /// lhs `.` rhs - bool variable is a dummy
+    Dot(Box<BinaryExpr>, bool, Position),
+    /// expr `[` expr `]` - boolean indicates whether the dotting/indexing chain stops
+    Index(Box<BinaryExpr>, bool, Position),
     /// lhs `&&` rhs
     And(Box<BinaryExpr>, Position),
     /// lhs `||` rhs
@@ -1835,10 +1835,18 @@ impl fmt::Debug for Expr {
                 }
                 ff.finish()
             }
-            Self::Dot(x, pos) | Self::Index(x, pos) | Self::And(x, pos) | Self::Or(x, pos) => {
+            Self::Index(x, term, pos) => {
+                display_pos = *pos;
+
+                f.debug_struct("Index")
+                    .field("lhs", &x.lhs)
+                    .field("rhs", &x.rhs)
+                    .field("terminate", term)
+                    .finish()
+            }
+            Self::Dot(x, _, pos) | Self::And(x, pos) | Self::Or(x, pos) => {
                 let op_name = match self {
-                    Self::Dot(_, _) => "Dot",
-                    Self::Index(_, _) => "Index",
+                    Self::Dot(_, _, _) => "Dot",
                     Self::And(_, _) => "And",
                     Self::Or(_, _) => "Or",
                     _ => unreachable!(),
@@ -1969,7 +1977,7 @@ impl Expr {
             Self::Property(x) => (x.2).1,
             Self::Stmt(x) => x.1,
 
-            Self::And(x, _) | Self::Or(x, _) | Self::Dot(x, _) | Self::Index(x, _) => {
+            Self::And(x, _) | Self::Or(x, _) | Self::Dot(x, _, _) | Self::Index(x, _, _) => {
                 x.lhs.position()
             }
         }
@@ -1991,8 +1999,8 @@ impl Expr {
             | Self::Map(_, pos)
             | Self::And(_, pos)
             | Self::Or(_, pos)
-            | Self::Dot(_, pos)
-            | Self::Index(_, pos)
+            | Self::Dot(_, _, pos)
+            | Self::Index(_, _, pos)
             | Self::Variable(_, pos, _)
             | Self::Stack(_, pos)
             | Self::FnCall(_, pos)
@@ -2083,8 +2091,8 @@ impl Expr {
             | Self::InterpolatedString(_, _)
             | Self::FnCall(_, _)
             | Self::Stmt(_)
-            | Self::Dot(_, _)
-            | Self::Index(_, _)
+            | Self::Dot(_, _, _)
+            | Self::Index(_, _, _)
             | Self::Array(_, _)
             | Self::Map(_, _) => match token {
                 #[cfg(not(feature = "no_index"))]
@@ -2149,7 +2157,7 @@ impl Expr {
                     }
                 }
             }
-            Self::Index(x, _) | Self::Dot(x, _) | Expr::And(x, _) | Expr::Or(x, _) => {
+            Self::Index(x, _, _) | Self::Dot(x, _, _) | Expr::And(x, _) | Expr::Or(x, _) => {
                 if !x.lhs.walk(path, on_node) {
                     return false;
                 }

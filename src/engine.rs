@@ -293,10 +293,10 @@ pub const TOKEN_OP_CONCAT: Token = Token::PlusAssign;
 enum ChainType {
     /// Indexing.
     #[cfg(not(feature = "no_index"))]
-    Index,
+    Indexing,
     /// Dotting.
     #[cfg(not(feature = "no_object"))]
-    Dot,
+    Dotting,
 }
 
 /// Value of a chaining argument.
@@ -324,6 +324,7 @@ impl ChainArgument {
     pub fn as_index_value(self) -> Option<Dynamic> {
         match self {
             Self::IndexValue(value, _) => Some(value),
+            #[cfg(not(feature = "no_object"))]
             _ => None,
         }
     }
@@ -352,6 +353,18 @@ impl From<(Dynamic, Position)> for ChainArgument {
     #[inline(always)]
     fn from((value, pos): (Dynamic, Position)) -> Self {
         Self::IndexValue(value, pos)
+    }
+}
+
+/// Get the chaining type for an [`Expr`].
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+fn match_chaining_type(expr: &Expr) -> ChainType {
+    match expr {
+        #[cfg(not(feature = "no_index"))]
+        Expr::Index(_, _, _) => ChainType::Indexing,
+        #[cfg(not(feature = "no_object"))]
+        Expr::Dot(_, _, _) => ChainType::Dotting,
+        _ => unreachable!("`expr` should only be `Index` or `Dot`, but got {:?}", expr),
     }
 }
 
@@ -1230,21 +1243,12 @@ impl Engine {
         target: &mut Target,
         root: (&str, Position),
         rhs: &Expr,
+        _terminate_chaining: bool,
         idx_values: &mut StaticVec<ChainArgument>,
         chain_type: ChainType,
         level: usize,
         new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        fn match_chain_type(expr: &Expr) -> ChainType {
-            match expr {
-                #[cfg(not(feature = "no_index"))]
-                Expr::Index(_, _) => ChainType::Index,
-                #[cfg(not(feature = "no_object"))]
-                Expr::Dot(_, _) => ChainType::Dot,
-                _ => unreachable!("`expr` should only be `Index` or `Dot`, but got {:?}", expr),
-            }
-        }
-
         let is_ref_mut = target.is_ref();
 
         // Pop the last index value
@@ -1254,7 +1258,7 @@ impl Engine {
 
         match chain_type {
             #[cfg(not(feature = "no_index"))]
-            ChainType::Index => {
+            ChainType::Indexing => {
                 let pos = rhs.position();
                 let idx_val = idx_val
                     .as_index_value()
@@ -1262,15 +1266,17 @@ impl Engine {
 
                 match rhs {
                     // xxx[idx].expr... | xxx[idx][expr]...
-                    Expr::Dot(x, x_pos) | Expr::Index(x, x_pos) => {
+                    Expr::Dot(x, term, x_pos) | Expr::Index(x, term, x_pos)
+                        if !_terminate_chaining =>
+                    {
                         let idx_pos = x.lhs.position();
                         let obj_ptr = &mut self.get_indexed_mut(
                             mods, state, lib, target, idx_val, idx_pos, false, true, level,
                         )?;
-                        let rhs_chain = match_chain_type(rhs);
 
+                        let rhs_chain = match_chaining_type(rhs);
                         self.eval_dot_index_chain_helper(
-                            mods, state, lib, this_ptr, obj_ptr, root, &x.rhs, idx_values,
+                            mods, state, lib, this_ptr, obj_ptr, root, &x.rhs, *term, idx_values,
                             rhs_chain, level, new_val,
                         )
                         .map_err(|err| err.fill_position(*x_pos))
@@ -1327,7 +1333,7 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_object"))]
-            ChainType::Dot => {
+            ChainType::Dotting => {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x, pos) if !x.is_qualified() && new_val.is_none() => {
@@ -1485,7 +1491,9 @@ impl Engine {
                         )
                     }
                     // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
-                    Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target.is::<Map>() => {
+                    Expr::Index(x, term, x_pos) | Expr::Dot(x, term, x_pos)
+                        if target.is::<Map>() =>
+                    {
                         let val_target = &mut match x.lhs {
                             Expr::Property(ref p) => {
                                 let (name, pos) = &p.2;
@@ -1512,22 +1520,22 @@ impl Engine {
                             // Others - syntax error
                             ref expr => unreachable!("invalid dot expression: {:?}", expr),
                         };
-                        let rhs_chain = match_chain_type(rhs);
+                        let rhs_chain = match_chaining_type(rhs);
 
                         self.eval_dot_index_chain_helper(
-                            mods, state, lib, this_ptr, val_target, root, &x.rhs, idx_values,
-                            rhs_chain, level, new_val,
+                            mods, state, lib, this_ptr, val_target, root, &x.rhs, *term,
+                            idx_values, rhs_chain, level, new_val,
                         )
                         .map_err(|err| err.fill_position(*x_pos))
                     }
                     // xxx.sub_lhs[expr] | xxx.sub_lhs.expr
-                    Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) => {
+                    Expr::Index(x, term, x_pos) | Expr::Dot(x, term, x_pos) => {
                         match x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(ref p) => {
                                 let ((getter, hash_get), (setter, hash_set), (name, pos)) =
                                     p.as_ref();
-                                let rhs_chain = match_chain_type(rhs);
+                                let rhs_chain = match_chaining_type(rhs);
                                 let hash_get = FnCallHashes::from_native(*hash_get);
                                 let hash_set = FnCallHashes::from_native(*hash_set);
                                 let mut arg_values = [target.as_mut(), &mut Default::default()];
@@ -1567,6 +1575,7 @@ impl Engine {
                                         &mut val.into(),
                                         root,
                                         &x.rhs,
+                                        *term,
                                         idx_values,
                                         rhs_chain,
                                         level,
@@ -1617,7 +1626,7 @@ impl Engine {
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
                             Expr::FnCall(ref f, pos) if !f.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = f.as_ref();
-                                let rhs_chain = match_chain_type(rhs);
+                                let rhs_chain = match_chaining_type(rhs);
                                 let args = &mut idx_val
                                     .as_fn_call_args()
                                     .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
@@ -1628,8 +1637,8 @@ impl Engine {
                                 let target = &mut val.into();
 
                                 self.eval_dot_index_chain_helper(
-                                    mods, state, lib, this_ptr, target, root, &x.rhs, idx_values,
-                                    rhs_chain, level, new_val,
+                                    mods, state, lib, this_ptr, target, root, &x.rhs, *term,
+                                    idx_values, rhs_chain, level, new_val,
                                 )
                                 .map_err(|err| err.fill_position(pos))
                             }
@@ -1663,18 +1672,18 @@ impl Engine {
         level: usize,
         new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
     ) -> RhaiResult {
-        let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, op_pos) = match expr {
+        let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, term, op_pos) = match expr {
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(x, pos) => (x.as_ref(), ChainType::Index, *pos),
+            Expr::Index(x, term, pos) => (x.as_ref(), ChainType::Indexing, *term, *pos),
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(x, pos) => (x.as_ref(), ChainType::Dot, *pos),
+            Expr::Dot(x, term, pos) => (x.as_ref(), ChainType::Dotting, *term, *pos),
             _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
         };
 
         let idx_values = &mut Default::default();
 
-        self.eval_indexed_chain(
-            scope, mods, state, lib, this_ptr, rhs, chain_type, idx_values, 0, level,
+        self.eval_dot_index_chain_arguments(
+            scope, mods, state, lib, this_ptr, rhs, term, chain_type, idx_values, 0, level,
         )?;
 
         match lhs {
@@ -1687,9 +1696,10 @@ impl Engine {
 
                 let obj_ptr = &mut target.into();
                 let root = (x.2.as_str(), *var_pos);
+
                 self.eval_dot_index_chain_helper(
-                    mods, state, lib, &mut None, obj_ptr, root, rhs, idx_values, chain_type, level,
-                    new_val,
+                    mods, state, lib, &mut None, obj_ptr, root, rhs, term, idx_values, chain_type,
+                    level, new_val,
                 )
                 .map(|(v, _)| v)
                 .map_err(|err| err.fill_position(op_pos))
@@ -1702,8 +1712,8 @@ impl Engine {
                 let obj_ptr = &mut value.into();
                 let root = ("", expr.position());
                 self.eval_dot_index_chain_helper(
-                    mods, state, lib, this_ptr, obj_ptr, root, rhs, idx_values, chain_type, level,
-                    new_val,
+                    mods, state, lib, this_ptr, obj_ptr, root, rhs, term, idx_values, chain_type,
+                    level, new_val,
                 )
                 .map(|(v, _)| v)
                 .map_err(|err| err.fill_position(op_pos))
@@ -1716,7 +1726,7 @@ impl Engine {
     /// just a few levels of indexing.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[must_use]
-    fn eval_indexed_chain(
+    fn eval_dot_index_chain_arguments(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
@@ -1724,6 +1734,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
+        terminate_chaining: bool,
         _parent_chain_type: ChainType,
         idx_values: &mut StaticVec<ChainArgument>,
         size: usize,
@@ -1734,7 +1745,7 @@ impl Engine {
 
         match expr {
             #[cfg(not(feature = "no_object"))]
-            Expr::FnCall(x, _) if _parent_chain_type == ChainType::Dot && !x.is_qualified() => {
+            Expr::FnCall(x, _) if _parent_chain_type == ChainType::Dotting && !x.is_qualified() => {
                 let crate::ast::FnCallExpr {
                     args, constants, ..
                 } = x.as_ref();
@@ -1754,30 +1765,30 @@ impl Engine {
                 idx_values.push((arg_values, first_arg_pos).into());
             }
             #[cfg(not(feature = "no_object"))]
-            Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dot => {
+            Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dotting => {
                 unreachable!("function call in dot chain should not be namespace-qualified")
             }
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Property(x) if _parent_chain_type == ChainType::Dot => {
+            Expr::Property(x) if _parent_chain_type == ChainType::Dotting => {
                 idx_values.push(ChainArgument::Property((x.2).1))
             }
             Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
 
-            Expr::Index(x, _) | Expr::Dot(x, _) => {
+            Expr::Index(x, term, _) | Expr::Dot(x, term, _) if !terminate_chaining => {
                 let crate::ast::BinaryExpr { lhs, rhs, .. } = x.as_ref();
 
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
                     #[cfg(not(feature = "no_object"))]
-                    Expr::Property(x) if _parent_chain_type == ChainType::Dot => {
+                    Expr::Property(x) if _parent_chain_type == ChainType::Dotting => {
                         ChainArgument::Property((x.2).1)
                     }
                     Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
 
                     #[cfg(not(feature = "no_object"))]
                     Expr::FnCall(x, _)
-                        if _parent_chain_type == ChainType::Dot && !x.is_qualified() =>
+                        if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
                     {
                         let crate::ast::FnCallExpr {
                             args, constants, ..
@@ -1798,41 +1809,37 @@ impl Engine {
                         (arg_values, first_arg_pos).into()
                     }
                     #[cfg(not(feature = "no_object"))]
-                    Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dot => {
+                    Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dotting => {
                         unreachable!("function call in dot chain should not be namespace-qualified")
                     }
                     #[cfg(not(feature = "no_object"))]
-                    expr if _parent_chain_type == ChainType::Dot => {
+                    expr if _parent_chain_type == ChainType::Dotting => {
                         unreachable!("invalid dot expression: {:?}", expr);
                     }
                     #[cfg(not(feature = "no_index"))]
-                    _ if _parent_chain_type == ChainType::Index => self
+                    _ if _parent_chain_type == ChainType::Indexing => self
                         .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)
                         .map(|v| (v.flatten(), lhs.position()).into())?,
                     expr => unreachable!("unknown chained expression: {:?}", expr),
                 };
 
                 // Push in reverse order
-                let chain_type = match expr {
-                    #[cfg(not(feature = "no_index"))]
-                    Expr::Index(_, _) => ChainType::Index,
-                    #[cfg(not(feature = "no_object"))]
-                    Expr::Dot(_, _) => ChainType::Dot,
-                    _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
-                };
-                self.eval_indexed_chain(
-                    scope, mods, state, lib, this_ptr, rhs, chain_type, idx_values, size, level,
+                let chain_type = match_chaining_type(expr);
+
+                self.eval_dot_index_chain_arguments(
+                    scope, mods, state, lib, this_ptr, rhs, *term, chain_type, idx_values, size,
+                    level,
                 )?;
 
                 idx_values.push(lhs_val);
             }
 
             #[cfg(not(feature = "no_object"))]
-            _ if _parent_chain_type == ChainType::Dot => {
+            _ if _parent_chain_type == ChainType::Dotting => {
                 unreachable!("invalid dot expression: {:?}", expr);
             }
             #[cfg(not(feature = "no_index"))]
-            _ if _parent_chain_type == ChainType::Index => idx_values.push(
+            _ if _parent_chain_type == ChainType::Indexing => idx_values.push(
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
                     .map(|v| (v.flatten(), expr.position()).into())?,
             ),
@@ -2054,13 +2061,13 @@ impl Engine {
 
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(_, _) => {
+            Expr::Index(_, _, _) => {
                 self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
             }
 
             // lhs.dot_rhs
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(_, _) => {
+            Expr::Dot(_, _, _) => {
                 self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
             }
 
@@ -2449,7 +2456,7 @@ impl Engine {
                     }
                     // idx_lhs[idx_expr] op= rhs
                     #[cfg(not(feature = "no_index"))]
-                    Expr::Index(_, _) => {
+                    Expr::Index(_, _, _) => {
                         self.eval_dot_index_chain(
                             scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
@@ -2457,7 +2464,7 @@ impl Engine {
                     }
                     // dot_lhs.dot_rhs op= rhs
                     #[cfg(not(feature = "no_object"))]
-                    Expr::Dot(_, _) => {
+                    Expr::Dot(_, _, _) => {
                         self.eval_dot_index_chain(
                             scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;

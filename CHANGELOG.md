@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 1.0.1
+=============
+
+Bug fixes
+---------
+
+* Fixed bug in using indexing/dotting inside index bracket.
+
+
 Version 1.0.0
 =============
 
