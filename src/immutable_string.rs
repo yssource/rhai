@@ -16,8 +16,8 @@ use std::{
 
 /// The system immutable string type.
 ///
-/// An [`ImmutableString`] wraps an [`Rc`][std::rc::Rc]`<`[`String`]`>`
-///  (or [`Arc`][std::sync::Arc]`<`[`String`]`>` under the `sync` feature)
+/// An [`ImmutableString`] wraps an [`Rc`][std::rc::Rc]`<`[`SmartString`][smartstring::SmartString]`>`
+///  (or [`Arc`][std::sync::Arc]`<`[`SmartString`][smartstring::SmartString]`>` under the `sync` feature)
 /// so that it can be simply shared and not cloned.
 ///
 /// # Example
@@ -255,12 +255,10 @@ impl Add<&str> for ImmutableString {
 
     #[inline]
     fn add(mut self, rhs: &str) -> Self::Output {
-        if rhs.is_empty() {
-            self
-        } else {
+        if !rhs.is_empty() {
             self.make_mut().push_str(rhs);
-            self
         }
+        self
     }
 }
 
@@ -322,7 +320,7 @@ impl Add<String> for &ImmutableString {
 }
 
 impl AddAssign<String> for ImmutableString {
-    #[inline(always)]
+    #[inline]
     fn add_assign(&mut self, rhs: String) {
         if !rhs.is_empty() {
             if self.is_empty() {

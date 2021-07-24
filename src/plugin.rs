@@ -22,7 +22,6 @@ pub use rhai_codegen::{export_fn, register_exported_fn};
 /// Use the `#[export_module]` and `#[export_fn]` procedural attributes instead.
 pub trait PluginFunction {
     /// Call the plugin function with the arguments provided.
-    #[must_use]
     fn call(&self, context: NativeCallContext, args: &mut FnCallArgs) -> RhaiResult;
 
     /// Is this plugin function a method?

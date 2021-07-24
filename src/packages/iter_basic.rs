@@ -1,5 +1,6 @@
 use crate::dynamic::Variant;
 use crate::{def_package, EvalAltResult, INT};
+use std::iter::{ExactSizeIterator, FusedIterator};
 use std::ops::Range;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -53,31 +54,19 @@ where
             None
         } else if self.0 < self.1 {
             #[cfg(not(feature = "unchecked"))]
-            let diff1 = if let Some(diff) = self.1.checked_sub(&self.0) {
-                diff
-            } else {
-                return None;
-            };
+            let diff1 = self.1.checked_sub(&self.0)?;
             #[cfg(feature = "unchecked")]
             let diff1 = self.1 - self.0;
 
             let v = self.0;
 
             #[cfg(not(feature = "unchecked"))]
-            let n = if let Some(num) = self.0.checked_add(&self.2) {
-                num
-            } else {
-                return None;
-            };
+            let n = self.0.checked_add(&self.2)?;
             #[cfg(feature = "unchecked")]
             let n = self.0 + self.2;
 
             #[cfg(not(feature = "unchecked"))]
-            let diff2 = if let Some(diff) = self.1.checked_sub(&n) {
-                diff
-            } else {
-                return None;
-            };
+            let diff2 = self.1.checked_sub(&n)?;
             #[cfg(feature = "unchecked")]
             let diff2 = self.1 - n;
 
@@ -89,31 +78,19 @@ where
             }
         } else {
             #[cfg(not(feature = "unchecked"))]
-            let diff1 = if let Some(diff) = self.0.checked_sub(&self.1) {
-                diff
-            } else {
-                return None;
-            };
+            let diff1 = self.0.checked_sub(&self.1)?;
             #[cfg(feature = "unchecked")]
             let diff1 = self.0 - self.1;
 
             let v = self.0;
 
             #[cfg(not(feature = "unchecked"))]
-            let n = if let Some(num) = self.0.checked_add(&self.2) {
-                num
-            } else {
-                return None;
-            };
+            let n = self.0.checked_add(&self.2)?;
             #[cfg(feature = "unchecked")]
             let n = self.0 + self.2;
 
             #[cfg(not(feature = "unchecked"))]
-            let diff2 = if let Some(diff) = n.checked_sub(&self.1) {
-                diff
-            } else {
-                return None;
-            };
+            let diff2 = n.checked_sub(&self.1)?;
             #[cfg(feature = "unchecked")]
             let diff2 = n - self.1;
 
@@ -125,6 +102,11 @@ where
             }
         }
     }
+}
+
+impl<T> FusedIterator for StepRange<T> where
+    T: Variant + Copy + PartialOrd + Add<Output = T> + Sub<Output = T>
+{
 }
 
 // Bit-field iterator with step
@@ -190,6 +172,20 @@ impl Iterator for BitRange {
             Some(r)
         }
     }
+
+    #[inline(always)]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.2, Some(self.2))
+    }
+}
+
+impl FusedIterator for BitRange {}
+
+impl ExactSizeIterator for BitRange {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        self.2
+    }
 }
 
 // String iterator over characters
@@ -247,6 +243,21 @@ impl Iterator for CharsStream {
             self.1 += 1;
             Some(ch)
         }
+    }
+
+    #[inline(always)]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.0.len() - self.1;
+        (remaining, Some(remaining))
+    }
+}
+
+impl FusedIterator for CharsStream {}
+
+impl ExactSizeIterator for CharsStream {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        self.0.len() - self.1
     }
 }
 
@@ -356,11 +367,11 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
             }
         }
 
-        impl std::iter::FusedIterator for StepFloatRange {}
+        impl FusedIterator for StepFloatRange {}
 
         lib.set_iterator::<StepFloatRange>();
 
-        let _hash = lib.set_native_fn("range", |from, to, step| StepFloatRange::new(from, to, step));
+        let _hash = lib.set_native_fn("range", StepFloatRange::new);
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata(_hash, &["from: FLOAT", "to: FLOAT", "step: FLOAT", "Iterator<Item=FLOAT>"]);
     }
@@ -418,11 +429,11 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
             }
         }
 
-        impl std::iter::FusedIterator for StepDecimalRange {}
+        impl FusedIterator for StepDecimalRange {}
 
         lib.set_iterator::<StepDecimalRange>();
 
-        let _hash = lib.set_native_fn("range", |from, to, step| StepDecimalRange::new(from, to, step));
+        let _hash = lib.set_native_fn("range", StepDecimalRange::new);
         #[cfg(feature = "metadata")]
         lib.update_fn_metadata(_hash, &["from: Decimal", "to: Decimal", "step: Decimal", "Iterator<Item=Decimal>"]);
     }
@@ -430,7 +441,7 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
     // Register string iterator
     lib.set_iterator::<CharsStream>();
 
-    let _hash = lib.set_native_fn("chars", |string, from,len| Ok(CharsStream::new(string, from, len)));
+    let _hash = lib.set_native_fn("chars", |string, from, len| Ok(CharsStream::new(string, from, len)));
     #[cfg(feature = "metadata")]
     lib.update_fn_metadata(_hash, &["string: &str", "from: INT", "len: INT", "Iterator<Item=char>"]);
 
@@ -445,7 +456,7 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
     // Register bit-field iterator
     lib.set_iterator::<BitRange>();
 
-    let _hash = lib.set_native_fn("bits", |value, from, len| BitRange::new(value, from, len));
+    let _hash = lib.set_native_fn("bits", BitRange::new);
     #[cfg(feature = "metadata")]
     lib.update_fn_metadata(_hash, &["value: INT", "from: INT", "len: INT", "Iterator<Item=bool>"]);
 

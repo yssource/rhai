@@ -38,12 +38,11 @@ mod string_functions {
     ) -> ImmutableString {
         let mut s = print_with_func(FUNC_TO_STRING, &ctx, item);
 
-        if string.is_empty() {
-            s
-        } else {
+        if !string.is_empty() {
             s.make_mut().push_str(string);
-            s.into()
         }
+
+        s
     }
 
     #[rhai_fn(name = "+", name = "append")]
@@ -240,7 +239,7 @@ mod string_functions {
         let mut chars = StaticVec::with_capacity(string.len());
 
         let offset = if string.is_empty() || len <= 0 {
-            return ctx.engine().empty_string.clone().into();
+            return ctx.engine().empty_string.clone();
         } else if start < 0 {
             if let Some(n) = start.checked_abs() {
                 chars.extend(string.chars());
@@ -253,7 +252,7 @@ mod string_functions {
                 0
             }
         } else if start as usize >= string.chars().count() {
-            return ctx.engine().empty_string.clone().into();
+            return ctx.engine().empty_string.clone();
         } else {
             start as usize
         };

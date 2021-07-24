@@ -67,7 +67,10 @@ impl Imports {
     #[inline(always)]
     #[must_use]
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            keys: StaticVec::new(),
+            modules: StaticVec::new(),
+        }
     }
     /// Get the length of this stack of imported [modules][Module].
     #[inline(always)]
@@ -119,7 +122,6 @@ impl Imports {
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     #[inline(always)]
-    #[must_use]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.keys
             .iter()
@@ -130,14 +132,12 @@ impl Imports {
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     #[inline(always)]
-    #[must_use]
     pub(crate) fn iter_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.keys.iter().rev().zip(self.modules.iter().rev())
     }
     /// Get an iterator to this stack of imported [modules][Module] in forward order.
     #[allow(dead_code)]
     #[inline(always)]
-    #[must_use]
     pub(crate) fn scan_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.keys.iter().zip(self.modules.iter())
     }
@@ -290,10 +290,10 @@ pub const TOKEN_OP_CONCAT: Token = Token::PlusAssign;
 enum ChainType {
     /// Indexing.
     #[cfg(not(feature = "no_index"))]
-    Index,
+    Indexing,
     /// Dotting.
     #[cfg(not(feature = "no_object"))]
-    Dot,
+    Dotting,
 }
 
 /// Value of a chaining argument.
@@ -318,9 +318,10 @@ impl ChainArgument {
     #[inline(always)]
     #[cfg(not(feature = "no_index"))]
     #[must_use]
-    pub fn as_index_value(self) -> Option<Dynamic> {
+    pub fn into_index_value(self) -> Option<Dynamic> {
         match self {
             Self::IndexValue(value, _) => Some(value),
+            #[cfg(not(feature = "no_object"))]
             _ => None,
         }
     }
@@ -328,7 +329,7 @@ impl ChainArgument {
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
     #[must_use]
-    pub fn as_fn_call_args(self) -> Option<(StaticVec<Dynamic>, Position)> {
+    pub fn into_fn_call_args(self) -> Option<(StaticVec<Dynamic>, Position)> {
         match self {
             Self::MethodCallArgs(values, pos) => Some((values, pos)),
             _ => None,
@@ -349,6 +350,18 @@ impl From<(Dynamic, Position)> for ChainArgument {
     #[inline(always)]
     fn from((value, pos): (Dynamic, Position)) -> Self {
         Self::IndexValue(value, pos)
+    }
+}
+
+/// Get the chaining type for an [`Expr`].
+#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+fn match_chaining_type(expr: &Expr) -> ChainType {
+    match expr {
+        #[cfg(not(feature = "no_index"))]
+        Expr::Index(_, _, _) => ChainType::Indexing,
+        #[cfg(not(feature = "no_object"))]
+        Expr::Dot(_, _, _) => ChainType::Dotting,
+        _ => unreachable!("`expr` should only be `Index` or `Dot`, but got {:?}", expr),
     }
 }
 
@@ -376,7 +389,7 @@ pub enum Target<'a> {
 impl<'a> Target<'a> {
     /// Is the `Target` a reference pointing to other data?
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_ref(&self) -> bool {
         match self {
@@ -391,7 +404,7 @@ impl<'a> Target<'a> {
         }
     }
     /// Is the `Target` a temp value?
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_temp_value(&self) -> bool {
         match self {
@@ -407,7 +420,7 @@ impl<'a> Target<'a> {
     }
     /// Is the `Target` a shared value?
     #[cfg(not(feature = "no_closure"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn is_shared(&self) -> bool {
         match self {
@@ -423,7 +436,7 @@ impl<'a> Target<'a> {
     }
     /// Is the `Target` a specific type?
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn is<T: Variant + Clone>(&self) -> bool {
         match self {
@@ -438,7 +451,7 @@ impl<'a> Target<'a> {
         }
     }
     /// Get the value of the `Target` as a `Dynamic`, cloning a referenced value if necessary.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn take_or_clone(self) -> Dynamic {
         match self {
@@ -469,8 +482,7 @@ impl<'a> Target<'a> {
     }
     /// Propagate a changed value back to the original source.
     /// This has no effect except for string indexing.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub fn propagate_changed_value(&mut self) -> Result<(), Box<EvalAltResult>> {
         match self {
             Self::RefMut(_) | Self::TempValue(_) => (),
@@ -534,7 +546,7 @@ impl<'a> Target<'a> {
 }
 
 impl<'a> From<&'a mut Dynamic> for Target<'a> {
-    #[inline(always)]
+    #[inline]
     fn from(value: &'a mut Dynamic) -> Self {
         #[cfg(not(feature = "no_closure"))]
         if value.is_shared() {
@@ -555,7 +567,7 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
 impl Deref for Target<'_> {
     type Target = Dynamic;
 
-    #[inline(always)]
+    #[inline]
     fn deref(&self) -> &Dynamic {
         match self {
             Self::RefMut(r) => *r,
@@ -578,7 +590,7 @@ impl AsRef<Dynamic> for Target<'_> {
 }
 
 impl DerefMut for Target<'_> {
-    #[inline(always)]
+    #[inline]
     fn deref_mut(&mut self) -> &mut Dynamic {
         match self {
             Self::RefMut(r) => *r,
@@ -818,7 +830,6 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
     /// Get an iterator over the current set of modules imported via `import` statements.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    #[must_use]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.mods.iter()
     }
@@ -833,7 +844,6 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
     }
     /// Get an iterator over the namespaces containing definition of all script-defined functions.
     #[inline(always)]
-    #[must_use]
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
     }
@@ -947,7 +957,7 @@ impl Default for Engine {
 
 /// Make getter function
 #[cfg(not(feature = "no_object"))]
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn make_getter(id: &str) -> String {
     format!("{}{}", FN_GET, id)
@@ -955,7 +965,7 @@ pub fn make_getter(id: &str) -> String {
 
 /// Make setter function
 #[cfg(not(feature = "no_object"))]
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn make_setter(id: &str) -> String {
     format!("{}{}", FN_SET, id)
@@ -970,7 +980,7 @@ pub fn is_anonymous_fn(fn_name: &str) -> bool {
 }
 
 /// Print to `stdout`
-#[inline(always)]
+#[inline]
 #[allow(unused_variables)]
 fn print_to_stdout(s: &str) {
     #[cfg(not(feature = "no_std"))]
@@ -979,7 +989,7 @@ fn print_to_stdout(s: &str) {
 }
 
 /// Debug to `stdout`
-#[inline(always)]
+#[inline]
 #[allow(unused_variables)]
 fn debug_to_stdout(s: &str, source: Option<&str>, pos: Position) {
     #[cfg(not(feature = "no_std"))]
@@ -1021,7 +1031,7 @@ impl Engine {
     /// Create a new [`Engine`] with minimal built-in functions.
     ///
     /// Use [`register_global_module`][Engine::register_global_module] to add packages of functions.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new_raw() -> Self {
         let mut engine = Self {
@@ -1093,7 +1103,6 @@ impl Engine {
 
     /// Search for a variable within the scope or within imports,
     /// depending on whether the variable name is namespace-qualified.
-    #[must_use]
     pub(crate) fn search_namespace<'s>(
         &self,
         scope: &'s mut Scope,
@@ -1143,7 +1152,6 @@ impl Engine {
     /// # Panics
     ///
     /// Panics if `expr` is not [`Expr::Variable`].
-    #[must_use]
     pub(crate) fn search_scope_only<'s>(
         &self,
         scope: &'s mut Scope,
@@ -1217,7 +1225,6 @@ impl Engine {
     /// Chain-evaluate a dot/index chain.
     /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and must be set afterwards.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[must_use]
     fn eval_dot_index_chain_helper(
         &self,
         mods: &mut Imports,
@@ -1227,21 +1234,12 @@ impl Engine {
         target: &mut Target,
         root: (&str, Position),
         rhs: &Expr,
+        _terminate_chaining: bool,
         idx_values: &mut StaticVec<ChainArgument>,
         chain_type: ChainType,
         level: usize,
         new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
-        fn match_chain_type(expr: &Expr) -> ChainType {
-            match expr {
-                #[cfg(not(feature = "no_index"))]
-                Expr::Index(_, _) => ChainType::Index,
-                #[cfg(not(feature = "no_object"))]
-                Expr::Dot(_, _) => ChainType::Dot,
-                _ => unreachable!("`expr` should only be `Index` or `Dot`, but got {:?}", expr),
-            }
-        }
-
         let is_ref_mut = target.is_ref();
 
         // Pop the last index value
@@ -1251,23 +1249,25 @@ impl Engine {
 
         match chain_type {
             #[cfg(not(feature = "no_index"))]
-            ChainType::Index => {
+            ChainType::Indexing => {
                 let pos = rhs.position();
                 let idx_val = idx_val
-                    .as_index_value()
+                    .into_index_value()
                     .expect("never fails because `chain_type` is `ChainType::Index`");
 
                 match rhs {
                     // xxx[idx].expr... | xxx[idx][expr]...
-                    Expr::Dot(x, x_pos) | Expr::Index(x, x_pos) => {
+                    Expr::Dot(x, term, x_pos) | Expr::Index(x, term, x_pos)
+                        if !_terminate_chaining =>
+                    {
                         let idx_pos = x.lhs.position();
                         let obj_ptr = &mut self.get_indexed_mut(
                             mods, state, lib, target, idx_val, idx_pos, false, true, level,
                         )?;
-                        let rhs_chain = match_chain_type(rhs);
 
+                        let rhs_chain = match_chaining_type(rhs);
                         self.eval_dot_index_chain_helper(
-                            mods, state, lib, this_ptr, obj_ptr, root, &x.rhs, idx_values,
+                            mods, state, lib, this_ptr, obj_ptr, root, &x.rhs, *term, idx_values,
                             rhs_chain, level, new_val,
                         )
                         .map_err(|err| err.fill_position(*x_pos))
@@ -1324,13 +1324,13 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_object"))]
-            ChainType::Dot => {
+            ChainType::Dotting => {
                 match rhs {
                     // xxx.fn_name(arg_expr_list)
                     Expr::FnCall(x, pos) if !x.is_qualified() && new_val.is_none() => {
                         let FnCallExpr { name, hashes, .. } = x.as_ref();
                         let call_args = &mut idx_val
-                            .as_fn_call_args()
+                            .into_fn_call_args()
                             .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
                         self.make_method_call(
                             mods, state, lib, name, *hashes, target, call_args, *pos, level,
@@ -1482,7 +1482,9 @@ impl Engine {
                         )
                     }
                     // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
-                    Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) if target.is::<Map>() => {
+                    Expr::Index(x, term, x_pos) | Expr::Dot(x, term, x_pos)
+                        if target.is::<Map>() =>
+                    {
                         let val_target = &mut match x.lhs {
                             Expr::Property(ref p) => {
                                 let (name, pos) = &p.2;
@@ -1495,7 +1497,7 @@ impl Engine {
                             Expr::FnCall(ref x, pos) if !x.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = x.as_ref();
                                 let call_args = &mut idx_val
-                                    .as_fn_call_args()
+                                    .into_fn_call_args()
                                     .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
                                 let (val, _) = self.make_method_call(
                                     mods, state, lib, name, *hashes, target, call_args, pos, level,
@@ -1509,22 +1511,22 @@ impl Engine {
                             // Others - syntax error
                             ref expr => unreachable!("invalid dot expression: {:?}", expr),
                         };
-                        let rhs_chain = match_chain_type(rhs);
+                        let rhs_chain = match_chaining_type(rhs);
 
                         self.eval_dot_index_chain_helper(
-                            mods, state, lib, this_ptr, val_target, root, &x.rhs, idx_values,
-                            rhs_chain, level, new_val,
+                            mods, state, lib, this_ptr, val_target, root, &x.rhs, *term,
+                            idx_values, rhs_chain, level, new_val,
                         )
                         .map_err(|err| err.fill_position(*x_pos))
                     }
                     // xxx.sub_lhs[expr] | xxx.sub_lhs.expr
-                    Expr::Index(x, x_pos) | Expr::Dot(x, x_pos) => {
+                    Expr::Index(x, term, x_pos) | Expr::Dot(x, term, x_pos) => {
                         match x.lhs {
                             // xxx.prop[expr] | xxx.prop.expr
                             Expr::Property(ref p) => {
                                 let ((getter, hash_get), (setter, hash_set), (name, pos)) =
                                     p.as_ref();
-                                let rhs_chain = match_chain_type(rhs);
+                                let rhs_chain = match_chaining_type(rhs);
                                 let hash_get = FnCallHashes::from_native(*hash_get);
                                 let hash_set = FnCallHashes::from_native(*hash_set);
                                 let mut arg_values = [target.as_mut(), &mut Default::default()];
@@ -1564,6 +1566,7 @@ impl Engine {
                                         &mut val.into(),
                                         root,
                                         &x.rhs,
+                                        *term,
                                         idx_values,
                                         rhs_chain,
                                         level,
@@ -1614,9 +1617,9 @@ impl Engine {
                             // xxx.fn_name(arg_expr_list)[expr] | xxx.fn_name(arg_expr_list).expr
                             Expr::FnCall(ref f, pos) if !f.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = f.as_ref();
-                                let rhs_chain = match_chain_type(rhs);
+                                let rhs_chain = match_chaining_type(rhs);
                                 let args = &mut idx_val
-                                    .as_fn_call_args()
+                                    .into_fn_call_args()
                                     .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
                                 let (mut val, _) = self.make_method_call(
                                     mods, state, lib, name, *hashes, target, args, pos, level,
@@ -1625,8 +1628,8 @@ impl Engine {
                                 let target = &mut val.into();
 
                                 self.eval_dot_index_chain_helper(
-                                    mods, state, lib, this_ptr, target, root, &x.rhs, idx_values,
-                                    rhs_chain, level, new_val,
+                                    mods, state, lib, this_ptr, target, root, &x.rhs, *term,
+                                    idx_values, rhs_chain, level, new_val,
                                 )
                                 .map_err(|err| err.fill_position(pos))
                             }
@@ -1647,8 +1650,6 @@ impl Engine {
 
     /// Evaluate a dot/index chain.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[must_use]
-    #[must_use]
     fn eval_dot_index_chain(
         &self,
         scope: &mut Scope,
@@ -1660,18 +1661,18 @@ impl Engine {
         level: usize,
         new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
     ) -> RhaiResult {
-        let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, op_pos) = match expr {
+        let (crate::ast::BinaryExpr { lhs, rhs }, chain_type, term, op_pos) = match expr {
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(x, pos) => (x.as_ref(), ChainType::Index, *pos),
+            Expr::Index(x, term, pos) => (x.as_ref(), ChainType::Indexing, *term, *pos),
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(x, pos) => (x.as_ref(), ChainType::Dot, *pos),
+            Expr::Dot(x, term, pos) => (x.as_ref(), ChainType::Dotting, *term, *pos),
             _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
         };
 
         let idx_values = &mut Default::default();
 
-        self.eval_indexed_chain(
-            scope, mods, state, lib, this_ptr, rhs, chain_type, idx_values, 0, level,
+        self.eval_dot_index_chain_arguments(
+            scope, mods, state, lib, this_ptr, rhs, term, chain_type, idx_values, 0, level,
         )?;
 
         match lhs {
@@ -1680,13 +1681,15 @@ impl Engine {
                 #[cfg(not(feature = "unchecked"))]
                 self.inc_operations(state, *var_pos)?;
 
-                let (target, _) = self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
+                let (mut target, _) =
+                    self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
 
-                let obj_ptr = &mut target.into();
+                let obj_ptr = &mut target;
                 let root = (x.2.as_str(), *var_pos);
+
                 self.eval_dot_index_chain_helper(
-                    mods, state, lib, &mut None, obj_ptr, root, rhs, idx_values, chain_type, level,
-                    new_val,
+                    mods, state, lib, &mut None, obj_ptr, root, rhs, term, idx_values, chain_type,
+                    level, new_val,
                 )
                 .map(|(v, _)| v)
                 .map_err(|err| err.fill_position(op_pos))
@@ -1699,8 +1702,8 @@ impl Engine {
                 let obj_ptr = &mut value.into();
                 let root = ("", expr.position());
                 self.eval_dot_index_chain_helper(
-                    mods, state, lib, this_ptr, obj_ptr, root, rhs, idx_values, chain_type, level,
-                    new_val,
+                    mods, state, lib, this_ptr, obj_ptr, root, rhs, term, idx_values, chain_type,
+                    level, new_val,
                 )
                 .map(|(v, _)| v)
                 .map_err(|err| err.fill_position(op_pos))
@@ -1712,8 +1715,7 @@ impl Engine {
     /// [`StaticVec`] is used to avoid an allocation in the overwhelming cases of
     /// just a few levels of indexing.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[must_use]
-    fn eval_indexed_chain(
+    fn eval_dot_index_chain_arguments(
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
@@ -1721,6 +1723,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
+        terminate_chaining: bool,
         _parent_chain_type: ChainType,
         idx_values: &mut StaticVec<ChainArgument>,
         size: usize,
@@ -1731,7 +1734,7 @@ impl Engine {
 
         match expr {
             #[cfg(not(feature = "no_object"))]
-            Expr::FnCall(x, _) if _parent_chain_type == ChainType::Dot && !x.is_qualified() => {
+            Expr::FnCall(x, _) if _parent_chain_type == ChainType::Dotting && !x.is_qualified() => {
                 let crate::ast::FnCallExpr {
                     args, constants, ..
                 } = x.as_ref();
@@ -1751,30 +1754,30 @@ impl Engine {
                 idx_values.push((arg_values, first_arg_pos).into());
             }
             #[cfg(not(feature = "no_object"))]
-            Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dot => {
+            Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dotting => {
                 unreachable!("function call in dot chain should not be namespace-qualified")
             }
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Property(x) if _parent_chain_type == ChainType::Dot => {
+            Expr::Property(x) if _parent_chain_type == ChainType::Dotting => {
                 idx_values.push(ChainArgument::Property((x.2).1))
             }
             Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
 
-            Expr::Index(x, _) | Expr::Dot(x, _) => {
+            Expr::Index(x, term, _) | Expr::Dot(x, term, _) if !terminate_chaining => {
                 let crate::ast::BinaryExpr { lhs, rhs, .. } = x.as_ref();
 
                 // Evaluate in left-to-right order
                 let lhs_val = match lhs {
                     #[cfg(not(feature = "no_object"))]
-                    Expr::Property(x) if _parent_chain_type == ChainType::Dot => {
+                    Expr::Property(x) if _parent_chain_type == ChainType::Dotting => {
                         ChainArgument::Property((x.2).1)
                     }
                     Expr::Property(_) => unreachable!("unexpected Expr::Property for indexing"),
 
                     #[cfg(not(feature = "no_object"))]
                     Expr::FnCall(x, _)
-                        if _parent_chain_type == ChainType::Dot && !x.is_qualified() =>
+                        if _parent_chain_type == ChainType::Dotting && !x.is_qualified() =>
                     {
                         let crate::ast::FnCallExpr {
                             args, constants, ..
@@ -1795,41 +1798,37 @@ impl Engine {
                         (arg_values, first_arg_pos).into()
                     }
                     #[cfg(not(feature = "no_object"))]
-                    Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dot => {
+                    Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dotting => {
                         unreachable!("function call in dot chain should not be namespace-qualified")
                     }
                     #[cfg(not(feature = "no_object"))]
-                    expr if _parent_chain_type == ChainType::Dot => {
+                    expr if _parent_chain_type == ChainType::Dotting => {
                         unreachable!("invalid dot expression: {:?}", expr);
                     }
                     #[cfg(not(feature = "no_index"))]
-                    _ if _parent_chain_type == ChainType::Index => self
+                    _ if _parent_chain_type == ChainType::Indexing => self
                         .eval_expr(scope, mods, state, lib, this_ptr, lhs, level)
                         .map(|v| (v.flatten(), lhs.position()).into())?,
                     expr => unreachable!("unknown chained expression: {:?}", expr),
                 };
 
                 // Push in reverse order
-                let chain_type = match expr {
-                    #[cfg(not(feature = "no_index"))]
-                    Expr::Index(_, _) => ChainType::Index,
-                    #[cfg(not(feature = "no_object"))]
-                    Expr::Dot(_, _) => ChainType::Dot,
-                    _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
-                };
-                self.eval_indexed_chain(
-                    scope, mods, state, lib, this_ptr, rhs, chain_type, idx_values, size, level,
+                let chain_type = match_chaining_type(expr);
+
+                self.eval_dot_index_chain_arguments(
+                    scope, mods, state, lib, this_ptr, rhs, *term, chain_type, idx_values, size,
+                    level,
                 )?;
 
                 idx_values.push(lhs_val);
             }
 
             #[cfg(not(feature = "no_object"))]
-            _ if _parent_chain_type == ChainType::Dot => {
+            _ if _parent_chain_type == ChainType::Dotting => {
                 unreachable!("invalid dot expression: {:?}", expr);
             }
             #[cfg(not(feature = "no_index"))]
-            _ if _parent_chain_type == ChainType::Index => idx_values.push(
+            _ if _parent_chain_type == ChainType::Indexing => idx_values.push(
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
                     .map(|v| (v.flatten(), expr.position()).into())?,
             ),
@@ -1842,7 +1841,6 @@ impl Engine {
     /// Get the value at the indexed position of a base type.
     /// [`Position`] in [`EvalAltResult`] may be [`NONE`][Position::NONE] and should be set afterwards.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[must_use]
     fn get_indexed_mut<'t>(
         &self,
         mods: &mut Imports,
@@ -2013,7 +2011,6 @@ impl Engine {
     }
 
     /// Evaluate an expression.
-    #[must_use]
     pub(crate) fn eval_expr(
         &self,
         scope: &mut Scope,
@@ -2051,13 +2048,13 @@ impl Engine {
 
             // lhs[idx_expr]
             #[cfg(not(feature = "no_index"))]
-            Expr::Index(_, _) => {
+            Expr::Index(_, _, _) => {
                 self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
             }
 
             // lhs.dot_rhs
             #[cfg(not(feature = "no_object"))]
-            Expr::Dot(_, _) => {
+            Expr::Dot(_, _, _) => {
                 self.eval_dot_index_chain(scope, mods, state, lib, this_ptr, expr, level, None)
             }
 
@@ -2214,7 +2211,6 @@ impl Engine {
     }
 
     /// Evaluate a statements block.
-    #[must_use]
     pub(crate) fn eval_stmt_block(
         &self,
         scope: &mut Scope,
@@ -2292,7 +2288,6 @@ impl Engine {
 
     /// Evaluate an op-assignment statement.
     /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and should be set afterwards.
-    #[must_use]
     pub(crate) fn eval_op_assignment(
         &self,
         mods: &mut Imports,
@@ -2366,7 +2361,6 @@ impl Engine {
     ///
     /// This method uses some unsafe code, mainly for avoiding cloning of local variable names via
     /// direct lifetime casting.
-    #[must_use]
     pub(crate) fn eval_stmt(
         &self,
         scope: &mut Scope,
@@ -2436,7 +2430,7 @@ impl Engine {
                 let rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
                     .flatten();
-                let _new_val = Some(((rhs_val, rhs_expr.position()), (op_info.clone(), *op_pos)));
+                let _new_val = Some(((rhs_val, rhs_expr.position()), (*op_info, *op_pos)));
 
                 // Must be either `var[index] op= val` or `var.prop op= val`
                 match lhs_expr {
@@ -2446,7 +2440,7 @@ impl Engine {
                     }
                     // idx_lhs[idx_expr] op= rhs
                     #[cfg(not(feature = "no_index"))]
-                    Expr::Index(_, _) => {
+                    Expr::Index(_, _, _) => {
                         self.eval_dot_index_chain(
                             scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
@@ -2454,7 +2448,7 @@ impl Engine {
                     }
                     // dot_lhs.dot_rhs op= rhs
                     #[cfg(not(feature = "no_object"))]
-                    Expr::Dot(_, _) => {
+                    Expr::Dot(_, _, _) => {
                         self.eval_dot_index_chain(
                             scope, mods, state, lib, this_ptr, lhs_expr, level, _new_val,
                         )?;
@@ -2953,7 +2947,7 @@ impl Engine {
                             EvalAltResult::ErrorModuleNotFound(path.to_string(), path_pos).into()
                         })?;
 
-                    export.as_ref().map(|x| x.name.clone()).map(|name| {
+                    if let Some(name) = export.as_ref().map(|x| x.name.clone()) {
                         if !module.is_indexed() {
                             // Index the module (making a clone copy if necessary) if it is not indexed
                             let mut module = crate::fn_native::shared_take_or_clone(module);
@@ -2962,7 +2956,7 @@ impl Engine {
                         } else {
                             mods.push(name, module);
                         }
-                    });
+                    }
 
                     state.modules += 1;
 
@@ -2992,14 +2986,14 @@ impl Engine {
             // Share statement
             #[cfg(not(feature = "no_closure"))]
             Stmt::Share(name) => {
-                scope.get_index(name).map(|(index, _)| {
+                if let Some((index, _)) = scope.get_index(name) {
                     let val = scope.get_mut_by_index(index);
 
                     if !val.is_shared() {
                         // Replace the variable with a shared value.
                         *val = std::mem::take(val).into_shared();
                     }
-                });
+                }
                 Ok(Dynamic::UNIT)
             }
         };
@@ -3011,7 +3005,6 @@ impl Engine {
     /// Check a result to ensure that the data size is within allowable limit.
     #[cfg(feature = "unchecked")]
     #[inline(always)]
-    #[must_use]
     fn check_return_value(&self, result: RhaiResult) -> RhaiResult {
         result
     }
@@ -3019,20 +3012,17 @@ impl Engine {
     /// Check a result to ensure that the data size is within allowable limit.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
-    #[must_use]
     fn check_return_value(&self, result: RhaiResult) -> RhaiResult {
         result.and_then(|r| self.check_data_size(&r).map(|_| r))
     }
 
     #[cfg(feature = "unchecked")]
     #[inline(always)]
-    #[must_use]
     fn check_data_size(&self, _value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
         Ok(())
     }
 
     #[cfg(not(feature = "unchecked"))]
-    #[must_use]
     fn check_data_size(&self, value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
         // Recursively calculate the size of a value (especially `Array` and `Map`)
         fn calc_size(value: &Dynamic) -> (usize, usize, usize) {
@@ -3135,7 +3125,6 @@ impl Engine {
 
     /// Check if the number of operations stay within limit.
     #[cfg(not(feature = "unchecked"))]
-    #[must_use]
     pub(crate) fn inc_operations(
         &self,
         state: &mut EvalState,

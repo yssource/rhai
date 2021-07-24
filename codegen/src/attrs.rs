@@ -132,7 +132,7 @@ pub fn inner_item_attributes<T: ExportedParams>(
     }
 }
 
-pub fn deny_cfg_attr(attrs: &Vec<syn::Attribute>) -> syn::Result<()> {
+pub fn deny_cfg_attr(attrs: &[syn::Attribute]) -> syn::Result<()> {
     if let Some(cfg_attr) = attrs
         .iter()
         .find(|a| a.path.get_ident().map(|i| *i == "cfg").unwrap_or(false))

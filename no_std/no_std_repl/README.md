@@ -1,7 +1,7 @@
-`no-std` Test Sample
+`no-std` REPL Sample
 ====================
 
-This sample application is a bare-bones `no-std` build for testing.
+This sample application is the same version as the `rhai-repl` tool, compiled for `no-std`.
 
 [`wee_alloc`](https://crates.io/crates/wee_alloc) is used as the allocator.
 

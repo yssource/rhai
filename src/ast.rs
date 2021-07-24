@@ -78,7 +78,6 @@ pub struct ScriptFnDef {
 }
 
 impl fmt::Display for ScriptFnDef {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -129,7 +128,6 @@ pub struct ScriptFnMetadata<'a> {
 
 #[cfg(not(feature = "no_function"))]
 impl fmt::Display for ScriptFnMetadata<'_> {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -149,16 +147,16 @@ impl fmt::Display for ScriptFnMetadata<'_> {
 }
 
 #[cfg(not(feature = "no_function"))]
-impl<'a> Into<ScriptFnMetadata<'a>> for &'a ScriptFnDef {
-    #[inline(always)]
-    fn into(self) -> ScriptFnMetadata<'a> {
-        ScriptFnMetadata {
+impl<'a> From<&'a ScriptFnDef> for ScriptFnMetadata<'a> {
+    #[inline]
+    fn from(value: &'a ScriptFnDef) -> Self {
+        Self {
             #[cfg(not(feature = "no_function"))]
             #[cfg(feature = "metadata")]
-            comments: self.comments.iter().map(|s| s.as_str()).collect(),
-            access: self.access,
-            name: &self.name,
-            params: self.params.iter().map(|s| s.as_str()).collect(),
+            comments: value.comments.iter().map(|s| s.as_str()).collect(),
+            access: value.access,
+            name: &value.name,
+            params: value.params.iter().map(|s| s.as_str()).collect(),
         }
     }
 }
@@ -215,7 +213,7 @@ impl Default for AST {
 
 impl AST {
     /// Create a new [`AST`].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new(
         statements: impl IntoIterator<Item = Stmt>,
@@ -223,7 +221,7 @@ impl AST {
     ) -> Self {
         Self {
             source: None,
-            body: StmtBlock::new(statements.into_iter().collect(), Position::NONE),
+            body: StmtBlock::new(statements, Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -239,7 +237,7 @@ impl AST {
     ) -> Self {
         Self {
             source: Some(source.into()),
-            body: StmtBlock::new(statements.into_iter().collect(), Position::NONE),
+            body: StmtBlock::new(statements, Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -258,7 +256,7 @@ impl AST {
         self.source.as_ref()
     }
     /// Set the source.
-    #[inline(always)]
+    #[inline]
     pub fn set_source(&mut self, source: impl Into<Identifier>) -> &mut Self {
         let source = source.into();
         Shared::get_mut(&mut self.functions)
@@ -386,7 +384,7 @@ impl AST {
     ///
     /// This operation is cheap because functions are shared.
     #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn clone_functions_only_filtered(
         &self,
@@ -657,7 +655,7 @@ impl AST {
     /// # Ok(())
     /// # }
     /// ```
-    #[inline(always)]
+    #[inline]
     pub fn combine_filtered(
         &mut self,
         other: Self,
@@ -696,7 +694,7 @@ impl AST {
     /// # }
     /// ```
     #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
+    #[inline]
     pub fn retain_functions(
         &mut self,
         filter: impl Fn(FnNamespace, FnAccess, &str, usize) -> bool,
@@ -712,7 +710,6 @@ impl AST {
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    #[must_use]
     pub(crate) fn iter_fn_def(&self) -> impl Iterator<Item = &ScriptFnDef> {
         self.functions
             .iter_script_fn()
@@ -723,7 +720,6 @@ impl AST {
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
-    #[must_use]
     pub fn iter_functions<'a>(&'a self) -> impl Iterator<Item = ScriptFnMetadata> + 'a {
         self.functions
             .iter_script_fn()
@@ -748,7 +744,7 @@ impl AST {
     /// Return `false` from the callback to terminate the walk.
     #[cfg(not(feature = "internals"))]
     #[cfg(not(feature = "no_module"))]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn walk(&self, on_node: &mut impl FnMut(&[ASTNode]) -> bool) -> bool {
         let path = &mut Default::default();
 
@@ -770,7 +766,7 @@ impl AST {
     /// Return `false` from the callback to terminate the walk.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
-    #[inline(always)]
+    #[inline]
     pub fn walk(&self, on_node: &mut impl FnMut(&[ASTNode]) -> bool) -> bool {
         let path = &mut Default::default();
 
@@ -835,7 +831,6 @@ pub struct Ident {
 }
 
 impl fmt::Debug for Ident {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.name)?;
         self.pos.debug_print(f)
@@ -892,7 +887,8 @@ pub struct StmtBlock(StaticVec<Stmt>, Position);
 impl StmtBlock {
     /// Create a new [`StmtBlock`].
     #[must_use]
-    pub fn new(mut statements: StaticVec<Stmt>, pos: Position) -> Self {
+    pub fn new(statements: impl IntoIterator<Item = Stmt>, pos: Position) -> Self {
+        let mut statements: StaticVec<_> = statements.into_iter().collect();
         statements.shrink_to_fit();
         Self(statements, pos)
     }
@@ -939,7 +935,6 @@ impl DerefMut for StmtBlock {
 }
 
 impl fmt::Debug for StmtBlock {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Block")?;
         fmt::Debug::fmt(&self.0, f)?;
@@ -1027,7 +1022,7 @@ impl Default for Stmt {
 }
 
 impl From<Stmt> for StmtBlock {
-    #[inline(always)]
+    #[inline]
     fn from(stmt: Stmt) -> Self {
         match stmt {
             Stmt::Block(mut block, pos) => Self(block.iter_mut().map(mem::take).collect(), pos),
@@ -1045,10 +1040,7 @@ impl Stmt {
     #[inline(always)]
     #[must_use]
     pub const fn is_noop(&self) -> bool {
-        match self {
-            Self::Noop(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Noop(_))
     }
     /// Get the [position][Position] of this statement.
     #[must_use]
@@ -1226,7 +1218,7 @@ impl Stmt {
     ///
     /// Only variable declarations (i.e. `let` and `const`) and `import`/`export` statements
     /// are internally pure.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn is_internally_pure(&self) -> bool {
         match self {
@@ -1245,7 +1237,7 @@ impl Stmt {
     /// Currently this is only true for `return`, `throw`, `break` and `continue`.
     ///
     /// All statements following this statement will essentially be dead code.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_control_flow_break(&self) -> bool {
         match self {
@@ -1634,7 +1626,6 @@ impl<F: Float + fmt::Debug> fmt::Debug for FloatWrapper<F> {
 
 #[cfg(not(feature = "no_float"))]
 impl<F: Float + fmt::Display + fmt::LowerExp + From<f32>> fmt::Display for FloatWrapper<F> {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let abs = self.0.abs();
         if abs > Self::MAX_NATURAL_FLOAT_FOR_DISPLAY.into()
@@ -1690,7 +1681,7 @@ impl FloatWrapper<FLOAT> {
     /// Create a new [`FloatWrapper`].
     #[inline(always)]
     #[must_use]
-    pub(crate) const fn const_new(value: FLOAT) -> Self {
+    pub const fn new_const(value: FLOAT) -> Self {
         Self(value)
     }
 }
@@ -1759,10 +1750,10 @@ pub enum Expr {
     Stmt(Box<StmtBlock>),
     /// func `(` expr `,` ... `)`
     FnCall(Box<FnCallExpr>, Position),
-    /// lhs `.` rhs
-    Dot(Box<BinaryExpr>, Position),
-    /// expr `[` expr `]`
-    Index(Box<BinaryExpr>, Position),
+    /// lhs `.` rhs - bool variable is a dummy
+    Dot(Box<BinaryExpr>, bool, Position),
+    /// expr `[` expr `]` - boolean indicates whether the dotting/indexing chain stops
+    Index(Box<BinaryExpr>, bool, Position),
     /// lhs `&&` rhs
     And(Box<BinaryExpr>, Position),
     /// lhs `||` rhs
@@ -1839,10 +1830,18 @@ impl fmt::Debug for Expr {
                 }
                 ff.finish()
             }
-            Self::Dot(x, pos) | Self::Index(x, pos) | Self::And(x, pos) | Self::Or(x, pos) => {
+            Self::Index(x, term, pos) => {
+                display_pos = *pos;
+
+                f.debug_struct("Index")
+                    .field("lhs", &x.lhs)
+                    .field("rhs", &x.rhs)
+                    .field("terminate", term)
+                    .finish()
+            }
+            Self::Dot(x, _, pos) | Self::And(x, pos) | Self::Or(x, pos) => {
                 let op_name = match self {
-                    Self::Dot(_, _) => "Dot",
-                    Self::Index(_, _) => "Index",
+                    Self::Dot(_, _, _) => "Dot",
                     Self::And(_, _) => "And",
                     Self::Or(_, _) => "Or",
                     _ => unreachable!(),
@@ -1915,8 +1914,17 @@ impl Expr {
             Union::Char(c, _, _) => Self::CharConstant(c, pos),
             Union::Int(i, _, _) => Self::IntegerConstant(i, pos),
 
+            #[cfg(feature = "decimal")]
+            Union::Decimal(value, _, _) => Self::DynamicConstant(Box::new((*value).into()), pos),
+
             #[cfg(not(feature = "no_float"))]
             Union::Float(f, _, _) => Self::FloatConstant(f, pos),
+
+            #[cfg(not(feature = "no_index"))]
+            Union::Array(a, _, _) => Self::DynamicConstant(Box::new((*a).into()), pos),
+
+            #[cfg(not(feature = "no_object"))]
+            Union::Map(m, _, _) => Self::DynamicConstant(Box::new((*m).into()), pos),
 
             _ => Self::DynamicConstant(value.into(), pos),
         }
@@ -1964,7 +1972,7 @@ impl Expr {
             Self::Property(x) => (x.2).1,
             Self::Stmt(x) => x.1,
 
-            Self::And(x, _) | Self::Or(x, _) | Self::Dot(x, _) | Self::Index(x, _) => {
+            Self::And(x, _) | Self::Or(x, _) | Self::Dot(x, _, _) | Self::Index(x, _, _) => {
                 x.lhs.position()
             }
         }
@@ -1986,8 +1994,8 @@ impl Expr {
             | Self::Map(_, pos)
             | Self::And(_, pos)
             | Self::Or(_, pos)
-            | Self::Dot(_, pos)
-            | Self::Index(_, pos)
+            | Self::Dot(_, _, pos)
+            | Self::Index(_, _, pos)
             | Self::Variable(_, pos, _)
             | Self::Stack(_, pos)
             | Self::FnCall(_, pos)
@@ -2024,10 +2032,7 @@ impl Expr {
     #[inline(always)]
     #[must_use]
     pub const fn is_unit(&self) -> bool {
-        match self {
-            Self::Unit(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Unit(_))
     }
     /// Is the expression a constant?
     #[inline]
@@ -2078,8 +2083,8 @@ impl Expr {
             | Self::InterpolatedString(_, _)
             | Self::FnCall(_, _)
             | Self::Stmt(_)
-            | Self::Dot(_, _)
-            | Self::Index(_, _)
+            | Self::Dot(_, _, _)
+            | Self::Index(_, _, _)
             | Self::Array(_, _)
             | Self::Map(_, _) => match token {
                 #[cfg(not(feature = "no_index"))]
@@ -2144,7 +2149,7 @@ impl Expr {
                     }
                 }
             }
-            Self::Index(x, _) | Self::Dot(x, _) | Expr::And(x, _) | Expr::Or(x, _) => {
+            Self::Index(x, _, _) | Self::Dot(x, _, _) | Expr::And(x, _) | Expr::Or(x, _) => {
                 if !x.lhs.walk(path, on_node) {
                     return false;
                 }

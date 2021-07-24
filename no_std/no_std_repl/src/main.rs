@@ -1,11 +1,8 @@
-use rhai::{Dynamic, Engine, EvalAltResult, Module, Scope, AST};
+use rhai::{Dynamic, Engine, EvalAltResult, Scope, AST};
 
 use std::{
     env,
-    fs::File,
-    io::{stdin, stdout, Read, Write},
-    path::Path,
-    process::exit,
+    io::{stdin, stdout, Write},
 };
 
 /// Pretty-print error.
@@ -46,9 +43,7 @@ fn print_help() {
     println!("help       => print this help");
     println!("quit, exit => quit");
     println!("scope      => print all variables in the scope");
-    #[cfg(feature = "metadata")]
     println!("functions  => print all functions defined");
-    #[cfg(feature = "metadata")]
     println!("json       => output all functions in JSON format");
     println!("ast        => print the last AST (optimized)");
     println!("astu       => print the last raw, un-optimized AST");
@@ -65,95 +60,9 @@ fn main() {
     // Initialize scripting engine
     let mut engine = Engine::new();
 
-    #[cfg(not(feature = "no_module"))]
-    #[cfg(not(feature = "no_std"))]
-    {
-        // Load init scripts
-        let mut contents = String::new();
-        let mut has_init_scripts = false;
-
-        for filename in env::args().skip(1) {
-            let filename = match Path::new(&filename).canonicalize() {
-                Err(err) => {
-                    eprintln!("Error script file path: {}\n{}", filename, err);
-                    exit(1);
-                }
-                Ok(f) => {
-                    match f.strip_prefix(std::env::current_dir().unwrap().canonicalize().unwrap()) {
-                        Ok(f) => f.into(),
-                        _ => f,
-                    }
-                }
-            };
-
-            contents.clear();
-
-            let mut f = match File::open(&filename) {
-                Err(err) => {
-                    eprintln!(
-                        "Error reading script file: {}\n{}",
-                        filename.to_string_lossy(),
-                        err
-                    );
-                    exit(1);
-                }
-                Ok(f) => f,
-            };
-
-            if let Err(err) = f.read_to_string(&mut contents) {
-                println!(
-                    "Error reading script file: {}\n{}",
-                    filename.to_string_lossy(),
-                    err
-                );
-                exit(1);
-            }
-
-            let module = match engine
-                .compile(&contents)
-                .map_err(|err| err.into())
-                .and_then(|mut ast| {
-                    ast.set_source(filename.to_string_lossy().to_string());
-                    Module::eval_ast_as_new(Default::default(), &ast, &engine)
-                }) {
-                Err(err) => {
-                    let filename = filename.to_string_lossy();
-
-                    eprintln!("{:=<1$}", "", filename.len());
-                    eprintln!("{}", filename);
-                    eprintln!("{:=<1$}", "", filename.len());
-                    eprintln!("");
-
-                    print_error(&contents, *err);
-                    exit(1);
-                }
-                Ok(m) => m,
-            };
-
-            engine.register_global_module(module.into());
-
-            has_init_scripts = true;
-
-            println!("Script '{}' loaded.", filename.to_string_lossy());
-        }
-
-        if has_init_scripts {
-            println!();
-        }
-    }
-
     // Setup Engine
     #[cfg(not(feature = "no_optimize"))]
     engine.set_optimization_level(rhai::OptimizationLevel::None);
-
-    // Set a file module resolver without caching
-    #[cfg(not(feature = "no_module"))]
-    #[cfg(not(feature = "no_std"))]
-    {
-        let mut resolver = rhai::module_resolvers::FileModuleResolver::new();
-        resolver.enable_cache(false);
-        engine.set_module_resolver(resolver);
-    }
 
     // Make Engine immutable
     let engine = engine;
@@ -214,7 +123,7 @@ fn main() {
                     .enumerate()
                     .for_each(|(i, (name, constant, value))| {
                         #[cfg(not(feature = "no_closure"))]
-                        let value_is_shared = if value.is_shared() { " (shared)" } else { "" };
+                        let value_is_shared = if value.is_shared() { " (shared" } else { "" };
                         #[cfg(feature = "no_closure")]
                         let value_is_shared = "";
 
@@ -240,7 +149,6 @@ fn main() {
                 println!("{:#?}\n", ast);
                 continue;
             }
-            #[cfg(feature = "metadata")]
             "functions" => {
                 // print a list of all registered functions
                 engine
@@ -254,7 +162,6 @@ fn main() {
                 println!();
                 continue;
             }
-            #[cfg(feature = "metadata")]
             "json" => {
                 println!(
                     "{}",

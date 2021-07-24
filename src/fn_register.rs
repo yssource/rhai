@@ -88,7 +88,7 @@ pub trait RegisterNativeFunction<Args, Result> {
     fn return_type_name() -> &'static str;
 }
 
-#[inline(always)]
+#[inline]
 #[must_use]
 fn is_setter(_fn_name: &str) -> bool {
     #[cfg(not(feature = "no_object"))]

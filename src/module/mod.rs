@@ -112,10 +112,10 @@ impl FuncInfo {
 /// # Note
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
-#[inline(always)]
+#[inline]
 fn calc_native_fn_hash<'a>(
     modules: impl Iterator<Item = &'a str>,
-    fn_name: impl AsRef<str>,
+    fn_name: &str,
     params: &[TypeId],
 ) -> u64 {
     let hash_script = calc_qualified_fn_hash(modules, fn_name, params.len());
@@ -324,7 +324,7 @@ impl Module {
     /// let module = Module::new();
     /// assert!(module.is_empty());
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.functions.is_empty()
@@ -437,7 +437,7 @@ impl Module {
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
     /// ```
-    #[inline(always)]
+    #[inline]
     pub fn set_var(
         &mut self,
         name: impl Into<Identifier>,
@@ -457,7 +457,6 @@ impl Module {
     /// Get a reference to a namespace-qualified variable.
     /// Name and Position in [`EvalAltResult`] are [`None`] and [`NONE`][Position::NONE] and must be set afterwards.
     #[inline(always)]
-    #[must_use]
     pub(crate) fn get_qualified_var(&self, hash_var: u64) -> Result<&Dynamic, Box<EvalAltResult>> {
         self.all_variables.get(&hash_var).ok_or_else(|| {
             EvalAltResult::ErrorVariableNotFound(String::new(), Position::NONE).into()
@@ -519,7 +518,7 @@ impl Module {
     /// By taking a mutable reference, it is assumed that some sub-modules will be modified.
     /// Thus the [`Module`] is automatically set to be non-indexed.
     #[cfg(not(feature = "no_module"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn sub_modules_mut(&mut self) -> &mut BTreeMap<Identifier, Shared<Module>> {
         // We must assume that the user has changed the sub-modules
@@ -580,7 +579,7 @@ impl Module {
     /// module.set_sub_module("question", sub_module);
     /// assert!(module.get_sub_module("question").is_some());
     /// ```
-    #[inline(always)]
+    #[inline]
     pub fn set_sub_module(
         &mut self,
         name: impl Into<Identifier>,
@@ -624,7 +623,7 @@ impl Module {
     /// The _last entry_ in the list should be the _return type_ of the function.
     /// In other words, the number of entries should be one larger than the number of parameters.
     #[cfg(feature = "metadata")]
-    #[inline(always)]
+    #[inline]
     pub fn update_fn_metadata(&mut self, hash_fn: u64, arg_names: &[&str]) -> &mut Self {
         let param_names = arg_names
             .iter()
@@ -641,7 +640,7 @@ impl Module {
     /// Update the namespace of a registered function.
     ///
     /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
-    #[inline(always)]
+    #[inline]
     pub fn update_fn_namespace(&mut self, hash_fn: u64, namespace: FnNamespace) -> &mut Self {
         if let Some(f) = self.functions.get_mut(&hash_fn) {
             f.namespace = namespace;
@@ -652,7 +651,7 @@ impl Module {
     }
 
     /// Remap type ID.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     fn map_type(map: bool, type_id: TypeId) -> TypeId {
         if !map {
@@ -706,7 +705,7 @@ impl Module {
         #[cfg(feature = "metadata")]
         param_names.shrink_to_fit();
 
-        let hash_fn = calc_native_fn_hash(empty(), &name, &param_types);
+        let hash_fn = calc_native_fn_hash(empty(), name.as_ref(), &param_types);
 
         self.functions.insert(
             hash_fn,
@@ -1207,7 +1206,7 @@ impl Module {
     /// Merge another [`Module`] into this [`Module`].
     #[inline(always)]
     pub fn merge(&mut self, other: &Self) -> &mut Self {
-        self.merge_filtered(other, &mut |_, _, _, _, _| true)
+        self.merge_filtered(other, &|_, _, _, _, _| true)
     }
 
     /// Merge another [`Module`] into this [`Module`] based on a filter predicate.
@@ -1292,14 +1291,12 @@ impl Module {
 
     /// Get an iterator to the sub-modules in the [`Module`].
     #[inline(always)]
-    #[must_use]
     pub fn iter_sub_modules(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
         self.modules.iter().map(|(k, m)| (k.as_str(), m.clone()))
     }
 
     /// Get an iterator to the variables in the [`Module`].
     #[inline(always)]
-    #[must_use]
     pub fn iter_var(&self) -> impl Iterator<Item = (&str, &Dynamic)> {
         self.variables.iter().map(|(k, v)| (k.as_str(), v))
     }
@@ -1307,7 +1304,6 @@ impl Module {
     /// Get an iterator to the functions in the [`Module`].
     #[inline(always)]
     #[allow(dead_code)]
-    #[must_use]
     pub(crate) fn iter_fn(&self) -> impl Iterator<Item = &FuncInfo> {
         self.functions.values().map(Box::as_ref)
     }
@@ -1322,7 +1318,6 @@ impl Module {
     /// 5) Shared reference to function definition [`ScriptFnDef`][crate::ast::ScriptFnDef].
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
-    #[must_use]
     pub(crate) fn iter_script_fn(
         &self,
     ) -> impl Iterator<
@@ -1360,7 +1355,6 @@ impl Module {
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "internals"))]
     #[inline(always)]
-    #[must_use]
     pub fn iter_script_fn_info(
         &self,
     ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize)> {
@@ -1419,7 +1413,6 @@ impl Module {
     /// # }
     /// ```
     #[cfg(not(feature = "no_module"))]
-    #[must_use]
     pub fn eval_ast_as_new(
         mut scope: crate::Scope,
         ast: &crate::AST,
@@ -1529,13 +1522,13 @@ impl Module {
 
             // Index all variables
             module.variables.iter().for_each(|(var_name, value)| {
-                let hash_var = crate::calc_qualified_var_hash(path.iter().map(|&v| v), var_name);
+                let hash_var = crate::calc_qualified_var_hash(path.iter().copied(), var_name);
                 variables.insert(hash_var, value.clone());
             });
 
             // Index type iterators
             module.type_iterators.iter().for_each(|(&type_id, func)| {
-                type_iterators.insert(type_id, func.clone());
+                type_iterators.insert(type_id, *func);
                 contains_indexed_global_functions = true;
             });
 
@@ -1611,10 +1604,10 @@ impl Module {
     }
 
     /// Set a type iterator into the [`Module`].
-    #[inline(always)]
+    #[inline]
     pub fn set_iter(&mut self, type_id: TypeId, func: IteratorFn) -> &mut Self {
         if self.indexed {
-            self.all_type_iterators.insert(type_id, func.clone());
+            self.all_type_iterators.insert(type_id, func);
             self.contains_indexed_global_functions = true;
         }
         self.type_iterators.insert(type_id, func);
@@ -1678,7 +1671,6 @@ pub struct NamespaceRef {
 }
 
 impl fmt::Debug for NamespaceRef {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(index) = self.index {
             write!(f, "{} -> ", index)?;
@@ -1696,7 +1688,6 @@ impl fmt::Debug for NamespaceRef {
 }
 
 impl fmt::Display for NamespaceRef {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for Ident { name, .. } in self.path.iter() {
             write!(f, "{}{}", name, Token::DoubleColon.syntax())?;
@@ -1735,7 +1726,10 @@ impl NamespaceRef {
     #[inline(always)]
     #[must_use]
     pub fn new(&self) -> Self {
-        Default::default()
+        Self {
+            index: None,
+            path: StaticVec::new(),
+        }
     }
     /// Get the [`Scope`][crate::Scope] index offset.
     #[inline(always)]

@@ -291,7 +291,6 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[must_use]
     pub fn register_custom_operator(
         &mut self,
         keyword: impl AsRef<str> + Into<Identifier>,
@@ -310,18 +309,18 @@ impl Engine {
             // Disabled keywords are OK
             Some(token) if token.is_keyword() => {
                 if !self.disabled_symbols.contains(token.syntax().as_ref()) {
-                    return Err(format!("'{}' is a reserved keyword", keyword.as_ref()).into());
+                    return Err(format!("'{}' is a reserved keyword", keyword.as_ref()));
                 }
             }
             // Active standard symbols cannot be made custom
             Some(token) if token.is_symbol() => {
                 if !self.disabled_symbols.contains(token.syntax().as_ref()) {
-                    return Err(format!("'{}' is a reserved operator", keyword.as_ref()).into());
+                    return Err(format!("'{}' is a reserved operator", keyword.as_ref()));
                 }
             }
             // Active standard symbols cannot be made custom
             Some(token) if !self.disabled_symbols.contains(token.syntax().as_ref()) => {
-                return Err(format!("'{}' is a reserved symbol", keyword.as_ref()).into())
+                return Err(format!("'{}' is a reserved symbol", keyword.as_ref()))
             }
             // Disabled symbols are OK
             Some(_) => (),

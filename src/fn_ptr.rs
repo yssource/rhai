@@ -19,7 +19,6 @@ pub struct FnPtr(Identifier, StaticVec<Dynamic>);
 impl FnPtr {
     /// Create a new function pointer.
     #[inline(always)]
-    #[must_use]
     pub fn new(name: impl Into<Identifier>) -> Result<Self, Box<EvalAltResult>> {
         name.into().try_into()
     }
@@ -27,7 +26,7 @@ impl FnPtr {
     #[inline(always)]
     #[must_use]
     pub(crate) fn new_unchecked(name: Identifier, curry: StaticVec<Dynamic>) -> Self {
-        Self(name.into(), curry)
+        Self(name, curry)
     }
     /// Get the name of the function.
     #[inline(always)]
@@ -96,8 +95,7 @@ impl FnPtr {
     /// This is to avoid unnecessarily cloning the arguments.
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub fn call_dynamic(
         &self,
         ctx: &NativeCallContext,
@@ -127,7 +125,6 @@ impl FnPtr {
 }
 
 impl fmt::Display for FnPtr {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Fn({})", self.0)
     }
@@ -136,7 +133,7 @@ impl fmt::Display for FnPtr {
 impl TryFrom<Identifier> for FnPtr {
     type Error = Box<EvalAltResult>;
 
-    #[inline(always)]
+    #[inline]
     fn try_from(value: Identifier) -> Result<Self, Self::Error> {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, Default::default()))

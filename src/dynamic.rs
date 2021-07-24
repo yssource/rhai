@@ -212,6 +212,7 @@ pub enum Union {
     TimeStamp(Box<Instant>, Tag, AccessMode),
 
     /// Any type as a trait object.
+    #[allow(clippy::redundant_allocation)]
     Variant(Box<Box<dyn Variant>>, Tag, AccessMode),
 
     /// A _shared_ value of any type.
@@ -378,10 +379,7 @@ impl Dynamic {
     #[inline(always)]
     #[must_use]
     pub const fn is_variant(&self) -> bool {
-        match self.0 {
-            Union::Variant(_, _, _) => true,
-            _ => false,
-        }
+        matches!(self.0, Union::Variant(_, _, _))
     }
     /// Is the value held by this [`Dynamic`] shared?
     ///
@@ -390,13 +388,11 @@ impl Dynamic {
     #[inline(always)]
     #[must_use]
     pub const fn is_shared(&self) -> bool {
-        #[cfg(not(feature = "no_closure"))]
         match self.0 {
-            Union::Shared(_, _, _) => return true,
-            _ => (),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(_, _, _) => true,
+            _ => false,
         }
-
-        false
     }
     /// Is the value held by this [`Dynamic`] a particular type?
     ///
@@ -405,13 +401,11 @@ impl Dynamic {
     #[inline(always)]
     #[must_use]
     pub fn is<T: Any + Clone>(&self) -> bool {
-        let mut target_type_id = TypeId::of::<T>();
-
-        if target_type_id == TypeId::of::<String>() {
-            target_type_id = TypeId::of::<ImmutableString>();
+        if TypeId::of::<T>() == TypeId::of::<String>() {
+            self.type_id() == TypeId::of::<ImmutableString>()
+        } else {
+            self.type_id() == TypeId::of::<T>()
         }
-
-        self.type_id() == target_type_id
     }
     /// Get the [`TypeId`] of the value held by this [`Dynamic`].
     ///
@@ -577,7 +571,7 @@ impl Hash for Dynamic {
 }
 
 /// Map the name of a standard type into a friendly form.
-#[inline(always)]
+#[inline]
 #[must_use]
 pub(crate) fn map_std_type_name(name: &str) -> &str {
     if name == type_name::<String>() {
@@ -845,7 +839,7 @@ impl Dynamic {
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     pub const FLOAT_ZERO: Dynamic = Self(Union::Float(
-        FloatWrapper::const_new(0.0),
+        FloatWrapper::new_const(0.0),
         DEFAULT_TAG_VALUE,
         ReadWrite,
     ));
@@ -854,7 +848,7 @@ impl Dynamic {
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     pub const FLOAT_ONE: Dynamic = Self(Union::Float(
-        FloatWrapper::const_new(1.0),
+        FloatWrapper::new_const(1.0),
         DEFAULT_TAG_VALUE,
         ReadWrite,
     ));
@@ -863,7 +857,7 @@ impl Dynamic {
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     pub const FLOAT_TWO: Dynamic = Self(Union::Float(
-        FloatWrapper::const_new(2.0),
+        FloatWrapper::new_const(2.0),
         DEFAULT_TAG_VALUE,
         ReadWrite,
     ));
@@ -872,7 +866,7 @@ impl Dynamic {
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     pub const FLOAT_TEN: Dynamic = Self(Union::Float(
-        FloatWrapper::const_new(10.0),
+        FloatWrapper::new_const(10.0),
         DEFAULT_TAG_VALUE,
         ReadWrite,
     ));
@@ -881,7 +875,7 @@ impl Dynamic {
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     pub const FLOAT_NEGATIVE_ONE: Dynamic = Self(Union::Float(
-        FloatWrapper::const_new(-1.0),
+        FloatWrapper::new_const(-1.0),
         DEFAULT_TAG_VALUE,
         ReadWrite,
     ));
@@ -1056,21 +1050,21 @@ impl Dynamic {
         let val = value.as_any();
 
         if TypeId::of::<T>() == TypeId::of::<INT>() {
-            return val.downcast_ref::<INT>().expect(CHECKED).clone().into();
+            return (*val.downcast_ref::<INT>().expect(CHECKED)).into();
         }
         #[cfg(not(feature = "no_float"))]
         if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
-            return val.downcast_ref::<FLOAT>().expect(CHECKED).clone().into();
+            return (*val.downcast_ref::<FLOAT>().expect(CHECKED)).into();
         }
         #[cfg(feature = "decimal")]
         if TypeId::of::<T>() == TypeId::of::<Decimal>() {
-            return val.downcast_ref::<Decimal>().expect(CHECKED).clone().into();
+            return (*val.downcast_ref::<Decimal>().expect(CHECKED)).into();
         }
         if TypeId::of::<T>() == TypeId::of::<bool>() {
-            return val.downcast_ref::<bool>().expect(CHECKED).clone().into();
+            return (*val.downcast_ref::<bool>().expect(CHECKED)).into();
         }
         if TypeId::of::<T>() == TypeId::of::<char>() {
-            return val.downcast_ref::<char>().expect(CHECKED).clone().into();
+            return (*val.downcast_ref::<char>().expect(CHECKED)).into();
         }
         if TypeId::of::<T>() == TypeId::of::<ImmutableString>() {
             return val
@@ -1321,7 +1315,7 @@ impl Dynamic {
     ///
     /// assert_eq!(x.cast::<u32>(), 42);
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn cast<T: Any + Clone>(self) -> T {
         #[cfg(not(feature = "no_closure"))]
@@ -1481,7 +1475,7 @@ impl Dynamic {
     ///
     /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn read_lock<T: Any + Clone>(&self) -> Option<DynamicReadLock<T>> {
         match self.0 {
@@ -1515,7 +1509,7 @@ impl Dynamic {
     ///
     /// Under the `sync` feature, this call may deadlock, or [panic](https://doc.rust-lang.org/std/sync/struct.RwLock.html#panics-1).
     /// Otherwise, this call panics if the data is currently borrowed for write.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn write_lock<T: Any + Clone>(&mut self) -> Option<DynamicWriteLock<T>> {
         match self.0 {
@@ -1735,7 +1729,6 @@ impl Dynamic {
     /// Cast the [`Dynamic`] as a unit `()` and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
-    #[must_use]
     pub fn as_unit(&self) -> Result<(), &'static str> {
         match self.0 {
             Union::Unit(value, _, _) => Ok(value),
@@ -1747,7 +1740,6 @@ impl Dynamic {
     /// Cast the [`Dynamic`] as the system integer type [`INT`] and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
-    #[must_use]
     pub fn as_int(&self) -> Result<INT, &'static str> {
         match self.0 {
             Union::Int(n, _, _) => Ok(n),
@@ -1762,7 +1754,6 @@ impl Dynamic {
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     #[inline(always)]
-    #[must_use]
     pub fn as_float(&self) -> Result<FLOAT, &'static str> {
         match self.0 {
             Union::Float(n, _, _) => Ok(*n),
@@ -1777,7 +1768,6 @@ impl Dynamic {
     /// Exported under the `decimal` feature only.
     #[cfg(feature = "decimal")]
     #[inline(always)]
-    #[must_use]
     pub fn as_decimal(&self) -> Result<Decimal, &'static str> {
         match self.0 {
             Union::Decimal(ref n, _, _) => Ok(**n),
@@ -1789,7 +1779,6 @@ impl Dynamic {
     /// Cast the [`Dynamic`] as a [`bool`] and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
-    #[must_use]
     pub fn as_bool(&self) -> Result<bool, &'static str> {
         match self.0 {
             Union::Bool(b, _, _) => Ok(b),
@@ -1801,7 +1790,6 @@ impl Dynamic {
     /// Cast the [`Dynamic`] as a [`char`] and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
-    #[must_use]
     pub fn as_char(&self) -> Result<char, &'static str> {
         match self.0 {
             Union::Char(n, _, _) => Ok(n),
@@ -1817,7 +1805,6 @@ impl Dynamic {
     ///
     /// Panics if the value is shared.
     #[inline(always)]
-    #[must_use]
     pub(crate) fn as_str_ref(&self) -> Result<&str, &'static str> {
         match self.0 {
             Union::Str(ref s, _, _) => Ok(s),
@@ -1830,14 +1817,12 @@ impl Dynamic {
     /// If there are other references to the same string, a cloned copy is returned.
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
-    #[must_use]
     pub fn as_string(self) -> Result<String, &'static str> {
         self.as_immutable_string().map(ImmutableString::into_owned)
     }
     /// Convert the [`Dynamic`] into an [`ImmutableString`] and return it.
     /// Returns the name of the actual type if the cast fails.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub fn as_immutable_string(self) -> Result<ImmutableString, &'static str> {
         match self.0 {
             Union::Str(s, _, _) => Ok(s),
@@ -2057,6 +2042,6 @@ impl From<Instant> for Dynamic {
 impl From<crate::Shared<crate::Locked<Dynamic>>> for Dynamic {
     #[inline(always)]
     fn from(value: crate::Shared<crate::Locked<Self>>) -> Self {
-        Self(Union::Shared(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
+        Self(Union::Shared(value, DEFAULT_TAG_VALUE, ReadWrite))
     }
 }

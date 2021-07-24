@@ -200,7 +200,7 @@ impl FileModuleResolver {
     }
 
     /// Is a particular path cached?
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn is_cached(&self, path: &str, source_path: Option<&str>) -> bool {
         if !self.cache_enabled {
@@ -227,7 +227,7 @@ impl FileModuleResolver {
     /// Remove the specified path from internal cache.
     ///
     /// The next time this path is resolved, the script file will be loaded once again.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn clear_cache_for_path(
         &mut self,
@@ -251,7 +251,6 @@ impl FileModuleResolver {
             .map(|(_, v)| v);
     }
     /// Construct a full file path.
-    #[must_use]
     #[must_use]
     fn get_file_path(&self, path: &str, source_path: Option<&str>) -> PathBuf {
         let path = Path::new(path);

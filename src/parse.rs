@@ -8,7 +8,7 @@ use crate::custom_syntax::{
     CustomSyntax, CUSTOM_SYNTAX_MARKER_BLOCK, CUSTOM_SYNTAX_MARKER_BOOL, CUSTOM_SYNTAX_MARKER_EXPR,
     CUSTOM_SYNTAX_MARKER_IDENT, CUSTOM_SYNTAX_MARKER_INT, CUSTOM_SYNTAX_MARKER_STRING,
 };
-use crate::dynamic::{AccessMode, Union};
+use crate::dynamic::AccessMode;
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::fn_hash::get_hasher;
 use crate::module::NamespaceRef;
@@ -17,8 +17,8 @@ use crate::token::{
     is_keyword_function, is_valid_identifier, Token, TokenStream, TokenizerControl,
 };
 use crate::{
-    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Dynamic, Engine, Identifier,
-    LexError, ParseError, ParseErrorType, Position, Scope, Shared, StaticVec, AST,
+    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Engine, Identifier, LexError,
+    ParseError, ParseErrorType, Position, Scope, Shared, StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -59,7 +59,7 @@ pub struct IdentifierBuilder(
 
 impl IdentifierBuilder {
     /// Get an identifier from a text string.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
         #[cfg(not(feature = "no_smartstring"))]
@@ -141,7 +141,7 @@ impl<'e> ParseState<'e> {
     /// i.e. the top element of [`ParseState`]'s variables stack is offset 1.
     ///
     /// Return `None` when the variable name is not found in the `stack`.
-    #[inline(always)]
+    #[inline]
     pub fn access_var(&mut self, name: &str, _pos: Position) -> Option<NonZeroUsize> {
         let mut barrier = false;
 
@@ -242,8 +242,7 @@ impl ParseSettings {
     }
     /// Make sure that the current level of expression nesting is within the maximum limit.
     #[cfg(not(feature = "unchecked"))]
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub fn ensure_level_within_max_limit(
         &self,
         limit: Option<NonZeroUsize>,
@@ -261,7 +260,7 @@ impl Expr {
     /// Convert a [`Variable`][Expr::Variable] into a [`Property`][Expr::Property].
     /// All other variants are untouched.
     #[cfg(not(feature = "no_object"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     fn into_property(self, state: &mut ParseState) -> Self {
         match self {
@@ -412,7 +411,7 @@ fn parse_paren_expr(
         // ( xxx )
         (Token::RightParen, _) => Ok(expr),
         // ( <error>
-        (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+        (Token::LexError(err), pos) => Err(err.into_err(pos)),
         // ( xxx ???
         (_, pos) => Err(PERR::MissingToken(
             Token::RightParen.into(),
@@ -700,17 +699,19 @@ fn parse_index_chain(
                     // Indexing binds to right
                     Ok(Expr::Index(
                         BinaryExpr { lhs, rhs: idx_expr }.into(),
+                        false,
                         prev_pos,
                     ))
                 }
                 // Otherwise terminate the indexing chain
                 _ => Ok(Expr::Index(
                     BinaryExpr { lhs, rhs: idx_expr }.into(),
+                    true,
                     settings.pos,
                 )),
             }
         }
-        (Token::LexError(err), pos) => return Err(err.clone().into_err(*pos)),
+        (Token::LexError(err), pos) => Err(err.clone().into_err(*pos)),
         (_, pos) => Err(PERR::MissingToken(
             Token::RightBracket.into(),
             "for a matching [ in this index expression".into(),
@@ -806,7 +807,7 @@ fn parse_map_literal(
     settings.pos = eat_token(input, Token::MapStart);
 
     let mut map: StaticVec<(Ident, Expr)> = Default::default();
-    let mut template: BTreeMap<Identifier, Dynamic> = Default::default();
+    let mut template: BTreeMap<Identifier, crate::Dynamic> = Default::default();
 
     loop {
         const MISSING_RBRACE: &str = "to end this object map literal";
@@ -878,7 +879,7 @@ fn parse_map_literal(
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
         let name = state.get_identifier(name);
-        template.insert(name.clone().into(), Default::default());
+        template.insert(name.clone(), Default::default());
         map.push((Ident { name, pos }, expr));
 
         match input.peek().expect(NEVER_ENDS) {
@@ -1085,7 +1086,7 @@ fn parse_primary(
         },
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => {
-            let x = (*x).into();
+            let x = *x;
             input.next().expect(NEVER_ENDS);
             Expr::FloatConstant(x, settings.pos)
         }
@@ -1396,7 +1397,7 @@ fn parse_primary(
 
                 let rhs = parse_primary(input, state, lib, settings.level_up())?;
 
-                make_dot_expr(state, expr, rhs, tail_pos)?
+                make_dot_expr(state, expr, false, rhs, tail_pos)?
             }
             // Unknown postfix operator
             (expr, token) => unreachable!(
@@ -1408,23 +1409,26 @@ fn parse_primary(
     }
 
     // Cache the hash key for namespace-qualified variables
-    match root_expr {
+    let namespaced_variable = match root_expr {
         Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
-        Expr::Index(ref mut x, _) | Expr::Dot(ref mut x, _) => match x.lhs {
+        Expr::Index(ref mut x, _, _) | Expr::Dot(ref mut x, _, _) => match x.lhs {
             Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
             _ => None,
         },
         _ => None,
-    }
-    .map(|x| match x {
-        (_, Some((namespace, hash)), name) => {
-            *hash = calc_qualified_var_hash(namespace.iter().map(|v| v.name.as_str()), name);
+    };
 
-            #[cfg(not(feature = "no_module"))]
-            namespace.set_index(state.find_module(&namespace[0].name));
+    if let Some(x) = namespaced_variable {
+        match x {
+            (_, Some((namespace, hash)), name) => {
+                *hash = calc_qualified_var_hash(namespace.iter().map(|v| v.name.as_str()), name);
+
+                #[cfg(not(feature = "no_module"))]
+                namespace.set_index(state.find_module(&namespace[0].name));
+            }
+            _ => unreachable!("expecting namespace-qualified variable access"),
         }
-        _ => unreachable!("expecting namespace-qualified variable access"),
-    });
+    }
 
     // Make sure identifiers are valid
     Ok(root_expr)
@@ -1529,7 +1533,7 @@ fn parse_unary(
 }
 
 /// Make an assignment statement.
-fn make_assignment_stmt<'a>(
+fn make_assignment_stmt(
     op: Option<Token>,
     state: &mut ParseState,
     lhs: Expr,
@@ -1539,13 +1543,13 @@ fn make_assignment_stmt<'a>(
     #[must_use]
     fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Option<Position> {
         match expr {
-            Expr::Index(x, _) | Expr::Dot(x, _) if parent_is_dot => match x.lhs {
-                Expr::Property(_) => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _))),
+            Expr::Index(x, _, _) | Expr::Dot(x, _, _) if parent_is_dot => match x.lhs {
+                Expr::Property(_) => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _, _))),
                 ref e => Some(e.position()),
             },
-            Expr::Index(x, _) | Expr::Dot(x, _) => match x.lhs {
+            Expr::Index(x, _, _) | Expr::Dot(x, _, _) => match x.lhs {
                 Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
-                _ => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _))),
+                _ => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _, _))),
             },
             Expr::Property(_) if parent_is_dot => None,
             Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
@@ -1554,7 +1558,7 @@ fn make_assignment_stmt<'a>(
         }
     }
 
-    let op_info = op.map(|v| OpAssignment::new(v));
+    let op_info = op.map(OpAssignment::new);
 
     match lhs {
         // const_expr = rhs
@@ -1587,8 +1591,8 @@ fn make_assignment_stmt<'a>(
             }
         }
         // xxx[???]... = rhs, xxx.prop... = rhs
-        Expr::Index(ref x, _) | Expr::Dot(ref x, _) => {
-            match check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _))) {
+        Expr::Index(ref x, _, _) | Expr::Dot(ref x, _, _) => {
+            match check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _, _))) {
                 None => match x.lhs {
                     // var[???] = rhs, var.??? = rhs
                     Expr::Variable(_, _, _) => {
@@ -1645,41 +1649,38 @@ fn parse_op_assignment_stmt(
 fn make_dot_expr(
     state: &mut ParseState,
     lhs: Expr,
+    terminate_chaining: bool,
     rhs: Expr,
     op_pos: Position,
 ) -> Result<Expr, ParseError> {
     Ok(match (lhs, rhs) {
-        // idx_lhs[idx_expr].rhs
-        // Attach dot chain to the bottom level of indexing chain
-        (Expr::Index(mut x, pos), rhs) => {
-            x.rhs = make_dot_expr(state, x.rhs, rhs, op_pos)?;
-            Expr::Index(x, pos)
+        // lhs[???]...[???].rhs
+        (Expr::Index(mut x, false, pos), rhs) if !terminate_chaining => {
+            // Attach dot chain to the bottom level of indexing chain
+            x.rhs = make_dot_expr(state, x.rhs, false, rhs, op_pos)?;
+            Expr::Index(x, false, pos)
+        }
+        // lhs[idx_expr].rhs
+        (Expr::Index(mut x, _, pos), rhs) => {
+            x.rhs = make_dot_expr(state, x.rhs, true, rhs, op_pos)?;
+            Expr::Index(x, false, pos)
         }
         // lhs.id
-        (lhs, Expr::Variable(_, var_pos, x)) if x.1.is_none() => {
-            let ident = x.2;
-            let getter = state.get_identifier(crate::engine::make_getter(&ident));
-            let hash_get = calc_fn_hash(&getter, 1);
-            let setter = state.get_identifier(crate::engine::make_setter(&ident));
-            let hash_set = calc_fn_hash(&setter, 2);
-
-            let rhs = Expr::Property(Box::new((
-                (getter, hash_get),
-                (setter, hash_set),
-                (state.get_identifier(ident).into(), var_pos),
-            )));
-
-            Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
+        (lhs, var_expr @ Expr::Variable(_, _, _)) if var_expr.is_variable_access(true) => {
+            let rhs = var_expr.into_property(state);
+            Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
         }
         // lhs.module::id - syntax error
-        (_, Expr::Variable(_, _, x)) if x.1.is_some() => {
+        (_, Expr::Variable(_, _, x)) => {
             return Err(PERR::PropertyExpected
                 .into_err(x.1.expect("never fails because the namespace is `Some`").0[0].pos))
         }
         // lhs.prop
-        (lhs, prop @ Expr::Property(_)) => Expr::Dot(BinaryExpr { lhs, rhs: prop }.into(), op_pos),
+        (lhs, prop @ Expr::Property(_)) => {
+            Expr::Dot(BinaryExpr { lhs, rhs: prop }.into(), false, op_pos)
+        }
         // lhs.dot_lhs.dot_rhs
-        (lhs, Expr::Dot(x, pos)) => match x.lhs {
+        (lhs, Expr::Dot(x, _, pos)) => match x.lhs {
             Expr::Variable(_, _, _) | Expr::Property(_) => {
                 let rhs = Expr::Dot(
                     BinaryExpr {
@@ -1687,9 +1688,10 @@ fn make_dot_expr(
                         rhs: x.rhs,
                     }
                     .into(),
+                    false,
                     pos,
                 );
-                Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
+                Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
             }
             Expr::FnCall(mut func, func_pos) => {
                 // Recalculate hash
@@ -1704,23 +1706,25 @@ fn make_dot_expr(
                         rhs: x.rhs,
                     }
                     .into(),
+                    false,
                     pos,
                 );
-                Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
+                Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
             }
             _ => unreachable!("invalid dot expression: {:?}", x.lhs),
         },
         // lhs.idx_lhs[idx_rhs]
-        (lhs, Expr::Index(x, pos)) => {
+        (lhs, Expr::Index(x, term, pos)) => {
             let rhs = Expr::Index(
                 BinaryExpr {
                     lhs: x.lhs.into_property(state),
                     rhs: x.rhs,
                 }
                 .into(),
+                term,
                 pos,
             );
-            Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
+            Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
         }
         // lhs.nnn::func(...)
         (_, Expr::FnCall(x, _)) if x.is_qualified() => {
@@ -1756,7 +1760,7 @@ fn make_dot_expr(
                 calc_fn_hash(&func.name, func.args.len() + 1),
             );
             let rhs = Expr::FnCall(func, func_pos);
-            Expr::Dot(BinaryExpr { lhs, rhs }.into(), op_pos)
+            Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
         }
         // lhs.rhs
         (_, rhs) => return Err(PERR::PropertyExpected.into_err(rhs.position())),
@@ -2715,7 +2719,7 @@ fn parse_stmt(
                         is_function_scope: true,
                         is_breakable: false,
                         level: 0,
-                        pos: pos,
+                        pos,
                     };
 
                     let func = parse_fn(
@@ -3033,40 +3037,38 @@ fn parse_anon_fn(
 
     let mut params_list: StaticVec<_> = Default::default();
 
-    if input.next().expect(NEVER_ENDS).0 != Token::Or {
-        if !match_token(input, Token::Pipe).0 {
-            loop {
-                match input.next().expect(NEVER_ENDS) {
-                    (Token::Pipe, _) => break,
-                    (Token::Identifier(s), pos) => {
-                        if params_list.iter().any(|p| p == &s) {
-                            return Err(PERR::FnDuplicatedParam("".to_string(), s).into_err(pos));
-                        }
-                        let s = state.get_identifier(s);
-                        state.stack.push((s.clone(), AccessMode::ReadWrite));
-                        params_list.push(s)
+    if input.next().expect(NEVER_ENDS).0 != Token::Or && !match_token(input, Token::Pipe).0 {
+        loop {
+            match input.next().expect(NEVER_ENDS) {
+                (Token::Pipe, _) => break,
+                (Token::Identifier(s), pos) => {
+                    if params_list.iter().any(|p| p == &s) {
+                        return Err(PERR::FnDuplicatedParam("".to_string(), s).into_err(pos));
                     }
-                    (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-                    (_, pos) => {
-                        return Err(PERR::MissingToken(
-                            Token::Pipe.into(),
-                            "to close the parameters list of anonymous function".into(),
-                        )
-                        .into_err(pos))
-                    }
+                    let s = state.get_identifier(s);
+                    state.stack.push((s.clone(), AccessMode::ReadWrite));
+                    params_list.push(s)
                 }
+                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+                (_, pos) => {
+                    return Err(PERR::MissingToken(
+                        Token::Pipe.into(),
+                        "to close the parameters list of anonymous function".into(),
+                    )
+                    .into_err(pos))
+                }
+            }
 
-                match input.next().expect(NEVER_ENDS) {
-                    (Token::Pipe, _) => break,
-                    (Token::Comma, _) => (),
-                    (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-                    (_, pos) => {
-                        return Err(PERR::MissingToken(
-                            Token::Comma.into(),
-                            "to separate the parameters of anonymous function".into(),
-                        )
-                        .into_err(pos))
-                    }
+            match input.next().expect(NEVER_ENDS) {
+                (Token::Pipe, _) => break,
+                (Token::Comma, _) => (),
+                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+                (_, pos) => {
+                    return Err(PERR::MissingToken(
+                        Token::Comma.into(),
+                        "to separate the parameters of anonymous function".into(),
+                    )
+                    .into_err(pos))
                 }
             }
         }
@@ -3119,7 +3121,7 @@ fn parse_anon_fn(
         comments: Default::default(),
     };
 
-    let fn_ptr = crate::FnPtr::new_unchecked(fn_name.into(), Default::default());
+    let fn_ptr = crate::FnPtr::new_unchecked(fn_name, Default::default());
     let expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), settings.pos);
 
     #[cfg(not(feature = "no_closure"))]
@@ -3130,7 +3132,6 @@ fn parse_anon_fn(
 
 impl Engine {
     /// Parse a global level expression.
-    #[must_use]
     pub(crate) fn parse_global_expr(
         &self,
         input: &mut TokenStream,
@@ -3172,7 +3173,6 @@ impl Engine {
     }
 
     /// Parse the global level statements.
-    #[must_use]
     fn parse_global_level(
         &self,
         input: &mut TokenStream,
@@ -3234,7 +3234,6 @@ impl Engine {
 
     /// Run the parser on an input stream, returning an AST.
     #[inline(always)]
-    #[must_use]
     pub(crate) fn parse(
         &self,
         input: &mut TokenStream,
@@ -3248,35 +3247,5 @@ impl Engine {
             // Optimize AST
             optimize_into_ast(self, scope, statements, lib, optimization_level),
         )
-    }
-}
-
-impl From<Dynamic> for Expr {
-    fn from(value: Dynamic) -> Self {
-        match value.0 {
-            #[cfg(not(feature = "no_float"))]
-            Union::Float(value, _, _) => Self::FloatConstant(value, Position::NONE),
-
-            #[cfg(feature = "decimal")]
-            Union::Decimal(value, _, _) => {
-                Self::DynamicConstant(Box::new((*value).into()), Position::NONE)
-            }
-
-            Union::Unit(_, _, _) => Self::Unit(Position::NONE),
-            Union::Int(value, _, _) => Self::IntegerConstant(value, Position::NONE),
-            Union::Char(value, _, _) => Self::CharConstant(value, Position::NONE),
-            Union::Str(value, _, _) => Self::StringConstant(value, Position::NONE),
-            Union::Bool(value, _, _) => Self::BoolConstant(value, Position::NONE),
-
-            #[cfg(not(feature = "no_index"))]
-            Union::Array(array, _, _) => {
-                Self::DynamicConstant(Box::new((*array).into()), Position::NONE)
-            }
-
-            #[cfg(not(feature = "no_object"))]
-            Union::Map(map, _, _) => Self::DynamicConstant(Box::new((*map).into()), Position::NONE),
-
-            _ => Self::DynamicConstant(Box::new(value.into()), Position::NONE),
-        }
     }
 }

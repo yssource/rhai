@@ -12,8 +12,8 @@ use crate::Array;
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
 
-pub const FUNC_TO_STRING: &'static str = "to_string";
-pub const FUNC_TO_DEBUG: &'static str = "to_debug";
+pub const FUNC_TO_STRING: &str = "to_string";
+pub const FUNC_TO_DEBUG: &str = "to_debug";
 
 def_package!(crate:BasicStringPackage:"Basic string utilities, including printing.", lib, {
     combine_with_exported_module!(lib, "print_debug", print_debug_functions);
@@ -22,7 +22,7 @@ def_package!(crate:BasicStringPackage:"Basic string utilities, including printin
 
 // Register print and debug
 
-#[inline(always)]
+#[inline]
 pub fn print_with_func(
     fn_name: &str,
     ctx: &NativeCallContext,
@@ -106,7 +106,7 @@ mod print_debug_functions {
         pub fn format_array(ctx: NativeCallContext, array: &mut Array) -> ImmutableString {
             let len = array.len();
             let mut result = String::with_capacity(len * 5 + 2);
-            result.push_str("[");
+            result.push('[');
 
             array.iter_mut().enumerate().for_each(|(i, x)| {
                 result.push_str(&print_with_func(FUNC_TO_DEBUG, &ctx, x));
@@ -115,7 +115,7 @@ mod print_debug_functions {
                 }
             });
 
-            result.push_str("]");
+            result.push(']');
             result.into()
         }
     }
@@ -144,7 +144,7 @@ mod print_debug_functions {
                 ));
             });
 
-            result.push_str("}");
+            result.push('}');
             result.into()
         }
     }

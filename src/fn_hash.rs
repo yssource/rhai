@@ -21,7 +21,7 @@ impl Hasher for StraightHasher {
     fn finish(&self) -> u64 {
         self.0
     }
-    #[inline(always)]
+    #[inline]
     fn write(&mut self, bytes: &[u8]) {
         assert_eq!(bytes.len(), 8, "StraightHasher can only hash u64 values");
 
@@ -62,10 +62,7 @@ pub fn get_hasher() -> ahash::AHasher {
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline]
 #[must_use]
-pub fn calc_qualified_var_hash<'a>(
-    modules: impl Iterator<Item = &'a str>,
-    var_name: impl AsRef<str>,
-) -> u64 {
+pub fn calc_qualified_var_hash<'a>(modules: impl Iterator<Item = &'a str>, var_name: &str) -> u64 {
     let s = &mut get_hasher();
 
     // We always skip the first module
@@ -75,7 +72,7 @@ pub fn calc_qualified_var_hash<'a>(
         .skip(1)
         .for_each(|m| m.hash(s));
     len.hash(s);
-    var_name.as_ref().hash(s);
+    var_name.hash(s);
     s.finish()
 }
 
@@ -92,7 +89,7 @@ pub fn calc_qualified_var_hash<'a>(
 #[must_use]
 pub fn calc_qualified_fn_hash<'a>(
     modules: impl Iterator<Item = &'a str>,
-    fn_name: impl AsRef<str>,
+    fn_name: &str,
     num: usize,
 ) -> u64 {
     let s = &mut get_hasher();
@@ -104,7 +101,7 @@ pub fn calc_qualified_fn_hash<'a>(
         .skip(1)
         .for_each(|m| m.hash(s));
     len.hash(s);
-    fn_name.as_ref().hash(s);
+    fn_name.hash(s);
     num.hash(s);
     s.finish()
 }
@@ -115,7 +112,7 @@ pub fn calc_qualified_fn_hash<'a>(
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
 #[inline(always)]
 #[must_use]
-pub fn calc_fn_hash(fn_name: impl AsRef<str>, num: usize) -> u64 {
+pub fn calc_fn_hash(fn_name: &str, num: usize) -> u64 {
     calc_qualified_fn_hash(empty(), fn_name, num)
 }
 
@@ -127,7 +124,10 @@ pub fn calc_fn_hash(fn_name: impl AsRef<str>, num: usize) -> u64 {
 pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
     let s = &mut get_hasher();
     let mut len = 0;
-    params.inspect(|_| len += 1).for_each(|t| t.hash(s));
+    params.for_each(|t| {
+        len += 1;
+        t.hash(s);
+    });
     len.hash(s);
     s.finish()
 }

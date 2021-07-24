@@ -23,7 +23,6 @@ pub use stat::StaticModuleResolver;
 /// Trait that encapsulates a module resolution service.
 pub trait ModuleResolver: SendSync {
     /// Resolve a module based on a path string.
-    #[must_use]
     fn resolve(
         &self,
         engine: &Engine,

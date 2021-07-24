@@ -77,15 +77,8 @@ impl ModuleResolversCollection {
     }
     /// Get an iterator of all the [module resolvers][ModuleResolver].
     #[inline(always)]
-    #[must_use]
     pub fn iter(&self) -> impl Iterator<Item = &dyn ModuleResolver> {
         self.0.iter().map(|v| v.as_ref())
-    }
-    /// Get a mutable iterator of all the [module resolvers][ModuleResolver].
-    #[inline(always)]
-    #[must_use]
-    pub fn into_iter(self) -> impl Iterator<Item = Box<dyn ModuleResolver>> {
-        self.0.into_iter()
     }
     /// Remove all [module resolvers][ModuleResolver].
     #[inline(always)]
@@ -111,6 +104,16 @@ impl ModuleResolversCollection {
     pub fn append(&mut self, other: Self) -> &mut Self {
         self.0.extend(other.0.into_iter());
         self
+    }
+}
+
+impl IntoIterator for ModuleResolversCollection {
+    type Item = Box<dyn ModuleResolver>;
+    type IntoIter = std::vec::IntoIter<Box<dyn ModuleResolver>>;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 

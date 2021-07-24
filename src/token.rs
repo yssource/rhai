@@ -83,53 +83,73 @@ impl Position {
     /// Create a new [`Position`].
     ///
     /// `line` must not be zero.
-    /// If [`Position`] is zero, then it is at the beginning of a line.
+    ///
+    /// If `position` is zero, then it is at the beginning of a line.
     ///
     /// # Panics
     ///
     /// Panics if `line` is zero.
     #[inline(always)]
     #[must_use]
-    pub fn new(line: u16, _position: u16) -> Self {
+    pub fn new(line: u16, position: u16) -> Self {
         assert!(line != 0, "line cannot be zero");
+
+        let _pos = position;
 
         Self {
             #[cfg(not(feature = "no_position"))]
             line,
             #[cfg(not(feature = "no_position"))]
-            pos: _position,
+            pos: _pos,
         }
+    }
+    /// Create a new [`Position`].
+    ///
+    /// If `line` is zero, then [`None`] is returned.
+    ///
+    /// If `position` is zero, then it is at the beginning of a line.
+    #[inline(always)]
+    #[must_use]
+    pub const fn new_const(line: u16, position: u16) -> Option<Self> {
+        if line == 0 {
+            return None;
+        }
+        let _pos = position;
+
+        Some(Self {
+            #[cfg(not(feature = "no_position"))]
+            line,
+            #[cfg(not(feature = "no_position"))]
+            pos: _pos,
+        })
     }
     /// Get the line number (1-based), or [`None`] if there is no position.
     #[inline(always)]
     #[must_use]
-    pub fn line(self) -> Option<usize> {
-        if self.is_none() {
+    pub const fn line(self) -> Option<usize> {
+        #[cfg(not(feature = "no_position"))]
+        return if self.is_none() {
             None
         } else {
-            #[cfg(not(feature = "no_position"))]
-            return Some(self.line as usize);
-            #[cfg(feature = "no_position")]
-            unreachable!("there is no Position");
-        }
+            Some(self.line as usize)
+        };
+
+        #[cfg(feature = "no_position")]
+        return None;
     }
     /// Get the character position (1-based), or [`None`] if at beginning of a line.
     #[inline(always)]
     #[must_use]
-    pub fn position(self) -> Option<usize> {
-        if self.is_none() {
+    pub const fn position(self) -> Option<usize> {
+        #[cfg(not(feature = "no_position"))]
+        return if self.is_none() || self.pos == 0 {
             None
         } else {
-            #[cfg(not(feature = "no_position"))]
-            return if self.pos == 0 {
-                None
-            } else {
-                Some(self.pos as usize)
-            };
+            Some(self.pos as usize)
+        };
 
-            #[cfg(feature = "no_position")]
-            unreachable!("there is no Position");
-        }
+        #[cfg(feature = "no_position")]
+        return None;
     }
     /// Advance by one character position.
     #[inline(always)]
@@ -192,7 +212,6 @@ impl Position {
     }
     /// Print this [`Position`] for debug purposes.
     #[inline(always)]
-    #[must_use]
     pub(crate) fn debug_print(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(not(feature = "no_position"))]
         if !self.is_none() {
@@ -211,7 +230,6 @@ impl Default for Position {
 }
 
 impl fmt::Display for Position {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_none() {
             write!(f, "none")?;
@@ -227,7 +245,6 @@ impl fmt::Display for Position {
 }
 
 impl fmt::Debug for Position {
-    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(not(feature = "no_position"))]
         write!(f, "{}:{}", self.line, self.pos)?;
@@ -586,20 +603,20 @@ impl Token {
     #[inline]
     #[must_use]
     pub const fn is_op_assignment(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::PlusAssign
-            | Self::MinusAssign
-            | Self::MultiplyAssign
-            | Self::DivideAssign
-            | Self::LeftShiftAssign
-            | Self::RightShiftAssign
-            | Self::ModuloAssign
-            | Self::PowerOfAssign
-            | Self::AndAssign
-            | Self::OrAssign
-            | Self::XOrAssign => true,
-            _ => false,
-        }
+                | Self::MinusAssign
+                | Self::MultiplyAssign
+                | Self::DivideAssign
+                | Self::LeftShiftAssign
+                | Self::RightShiftAssign
+                | Self::ModuloAssign
+                | Self::PowerOfAssign
+                | Self::AndAssign
+                | Self::OrAssign
+                | Self::XOrAssign
+        )
     }
 
     /// Get the corresponding operator of the token if it is an op-assignment operator.
@@ -625,20 +642,20 @@ impl Token {
     #[inline]
     #[must_use]
     pub const fn has_op_assignment(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::Plus
-            | Self::Minus
-            | Self::Multiply
-            | Self::Divide
-            | Self::LeftShift
-            | Self::RightShift
-            | Self::Modulo
-            | Self::PowerOf
-            | Self::Ampersand
-            | Self::Pipe
-            | Self::XOr => true,
-            _ => false,
-        }
+                | Self::Minus
+                | Self::Multiply
+                | Self::Divide
+                | Self::LeftShift
+                | Self::RightShift
+                | Self::Modulo
+                | Self::PowerOf
+                | Self::Ampersand
+                | Self::Pipe
+                | Self::XOr
+        )
     }
 
     /// Get the corresponding op-assignment operator of the token.
@@ -772,12 +789,7 @@ impl Token {
     #[inline(always)]
     #[must_use]
     pub const fn is_eof(&self) -> bool {
-        use Token::*;
-
-        match self {
-            EOF => true,
-            _ => false,
-        }
+        matches!(self, Self::EOF)
     }
 
     // If another operator is after these, it's probably an unary operator
@@ -917,6 +929,7 @@ impl Token {
     }
 
     /// Is this token an active standard keyword?
+    #[inline]
     #[must_use]
     pub const fn is_keyword(&self) -> bool {
         use Token::*;
@@ -939,15 +952,12 @@ impl Token {
     #[inline(always)]
     #[must_use]
     pub const fn is_reserved(&self) -> bool {
-        match self {
-            Self::Reserved(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Reserved(_))
     }
 
     /// Convert a token into a function name, if possible.
     #[cfg(not(feature = "no_function"))]
-    #[must_use]
+    #[inline]
     pub(crate) fn into_function_name_for_override(self) -> Result<String, Self> {
         match self {
             Self::Custom(s) | Self::Identifier(s) if is_valid_identifier(s.chars()) => Ok(s),
@@ -959,10 +969,7 @@ impl Token {
     #[inline(always)]
     #[must_use]
     pub const fn is_custom(&self) -> bool {
-        match self {
-            Self::Custom(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Custom(_))
     }
 }
 
@@ -1045,7 +1052,6 @@ pub trait InputStream {
 /// # Volatile API
 ///
 /// This function is volatile and may change.
-#[must_use]
 pub fn parse_string_literal(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
@@ -1269,20 +1275,26 @@ fn scan_block_comment(
     while let Some(c) = stream.get_next() {
         pos.advance();
 
-        comment.as_mut().map(|comment| comment.push(c));
+        if let Some(comment) = comment.as_mut() {
+            comment.push(c);
+        }
 
         match c {
             '/' => {
                 stream.peek_next().filter(|&c2| c2 == '*').map(|c2| {
                     eat_next(stream, pos);
-                    comment.as_mut().map(|comment| comment.push(c2));
+                    if let Some(comment) = comment.as_mut() {
+                        comment.push(c2);
+                    }
                     level += 1;
                 });
             }
             '*' => {
                 stream.peek_next().filter(|&c2| c2 == '/').map(|c2| {
                     eat_next(stream, pos);
-                    comment.as_mut().map(|comment| comment.push(c2));
+                    if let Some(comment) = comment.as_mut() {
+                        comment.push(c2);
+                    }
                     level -= 1;
                 });
             }
@@ -1304,7 +1316,7 @@ fn scan_block_comment(
 /// # Volatile API
 ///
 /// This function is volatile and may change.
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn get_next_token(
     stream: &mut impl InputStream,
@@ -1324,21 +1336,13 @@ pub fn get_next_token(
 /// Test if the given character is a hex character.
 #[inline(always)]
 fn is_hex_digit(c: char) -> bool {
-    match c {
-        'a'..='f' => true,
-        'A'..='F' => true,
-        '0'..='9' => true,
-        _ => false,
-    }
+    matches!(c, 'a'..='f' | 'A'..='F' | '0'..='9')
 }
 
 /// Test if the given character is a numeric digit.
 #[inline(always)]
 fn is_numeric_digit(c: char) -> bool {
-    match c {
-        '0'..='9' => true,
-        _ => false,
-    }
+    matches!(c, '0'..='9')
 }
 
 /// Test if the comment block is a doc-comment.
@@ -1455,7 +1459,7 @@ fn get_next_token_inner(
                                     break;
                                 }
                                 // symbol after period - probably a float
-                                ch @ _ if !is_id_first_alphabetic(ch) => {
+                                ch if !is_id_first_alphabetic(ch) => {
                                     result.push(next_char);
                                     pos.advance();
                                     result.push('0');
@@ -1750,7 +1754,9 @@ fn get_next_token_inner(
                         pos.new_line();
                         break;
                     }
-                    comment.as_mut().map(|comment| comment.push(c));
+                    if let Some(comment) = comment.as_mut() {
+                        comment.push(c);
+                    }
                     pos.advance();
                 }
 
@@ -1982,11 +1988,11 @@ fn get_identifier(
         ));
     }
 
-    return Some((Token::Identifier(identifier), start_pos));
+    Some((Token::Identifier(identifier), start_pos))
 }
 
 /// Is this keyword allowed as a function?
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn is_keyword_function(name: &str) -> bool {
     match name {
@@ -2062,7 +2068,7 @@ pub struct MultiInputsStream<'a> {
 }
 
 impl InputStream for MultiInputsStream<'_> {
-    #[inline(always)]
+    #[inline]
     fn unget(&mut self, ch: char) {
         if self.buf.is_some() {
             panic!("cannot unget two characters in a row");
@@ -2252,7 +2258,7 @@ impl Engine {
         self.lex_raw(input, Some(map))
     }
     /// Tokenize an input text stream with an optional mapping function.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn lex_raw<'a>(
         &'a self,

@@ -18,7 +18,7 @@ use rust_decimal::Decimal;
 const BUILTIN: &str = "never fails because this is built-in code and the type is already checked";
 
 /// Is the type a numeric type?
-#[inline(always)]
+#[inline]
 #[must_use]
 fn is_numeric(type_id: TypeId) -> bool {
     let result = type_id == TypeId::of::<u8>()
@@ -206,7 +206,6 @@ pub fn get_builtin_binary_op_fn(
 
     // char op string
     if types_pair == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
-        #[inline(always)]
         fn get_s1s2(args: &FnCallArgs) -> ([char; 2], [char; 2]) {
             let x = args[0].as_char().expect(BUILTIN);
             let y = &*args[1].read_lock::<ImmutableString>().expect(BUILTIN);
@@ -233,7 +232,6 @@ pub fn get_builtin_binary_op_fn(
     }
     // string op char
     if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {
-        #[inline(always)]
         fn get_s1s2(args: &FnCallArgs) -> ([char; 2], [char; 2]) {
             let x = &*args[0].read_lock::<ImmutableString>().expect(BUILTIN);
             let y = args[1].as_char().expect(BUILTIN);
