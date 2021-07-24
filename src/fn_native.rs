@@ -144,7 +144,6 @@ impl<'a> NativeCallContext<'a> {
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    #[must_use]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.mods.iter().flat_map(|&m| m.iter())
     }
@@ -152,7 +151,6 @@ impl<'a> NativeCallContext<'a> {
     #[cfg(not(feature = "no_module"))]
     #[allow(dead_code)]
     #[inline(always)]
-    #[must_use]
     pub(crate) fn iter_imports_raw(
         &self,
     ) -> impl Iterator<Item = (&crate::Identifier, &Shared<Module>)> {
@@ -171,7 +169,6 @@ impl<'a> NativeCallContext<'a> {
     }
     /// Get an iterator over the namespaces containing definitions of all script-defined functions.
     #[inline(always)]
-    #[must_use]
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
     }
@@ -196,7 +193,6 @@ impl<'a> NativeCallContext<'a> {
     /// If `is_method` is [`true`], the first argument is assumed to be passed
     /// by reference and is not consumed.
     #[inline]
-    #[must_use]
     pub fn call_fn_dynamic_raw(
         &self,
         fn_name: impl AsRef<str>,
@@ -249,7 +245,6 @@ pub fn shared_take_or_clone<T: Clone>(value: Shared<T>) -> T {
 
 /// Consume a [`Shared`] resource if is unique (i.e. not shared).
 #[inline(always)]
-#[must_use]
 pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
     Shared::try_unwrap(value)
 }
@@ -493,7 +488,7 @@ impl CallableFunction {
     /// Get a shared reference to a plugin function.
     #[inline]
     #[must_use]
-    pub fn get_plugin_fn<'s>(&'s self) -> Option<&Shared<FnPlugin>> {
+    pub fn get_plugin_fn(&self) -> Option<&Shared<FnPlugin>> {
         match self {
             Self::Plugin(f) => Some(f),
             Self::Pure(_) | Self::Method(_) | Self::Iterator(_) => None,
@@ -555,6 +550,6 @@ impl<T: PluginFunction + 'static + SendSync> From<T> for CallableFunction {
 impl From<Shared<FnPlugin>> for CallableFunction {
     #[inline(always)]
     fn from(func: Shared<FnPlugin>) -> Self {
-        Self::Plugin(func.into())
+        Self::Plugin(func)
     }
 }

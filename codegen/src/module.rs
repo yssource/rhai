@@ -91,7 +91,6 @@ impl ExportedParams for ExportedModParams {
             name,
             skip,
             scope: scope.unwrap_or_default(),
-            ..Default::default()
         })
     }
 }

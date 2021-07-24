@@ -147,16 +147,16 @@ impl fmt::Display for ScriptFnMetadata<'_> {
 }
 
 #[cfg(not(feature = "no_function"))]
-impl<'a> Into<ScriptFnMetadata<'a>> for &'a ScriptFnDef {
+impl<'a> From<&'a ScriptFnDef> for ScriptFnMetadata<'a> {
     #[inline]
-    fn into(self) -> ScriptFnMetadata<'a> {
-        ScriptFnMetadata {
+    fn from(value: &'a ScriptFnDef) -> Self {
+        Self {
             #[cfg(not(feature = "no_function"))]
             #[cfg(feature = "metadata")]
             comments: self.comments.iter().map(|s| s.as_str()).collect(),
-            access: self.access,
-            name: &self.name,
-            params: self.params.iter().map(|s| s.as_str()).collect(),
+            access: value.access,
+            name: &value.name,
+            params: value.params.iter().map(|s| s.as_str()).collect(),
         }
     }
 }
@@ -710,7 +710,6 @@ impl AST {
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    #[must_use]
     pub(crate) fn iter_fn_def(&self) -> impl Iterator<Item = &ScriptFnDef> {
         self.functions
             .iter_script_fn()
@@ -721,7 +720,6 @@ impl AST {
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
-    #[must_use]
     pub fn iter_functions<'a>(&'a self) -> impl Iterator<Item = ScriptFnMetadata> + 'a {
         self.functions
             .iter_script_fn()
@@ -1042,10 +1040,7 @@ impl Stmt {
     #[inline(always)]
     #[must_use]
     pub const fn is_noop(&self) -> bool {
-        match self {
-            Self::Noop(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Noop(_))
     }
     /// Get the [position][Position] of this statement.
     #[must_use]
@@ -2037,10 +2032,7 @@ impl Expr {
     #[inline(always)]
     #[must_use]
     pub const fn is_unit(&self) -> bool {
-        match self {
-            Self::Unit(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Unit(_))
     }
     /// Is the expression a constant?
     #[inline]

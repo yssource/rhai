@@ -113,7 +113,7 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
 mod int_functions {
     #[rhai_fn(name = "parse_int", return_raw)]
     pub fn parse_int_radix(s: &str, radix: INT) -> Result<INT, Box<EvalAltResult>> {
-        if radix < 2 || radix > 36 {
+        if !(2..=36).contains(&radix) {
             return EvalAltResult::ErrorArithmetic(
                 format!("Invalid radix: '{}'", radix),
                 Position::NONE,

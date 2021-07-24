@@ -122,7 +122,6 @@ impl Imports {
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     #[inline(always)]
-    #[must_use]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.keys
             .iter()
@@ -133,14 +132,12 @@ impl Imports {
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
     #[inline(always)]
-    #[must_use]
     pub(crate) fn iter_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.keys.iter().rev().zip(self.modules.iter().rev())
     }
     /// Get an iterator to this stack of imported [modules][Module] in forward order.
     #[allow(dead_code)]
     #[inline(always)]
-    #[must_use]
     pub(crate) fn scan_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.keys.iter().zip(self.modules.iter())
     }
@@ -321,7 +318,7 @@ impl ChainArgument {
     #[inline(always)]
     #[cfg(not(feature = "no_index"))]
     #[must_use]
-    pub fn as_index_value(self) -> Option<Dynamic> {
+    pub fn into_index_value(self) -> Option<Dynamic> {
         match self {
             Self::IndexValue(value, _) => Some(value),
             #[cfg(not(feature = "no_object"))]
@@ -332,7 +329,7 @@ impl ChainArgument {
     #[inline(always)]
     #[cfg(not(feature = "no_object"))]
     #[must_use]
-    pub fn as_fn_call_args(self) -> Option<(StaticVec<Dynamic>, Position)> {
+    pub fn into_fn_call_args(self) -> Option<(StaticVec<Dynamic>, Position)> {
         match self {
             Self::MethodCallArgs(values, pos) => Some((values, pos)),
             _ => None,
@@ -486,7 +483,6 @@ impl<'a> Target<'a> {
     /// Propagate a changed value back to the original source.
     /// This has no effect except for string indexing.
     #[inline]
-    #[must_use]
     pub fn propagate_changed_value(&mut self) -> Result<(), Box<EvalAltResult>> {
         match self {
             Self::RefMut(_) | Self::TempValue(_) => (),
@@ -834,7 +830,6 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
     /// Get an iterator over the current set of modules imported via `import` statements.
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
-    #[must_use]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.mods.iter()
     }
@@ -849,7 +844,6 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
     }
     /// Get an iterator over the namespaces containing definition of all script-defined functions.
     #[inline(always)]
-    #[must_use]
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
     }
@@ -1109,7 +1103,6 @@ impl Engine {
 
     /// Search for a variable within the scope or within imports,
     /// depending on whether the variable name is namespace-qualified.
-    #[must_use]
     pub(crate) fn search_namespace<'s>(
         &self,
         scope: &'s mut Scope,
@@ -1159,7 +1152,6 @@ impl Engine {
     /// # Panics
     ///
     /// Panics if `expr` is not [`Expr::Variable`].
-    #[must_use]
     pub(crate) fn search_scope_only<'s>(
         &self,
         scope: &'s mut Scope,
@@ -1233,7 +1225,6 @@ impl Engine {
     /// Chain-evaluate a dot/index chain.
     /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and must be set afterwards.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[must_use]
     fn eval_dot_index_chain_helper(
         &self,
         mods: &mut Imports,
@@ -1261,7 +1252,7 @@ impl Engine {
             ChainType::Indexing => {
                 let pos = rhs.position();
                 let idx_val = idx_val
-                    .as_index_value()
+                    .into_index_value()
                     .expect("never fails because `chain_type` is `ChainType::Index`");
 
                 match rhs {
@@ -1339,7 +1330,7 @@ impl Engine {
                     Expr::FnCall(x, pos) if !x.is_qualified() && new_val.is_none() => {
                         let FnCallExpr { name, hashes, .. } = x.as_ref();
                         let call_args = &mut idx_val
-                            .as_fn_call_args()
+                            .into_fn_call_args()
                             .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
                         self.make_method_call(
                             mods, state, lib, name, *hashes, target, call_args, *pos, level,
@@ -1506,7 +1497,7 @@ impl Engine {
                             Expr::FnCall(ref x, pos) if !x.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = x.as_ref();
                                 let call_args = &mut idx_val
-                                    .as_fn_call_args()
+                                    .into_fn_call_args()
                                     .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
                                 let (val, _) = self.make_method_call(
                                     mods, state, lib, name, *hashes, target, call_args, pos, level,
@@ -1628,7 +1619,7 @@ impl Engine {
                                 let FnCallExpr { name, hashes, .. } = f.as_ref();
                                 let rhs_chain = match_chaining_type(rhs);
                                 let args = &mut idx_val
-                                    .as_fn_call_args()
+                                    .into_fn_call_args()
                                     .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
                                 let (mut val, _) = self.make_method_call(
                                     mods, state, lib, name, *hashes, target, args, pos, level,
@@ -1659,8 +1650,6 @@ impl Engine {
 
     /// Evaluate a dot/index chain.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[must_use]
-    #[must_use]
     fn eval_dot_index_chain(
         &self,
         scope: &mut Scope,
@@ -1692,9 +1681,10 @@ impl Engine {
                 #[cfg(not(feature = "unchecked"))]
                 self.inc_operations(state, *var_pos)?;
 
-                let (target, _) = self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
+                let (mut target, _) =
+                    self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
 
-                let obj_ptr = &mut target.into();
+                let obj_ptr = &mut target;
                 let root = (x.2.as_str(), *var_pos);
 
                 self.eval_dot_index_chain_helper(
@@ -1725,7 +1715,6 @@ impl Engine {
     /// [`StaticVec`] is used to avoid an allocation in the overwhelming cases of
     /// just a few levels of indexing.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[must_use]
     fn eval_dot_index_chain_arguments(
         &self,
         scope: &mut Scope,
@@ -1852,7 +1841,6 @@ impl Engine {
     /// Get the value at the indexed position of a base type.
     /// [`Position`] in [`EvalAltResult`] may be [`NONE`][Position::NONE] and should be set afterwards.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[must_use]
     fn get_indexed_mut<'t>(
         &self,
         mods: &mut Imports,
@@ -2023,7 +2011,6 @@ impl Engine {
     }
 
     /// Evaluate an expression.
-    #[must_use]
     pub(crate) fn eval_expr(
         &self,
         scope: &mut Scope,
@@ -2224,7 +2211,6 @@ impl Engine {
     }
 
     /// Evaluate a statements block.
-    #[must_use]
     pub(crate) fn eval_stmt_block(
         &self,
         scope: &mut Scope,
@@ -2302,7 +2288,6 @@ impl Engine {
 
     /// Evaluate an op-assignment statement.
     /// [`Position`] in [`EvalAltResult`] is [`NONE`][Position::NONE] and should be set afterwards.
-    #[must_use]
     pub(crate) fn eval_op_assignment(
         &self,
         mods: &mut Imports,
@@ -2376,7 +2361,6 @@ impl Engine {
     ///
     /// This method uses some unsafe code, mainly for avoiding cloning of local variable names via
     /// direct lifetime casting.
-    #[must_use]
     pub(crate) fn eval_stmt(
         &self,
         scope: &mut Scope,
@@ -2446,7 +2430,7 @@ impl Engine {
                 let rhs_val = self
                     .eval_expr(scope, mods, state, lib, this_ptr, rhs_expr, level)?
                     .flatten();
-                let _new_val = Some(((rhs_val, rhs_expr.position()), (op_info.clone(), *op_pos)));
+                let _new_val = Some(((rhs_val, rhs_expr.position()), (*op_info, *op_pos)));
 
                 // Must be either `var[index] op= val` or `var.prop op= val`
                 match lhs_expr {
@@ -2963,7 +2947,7 @@ impl Engine {
                             EvalAltResult::ErrorModuleNotFound(path.to_string(), path_pos).into()
                         })?;
 
-                    export.as_ref().map(|x| x.name.clone()).map(|name| {
+                    if let Some(name) = export.as_ref().map(|x| x.name.clone()) {
                         if !module.is_indexed() {
                             // Index the module (making a clone copy if necessary) if it is not indexed
                             let mut module = crate::fn_native::shared_take_or_clone(module);
@@ -2972,7 +2956,7 @@ impl Engine {
                         } else {
                             mods.push(name, module);
                         }
-                    });
+                    }
 
                     state.modules += 1;
 
@@ -3002,14 +2986,14 @@ impl Engine {
             // Share statement
             #[cfg(not(feature = "no_closure"))]
             Stmt::Share(name) => {
-                scope.get_index(name).map(|(index, _)| {
+                if let Some((index, _)) = scope.get_index(name) {
                     let val = scope.get_mut_by_index(index);
 
                     if !val.is_shared() {
                         // Replace the variable with a shared value.
                         *val = std::mem::take(val).into_shared();
                     }
-                });
+                }
                 Ok(Dynamic::UNIT)
             }
         };
@@ -3021,7 +3005,6 @@ impl Engine {
     /// Check a result to ensure that the data size is within allowable limit.
     #[cfg(feature = "unchecked")]
     #[inline(always)]
-    #[must_use]
     fn check_return_value(&self, result: RhaiResult) -> RhaiResult {
         result
     }
@@ -3029,20 +3012,17 @@ impl Engine {
     /// Check a result to ensure that the data size is within allowable limit.
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
-    #[must_use]
     fn check_return_value(&self, result: RhaiResult) -> RhaiResult {
         result.and_then(|r| self.check_data_size(&r).map(|_| r))
     }
 
     #[cfg(feature = "unchecked")]
     #[inline(always)]
-    #[must_use]
     fn check_data_size(&self, _value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
         Ok(())
     }
 
     #[cfg(not(feature = "unchecked"))]
-    #[must_use]
     fn check_data_size(&self, value: &Dynamic) -> Result<(), Box<EvalAltResult>> {
         // Recursively calculate the size of a value (especially `Array` and `Map`)
         fn calc_size(value: &Dynamic) -> (usize, usize, usize) {
@@ -3145,7 +3125,6 @@ impl Engine {
 
     /// Check if the number of operations stay within limit.
     #[cfg(not(feature = "unchecked"))]
-    #[must_use]
     pub(crate) fn inc_operations(
         &self,
         state: &mut EvalState,

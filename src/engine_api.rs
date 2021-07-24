@@ -879,7 +879,7 @@ impl Engine {
     pub fn register_indexer_get_set<T: Variant + Clone, X: Variant + Clone, V: Variant + Clone>(
         &mut self,
         get_fn: impl Fn(&mut T, X) -> V + SendSync + 'static,
-        set_fn: impl Fn(&mut T, X, V) -> () + SendSync + 'static,
+        set_fn: impl Fn(&mut T, X, V) + SendSync + 'static,
     ) -> &mut Self {
         self.register_indexer_get(get_fn)
             .register_indexer_set(set_fn)
@@ -1007,7 +1007,6 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    #[must_use]
     pub fn compile(&self, script: &str) -> Result<AST, ParseError> {
         self.compile_with_scope(&Default::default(), script)
     }
@@ -1050,7 +1049,6 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    #[must_use]
     pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, ParseError> {
         self.compile_scripts_with_scope(scope, &[script])
     }
@@ -1064,7 +1062,6 @@ impl Engine {
     /// [`AST`]. When it is evaluated later, `import` statement directly recall pre-resolved
     /// [modules][Module] and the resolution process is not performed again.
     #[cfg(not(feature = "no_module"))]
-    #[must_use]
     pub fn compile_into_self_contained(
         &self,
         scope: &Scope,
@@ -1103,7 +1100,7 @@ impl Engine {
             let mut resolver = StaticModuleResolver::new();
             let mut imports = Default::default();
 
-            collect_imports(&ast, &mut resolver, &mut imports);
+            collect_imports(&ast, &resolver, &mut imports);
 
             if !imports.is_empty() {
                 while let Some(path) = imports.iter().next() {
@@ -1111,7 +1108,7 @@ impl Engine {
 
                     match module_resolver.resolve_ast(self, None, &path, Position::NONE) {
                         Some(Ok(module_ast)) => {
-                            collect_imports(&module_ast, &mut resolver, &mut imports)
+                            collect_imports(&module_ast, &resolver, &mut imports)
                         }
                         Some(err) => return err,
                         None => (),
@@ -1176,7 +1173,6 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    #[must_use]
     pub fn compile_scripts_with_scope(
         &self,
         scope: &Scope,
@@ -1186,7 +1182,6 @@ impl Engine {
     }
     /// Join a list of strings and compile into an [`AST`] using own scope at a specific optimization level.
     #[inline]
-    #[must_use]
     pub(crate) fn compile_with_scope_and_optimization_level(
         &self,
         scope: &Scope,
@@ -1205,7 +1200,6 @@ impl Engine {
     /// Read the contents of a file into a string.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-    #[must_use]
     fn read_file(path: std::path::PathBuf) -> Result<String, Box<EvalAltResult>> {
         use std::io::Read;
 
@@ -1261,7 +1255,6 @@ impl Engine {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
-    #[must_use]
     pub fn compile_file(&self, path: std::path::PathBuf) -> Result<AST, Box<EvalAltResult>> {
         self.compile_file_with_scope(&Default::default(), path)
     }
@@ -1301,7 +1294,6 @@ impl Engine {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
-    #[must_use]
     pub fn compile_file_with_scope(
         &self,
         scope: &Scope,
@@ -1353,7 +1345,6 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
-    #[must_use]
     pub fn parse_json(
         &self,
         json: impl AsRef<str>,
@@ -1429,7 +1420,6 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    #[must_use]
     pub fn compile_expression(&self, script: &str) -> Result<AST, ParseError> {
         self.compile_expression_with_scope(&Default::default(), script)
     }
@@ -1473,7 +1463,6 @@ impl Engine {
     /// # }
     /// ```
     #[inline]
-    #[must_use]
     pub fn compile_expression_with_scope(
         &self,
         scope: &Scope,
@@ -1506,7 +1495,6 @@ impl Engine {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
-    #[must_use]
     pub fn eval_file<T: Variant + Clone>(
         &self,
         path: std::path::PathBuf,
@@ -1537,7 +1525,6 @@ impl Engine {
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
-    #[must_use]
     pub fn eval_file_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1560,7 +1547,6 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    #[must_use]
     pub fn eval<T: Variant + Clone>(&self, script: &str) -> Result<T, Box<EvalAltResult>> {
         self.eval_with_scope(&mut Default::default(), script)
     }
@@ -1587,7 +1573,6 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    #[must_use]
     pub fn eval_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1615,7 +1600,6 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    #[must_use]
     pub fn eval_expression<T: Variant + Clone>(
         &self,
         script: &str,
@@ -1641,7 +1625,6 @@ impl Engine {
     /// # }
     /// ```
     #[inline]
-    #[must_use]
     pub fn eval_expression_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1680,7 +1663,6 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    #[must_use]
     pub fn eval_ast<T: Variant + Clone>(&self, ast: &AST) -> Result<T, Box<EvalAltResult>> {
         self.eval_ast_with_scope(&mut Default::default(), ast)
     }
@@ -1714,7 +1696,6 @@ impl Engine {
     /// # }
     /// ```
     #[inline]
-    #[must_use]
     pub fn eval_ast_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1726,18 +1707,17 @@ impl Engine {
 
         let typ = self.map_type_name(result.type_name());
 
-        return result.try_cast::<T>().ok_or_else(|| {
+        result.try_cast::<T>().ok_or_else(|| {
             EvalAltResult::ErrorMismatchOutputType(
                 self.map_type_name(type_name::<T>()).into(),
                 typ.into(),
                 Position::NONE,
             )
             .into()
-        });
+        })
     }
     /// Evaluate an [`AST`] with own scope.
     #[inline]
-    #[must_use]
     pub(crate) fn eval_ast_with_scope_raw<'a>(
         &self,
         scope: &mut Scope,
@@ -1886,7 +1866,6 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    #[must_use]
     pub fn call_fn<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1967,7 +1946,6 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    #[must_use]
     pub fn call_fn_dynamic(
         &self,
         scope: &mut Scope,
@@ -1992,7 +1970,6 @@ impl Engine {
     /// clone them _before_ calling this function.
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    #[must_use]
     pub(crate) fn call_fn_dynamic_raw(
         &self,
         scope: &mut Scope,

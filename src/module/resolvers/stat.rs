@@ -64,33 +64,28 @@ impl StaticModuleResolver {
     }
     /// Get an iterator of all the [modules][Module].
     #[inline(always)]
-    #[must_use]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Shared<Module>)> {
         self.0.iter().map(|(k, v)| (k.as_str(), v))
     }
     /// Get a mutable iterator of all the [modules][Module].
     #[inline(always)]
-    #[must_use]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&str, &mut Shared<Module>)> {
         self.0.iter_mut().map(|(k, v)| (k.as_str(), v))
     }
     /// Get a mutable iterator of all the modules.
     #[inline(always)]
-    #[must_use]
     pub fn into_iter(self) -> impl Iterator<Item = (Identifier, Shared<Module>)> {
         self.0.into_iter()
     }
     /// Get an iterator of all the [module][Module] paths.
     #[inline(always)]
-    #[must_use]
     pub fn paths(&self) -> impl Iterator<Item = &str> {
         self.0.keys().map(|s| s.as_str())
     }
     /// Get an iterator of all the [modules][Module].
     #[inline(always)]
-    #[must_use]
     pub fn values(&self) -> impl Iterator<Item = &Shared<Module>> {
-        self.0.values().map(|m| m)
+        self.0.values()
     }
     /// Remove all [modules][Module].
     #[inline(always)]

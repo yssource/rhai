@@ -255,12 +255,10 @@ impl Add<&str> for ImmutableString {
 
     #[inline]
     fn add(mut self, rhs: &str) -> Self::Output {
-        if rhs.is_empty() {
-            self
-        } else {
+        if !rhs.is_empty() {
             self.make_mut().push_str(rhs);
-            self
         }
+        self
     }
 }
 

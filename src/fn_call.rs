@@ -84,7 +84,9 @@ impl<'a> ArgBackup<'a> {
     /// the current scope.  Otherwise it is undefined behavior as the shorter lifetime will leak.
     #[inline(always)]
     fn restore_first_arg(mut self, args: &mut FnCallArgs<'a>) {
-        self.orig_mut.take().map(|p| args[0] = p);
+        if let Some(p) = self.orig_mut.take() {
+            args[0] = p;
+        }
     }
 }
 
@@ -101,7 +103,6 @@ impl Drop for ArgBackup<'_> {
 
 #[cfg(not(feature = "no_closure"))]
 #[inline]
-#[must_use]
 pub fn ensure_no_data_race(
     fn_name: &str,
     args: &FnCallArgs,
@@ -261,7 +262,6 @@ impl Engine {
     /// Function call arguments be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
-    #[must_use]
     pub(crate) fn call_native_fn(
         &self,
         mods: &Imports,
@@ -290,7 +290,7 @@ impl Engine {
             let mut backup: Option<ArgBackup> = None;
             if is_method_call && func.is_pure() && !args.is_empty() {
                 backup = Some(Default::default());
-                backup.as_mut().map(|bk| bk.change_first_arg_to_copy(args));
+                backup.as_mut().unwrap().change_first_arg_to_copy(args);
             }
 
             // Run external function
@@ -311,7 +311,9 @@ impl Engine {
             };
 
             // Restore the original reference
-            backup.map(|bk| bk.restore_first_arg(args));
+            if let Some(bk) = backup {
+                bk.restore_first_arg(args)
+            }
 
             let result = result.map_err(|err| err.fill_position(pos))?;
 
@@ -433,7 +435,6 @@ impl Engine {
     /// All function arguments not in the first position are always passed by value and thus consumed.
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     #[cfg(not(feature = "no_function"))]
-    #[must_use]
     pub(crate) fn call_script_fn(
         &self,
         scope: &mut Scope,
@@ -601,7 +602,6 @@ impl Engine {
     /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
     /// All function arguments not in the first position are always passed by value and thus consumed.
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
-    #[must_use]
     pub(crate) fn exec_fn_call(
         &self,
         mods: &mut Imports,
@@ -702,7 +702,7 @@ impl Engine {
             // Move captured variables into scope
             #[cfg(not(feature = "no_closure"))]
             if !func.externals.is_empty() {
-                _capture_scope.map(|captured| {
+                if let Some(captured) = _capture_scope {
                     captured
                         .into_iter()
                         .filter(|(name, _, _)| func.externals.contains(name.as_ref()))
@@ -710,7 +710,7 @@ impl Engine {
                             // Consume the scope values.
                             scope.push_dynamic(name, value);
                         })
-                });
+                }
             }
 
             let result = if _is_method_call {
@@ -746,7 +746,7 @@ impl Engine {
                 let mut backup: Option<ArgBackup> = None;
                 if is_ref_mut && !args.is_empty() {
                     backup = Some(Default::default());
-                    backup.as_mut().map(|bk| bk.change_first_arg_to_copy(args));
+                    backup.as_mut().unwrap().change_first_arg_to_copy(args);
                 }
 
                 let orig_source = state.source.take();
@@ -761,7 +761,9 @@ impl Engine {
                 state.source = orig_source;
 
                 // Restore the original reference
-                backup.map(|bk| bk.restore_first_arg(args));
+                if let Some(bk) = backup {
+                    bk.restore_first_arg(args)
+                }
 
                 result?
             };
@@ -779,7 +781,6 @@ impl Engine {
     /// Evaluate a list of statements with no `this` pointer.
     /// This is commonly used to evaluate a list of statements in an [`AST`] or a script function body.
     #[inline]
-    #[must_use]
     pub(crate) fn eval_global_statements(
         &self,
         scope: &mut Scope,
@@ -800,7 +801,6 @@ impl Engine {
     }
 
     /// Evaluate a text script in place - used primarily for 'eval'.
-    #[must_use]
     fn eval_script_expr_in_place(
         &self,
         scope: &mut Scope,
@@ -852,7 +852,6 @@ impl Engine {
 
     /// Call a dot method.
     #[cfg(not(feature = "no_object"))]
-    #[must_use]
     pub(crate) fn make_method_call(
         &self,
         mods: &mut Imports,
@@ -891,7 +890,7 @@ impl Engine {
                 )
             }
             KEYWORD_FN_PTR_CALL => {
-                if call_args.len() > 0 {
+                if !call_args.is_empty() {
                     if !call_args[0].is::<FnPtr>() {
                         return Err(self.make_type_mismatch_err::<FnPtr>(
                             self.map_type_name(call_args[0].type_name()),
@@ -1015,7 +1014,6 @@ impl Engine {
 
     /// Evaluate an argument.
     #[inline]
-    #[must_use]
     pub(crate) fn get_arg_value(
         &self,
         scope: &mut Scope,
@@ -1037,7 +1035,6 @@ impl Engine {
     }
 
     /// Call a function in normal function-call style.
-    #[must_use]
     pub(crate) fn make_function_call(
         &self,
         scope: &mut Scope,
@@ -1103,7 +1100,7 @@ impl Engine {
                 return arg
                     .as_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))
-                    .and_then(|s| FnPtr::try_from(s))
+                    .and_then(FnPtr::try_from)
                     .map(Into::<Dynamic>::into)
                     .map_err(|err| err.fill_position(arg_pos));
             }
@@ -1289,7 +1286,6 @@ impl Engine {
     }
 
     /// Call a namespace-qualified function in normal function-call style.
-    #[must_use]
     pub(crate) fn make_qualified_function_call(
         &self,
         scope: &mut Scope,
@@ -1386,10 +1382,10 @@ impl Engine {
 
         // Clone first argument if the function is not a method after-all
         if !func.map(|f| f.is_method()).unwrap_or(true) {
-            first_arg_value.map(|first| {
+            if let Some(first) = first_arg_value {
                 *first = args[0].clone();
                 args[0] = first;
-            });
+            }
         }
 
         match func {

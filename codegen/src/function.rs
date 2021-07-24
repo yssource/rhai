@@ -152,13 +152,13 @@ impl ExportedParams for ExportedFnParams {
                 ("get", None) | ("set", None) | ("name", None) => {
                     return Err(syn::Error::new(key.span(), "requires value"))
                 }
-                ("name", Some(s)) if &s.value() == FN_IDX_GET => {
+                ("name", Some(s)) if s.value() == FN_IDX_GET => {
                     return Err(syn::Error::new(
                         item_span,
                         "use attribute 'index_get' instead",
                     ))
                 }
-                ("name", Some(s)) if &s.value() == FN_IDX_SET => {
+                ("name", Some(s)) if s.value() == FN_IDX_SET => {
                     return Err(syn::Error::new(
                         item_span,
                         "use attribute 'index_set' instead",
@@ -268,7 +268,6 @@ impl ExportedParams for ExportedFnParams {
             special,
             namespace,
             span: Some(span),
-            ..Default::default()
         })
     }
 }
@@ -317,7 +316,7 @@ impl Parse for ExportedFn {
         let skip_slots = if pass_context { 1 } else { 0 };
 
         // Determine whether function generates a special calling convention for a mutable receiver.
-        let mut_receiver = match fn_all.sig.inputs.iter().skip(skip_slots).next() {
+        let mut_receiver = match fn_all.sig.inputs.iter().nth(skip_slots) {
             Some(syn::FnArg::Receiver(syn::Receiver {
                 reference: Some(_), ..
             })) => true,
@@ -474,7 +473,7 @@ impl ExportedFn {
         literals
     }
 
-    pub fn exported_name<'n>(&'n self) -> Cow<'n, str> {
+    pub fn exported_name(&self) -> Cow<str> {
         self.params
             .name
             .last()
@@ -629,7 +628,7 @@ impl ExportedFn {
         let return_span = self
             .return_type()
             .map(|r| r.span())
-            .unwrap_or_else(|| proc_macro2::Span::call_site());
+            .unwrap_or_else(proc_macro2::Span::call_site);
         if self.params.return_raw.is_some() {
             quote_spanned! { return_span =>
                 pub #dynamic_signature {
@@ -691,7 +690,7 @@ impl ExportedFn {
                         })
                         .unwrap(),
                     );
-                    if !self.params().pure.is_some() {
+                    if self.params().pure.is_none() {
                         let arg_lit_str =
                             syn::LitStr::new(&pat.to_token_stream().to_string(), pat.span());
                         unpack_statements.push(
@@ -812,8 +811,8 @@ impl ExportedFn {
         let return_span = self
             .return_type()
             .map(|r| r.span())
-            .unwrap_or_else(|| proc_macro2::Span::call_site());
-        let return_expr = if !self.params.return_raw.is_some() {
+            .unwrap_or_else(proc_macro2::Span::call_site);
+        let return_expr = if self.params.return_raw.is_none() {
             quote_spanned! { return_span =>
                 Ok(Dynamic::from(#sig_name(#(#unpack_exprs),*)))
             }

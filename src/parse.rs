@@ -243,7 +243,6 @@ impl ParseSettings {
     /// Make sure that the current level of expression nesting is within the maximum limit.
     #[cfg(not(feature = "unchecked"))]
     #[inline]
-    #[must_use]
     pub fn ensure_level_within_max_limit(
         &self,
         limit: Option<NonZeroUsize>,
@@ -412,7 +411,7 @@ fn parse_paren_expr(
         // ( xxx )
         (Token::RightParen, _) => Ok(expr),
         // ( <error>
-        (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+        (Token::LexError(err), pos) => Err(err.into_err(pos)),
         // ( xxx ???
         (_, pos) => Err(PERR::MissingToken(
             Token::RightParen.into(),
@@ -712,7 +711,7 @@ fn parse_index_chain(
                 )),
             }
         }
-        (Token::LexError(err), pos) => return Err(err.clone().into_err(*pos)),
+        (Token::LexError(err), pos) => Err(err.clone().into_err(*pos)),
         (_, pos) => Err(PERR::MissingToken(
             Token::RightBracket.into(),
             "for a matching [ in this index expression".into(),
@@ -880,7 +879,7 @@ fn parse_map_literal(
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
         let name = state.get_identifier(name);
-        template.insert(name.clone().into(), Default::default());
+        template.insert(name.clone(), Default::default());
         map.push((Ident { name, pos }, expr));
 
         match input.peek().expect(NEVER_ENDS) {
@@ -1087,7 +1086,7 @@ fn parse_primary(
         },
         #[cfg(not(feature = "no_float"))]
         Token::FloatConstant(x) => {
-            let x = (*x).into();
+            let x = *x;
             input.next().expect(NEVER_ENDS);
             Expr::FloatConstant(x, settings.pos)
         }
@@ -1410,23 +1409,26 @@ fn parse_primary(
     }
 
     // Cache the hash key for namespace-qualified variables
-    match root_expr {
+    let namespaced_variable = match root_expr {
         Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
         Expr::Index(ref mut x, _, _) | Expr::Dot(ref mut x, _, _) => match x.lhs {
             Expr::Variable(_, _, ref mut x) if x.1.is_some() => Some(x.as_mut()),
             _ => None,
         },
         _ => None,
-    }
-    .map(|x| match x {
-        (_, Some((namespace, hash)), name) => {
-            *hash = calc_qualified_var_hash(namespace.iter().map(|v| v.name.as_str()), name);
+    };
 
-            #[cfg(not(feature = "no_module"))]
-            namespace.set_index(state.find_module(&namespace[0].name));
+    if let Some(x) = namespaced_variable {
+        match x {
+            (_, Some((namespace, hash)), name) => {
+                *hash = calc_qualified_var_hash(namespace.iter().map(|v| v.name.as_str()), name);
+
+                #[cfg(not(feature = "no_module"))]
+                namespace.set_index(state.find_module(&namespace[0].name));
+            }
+            _ => unreachable!("expecting namespace-qualified variable access"),
         }
-        _ => unreachable!("expecting namespace-qualified variable access"),
-    });
+    }
 
     // Make sure identifiers are valid
     Ok(root_expr)
@@ -1531,7 +1533,7 @@ fn parse_unary(
 }
 
 /// Make an assignment statement.
-fn make_assignment_stmt<'a>(
+fn make_assignment_stmt(
     op: Option<Token>,
     state: &mut ParseState,
     lhs: Expr,
@@ -1556,7 +1558,7 @@ fn make_assignment_stmt<'a>(
         }
     }
 
-    let op_info = op.map(|v| OpAssignment::new(v));
+    let op_info = op.map(OpAssignment::new);
 
     match lhs {
         // const_expr = rhs
@@ -2717,7 +2719,7 @@ fn parse_stmt(
                         is_function_scope: true,
                         is_breakable: false,
                         level: 0,
-                        pos: pos,
+                        pos,
                     };
 
                     let func = parse_fn(
@@ -3035,40 +3037,38 @@ fn parse_anon_fn(
 
     let mut params_list: StaticVec<_> = Default::default();
 
-    if input.next().expect(NEVER_ENDS).0 != Token::Or {
-        if !match_token(input, Token::Pipe).0 {
-            loop {
-                match input.next().expect(NEVER_ENDS) {
-                    (Token::Pipe, _) => break,
-                    (Token::Identifier(s), pos) => {
-                        if params_list.iter().any(|p| p == &s) {
-                            return Err(PERR::FnDuplicatedParam("".to_string(), s).into_err(pos));
-                        }
-                        let s = state.get_identifier(s);
-                        state.stack.push((s.clone(), AccessMode::ReadWrite));
-                        params_list.push(s)
+    if input.next().expect(NEVER_ENDS).0 != Token::Or && !match_token(input, Token::Pipe).0 {
+        loop {
+            match input.next().expect(NEVER_ENDS) {
+                (Token::Pipe, _) => break,
+                (Token::Identifier(s), pos) => {
+                    if params_list.iter().any(|p| p == &s) {
+                        return Err(PERR::FnDuplicatedParam("".to_string(), s).into_err(pos));
                     }
-                    (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-                    (_, pos) => {
-                        return Err(PERR::MissingToken(
-                            Token::Pipe.into(),
-                            "to close the parameters list of anonymous function".into(),
-                        )
-                        .into_err(pos))
-                    }
+                    let s = state.get_identifier(s);
+                    state.stack.push((s.clone(), AccessMode::ReadWrite));
+                    params_list.push(s)
                 }
+                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+                (_, pos) => {
+                    return Err(PERR::MissingToken(
+                        Token::Pipe.into(),
+                        "to close the parameters list of anonymous function".into(),
+                    )
+                    .into_err(pos))
+                }
+            }
 
-                match input.next().expect(NEVER_ENDS) {
-                    (Token::Pipe, _) => break,
-                    (Token::Comma, _) => (),
-                    (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-                    (_, pos) => {
-                        return Err(PERR::MissingToken(
-                            Token::Comma.into(),
-                            "to separate the parameters of anonymous function".into(),
-                        )
-                        .into_err(pos))
-                    }
+            match input.next().expect(NEVER_ENDS) {
+                (Token::Pipe, _) => break,
+                (Token::Comma, _) => (),
+                (Token::LexError(err), pos) => return Err(err.into_err(pos)),
+                (_, pos) => {
+                    return Err(PERR::MissingToken(
+                        Token::Comma.into(),
+                        "to separate the parameters of anonymous function".into(),
+                    )
+                    .into_err(pos))
                 }
             }
         }
@@ -3121,7 +3121,7 @@ fn parse_anon_fn(
         comments: Default::default(),
     };
 
-    let fn_ptr = crate::FnPtr::new_unchecked(fn_name.into(), Default::default());
+    let fn_ptr = crate::FnPtr::new_unchecked(fn_name, Default::default());
     let expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), settings.pos);
 
     #[cfg(not(feature = "no_closure"))]
@@ -3132,7 +3132,6 @@ fn parse_anon_fn(
 
 impl Engine {
     /// Parse a global level expression.
-    #[must_use]
     pub(crate) fn parse_global_expr(
         &self,
         input: &mut TokenStream,
@@ -3174,7 +3173,6 @@ impl Engine {
     }
 
     /// Parse the global level statements.
-    #[must_use]
     fn parse_global_level(
         &self,
         input: &mut TokenStream,
@@ -3236,7 +3234,6 @@ impl Engine {
 
     /// Run the parser on an input stream, returning an AST.
     #[inline(always)]
-    #[must_use]
     pub(crate) fn parse(
         &self,
         input: &mut TokenStream,

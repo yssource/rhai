@@ -142,9 +142,7 @@ impl Position {
     #[must_use]
     pub const fn position(self) -> Option<usize> {
         #[cfg(not(feature = "no_position"))]
-        return if self.is_none() {
-            None
-        } else if self.pos == 0 {
+        return if self.is_none() || self.pos == 0 {
             None
         } else {
             Some(self.pos as usize)
@@ -214,7 +212,6 @@ impl Position {
     }
     /// Print this [`Position`] for debug purposes.
     #[inline(always)]
-    #[must_use]
     pub(crate) fn debug_print(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(not(feature = "no_position"))]
         if !self.is_none() {
@@ -606,20 +603,20 @@ impl Token {
     #[inline]
     #[must_use]
     pub const fn is_op_assignment(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::PlusAssign
-            | Self::MinusAssign
-            | Self::MultiplyAssign
-            | Self::DivideAssign
-            | Self::LeftShiftAssign
-            | Self::RightShiftAssign
-            | Self::ModuloAssign
-            | Self::PowerOfAssign
-            | Self::AndAssign
-            | Self::OrAssign
-            | Self::XOrAssign => true,
-            _ => false,
-        }
+                | Self::MinusAssign
+                | Self::MultiplyAssign
+                | Self::DivideAssign
+                | Self::LeftShiftAssign
+                | Self::RightShiftAssign
+                | Self::ModuloAssign
+                | Self::PowerOfAssign
+                | Self::AndAssign
+                | Self::OrAssign
+                | Self::XOrAssign
+        )
     }
 
     /// Get the corresponding operator of the token if it is an op-assignment operator.
@@ -645,20 +642,20 @@ impl Token {
     #[inline]
     #[must_use]
     pub const fn has_op_assignment(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::Plus
-            | Self::Minus
-            | Self::Multiply
-            | Self::Divide
-            | Self::LeftShift
-            | Self::RightShift
-            | Self::Modulo
-            | Self::PowerOf
-            | Self::Ampersand
-            | Self::Pipe
-            | Self::XOr => true,
-            _ => false,
-        }
+                | Self::Minus
+                | Self::Multiply
+                | Self::Divide
+                | Self::LeftShift
+                | Self::RightShift
+                | Self::Modulo
+                | Self::PowerOf
+                | Self::Ampersand
+                | Self::Pipe
+                | Self::XOr
+        )
     }
 
     /// Get the corresponding op-assignment operator of the token.
@@ -792,10 +789,7 @@ impl Token {
     #[inline(always)]
     #[must_use]
     pub const fn is_eof(&self) -> bool {
-        match self {
-            Self::EOF => true,
-            _ => false,
-        }
+        matches!(self, Self::EOF)
     }
 
     // If another operator is after these, it's probably an unary operator
@@ -958,16 +952,12 @@ impl Token {
     #[inline(always)]
     #[must_use]
     pub const fn is_reserved(&self) -> bool {
-        match self {
-            Self::Reserved(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Reserved(_))
     }
 
     /// Convert a token into a function name, if possible.
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    #[must_use]
     pub(crate) fn into_function_name_for_override(self) -> Result<String, Self> {
         match self {
             Self::Custom(s) | Self::Identifier(s) if is_valid_identifier(s.chars()) => Ok(s),
@@ -979,10 +969,7 @@ impl Token {
     #[inline(always)]
     #[must_use]
     pub const fn is_custom(&self) -> bool {
-        match self {
-            Self::Custom(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Custom(_))
     }
 }
 
@@ -1065,7 +1052,6 @@ pub trait InputStream {
 /// # Volatile API
 ///
 /// This function is volatile and may change.
-#[must_use]
 pub fn parse_string_literal(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
@@ -1289,20 +1275,26 @@ fn scan_block_comment(
     while let Some(c) = stream.get_next() {
         pos.advance();
 
-        comment.as_mut().map(|comment| comment.push(c));
+        if let Some(comment) = comment.as_mut() {
+            comment.push(c);
+        }
 
         match c {
             '/' => {
                 stream.peek_next().filter(|&c2| c2 == '*').map(|c2| {
                     eat_next(stream, pos);
-                    comment.as_mut().map(|comment| comment.push(c2));
+                    if let Some(comment) = comment.as_mut() {
+                        comment.push(c2);
+                    }
                     level += 1;
                 });
             }
             '*' => {
                 stream.peek_next().filter(|&c2| c2 == '/').map(|c2| {
                     eat_next(stream, pos);
-                    comment.as_mut().map(|comment| comment.push(c2));
+                    if let Some(comment) = comment.as_mut() {
+                        comment.push(c2);
+                    }
                     level -= 1;
                 });
             }
@@ -1344,21 +1336,13 @@ pub fn get_next_token(
 /// Test if the given character is a hex character.
 #[inline(always)]
 fn is_hex_digit(c: char) -> bool {
-    match c {
-        'a'..='f' => true,
-        'A'..='F' => true,
-        '0'..='9' => true,
-        _ => false,
-    }
+    matches!(c, 'a'..='f' | 'A'..='F' | '0'..='9')
 }
 
 /// Test if the given character is a numeric digit.
 #[inline(always)]
 fn is_numeric_digit(c: char) -> bool {
-    match c {
-        '0'..='9' => true,
-        _ => false,
-    }
+    matches!(c, '0'..='9')
 }
 
 /// Test if the comment block is a doc-comment.
@@ -1475,7 +1459,7 @@ fn get_next_token_inner(
                                     break;
                                 }
                                 // symbol after period - probably a float
-                                ch @ _ if !is_id_first_alphabetic(ch) => {
+                                ch if !is_id_first_alphabetic(ch) => {
                                     result.push(next_char);
                                     pos.advance();
                                     result.push('0');
@@ -1770,7 +1754,9 @@ fn get_next_token_inner(
                         pos.new_line();
                         break;
                     }
-                    comment.as_mut().map(|comment| comment.push(c));
+                    if let Some(comment) = comment.as_mut() {
+                        comment.push(c);
+                    }
                     pos.advance();
                 }
 
@@ -2002,7 +1988,7 @@ fn get_identifier(
         ));
     }
 
-    return Some((Token::Identifier(identifier), start_pos));
+    Some((Token::Identifier(identifier), start_pos))
 }
 
 /// Is this keyword allowed as a function?

@@ -245,7 +245,7 @@ impl<'a> Scope<'a> {
     ) -> &mut Self {
         self.names.push((name.into(), Default::default()));
         value.set_access_mode(access);
-        self.values.push(value.into());
+        self.values.push(value);
         self
     }
     /// Truncate (rewind) the [`Scope`] to a previous size.
@@ -465,7 +465,6 @@ impl<'a> Scope<'a> {
     /// Get an iterator to entries in the [`Scope`].
     #[inline(always)]
     #[allow(dead_code)]
-    #[must_use]
     pub(crate) fn into_iter(
         self,
     ) -> impl Iterator<Item = (Cow<'a, str>, Dynamic, Vec<Identifier>)> {
@@ -502,7 +501,6 @@ impl<'a> Scope<'a> {
     /// assert_eq!(value.cast::<String>(), "hello");
     /// ```
     #[inline(always)]
-    #[must_use]
     pub fn iter(&self) -> impl Iterator<Item = (&str, bool, Dynamic)> {
         self.iter_raw()
             .map(|(name, constant, value)| (name, constant, value.flatten_clone()))
@@ -510,7 +508,6 @@ impl<'a> Scope<'a> {
     /// Get an iterator to entries in the [`Scope`].
     /// Shared values are not expanded.
     #[inline(always)]
-    #[must_use]
     pub fn iter_raw(&self) -> impl Iterator<Item = (&str, bool, &Dynamic)> {
         self.names
             .iter()

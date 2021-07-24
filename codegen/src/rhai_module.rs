@@ -214,7 +214,7 @@ pub fn generate_body(
     }
 }
 
-pub fn check_rename_collisions(fns: &Vec<ExportedFn>) -> Result<(), syn::Error> {
+pub fn check_rename_collisions(fns: &[ExportedFn]) -> Result<(), syn::Error> {
     fn make_key(name: impl ToString, item_fn: &ExportedFn) -> String {
         item_fn
             .arg_list()

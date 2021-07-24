@@ -134,7 +134,6 @@ impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_> {
     ///
     /// This function is very low level.  It evaluates an expression from an [`AST`][crate::AST].
     #[inline(always)]
-    #[must_use]
     pub fn eval_expression_tree(&mut self, expr: &Expression) -> RhaiResult {
         self.engine.eval_expr(
             self.scope,
@@ -179,15 +178,12 @@ impl Engine {
     /// Replacing one variable with another (i.e. adding a new variable and removing one variable at
     /// the same time so that the total _size_ of the [`Scope`][crate::Scope] is unchanged) also
     /// does NOT count, so `false` should be passed.
-    #[must_use]
     pub fn register_custom_syntax<S: AsRef<str> + Into<Identifier>>(
         &mut self,
         keywords: &[S],
         scope_may_be_changed: bool,
         func: impl Fn(&mut EvalContext, &[Expression]) -> RhaiResult + SendSync + 'static,
     ) -> Result<&mut Self, ParseError> {
-        let keywords = keywords.as_ref();
-
         let mut segments: StaticVec<ImmutableString> = Default::default();
 
         for s in keywords {
@@ -240,8 +236,7 @@ impl Engine {
                             s
                         ),
                     )
-                    .into_err(Position::NONE)
-                    .into());
+                    .into_err(Position::NONE));
                 }
                 // Identifier in first position
                 s if segments.is_empty() && is_valid_identifier(s.chars()) => {
@@ -264,8 +259,7 @@ impl Engine {
                             s
                         ),
                     )
-                    .into_err(Position::NONE)
-                    .into());
+                    .into_err(Position::NONE));
                 }
             };
 

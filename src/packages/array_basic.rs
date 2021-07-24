@@ -155,7 +155,7 @@ mod array_functions {
             len as usize
         };
 
-        array[start..start + len].iter().cloned().collect()
+        array[start..start + len].to_vec()
     }
     #[rhai_fn(name = "extract")]
     pub fn extract_tail(array: &mut Array, start: INT) -> Array {
@@ -170,7 +170,7 @@ mod array_functions {
             start as usize
         };
 
-        array[start..].iter().cloned().collect()
+        array[start..].to_vec()
     }
     #[rhai_fn(name = "split")]
     pub fn split_at(array: &mut Array, start: INT) -> Array {

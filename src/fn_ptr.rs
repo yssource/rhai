@@ -19,7 +19,6 @@ pub struct FnPtr(Identifier, StaticVec<Dynamic>);
 impl FnPtr {
     /// Create a new function pointer.
     #[inline(always)]
-    #[must_use]
     pub fn new(name: impl Into<Identifier>) -> Result<Self, Box<EvalAltResult>> {
         name.into().try_into()
     }
@@ -27,7 +26,7 @@ impl FnPtr {
     #[inline(always)]
     #[must_use]
     pub(crate) fn new_unchecked(name: Identifier, curry: StaticVec<Dynamic>) -> Self {
-        Self(name.into(), curry)
+        Self(name, curry)
     }
     /// Get the name of the function.
     #[inline(always)]
@@ -97,7 +96,6 @@ impl FnPtr {
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
     #[inline]
-    #[must_use]
     pub fn call_dynamic(
         &self,
         ctx: &NativeCallContext,

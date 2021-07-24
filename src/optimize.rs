@@ -130,7 +130,7 @@ impl<'a> OptimizerState<'a> {
     ) -> Option<Dynamic> {
         self.engine
             .call_native_fn(
-                &mut Default::default(),
+                &Default::default(),
                 &mut Default::default(),
                 self.lib,
                 fn_name,
@@ -713,7 +713,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
                 // Map literal where everything is pure - promote the indexed item.
                 // All other items can be thrown away.
                 state.set_dirty();
-                *expr = mem::take(&mut m.0).into_iter().find(|(x, _)| &x.name == prop)
+                *expr = mem::take(&mut m.0).into_iter().find(|(x, _)| x.name == prop)
                             .map(|(_, mut expr)| { expr.set_position(*pos); expr })
                             .unwrap_or_else(|| Expr::Unit(*pos));
             }

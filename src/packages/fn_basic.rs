@@ -50,14 +50,11 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
         let mut map = Map::new();
 
         if let Some(ns) = namespace {
-            map.insert(dict.get("namespace").expect(DICT).clone().into(), ns.into());
+            map.insert(dict.get("namespace").expect(DICT).clone(), ns.into());
         }
+        map.insert(dict.get("name").expect(DICT).clone(), f.name.clone().into());
         map.insert(
-            dict.get("name").expect(DICT).clone().into(),
-            f.name.clone().into(),
-        );
-        map.insert(
-            dict.get("access").expect(DICT).clone().into(),
+            dict.get("access").expect(DICT).clone(),
             match f.access {
                 FnAccess::Public => dict.get("public").expect(DICT).clone(),
                 FnAccess::Private => dict.get("private").expect(DICT).clone(),
@@ -65,11 +62,11 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
             .into(),
         );
         map.insert(
-            dict.get("is_anonymous").expect(DICT).clone().into(),
+            dict.get("is_anonymous").expect(DICT).clone(),
             f.name.starts_with(crate::engine::FN_ANONYMOUS).into(),
         );
         map.insert(
-            dict.get("params").expect(DICT).clone().into(),
+            dict.get("params").expect(DICT).clone(),
             f.params
                 .iter()
                 .cloned()
@@ -78,7 +75,7 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
                 .into(),
         );
 
-        map.into()
+        map
     }
 
     // Intern strings
