@@ -153,7 +153,7 @@ impl<'a> From<&'a ScriptFnDef> for ScriptFnMetadata<'a> {
         Self {
             #[cfg(not(feature = "no_function"))]
             #[cfg(feature = "metadata")]
-            comments: self.comments.iter().map(|s| s.as_str()).collect(),
+            comments: value.comments.iter().map(|s| s.as_str()).collect(),
             access: value.access,
             name: &value.name,
             params: value.params.iter().map(|s| s.as_str()).collect(),
