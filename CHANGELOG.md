@@ -10,6 +10,7 @@ Enhancements
 * `$symbol$` is supported in custom syntax to match any symbol.
 * `Dynamic::as_string` and `Dynamic::as_immutable_string` are deprecated and replaced by `into_string` and `into_immutable_string` respectively.
 * Added a number of constants to `Dynamic`.
+* Added a number of constants and `fromXXX` constant methods to `Dynamic`.
 * `parse_float()`, `PI()` and `E()` now defer to `Decimal` under `no_float` if `decimal` is turned on.
 
 
