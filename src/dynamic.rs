@@ -1762,7 +1762,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// _(DECIMAL)_ Cast the [`Dynamic`] as a [`Decimal`] and return it.
+    /// _(DECIMAL)_ Cast the [`Dynamic`] as a [`Decimal`](https://docs.rs/rust_decimal) and return it.
     /// Returns the name of the actual type if the cast fails.
     ///
     /// Exported under the `decimal` feature only.
