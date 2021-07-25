@@ -40,7 +40,7 @@ use crate::ast::FnCallHashes;
 
 pub type Precedence = NonZeroU8;
 
-/// _(INTERNALS)_ A stack of imported [modules][Module].
+/// _(internals)_ A stack of imported [modules][Module].
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -620,7 +620,7 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
     }
 }
 
-/// _(INTERNALS)_ An entry in a function resolution cache.
+/// _(internals)_ An entry in a function resolution cache.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -634,7 +634,7 @@ pub struct FnResolutionCacheEntry {
     pub source: Option<Identifier>,
 }
 
-/// _(INTERNALS)_ A function resolution cache.
+/// _(internals)_ A function resolution cache.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -642,7 +642,7 @@ pub struct FnResolutionCacheEntry {
 /// This type is volatile and may change.
 pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
 
-/// _(INTERNALS)_ A type that holds all the current states of the [`Engine`].
+/// _(internals)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -723,7 +723,7 @@ impl EvalState {
     }
 }
 
-/// _(INTERNALS)_ A type containing all the limits imposed by the [`Engine`].
+/// _(internals)_ A type containing all the limits imposed by the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -833,7 +833,7 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.mods.iter()
     }
-    /// _(INTERNALS)_ The current set of modules imported via `import` statements.
+    /// _(internals)_ The current set of modules imported via `import` statements.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
@@ -847,7 +847,7 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
     }
-    /// _(INTERNALS)_ The current set of namespaces containing definitions of all script-defined functions.
+    /// _(internals)_ The current set of namespaces containing definitions of all script-defined functions.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]

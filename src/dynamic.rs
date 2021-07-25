@@ -46,7 +46,7 @@ mod private {
     impl<T: Any + Clone + SendSync> Sealed for T {}
 }
 
-/// _(INTERNALS)_ Trait to represent any type.
+/// _(internals)_ Trait to represent any type.
 /// Exported under the `internals` feature only.
 ///
 /// This trait is sealed and cannot be implemented.
@@ -80,7 +80,7 @@ pub trait Variant: Any + private::Sealed {
     fn clone_into_dynamic(&self) -> Dynamic;
 }
 
-/// _(INTERNALS)_ Trait to represent any type.
+/// _(internals)_ Trait to represent any type.
 /// Exported under the `internals` feature only.
 ///
 /// This trait is sealed and cannot be implemented.
@@ -189,7 +189,7 @@ pub enum Union {
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     Float(FloatWrapper<FLOAT>, Tag, AccessMode),
-    /// _(DECIMAL)_ A fixed-precision decimal value.
+    /// _(decimal)_ A fixed-precision decimal value.
     /// Exported under the `decimal` feature only.
     #[cfg(feature = "decimal")]
     Decimal(Box<Decimal>, Tag, AccessMode),
@@ -222,7 +222,7 @@ pub enum Union {
     Shared(crate::Shared<crate::Locked<Dynamic>>, Tag, AccessMode),
 }
 
-/// _(INTERNALS)_ Lock guard for reading a [`Dynamic`].
+/// _(internals)_ Lock guard for reading a [`Dynamic`].
 /// Exported under the `internals` feature only.
 ///
 /// This type provides transparent interoperability between normal [`Dynamic`] and shared
@@ -265,7 +265,7 @@ impl<'d, T: Any + Clone> Deref for DynamicReadLock<'d, T> {
     }
 }
 
-/// _(INTERNALS)_ Lock guard for writing a [`Dynamic`].
+/// _(internals)_ Lock guard for writing a [`Dynamic`].
 /// Exported under the `internals` feature only.
 ///
 /// This type provides transparent interoperability between normal [`Dynamic`] and shared
@@ -1762,7 +1762,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// _(DECIMAL)_ Cast the [`Dynamic`] as a [`Decimal`](https://docs.rs/rust_decimal) and return it.
+    /// _(decimal)_ Cast the [`Dynamic`] as a [`Decimal`](https://docs.rs/rust_decimal) and return it.
     /// Returns the name of the actual type if the cast fails.
     ///
     /// Exported under the `decimal` feature only.

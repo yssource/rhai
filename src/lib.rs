@@ -278,7 +278,7 @@ pub use module::NamespaceRef;
 #[cfg(not(feature = "internals"))]
 type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 
-/// _(INTERNALS)_ Alias to [`smallvec`](https://crates.io/crates/smallvec), which is a specialized
+/// _(internals)_ Alias to [`smallvec`](https://crates.io/crates/smallvec), which is a specialized
 /// [`Vec`] backed by a small, inline, fixed-size array when there are ≤ 4 items stored.
 /// Exported under the `internals` feature only.
 ///

@@ -102,7 +102,7 @@ impl FuncInfo {
     }
 }
 
-/// _(INTERNALS)_ Calculate a [`u64`] hash key from a namespace-qualified function name and
+/// _(internals)_ Calculate a [`u64`] hash key from a namespace-qualified function name and
 /// parameter types.
 /// Exported under the `internals` feature only.
 ///
@@ -1364,7 +1364,7 @@ impl Module {
             .map(|f| (f.namespace, f.access, f.name.as_str(), f.params))
     }
 
-    /// _(INTERNALS)_ Get an iterator over all script-defined functions in the [`Module`].
+    /// _(internals)_ Get an iterator over all script-defined functions in the [`Module`].
     /// Exported under the `internals` feature only.
     ///
     /// Function metadata includes:
@@ -1372,7 +1372,7 @@ impl Module {
     /// 2) Access mode ([`FnAccess::Public`] or [`FnAccess::Private`]).
     /// 3) Function name (as string slice).
     /// 4) Number of parameters.
-    /// 5) _(INTERNALS)_ Shared reference to function definition [`ScriptFnDef`][crate::ast::ScriptFnDef].
+    /// 5) _(internals)_ Shared reference to function definition [`ScriptFnDef`][crate::ast::ScriptFnDef].
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "internals")]
     #[inline(always)]
@@ -1653,7 +1653,7 @@ impl Module {
     }
 }
 
-/// _(INTERNALS)_ A chain of [module][Module] names to namespace-qualify a variable or function call.
+/// _(internals)_ A chain of [module][Module] names to namespace-qualify a variable or function call.
 /// Exported under the `internals` feature only.
 ///
 /// A [`u64`] offset to the current [`Scope`][crate::Scope] is cached for quick search purposes.

@@ -2052,7 +2052,7 @@ impl Engine {
         let stmt = std::mem::take(ast.statements_mut());
         crate::optimize::optimize_into_ast(self, scope, stmt.into_vec(), lib, optimization_level)
     }
-    /// _(METADATA)_ Generate a list of all registered functions.
+    /// _(metadata)_ Generate a list of all registered functions.
     /// Exported under the `metadata` feature only.
     ///
     /// Functions from the following sources are included, in order:

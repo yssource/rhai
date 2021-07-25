@@ -209,7 +209,7 @@ impl From<&crate::Module> for ModuleMetadata {
 
 #[cfg(feature = "metadata")]
 impl Engine {
-    /// _(METADATA)_ Generate a list of all functions (including those defined in an
+    /// _(metadata)_ Generate a list of all functions (including those defined in an
     /// [`AST`][crate::AST]) in JSON format.
     /// Exported under the `metadata` feature only.
     ///

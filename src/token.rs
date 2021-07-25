@@ -27,7 +27,7 @@ use rust_decimal::Decimal;
 #[cfg(not(feature = "no_function"))]
 use crate::engine::KEYWORD_IS_DEF_FN;
 
-/// _(INTERNALS)_ A type containing commands to control the tokenizer.
+/// _(internals)_ A type containing commands to control the tokenizer.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Copy, Default)]
 pub struct TokenizerControlBlock {
     /// Is the current tokenizer position within an interpolated text string?
@@ -35,7 +35,7 @@ pub struct TokenizerControlBlock {
     pub is_within_text: bool,
 }
 
-/// _(INTERNALS)_ A shared object that allows control of the tokenizer from outside.
+/// _(internals)_ A shared object that allows control of the tokenizer from outside.
 pub type TokenizerControl = Rc<Cell<TokenizerControlBlock>>;
 
 type LERR = LexError;
@@ -283,7 +283,7 @@ impl AddAssign for Position {
     }
 }
 
-/// _(INTERNALS)_ A Rhai language token.
+/// _(internals)_ A Rhai language token.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -980,7 +980,7 @@ impl From<Token> for String {
     }
 }
 
-/// _(INTERNALS)_ State of the tokenizer.
+/// _(internals)_ State of the tokenizer.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -1000,7 +1000,7 @@ pub struct TokenizeState {
     pub is_within_text_terminated_by: Option<char>,
 }
 
-/// _(INTERNALS)_ Trait that encapsulates a peekable character input stream.
+/// _(internals)_ Trait that encapsulates a peekable character input stream.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -1018,7 +1018,7 @@ pub trait InputStream {
     fn peek_next(&mut self) -> Option<char>;
 }
 
-/// _(INTERNALS)_ Parse a string literal ended by `termination_char`.
+/// _(internals)_ Parse a string literal ended by `termination_char`.
 /// Exported under the `internals` feature only.
 ///
 /// Returns the parsed string and a boolean indicating whether the string is
@@ -1310,7 +1310,7 @@ fn scan_block_comment(
     level
 }
 
-/// _(INTERNALS)_ Get the next token from the `stream`.
+/// _(internals)_ Get the next token from the `stream`.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile API
@@ -2234,7 +2234,7 @@ impl<'a> Iterator for TokenIterator<'a> {
 impl FusedIterator for TokenIterator<'_> {}
 
 impl Engine {
-    /// _(INTERNALS)_ Tokenize an input text stream.
+    /// _(internals)_ Tokenize an input text stream.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]
@@ -2245,7 +2245,7 @@ impl Engine {
     ) -> (TokenIterator<'a>, TokenizerControl) {
         self.lex_raw(input, None)
     }
-    /// _(INTERNALS)_ Tokenize an input text stream with a mapping function.
+    /// _(internals)_ Tokenize an input text stream with a mapping function.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]

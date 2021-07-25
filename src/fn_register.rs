@@ -71,17 +71,17 @@ pub trait RegisterNativeFunction<Args, Result> {
     /// Get the type ID's of this function's parameters.
     #[must_use]
     fn param_types() -> Box<[TypeId]>;
-    /// _(METADATA)_ Get the type names of this function's parameters.
+    /// _(metadata)_ Get the type names of this function's parameters.
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     #[must_use]
     fn param_names() -> Box<[&'static str]>;
-    /// _(METADATA)_ Get the type ID of this function's return value.
+    /// _(metadata)_ Get the type ID of this function's return value.
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     #[must_use]
     fn return_type() -> TypeId;
-    /// _(METADATA)_ Get the type name of this function's return value.
+    /// _(metadata)_ Get the type name of this function's return value.
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     #[must_use]

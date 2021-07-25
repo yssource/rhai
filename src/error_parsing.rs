@@ -9,7 +9,7 @@ use std::fmt;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
-/// _(INTERNALS)_ Error encountered when tokenizing the script text.
+/// _(internals)_ Error encountered when tokenizing the script text.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
