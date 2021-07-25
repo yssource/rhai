@@ -830,8 +830,14 @@ impl Dynamic {
     pub const ONE: Dynamic = Self(Union::Int(1, DEFAULT_TAG_VALUE, ReadWrite));
     /// A [`Dynamic`] containing the integer two.
     pub const TWO: Dynamic = Self(Union::Int(2, DEFAULT_TAG_VALUE, ReadWrite));
+    /// A [`Dynamic`] containing the integer three.
+    pub const THREE: Dynamic = Self(Union::Int(3, DEFAULT_TAG_VALUE, ReadWrite));
     /// A [`Dynamic`] containing the integer ten.
     pub const TEN: Dynamic = Self(Union::Int(10, DEFAULT_TAG_VALUE, ReadWrite));
+    /// A [`Dynamic`] containing the integer one hundred.
+    pub const HUNDRED: Dynamic = Self(Union::Int(100, DEFAULT_TAG_VALUE, ReadWrite));
+    /// A [`Dynamic`] containing the integer one thousand.
+    pub const THOUSAND: Dynamic = Self(Union::Int(1000, DEFAULT_TAG_VALUE, ReadWrite));
     /// A [`Dynamic`] containing the integer negative one.
     pub const NEGATIVE_ONE: Dynamic = Self(Union::Int(-1, DEFAULT_TAG_VALUE, ReadWrite));
     /// A [`Dynamic`] containing `0.0`.
@@ -870,12 +876,66 @@ impl Dynamic {
         DEFAULT_TAG_VALUE,
         ReadWrite,
     ));
-    /// A [`Dynamic`] containing the `-1.0`.
+    /// A [`Dynamic`] containing `100.0`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_HUNDRED: Dynamic = Self(Union::Float(
+        FloatWrapper::new_const(100.0),
+        DEFAULT_TAG_VALUE,
+        ReadWrite,
+    ));
+    /// A [`Dynamic`] containing `1000.0`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_THOUSAND: Dynamic = Self(Union::Float(
+        FloatWrapper::new_const(1000.0),
+        DEFAULT_TAG_VALUE,
+        ReadWrite,
+    ));
+    /// A [`Dynamic`] containing `-1.0`.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     pub const FLOAT_NEGATIVE_ONE: Dynamic = Self(Union::Float(
         FloatWrapper::new_const(-1.0),
+        DEFAULT_TAG_VALUE,
+        ReadWrite,
+    ));
+    /// A [`Dynamic`] containing π.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_PI: Dynamic = Self(Union::Float(
+        #[cfg(not(feature = "f32_float"))]
+        FloatWrapper::new_const(std::f64::consts::PI),
+        #[cfg(feature = "f32_float")]
+        FloatWrapper::new_const(std::f32::consts::PI),
+        DEFAULT_TAG_VALUE,
+        ReadWrite,
+    ));
+    /// A [`Dynamic`] containing π/2.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_HALF_PI: Dynamic = Self(Union::Float(
+        #[cfg(not(feature = "f32_float"))]
+        FloatWrapper::new_const(std::f64::consts::PI / 2.0),
+        #[cfg(feature = "f32_float")]
+        FloatWrapper::new_const(std::f32::consts::PI / 2.0),
+        DEFAULT_TAG_VALUE,
+        ReadWrite,
+    ));
+    /// A [`Dynamic`] containing 2π.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_TWO_PI: Dynamic = Self(Union::Float(
+        #[cfg(not(feature = "f32_float"))]
+        FloatWrapper::new_const(2.0 * std::f64::consts::PI),
+        #[cfg(feature = "f32_float")]
+        FloatWrapper::new_const(2.0 * std::f32::consts::PI),
         DEFAULT_TAG_VALUE,
         ReadWrite,
     ));
