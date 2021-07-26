@@ -840,12 +840,12 @@ impl Engine {
         // Evaluate the AST
         let mut new_state = EvalState::new();
         new_state.source = state.source.clone();
-        new_state.operations = state.operations;
+        new_state.num_operations = state.num_operations;
 
         let result =
             self.eval_global_statements(scope, mods, &mut new_state, statements, lib, level);
 
-        state.operations = new_state.operations;
+        state.num_operations = new_state.num_operations;
 
         result
     }

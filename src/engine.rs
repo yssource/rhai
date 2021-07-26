@@ -653,19 +653,20 @@ pub struct EvalState {
     /// Source of the current context.
     pub source: Option<Identifier>,
     /// Normally, access to variables are parsed with a relative offset into the [`Scope`] to avoid a lookup.
-    /// In some situation, e.g. after running an `eval` statement, subsequent offsets may become mis-aligned.
+    /// In some situation, e.g. after running an `eval` statement, or after a custom syntax statement,
+    /// subsequent offsets may become mis-aligned.
     /// When that happens, this flag is turned on to force a [`Scope`] search by name.
     pub always_search_scope: bool,
     /// Level of the current scope.  The global (root) level is zero, a new block (or function call)
     /// is one level higher, and so on.
     pub scope_level: usize,
     /// Number of operations performed.
-    pub operations: u64,
+    pub num_operations: u64,
     /// Number of modules loaded.
-    pub modules: usize,
+    pub num_modules: usize,
     /// Embedded module resolver.
     #[cfg(not(feature = "no_module"))]
-    pub resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
+    pub embedded_module_resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
     /// Stack of function resolution caches.
     fn_resolution_caches: Vec<FnResolutionCache>,
 }
@@ -679,10 +680,10 @@ impl EvalState {
             source: None,
             always_search_scope: false,
             scope_level: 0,
-            operations: 0,
-            modules: 0,
+            num_operations: 0,
+            num_modules: 0,
             #[cfg(not(feature = "no_module"))]
-            resolver: None,
+            embedded_module_resolver: None,
             fn_resolution_caches: Vec::new(),
         }
     }
@@ -2914,7 +2915,7 @@ impl Engine {
             Stmt::Import(expr, export, _pos) => {
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
-                if state.modules >= self.max_modules() {
+                if state.num_modules >= self.max_modules() {
                     return EvalAltResult::ErrorTooManyModules(*_pos).into();
                 }
 
@@ -2928,7 +2929,7 @@ impl Engine {
                     let path_pos = expr.position();
 
                     let module = state
-                        .resolver
+                        .embedded_module_resolver
                         .as_ref()
                         .and_then(|r| match r.resolve(self, source, &path, path_pos) {
                             Err(err)
@@ -2958,7 +2959,7 @@ impl Engine {
                         }
                     }
 
-                    state.modules += 1;
+                    state.num_modules += 1;
 
                     Ok(Dynamic::UNIT)
                 } else {
@@ -3130,16 +3131,16 @@ impl Engine {
         state: &mut EvalState,
         pos: Position,
     ) -> Result<(), Box<EvalAltResult>> {
-        state.operations += 1;
+        state.num_operations += 1;
 
         // Guard against too many operations
-        if self.max_operations() > 0 && state.operations > self.max_operations() {
+        if self.max_operations() > 0 && state.num_operations > self.max_operations() {
             return EvalAltResult::ErrorTooManyOperations(pos).into();
         }
 
         // Report progress - only in steps
         if let Some(ref progress) = self.progress {
-            if let Some(token) = progress(state.operations) {
+            if let Some(token) = progress(state.num_operations) {
                 // Terminate script if progress returns a termination token
                 return EvalAltResult::ErrorTerminated(token, pos).into();
             }

@@ -1729,7 +1729,7 @@ impl Engine {
         state.source = ast.source_raw().cloned();
         #[cfg(not(feature = "no_module"))]
         {
-            state.resolver = ast.resolver();
+            state.embedded_module_resolver = ast.resolver();
         }
 
         let statements = ast.statements();
@@ -1811,7 +1811,7 @@ impl Engine {
         state.source = ast.source_raw().cloned();
         #[cfg(not(feature = "no_module"))]
         {
-            state.resolver = ast.resolver();
+            state.embedded_module_resolver = ast.resolver();
         }
 
         let statements = ast.statements();
