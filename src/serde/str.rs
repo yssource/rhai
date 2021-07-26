@@ -18,7 +18,6 @@ impl<'a> StringSliceDeserializer<'a> {
         Self { value }
     }
     /// Shortcut for a type conversion error.
-    #[must_use]
     fn type_error<T>(&self) -> Result<T, Box<EvalAltResult>> {
         EvalAltResult::ErrorMismatchOutputType(
             type_name::<T>().into(),

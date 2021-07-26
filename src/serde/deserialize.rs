@@ -40,12 +40,14 @@ impl<'d> Visitor<'d> for DynamicVisitor {
     }
     fn visit_i64<E: Error>(self, v: i64) -> Result<Self::Value, E> {
         #[cfg(not(feature = "only_i32"))]
-        return Ok(v.into());
+        {
+            Ok(v.into())
+        }
         #[cfg(feature = "only_i32")]
         if v > i32::MAX as i64 {
-            return Ok(Dynamic::from(v));
+            Ok(Dynamic::from(v))
         } else {
-            return self.visit_i32(v as i32);
+            self.visit_i32(v as i32)
         }
     }
     fn visit_u8<E: Error>(self, v: u8) -> Result<Self::Value, E> {
@@ -56,26 +58,28 @@ impl<'d> Visitor<'d> for DynamicVisitor {
     }
     fn visit_u32<E: Error>(self, v: u32) -> Result<Self::Value, E> {
         #[cfg(not(feature = "only_i32"))]
-        return Ok(INT::from(v).into());
+        {
+            Ok(INT::from(v).into())
+        }
         #[cfg(feature = "only_i32")]
         if v > i32::MAX as u32 {
-            return Ok(Dynamic::from(v));
+            Ok(Dynamic::from(v))
         } else {
-            return self.visit_i32(v as i32);
+            self.visit_i32(v as i32)
         }
     }
     fn visit_u64<E: Error>(self, v: u64) -> Result<Self::Value, E> {
         #[cfg(not(feature = "only_i32"))]
         if v > i64::MAX as u64 {
-            return Ok(Dynamic::from(v));
+            Ok(Dynamic::from(v))
         } else {
-            return self.visit_i64(v as i64);
+            self.visit_i64(v as i64)
         }
         #[cfg(feature = "only_i32")]
         if v > i32::MAX as u64 {
-            return Ok(Dynamic::from(v));
+            Ok(Dynamic::from(v))
         } else {
-            return self.visit_i32(v as i32);
+            self.visit_i32(v as i32)
         }
     }
 

@@ -1281,22 +1281,22 @@ fn scan_block_comment(
 
         match c {
             '/' => {
-                stream.peek_next().filter(|&c2| c2 == '*').map(|c2| {
+                if let Some(c2) = stream.peek_next().filter(|&c2| c2 == '*') {
                     eat_next(stream, pos);
                     if let Some(comment) = comment.as_mut() {
                         comment.push(c2);
                     }
                     level += 1;
-                });
+                }
             }
             '*' => {
-                stream.peek_next().filter(|&c2| c2 == '/').map(|c2| {
+                if let Some(c2) = stream.peek_next().filter(|&c2| c2 == '/') {
                     eat_next(stream, pos);
                     if let Some(comment) = comment.as_mut() {
                         comment.push(c2);
                     }
                     level -= 1;
-                });
+                }
             }
             '\n' => pos.new_line(),
             _ => (),

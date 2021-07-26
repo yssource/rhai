@@ -81,18 +81,18 @@ impl FuncInfo {
                 sig.push_str(") -> ");
                 sig.push_str(&return_type);
             } else {
-                sig.push_str(")");
+                sig.push(')');
             }
         } else {
             for x in 0..self.params {
-                sig.push_str("_");
+                sig.push('_');
                 if x < self.params - 1 {
                     sig.push_str(", ");
                 }
             }
 
             if self.func.is_script() {
-                sig.push_str(")");
+                sig.push(')');
             } else {
                 sig.push_str(") -> ?");
             }
@@ -366,7 +366,6 @@ impl Module {
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
     #[inline(always)]
-    #[must_use]
     pub fn gen_fn_signatures(&self) -> impl Iterator<Item = String> + '_ {
         self.functions
             .values()
@@ -630,9 +629,9 @@ impl Module {
             .map(|&name| self.identifiers.get(name))
             .collect();
 
-        self.functions
-            .get_mut(&hash_fn)
-            .map(|f| f.param_names = param_names);
+        if let Some(f) = self.functions.get_mut(&hash_fn) {
+            f.param_names = param_names;
+        }
 
         self
     }

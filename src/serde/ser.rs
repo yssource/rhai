@@ -82,7 +82,6 @@ impl DynamicSerializer {
 /// # Ok(())
 /// # }
 /// ```
-#[must_use]
 pub fn to_dynamic<T: Serialize>(value: T) -> RhaiResult {
     let mut s = DynamicSerializer::new(Default::default());
     value.serialize(&mut s)
@@ -138,27 +137,29 @@ impl Serializer for &mut DynamicSerializer {
 
     fn serialize_i64(self, v: i64) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "only_i32"))]
-        return Ok(v.into());
+        {
+            Ok(v.into())
+        }
         #[cfg(feature = "only_i32")]
         if v > i32::MAX as i64 {
-            return Ok(Dynamic::from(v));
+            Ok(Dynamic::from(v))
         } else {
-            return self.serialize_i32(v as i32);
+            self.serialize_i32(v as i32)
         }
     }
 
     fn serialize_i128(self, v: i128) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "only_i32"))]
         if v > i64::MAX as i128 {
-            return Ok(Dynamic::from(v));
+            Ok(Dynamic::from(v))
         } else {
-            return self.serialize_i64(v as i64);
+            self.serialize_i64(v as i64)
         }
         #[cfg(feature = "only_i32")]
         if v > i32::MAX as i128 {
-            return Ok(Dynamic::from(v));
+            Ok(Dynamic::from(v))
         } else {
-            return self.serialize_i32(v as i32);
+            self.serialize_i32(v as i32)
         }
     }
 
@@ -178,42 +179,44 @@ impl Serializer for &mut DynamicSerializer {
 
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "only_i32"))]
-        return self.serialize_i64(i64::from(v));
+        {
+            self.serialize_i64(i64::from(v))
+        }
         #[cfg(feature = "only_i32")]
         if v > i32::MAX as u32 {
-            return Ok(Dynamic::from(v));
+            Ok(Dynamic::from(v))
         } else {
-            return self.serialize_i32(v as i32);
+            self.serialize_i32(v as i32)
         }
     }
 
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "only_i32"))]
         if v > i64::MAX as u64 {
-            return Ok(Dynamic::from(v));
+            Ok(Dynamic::from(v))
         } else {
-            return self.serialize_i64(v as i64);
+            self.serialize_i64(v as i64)
         }
         #[cfg(feature = "only_i32")]
         if v > i32::MAX as u64 {
-            return Ok(Dynamic::from(v));
+            Ok(Dynamic::from(v))
         } else {
-            return self.serialize_i32(v as i32);
+            self.serialize_i32(v as i32)
         }
     }
 
     fn serialize_u128(self, v: u128) -> Result<Self::Ok, Box<EvalAltResult>> {
         #[cfg(not(feature = "only_i32"))]
         if v > i64::MAX as u128 {
-            return Ok(Dynamic::from(v));
+            Ok(Dynamic::from(v))
         } else {
-            return self.serialize_i64(v as i64);
+            self.serialize_i64(v as i64)
         }
         #[cfg(feature = "only_i32")]
         if v > i32::MAX as u128 {
-            return Ok(Dynamic::from(v));
+            Ok(Dynamic::from(v))
         } else {
-            return self.serialize_i32(v as i32);
+            self.serialize_i32(v as i32)
         }
     }
 

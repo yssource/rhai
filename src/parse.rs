@@ -2115,14 +2115,12 @@ fn parse_expr(
 
         match token {
             Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key) => {
-                match state.engine.custom_syntax.get_key_value(key.as_str()) {
-                    Some((key, syntax)) => {
-                        input.next().expect(NEVER_ENDS);
-                        return parse_custom_syntax(
-                            input, state, lib, settings, key, syntax, token_pos,
-                        );
-                    }
-                    _ => (),
+                if let Some((key, syntax)) = state.engine.custom_syntax.get_key_value(key.as_str())
+                {
+                    input.next().expect(NEVER_ENDS);
+                    return parse_custom_syntax(
+                        input, state, lib, settings, key, syntax, token_pos,
+                    );
                 }
             }
             _ => (),
