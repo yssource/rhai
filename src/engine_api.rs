@@ -1729,7 +1729,7 @@ impl Engine {
         state.source = ast.source_raw().cloned();
         #[cfg(not(feature = "no_module"))]
         {
-            state.resolver = ast.resolver();
+            state.embedded_module_resolver = ast.resolver();
         }
 
         let statements = ast.statements();
@@ -1811,7 +1811,7 @@ impl Engine {
         state.source = ast.source_raw().cloned();
         #[cfg(not(feature = "no_module"))]
         {
-            state.resolver = ast.resolver();
+            state.embedded_module_resolver = ast.resolver();
         }
 
         let statements = ast.statements();
@@ -2052,7 +2052,7 @@ impl Engine {
         let stmt = std::mem::take(ast.statements_mut());
         crate::optimize::optimize_into_ast(self, scope, stmt.into_vec(), lib, optimization_level)
     }
-    /// _(METADATA)_ Generate a list of all registered functions.
+    /// _(metadata)_ Generate a list of all registered functions.
     /// Exported under the `metadata` feature only.
     ///
     /// Functions from the following sources are included, in order:

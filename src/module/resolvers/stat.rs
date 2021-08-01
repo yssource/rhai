@@ -1,4 +1,6 @@
-use crate::{Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Shared};
+use crate::{
+    Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Shared, SmartString,
+};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{collections::BTreeMap, ops::AddAssign};
@@ -72,11 +74,6 @@ impl StaticModuleResolver {
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&str, &mut Shared<Module>)> {
         self.0.iter_mut().map(|(k, v)| (k.as_str(), v))
     }
-    /// Get a mutable iterator of all the modules.
-    #[inline(always)]
-    pub fn into_iter(self) -> impl Iterator<Item = (Identifier, Shared<Module>)> {
-        self.0.into_iter()
-    }
     /// Get an iterator of all the [module][Module] paths.
     #[inline(always)]
     pub fn paths(&self) -> impl Iterator<Item = &str> {
@@ -114,6 +111,15 @@ impl StaticModuleResolver {
             self.0.extend(other.0.into_iter());
         }
         self
+    }
+}
+
+impl IntoIterator for StaticModuleResolver {
+    type Item = (Identifier, Shared<Module>);
+    type IntoIter = std::collections::btree_map::IntoIter<SmartString, Shared<Module>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 

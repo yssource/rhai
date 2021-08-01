@@ -98,7 +98,7 @@ impl<'a> NativeCallContext<'a> {
             lib,
         }
     }
-    /// _(INTERNALS)_ Create a new [`NativeCallContext`].
+    /// _(internals)_ Create a new [`NativeCallContext`].
     /// Exported under the `internals` feature only.
     ///
     /// Not available under `no_module`.
@@ -156,7 +156,7 @@ impl<'a> NativeCallContext<'a> {
     ) -> impl Iterator<Item = (&crate::Identifier, &Shared<Module>)> {
         self.mods.iter().flat_map(|&m| m.iter_raw())
     }
-    /// _(INTERNALS)_ The current set of modules imported via `import` statements.
+    /// _(internals)_ The current set of modules imported via `import` statements.
     /// Exported under the `internals` feature only.
     ///
     /// Not available under `no_module`.
@@ -172,7 +172,7 @@ impl<'a> NativeCallContext<'a> {
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
     }
-    /// _(INTERNALS)_ The current set of namespaces containing definitions of all script-defined functions.
+    /// _(internals)_ The current set of namespaces containing definitions of all script-defined functions.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]

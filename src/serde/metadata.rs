@@ -43,7 +43,7 @@ impl From<crate::FnAccess> for FnAccess {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FnParam {
     pub name: String,
@@ -68,6 +68,15 @@ impl PartialOrd for FnParam {
                     .unwrap(),
             },
         })
+    }
+}
+
+impl Ord for FnParam {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.name.cmp(&other.name) {
+            Ordering::Equal => self.typ.cmp(&other.typ),
+            cmp => cmp,
+        }
     }
 }
 
@@ -128,7 +137,7 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
                     let name = seg
                         .next()
                         .map(|s| s.trim().to_string())
-                        .unwrap_or("_".to_string());
+                        .unwrap_or_else(|| "_".to_string());
                     let typ = seg.next().map(|s| s.trim().to_string());
                     FnParam { name, typ }
                 })
@@ -209,7 +218,7 @@ impl From<&crate::Module> for ModuleMetadata {
 
 #[cfg(feature = "metadata")]
 impl Engine {
-    /// _(METADATA)_ Generate a list of all functions (including those defined in an
+    /// _(metadata)_ Generate a list of all functions (including those defined in an
     /// [`AST`][crate::AST]) in JSON format.
     /// Exported under the `metadata` feature only.
     ///
@@ -218,7 +227,6 @@ impl Engine {
     /// 2) Functions registered into the global namespace
     /// 3) Functions in static modules
     /// 4) Functions in global modules (optional)
-    #[must_use]
     pub fn gen_fn_metadata_with_ast_to_json(
         &self,
         ast: &AST,
@@ -258,7 +266,6 @@ impl Engine {
     /// 1) Functions registered into the global namespace
     /// 2) Functions in static modules
     /// 3) Functions in global modules (optional)
-    #[must_use]
     pub fn gen_fn_metadata_to_json(&self, include_global: bool) -> serde_json::Result<String> {
         self.gen_fn_metadata_with_ast_to_json(&Default::default(), include_global)
     }

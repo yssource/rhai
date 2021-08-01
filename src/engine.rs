@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt};
+use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt, VarDeclaration};
 use crate::custom_syntax::CustomSyntax;
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_hash::get_hasher;
@@ -40,7 +40,7 @@ use crate::ast::FnCallHashes;
 
 pub type Precedence = NonZeroU8;
 
-/// _(INTERNALS)_ A stack of imported [modules][Module].
+/// _(internals)_ A stack of imported [modules][Module].
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -620,7 +620,7 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
     }
 }
 
-/// _(INTERNALS)_ An entry in a function resolution cache.
+/// _(internals)_ An entry in a function resolution cache.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -634,7 +634,7 @@ pub struct FnResolutionCacheEntry {
     pub source: Option<Identifier>,
 }
 
-/// _(INTERNALS)_ A function resolution cache.
+/// _(internals)_ A function resolution cache.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -642,7 +642,7 @@ pub struct FnResolutionCacheEntry {
 /// This type is volatile and may change.
 pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
 
-/// _(INTERNALS)_ A type that holds all the current states of the [`Engine`].
+/// _(internals)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -653,19 +653,20 @@ pub struct EvalState {
     /// Source of the current context.
     pub source: Option<Identifier>,
     /// Normally, access to variables are parsed with a relative offset into the [`Scope`] to avoid a lookup.
-    /// In some situation, e.g. after running an `eval` statement, subsequent offsets may become mis-aligned.
+    /// In some situation, e.g. after running an `eval` statement, or after a custom syntax statement,
+    /// subsequent offsets may become mis-aligned.
     /// When that happens, this flag is turned on to force a [`Scope`] search by name.
     pub always_search_scope: bool,
     /// Level of the current scope.  The global (root) level is zero, a new block (or function call)
     /// is one level higher, and so on.
     pub scope_level: usize,
     /// Number of operations performed.
-    pub operations: u64,
+    pub num_operations: u64,
     /// Number of modules loaded.
-    pub modules: usize,
+    pub num_modules: usize,
     /// Embedded module resolver.
     #[cfg(not(feature = "no_module"))]
-    pub resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
+    pub embedded_module_resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
     /// Stack of function resolution caches.
     fn_resolution_caches: Vec<FnResolutionCache>,
 }
@@ -679,10 +680,10 @@ impl EvalState {
             source: None,
             always_search_scope: false,
             scope_level: 0,
-            operations: 0,
-            modules: 0,
+            num_operations: 0,
+            num_modules: 0,
             #[cfg(not(feature = "no_module"))]
-            resolver: None,
+            embedded_module_resolver: None,
             fn_resolution_caches: Vec::new(),
         }
     }
@@ -723,7 +724,7 @@ impl EvalState {
     }
 }
 
-/// _(INTERNALS)_ A type containing all the limits imposed by the [`Engine`].
+/// _(internals)_ A type containing all the limits imposed by the [`Engine`].
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -833,7 +834,7 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.mods.iter()
     }
-    /// _(INTERNALS)_ The current set of modules imported via `import` statements.
+    /// _(internals)_ The current set of modules imported via `import` statements.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[cfg(not(feature = "no_module"))]
@@ -847,7 +848,7 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
     }
-    /// _(INTERNALS)_ The current set of namespaces containing definitions of all script-defined functions.
+    /// _(internals)_ The current set of namespaces containing definitions of all script-defined functions.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[inline(always)]
@@ -2850,12 +2851,11 @@ impl Engine {
             }
 
             // Let/const statement
-            Stmt::Let(expr, x, export, _) | Stmt::Const(expr, x, export, _) => {
+            Stmt::Var(expr, x, var_type, export, _) => {
                 let name = &x.name;
-                let entry_type = match stmt {
-                    Stmt::Let(_, _, _, _) => AccessMode::ReadWrite,
-                    Stmt::Const(_, _, _, _) => AccessMode::ReadOnly,
-                    _ => unreachable!("should be Stmt::Let or Stmt::Const, but gets {:?}", stmt),
+                let entry_type = match var_type {
+                    VarDeclaration::Let => AccessMode::ReadWrite,
+                    VarDeclaration::Const => AccessMode::ReadOnly,
                 };
 
                 let value = self
@@ -2914,7 +2914,7 @@ impl Engine {
             Stmt::Import(expr, export, _pos) => {
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
-                if state.modules >= self.max_modules() {
+                if state.num_modules >= self.max_modules() {
                     return EvalAltResult::ErrorTooManyModules(*_pos).into();
                 }
 
@@ -2928,7 +2928,7 @@ impl Engine {
                     let path_pos = expr.position();
 
                     let module = state
-                        .resolver
+                        .embedded_module_resolver
                         .as_ref()
                         .and_then(|r| match r.resolve(self, source, &path, path_pos) {
                             Err(err)
@@ -2958,7 +2958,7 @@ impl Engine {
                         }
                     }
 
-                    state.modules += 1;
+                    state.num_modules += 1;
 
                     Ok(Dynamic::UNIT)
                 } else {
@@ -3130,16 +3130,16 @@ impl Engine {
         state: &mut EvalState,
         pos: Position,
     ) -> Result<(), Box<EvalAltResult>> {
-        state.operations += 1;
+        state.num_operations += 1;
 
         // Guard against too many operations
-        if self.max_operations() > 0 && state.operations > self.max_operations() {
+        if self.max_operations() > 0 && state.num_operations > self.max_operations() {
             return EvalAltResult::ErrorTooManyOperations(pos).into();
         }
 
         // Report progress - only in steps
         if let Some(ref progress) = self.progress {
-            if let Some(token) = progress(state.operations) {
+            if let Some(token) = progress(state.num_operations) {
                 // Terminate script if progress returns a termination token
                 return EvalAltResult::ErrorTerminated(token, pos).into();
             }

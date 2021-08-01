@@ -40,7 +40,7 @@ pub enum FnAccess {
     Private,
 }
 
-/// _(INTERNALS)_ A type containing information on a scripted function.
+/// _(internals)_ A type containing information on a scripted function.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -68,7 +68,7 @@ pub struct ScriptFnDef {
     /// Not available under `no_closure`.
     #[cfg(not(feature = "no_closure"))]
     pub externals: std::collections::BTreeSet<Identifier>,
-    /// _(METADATA)_ Function doc-comments (if any).
+    /// _(metadata)_ Function doc-comments (if any).
     /// Exported under the `metadata` feature only.
     ///
     /// Not available under `no_function`.
@@ -104,7 +104,7 @@ impl fmt::Display for ScriptFnDef {
 #[cfg(not(feature = "no_function"))]
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct ScriptFnMetadata<'a> {
-    /// _(METADATA)_ Function doc-comments (if any).
+    /// _(metadata)_ Function doc-comments (if any).
     /// Exported under the `metadata` feature only.
     ///
     /// Not available under `no_function`.
@@ -278,7 +278,7 @@ impl AST {
     pub(crate) fn statements(&self) -> &[Stmt] {
         &self.body.0
     }
-    /// _(INTERNALS)_ Get the statements.
+    /// _(internals)_ Get the statements.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
     #[deprecated = "this method is volatile and may change"]
@@ -303,7 +303,7 @@ impl AST {
     pub(crate) fn shared_lib(&self) -> Shared<Module> {
         self.functions.clone()
     }
-    /// _(INTERNALS)_ Get the internal shared [`Module`] containing all script-defined functions.
+    /// _(internals)_ Get the internal shared [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
     ///
     /// Not available under `no_function` or `no_module`.
@@ -323,7 +323,7 @@ impl AST {
     pub(crate) fn lib(&self) -> &Module {
         &self.functions
     }
-    /// _(INTERNALS)_ Get the internal [`Module`] containing all script-defined functions.
+    /// _(internals)_ Get the internal [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
     ///
     /// Not available under `no_function`.
@@ -344,7 +344,7 @@ impl AST {
     ) -> Option<Shared<crate::module::resolvers::StaticModuleResolver>> {
         self.resolver.clone()
     }
-    /// _(INTERNALS)_ Get the embedded [module resolver][crate::ModuleResolver].
+    /// _(internals)_ Get the embedded [module resolver][crate::ModuleResolver].
     /// Exported under the `internals` feature only.
     ///
     /// Not available under `no_module`.
@@ -762,7 +762,7 @@ impl AST {
 
         true
     }
-    /// _(INTERNALS)_ Recursively walk the [`AST`], including function bodies (if any).
+    /// _(internals)_ Recursively walk the [`AST`], including function bodies (if any).
     /// Return `false` from the callback to terminate the walk.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
@@ -816,7 +816,7 @@ impl AsRef<Module> for AST {
     }
 }
 
-/// _(INTERNALS)_ An identifier containing a name and a [position][Position].
+/// _(internals)_ An identifier containing a name and a [position][Position].
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -837,7 +837,7 @@ impl fmt::Debug for Ident {
     }
 }
 
-/// _(INTERNALS)_ A type encapsulating the mode of a `return`/`throw` statement.
+/// _(internals)_ A type encapsulating the mode of a `return`/`throw` statement.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -851,7 +851,7 @@ pub enum ReturnType {
     Exception,
 }
 
-/// _(INTERNALS)_ An [`AST`] node, consisting of either an [`Expr`] or a [`Stmt`].
+/// _(internals)_ An [`AST`] node, consisting of either an [`Expr`] or a [`Stmt`].
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -875,7 +875,7 @@ impl<'a> From<&'a Expr> for ASTNode<'a> {
     }
 }
 
-/// _(INTERNALS)_ A statements block.
+/// _(internals)_ A statements block.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -950,7 +950,19 @@ impl From<StmtBlock> for Stmt {
     }
 }
 
-/// _(INTERNALS)_ A statement.
+/// _(internals)_ Type of variable declaration.
+/// Exported under the `internals` feature only.
+///
+/// # Volatile Data Structure
+///
+/// This type is volatile and may change.
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
+pub enum VarDeclaration {
+    Let,
+    Const,
+}
+
+/// _(internals)_ A statement.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -974,10 +986,8 @@ pub enum Stmt {
     Do(Box<StmtBlock>, Expr, bool, Position),
     /// `for` `(` id `,` counter `)` `in` expr `{` stmt `}`
     For(Expr, Box<(Ident, Option<Ident>, StmtBlock)>, Position),
-    /// \[`export`\] `let` id `=` expr
-    Let(Expr, Box<Ident>, bool, Position),
-    /// \[`export`\] `const` id `=` expr
-    Const(Expr, Box<Ident>, bool, Position),
+    /// \[`export`\] `let`/`const` id `=` expr
+    Var(Expr, Box<Ident>, VarDeclaration, bool, Position),
     /// expr op`=` expr
     Assignment(Box<(Expr, Option<OpAssignment<'static>>, Expr)>, Position),
     /// func `(` expr `,` ... `)`
@@ -1058,8 +1068,7 @@ impl Stmt {
             | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
             | Self::Return(_, _, pos)
-            | Self::Let(_, _, _, pos)
-            | Self::Const(_, _, _, pos)
+            | Self::Var(_, _, _, _, pos)
             | Self::TryCatch(_, pos) => *pos,
 
             Self::Expr(x) => x.position(),
@@ -1088,8 +1097,7 @@ impl Stmt {
             | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
             | Self::Return(_, _, pos)
-            | Self::Let(_, _, _, pos)
-            | Self::Const(_, _, _, pos)
+            | Self::Var(_, _, _, _, pos)
             | Self::TryCatch(_, pos) => *pos = new_pos,
 
             Self::Expr(x) => {
@@ -1123,8 +1131,7 @@ impl Stmt {
             | Self::For(_, _, _)
             | Self::TryCatch(_, _) => false,
 
-            Self::Let(_, _, _, _)
-            | Self::Const(_, _, _, _)
+            Self::Var(_, _, _, _, _)
             | Self::Assignment(_, _)
             | Self::Continue(_)
             | Self::Break(_)
@@ -1151,8 +1158,7 @@ impl Stmt {
             // A No-op requires a semicolon in order to know it is an empty statement!
             Self::Noop(_) => false,
 
-            Self::Let(_, _, _, _)
-            | Self::Const(_, _, _, _)
+            Self::Var(_, _, _, _, _)
             | Self::Assignment(_, _)
             | Self::FnCall(_, _)
             | Self::Expr(_)
@@ -1193,10 +1199,7 @@ impl Stmt {
                 condition.is_pure() && block.0.iter().all(Stmt::is_pure)
             }
             Self::For(iterable, x, _) => iterable.is_pure() && (x.2).0.iter().all(Stmt::is_pure),
-            Self::Let(_, _, _, _)
-            | Self::Const(_, _, _, _)
-            | Self::Assignment(_, _)
-            | Self::FnCall(_, _) => false,
+            Self::Var(_, _, _, _, _) | Self::Assignment(_, _) | Self::FnCall(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::Return(_, _, _) => false,
             Self::TryCatch(x, _) => {
@@ -1222,7 +1225,7 @@ impl Stmt {
     #[must_use]
     pub fn is_internally_pure(&self) -> bool {
         match self {
-            Self::Let(expr, _, _, _) | Self::Const(expr, _, _, _) => expr.is_pure(),
+            Self::Var(expr, _, _, _, _) => expr.is_pure(),
 
             #[cfg(not(feature = "no_module"))]
             Self::Import(expr, _, _) => expr.is_pure(),
@@ -1260,7 +1263,7 @@ impl Stmt {
         }
 
         match self {
-            Self::Let(e, _, _, _) | Self::Const(e, _, _, _) => {
+            Self::Var(e, _, _, _, _) => {
                 if !e.walk(path, on_node) {
                     return false;
                 }
@@ -1375,7 +1378,7 @@ impl Stmt {
     }
 }
 
-/// _(INTERNALS)_ A custom syntax expression.
+/// _(internals)_ A custom syntax expression.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -1391,7 +1394,7 @@ pub struct CustomExpr {
     pub tokens: StaticVec<Identifier>,
 }
 
-/// _(INTERNALS)_ A binary expression.
+/// _(internals)_ A binary expression.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -1405,7 +1408,7 @@ pub struct BinaryExpr {
     pub rhs: Expr,
 }
 
-/// _(INTERNALS)_ An op-assignment operator.
+/// _(internals)_ An op-assignment operator.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -1443,7 +1446,7 @@ impl OpAssignment<'_> {
     }
 }
 
-/// _(INTERNALS)_ An set of function call hashes.
+/// _(internals)_ An set of function call hashes.
 /// Exported under the `internals` feature only.
 ///
 /// Two separate hashes are pre-calculated because of the following pattern:
@@ -1530,7 +1533,7 @@ impl FnCallHashes {
     }
 }
 
-/// _(INTERNALS)_ A function call.
+/// _(internals)_ A function call.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -1686,7 +1689,7 @@ impl FloatWrapper<FLOAT> {
     }
 }
 
-/// _(INTERNALS)_ An expression sub-tree.
+/// _(internals)_ An expression sub-tree.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
