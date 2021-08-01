@@ -950,6 +950,18 @@ impl From<StmtBlock> for Stmt {
     }
 }
 
+/// _(internals)_ Type of variable declaration.
+/// Exported under the `internals` feature only.
+///
+/// # Volatile Data Structure
+///
+/// This type is volatile and may change.
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
+pub enum VarDeclaration {
+    Let,
+    Const,
+}
+
 /// _(internals)_ A statement.
 /// Exported under the `internals` feature only.
 ///
@@ -974,10 +986,8 @@ pub enum Stmt {
     Do(Box<StmtBlock>, Expr, bool, Position),
     /// `for` `(` id `,` counter `)` `in` expr `{` stmt `}`
     For(Expr, Box<(Ident, Option<Ident>, StmtBlock)>, Position),
-    /// \[`export`\] `let` id `=` expr
-    Let(Expr, Box<Ident>, bool, Position),
-    /// \[`export`\] `const` id `=` expr
-    Const(Expr, Box<Ident>, bool, Position),
+    /// \[`export`\] `let`/`const` id `=` expr
+    Var(Expr, Box<Ident>, VarDeclaration, bool, Position),
     /// expr op`=` expr
     Assignment(Box<(Expr, Option<OpAssignment<'static>>, Expr)>, Position),
     /// func `(` expr `,` ... `)`
@@ -1058,8 +1068,7 @@ impl Stmt {
             | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
             | Self::Return(_, _, pos)
-            | Self::Let(_, _, _, pos)
-            | Self::Const(_, _, _, pos)
+            | Self::Var(_, _, _, _, pos)
             | Self::TryCatch(_, pos) => *pos,
 
             Self::Expr(x) => x.position(),
@@ -1088,8 +1097,7 @@ impl Stmt {
             | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
             | Self::Return(_, _, pos)
-            | Self::Let(_, _, _, pos)
-            | Self::Const(_, _, _, pos)
+            | Self::Var(_, _, _, _, pos)
             | Self::TryCatch(_, pos) => *pos = new_pos,
 
             Self::Expr(x) => {
@@ -1123,8 +1131,7 @@ impl Stmt {
             | Self::For(_, _, _)
             | Self::TryCatch(_, _) => false,
 
-            Self::Let(_, _, _, _)
-            | Self::Const(_, _, _, _)
+            Self::Var(_, _, _, _, _)
             | Self::Assignment(_, _)
             | Self::Continue(_)
             | Self::Break(_)
@@ -1151,8 +1158,7 @@ impl Stmt {
             // A No-op requires a semicolon in order to know it is an empty statement!
             Self::Noop(_) => false,
 
-            Self::Let(_, _, _, _)
-            | Self::Const(_, _, _, _)
+            Self::Var(_, _, _, _, _)
             | Self::Assignment(_, _)
             | Self::FnCall(_, _)
             | Self::Expr(_)
@@ -1193,10 +1199,7 @@ impl Stmt {
                 condition.is_pure() && block.0.iter().all(Stmt::is_pure)
             }
             Self::For(iterable, x, _) => iterable.is_pure() && (x.2).0.iter().all(Stmt::is_pure),
-            Self::Let(_, _, _, _)
-            | Self::Const(_, _, _, _)
-            | Self::Assignment(_, _)
-            | Self::FnCall(_, _) => false,
+            Self::Var(_, _, _, _, _) | Self::Assignment(_, _) | Self::FnCall(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::Return(_, _, _) => false,
             Self::TryCatch(x, _) => {
@@ -1222,7 +1225,7 @@ impl Stmt {
     #[must_use]
     pub fn is_internally_pure(&self) -> bool {
         match self {
-            Self::Let(expr, _, _, _) | Self::Const(expr, _, _, _) => expr.is_pure(),
+            Self::Var(expr, _, _, _, _) => expr.is_pure(),
 
             #[cfg(not(feature = "no_module"))]
             Self::Import(expr, _, _) => expr.is_pure(),
@@ -1260,7 +1263,7 @@ impl Stmt {
         }
 
         match self {
-            Self::Let(e, _, _, _) | Self::Const(e, _, _, _) => {
+            Self::Var(e, _, _, _, _) => {
                 if !e.walk(path, on_node) {
                     return false;
                 }

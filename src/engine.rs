@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt};
+use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt, VarDeclaration};
 use crate::custom_syntax::CustomSyntax;
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_hash::get_hasher;
@@ -2851,12 +2851,11 @@ impl Engine {
             }
 
             // Let/const statement
-            Stmt::Let(expr, x, export, _) | Stmt::Const(expr, x, export, _) => {
+            Stmt::Var(expr, x, var_type, export, _) => {
                 let name = &x.name;
-                let entry_type = match stmt {
-                    Stmt::Let(_, _, _, _) => AccessMode::ReadWrite,
-                    Stmt::Const(_, _, _, _) => AccessMode::ReadOnly,
-                    _ => unreachable!("should be Stmt::Let or Stmt::Const, but gets {:?}", stmt),
+                let entry_type = match var_type {
+                    VarDeclaration::Let => AccessMode::ReadWrite,
+                    VarDeclaration::Const => AccessMode::ReadOnly,
                 };
 
                 let value = self

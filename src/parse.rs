@@ -2,7 +2,7 @@
 
 use crate::ast::{
     BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ReturnType,
-    ScriptFnDef, Stmt, StmtBlock,
+    ScriptFnDef, Stmt, StmtBlock, VarDeclaration,
 };
 use crate::custom_syntax::{
     CustomSyntax, CUSTOM_SYNTAX_MARKER_BLOCK, CUSTOM_SYNTAX_MARKER_BOOL, CUSTOM_SYNTAX_MARKER_EXPR,
@@ -2383,9 +2383,21 @@ fn parse_let(
 
     match var_type {
         // let name = expr
-        AccessMode::ReadWrite => Ok(Stmt::Let(expr, var_def.into(), export, settings.pos)),
+        AccessMode::ReadWrite => Ok(Stmt::Var(
+            expr,
+            var_def.into(),
+            VarDeclaration::Let,
+            export,
+            settings.pos,
+        )),
         // const name = { expr:constant }
-        AccessMode::ReadOnly => Ok(Stmt::Const(expr, var_def.into(), export, settings.pos)),
+        AccessMode::ReadOnly => Ok(Stmt::Var(
+            expr,
+            var_def.into(),
+            VarDeclaration::Const,
+            export,
+            settings.pos,
+        )),
     }
 }
 
