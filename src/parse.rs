@@ -2004,16 +2004,17 @@ fn parse_custom_syntax(
     }
 
     let parse_func = syntax.parse.as_ref();
+    let mut required_token: ImmutableString = key.into();
 
-    segments.push(key.into());
-    tokens.push(key.into());
+    tokens.push(required_token.clone().into());
+    segments.push(required_token.clone());
 
     loop {
         let (fwd_token, fwd_pos) = input.peek().expect(NEVER_ENDS);
         settings.pos = *fwd_pos;
         let settings = settings.level_up();
 
-        let required_token = match parse_func(&segments, fwd_token.syntax().as_ref()) {
+        required_token = match parse_func(&segments, fwd_token.syntax().as_ref()) {
             Ok(Some(seg)) => seg,
             Ok(None) => break,
             Err(err) => return Err(err.0.into_err(settings.pos)),
@@ -2120,11 +2121,23 @@ fn parse_custom_syntax(
     keywords.shrink_to_fit();
     tokens.shrink_to_fit();
 
+    const KEYWORD_SEMICOLON: &str = Token::SemiColon.literal_syntax();
+    const KEYWORD_CLOSE_BRACE: &str = Token::RightBrace.literal_syntax();
+
+    let self_terminated = match required_token.as_str() {
+        // It is self-terminating if the last symbol is a block
+        CUSTOM_SYNTAX_MARKER_BLOCK => true,
+        // If the last symbol is `;` or `}`, it is self-terminating
+        KEYWORD_SEMICOLON | KEYWORD_CLOSE_BRACE => true,
+        _ => false,
+    };
+
     Ok(Expr::Custom(
         CustomExpr {
             keywords,
             tokens,
             scope_may_be_changed: syntax.scope_may_be_changed,
+            self_terminated,
         }
         .into(),
         pos,

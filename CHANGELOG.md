@@ -8,6 +8,7 @@ Enhancements
 ------------
 
 * `$symbol$` is supported in custom syntax to match any symbol.
+* Custom syntax with `$block$`, `}` or `;` as the last symbol are now self-terminating (i.e. no need to attach a terminating `;`).
 * `Dynamic::as_string` and `Dynamic::as_immutable_string` are deprecated and replaced by `into_string` and `into_immutable_string` respectively.
 * Added a number of constants to `Dynamic`.
 * Added a number of constants and `fromXXX` constant methods to `Dynamic`.

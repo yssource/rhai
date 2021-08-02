@@ -136,6 +136,16 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
         ))
     );
 
+    // Check self-termination
+    engine
+        .register_custom_syntax(&["test1", "$block$"], true, |_, _| Ok(Dynamic::UNIT))?
+        .register_custom_syntax(&["test2", "}"], true, |_, _| Ok(Dynamic::UNIT))?
+        .register_custom_syntax(&["test3", ";"], true, |_, _| Ok(Dynamic::UNIT))?;
+
+    assert_eq!(engine.eval::<INT>("test1 { x = y + z; } 42")?, 42);
+    assert_eq!(engine.eval::<INT>("test2 } 42")?, 42);
+    assert_eq!(engine.eval::<INT>("test3; 42")?, 42);
+
     Ok(())
 }
 
