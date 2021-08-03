@@ -2,7 +2,7 @@
 
 use crate::ast::{
     BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ReturnType,
-    ScriptFnDef, Stmt, StmtBlock, VarDeclaration,
+    ScriptFnDef, Stmt, StmtBlock, AST_FLAGS::*,
 };
 use crate::custom_syntax::{
     CustomSyntax, CUSTOM_SYNTAX_MARKER_BLOCK, CUSTOM_SYNTAX_MARKER_BOOL, CUSTOM_SYNTAX_MARKER_EXPR,
@@ -2224,9 +2224,9 @@ fn parse_do(
     settings.is_breakable = true;
     let body = parse_block(input, state, lib, settings.level_up())?;
 
-    let is_while = match input.next().expect(NEVER_ENDS) {
-        (Token::While, _) => true,
-        (Token::Until, _) => false,
+    let negated = match input.next().expect(NEVER_ENDS) {
+        (Token::While, _) => AST_FLAG_NONE,
+        (Token::Until, _) => AST_FLAG_NEGATED,
         (_, pos) => {
             return Err(
                 PERR::MissingToken(Token::While.into(), "for the do statement".into())
@@ -2244,7 +2244,7 @@ fn parse_do(
     Ok(Stmt::Do(
         Box::new(body.into()),
         guard,
-        is_while,
+        negated,
         settings.pos,
     ))
 }
@@ -2381,21 +2381,20 @@ fn parse_let(
 
     state.stack.push((name, var_type));
 
+    let export = if export {
+        AST_FLAG_EXPORTED
+    } else {
+        AST_FLAG_NONE
+    };
+
     match var_type {
         // let name = expr
-        AccessMode::ReadWrite => Ok(Stmt::Var(
-            expr,
-            var_def.into(),
-            VarDeclaration::Let,
-            export,
-            settings.pos,
-        )),
+        AccessMode::ReadWrite => Ok(Stmt::Var(expr, var_def.into(), export, settings.pos)),
         // const name = { expr:constant }
         AccessMode::ReadOnly => Ok(Stmt::Var(
             expr,
             var_def.into(),
-            VarDeclaration::Const,
-            export,
+            AST_FLAG_CONSTANT + export,
             settings.pos,
         )),
     }

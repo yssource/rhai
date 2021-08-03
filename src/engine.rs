@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt, VarDeclaration};
+use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt, AST_FLAGS::*};
 use crate::custom_syntax::CustomSyntax;
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_hash::get_hasher;
@@ -2569,7 +2569,9 @@ impl Engine {
             },
 
             // Do loop
-            Stmt::Do(body, expr, is_while, _) => loop {
+            Stmt::Do(body, expr, flags, _) => loop {
+                let is_while = !flags.contains(AST_FLAG_NEGATED);
+
                 if !body.is_empty() {
                     match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
                     {
@@ -2587,7 +2589,7 @@ impl Engine {
                     .as_bool()
                     .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, expr.position()))?;
 
-                if condition ^ *is_while {
+                if condition ^ is_while {
                     return Ok(Dynamic::UNIT);
                 }
             },
@@ -2851,12 +2853,14 @@ impl Engine {
             }
 
             // Let/const statement
-            Stmt::Var(expr, x, var_type, export, _) => {
+            Stmt::Var(expr, x, flags, _) => {
                 let name = &x.name;
-                let entry_type = match var_type {
-                    VarDeclaration::Let => AccessMode::ReadWrite,
-                    VarDeclaration::Const => AccessMode::ReadOnly,
+                let entry_type = if flags.contains(AST_FLAG_CONSTANT) {
+                    AccessMode::ReadOnly
+                } else {
+                    AccessMode::ReadWrite
                 };
+                let export = flags.contains(AST_FLAG_EXPORTED);
 
                 let value = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
@@ -2893,9 +2897,9 @@ impl Engine {
 
                     (
                         name.to_string().into(),
-                        if *export { Some(name.clone()) } else { None },
+                        if export { Some(name.clone()) } else { None },
                     )
-                } else if *export {
+                } else if export {
                     unreachable!("exported variable not on global level");
                 } else {
                     (unsafe_cast_var_name_to_lifetime(name).into(), None)

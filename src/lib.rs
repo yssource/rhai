@@ -227,8 +227,8 @@ pub use token::{InputStream, Token, TokenizeState, TokenizerControl, TokenizerCo
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
 pub use ast::{
-    ASTNode, BinaryExpr, CustomExpr, Expr, FloatWrapper, FnCallExpr, FnCallHashes, Ident,
-    OpAssignment, ReturnType, ScriptFnDef, Stmt, StmtBlock, VarDeclaration,
+    ASTNode, BinaryExpr, BitOptions, CustomExpr, Expr, FloatWrapper, FnCallExpr, FnCallHashes,
+    Ident, OpAssignment, ReturnType, ScriptFnDef, Stmt, StmtBlock, AST_FLAGS::*,
 };
 
 #[cfg(feature = "internals")]

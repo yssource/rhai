@@ -16,7 +16,7 @@ use std::{
     hash::Hash,
     mem,
     num::{NonZeroU8, NonZeroUsize},
-    ops::{Add, AddAssign, Deref, DerefMut},
+    ops::{Add, AddAssign, Deref, DerefMut, Not, Sub, SubAssign},
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -950,16 +950,108 @@ impl From<StmtBlock> for Stmt {
     }
 }
 
-/// _(internals)_ Type of variable declaration.
+/// A type that holds a configuration option with bit-flags.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
-pub enum VarDeclaration {
-    Let,
-    Const,
+#[derive(PartialEq, Eq, Copy, Clone, Hash, Default)]
+pub struct BitOptions(u8);
+
+impl BitOptions {
+    /// Does this [`BitOptions`] contain a particular option flag?
+    #[inline(always)]
+    pub const fn contains(self, flag: Self) -> bool {
+        self.0 & flag.0 != 0
+    }
+}
+
+impl Not for BitOptions {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        Self(!self.0)
+    }
+}
+
+impl Add for BitOptions {
+    type Output = Self;
+
+    #[inline(always)]
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl AddAssign for BitOptions {
+    #[inline(always)]
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0
+    }
+}
+
+impl Sub for BitOptions {
+    type Output = Self;
+
+    #[inline(always)]
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 & !rhs.0)
+    }
+}
+
+impl SubAssign for BitOptions {
+    #[inline(always)]
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 &= !rhs.0
+    }
+}
+
+/// Option bit-flags for [`AST`] nodes.
+#[allow(non_snake_case)]
+pub mod AST_FLAGS {
+    use super::BitOptions;
+
+    /// _(internals)_ No options for the [`AST`][crate::AST] node.
+    /// Exported under the `internals` feature only.
+    pub const AST_FLAG_NONE: BitOptions = BitOptions(0b0000_0000);
+    /// _(internals)_ The [`AST`][crate::AST] node is constant.
+    /// Exported under the `internals` feature only.
+    pub const AST_FLAG_CONSTANT: BitOptions = BitOptions(0b0000_0001);
+    /// _(internals)_ The [`AST`][crate::AST] node is exported.
+    /// Exported under the `internals` feature only.
+    pub const AST_FLAG_EXPORTED: BitOptions = BitOptions(0b0000_0010);
+    /// _(internals)_ The [`AST`][crate::AST] node is in negated mode.
+    /// Exported under the `internals` feature only.
+    pub const AST_FLAG_NEGATED: BitOptions = BitOptions(0b0000_0100);
+
+    impl std::fmt::Debug for BitOptions {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let mut has_flags = false;
+
+            f.write_str("(")?;
+            if self.contains(AST_FLAG_CONSTANT) {
+                if has_flags {
+                    f.write_str("+")?;
+                }
+                f.write_str("Constant")?;
+                has_flags = true;
+            }
+            if self.contains(AST_FLAG_EXPORTED) {
+                if has_flags {
+                    f.write_str("+")?;
+                }
+                f.write_str("Exported")?;
+                has_flags = true;
+            }
+            if self.contains(AST_FLAG_NEGATED) {
+                if has_flags {
+                    f.write_str("+")?;
+                }
+                f.write_str("Negated")?;
+                //has_flags = true;
+            }
+            f.write_str(")")?;
+
+            Ok(())
+        }
+    }
 }
 
 /// _(internals)_ A statement.
@@ -983,11 +1075,21 @@ pub enum Stmt {
     /// `while` expr `{` stmt `}`
     While(Expr, Box<StmtBlock>, Position),
     /// `do` `{` stmt `}` `while`|`until` expr
-    Do(Box<StmtBlock>, Expr, bool, Position),
+    ///
+    /// ### Option flags
+    ///
+    /// * [`AST_FLAG_NONE`][AST_FLAGS::AST_FLAG_NONE] = `while`
+    /// * [`AST_FLAG_NEGATED`][AST_FLAGS::AST_FLAG_NEGATED] = `until`
+    Do(Box<StmtBlock>, Expr, BitOptions, Position),
     /// `for` `(` id `,` counter `)` `in` expr `{` stmt `}`
     For(Expr, Box<(Ident, Option<Ident>, StmtBlock)>, Position),
     /// \[`export`\] `let`/`const` id `=` expr
-    Var(Expr, Box<Ident>, VarDeclaration, bool, Position),
+    ///
+    /// ### Option flags
+    ///
+    /// * [`AST_FLAG_EXPORTED`][AST_FLAGS::AST_FLAG_EXPORTED] = `export`
+    /// * [`AST_FLAG_CONSTANT`][AST_FLAGS::AST_FLAG_CONSTANT] = `const`
+    Var(Expr, Box<Ident>, BitOptions, Position),
     /// expr op`=` expr
     Assignment(Box<(Expr, Option<OpAssignment<'static>>, Expr)>, Position),
     /// func `(` expr `,` ... `)`
@@ -1068,7 +1170,7 @@ impl Stmt {
             | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
             | Self::Return(_, _, pos)
-            | Self::Var(_, _, _, _, pos)
+            | Self::Var(_, _, _, pos)
             | Self::TryCatch(_, pos) => *pos,
 
             Self::Expr(x) => x.position(),
@@ -1097,7 +1199,7 @@ impl Stmt {
             | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
             | Self::Return(_, _, pos)
-            | Self::Var(_, _, _, _, pos)
+            | Self::Var(_, _, _, pos)
             | Self::TryCatch(_, pos) => *pos = new_pos,
 
             Self::Expr(x) => {
@@ -1131,7 +1233,7 @@ impl Stmt {
             | Self::For(_, _, _)
             | Self::TryCatch(_, _) => false,
 
-            Self::Var(_, _, _, _, _)
+            Self::Var(_, _, _, _)
             | Self::Assignment(_, _)
             | Self::Continue(_)
             | Self::Break(_)
@@ -1158,7 +1260,7 @@ impl Stmt {
             // A No-op requires a semicolon in order to know it is an empty statement!
             Self::Noop(_) => false,
 
-            Self::Var(_, _, _, _, _)
+            Self::Var(_, _, _, _)
             | Self::Assignment(_, _)
             | Self::FnCall(_, _)
             | Self::Expr(_)
@@ -1199,7 +1301,7 @@ impl Stmt {
                 condition.is_pure() && block.0.iter().all(Stmt::is_pure)
             }
             Self::For(iterable, x, _) => iterable.is_pure() && (x.2).0.iter().all(Stmt::is_pure),
-            Self::Var(_, _, _, _, _) | Self::Assignment(_, _) | Self::FnCall(_, _) => false,
+            Self::Var(_, _, _, _) | Self::Assignment(_, _) | Self::FnCall(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::Return(_, _, _) => false,
             Self::TryCatch(x, _) => {
@@ -1225,7 +1327,7 @@ impl Stmt {
     #[must_use]
     pub fn is_internally_pure(&self) -> bool {
         match self {
-            Self::Var(expr, _, _, _, _) => expr.is_pure(),
+            Self::Var(expr, _, _, _) => expr.is_pure(),
 
             #[cfg(not(feature = "no_module"))]
             Self::Import(expr, _, _) => expr.is_pure(),
@@ -1263,7 +1365,7 @@ impl Stmt {
         }
 
         match self {
-            Self::Var(e, _, _, _, _) => {
+            Self::Var(e, _, _, _) => {
                 if !e.walk(path, on_node) {
                     return false;
                 }
