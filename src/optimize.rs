@@ -1,6 +1,6 @@
 //! Module implementing the [`AST`] optimizer.
 
-use crate::ast::{Expr, OpAssignment, Stmt, AST_FLAGS::*};
+use crate::ast::{Expr, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
@@ -201,8 +201,8 @@ fn optimize_stmt_block(
         // Optimize each statement in the block
         statements.iter_mut().for_each(|stmt| {
             match stmt {
-                Stmt::Var(value_expr, x, flags, _) => {
-                    if flags.contains(AST_FLAG_CONSTANT) {
+                Stmt::Var(value_expr, x, options, _) => {
+                    if options.contains(AST_OPTION_CONSTANT) {
                         // Add constant literals into the state
                         optimize_expr(value_expr, state, false);
 
@@ -583,8 +583,8 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             }
         }
         // do { block } while false | do { block } until true -> { block }
-        Stmt::Do(body, Expr::BoolConstant(x, _), flags, _)
-            if *x == flags.contains(AST_FLAG_NEGATED) =>
+        Stmt::Do(body, Expr::BoolConstant(x, _), options, _)
+            if *x == options.contains(AST_OPTION_NEGATED) =>
         {
             state.set_dirty();
             let block_pos = body.position();
@@ -607,7 +607,7 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             *x.2.statements_mut() = optimize_stmt_block(body, state, false, true, false).into();
         }
         // let id = expr;
-        Stmt::Var(expr, _, flags, _) if !flags.contains(AST_FLAG_CONSTANT) => {
+        Stmt::Var(expr, _, options, _) if !options.contains(AST_OPTION_CONSTANT) => {
             optimize_expr(expr, state, false)
         }
         // import expr as var;

@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt, AST_FLAGS::*};
+use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt, AST_OPTION_FLAGS::*};
 use crate::custom_syntax::CustomSyntax;
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_hash::get_hasher;
@@ -2569,8 +2569,8 @@ impl Engine {
             },
 
             // Do loop
-            Stmt::Do(body, expr, flags, _) => loop {
-                let is_while = !flags.contains(AST_FLAG_NEGATED);
+            Stmt::Do(body, expr, options, _) => loop {
+                let is_while = !options.contains(AST_OPTION_NEGATED);
 
                 if !body.is_empty() {
                     match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
@@ -2853,14 +2853,14 @@ impl Engine {
             }
 
             // Let/const statement
-            Stmt::Var(expr, x, flags, _) => {
+            Stmt::Var(expr, x, options, _) => {
                 let name = &x.name;
-                let entry_type = if flags.contains(AST_FLAG_CONSTANT) {
+                let entry_type = if options.contains(AST_OPTION_CONSTANT) {
                     AccessMode::ReadOnly
                 } else {
                     AccessMode::ReadWrite
                 };
-                let export = flags.contains(AST_FLAG_EXPORTED);
+                let export = options.contains(AST_OPTION_EXPORTED);
 
                 let value = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?

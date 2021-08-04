@@ -953,25 +953,27 @@ impl From<StmtBlock> for Stmt {
 /// A type that holds a configuration option with bit-flags.
 /// Exported under the `internals` feature only.
 #[derive(PartialEq, Eq, Copy, Clone, Hash, Default)]
-pub struct BitOptions(u8);
+pub struct OptionFlags(u8);
 
-impl BitOptions {
+impl OptionFlags {
     /// Does this [`BitOptions`] contain a particular option flag?
     #[inline(always)]
+    #[must_use]
     pub const fn contains(self, flag: Self) -> bool {
         self.0 & flag.0 != 0
     }
 }
 
-impl Not for BitOptions {
+impl Not for OptionFlags {
     type Output = Self;
 
+    #[inline(always)]
     fn not(self) -> Self::Output {
         Self(!self.0)
     }
 }
 
-impl Add for BitOptions {
+impl Add for OptionFlags {
     type Output = Self;
 
     #[inline(always)]
@@ -980,14 +982,14 @@ impl Add for BitOptions {
     }
 }
 
-impl AddAssign for BitOptions {
+impl AddAssign for OptionFlags {
     #[inline(always)]
     fn add_assign(&mut self, rhs: Self) {
         self.0 |= rhs.0
     }
 }
 
-impl Sub for BitOptions {
+impl Sub for OptionFlags {
     type Output = Self;
 
     #[inline(always)]
@@ -996,7 +998,7 @@ impl Sub for BitOptions {
     }
 }
 
-impl SubAssign for BitOptions {
+impl SubAssign for OptionFlags {
     #[inline(always)]
     fn sub_assign(&mut self, rhs: Self) {
         self.0 &= !rhs.0
@@ -1005,48 +1007,47 @@ impl SubAssign for BitOptions {
 
 /// Option bit-flags for [`AST`] nodes.
 #[allow(non_snake_case)]
-pub mod AST_FLAGS {
-    use super::BitOptions;
+pub mod AST_OPTION_FLAGS {
+    use super::OptionFlags;
 
     /// _(internals)_ No options for the [`AST`][crate::AST] node.
     /// Exported under the `internals` feature only.
-    pub const AST_FLAG_NONE: BitOptions = BitOptions(0b0000_0000);
+    pub const AST_OPTION_NONE: OptionFlags = OptionFlags(0b0000_0000);
     /// _(internals)_ The [`AST`][crate::AST] node is constant.
     /// Exported under the `internals` feature only.
-    pub const AST_FLAG_CONSTANT: BitOptions = BitOptions(0b0000_0001);
+    pub const AST_OPTION_CONSTANT: OptionFlags = OptionFlags(0b0000_0001);
     /// _(internals)_ The [`AST`][crate::AST] node is exported.
     /// Exported under the `internals` feature only.
-    pub const AST_FLAG_EXPORTED: BitOptions = BitOptions(0b0000_0010);
+    pub const AST_OPTION_EXPORTED: OptionFlags = OptionFlags(0b0000_0010);
     /// _(internals)_ The [`AST`][crate::AST] node is in negated mode.
     /// Exported under the `internals` feature only.
-    pub const AST_FLAG_NEGATED: BitOptions = BitOptions(0b0000_0100);
+    pub const AST_OPTION_NEGATED: OptionFlags = OptionFlags(0b0000_0100);
 
-    impl std::fmt::Debug for BitOptions {
+    impl std::fmt::Debug for OptionFlags {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            let mut has_flags = false;
+            fn write_option(
+                options: &OptionFlags,
+                f: &mut std::fmt::Formatter<'_>,
+                num_flags: &mut usize,
+                flag: OptionFlags,
+                name: &str,
+            ) -> std::fmt::Result {
+                if options.contains(flag) {
+                    if *num_flags > 0 {
+                        f.write_str("+")?;
+                    }
+                    f.write_str(name)?;
+                    *num_flags += 1;
+                }
+                Ok(())
+            }
+
+            let num_flags = &mut 0;
 
             f.write_str("(")?;
-            if self.contains(AST_FLAG_CONSTANT) {
-                if has_flags {
-                    f.write_str("+")?;
-                }
-                f.write_str("Constant")?;
-                has_flags = true;
-            }
-            if self.contains(AST_FLAG_EXPORTED) {
-                if has_flags {
-                    f.write_str("+")?;
-                }
-                f.write_str("Exported")?;
-                has_flags = true;
-            }
-            if self.contains(AST_FLAG_NEGATED) {
-                if has_flags {
-                    f.write_str("+")?;
-                }
-                f.write_str("Negated")?;
-                //has_flags = true;
-            }
+            write_option(self, f, num_flags, AST_OPTION_CONSTANT, "Constant")?;
+            write_option(self, f, num_flags, AST_OPTION_EXPORTED, "Exported")?;
+            write_option(self, f, num_flags, AST_OPTION_NEGATED, "Negated")?;
             f.write_str(")")?;
 
             Ok(())
@@ -1076,20 +1077,20 @@ pub enum Stmt {
     While(Expr, Box<StmtBlock>, Position),
     /// `do` `{` stmt `}` `while`|`until` expr
     ///
-    /// ### Option flags
+    /// ### Option Flags
     ///
     /// * [`AST_FLAG_NONE`][AST_FLAGS::AST_FLAG_NONE] = `while`
     /// * [`AST_FLAG_NEGATED`][AST_FLAGS::AST_FLAG_NEGATED] = `until`
-    Do(Box<StmtBlock>, Expr, BitOptions, Position),
+    Do(Box<StmtBlock>, Expr, OptionFlags, Position),
     /// `for` `(` id `,` counter `)` `in` expr `{` stmt `}`
     For(Expr, Box<(Ident, Option<Ident>, StmtBlock)>, Position),
     /// \[`export`\] `let`/`const` id `=` expr
     ///
-    /// ### Option flags
+    /// ### Option Flags
     ///
     /// * [`AST_FLAG_EXPORTED`][AST_FLAGS::AST_FLAG_EXPORTED] = `export`
     /// * [`AST_FLAG_CONSTANT`][AST_FLAGS::AST_FLAG_CONSTANT] = `const`
-    Var(Expr, Box<Ident>, BitOptions, Position),
+    Var(Expr, Box<Ident>, OptionFlags, Position),
     /// expr op`=` expr
     Assignment(Box<(Expr, Option<OpAssignment<'static>>, Expr)>, Position),
     /// func `(` expr `,` ... `)`

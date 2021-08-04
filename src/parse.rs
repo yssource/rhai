@@ -2,7 +2,7 @@
 
 use crate::ast::{
     BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ReturnType,
-    ScriptFnDef, Stmt, StmtBlock, AST_FLAGS::*,
+    ScriptFnDef, Stmt, StmtBlock, AST_OPTION_FLAGS::*,
 };
 use crate::custom_syntax::{
     CustomSyntax, CUSTOM_SYNTAX_MARKER_BLOCK, CUSTOM_SYNTAX_MARKER_BOOL, CUSTOM_SYNTAX_MARKER_EXPR,
@@ -2225,8 +2225,8 @@ fn parse_do(
     let body = parse_block(input, state, lib, settings.level_up())?;
 
     let negated = match input.next().expect(NEVER_ENDS) {
-        (Token::While, _) => AST_FLAG_NONE,
-        (Token::Until, _) => AST_FLAG_NEGATED,
+        (Token::While, _) => AST_OPTION_NONE,
+        (Token::Until, _) => AST_OPTION_NEGATED,
         (_, pos) => {
             return Err(
                 PERR::MissingToken(Token::While.into(), "for the do statement".into())
@@ -2382,9 +2382,9 @@ fn parse_let(
     state.stack.push((name, var_type));
 
     let export = if export {
-        AST_FLAG_EXPORTED
+        AST_OPTION_EXPORTED
     } else {
-        AST_FLAG_NONE
+        AST_OPTION_NONE
     };
 
     match var_type {
@@ -2394,7 +2394,7 @@ fn parse_let(
         AccessMode::ReadOnly => Ok(Stmt::Var(
             expr,
             var_def.into(),
-            AST_FLAG_CONSTANT + export,
+            AST_OPTION_CONSTANT + export,
             settings.pos,
         )),
     }
