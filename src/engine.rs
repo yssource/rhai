@@ -2542,15 +2542,30 @@ impl Engine {
                 })
             }
 
+            // Loop
+            Stmt::While(Expr::Unit(_), body, _) => loop {
+                if !body.is_empty() {
+                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    {
+                        Ok(_) => (),
+                        Err(err) => match *err {
+                            EvalAltResult::LoopBreak(false, _) => (),
+                            EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
+                            _ => return Err(err),
+                        },
+                    }
+                } else {
+                    #[cfg(not(feature = "unchecked"))]
+                    self.inc_operations(state, body.position())?;
+                }
+            },
+
             // While loop
             Stmt::While(expr, body, _) => loop {
-                let condition = if !expr.is_unit() {
-                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                        .as_bool()
-                        .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, expr.position()))?
-                } else {
-                    true
-                };
+                let condition = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .as_bool()
+                    .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, expr.position()))?;
 
                 if !condition {
                     return Ok(Dynamic::UNIT);

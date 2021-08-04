@@ -559,6 +559,9 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         // while expr { block }
         Stmt::While(condition, body, _) => {
             optimize_expr(condition, state, false);
+            if let Expr::BoolConstant(true, pos) = condition {
+                *condition = Expr::Unit(*pos);
+            }
             let block = mem::take(body.statements_mut()).into_vec();
             *body.statements_mut() = optimize_stmt_block(block, state, false, true, false).into();
 
