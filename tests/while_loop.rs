@@ -50,6 +50,7 @@ fn test_do() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[cfg(not(feature = "unchecked"))]
 #[test]
 fn test_infinite_loops() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
