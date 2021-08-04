@@ -49,3 +49,16 @@ fn test_do() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_infinite_loops() -> Result<(), Box<EvalAltResult>> {
+    let mut engine = Engine::new();
+
+    engine.set_max_operations(1024);
+
+    assert!(engine.consume("loop {}").is_err());
+    assert!(engine.consume("while true {}").is_err());
+    assert!(engine.consume("do {} while true").is_err());
+
+    Ok(())
+}

@@ -8,6 +8,7 @@ Bug fixes
 ---------
 
 * Fixed bug in using indexing/dotting inside index bracket.
+* `while` and `loop` statements are no longer considered _pure_ (since a loop can go on forever and this is a side effect).
 
 
 Version 1.0.0

@@ -1073,7 +1073,9 @@ pub enum Stmt {
         Box<(BTreeMap<u64, Box<(Option<Expr>, StmtBlock)>>, StmtBlock)>,
         Position,
     ),
-    /// `while` expr `{` stmt `}`
+    /// `while` expr `{` stmt `}` | `loop` `{` stmt `}`
+    ///
+    /// If the guard expression is [`UNIT`][Expr::Unit], then it is a `loop` statement.
     While(Expr, Box<StmtBlock>, Position),
     /// `do` `{` stmt `}` `while`|`until` expr
     ///
@@ -1084,7 +1086,7 @@ pub enum Stmt {
     Do(Box<StmtBlock>, Expr, OptionFlags, Position),
     /// `for` `(` id `,` counter `)` `in` expr `{` stmt `}`
     For(Expr, Box<(Ident, Option<Ident>, StmtBlock)>, Position),
-    /// \[`export`\] `let`/`const` id `=` expr
+    /// \[`export`\] `let`|`const` id `=` expr
     ///
     /// ### Option Flags
     ///
@@ -1298,10 +1300,22 @@ impl Stmt {
                     })
                     && (x.1).0.iter().all(Stmt::is_pure)
             }
-            Self::While(condition, block, _) | Self::Do(block, condition, _, _) => {
-                condition.is_pure() && block.0.iter().all(Stmt::is_pure)
+
+            // Loops that exit can be pure because it can never be infinite.
+            Self::While(Expr::BoolConstant(false, _), _, _) => true,
+            Self::Do(body, Expr::BoolConstant(x, _), options, _)
+                if *x == options.contains(AST_OPTION_FLAGS::AST_OPTION_NEGATED) =>
+            {
+                body.iter().all(Stmt::is_pure)
             }
+
+            // Loops are never pure since they can be infinite - and that's a side effect.
+            Self::While(_, _, _) | Self::Do(_, _, _, _) => false,
+
+            // For loops can be pure because if the iterable is pure, it is finite,
+            // so infinite loops can never occur.
             Self::For(iterable, x, _) => iterable.is_pure() && (x.2).0.iter().all(Stmt::is_pure),
+
             Self::Var(_, _, _, _) | Self::Assignment(_, _) | Self::FnCall(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::Return(_, _, _) => false,
