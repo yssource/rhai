@@ -1,6 +1,6 @@
 //! Module implementing the [`AST`] optimizer.
 
-use crate::ast::{Expr, OpAssignment, Stmt, VarDeclaration};
+use crate::ast::{Expr, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::dynamic::AccessMode;
 use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
 use crate::fn_builtin::get_builtin_binary_op_fn;
@@ -201,22 +201,23 @@ fn optimize_stmt_block(
         // Optimize each statement in the block
         statements.iter_mut().for_each(|stmt| {
             match stmt {
-                // Add constant literals into the state
-                Stmt::Var(value_expr, x, VarDeclaration::Const, _, _) => {
-                    optimize_expr(value_expr, state, false);
+                Stmt::Var(value_expr, x, options, _) => {
+                    if options.contains(AST_OPTION_CONSTANT) {
+                        // Add constant literals into the state
+                        optimize_expr(value_expr, state, false);
 
-                    if value_expr.is_constant() {
-                        state.push_var(
-                            &x.name,
-                            AccessMode::ReadOnly,
-                            value_expr.get_literal_value(),
-                        );
+                        if value_expr.is_constant() {
+                            state.push_var(
+                                &x.name,
+                                AccessMode::ReadOnly,
+                                value_expr.get_literal_value(),
+                            );
+                        }
+                    } else {
+                        // Add variables into the state
+                        optimize_expr(value_expr, state, false);
+                        state.push_var(&x.name, AccessMode::ReadWrite, None);
                     }
-                }
-                // Add variables into the state
-                Stmt::Var(value_expr, x, VarDeclaration::Let, _, _) => {
-                    optimize_expr(value_expr, state, false);
-                    state.push_var(&x.name, AccessMode::ReadWrite, None);
                 }
                 // Optimize the statement
                 _ => optimize_stmt(stmt, state, preserve_result),
@@ -232,7 +233,7 @@ fn optimize_stmt_block(
             .find_map(|(i, stmt)| match stmt {
                 stmt if !is_pure(stmt) => Some(i),
 
-                Stmt::Var(e, _, _, _, _) | Stmt::Expr(e) if !e.is_constant() => Some(i),
+                Stmt::Var(e, _, _, _) | Stmt::Expr(e) if !e.is_constant() => Some(i),
 
                 #[cfg(not(feature = "no_module"))]
                 Stmt::Import(e, _, _) if !e.is_constant() => Some(i),
@@ -558,6 +559,9 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
         // while expr { block }
         Stmt::While(condition, body, _) => {
             optimize_expr(condition, state, false);
+            if let Expr::BoolConstant(true, pos) = condition {
+                *condition = Expr::Unit(*pos);
+            }
             let block = mem::take(body.statements_mut()).into_vec();
             *body.statements_mut() = optimize_stmt_block(block, state, false, true, false).into();
 
@@ -582,8 +586,9 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             }
         }
         // do { block } while false | do { block } until true -> { block }
-        Stmt::Do(body, Expr::BoolConstant(true, _), false, _)
-        | Stmt::Do(body, Expr::BoolConstant(false, _), true, _) => {
+        Stmt::Do(body, Expr::BoolConstant(x, _), options, _)
+            if *x == options.contains(AST_OPTION_NEGATED) =>
+        {
             state.set_dirty();
             let block_pos = body.position();
             let block = mem::take(body.statements_mut()).into_vec();
@@ -605,7 +610,9 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             *x.2.statements_mut() = optimize_stmt_block(body, state, false, true, false).into();
         }
         // let id = expr;
-        Stmt::Var(expr, _, VarDeclaration::Let, _, _) => optimize_expr(expr, state, false),
+        Stmt::Var(expr, _, options, _) if !options.contains(AST_OPTION_CONSTANT) => {
+            optimize_expr(expr, state, false)
+        }
         // import expr as var;
         #[cfg(not(feature = "no_module"))]
         Stmt::Import(expr, _, _) => optimize_expr(expr, state, false),

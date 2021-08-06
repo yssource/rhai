@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt, VarDeclaration};
+use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt, AST_OPTION_FLAGS::*};
 use crate::custom_syntax::CustomSyntax;
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_hash::get_hasher;
@@ -2542,15 +2542,30 @@ impl Engine {
                 })
             }
 
+            // Loop
+            Stmt::While(Expr::Unit(_), body, _) => loop {
+                if !body.is_empty() {
+                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    {
+                        Ok(_) => (),
+                        Err(err) => match *err {
+                            EvalAltResult::LoopBreak(false, _) => (),
+                            EvalAltResult::LoopBreak(true, _) => return Ok(Dynamic::UNIT),
+                            _ => return Err(err),
+                        },
+                    }
+                } else {
+                    #[cfg(not(feature = "unchecked"))]
+                    self.inc_operations(state, body.position())?;
+                }
+            },
+
             // While loop
             Stmt::While(expr, body, _) => loop {
-                let condition = if !expr.is_unit() {
-                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                        .as_bool()
-                        .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, expr.position()))?
-                } else {
-                    true
-                };
+                let condition = self
+                    .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                    .as_bool()
+                    .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, expr.position()))?;
 
                 if !condition {
                     return Ok(Dynamic::UNIT);
@@ -2569,7 +2584,9 @@ impl Engine {
             },
 
             // Do loop
-            Stmt::Do(body, expr, is_while, _) => loop {
+            Stmt::Do(body, expr, options, _) => loop {
+                let is_while = !options.contains(AST_OPTION_NEGATED);
+
                 if !body.is_empty() {
                     match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
                     {
@@ -2587,7 +2604,7 @@ impl Engine {
                     .as_bool()
                     .map_err(|typ| self.make_type_mismatch_err::<bool>(typ, expr.position()))?;
 
-                if condition ^ *is_while {
+                if condition ^ is_while {
                     return Ok(Dynamic::UNIT);
                 }
             },
@@ -2851,12 +2868,14 @@ impl Engine {
             }
 
             // Let/const statement
-            Stmt::Var(expr, x, var_type, export, _) => {
+            Stmt::Var(expr, x, options, _) => {
                 let name = &x.name;
-                let entry_type = match var_type {
-                    VarDeclaration::Let => AccessMode::ReadWrite,
-                    VarDeclaration::Const => AccessMode::ReadOnly,
+                let entry_type = if options.contains(AST_OPTION_CONSTANT) {
+                    AccessMode::ReadOnly
+                } else {
+                    AccessMode::ReadWrite
                 };
+                let export = options.contains(AST_OPTION_EXPORTED);
 
                 let value = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
@@ -2893,9 +2912,9 @@ impl Engine {
 
                     (
                         name.to_string().into(),
-                        if *export { Some(name.clone()) } else { None },
+                        if export { Some(name.clone()) } else { None },
                     )
-                } else if *export {
+                } else if export {
                     unreachable!("exported variable not on global level");
                 } else {
                     (unsafe_cast_var_name_to_lifetime(name).into(), None)

@@ -16,7 +16,7 @@ use std::{
     hash::Hash,
     mem,
     num::{NonZeroU8, NonZeroUsize},
-    ops::{Add, AddAssign, Deref, DerefMut},
+    ops::{Add, AddAssign, Deref, DerefMut, Not, Sub, SubAssign},
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -950,16 +950,109 @@ impl From<StmtBlock> for Stmt {
     }
 }
 
-/// _(internals)_ Type of variable declaration.
+/// A type that holds a configuration option with bit-flags.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
-pub enum VarDeclaration {
-    Let,
-    Const,
+#[derive(PartialEq, Eq, Copy, Clone, Hash, Default)]
+pub struct OptionFlags(u8);
+
+impl OptionFlags {
+    /// Does this [`BitOptions`] contain a particular option flag?
+    #[inline(always)]
+    #[must_use]
+    pub const fn contains(self, flag: Self) -> bool {
+        self.0 & flag.0 != 0
+    }
+}
+
+impl Not for OptionFlags {
+    type Output = Self;
+
+    #[inline(always)]
+    fn not(self) -> Self::Output {
+        Self(!self.0)
+    }
+}
+
+impl Add for OptionFlags {
+    type Output = Self;
+
+    #[inline(always)]
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl AddAssign for OptionFlags {
+    #[inline(always)]
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0
+    }
+}
+
+impl Sub for OptionFlags {
+    type Output = Self;
+
+    #[inline(always)]
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 & !rhs.0)
+    }
+}
+
+impl SubAssign for OptionFlags {
+    #[inline(always)]
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 &= !rhs.0
+    }
+}
+
+/// Option bit-flags for [`AST`] nodes.
+#[allow(non_snake_case)]
+pub mod AST_OPTION_FLAGS {
+    use super::OptionFlags;
+
+    /// _(internals)_ No options for the [`AST`][crate::AST] node.
+    /// Exported under the `internals` feature only.
+    pub const AST_OPTION_NONE: OptionFlags = OptionFlags(0b0000_0000);
+    /// _(internals)_ The [`AST`][crate::AST] node is constant.
+    /// Exported under the `internals` feature only.
+    pub const AST_OPTION_CONSTANT: OptionFlags = OptionFlags(0b0000_0001);
+    /// _(internals)_ The [`AST`][crate::AST] node is exported.
+    /// Exported under the `internals` feature only.
+    pub const AST_OPTION_EXPORTED: OptionFlags = OptionFlags(0b0000_0010);
+    /// _(internals)_ The [`AST`][crate::AST] node is in negated mode.
+    /// Exported under the `internals` feature only.
+    pub const AST_OPTION_NEGATED: OptionFlags = OptionFlags(0b0000_0100);
+
+    impl std::fmt::Debug for OptionFlags {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            fn write_option(
+                options: &OptionFlags,
+                f: &mut std::fmt::Formatter<'_>,
+                num_flags: &mut usize,
+                flag: OptionFlags,
+                name: &str,
+            ) -> std::fmt::Result {
+                if options.contains(flag) {
+                    if *num_flags > 0 {
+                        f.write_str("+")?;
+                    }
+                    f.write_str(name)?;
+                    *num_flags += 1;
+                }
+                Ok(())
+            }
+
+            let num_flags = &mut 0;
+
+            f.write_str("(")?;
+            write_option(self, f, num_flags, AST_OPTION_CONSTANT, "Constant")?;
+            write_option(self, f, num_flags, AST_OPTION_EXPORTED, "Exported")?;
+            write_option(self, f, num_flags, AST_OPTION_NEGATED, "Negated")?;
+            f.write_str(")")?;
+
+            Ok(())
+        }
+    }
 }
 
 /// _(internals)_ A statement.
@@ -980,14 +1073,26 @@ pub enum Stmt {
         Box<(BTreeMap<u64, Box<(Option<Expr>, StmtBlock)>>, StmtBlock)>,
         Position,
     ),
-    /// `while` expr `{` stmt `}`
+    /// `while` expr `{` stmt `}` | `loop` `{` stmt `}`
+    ///
+    /// If the guard expression is [`UNIT`][Expr::Unit], then it is a `loop` statement.
     While(Expr, Box<StmtBlock>, Position),
     /// `do` `{` stmt `}` `while`|`until` expr
-    Do(Box<StmtBlock>, Expr, bool, Position),
+    ///
+    /// ### Option Flags
+    ///
+    /// * [`AST_FLAG_NONE`][AST_FLAGS::AST_FLAG_NONE] = `while`
+    /// * [`AST_FLAG_NEGATED`][AST_FLAGS::AST_FLAG_NEGATED] = `until`
+    Do(Box<StmtBlock>, Expr, OptionFlags, Position),
     /// `for` `(` id `,` counter `)` `in` expr `{` stmt `}`
     For(Expr, Box<(Ident, Option<Ident>, StmtBlock)>, Position),
-    /// \[`export`\] `let`/`const` id `=` expr
-    Var(Expr, Box<Ident>, VarDeclaration, bool, Position),
+    /// \[`export`\] `let`|`const` id `=` expr
+    ///
+    /// ### Option Flags
+    ///
+    /// * [`AST_FLAG_EXPORTED`][AST_FLAGS::AST_FLAG_EXPORTED] = `export`
+    /// * [`AST_FLAG_CONSTANT`][AST_FLAGS::AST_FLAG_CONSTANT] = `const`
+    Var(Expr, Box<Ident>, OptionFlags, Position),
     /// expr op`=` expr
     Assignment(Box<(Expr, Option<OpAssignment<'static>>, Expr)>, Position),
     /// func `(` expr `,` ... `)`
@@ -1068,7 +1173,7 @@ impl Stmt {
             | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
             | Self::Return(_, _, pos)
-            | Self::Var(_, _, _, _, pos)
+            | Self::Var(_, _, _, pos)
             | Self::TryCatch(_, pos) => *pos,
 
             Self::Expr(x) => x.position(),
@@ -1097,7 +1202,7 @@ impl Stmt {
             | Self::Do(_, _, _, pos)
             | Self::For(_, _, pos)
             | Self::Return(_, _, pos)
-            | Self::Var(_, _, _, _, pos)
+            | Self::Var(_, _, _, pos)
             | Self::TryCatch(_, pos) => *pos = new_pos,
 
             Self::Expr(x) => {
@@ -1131,7 +1236,7 @@ impl Stmt {
             | Self::For(_, _, _)
             | Self::TryCatch(_, _) => false,
 
-            Self::Var(_, _, _, _, _)
+            Self::Var(_, _, _, _)
             | Self::Assignment(_, _)
             | Self::Continue(_)
             | Self::Break(_)
@@ -1158,7 +1263,7 @@ impl Stmt {
             // A No-op requires a semicolon in order to know it is an empty statement!
             Self::Noop(_) => false,
 
-            Self::Var(_, _, _, _, _)
+            Self::Var(_, _, _, _)
             | Self::Assignment(_, _)
             | Self::FnCall(_, _)
             | Self::Expr(_)
@@ -1195,11 +1300,23 @@ impl Stmt {
                     })
                     && (x.1).0.iter().all(Stmt::is_pure)
             }
-            Self::While(condition, block, _) | Self::Do(block, condition, _, _) => {
-                condition.is_pure() && block.0.iter().all(Stmt::is_pure)
+
+            // Loops that exit can be pure because it can never be infinite.
+            Self::While(Expr::BoolConstant(false, _), _, _) => true,
+            Self::Do(body, Expr::BoolConstant(x, _), options, _)
+                if *x == options.contains(AST_OPTION_FLAGS::AST_OPTION_NEGATED) =>
+            {
+                body.iter().all(Stmt::is_pure)
             }
+
+            // Loops are never pure since they can be infinite - and that's a side effect.
+            Self::While(_, _, _) | Self::Do(_, _, _, _) => false,
+
+            // For loops can be pure because if the iterable is pure, it is finite,
+            // so infinite loops can never occur.
             Self::For(iterable, x, _) => iterable.is_pure() && (x.2).0.iter().all(Stmt::is_pure),
-            Self::Var(_, _, _, _, _) | Self::Assignment(_, _) | Self::FnCall(_, _) => false,
+
+            Self::Var(_, _, _, _) | Self::Assignment(_, _) | Self::FnCall(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
             Self::Continue(_) | Self::Break(_) | Self::Return(_, _, _) => false,
             Self::TryCatch(x, _) => {
@@ -1225,7 +1342,7 @@ impl Stmt {
     #[must_use]
     pub fn is_internally_pure(&self) -> bool {
         match self {
-            Self::Var(expr, _, _, _, _) => expr.is_pure(),
+            Self::Var(expr, _, _, _) => expr.is_pure(),
 
             #[cfg(not(feature = "no_module"))]
             Self::Import(expr, _, _) => expr.is_pure(),
@@ -1263,7 +1380,7 @@ impl Stmt {
         }
 
         match self {
-            Self::Var(e, _, _, _, _) => {
+            Self::Var(e, _, _, _) => {
                 if !e.walk(path, on_node) {
                     return false;
                 }
