@@ -7,6 +7,7 @@ Version 1.1.0
 Enhancements
 ------------
 
+* `Engine::consume_XXX` methods are renamed to `Engine::run_XXX` to make meanings clearer. The `consume_XXX` API is deprecated.
 * `$symbol$` is supported in custom syntax to match any symbol.
 * Custom syntax with `$block$`, `}` or `;` as the last symbol are now self-terminating (i.e. no need to attach a terminating `;`).
 * `Dynamic::as_string` and `Dynamic::as_immutable_string` are deprecated and replaced by `into_string` and `into_immutable_string` respectively.

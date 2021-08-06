@@ -21,7 +21,7 @@ fn bench_iterations_1000(bench: &mut Bencher) {
 
     let ast = engine.compile(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }
 
 #[bench]

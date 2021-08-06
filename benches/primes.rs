@@ -39,5 +39,5 @@ fn bench_eval_primes(bench: &mut Bencher) {
 
     let ast = engine.compile(SCRIPT).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }

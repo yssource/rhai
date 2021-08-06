@@ -6,7 +6,7 @@ use rhai::{
 fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    engine.consume("while false {}")?;
+    engine.run("while false {}")?;
 
     // Disable 'while' and make sure it still works with custom syntax
     engine.disable_symbol("while");
@@ -79,7 +79,7 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .consume("let foo = (exec [x<<15] -> { x += 2 } while x < 42) * 10;")
+            .run("let foo = (exec [x<<15] -> { x += 2 } while x < 42) * 10;")
             .expect_err("should error"),
         EvalAltResult::ErrorRuntime(_, _)
     ));

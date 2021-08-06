@@ -1745,16 +1745,39 @@ impl Engine {
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
     /// Not available under `no_std` or `WASM`.
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`run_file`][Engine::run_file] instead.
+    ///
+    /// This method will be removed in the next major version.
+    #[deprecated(since = "1.1.0", note = "use `run_file` instead")]
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
     pub fn consume_file(&self, path: std::path::PathBuf) -> Result<(), Box<EvalAltResult>> {
-        Self::read_file(path).and_then(|contents| self.consume(&contents))
+        self.run_file(path)
+    }
+    /// Evaluate a file, returning any error (if any).
+    ///
+    /// Not available under `no_std` or `WASM`.
+    #[cfg(not(feature = "no_std"))]
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+    #[inline(always)]
+    pub fn run_file(&self, path: std::path::PathBuf) -> Result<(), Box<EvalAltResult>> {
+        Self::read_file(path).and_then(|contents| self.run(&contents))
     }
     /// Evaluate a file with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
     /// Not available under `no_std` or `WASM`.
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`run_file_with_scope`][Engine::run_file_with_scope] instead.
+    ///
+    /// This method will be removed in the next major version.
+    #[deprecated(since = "1.1.0", note = "use `run_file_with_scope` instead")]
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
@@ -1763,18 +1786,59 @@ impl Engine {
         scope: &mut Scope,
         path: std::path::PathBuf,
     ) -> Result<(), Box<EvalAltResult>> {
-        Self::read_file(path).and_then(|contents| self.consume_with_scope(scope, &contents))
+        self.run_file_with_scope(scope, path)
+    }
+    /// Evaluate a file with own scope, returning any error (if any).
+    ///
+    /// Not available under `no_std` or `WASM`.
+    #[cfg(not(feature = "no_std"))]
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+    #[inline(always)]
+    pub fn run_file_with_scope(
+        &self,
+        scope: &mut Scope,
+        path: std::path::PathBuf,
+    ) -> Result<(), Box<EvalAltResult>> {
+        Self::read_file(path).and_then(|contents| self.run_with_scope(scope, &contents))
     }
     /// Evaluate a string, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`run`][Engine::run] instead.
+    ///
+    /// This method will be removed in the next major version.
+    #[deprecated(since = "1.1.0", note = "use `run` instead")]
     #[inline(always)]
     pub fn consume(&self, script: &str) -> Result<(), Box<EvalAltResult>> {
-        self.consume_with_scope(&mut Default::default(), script)
+        self.run(script)
+    }
+    /// Evaluate a script, returning any error (if any).
+    #[inline(always)]
+    pub fn run(&self, script: &str) -> Result<(), Box<EvalAltResult>> {
+        self.run_with_scope(&mut Default::default(), script)
     }
     /// Evaluate a string with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    #[inline]
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`run_with_scope`][Engine::run_with_scope] instead.
+    ///
+    /// This method will be removed in the next major version.
+    #[deprecated(since = "1.1.0", note = "use `run_with_scope` instead")]
+    #[inline(always)]
     pub fn consume_with_scope(
+        &self,
+        scope: &mut Scope,
+        script: &str,
+    ) -> Result<(), Box<EvalAltResult>> {
+        self.run_with_scope(scope, script)
+    }
+    /// Evaluate a script with own scope, returning any error (if any).
+    #[inline]
+    pub fn run_with_scope(
         &self,
         scope: &mut Scope,
         script: &str,
@@ -1790,18 +1854,46 @@ impl Engine {
             self.optimization_level,
         )?;
 
-        self.consume_ast_with_scope(scope, &ast)
+        self.run_ast_with_scope(scope, &ast)
     }
     /// Evaluate an AST, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`run_ast`][Engine::run_ast] instead.
+    ///
+    /// This method will be removed in the next major version.
+    #[deprecated(since = "1.1.0", note = "use `run_ast` instead")]
     #[inline(always)]
     pub fn consume_ast(&self, ast: &AST) -> Result<(), Box<EvalAltResult>> {
-        self.consume_ast_with_scope(&mut Default::default(), ast)
+        self.run_ast(ast)
+    }
+    /// Evaluate an AST, returning any error (if any).
+    #[inline(always)]
+    pub fn run_ast(&self, ast: &AST) -> Result<(), Box<EvalAltResult>> {
+        self.run_ast_with_scope(&mut Default::default(), ast)
     }
     /// Evaluate an [`AST`] with own scope, but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
-    #[inline]
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`run_ast_with_scope`][Engine::run_ast_with_scope] instead.
+    ///
+    /// This method will be removed in the next major version.
+    #[deprecated(since = "1.1.0", note = "use `run_ast_with_scope` instead")]
+    #[inline(always)]
     pub fn consume_ast_with_scope(
+        &self,
+        scope: &mut Scope,
+        ast: &AST,
+    ) -> Result<(), Box<EvalAltResult>> {
+        self.run_ast_with_scope(scope, ast)
+    }
+    /// Evaluate an [`AST`] with own scope, returning any error (if any).
+    #[inline]
+    pub fn run_ast_with_scope(
         &self,
         scope: &mut Scope,
         ast: &AST,
@@ -2151,8 +2243,8 @@ impl Engine {
     ///     }
     /// });
     ///
-    /// engine.consume("for x in range(0, 50000) {}")
-    ///     .expect_err("should error");
+    /// engine.run("for x in range(0, 50000) {}")
+    ///       .expect_err("should error");
     ///
     /// assert_eq!(*result.read().unwrap(), 9600);
     ///
@@ -2186,7 +2278,7 @@ impl Engine {
     /// let logger = result.clone();
     /// engine.on_print(move |s| logger.write().unwrap().push_str(s));
     ///
-    /// engine.consume("print(40 + 2);")?;
+    /// engine.run("print(40 + 2);")?;
     ///
     /// assert_eq!(*result.read().unwrap(), "42");
     /// # Ok(())
@@ -2219,7 +2311,7 @@ impl Engine {
     ///
     /// let mut ast = engine.compile(r#"let x = "hello"; debug(x);"#)?;
     /// ast.set_source("world");
-    /// engine.consume_ast(&ast)?;
+    /// engine.run_ast(&ast)?;
     ///
     /// #[cfg(not(feature = "no_position"))]
     /// assert_eq!(*result.read().unwrap(), r#"world @ 1:18 > "hello""#);

@@ -34,7 +34,7 @@ fn main() {
 
         // Run script
         engine
-            .consume(
+            .run(
                 r#"
                     print("Starting script loop...");
 

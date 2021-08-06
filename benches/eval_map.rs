@@ -15,7 +15,7 @@ fn bench_eval_map_small_get(bench: &mut Bencher) {
 
     let ast = engine.compile(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }
 
 #[bench]
@@ -27,7 +27,7 @@ fn bench_eval_map_small_set(bench: &mut Bencher) {
 
     let ast = engine.compile(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }
 
 #[bench]
@@ -47,7 +47,7 @@ fn bench_eval_map_large_get(bench: &mut Bencher) {
 
     let ast = engine.compile(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }
 
 #[bench]
@@ -67,5 +67,5 @@ fn bench_eval_map_large_set(bench: &mut Bencher) {
 
     let ast = engine.compile(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }

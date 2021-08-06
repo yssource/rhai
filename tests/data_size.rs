@@ -208,7 +208,7 @@ fn test_max_map_size() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .consume(
+            .run(
                 "
                     let x = #{};
                     loop { x.a = x; }

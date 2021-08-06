@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<EvalAltResult>> {
 
         println!("Line: {}", input.replace('\r', "\\r").replace('\n', "\\n"));
 
-        engine.consume_with_scope(
+        engine.run_with_scope(
             &mut scope,
             r#"
                 display("Length", x.len());

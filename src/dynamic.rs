@@ -1906,7 +1906,7 @@ impl Dynamic {
     /// This method is deprecated. Use [`into_string`][Dynamic::into_string] instead.
     ///
     /// This method will be removed in the next major version.
-    #[deprecated(since = "1.0.1", note = "use `into_string` instead")]
+    #[deprecated(since = "1.1.0", note = "use `into_string` instead")]
     #[inline(always)]
     pub fn as_string(self) -> Result<String, &'static str> {
         self.into_string()
@@ -1927,7 +1927,7 @@ impl Dynamic {
     /// This method is deprecated. Use [`into_immutable_string`][Dynamic::into_immutable_string] instead.
     ///
     /// This method will be removed in the next major version.
-    #[deprecated(since = "1.0.1", note = "use `into_immutable_string` instead")]
+    #[deprecated(since = "1.1.0", note = "use `into_immutable_string` instead")]
     #[inline(always)]
     pub fn as_immutable_string(self) -> Result<ImmutableString, &'static str> {
         self.into_immutable_string()
