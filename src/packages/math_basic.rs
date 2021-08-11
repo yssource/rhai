@@ -339,8 +339,23 @@ mod decimal_functions {
             Ok(x.exp())
         }
     }
-    pub fn ln(x: Decimal) -> Decimal {
-        x.ln()
+    #[rhai_fn(return_raw)]
+    pub fn ln(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+        if cfg!(not(feature = "unchecked")) {
+            x.checked_ln()
+                .ok_or_else(|| make_err(format!("Error taking the natural log of {}", x)))
+        } else {
+            Ok(x.ln())
+        }
+    }
+    #[rhai_fn(name = "log", return_raw)]
+    pub fn log10(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
+        if cfg!(not(feature = "unchecked")) {
+            x.checked_log10()
+                .ok_or_else(|| make_err(format!("Error taking the log of {}", x)))
+        } else {
+            Ok(x.log10())
+        }
     }
     #[rhai_fn(name = "floor", get = "floor")]
     pub fn floor(x: Decimal) -> Decimal {

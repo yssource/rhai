@@ -14,6 +14,8 @@ Enhancements
 * Added a number of constants to `Dynamic`.
 * Added a number of constants and `fromXXX` constant methods to `Dynamic`.
 * `parse_float()`, `PI()` and `E()` now defer to `Decimal` under `no_float` if `decimal` is turned on.
+* Added `log10()` for `Decimal`.
+* `ln` for `Decimal` is now checked and won't panic.
 
 
 Version 1.0.2
