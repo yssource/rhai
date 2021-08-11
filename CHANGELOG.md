@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 1.1.0
+=============
+
+Enhancements
+------------
+
+* `parse_float()`, `PI()` and `E()` now defer to `Decimal` under `no_float` if `decimal` is turned on.
+
+
 Version 1.0.2
 =============
 
@@ -105,7 +114,7 @@ New features
 * Each `Dynamic` value can now contain arbitrary data (type `i32`) in the form of a _tag_. This is to use up otherwise wasted space in the `Dynamic` type.
 * A new internal feature `no_smartstring` to turn off `SmartString` for those rare cases that it is needed.
 * `DynamicReadLock` and `DynamicWriteLoc` are exposed under `internals`.
-* `From<Shared<Locked<Dynamic>>>` is added for `Dynamic` mapping directly to a shared value, together with support for `Dynamic::from`.
+* `From< Shared< Locked<Dynamic> > >` is added for `Dynamic` mapping directly to a shared value, together with support for `Dynamic::from`.
 * An indexer with string index acts as a _fallback_ to a property getter/setter.
 
 Enhancements

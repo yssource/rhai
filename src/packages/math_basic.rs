@@ -309,6 +309,22 @@ mod decimal_functions {
         Decimal, MathematicalOps,
     };
 
+    #[cfg(feature = "no_float")]
+    pub mod float_polyfills {
+        #[rhai_fn(name = "PI")]
+        pub fn pi() -> Decimal {
+            Decimal::PI
+        }
+        #[rhai_fn(name = "E")]
+        pub fn e() -> Decimal {
+            Decimal::E
+        }
+        #[rhai_fn(return_raw)]
+        pub fn parse_float(s: &str) -> Result<Decimal, Box<EvalAltResult>> {
+            super::parse_decimal(s)
+        }
+    }
+
     #[rhai_fn(return_raw)]
     pub fn sqrt(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
         x.sqrt()
