@@ -3,8 +3,7 @@ name: Build
 on:
   push:
     branches:
-      - master
-      - plugins
+      - v1.1
   pull_request: {}
 
 jobs:
