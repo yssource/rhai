@@ -66,8 +66,8 @@ mod time_functions {
         .into());
 
         #[cfg(feature = "no_float")]
-        if timestamp2 > timestamp {
-            let seconds = (timestamp2 - timestamp).as_secs();
+        if timestamp2 > timestamp1 {
+            let seconds = (timestamp2 - timestamp1).as_secs();
 
             if cfg!(not(feature = "unchecked")) && seconds > (MAX_INT as u64) {
                 Err(make_arithmetic_err(format!(
@@ -78,7 +78,7 @@ mod time_functions {
                 Ok((-(seconds as INT)).into())
             }
         } else {
-            let seconds = (timestamp - timestamp2).as_secs();
+            let seconds = (timestamp1 - timestamp2).as_secs();
 
             if cfg!(not(feature = "unchecked")) && seconds > (MAX_INT as u64) {
                 Err(make_arithmetic_err(format!(

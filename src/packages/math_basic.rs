@@ -429,7 +429,7 @@ mod decimal_functions {
     #[rhai_fn(return_raw)]
     pub fn parse_decimal(string: &str) -> Result<Decimal, Box<EvalAltResult>> {
         Decimal::from_str(string)
-            .or_else(|_| Decimal::from_scientific(s))
+            .or_else(|_| Decimal::from_scientific(string))
             .map_err(|err| {
                 EvalAltResult::ErrorArithmetic(
                     format!("Error parsing decimal number '{}': {}", string, err),
