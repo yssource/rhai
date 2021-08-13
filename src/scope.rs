@@ -339,6 +339,30 @@ impl<'a> Scope<'a> {
             .find(|(_, (key, _))| name == key.as_ref())
             .and_then(|(index, _)| self.values[index].flatten_clone().try_cast())
     }
+    /// Check if the named entry in the [`Scope`] is constant.
+    ///
+    /// Search starts backwards from the last, stopping at the first entry matching the specified name.
+    ///
+    /// Returns [`None`] if no entry matching the specified name is found.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::Scope;
+    ///
+    /// let mut my_scope = Scope::new();
+    ///
+    /// my_scope.push_constant("x", 42_i64);
+    /// assert_eq!(my_scope.is_constant("x"), Some(true));
+    /// assert_eq!(my_scope.is_constant("y"), None);
+    /// ```
+    #[inline]
+    pub fn is_constant(&self, name: &str) -> Option<bool> {
+        self.get_index(name).and_then(|(_, access)| match access {
+            AccessMode::ReadWrite => None,
+            AccessMode::ReadOnly => Some(true),
+        })
+    }
     /// Update the value of the named entry in the [`Scope`].
     ///
     /// Search starts backwards from the last, and only the first entry matching the specified name is updated.

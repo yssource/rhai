@@ -22,6 +22,7 @@ Enhancements
 * Added `log10()` for `Decimal`.
 * `ln` for `Decimal` is now checked and won't panic.
 * `Scope::set_value` now takes anything that implements `Into<Cow<str>>`.
+* Added `Scope::is_constant` to check if a variable is constant.
 
 
 Version 1.0.2

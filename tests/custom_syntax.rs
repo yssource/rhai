@@ -157,13 +157,12 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
             // Evaluate the expression
             let value = context.eval_expression_tree(expr)?;
 
-            // Push new variable into the scope if it doesn't already exist.
-            // Otherwise set its value.
-            // WARNING - This panics if 'var_name' already exists and is constant!
-            //         - In a real implementation, check this before doing anything!
-            context.scope_mut().set_value(var_name, value);
-
-            Ok(Dynamic::UNIT)
+            if !context.scope().is_constant(&var_name).unwrap_or(false) {
+                context.scope_mut().set_value(var_name, value);
+                Ok(Dynamic::UNIT)
+            } else {
+                Err(format!("variable {} is constant", var_name).into())
+            }
         },
     )?;
 
