@@ -362,12 +362,16 @@ impl<'a> Scope<'a> {
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 0);
     /// ```
     #[inline]
-    pub fn set_value(&mut self, name: &'a str, value: impl Variant + Clone) -> &mut Self {
-        match self.get_index(name) {
+    pub fn set_value(
+        &mut self,
+        name: impl AsRef<str> + Into<Cow<'a, str>>,
+        value: impl Variant + Clone,
+    ) -> &mut Self {
+        match self.get_index(name.as_ref()) {
             None => {
                 self.push(name, value);
             }
-            Some((_, AccessMode::ReadOnly)) => panic!("variable {} is constant", name),
+            Some((_, AccessMode::ReadOnly)) => panic!("variable {} is constant", name.as_ref()),
             Some((index, AccessMode::ReadWrite)) => {
                 let value_ref = self
                     .values
