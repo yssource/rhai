@@ -611,7 +611,7 @@ impl Engine {
         hashes: FnCallHashes,
         args: &mut FnCallArgs,
         is_ref_mut: bool,
-        _is_method_call: bool,
+        is_method_call: bool,
         pos: Position,
         _capture_scope: Option<Scope>,
         _level: usize,
@@ -624,6 +624,8 @@ impl Engine {
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
         ensure_no_data_race(fn_name, args, is_ref_mut)?;
+
+        let _is_method_call = is_method_call;
 
         // These may be redirected from method style calls.
         match fn_name {

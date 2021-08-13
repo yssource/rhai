@@ -10,15 +10,15 @@ def_package!(crate:BasicFnPackage:"Basic Fn functions.", lib, {
 #[export_module]
 mod fn_ptr_functions {
     #[rhai_fn(name = "name", get = "name", pure)]
-    pub fn name(f: &mut FnPtr) -> ImmutableString {
-        f.fn_name_raw().into()
+    pub fn name(fn_ptr: &mut FnPtr) -> ImmutableString {
+        fn_ptr.fn_name_raw().into()
     }
 
     #[cfg(not(feature = "no_function"))]
     pub mod functions {
         #[rhai_fn(name = "is_anonymous", get = "is_anonymous", pure)]
-        pub fn is_anonymous(f: &mut FnPtr) -> bool {
-            f.is_anonymous()
+        pub fn is_anonymous(fn_ptr: &mut FnPtr) -> bool {
+            fn_ptr.is_anonymous()
         }
     }
 

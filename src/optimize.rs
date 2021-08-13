@@ -686,13 +686,15 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
 }
 
 /// Optimize an [expression][Expr].
-fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
+fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
     // These keywords are handled specially
     const DONT_EVAL_KEYWORDS: &[&str] = &[
         KEYWORD_PRINT, // side effects
         KEYWORD_DEBUG, // side effects
         KEYWORD_EVAL,  // arbitrary scripts
     ];
+
+    let _chaining = chaining;
 
     match expr {
         // {}
@@ -1061,12 +1063,14 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, _chaining: bool) {
 
 /// Optimize a block of [statements][Stmt] at top level.
 fn optimize_top_level(
-    mut statements: Vec<Stmt>,
+    statements: Vec<Stmt>,
     engine: &Engine,
     scope: &Scope,
     lib: &[&Module],
     optimization_level: OptimizationLevel,
 ) -> Vec<Stmt> {
+    let mut statements = statements;
+
     // If optimization level is None then skip optimizing
     if optimization_level == OptimizationLevel::None {
         statements.shrink_to_fit();
@@ -1093,8 +1097,8 @@ fn optimize_top_level(
 pub fn optimize_into_ast(
     engine: &Engine,
     scope: &Scope,
-    mut statements: Vec<Stmt>,
-    _functions: Vec<crate::Shared<crate::ast::ScriptFnDef>>,
+    statements: Vec<Stmt>,
+    functions: Vec<crate::Shared<crate::ast::ScriptFnDef>>,
     optimization_level: OptimizationLevel,
 ) -> AST {
     let level = if cfg!(feature = "no_optimize") {
@@ -1102,6 +1106,9 @@ pub fn optimize_into_ast(
     } else {
         optimization_level
     };
+
+    let mut statements = statements;
+    let _functions = functions;
 
     #[cfg(not(feature = "no_function"))]
     let lib = {

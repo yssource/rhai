@@ -142,8 +142,9 @@ impl<'e> ParseState<'e> {
     ///
     /// Return `None` when the variable name is not found in the `stack`.
     #[inline]
-    pub fn access_var(&mut self, name: &str, _pos: Position) -> Option<NonZeroUsize> {
+    pub fn access_var(&mut self, name: &str, pos: Position) -> Option<NonZeroUsize> {
         let mut barrier = false;
+        let _pos = pos;
 
         let index = self
             .stack
@@ -393,8 +394,10 @@ fn parse_paren_expr(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -428,7 +431,7 @@ fn parse_fn_call(
     lib: &mut FunctionsLib,
     id: Identifier,
     capture: bool,
-    mut namespace: Option<NamespaceRef>,
+    namespace: Option<NamespaceRef>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
     #[cfg(not(feature = "unchecked"))]
@@ -436,6 +439,7 @@ fn parse_fn_call(
 
     let (token, token_pos) = input.peek().expect(NEVER_ENDS);
 
+    let mut namespace = namespace;
     let mut args = StaticVec::new();
 
     match token {
@@ -565,8 +569,10 @@ fn parse_index_chain(
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     lhs: Expr,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -726,8 +732,10 @@ fn parse_array_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -798,8 +806,10 @@ fn parse_map_literal(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -914,8 +924,10 @@ fn parse_switch(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -1059,8 +1071,10 @@ fn parse_primary(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -1439,8 +1453,10 @@ fn parse_unary(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    let mut settings = settings;
+
     let (token, token_pos) = input.peek().expect(NEVER_ENDS);
     settings.pos = *token_pos;
 
@@ -1623,8 +1639,10 @@ fn parse_op_assignment_stmt(
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     lhs: Expr,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -1774,8 +1792,10 @@ fn parse_binary_op(
     lib: &mut FunctionsLib,
     parent_precedence: Option<Precedence>,
     lhs: Expr,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -1955,11 +1975,12 @@ fn parse_custom_syntax(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
     key: &str,
     syntax: &CustomSyntax,
     pos: Position,
 ) -> Result<Expr, ParseError> {
+    let mut settings = settings;
     let mut keywords: StaticVec<Expr> = Default::default();
     let mut segments: StaticVec<_> = Default::default();
     let mut tokens: StaticVec<_> = Default::default();
@@ -2101,8 +2122,10 @@ fn parse_expr(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2144,8 +2167,10 @@ fn parse_if(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2183,8 +2208,10 @@ fn parse_while_loop(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2212,8 +2239,10 @@ fn parse_do(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2254,8 +2283,10 @@ fn parse_for(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2353,9 +2384,11 @@ fn parse_let(
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     var_type: AccessMode,
-    export: bool,
-    mut settings: ParseSettings,
+    is_export: bool,
+    settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2381,7 +2414,7 @@ fn parse_let(
 
     state.stack.push((name, var_type));
 
-    let export = if export {
+    let export = if is_export {
         AST_OPTION_EXPORTED
     } else {
         AST_OPTION_NONE
@@ -2406,8 +2439,10 @@ fn parse_import(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2446,8 +2481,10 @@ fn parse_export(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2518,8 +2555,10 @@ fn parse_block(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
+    let mut settings = settings;
+
     // Must start with {
     settings.pos = match input.next().expect(NEVER_ENDS) {
         (Token::LeftBrace, pos) => pos,
@@ -2619,8 +2658,10 @@ fn parse_expr_stmt(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2636,9 +2677,11 @@ fn parse_stmt(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
     use AccessMode::{ReadOnly, ReadWrite};
+
+    let mut settings = settings;
 
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
@@ -2836,8 +2879,10 @@ fn parse_try_catch(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<Stmt, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -2892,11 +2937,13 @@ fn parse_fn(
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     access: FnAccess,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     comments: StaticVec<String>,
 ) -> Result<ScriptFnDef, ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
@@ -3039,8 +3086,10 @@ fn parse_anon_fn(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    mut settings: ParseSettings,
+    settings: ParseSettings,
 ) -> Result<(Expr, ScriptFnDef), ParseError> {
+    let mut settings = settings;
+
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 

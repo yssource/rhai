@@ -54,14 +54,14 @@ mod time_functions {
 
     #[rhai_fn(return_raw, name = "-")]
     pub fn time_diff(
-        timestamp: Instant,
+        timestamp1: Instant,
         timestamp2: Instant,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_float"))]
-        return Ok(if timestamp2 > timestamp {
-            -(timestamp2 - timestamp).as_secs_f64() as FLOAT
+        return Ok(if timestamp2 > timestamp1 {
+            -(timestamp2 - timestamp1).as_secs_f64() as FLOAT
         } else {
-            (timestamp - timestamp2).as_secs_f64() as FLOAT
+            (timestamp1 - timestamp2).as_secs_f64() as FLOAT
         }
         .into());
 
@@ -225,27 +225,27 @@ mod time_functions {
     }
 
     #[rhai_fn(name = "==")]
-    pub fn eq(timestamp: Instant, timestamp2: Instant) -> bool {
-        timestamp == timestamp2
+    pub fn eq(timestamp1: Instant, timestamp2: Instant) -> bool {
+        timestamp1 == timestamp2
     }
     #[rhai_fn(name = "!=")]
-    pub fn ne(timestamp: Instant, timestamp2: Instant) -> bool {
-        timestamp != timestamp2
+    pub fn ne(timestamp1: Instant, timestamp2: Instant) -> bool {
+        timestamp1 != timestamp2
     }
     #[rhai_fn(name = "<")]
-    pub fn lt(timestamp: Instant, timestamp2: Instant) -> bool {
-        timestamp < timestamp2
+    pub fn lt(timestamp1: Instant, timestamp2: Instant) -> bool {
+        timestamp1 < timestamp2
     }
     #[rhai_fn(name = "<=")]
-    pub fn lte(timestamp: Instant, timestamp2: Instant) -> bool {
-        timestamp <= timestamp2
+    pub fn lte(timestamp1: Instant, timestamp2: Instant) -> bool {
+        timestamp1 <= timestamp2
     }
     #[rhai_fn(name = ">")]
-    pub fn gt(timestamp: Instant, timestamp2: Instant) -> bool {
-        timestamp > timestamp2
+    pub fn gt(timestamp1: Instant, timestamp2: Instant) -> bool {
+        timestamp1 > timestamp2
     }
     #[rhai_fn(name = ">=")]
-    pub fn gte(timestamp: Instant, timestamp2: Instant) -> bool {
-        timestamp >= timestamp2
+    pub fn gte(timestamp1: Instant, timestamp2: Instant) -> bool {
+        timestamp1 >= timestamp2
     }
 }

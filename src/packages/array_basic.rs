@@ -753,17 +753,19 @@ mod array_functions {
     #[rhai_fn(name = "==", return_raw, pure)]
     pub fn equals(
         ctx: NativeCallContext,
-        array: &mut Array,
-        mut array2: Array,
+        array1: &mut Array,
+        array2: Array,
     ) -> Result<bool, Box<EvalAltResult>> {
-        if array.len() != array2.len() {
+        if array1.len() != array2.len() {
             return Ok(false);
         }
-        if array.is_empty() {
+        if array1.is_empty() {
             return Ok(true);
         }
 
-        for (a1, a2) in array.iter_mut().zip(array2.iter_mut()) {
+        let mut array2 = array2;
+
+        for (a1, a2) in array1.iter_mut().zip(array2.iter_mut()) {
             if !ctx
                 .call_fn_dynamic_raw(OP_EQUALS, true, &mut [a1, a2])
                 .or_else(|err| match *err {
@@ -791,9 +793,9 @@ mod array_functions {
     #[rhai_fn(name = "!=", return_raw, pure)]
     pub fn not_equals(
         ctx: NativeCallContext,
-        array: &mut Array,
+        array1: &mut Array,
         array2: Array,
     ) -> Result<bool, Box<EvalAltResult>> {
-        equals(ctx, array, array2).map(|r| !r)
+        equals(ctx, array1, array2).map(|r| !r)
     }
 }

@@ -1266,11 +1266,12 @@ fn eat_next(stream: &mut impl InputStream, pos: &mut Position) -> Option<char> {
 /// Scan for a block comment until the end.
 fn scan_block_comment(
     stream: &mut impl InputStream,
-    mut level: usize,
+    level: usize,
     pos: &mut Position,
-    mut comment: Option<&mut String>,
+    comment: Option<&mut String>,
 ) -> usize {
-    let comment = &mut comment;
+    let mut level = level;
+    let mut comment = comment;
 
     while let Some(c) = stream.get_next() {
         pos.advance();

@@ -34,9 +34,10 @@ mod map_functions {
         map.extend(map2.into_iter());
     }
     #[rhai_fn(name = "+")]
-    pub fn merge(mut map: Map, map2: Map) -> Map {
-        map.extend(map2.into_iter());
-        map
+    pub fn merge(map1: Map, map2: Map) -> Map {
+        let mut map1 = map1;
+        map1.extend(map2.into_iter());
+        map1
     }
     pub fn fill_with(map: &mut Map, map2: Map) {
         map2.into_iter().for_each(|(key, value)| {
@@ -46,17 +47,19 @@ mod map_functions {
     #[rhai_fn(name = "==", return_raw, pure)]
     pub fn equals(
         ctx: NativeCallContext,
-        map: &mut Map,
-        mut map2: Map,
+        map1: &mut Map,
+        map2: Map,
     ) -> Result<bool, Box<EvalAltResult>> {
-        if map.len() != map2.len() {
+        if map1.len() != map2.len() {
             return Ok(false);
         }
-        if map.is_empty() {
+        if map1.is_empty() {
             return Ok(true);
         }
 
-        for (m1, v1) in map.iter_mut() {
+        let mut map2 = map2;
+
+        for (m1, v1) in map1.iter_mut() {
             if let Some(v2) = map2.get_mut(m1) {
                 let equals = ctx
                     .call_fn_dynamic_raw(OP_EQUALS, true, &mut [v1, v2])
@@ -75,10 +78,10 @@ mod map_functions {
     #[rhai_fn(name = "!=", return_raw, pure)]
     pub fn not_equals(
         ctx: NativeCallContext,
-        map: &mut Map,
+        map1: &mut Map,
         map2: Map,
     ) -> Result<bool, Box<EvalAltResult>> {
-        equals(ctx, map, map2).map(|r| !r)
+        equals(ctx, map1, map2).map(|r| !r)
     }
 
     #[cfg(not(feature = "no_index"))]

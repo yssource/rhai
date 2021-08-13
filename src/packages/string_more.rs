@@ -50,12 +50,13 @@ mod string_functions {
         string1 + string2
     }
     #[rhai_fn(name = "+", name = "append")]
-    pub fn add_append_char(string: ImmutableString, ch: char) -> ImmutableString {
-        string + ch
+    pub fn add_append_char(string: ImmutableString, character: char) -> ImmutableString {
+        string + character
     }
 
     #[rhai_fn(name = "+", name = "append")]
-    pub fn add_append_unit(string: ImmutableString, _item: ()) -> ImmutableString {
+    pub fn add_append_unit(string: ImmutableString, item: ()) -> ImmutableString {
+        let _item = item;
         string
     }
     #[rhai_fn(name = "+")]
@@ -369,11 +370,13 @@ mod string_functions {
 
     #[rhai_fn(return_raw)]
     pub fn pad(
-        _ctx: NativeCallContext,
+        ctx: NativeCallContext,
         string: &mut ImmutableString,
         len: INT,
         character: char,
     ) -> Result<(), Box<crate::EvalAltResult>> {
+        let _ctx = ctx;
+
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
@@ -411,11 +414,13 @@ mod string_functions {
     }
     #[rhai_fn(name = "pad", return_raw)]
     pub fn pad_with_string(
-        _ctx: NativeCallContext,
+        ctx: NativeCallContext,
         string: &mut ImmutableString,
         len: INT,
         padding: &str,
     ) -> Result<(), Box<crate::EvalAltResult>> {
+        let _ctx = ctx;
+
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
