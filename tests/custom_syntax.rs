@@ -1,5 +1,5 @@
 use rhai::{
-    Dynamic, Engine, EvalAltResult, ImmutableString, LexError, ParseErrorType, Position, INT,
+    Dynamic, Engine, EvalAltResult, ImmutableString, LexError, ParseErrorType, Position, Scope, INT,
 };
 
 #[test]
@@ -145,6 +145,42 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<INT>("test1 { x = y + z; } 42")?, 42);
     assert_eq!(engine.eval::<INT>("test2 } 42")?, 42);
     assert_eq!(engine.eval::<INT>("test3; 42")?, 42);
+
+    // Register the custom syntax: var x = ???
+    engine.register_custom_syntax(
+        &["var", "$ident$", "=", "$expr$"],
+        true,
+        |context, inputs| {
+            let var_name = inputs[0].get_variable_name().unwrap().to_string();
+            let expr = &inputs[1];
+
+            // Evaluate the expression
+            let value = context.eval_expression_tree(expr)?;
+
+            // Push new variable into the scope if it doesn't already exist.
+            // Otherwise set its value.
+            // WARNING - This panics if 'var_name' already exists and is constant!
+            //         - In a real implementation, check this before doing anything!
+            context.scope_mut().set_value(var_name, value);
+
+            Ok(Dynamic::UNIT)
+        },
+    )?;
+
+    let mut scope = Scope::new();
+
+    assert_eq!(
+        engine.eval_with_scope::<INT>(&mut scope, "var foo = 42; foo")?,
+        42
+    );
+    assert_eq!(scope.get_value::<INT>("foo"), Some(42));
+    assert_eq!(scope.len(), 1);
+    assert_eq!(
+        engine.eval_with_scope::<INT>(&mut scope, "var foo = 123; foo")?,
+        123
+    );
+    assert_eq!(scope.get_value::<INT>("foo"), Some(123));
+    assert_eq!(scope.len(), 1);
 
     Ok(())
 }

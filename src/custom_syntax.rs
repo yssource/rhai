@@ -230,11 +230,10 @@ impl Engine {
                     }
                     s.into()
                 }
-                // Standard keyword in first position
-                s if segments.is_empty()
-                    && token
-                        .as_ref()
-                        .map_or(false, |v| v.is_standard_keyword() || v.is_reserved()) =>
+                // Standard keyword in first position but not disabled
+                _ if segments.is_empty()
+                    && token.as_ref().map_or(false, |v| v.is_standard_keyword())
+                    && !self.disabled_symbols.contains(s) =>
                 {
                     return Err(LexError::ImproperSymbol(
                         s.to_string(),
@@ -247,13 +246,13 @@ impl Engine {
                     .into_err(Position::NONE));
                 }
                 // Identifier in first position
-                s if segments.is_empty() && is_valid_identifier(s.chars()) => {
+                _ if segments.is_empty() && is_valid_identifier(s.chars()) => {
                     // Make it a custom keyword/symbol if it is disabled or reserved
-                    if (self.disabled_symbols.contains(s)
-                        || matches!(token, Some(Token::Reserved(_))))
-                        && !self.custom_keywords.contains_key(s)
+                    if self.disabled_symbols.contains(s) || token.map_or(false, |v| v.is_reserved())
                     {
-                        self.custom_keywords.insert(s.into(), None);
+                        if !self.custom_keywords.contains_key(s) {
+                            self.custom_keywords.insert(s.into(), None);
+                        }
                     }
                     s.into()
                 }

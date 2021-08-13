@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 1.1.0
 =============
 
+Bug fixes
+---------
+
+* Custom syntax starting with a disabled standard keyword now works properly.
+
 Enhancements
 ------------
 
@@ -16,6 +21,7 @@ Enhancements
 * `parse_float()`, `PI()` and `E()` now defer to `Decimal` under `no_float` if `decimal` is turned on.
 * Added `log10()` for `Decimal`.
 * `ln` for `Decimal` is now checked and won't panic.
+* `Scope::set_value` now takes anything that implements `Into<Cow<str>>`.
 
 
 Version 1.0.2
