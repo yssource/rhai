@@ -23,6 +23,7 @@ Enhancements
 * `ln` for `Decimal` is now checked and won't panic.
 * `Scope::set_value` now takes anything that implements `Into<Cow<str>>`.
 * Added `Scope::is_constant` to check if a variable is constant.
+* Added `Scope::set_or_push` to add a new variable only if one doesn't already exist.
 
 
 Version 1.0.2
