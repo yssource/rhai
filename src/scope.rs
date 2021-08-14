@@ -63,7 +63,7 @@ impl<'a> IntoIterator for Scope<'a> {
     type Item = (Cow<'a, str>, Dynamic);
     type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
-    #[inline(always)]
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         Box::new(
             self.values
@@ -293,7 +293,7 @@ impl<'a> Scope<'a> {
     /// assert!(my_scope.contains("x"));
     /// assert!(!my_scope.contains("y"));
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn contains(&self, name: &str) -> bool {
         self.names
@@ -302,7 +302,7 @@ impl<'a> Scope<'a> {
             .any(|(key, _)| name == key.as_ref())
     }
     /// Find an entry in the [`Scope`], starting from the last.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn get_index(&self, name: &str) -> Option<(usize, AccessMode)> {
         self.names
@@ -329,7 +329,7 @@ impl<'a> Scope<'a> {
     /// my_scope.push("x", 42_i64);
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get_value<T: Variant + Clone>(&self, name: &str) -> Option<T> {
         self.names
@@ -398,7 +398,7 @@ impl<'a> Scope<'a> {
     ///
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 123);
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get_mut(&mut self, name: &str) -> Option<&mut Dynamic> {
         self.get_index(name)
@@ -444,7 +444,7 @@ impl<'a> Scope<'a> {
     }
     /// Clone the [`Scope`], keeping only the last instances of each variable name.
     /// Shadowed variables are omitted in the copy.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn clone_visible(&self) -> Self {
         let mut entries = Self::new();
@@ -463,7 +463,7 @@ impl<'a> Scope<'a> {
         entries
     }
     /// Get an iterator to entries in the [`Scope`].
-    #[inline(always)]
+    #[inline]
     #[allow(dead_code)]
     pub(crate) fn into_iter(
         self,
@@ -507,7 +507,7 @@ impl<'a> Scope<'a> {
     }
     /// Get an iterator to entries in the [`Scope`].
     /// Shared values are not expanded.
-    #[inline(always)]
+    #[inline]
     pub fn iter_raw(&self) -> impl Iterator<Item = (&str, bool, &Dynamic)> {
         self.names
             .iter()

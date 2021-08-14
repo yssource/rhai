@@ -189,7 +189,7 @@ impl<'e> ParseState<'e> {
     ///
     /// Panics when called under `no_module`.
     #[cfg(not(feature = "no_module"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
         self.modules
@@ -325,7 +325,7 @@ impl Expr {
 }
 
 /// Make sure that the next expression is not a statement expression (i.e. wrapped in `{}`).
-#[inline(always)]
+#[inline]
 fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result<(), ParseError> {
     match input.peek().expect(NEVER_ENDS) {
         (Token::LeftBrace, pos) => Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos)),
@@ -334,7 +334,7 @@ fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result
 }
 
 /// Make sure that the next expression is not a mis-typed assignment (i.e. `a = b` instead of `a == b`).
-#[inline(always)]
+#[inline]
 fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
     match input.peek().expect(NEVER_ENDS) {
         (Token::Equals, pos) => Err(LexError::ImproperSymbol(

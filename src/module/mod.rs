@@ -455,7 +455,7 @@ impl Module {
 
     /// Get a reference to a namespace-qualified variable.
     /// Name and Position in [`EvalAltResult`] are [`None`] and [`NONE`][Position::NONE] and must be set afterwards.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn get_qualified_var(&self, hash_var: u64) -> Result<&Dynamic, Box<EvalAltResult>> {
         self.all_variables.get(&hash_var).ok_or_else(|| {
             EvalAltResult::ErrorVariableNotFound(String::new(), Position::NONE).into()
@@ -497,7 +497,7 @@ impl Module {
     /// Get a shared reference to the script-defined function in the [`Module`] based on name
     /// and number of parameters.
     #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get_script_fn(
         &self,
@@ -965,7 +965,7 @@ impl Module {
     /// assert!(module.contains_fn(hash));
     /// ```
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[inline(always)]
+    #[inline]
     pub fn set_indexer_get_fn<ARGS, A, B, T, F>(&mut self, func: F) -> u64
     where
         A: Variant + Clone,
@@ -1026,7 +1026,7 @@ impl Module {
     /// assert!(module.contains_fn(hash));
     /// ```
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[inline(always)]
+    #[inline]
     pub fn set_indexer_set_fn<ARGS, A, B, C, F>(&mut self, func: F) -> u64
     where
         A: Variant + Clone,

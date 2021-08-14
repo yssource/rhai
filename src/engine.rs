@@ -98,7 +98,7 @@ impl Imports {
         self.modules.get_mut(index)
     }
     /// Get the index of an imported [module][Module] by name.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn find(&self, name: &str) -> Option<usize> {
         self.keys
@@ -121,7 +121,7 @@ impl Imports {
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.keys
             .iter()
@@ -131,13 +131,13 @@ impl Imports {
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn iter_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.keys.iter().rev().zip(self.modules.iter().rev())
     }
     /// Get an iterator to this stack of imported [modules][Module] in forward order.
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn scan_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.keys.iter().zip(self.modules.iter())
     }
@@ -149,7 +149,7 @@ impl Imports {
         self.modules.iter().any(|m| m.contains_qualified_fn(hash))
     }
     /// Get the specified function via its hash key from this stack of imported [modules][Module].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get_fn(&self, hash: u64) -> Option<(&CallableFunction, Option<&Identifier>)> {
         self.modules
@@ -167,7 +167,7 @@ impl Imports {
     }
     /// Get the specified [`TypeId`][std::any::TypeId] iterator from this stack of imported
     /// [modules][Module].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.modules
@@ -182,7 +182,7 @@ impl IntoIterator for Imports {
     type IntoIter =
         Zip<Rev<smallvec::IntoIter<[Identifier; 4]>>, Rev<smallvec::IntoIter<[Shared<Module>; 4]>>>;
 
-    #[inline(always)]
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.keys
             .into_iter()
@@ -694,7 +694,7 @@ impl EvalState {
         self.scope_level == 0
     }
     /// Get a mutable reference to the current function resolution cache.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn fn_resolution_cache_mut(&mut self) -> &mut FnResolutionCache {
         if self.fn_resolution_caches.is_empty() {

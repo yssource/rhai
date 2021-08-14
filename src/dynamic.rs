@@ -1038,7 +1038,7 @@ impl Dynamic {
     /// assert_eq!(new_result.type_name(), "string");
     /// assert_eq!(new_result.to_string(), "hello");
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn from<T: Variant + Clone>(mut value: T) -> Self {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
@@ -1179,7 +1179,7 @@ impl Dynamic {
     ///
     /// assert_eq!(x.try_cast::<u32>().unwrap(), 42);
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn try_cast<T: Any>(self) -> Option<T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
@@ -1538,7 +1538,7 @@ impl Dynamic {
     /// Casting to [`Dynamic`] just returns a reference to it.
     ///
     /// Returns [`None`] if the cast fails, or if the value is shared.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn downcast_ref<T: Any + Clone + ?Sized>(&self) -> Option<&T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
@@ -1629,7 +1629,7 @@ impl Dynamic {
     /// Casting to [`Dynamic`] just returns a mutable reference to it.
     ///
     /// Returns [`None`] if the cast fails, or if the value is shared.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn downcast_mut<T: Any + Clone>(&mut self) -> Option<&mut T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.
@@ -1728,7 +1728,7 @@ impl Dynamic {
     }
     /// Cast the [`Dynamic`] as a unit `()` and return it.
     /// Returns the name of the actual type if the cast fails.
-    #[inline(always)]
+    #[inline]
     pub fn as_unit(&self) -> Result<(), &'static str> {
         match self.0 {
             Union::Unit(value, _, _) => Ok(value),
@@ -1739,7 +1739,7 @@ impl Dynamic {
     }
     /// Cast the [`Dynamic`] as the system integer type [`INT`] and return it.
     /// Returns the name of the actual type if the cast fails.
-    #[inline(always)]
+    #[inline]
     pub fn as_int(&self) -> Result<INT, &'static str> {
         match self.0 {
             Union::Int(n, _, _) => Ok(n),
@@ -1753,7 +1753,7 @@ impl Dynamic {
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    #[inline(always)]
+    #[inline]
     pub fn as_float(&self) -> Result<FLOAT, &'static str> {
         match self.0 {
             Union::Float(n, _, _) => Ok(*n),
@@ -1767,7 +1767,7 @@ impl Dynamic {
     ///
     /// Exported under the `decimal` feature only.
     #[cfg(feature = "decimal")]
-    #[inline(always)]
+    #[inline]
     pub fn as_decimal(&self) -> Result<Decimal, &'static str> {
         match self.0 {
             Union::Decimal(ref n, _, _) => Ok(**n),
@@ -1778,7 +1778,7 @@ impl Dynamic {
     }
     /// Cast the [`Dynamic`] as a [`bool`] and return it.
     /// Returns the name of the actual type if the cast fails.
-    #[inline(always)]
+    #[inline]
     pub fn as_bool(&self) -> Result<bool, &'static str> {
         match self.0 {
             Union::Bool(b, _, _) => Ok(b),
@@ -1789,7 +1789,7 @@ impl Dynamic {
     }
     /// Cast the [`Dynamic`] as a [`char`] and return it.
     /// Returns the name of the actual type if the cast fails.
-    #[inline(always)]
+    #[inline]
     pub fn as_char(&self) -> Result<char, &'static str> {
         match self.0 {
             Union::Char(n, _, _) => Ok(n),
@@ -1804,7 +1804,7 @@ impl Dynamic {
     /// # Panics
     ///
     /// Panics if the value is shared.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn as_str_ref(&self) -> Result<&str, &'static str> {
         match self.0 {
             Union::Str(ref s, _, _) => Ok(s),
@@ -1816,7 +1816,7 @@ impl Dynamic {
     /// Convert the [`Dynamic`] into a [`String`] and return it.
     /// If there are other references to the same string, a cloned copy is returned.
     /// Returns the name of the actual type if the cast fails.
-    #[inline(always)]
+    #[inline]
     pub fn as_string(self) -> Result<String, &'static str> {
         self.as_immutable_string().map(ImmutableString::into_owned)
     }
@@ -1954,7 +1954,7 @@ impl Dynamic {
 impl<K: Into<crate::Identifier>, T: Variant + Clone> From<std::collections::HashMap<K, T>>
     for Dynamic
 {
-    #[inline(always)]
+    #[inline]
     fn from(value: std::collections::HashMap<K, T>) -> Self {
         Self(Union::Map(
             Box::new(
@@ -1971,7 +1971,7 @@ impl<K: Into<crate::Identifier>, T: Variant + Clone> From<std::collections::Hash
 #[cfg(not(feature = "no_object"))]
 #[cfg(not(feature = "no_std"))]
 impl<K: Into<crate::Identifier>> From<std::collections::HashSet<K>> for Dynamic {
-    #[inline(always)]
+    #[inline]
     fn from(value: std::collections::HashSet<K>) -> Self {
         Self(Union::Map(
             Box::new(
@@ -1989,7 +1989,7 @@ impl<K: Into<crate::Identifier>> From<std::collections::HashSet<K>> for Dynamic 
 impl<K: Into<crate::Identifier>, T: Variant + Clone> From<std::collections::BTreeMap<K, T>>
     for Dynamic
 {
-    #[inline(always)]
+    #[inline]
     fn from(value: std::collections::BTreeMap<K, T>) -> Self {
         Self(Union::Map(
             Box::new(
@@ -2005,7 +2005,7 @@ impl<K: Into<crate::Identifier>, T: Variant + Clone> From<std::collections::BTre
 }
 #[cfg(not(feature = "no_object"))]
 impl<K: Into<crate::Identifier>> From<std::collections::BTreeSet<K>> for Dynamic {
-    #[inline(always)]
+    #[inline]
     fn from(value: std::collections::BTreeSet<K>) -> Self {
         Self(Union::Map(
             Box::new(
