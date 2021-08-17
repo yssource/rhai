@@ -13,8 +13,18 @@ use std::{
 
 /// A general function pointer, which may carry additional (i.e. curried) argument values
 /// to be passed onto a function during a call.
-#[derive(Debug, Clone, Hash)]
+#[derive(Clone, Hash)]
 pub struct FnPtr(Identifier, StaticVec<Dynamic>);
+
+impl fmt::Debug for FnPtr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if !self.is_curried() {
+            write!(f, "Fn({})", self.fn_name())
+        } else {
+            f.debug_tuple("Fn").field(&self.0).field(&self.1).finish()
+        }
+    }
+}
 
 impl FnPtr {
     /// Create a new function pointer.
