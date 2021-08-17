@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 1.0.2
+=============
+
+Bug fixes
+---------
+
+* Fixed bug in method call followed by an array indexing.
+
+
 Version 1.0.1
 =============
 
