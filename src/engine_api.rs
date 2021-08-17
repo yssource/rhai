@@ -574,7 +574,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[inline(always)]
+    #[inline]
     pub fn register_indexer_get<T: Variant + Clone, X: Variant + Clone, V: Variant + Clone>(
         &mut self,
         get_fn: impl Fn(&mut T, X) -> V + SendSync + 'static,
@@ -648,7 +648,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[inline(always)]
+    #[inline]
     pub fn register_indexer_get_result<
         T: Variant + Clone,
         X: Variant + Clone,
@@ -724,7 +724,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[inline(always)]
+    #[inline]
     pub fn register_indexer_set<T: Variant + Clone, X: Variant + Clone, V: Variant + Clone>(
         &mut self,
         set_fn: impl Fn(&mut T, X, V) + SendSync + 'static,
@@ -799,7 +799,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[inline(always)]
+    #[inline]
     pub fn register_indexer_set_result<
         T: Variant + Clone,
         X: Variant + Clone,

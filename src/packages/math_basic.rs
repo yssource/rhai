@@ -112,7 +112,7 @@ def_package!(crate:BasicMathPackage:"Basic mathematic functions.", lib, {
 #[export_module]
 mod int_functions {
     #[rhai_fn(name = "parse_int", return_raw)]
-    pub fn parse_int_radix(s: &str, radix: INT) -> Result<INT, Box<EvalAltResult>> {
+    pub fn parse_int_radix(string: &str, radix: INT) -> Result<INT, Box<EvalAltResult>> {
         if !(2..=36).contains(&radix) {
             return EvalAltResult::ErrorArithmetic(
                 format!("Invalid radix: '{}'", radix),
@@ -121,17 +121,17 @@ mod int_functions {
             .into();
         }
 
-        INT::from_str_radix(s.trim(), radix as u32).map_err(|err| {
+        INT::from_str_radix(string.trim(), radix as u32).map_err(|err| {
             EvalAltResult::ErrorArithmetic(
-                format!("Error parsing integer number '{}': {}", s, err),
+                format!("Error parsing integer number '{}': {}", string, err),
                 Position::NONE,
             )
             .into()
         })
     }
     #[rhai_fn(name = "parse_int", return_raw)]
-    pub fn parse_int(s: &str) -> Result<INT, Box<EvalAltResult>> {
-        parse_int_radix(s, 10)
+    pub fn parse_int(string: &str) -> Result<INT, Box<EvalAltResult>> {
+        parse_int_radix(string, 10)
     }
 }
 
@@ -283,10 +283,10 @@ mod float_functions {
         }
     }
     #[rhai_fn(return_raw)]
-    pub fn parse_float(s: &str) -> Result<FLOAT, Box<EvalAltResult>> {
-        s.trim().parse::<FLOAT>().map_err(|err| {
+    pub fn parse_float(string: &str) -> Result<FLOAT, Box<EvalAltResult>> {
+        string.trim().parse::<FLOAT>().map_err(|err| {
             EvalAltResult::ErrorArithmetic(
-                format!("Error parsing floating-point number '{}': {}", s, err),
+                format!("Error parsing floating-point number '{}': {}", string, err),
                 Position::NONE,
             )
             .into()
@@ -427,12 +427,12 @@ mod decimal_functions {
         x.fract()
     }
     #[rhai_fn(return_raw)]
-    pub fn parse_decimal(s: &str) -> Result<Decimal, Box<EvalAltResult>> {
-        Decimal::from_str(s)
-            .or_else(|_| Decimal::from_scientific(s))
+    pub fn parse_decimal(string: &str) -> Result<Decimal, Box<EvalAltResult>> {
+        Decimal::from_str(string)
+            .or_else(|_| Decimal::from_scientific(string))
             .map_err(|err| {
                 EvalAltResult::ErrorArithmetic(
-                    format!("Error parsing decimal number '{}': {}", s, err),
+                    format!("Error parsing decimal number '{}': {}", string, err),
                     Position::NONE,
                 )
                 .into()

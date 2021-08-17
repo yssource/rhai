@@ -39,7 +39,7 @@ pub fn by_ref<T: Variant + Clone>(data: &mut Dynamic) -> DynamicWriteLock<T> {
 }
 
 /// Dereference into value.
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
     if TypeId::of::<T>() == TypeId::of::<&str>() {

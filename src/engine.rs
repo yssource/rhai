@@ -98,7 +98,7 @@ impl Imports {
         self.modules.get_mut(index)
     }
     /// Get the index of an imported [module][Module] by name.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn find(&self, name: &str) -> Option<usize> {
         self.keys
@@ -121,7 +121,7 @@ impl Imports {
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.keys
             .iter()
@@ -131,13 +131,13 @@ impl Imports {
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn iter_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.keys.iter().rev().zip(self.modules.iter().rev())
     }
     /// Get an iterator to this stack of imported [modules][Module] in forward order.
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn scan_raw(&self) -> impl Iterator<Item = (&Identifier, &Shared<Module>)> {
         self.keys.iter().zip(self.modules.iter())
     }
@@ -149,7 +149,7 @@ impl Imports {
         self.modules.iter().any(|m| m.contains_qualified_fn(hash))
     }
     /// Get the specified function via its hash key from this stack of imported [modules][Module].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get_fn(&self, hash: u64) -> Option<(&CallableFunction, Option<&Identifier>)> {
         self.modules
@@ -167,7 +167,7 @@ impl Imports {
     }
     /// Get the specified [`TypeId`][std::any::TypeId] iterator from this stack of imported
     /// [modules][Module].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.modules
@@ -182,7 +182,7 @@ impl IntoIterator for Imports {
     type IntoIter =
         Zip<Rev<smallvec::IntoIter<[Identifier; 4]>>, Rev<smallvec::IntoIter<[Shared<Module>; 4]>>>;
 
-    #[inline(always)]
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.keys
             .into_iter()
@@ -694,7 +694,7 @@ impl EvalState {
         self.scope_level == 0
     }
     /// Get a mutable reference to the current function resolution cache.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn fn_resolution_cache_mut(&mut self) -> &mut FnResolutionCache {
         if self.fn_resolution_caches.is_empty() {
@@ -1235,13 +1235,14 @@ impl Engine {
         target: &mut Target,
         root: (&str, Position),
         rhs: &Expr,
-        _terminate_chaining: bool,
+        terminate_chaining: bool,
         idx_values: &mut StaticVec<ChainArgument>,
         chain_type: ChainType,
         level: usize,
         new_val: Option<((Dynamic, Position), (Option<OpAssignment>, Position))>,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         let is_ref_mut = target.is_ref();
+        let _terminate_chaining = terminate_chaining;
 
         // Pop the last index value
         let idx_val = idx_values
@@ -1725,13 +1726,15 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         expr: &Expr,
         terminate_chaining: bool,
-        _parent_chain_type: ChainType,
+        parent_chain_type: ChainType,
         idx_values: &mut StaticVec<ChainArgument>,
         size: usize,
         level: usize,
     ) -> Result<(), Box<EvalAltResult>> {
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(state, expr.position())?;
+
+        let _parent_chain_type = parent_chain_type;
 
         match expr {
             #[cfg(not(feature = "no_object"))]
@@ -1848,14 +1851,17 @@ impl Engine {
         state: &mut EvalState,
         lib: &[&Module],
         target: &'t mut Dynamic,
-        mut idx: Dynamic,
+        idx: Dynamic,
         idx_pos: Position,
-        _create: bool,
-        indexers: bool,
+        add_if_not_found: bool,
+        use_indexers: bool,
         level: usize,
     ) -> Result<Target<'t>, Box<EvalAltResult>> {
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(state, Position::NONE)?;
+
+        let mut idx = idx;
+        let _add_if_not_found = add_if_not_found;
 
         match target {
             #[cfg(not(feature = "no_index"))]
@@ -1907,7 +1913,7 @@ impl Engine {
                     self.make_type_mismatch_err::<ImmutableString>(idx.type_name(), idx_pos)
                 })?;
 
-                if _create && !map.contains_key(index.as_str()) {
+                if _add_if_not_found && !map.contains_key(index.as_str()) {
                     map.insert(index.clone().into(), Default::default());
                 }
 
@@ -1988,7 +1994,7 @@ impl Engine {
                 Ok(Target::StringChar(target, offset, ch.into()))
             }
 
-            _ if indexers => {
+            _ if use_indexers => {
                 let args = &mut [target, &mut idx];
                 let hash_get = FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_GET, 2));
                 let idx_pos = Position::NONE;
@@ -2298,12 +2304,14 @@ impl Engine {
         op_pos: Position,
         target: &mut Target,
         root: (&str, Position),
-        mut new_val: Dynamic,
+        new_val: Dynamic,
     ) -> Result<(), Box<EvalAltResult>> {
         if target.is_read_only() {
             // Assignment to constant variable
             return EvalAltResult::ErrorAssignmentToConstant(root.0.to_string(), root.1).into();
         }
+
+        let mut new_val = new_val;
 
         if let Some(OpAssignment {
             hash_op_assign,

@@ -81,7 +81,7 @@ impl Expression<'_> {
     /// [`ImmutableString`][crate::ImmutableString].
     ///
     /// Returns [`None`] also if the constant is not of the specified type.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get_literal_value<T: Variant>(&self) -> Option<T> {
         // Coded this way in order to maximally leverage potentials for dead-code removal.

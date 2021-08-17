@@ -25,8 +25,8 @@ fn test_custom_syntax() -> Result<(), Box<EvalAltResult>> {
         |context, inputs| {
             let var_name = inputs[0].get_variable_name().unwrap().to_string();
             let max = inputs[1].get_literal_value::<INT>().unwrap();
-            let stmt = inputs.get(2).unwrap();
-            let condition = inputs.get(3).unwrap();
+            let stmt = &inputs[2];
+            let condition = &inputs[3];
 
             context.scope_mut().push(var_name.clone(), 0 as INT);
 

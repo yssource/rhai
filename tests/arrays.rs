@@ -168,6 +168,9 @@ fn test_array_with_structs() -> Result<(), Box<EvalAltResult>> {
 fn test_arrays_map_reduce() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
+    assert_eq!(engine.eval::<INT>("[1].map(|x| x + 41)[0]")?, 42);
+    assert_eq!(engine.eval::<INT>("([1].map(|x| x + 41))[0]")?, 42);
+
     assert_eq!(
         convert_to_vec::<INT>(engine.eval(
             "
