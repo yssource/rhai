@@ -1979,7 +1979,10 @@ impl Engine {
         let statements = ast.statements();
 
         if eval_ast && !statements.is_empty() {
+            // Make sure new variables introduced at global level do not _spill_ into the function call
+            let orig_scope_len = scope.len();
             self.eval_global_statements(scope, mods, state, statements, lib, 0)?;
+            scope.rewind(orig_scope_len);
         }
 
         let fn_def = ast
