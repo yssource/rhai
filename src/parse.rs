@@ -1697,52 +1697,51 @@ fn make_dot_expr(
         (lhs, prop @ Expr::Property(_)) => {
             Expr::Dot(BinaryExpr { lhs, rhs: prop }.into(), false, op_pos)
         }
-        // lhs.dot_lhs.dot_rhs
-        (lhs, Expr::Dot(x, _, pos)) => match x.lhs {
-            Expr::Variable(_, _, _) | Expr::Property(_) => {
-                let rhs = Expr::Dot(
-                    BinaryExpr {
+        // lhs.dot_lhs.dot_rhs or lhs.dot_lhs[idx_rhs]
+        (lhs, rhs @ Expr::Dot(_, _, _)) | (lhs, rhs @ Expr::Index(_, _, _)) => {
+            let (x, term, pos, is_dot) = match rhs {
+                Expr::Dot(x, term, pos) => (x, term, pos, true),
+                Expr::Index(x, term, pos) => (x, term, pos, false),
+                _ => unreachable!(),
+            };
+
+            match x.lhs {
+                Expr::Variable(_, _, _) | Expr::Property(_) => {
+                    let new_lhs = BinaryExpr {
                         lhs: x.lhs.into_property(state),
                         rhs: x.rhs,
                     }
-                    .into(),
-                    false,
-                    pos,
-                );
-                Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
-            }
-            Expr::FnCall(mut func, func_pos) => {
-                // Recalculate hash
-                func.hashes = FnCallHashes::from_script_and_native(
-                    calc_fn_hash(&func.name, func.args.len()),
-                    calc_fn_hash(&func.name, func.args.len() + 1),
-                );
+                    .into();
 
-                let rhs = Expr::Dot(
-                    BinaryExpr {
+                    let rhs = if is_dot {
+                        Expr::Dot(new_lhs, term, pos)
+                    } else {
+                        Expr::Index(new_lhs, term, pos)
+                    };
+                    Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
+                }
+                Expr::FnCall(mut func, func_pos) => {
+                    // Recalculate hash
+                    func.hashes = FnCallHashes::from_script_and_native(
+                        calc_fn_hash(&func.name, func.args.len()),
+                        calc_fn_hash(&func.name, func.args.len() + 1),
+                    );
+
+                    let new_lhs = BinaryExpr {
                         lhs: Expr::FnCall(func, func_pos),
                         rhs: x.rhs,
                     }
-                    .into(),
-                    false,
-                    pos,
-                );
-                Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
-            }
-            _ => unreachable!("invalid dot expression: {:?}", x.lhs),
-        },
-        // lhs.idx_lhs[idx_rhs]
-        (lhs, Expr::Index(x, term, pos)) => {
-            let rhs = Expr::Index(
-                BinaryExpr {
-                    lhs: x.lhs.into_property(state),
-                    rhs: x.rhs,
+                    .into();
+
+                    let rhs = if is_dot {
+                        Expr::Dot(new_lhs, term, pos)
+                    } else {
+                        Expr::Index(new_lhs, term, pos)
+                    };
+                    Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
                 }
-                .into(),
-                term,
-                pos,
-            );
-            Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
+                _ => unreachable!("invalid dot expression: {:?}", x.lhs),
+            }
         }
         // lhs.nnn::func(...)
         (_, Expr::FnCall(x, _)) if x.is_qualified() => {
