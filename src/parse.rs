@@ -1683,15 +1683,9 @@ fn make_dot_expr(
     op_pos: Position,
 ) -> Result<Expr, ParseError> {
     Ok(match (lhs, rhs) {
-        // lhs[???]...[???].rhs
-        (Expr::Index(mut x, false, pos), rhs) if !terminate_chaining => {
-            // Attach dot chain to the bottom level of indexing chain
-            x.rhs = make_dot_expr(state, x.rhs, false, rhs, op_pos)?;
-            Expr::Index(x, false, pos)
-        }
         // lhs[idx_expr].rhs
-        (Expr::Index(mut x, _, pos), rhs) => {
-            x.rhs = make_dot_expr(state, x.rhs, true, rhs, op_pos)?;
+        (Expr::Index(mut x, term, pos), rhs) => {
+            x.rhs = make_dot_expr(state, x.rhs, term || terminate_chaining, rhs, op_pos)?;
             Expr::Index(x, false, pos)
         }
         // lhs.id
