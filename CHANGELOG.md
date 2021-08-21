@@ -1,6 +1,32 @@
 Rhai Release Notes
 ==================
 
+Version 1.1.0
+=============
+
+Bug fixes
+---------
+
+* Custom syntax starting with a disabled standard keyword now works properly.
+* When calling `Engine::call_fn`, new variables defined during evaluation of the body script are removed and no longer spill into the function call.
+
+Enhancements
+------------
+
+* `Engine::consume_XXX` methods are renamed to `Engine::run_XXX` to make meanings clearer. The `consume_XXX` API is deprecated.
+* `$symbol$` is supported in custom syntax to match any symbol.
+* Custom syntax with `$block$`, `}` or `;` as the last symbol are now self-terminating (i.e. no need to attach a terminating `;`).
+* `Dynamic::as_string` and `Dynamic::as_immutable_string` are deprecated and replaced by `into_string` and `into_immutable_string` respectively.
+* Added a number of constants to `Dynamic`.
+* Added a number of constants and `fromXXX` constant methods to `Dynamic`.
+* `parse_float()`, `PI()` and `E()` now defer to `Decimal` under `no_float` if `decimal` is turned on.
+* Added `log10()` for `Decimal`.
+* `ln` for `Decimal` is now checked and won't panic.
+* `Scope::set_value` now takes anything that implements `Into<Cow<str>>`.
+* Added `Scope::is_constant` to check if a variable is constant.
+* Added `Scope::set_or_push` to add a new variable only if one doesn't already exist.
+
+
 Version 1.0.2
 =============
 
@@ -105,7 +131,7 @@ New features
 * Each `Dynamic` value can now contain arbitrary data (type `i32`) in the form of a _tag_. This is to use up otherwise wasted space in the `Dynamic` type.
 * A new internal feature `no_smartstring` to turn off `SmartString` for those rare cases that it is needed.
 * `DynamicReadLock` and `DynamicWriteLoc` are exposed under `internals`.
-* `From<Shared<Locked<Dynamic>>>` is added for `Dynamic` mapping directly to a shared value, together with support for `Dynamic::from`.
+* `From< Shared< Locked<Dynamic> > >` is added for `Dynamic` mapping directly to a shared value, together with support for `Dynamic::from`.
 * An indexer with string index acts as a _fallback_ to a property getter/setter.
 
 Enhancements

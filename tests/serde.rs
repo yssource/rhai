@@ -102,7 +102,7 @@ fn test_serde_ser_struct() -> Result<(), Box<EvalAltResult>> {
     assert!(obj["b"].as_bool().unwrap());
     assert_eq!(Ok(42), map["int"].as_int());
     assert_eq!(seq.len(), 3);
-    assert_eq!("kitty", seq.remove(1).as_string().unwrap());
+    assert_eq!("kitty", seq.remove(1).into_string().unwrap());
 
     Ok(())
 }
@@ -116,10 +116,10 @@ fn test_serde_ser_unit_enum() -> Result<(), Box<EvalAltResult>> {
     }
 
     let d = to_dynamic(MyEnum::VariantFoo)?;
-    assert_eq!("VariantFoo", d.as_string().unwrap());
+    assert_eq!("VariantFoo", d.into_string().unwrap());
 
     let d = to_dynamic(MyEnum::VariantBar)?;
-    assert_eq!("VariantBar", d.as_string().unwrap());
+    assert_eq!("VariantBar", d.into_string().unwrap());
 
     Ok(())
 }
@@ -145,7 +145,7 @@ fn test_serde_ser_externally_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         assert_eq!(
             "VariantUnit",
             to_dynamic(MyEnum::VariantUnit)?
-                .as_immutable_string()
+                .into_immutable_string()
                 .unwrap()
                 .as_str()
         );
@@ -203,7 +203,7 @@ fn test_serde_ser_internally_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         "VariantEmptyStruct",
         map.remove("tag")
             .unwrap()
-            .as_immutable_string()
+            .into_immutable_string()
             .unwrap()
             .as_str()
     );
@@ -214,7 +214,7 @@ fn test_serde_ser_internally_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         "VariantStruct",
         map.remove("tag")
             .unwrap()
-            .as_immutable_string()
+            .into_immutable_string()
             .unwrap()
             .as_str()
     );
@@ -247,7 +247,7 @@ fn test_serde_ser_adjacently_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         "VariantUnit",
         map.remove("tag")
             .unwrap()
-            .as_immutable_string()
+            .into_immutable_string()
             .unwrap()
             .as_str()
     );
@@ -260,7 +260,7 @@ fn test_serde_ser_adjacently_tagged_enum() -> Result<(), Box<EvalAltResult>> {
             "VariantUnitTuple",
             map.remove("tag")
                 .unwrap()
-                .as_immutable_string()
+                .into_immutable_string()
                 .unwrap()
                 .as_str()
         );
@@ -274,7 +274,7 @@ fn test_serde_ser_adjacently_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         "VariantNewtype",
         map.remove("tag")
             .unwrap()
-            .as_immutable_string()
+            .into_immutable_string()
             .unwrap()
             .as_str()
     );
@@ -289,7 +289,7 @@ fn test_serde_ser_adjacently_tagged_enum() -> Result<(), Box<EvalAltResult>> {
             "VariantTuple",
             map.remove("tag")
                 .unwrap()
-                .as_immutable_string()
+                .into_immutable_string()
                 .unwrap()
                 .as_str()
         );
@@ -305,7 +305,7 @@ fn test_serde_ser_adjacently_tagged_enum() -> Result<(), Box<EvalAltResult>> {
         "VariantEmptyStruct",
         map.remove("tag")
             .unwrap()
-            .as_immutable_string()
+            .into_immutable_string()
             .unwrap()
             .as_str()
     );
@@ -316,7 +316,7 @@ fn test_serde_ser_adjacently_tagged_enum() -> Result<(), Box<EvalAltResult>> {
     let mut map = to_dynamic(MyEnum::VariantStruct { a: 123 })?.cast::<Map>();
     assert_eq!(
         "VariantStruct",
-        map.remove("tag").unwrap().as_string().unwrap()
+        map.remove("tag").unwrap().into_string().unwrap()
     );
     let mut map_inner = map.remove("content").unwrap().cast::<Map>();
     assert!(map.is_empty());

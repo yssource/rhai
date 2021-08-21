@@ -71,6 +71,7 @@ use std::prelude::v1::*;
 
 mod ast;
 mod custom_syntax;
+mod deprecated;
 mod dynamic;
 mod engine;
 mod engine_api;

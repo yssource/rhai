@@ -41,7 +41,7 @@ fn bench_type_field(bench: &mut Bencher) {
     let mut scope = Scope::new();
     scope.push("foo", Test { x: 42 });
 
-    bench.iter(|| engine.consume_ast_with_scope(&mut scope, &ast).unwrap());
+    bench.iter(|| engine.run_ast_with_scope(&mut scope, &ast).unwrap());
 }
 
 #[bench]
@@ -59,7 +59,7 @@ fn bench_type_method(bench: &mut Bencher) {
     let mut scope = Scope::new();
     scope.push("foo", Test { x: 42 });
 
-    bench.iter(|| engine.consume_ast_with_scope(&mut scope, &ast).unwrap());
+    bench.iter(|| engine.run_ast_with_scope(&mut scope, &ast).unwrap());
 }
 
 #[bench]
@@ -77,7 +77,7 @@ fn bench_type_method_with_params(bench: &mut Bencher) {
     let mut scope = Scope::new();
     scope.push("foo", Test { x: 42 });
 
-    bench.iter(|| engine.consume_ast_with_scope(&mut scope, &ast).unwrap());
+    bench.iter(|| engine.run_ast_with_scope(&mut scope, &ast).unwrap());
 }
 
 #[bench]
@@ -96,5 +96,5 @@ fn bench_type_method_nested(bench: &mut Bencher) {
     let mut scope = Scope::new();
     scope.push("foo", Test { x: 42 });
 
-    bench.iter(|| engine.consume_ast_with_scope(&mut scope, &ast).unwrap());
+    bench.iter(|| engine.run_ast_with_scope(&mut scope, &ast).unwrap());
 }

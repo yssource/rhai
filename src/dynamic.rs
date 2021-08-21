@@ -10,6 +10,7 @@ use std::{
     fmt,
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut},
+    str::FromStr,
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -819,66 +820,149 @@ impl Default for Dynamic {
 
 impl Dynamic {
     /// A [`Dynamic`] containing a `()`.
-    pub const UNIT: Dynamic = Self(Union::Unit((), DEFAULT_TAG_VALUE, ReadWrite));
+    pub const UNIT: Self = Self(Union::Unit((), DEFAULT_TAG_VALUE, ReadWrite));
     /// A [`Dynamic`] containing a `true`.
-    pub const TRUE: Dynamic = Self(Union::Bool(true, DEFAULT_TAG_VALUE, ReadWrite));
+    pub const TRUE: Self = Self::from_bool(true);
     /// A [`Dynamic`] containing a [`false`].
-    pub const FALSE: Dynamic = Self(Union::Bool(false, DEFAULT_TAG_VALUE, ReadWrite));
+    pub const FALSE: Self = Self::from_bool(false);
     /// A [`Dynamic`] containing the integer zero.
-    pub const ZERO: Dynamic = Self(Union::Int(0, DEFAULT_TAG_VALUE, ReadWrite));
+    pub const ZERO: Self = Self::from_int(0);
     /// A [`Dynamic`] containing the integer one.
-    pub const ONE: Dynamic = Self(Union::Int(1, DEFAULT_TAG_VALUE, ReadWrite));
+    pub const ONE: Self = Self::from_int(1);
     /// A [`Dynamic`] containing the integer two.
-    pub const TWO: Dynamic = Self(Union::Int(2, DEFAULT_TAG_VALUE, ReadWrite));
+    pub const TWO: Self = Self::from_int(2);
+    /// A [`Dynamic`] containing the integer three.
+    pub const THREE: Self = Self::from_int(3);
     /// A [`Dynamic`] containing the integer ten.
-    pub const TEN: Dynamic = Self(Union::Int(10, DEFAULT_TAG_VALUE, ReadWrite));
+    pub const TEN: Self = Self::from_int(10);
+    /// A [`Dynamic`] containing the integer one hundred.
+    pub const HUNDRED: Self = Self::from_int(100);
+    /// A [`Dynamic`] containing the integer one thousand.
+    pub const THOUSAND: Self = Self::from_int(1000);
     /// A [`Dynamic`] containing the integer negative one.
-    pub const NEGATIVE_ONE: Dynamic = Self(Union::Int(-1, DEFAULT_TAG_VALUE, ReadWrite));
+    pub const NEGATIVE_ONE: Self = Self::from_int(-1);
     /// A [`Dynamic`] containing `0.0`.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_ZERO: Dynamic = Self(Union::Float(
-        FloatWrapper::new_const(0.0),
-        DEFAULT_TAG_VALUE,
-        ReadWrite,
-    ));
+    pub const FLOAT_ZERO: Self = Self::from_float(0.0);
     /// A [`Dynamic`] containing `1.0`.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_ONE: Dynamic = Self(Union::Float(
-        FloatWrapper::new_const(1.0),
-        DEFAULT_TAG_VALUE,
-        ReadWrite,
-    ));
+    pub const FLOAT_ONE: Self = Self::from_float(1.0);
     /// A [`Dynamic`] containing `2.0`.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_TWO: Dynamic = Self(Union::Float(
-        FloatWrapper::new_const(2.0),
-        DEFAULT_TAG_VALUE,
-        ReadWrite,
-    ));
+    pub const FLOAT_TWO: Self = Self::from_float(2.0);
     /// A [`Dynamic`] containing `10.0`.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_TEN: Dynamic = Self(Union::Float(
-        FloatWrapper::new_const(10.0),
-        DEFAULT_TAG_VALUE,
-        ReadWrite,
-    ));
-    /// A [`Dynamic`] containing the `-1.0`.
+    pub const FLOAT_TEN: Self = Self::from_float(10.0);
+    /// A [`Dynamic`] containing `100.0`.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_NEGATIVE_ONE: Dynamic = Self(Union::Float(
-        FloatWrapper::new_const(-1.0),
-        DEFAULT_TAG_VALUE,
-        ReadWrite,
-    ));
+    pub const FLOAT_HUNDRED: Self = Self::from_float(100.0);
+    /// A [`Dynamic`] containing `1000.0`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_THOUSAND: Self = Self::from_float(1000.0);
+    /// A [`Dynamic`] containing `-1.0`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_NEGATIVE_ONE: Self = Self::from_float(-1.0);
+    /// A [`Dynamic`] containing π.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    #[cfg(not(feature = "f32_float"))]
+    pub const FLOAT_PI: Self = Self::from_float(
+        #[cfg(not(feature = "f32_float"))]
+        {
+            std::f64::consts::PI
+        },
+        #[cfg(feature = "f32_float")]
+        {
+            std::f32::consts::PI
+        },
+    );
+    /// A [`Dynamic`] containing π/2.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_HALF_PI: Self = Self::from_float(
+        #[cfg(not(feature = "f32_float"))]
+        {
+            std::f64::consts::PI / 2.0
+        },
+        #[cfg(feature = "f32_float")]
+        {
+            std::f32::consts::PI / 2.0
+        },
+    );
+    /// A [`Dynamic`] containing 2π.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_TWO_PI: Self = Self::from_float(
+        #[cfg(not(feature = "f32_float"))]
+        {
+            std::f64::consts::PI * 2.0
+        },
+        #[cfg(feature = "f32_float")]
+        {
+            std::f32::consts::PI * 2.0
+        },
+    );
+
+    /// Create a new [`Dynamic`] from a [`bool`].
+    #[inline(always)]
+    pub const fn from_bool(value: bool) -> Self {
+        Self(Union::Bool(value, DEFAULT_TAG_VALUE, ReadWrite))
+    }
+    /// Create a new [`Dynamic`] from an [`INT`].
+    #[inline(always)]
+    pub const fn from_int(value: INT) -> Self {
+        Self(Union::Int(value, DEFAULT_TAG_VALUE, ReadWrite))
+    }
+    /// Create a new [`Dynamic`] from a [`char`].
+    #[inline(always)]
+    pub const fn from_char(value: char) -> Self {
+        Self(Union::Char(value, DEFAULT_TAG_VALUE, ReadWrite))
+    }
+    /// Create a new [`Dynamic`] from a [`FLOAT`].
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    #[inline(always)]
+    pub const fn from_float(value: FLOAT) -> Self {
+        Self(Union::Float(
+            FloatWrapper::new_const(value),
+            DEFAULT_TAG_VALUE,
+            ReadWrite,
+        ))
+    }
+    /// Create a new [`Dynamic`] from a [`Decimal`](https://docs.rs/rust_decimal).
+    ///
+    /// Exported under the `decimal` feature only.
+    #[cfg(feature = "decimal")]
+    #[inline(always)]
+    pub fn from_decimal(value: Decimal) -> Self {
+        Self(Union::Decimal(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
+    }
+    /// Create a new [`Dynamic`] from an [`Instant`].
+    ///
+    /// Not available under `no-std`.
+    #[cfg(not(feature = "no_std"))]
+    #[inline(always)]
+    pub fn from_timestamp(value: Instant) -> Self {
+        Self(Union::TimeStamp(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
+    }
 
     /// Get the [`AccessMode`] for this [`Dynamic`].
     #[must_use]
@@ -1816,14 +1900,15 @@ impl Dynamic {
     /// Convert the [`Dynamic`] into a [`String`] and return it.
     /// If there are other references to the same string, a cloned copy is returned.
     /// Returns the name of the actual type if the cast fails.
-    #[inline]
-    pub fn as_string(self) -> Result<String, &'static str> {
-        self.as_immutable_string().map(ImmutableString::into_owned)
+    #[inline(always)]
+    pub fn into_string(self) -> Result<String, &'static str> {
+        self.into_immutable_string()
+            .map(ImmutableString::into_owned)
     }
     /// Convert the [`Dynamic`] into an [`ImmutableString`] and return it.
     /// Returns the name of the actual type if the cast fails.
     #[inline]
-    pub fn as_immutable_string(self) -> Result<ImmutableString, &'static str> {
+    pub fn into_immutable_string(self) -> Result<ImmutableString, &'static str> {
         match self.0 {
             Union::Str(s, _, _) => Ok(s),
             #[cfg(not(feature = "no_closure"))]
@@ -1898,6 +1983,13 @@ impl From<&ImmutableString> for Dynamic {
     #[inline(always)]
     fn from(value: &ImmutableString) -> Self {
         value.clone().into()
+    }
+}
+impl FromStr for Dynamic {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(Self(Union::Str(value.into(), DEFAULT_TAG_VALUE, ReadWrite)))
     }
 }
 #[cfg(not(feature = "no_index"))]

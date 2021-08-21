@@ -368,7 +368,7 @@ fn test_module_from_ast() -> Result<(), Box<EvalAltResult>> {
     );
     assert!(matches!(
         *engine
-            .consume(r#"import "testing" as ttt; ttt::hidden()"#)
+            .run(r#"import "testing" as ttt; ttt::hidden()"#)
             .expect_err("should error"),
         EvalAltResult::ErrorFunctionNotFound(fn_name, _) if fn_name == "ttt::hidden ()"
     ));
@@ -498,7 +498,7 @@ fn test_module_ast_namespace2() -> Result<(), Box<EvalAltResult>> {
     static_modules.insert("test_module", module);
     engine.set_module_resolver(static_modules);
 
-    engine.consume(SCRIPT)?;
+    engine.run(SCRIPT)?;
 
     Ok(())
 }

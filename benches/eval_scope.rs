@@ -18,7 +18,7 @@ fn bench_eval_scope_single(bench: &mut Bencher) {
 
     let ast = engine.compile_expression(script).unwrap();
 
-    bench.iter(|| engine.consume_ast_with_scope(&mut scope, &ast).unwrap());
+    bench.iter(|| engine.run_ast_with_scope(&mut scope, &ast).unwrap());
 }
 
 #[bench]
@@ -34,7 +34,7 @@ fn bench_eval_scope_multiple(bench: &mut Bencher) {
 
     let ast = engine.compile_expression(script).unwrap();
 
-    bench.iter(|| engine.consume_ast_with_scope(&mut scope, &ast).unwrap());
+    bench.iter(|| engine.run_ast_with_scope(&mut scope, &ast).unwrap());
 }
 
 #[bench]
@@ -50,7 +50,7 @@ fn bench_eval_scope_longer(bench: &mut Bencher) {
 
     let ast = engine.compile_expression(script).unwrap();
 
-    bench.iter(|| engine.consume_ast_with_scope(&mut scope, &ast).unwrap());
+    bench.iter(|| engine.run_ast_with_scope(&mut scope, &ast).unwrap());
 }
 
 #[bench]
@@ -73,5 +73,5 @@ fn bench_eval_scope_complex(bench: &mut Bencher) {
 
     let ast = engine.compile_expression(script).unwrap();
 
-    bench.iter(|| engine.consume_ast_with_scope(&mut scope, &ast).unwrap());
+    bench.iter(|| engine.run_ast_with_scope(&mut scope, &ast).unwrap());
 }

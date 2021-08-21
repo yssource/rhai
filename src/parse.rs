@@ -4,10 +4,7 @@ use crate::ast::{
     BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ReturnType,
     ScriptFnDef, Stmt, StmtBlock, AST_OPTION_FLAGS::*,
 };
-use crate::custom_syntax::{
-    CustomSyntax, CUSTOM_SYNTAX_MARKER_BLOCK, CUSTOM_SYNTAX_MARKER_BOOL, CUSTOM_SYNTAX_MARKER_EXPR,
-    CUSTOM_SYNTAX_MARKER_IDENT, CUSTOM_SYNTAX_MARKER_INT, CUSTOM_SYNTAX_MARKER_STRING,
-};
+use crate::custom_syntax::{markers::*, CustomSyntax};
 use crate::dynamic::AccessMode;
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::fn_hash::get_hasher;
@@ -17,8 +14,8 @@ use crate::token::{
     is_keyword_function, is_valid_identifier, Token, TokenStream, TokenizerControl,
 };
 use crate::{
-    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Engine, Identifier, LexError,
-    ParseError, ParseErrorType, Position, Scope, Shared, StaticVec, AST,
+    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Engine, Identifier,
+    ImmutableString, LexError, ParseError, ParseErrorType, Position, Scope, Shared, StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -29,7 +26,7 @@ use std::{
 };
 
 #[cfg(not(feature = "no_float"))]
-use crate::{custom_syntax::CUSTOM_SYNTAX_MARKER_FLOAT, FLOAT};
+use crate::{custom_syntax::markers::CUSTOM_SYNTAX_MARKER_FLOAT, FLOAT};
 
 #[cfg(not(feature = "no_function"))]
 use crate::FnAccess;
@@ -386,6 +383,20 @@ fn parse_var_name(input: &mut TokenStream) -> Result<(String, Position), ParseEr
         (Token::LexError(err), pos) => Err(err.into_err(pos)),
         // Not a variable name
         (_, pos) => Err(PERR::VariableExpected.into_err(pos)),
+    }
+}
+
+/// Parse a symbol.
+fn parse_symbol(input: &mut TokenStream) -> Result<(String, Position), ParseError> {
+    match input.next().expect(NEVER_ENDS) {
+        // Symbol
+        (token, pos) if token.is_standard_symbol() => Ok((token.literal_syntax().into(), pos)),
+        // Reserved symbol
+        (Token::Reserved(s), pos) if !is_valid_identifier(s.chars()) => Ok((s, pos)),
+        // Bad identifier
+        (Token::LexError(err), pos) => Err(err.into_err(pos)),
+        // Not a symbol
+        (_, pos) => Err(PERR::MissingSymbol(Default::default()).into_err(pos)),
     }
 }
 
@@ -1672,15 +1683,9 @@ fn make_dot_expr(
     op_pos: Position,
 ) -> Result<Expr, ParseError> {
     Ok(match (lhs, rhs) {
-        // lhs[???]...[???].rhs
-        (Expr::Index(mut x, false, pos), rhs) if !terminate_chaining => {
-            // Attach dot chain to the bottom level of indexing chain
-            x.rhs = make_dot_expr(state, x.rhs, false, rhs, op_pos)?;
-            Expr::Index(x, false, pos)
-        }
         // lhs[idx_expr].rhs
-        (Expr::Index(mut x, _, pos), rhs) => {
-            x.rhs = make_dot_expr(state, x.rhs, true, rhs, op_pos)?;
+        (Expr::Index(mut x, term, pos), rhs) => {
+            x.rhs = make_dot_expr(state, x.rhs, term || terminate_chaining, rhs, op_pos)?;
             Expr::Index(x, false, pos)
         }
         // lhs.id
@@ -1993,16 +1998,17 @@ fn parse_custom_syntax(
     }
 
     let parse_func = syntax.parse.as_ref();
+    let mut required_token: ImmutableString = key.into();
 
-    segments.push(key.into());
-    tokens.push(key.into());
+    tokens.push(required_token.clone().into());
+    segments.push(required_token.clone());
 
     loop {
         let (fwd_token, fwd_pos) = input.peek().expect(NEVER_ENDS);
         settings.pos = *fwd_pos;
         let settings = settings.level_up();
 
-        let required_token = match parse_func(&segments, fwd_token.syntax().as_ref()) {
+        required_token = match parse_func(&segments, fwd_token.syntax().as_ref()) {
             Ok(Some(seg)) => seg,
             Ok(None) => break,
             Err(err) => return Err(err.0.into_err(settings.pos)),
@@ -2015,6 +2021,13 @@ fn parse_custom_syntax(
                 segments.push(name.clone().into());
                 tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_IDENT));
                 keywords.push(Expr::Variable(None, pos, (None, None, name).into()));
+            }
+            CUSTOM_SYNTAX_MARKER_SYMBOL => {
+                let (symbol, pos) = parse_symbol(input)?;
+                let symbol: ImmutableString = state.get_identifier(symbol).into();
+                segments.push(symbol.clone());
+                tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_SYMBOL));
+                keywords.push(Expr::StringConstant(symbol, pos));
             }
             CUSTOM_SYNTAX_MARKER_EXPR => {
                 keywords.push(parse_expr(input, state, lib, settings)?);
@@ -2034,9 +2047,8 @@ fn parse_custom_syntax(
             CUSTOM_SYNTAX_MARKER_BOOL => match input.next().expect(NEVER_ENDS) {
                 (b @ Token::True, pos) | (b @ Token::False, pos) => {
                     keywords.push(Expr::BoolConstant(b == Token::True, pos));
-                    let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_BOOL);
-                    segments.push(keyword.clone().into());
-                    tokens.push(keyword);
+                    segments.push(state.get_identifier(b.literal_syntax()).into());
+                    tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_BOOL));
                 }
                 (_, pos) => {
                     return Err(
@@ -2048,9 +2060,8 @@ fn parse_custom_syntax(
             CUSTOM_SYNTAX_MARKER_INT => match input.next().expect(NEVER_ENDS) {
                 (Token::IntegerConstant(i), pos) => {
                     keywords.push(Expr::IntegerConstant(i, pos));
-                    let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_INT);
-                    segments.push(keyword.clone().into());
-                    tokens.push(keyword);
+                    segments.push(i.to_string().into());
+                    tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_INT));
                 }
                 (_, pos) => {
                     return Err(
@@ -2063,9 +2074,8 @@ fn parse_custom_syntax(
             CUSTOM_SYNTAX_MARKER_FLOAT => match input.next().expect(NEVER_ENDS) {
                 (Token::FloatConstant(f), pos) => {
                     keywords.push(Expr::FloatConstant(f, pos));
-                    let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_FLOAT);
-                    segments.push(keyword.clone().into());
-                    tokens.push(keyword);
+                    segments.push(f.to_string().into());
+                    tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_FLOAT));
                 }
                 (_, pos) => {
                     return Err(PERR::MissingSymbol(
@@ -2076,10 +2086,10 @@ fn parse_custom_syntax(
             },
             CUSTOM_SYNTAX_MARKER_STRING => match input.next().expect(NEVER_ENDS) {
                 (Token::StringConstant(s), pos) => {
-                    keywords.push(Expr::StringConstant(state.get_identifier(s).into(), pos));
-                    let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_STRING);
-                    segments.push(keyword.clone().into());
-                    tokens.push(keyword);
+                    let s: ImmutableString = state.get_identifier(s).into();
+                    keywords.push(Expr::StringConstant(s.clone(), pos));
+                    segments.push(s);
+                    tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_STRING));
                 }
                 (_, pos) => {
                     return Err(PERR::MissingSymbol("Expecting a string".to_string()).into_err(pos))
@@ -2105,11 +2115,23 @@ fn parse_custom_syntax(
     keywords.shrink_to_fit();
     tokens.shrink_to_fit();
 
+    const KEYWORD_SEMICOLON: &str = Token::SemiColon.literal_syntax();
+    const KEYWORD_CLOSE_BRACE: &str = Token::RightBrace.literal_syntax();
+
+    let self_terminated = match required_token.as_str() {
+        // It is self-terminating if the last symbol is a block
+        CUSTOM_SYNTAX_MARKER_BLOCK => true,
+        // If the last symbol is `;` or `}`, it is self-terminating
+        KEYWORD_SEMICOLON | KEYWORD_CLOSE_BRACE => true,
+        _ => false,
+    };
+
     Ok(Expr::Custom(
         CustomExpr {
             keywords,
             tokens,
             scope_may_be_changed: syntax.scope_may_be_changed,
+            self_terminated,
         }
         .into(),
         pos,

@@ -3,7 +3,7 @@ members = [".", "codegen"]
 
 [package]
 name = "rhai"
-version = "1.0.3"
+version = "1.1.0"
 edition = "2018"
 authors = ["Jonathan Turner", "Lukáš Hozda", "Stephen Chung", "jhwgh1968"]
 description = "Embedded scripting for Rust"
@@ -92,7 +92,7 @@ default-features = false
 optional = true
 
 [dependencies.rust_decimal]
-version = "1.14.2"
+version = "1.15"
 default-features = false
 features = ["maths"]
 optional = true

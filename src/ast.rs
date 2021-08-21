@@ -1263,10 +1263,12 @@ impl Stmt {
             // A No-op requires a semicolon in order to know it is an empty statement!
             Self::Noop(_) => false,
 
+            Self::Expr(Expr::Custom(x, _)) if x.is_self_terminated() => true,
+
             Self::Var(_, _, _, _)
             | Self::Assignment(_, _)
-            | Self::FnCall(_, _)
             | Self::Expr(_)
+            | Self::FnCall(_, _)
             | Self::Do(_, _, _, _)
             | Self::Continue(_)
             | Self::Break(_)
@@ -1509,6 +1511,19 @@ pub struct CustomExpr {
     pub scope_may_be_changed: bool,
     /// List of tokens actually parsed.
     pub tokens: StaticVec<Identifier>,
+    /// Is this custom syntax self-terminated?
+    pub self_terminated: bool,
+}
+
+impl CustomExpr {
+    /// Is this custom syntax self-terminated (i.e. no need for a semicolon terminator)?
+    ///
+    /// A self-terminated custom syntax always ends in `$block$`, `}` or `;`
+    #[must_use]
+    #[inline(always)]
+    pub const fn is_self_terminated(&self) -> bool {
+        self.self_terminated
+    }
 }
 
 /// _(internals)_ A binary expression.
@@ -1552,8 +1567,8 @@ impl OpAssignment<'_> {
         let op_raw = op
             .map_op_assignment()
             .expect("never fails because token must be an op-assignment operator")
-            .keyword_syntax();
-        let op_assignment = op.keyword_syntax();
+            .literal_syntax();
+        let op_assignment = op.literal_syntax();
 
         Self {
             hash_op_assign: calc_fn_hash(op_assignment, 2),

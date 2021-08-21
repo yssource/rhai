@@ -3,7 +3,7 @@ use rhai::{Engine, EvalAltResult, INT};
 fn main() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
-    engine.consume(r#"print("hello, world!")"#)?;
+    engine.run(r#"print("hello, world!")"#)?;
 
     let result = engine.eval::<INT>("40 + 2")?;
 

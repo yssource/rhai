@@ -87,11 +87,11 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
     #[cfg(not(feature = "no_object"))]
     {
         assert_eq!(engine.eval::<INT>("let a = [1, 2, 3]; a.foo")?, 1);
-        engine.consume("const A = [1, 2, 3]; A.no_effect(42);")?;
-        engine.consume("const A = [1, 2, 3]; A.no_effect = 42;")?;
+        engine.run("const A = [1, 2, 3]; A.no_effect(42);")?;
+        engine.run("const A = [1, 2, 3]; A.no_effect = 42;")?;
 
         assert!(
-            matches!(*engine.consume("const A = [1, 2, 3]; A.test(42);").expect_err("should error"),
+            matches!(*engine.run("const A = [1, 2, 3]; A.test(42);").expect_err("should error"),
             EvalAltResult::ErrorAssignmentToConstant(x, _) if x == "array")
         )
     }

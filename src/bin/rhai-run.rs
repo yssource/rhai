@@ -90,7 +90,7 @@ fn main() {
             .map_err(|err| err.into())
             .and_then(|mut ast| {
                 ast.set_source(filename.to_string_lossy().to_string());
-                engine.consume_ast(&ast)
+                engine.run_ast(&ast)
             })
         {
             let filename = filename.to_string_lossy();

@@ -31,7 +31,7 @@ fn bench_eval_module(bench: &mut Bencher) {
         )
         .unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }
 
 #[bench]
@@ -49,5 +49,5 @@ fn bench_eval_function_call(bench: &mut Bencher) {
         )
         .unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }

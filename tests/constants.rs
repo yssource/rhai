@@ -15,7 +15,7 @@ fn test_constant() -> Result<(), Box<EvalAltResult>> {
 
     #[cfg(not(feature = "no_index"))]
     assert!(matches!(
-        *engine.consume("const x = [1, 2, 3, 4, 5]; x[2] = 42;").expect_err("expects error"),
+        *engine.run("const x = [1, 2, 3, 4, 5]; x[2] = 42;").expect_err("expects error"),
         EvalAltResult::ErrorAssignmentToConstant(x, _) if x == "x"
     ));
 
@@ -30,7 +30,7 @@ fn test_constant_scope() -> Result<(), Box<EvalAltResult>> {
     scope.push_constant("x", 42 as INT);
 
     assert!(matches!(
-        *engine.consume_with_scope(&mut scope, "x = 1").expect_err("expects error"),
+        *engine.run_with_scope(&mut scope, "x = 1").expect_err("expects error"),
         EvalAltResult::ErrorAssignmentToConstant(x, _) if x == "x"
     ));
 
@@ -80,7 +80,7 @@ fn test_constant_mut() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .consume(
+            .run(
                 "
                     const MY_NUMBER = new_ts();
                     MY_NUMBER.value = 42;
@@ -118,7 +118,7 @@ fn test_constant_mut() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .consume_with_scope(&mut scope, "MY_NUMBER.value = 42;")
+            .run_with_scope(&mut scope, "MY_NUMBER.value = 42;")
             .expect_err("should error"),
         EvalAltResult::ErrorAssignmentToConstant(_, _)
     ));

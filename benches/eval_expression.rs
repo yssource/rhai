@@ -15,7 +15,7 @@ fn bench_eval_expression_single(bench: &mut Bencher) {
 
     let ast = engine.compile_expression(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }
 
 #[bench]
@@ -27,7 +27,7 @@ fn bench_eval_expression_number_literal(bench: &mut Bencher) {
 
     let ast = engine.compile_expression(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }
 
 #[bench]
@@ -39,7 +39,7 @@ fn bench_eval_expression_number_operators(bench: &mut Bencher) {
 
     let ast = engine.compile_expression(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }
 
 #[bench]
@@ -56,7 +56,7 @@ fn bench_eval_expression_optimized_simple(bench: &mut Bencher) {
     engine.set_optimization_level(OptimizationLevel::Simple);
     let ast = engine.compile_expression(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }
 
 #[bench]
@@ -73,7 +73,7 @@ fn bench_eval_expression_optimized_full(bench: &mut Bencher) {
     engine.set_optimization_level(OptimizationLevel::Full);
     let ast = engine.compile_expression(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }
 
 #[bench]
@@ -120,7 +120,7 @@ fn bench_eval_loop_number(bench: &mut Bencher) {
 
     let ast = engine.compile(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }
 
 #[bench]
@@ -137,7 +137,7 @@ fn bench_eval_loop_strings_build(bench: &mut Bencher) {
 
     let ast = engine.compile(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }
 
 #[bench]
@@ -154,7 +154,7 @@ fn bench_eval_loop_strings_no_build(bench: &mut Bencher) {
 
     let ast = engine.compile(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }
 
 #[bench]
@@ -186,7 +186,7 @@ fn bench_eval_switch(bench: &mut Bencher) {
 
     let ast = engine.compile(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }
 
 #[bench]
@@ -216,5 +216,5 @@ fn bench_eval_nested_if(bench: &mut Bencher) {
 
     let ast = engine.compile(script).unwrap();
 
-    bench.iter(|| engine.consume_ast(&ast).unwrap());
+    bench.iter(|| engine.run_ast(&ast).unwrap());
 }

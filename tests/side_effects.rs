@@ -74,7 +74,7 @@ fn test_side_effects_print() -> Result<(), Box<EvalAltResult>> {
     let logger = result.clone();
     engine.on_print(move |s| logger.write().unwrap().push_str(s));
 
-    engine.consume("print(40 + 2);")?;
+    engine.run("print(40 + 2);")?;
 
     assert_eq!(*result.read().unwrap(), "42");
     Ok(())

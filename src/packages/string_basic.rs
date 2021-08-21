@@ -30,7 +30,7 @@ pub fn print_with_func(
 ) -> crate::ImmutableString {
     match ctx.call_fn_dynamic_raw(fn_name, true, &mut [value]) {
         Ok(result) if result.is::<crate::ImmutableString>() => result
-            .as_immutable_string()
+            .into_immutable_string()
             .expect("never fails as the result is `ImmutableString`"),
         Ok(result) => ctx.engine().map_type_name(result.type_name()).into(),
         Err(_) => ctx.engine().map_type_name(value.type_name()).into(),

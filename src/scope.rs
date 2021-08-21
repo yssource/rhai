@@ -339,6 +339,75 @@ impl<'a> Scope<'a> {
             .find(|(_, (key, _))| name == key.as_ref())
             .and_then(|(index, _)| self.values[index].flatten_clone().try_cast())
     }
+    /// Check if the named entry in the [`Scope`] is constant.
+    ///
+    /// Search starts backwards from the last, stopping at the first entry matching the specified name.
+    ///
+    /// Returns [`None`] if no entry matching the specified name is found.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::Scope;
+    ///
+    /// let mut my_scope = Scope::new();
+    ///
+    /// my_scope.push_constant("x", 42_i64);
+    /// assert_eq!(my_scope.is_constant("x"), Some(true));
+    /// assert_eq!(my_scope.is_constant("y"), None);
+    /// ```
+    #[inline]
+    pub fn is_constant(&self, name: &str) -> Option<bool> {
+        self.get_index(name).and_then(|(_, access)| match access {
+            AccessMode::ReadWrite => None,
+            AccessMode::ReadOnly => Some(true),
+        })
+    }
+    /// Update the value of the named entry in the [`Scope`] if it already exists and is not constant.
+    /// Push a new entry with the value into the [`Scope`] if the name doesn't exist or if the
+    /// existing entry is constant.
+    ///
+    /// Search starts backwards from the last, and only the first entry matching the specified name is updated.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::Scope;
+    ///
+    /// let mut my_scope = Scope::new();
+    ///
+    /// my_scope.set_or_push("x", 42_i64);
+    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
+    /// assert_eq!(my_scope.len(), 1);
+    ///
+    /// my_scope.set_or_push("x", 0_i64);
+    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 0);
+    /// assert_eq!(my_scope.len(), 1);
+    ///
+    /// my_scope.set_or_push("y", 123_i64);
+    /// assert_eq!(my_scope.get_value::<i64>("y").unwrap(), 123);
+    /// assert_eq!(my_scope.len(), 2);
+    /// ```
+    #[inline]
+    pub fn set_or_push(
+        &mut self,
+        name: impl AsRef<str> + Into<Cow<'a, str>>,
+        value: impl Variant + Clone,
+    ) -> &mut Self {
+        match self.get_index(name.as_ref()) {
+            None | Some((_, AccessMode::ReadOnly)) => {
+                self.push(name, value);
+            }
+            Some((index, AccessMode::ReadWrite)) => {
+                let value_ref = self
+                    .values
+                    .get_mut(index)
+                    .expect("never fails because the index is returned by `get_index`");
+                *value_ref = Dynamic::from(value);
+            }
+        }
+        self
+    }
     /// Update the value of the named entry in the [`Scope`].
     ///
     /// Search starts backwards from the last, and only the first entry matching the specified name is updated.
@@ -362,12 +431,16 @@ impl<'a> Scope<'a> {
     /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 0);
     /// ```
     #[inline]
-    pub fn set_value(&mut self, name: &'a str, value: impl Variant + Clone) -> &mut Self {
-        match self.get_index(name) {
+    pub fn set_value(
+        &mut self,
+        name: impl AsRef<str> + Into<Cow<'a, str>>,
+        value: impl Variant + Clone,
+    ) -> &mut Self {
+        match self.get_index(name.as_ref()) {
             None => {
                 self.push(name, value);
             }
-            Some((_, AccessMode::ReadOnly)) => panic!("variable {} is constant", name),
+            Some((_, AccessMode::ReadOnly)) => panic!("variable {} is constant", name.as_ref()),
             Some((index, AccessMode::ReadWrite)) => {
                 let value_ref = self
                     .values

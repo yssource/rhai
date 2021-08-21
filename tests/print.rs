@@ -50,10 +50,10 @@ fn test_print_debug() -> Result<(), Box<EvalAltResult>> {
         });
 
     // Evaluate script
-    engine.consume("print(40 + 2)")?;
+    engine.run("print(40 + 2)")?;
     let mut ast = engine.compile(r#"let x = "hello!"; debug(x)"#)?;
     ast.set_source("world");
-    engine.consume_ast(&ast)?;
+    engine.run_ast(&ast)?;
 
     // 'logbook' captures all the 'print' and 'debug' output
     assert_eq!(logbook.read().unwrap().len(), 2);
@@ -96,7 +96,7 @@ fn test_print_custom_type() -> Result<(), Box<EvalAltResult>> {
         .register_fn("debug", |x: &mut MyStruct| x.to_string())
         .register_fn("new_ts", || MyStruct { field: 42 });
 
-    engine.consume("let x = new_ts(); debug(x);")?;
+    engine.run("let x = new_ts(); debug(x);")?;
 
     #[cfg(not(feature = "no_index"))]
     assert_eq!(
