@@ -3,7 +3,7 @@ name: Build
 on:
   push:
     branches:
-      - v1.1
+      - master
   pull_request: {}
 
 jobs:

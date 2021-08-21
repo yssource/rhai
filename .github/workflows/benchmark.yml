@@ -2,7 +2,7 @@ name: Benchmark
 on:
   push:
     branches:
-      - v1.1
+      - master
 
 jobs:
   benchmark:
