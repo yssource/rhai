@@ -184,8 +184,6 @@ impl Engine {
     /// Register a custom type for use with the [`Engine`].
     /// The type must implement [`Clone`].
     ///
-    /// Not available under `no_object`.
-    ///
     /// # Example
     ///
     /// ```
@@ -219,15 +217,12 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_object"))]
     #[inline(always)]
     pub fn register_type<T: Variant + Clone>(&mut self) -> &mut Self {
         self.register_type_with_name::<T>(type_name::<T>())
     }
     /// Register a custom type for use with the [`Engine`], with a pretty-print name
     /// for the `type_of` function. The type must implement [`Clone`].
-    ///
-    /// Not available under `no_object`.
     ///
     /// # Example
     ///
@@ -266,7 +261,6 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_object"))]
     #[inline(always)]
     pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) -> &mut Self {
         // Add the pretty-print type name into the map
