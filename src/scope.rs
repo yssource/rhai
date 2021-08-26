@@ -32,8 +32,8 @@ const SCOPE_ENTRIES_INLINED: usize = 8;
 ///
 /// assert_eq!(engine.eval_with_scope::<i64>(&mut my_scope, "x + 1")?, 42);
 ///
-/// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 41);
-/// assert_eq!(my_scope.get_value::<i64>("z").unwrap(), 0);
+/// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 41);
+/// assert_eq!(my_scope.get_value::<i64>("z").expect("z should exist"), 0);
 /// # Ok(())
 /// # }
 /// ```
@@ -85,7 +85,7 @@ impl<'a> Scope<'a> {
     /// let mut my_scope = Scope::new();
     ///
     /// my_scope.push("x", 42_i64);
-    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
+    /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 42);
     /// ```
     #[inline(always)]
     #[must_use]
@@ -163,7 +163,7 @@ impl<'a> Scope<'a> {
     /// let mut my_scope = Scope::new();
     ///
     /// my_scope.push("x", 42_i64);
-    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
+    /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 42);
     /// ```
     #[inline(always)]
     pub fn push(
@@ -183,7 +183,7 @@ impl<'a> Scope<'a> {
     /// let mut my_scope = Scope::new();
     ///
     /// my_scope.push_dynamic("x", Dynamic::from(42_i64));
-    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
+    /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 42);
     /// ```
     #[inline(always)]
     pub fn push_dynamic(&mut self, name: impl Into<Cow<'a, str>>, value: Dynamic) -> &mut Self {
@@ -202,7 +202,7 @@ impl<'a> Scope<'a> {
     /// let mut my_scope = Scope::new();
     ///
     /// my_scope.push_constant("x", 42_i64);
-    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
+    /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 42);
     /// ```
     #[inline(always)]
     pub fn push_constant(
@@ -225,7 +225,7 @@ impl<'a> Scope<'a> {
     /// let mut my_scope = Scope::new();
     ///
     /// my_scope.push_constant_dynamic("x", Dynamic::from(42_i64));
-    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
+    /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 42);
     /// ```
     #[inline(always)]
     pub fn push_constant_dynamic(
@@ -327,7 +327,7 @@ impl<'a> Scope<'a> {
     /// let mut my_scope = Scope::new();
     ///
     /// my_scope.push("x", 42_i64);
-    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
+    /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 42);
     /// ```
     #[inline]
     #[must_use]
@@ -377,15 +377,15 @@ impl<'a> Scope<'a> {
     /// let mut my_scope = Scope::new();
     ///
     /// my_scope.set_or_push("x", 42_i64);
-    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
+    /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 42);
     /// assert_eq!(my_scope.len(), 1);
     ///
     /// my_scope.set_or_push("x", 0_i64);
-    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 0);
+    /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 0);
     /// assert_eq!(my_scope.len(), 1);
     ///
     /// my_scope.set_or_push("y", 123_i64);
-    /// assert_eq!(my_scope.get_value::<i64>("y").unwrap(), 123);
+    /// assert_eq!(my_scope.get_value::<i64>("y").expect("y should exist"), 123);
     /// assert_eq!(my_scope.len(), 2);
     /// ```
     #[inline]
@@ -399,10 +399,7 @@ impl<'a> Scope<'a> {
                 self.push(name, value);
             }
             Some((index, AccessMode::ReadWrite)) => {
-                let value_ref = self
-                    .values
-                    .get_mut(index)
-                    .expect("never fails because the index is returned by `get_index`");
+                let value_ref = self.values.get_mut(index).expect("index is valid");
                 *value_ref = Dynamic::from(value);
             }
         }
@@ -425,10 +422,10 @@ impl<'a> Scope<'a> {
     /// let mut my_scope = Scope::new();
     ///
     /// my_scope.push("x", 42_i64);
-    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
+    /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 42);
     ///
     /// my_scope.set_value("x", 0_i64);
-    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 0);
+    /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 0);
     /// ```
     #[inline]
     pub fn set_value(
@@ -442,10 +439,7 @@ impl<'a> Scope<'a> {
             }
             Some((_, AccessMode::ReadOnly)) => panic!("variable {} is constant", name.as_ref()),
             Some((index, AccessMode::ReadWrite)) => {
-                let value_ref = self
-                    .values
-                    .get_mut(index)
-                    .expect("never fails because the index is returned by `get_index`");
+                let value_ref = self.values.get_mut(index).expect("index is valid");
                 *value_ref = Dynamic::from(value);
             }
         }
@@ -464,12 +458,12 @@ impl<'a> Scope<'a> {
     /// let mut my_scope = Scope::new();
     ///
     /// my_scope.push("x", 42_i64);
-    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 42);
+    /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 42);
     ///
-    /// let ptr = my_scope.get_mut("x").unwrap();
+    /// let ptr = my_scope.get_mut("x").expect("x should exist");
     /// *ptr = 123_i64.into();
     ///
-    /// assert_eq!(my_scope.get_value::<i64>("x").unwrap(), 123);
+    /// assert_eq!(my_scope.get_value::<i64>("x").expect("x should exist"), 123);
     /// ```
     #[inline]
     #[must_use]
@@ -488,9 +482,7 @@ impl<'a> Scope<'a> {
     #[inline(always)]
     #[must_use]
     pub(crate) fn get_mut_by_index(&mut self, index: usize) -> &mut Dynamic {
-        self.values
-            .get_mut(index)
-            .expect("never fails unless the index is out of bounds")
+        self.values.get_mut(index).expect("index is out of bounds")
     }
     /// Update the access type of an entry in the [`Scope`].
     ///
@@ -500,10 +492,7 @@ impl<'a> Scope<'a> {
     #[cfg(not(feature = "no_module"))]
     #[inline]
     pub(crate) fn add_entry_alias(&mut self, index: usize, alias: Identifier) -> &mut Self {
-        let (_, aliases) = self
-            .names
-            .get_mut(index)
-            .expect("never fails unless the index is out of bounds");
+        let (_, aliases) = self.names.get_mut(index).expect("index is out of bounds");
         match aliases {
             None => {
                 let mut list = StaticVec::new();
@@ -563,12 +552,12 @@ impl<'a> Scope<'a> {
     ///
     /// let mut iter = my_scope.iter();
     ///
-    /// let (name, is_constant, value) = iter.next().unwrap();
+    /// let (name, is_constant, value) = iter.next().expect("value should exist");
     /// assert_eq!(name, "x");
     /// assert!(!is_constant);
     /// assert_eq!(value.cast::<i64>(), 42);
     ///
-    /// let (name, is_constant, value) = iter.next().unwrap();
+    /// let (name, is_constant, value) = iter.next().expect("value should exist");
     /// assert_eq!(name, "foo");
     /// assert!(is_constant);
     /// assert_eq!(value.cast::<String>(), "hello");

@@ -1207,7 +1207,7 @@ pub fn parse_string_literal(
                 {
                     let start_position = start
                         .position()
-                        .expect("never fails because the string must have a starting position");
+                        .expect("string must have starting position");
                     skip_whitespace_until = start_position + 1;
                 }
             }
@@ -1229,9 +1229,7 @@ pub fn parse_string_literal(
             // Whitespace to skip
             #[cfg(not(feature = "no_position"))]
             _ if next_char.is_whitespace()
-                && pos
-                    .position()
-                    .expect("never fails because a character must have a position")
+                && pos.position().expect("character must have position")
                     < skip_whitespace_until => {}
 
             // All other characters
@@ -1379,16 +1377,12 @@ fn get_next_token_inner(
 
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
-        let return_comment = return_comment
-            || is_doc_comment(
-                comment
-                    .as_ref()
-                    .expect("never fails because `include_comments` is true"),
-            );
+        let return_comment =
+            return_comment || is_doc_comment(comment.as_ref().expect("`include_comments` is true"));
 
         if return_comment {
             return Some((
-                Token::Comment(comment.expect("never fails because `return_comment` is true")),
+                Token::Comment(comment.expect("`return_comment` is true")),
                 start_pos,
             ));
         }
@@ -1440,7 +1434,7 @@ fn get_next_token_inner(
                         }
                         #[cfg(any(not(feature = "no_float"), feature = "decimal"))]
                         '.' => {
-                            stream.get_next().expect("never fails because it is `.`");
+                            stream.get_next().expect("it is `.`");
 
                             // Check if followed by digits or something that cannot start a property name
                             match stream.peek_next().unwrap_or('\0') {
@@ -1474,7 +1468,7 @@ fn get_next_token_inner(
                         }
                         #[cfg(not(feature = "no_float"))]
                         'e' => {
-                            stream.get_next().expect("never fails it is `e`");
+                            stream.get_next().expect("it is `e`");
 
                             // Check if followed by digits or +/-
                             match stream.peek_next().unwrap_or('\0') {
@@ -1487,11 +1481,7 @@ fn get_next_token_inner(
                                 '+' | '-' => {
                                     result.push(next_char);
                                     pos.advance();
-                                    result.push(
-                                        stream
-                                            .get_next()
-                                            .expect("never fails because it is `+` or `-`"),
-                                    );
+                                    result.push(stream.get_next().expect("it is `+` or `-`"));
                                     pos.advance();
                                 }
                                 // Not a floating-point number
@@ -1639,7 +1629,7 @@ fn get_next_token_inner(
                         |(err, err_pos)| (Token::LexError(err), err_pos),
                         |(result, _)| {
                             let mut chars = result.chars();
-                            let first = chars.next().unwrap();
+                            let first = chars.next().expect("`chars` is not empty");
 
                             if chars.next().is_some() {
                                 (Token::LexError(LERR::MalformedChar(result)), start_pos)

@@ -937,14 +937,8 @@ impl Engine {
                 }
             } else {
                 let mut iter = name.as_ref().splitn(2, separator.as_ref());
-                let sub_module = iter
-                    .next()
-                    .expect("never fails because the name contains a separator")
-                    .trim();
-                let remainder = iter
-                    .next()
-                    .expect("never fails because the name contains a separator")
-                    .trim();
+                let sub_module = iter.next().expect("name contains separator").trim();
+                let remainder = iter.next().expect("name contains separator").trim();
 
                 if !root.contains_key(sub_module) {
                     let mut m: Module = Default::default();
@@ -954,7 +948,7 @@ impl Engine {
                 } else {
                     let m = root
                         .remove(sub_module)
-                        .expect("never fails because the root contains the sub-module");
+                        .expect("root contains the sub-module");
                     let mut m = crate::fn_native::shared_take_or_clone(m);
                     register_static_module_raw(m.sub_modules_mut(), remainder, module);
                     m.build_index();
@@ -1059,19 +1053,18 @@ impl Engine {
             resolver: &StaticModuleResolver,
             imports: &mut BTreeSet<Identifier>,
         ) {
-            ast.walk(&mut |path| match path
-                .last()
-                .expect("never fails because `path` always contains the current node")
-            {
-                // Collect all `import` statements with a string constant path
-                ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
-                    if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>
-                {
-                    imports.insert(s.clone().into());
-                    true
-                }
-                _ => true,
-            });
+            ast.walk(
+                &mut |path| match path.last().expect("`path` contains the current node") {
+                    // Collect all `import` statements with a string constant path
+                    ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
+                        if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>
+                    {
+                        imports.insert(s.clone().into());
+                        true
+                    }
+                    _ => true,
+                },
+            );
         }
 
         let mut ast = self.compile_scripts_with_scope(scope, &[script])?;
@@ -1315,12 +1308,12 @@ impl Engine {
     /// true)?;
     ///
     /// assert_eq!(map.len(), 4);
-    /// assert_eq!(map["a"].as_int().unwrap(), 123);
-    /// assert_eq!(map["b"].as_int().unwrap(), 42);
+    /// assert_eq!(map["a"].as_int().expect("a should exist"), 123);
+    /// assert_eq!(map["b"].as_int().expect("b should exist"), 42);
     /// assert!(map["d"].is::<()>());
     ///
-    /// let c = map["c"].read_lock::<Map>().unwrap();
-    /// assert_eq!(c["x"].as_bool().unwrap(), false);
+    /// let c = map["c"].read_lock::<Map>().expect("c should exist");
+    /// assert_eq!(c["x"].as_bool().expect("x should be bool"), false);
     /// # Ok(())
     /// # }
     /// ```
@@ -1913,7 +1906,7 @@ impl Engine {
     /// let mut value: Dynamic = 1_i64.into();
     /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "action", Some(&mut value), [ 41_i64.into() ])?;
     /// //                                                                    ^^^^^^^^^^^^^^^^ binding the 'this' pointer
-    /// assert_eq!(value.as_int().unwrap(), 42);
+    /// assert_eq!(value.as_int().expect("value should be INT"), 42);
     /// # }
     /// # Ok(())
     /// # }
@@ -2018,7 +2011,7 @@ impl Engine {
             .map(|f| {
                 f.func
                     .get_script_fn_def()
-                    .expect("never fails because the function is scripted")
+                    .expect("scripted function")
                     .clone()
             })
             .collect();

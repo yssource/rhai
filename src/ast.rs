@@ -1490,8 +1490,7 @@ impl Stmt {
             _ => (),
         }
 
-        path.pop()
-            .expect("never fails because `path` always contains the current node");
+        path.pop().expect("`path` contains current node");
 
         true
     }
@@ -1566,7 +1565,7 @@ impl OpAssignment<'_> {
     pub fn new(op: Token) -> Self {
         let op_raw = op
             .map_op_assignment()
-            .expect("never fails because token must be an op-assignment operator")
+            .expect("token is op-assignment operator")
             .literal_syntax();
         let op_assignment = op.literal_syntax();
 
@@ -2018,7 +2017,7 @@ impl Expr {
                 let mut arr = Array::with_capacity(x.len());
                 arr.extend(x.iter().map(|v| {
                     v.get_literal_value()
-                        .expect("never fails because a constant array always has a constant value")
+                        .expect("constant array has constant value")
                 }));
                 Dynamic::from_array(arr)
             }
@@ -2028,9 +2027,9 @@ impl Expr {
                 let mut map = x.1.clone();
                 x.0.iter().for_each(|(k, v)| {
                     *map.get_mut(k.name.as_str())
-                        .expect("never fails because the template should contain all the keys") = v
+                        .expect("template contains all keys") = v
                         .get_literal_value()
-                        .expect("never fails because a constant map always has a constant value")
+                        .expect("constant map has constant value")
                 });
                 Dynamic::from_map(map)
             }
@@ -2309,8 +2308,7 @@ impl Expr {
             _ => (),
         }
 
-        path.pop()
-            .expect("never fails because `path` always contains the current node");
+        path.pop().expect("`path` contains current node");
 
         true
     }

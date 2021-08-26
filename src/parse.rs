@@ -38,8 +38,8 @@ type FunctionsLib = BTreeMap<u64, Shared<ScriptFnDef>>;
 /// Invalid variable name that acts as a search barrier in a [`Scope`].
 const SCOPE_SEARCH_BARRIER_MARKER: &str = "$BARRIER$";
 
-/// The message: never fails because `TokenStream` never ends
-const NEVER_ENDS: &str = "never fails because `TokenStream` never ends";
+/// The message: `TokenStream` never ends
+const NEVER_ENDS: &str = "`TokenStream` never ends";
 
 /// A factory of identifiers from text strings.
 ///
@@ -1602,9 +1602,7 @@ fn make_assignment_stmt(
             let index = i.map_or_else(
                 || {
                     index
-                        .expect(
-                            "never fails because the long index is `Some` when the short index is `None`",
-                        )
+                        .expect("the long index is `Some` when the short index is `None`")
                         .get()
                 },
                 |n| n.get() as usize,
@@ -1695,8 +1693,9 @@ fn make_dot_expr(
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(_, _, x)) => {
-            return Err(PERR::PropertyExpected
-                .into_err(x.1.expect("never fails because the namespace is `Some`").0[0].pos))
+            return Err(
+                PERR::PropertyExpected.into_err(x.1.expect("the namespace is `Some`").0[0].pos)
+            )
         }
         // lhs.prop
         (lhs, prop @ Expr::Property(_)) => {
@@ -1901,12 +1900,8 @@ fn parse_binary_op(
             | Token::GreaterThanEqualsTo => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
 
             Token::Or => {
-                let rhs = args
-                    .pop()
-                    .expect("never fails because `||` has two arguments");
-                let current_lhs = args
-                    .pop()
-                    .expect("never fails because `||` has two arguments");
+                let rhs = args.pop().expect("`||` has two arguments");
+                let current_lhs = args.pop().expect("`||` has two arguments");
                 Expr::Or(
                     BinaryExpr {
                         lhs: current_lhs.ensure_bool_expr()?,
@@ -1917,12 +1912,8 @@ fn parse_binary_op(
                 )
             }
             Token::And => {
-                let rhs = args
-                    .pop()
-                    .expect("never fails because `&&` has two arguments");
-                let current_lhs = args
-                    .pop()
-                    .expect("never fails because `&&` has two arguments");
+                let rhs = args.pop().expect("`&&` has two arguments");
+                let current_lhs = args.pop().expect("`&&` has two arguments");
                 Expr::And(
                     BinaryExpr {
                         lhs: current_lhs.ensure_bool_expr()?,
@@ -2391,7 +2382,7 @@ fn parse_for(
             },
             counter_var.map(|name| Ident {
                 name,
-                pos: counter_pos.expect("never fails because `counter_var` is `Some`"),
+                pos: counter_pos.expect("`counter_var` is `Some`"),
             }),
             body.into(),
         )),

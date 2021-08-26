@@ -190,17 +190,45 @@ impl Engine {
                 let mut bitmask = 1usize; // Bitmask of which parameter to replace with `Dynamic`
 
                 loop {
-                    let func = lib.iter().find_map(|m| m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
-                        func, source: m.id_raw().cloned()
-                    })).or_else(|| self.global_namespace.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
-                        func, source: None
-                    })).or_else(|| self.global_modules.iter().find_map(|m| m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
-                        func, source: m.id_raw().cloned()
-                    }))).or_else(|| mods.get_fn(hash).map(|(func, source)| FnResolutionCacheEntry {
-                        func: func.clone(), source: source.cloned()
-                    })).or_else(|| self.global_sub_modules.values().find_map(|m| m.get_qualified_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
-                        func, source: m.id_raw().cloned()
-                    })));
+                    let func = lib
+                        .iter()
+                        .find_map(|m| {
+                            m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
+                                func,
+                                source: m.id_raw().cloned(),
+                            })
+                        })
+                        .or_else(|| {
+                            self.global_namespace
+                                .get_fn(hash)
+                                .cloned()
+                                .map(|func| FnResolutionCacheEntry { func, source: None })
+                        })
+                        .or_else(|| {
+                            self.global_modules.iter().find_map(|m| {
+                                m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
+                                    func,
+                                    source: m.id_raw().cloned(),
+                                })
+                            })
+                        })
+                        .or_else(|| {
+                            mods.get_fn(hash)
+                                .map(|(func, source)| FnResolutionCacheEntry {
+                                    func: func.clone(),
+                                    source: source.cloned(),
+                                })
+                        })
+                        .or_else(|| {
+                            self.global_sub_modules.values().find_map(|m| {
+                                m.get_qualified_fn(hash).cloned().map(|func| {
+                                    FnResolutionCacheEntry {
+                                        func,
+                                        source: m.id_raw().cloned(),
+                                    }
+                                })
+                            })
+                        });
 
                     match func {
                         // Specific version found
@@ -215,17 +243,26 @@ impl Engine {
                             return args.and_then(|args| {
                                 if !is_op_assignment {
                                     get_builtin_binary_op_fn(fn_name, &args[0], &args[1]).map(|f| {
-                                        FnResolutionCacheEntry { func: CallableFunction::from_method(
-                                            Box::new(f) as Box<FnAny>
-                                        ), source: None }
+                                        FnResolutionCacheEntry {
+                                            func: CallableFunction::from_method(
+                                                Box::new(f) as Box<FnAny>
+                                            ),
+                                            source: None,
+                                        }
                                     })
                                 } else {
-                                    let (first, second) = args.split_first()
-                                                              .expect("never fails because an op-assignment must have two arguments");
+                                    let (first, second) = args
+                                        .split_first()
+                                        .expect("op-assignment has two arguments");
 
-                                    get_builtin_op_assignment_fn(fn_name, *first, second[0]).map(|f| FnResolutionCacheEntry {
-                                        func: CallableFunction::from_method(Box::new(f) as Box<FnAny>), source: None
-                                    })
+                                    get_builtin_op_assignment_fn(fn_name, *first, second[0]).map(
+                                        |f| FnResolutionCacheEntry {
+                                            func: CallableFunction::from_method(
+                                                Box::new(f) as Box<FnAny>
+                                            ),
+                                            source: None,
+                                        },
+                                    )
                                 }
                                 .map(Box::new)
                             });
@@ -234,17 +271,19 @@ impl Engine {
                         // Try all permutations with `Dynamic` wildcards
                         None => {
                             let hash_params = calc_fn_params_hash(
-                                args.as_ref().expect("never fails because there are no permutations if there are no arguments")
-                                        .iter().enumerate().map(|(i, a)|
-                                {
-                                    let mask = 1usize << (num_args - i - 1);
-                                    if bitmask & mask != 0 {
-                                        // Replace with `Dynamic`
-                                        TypeId::of::<Dynamic>()
-                                    } else {
-                                        a.type_id()
-                                    }
-                                }),
+                                args.as_ref()
+                                    .expect("no permutations if no arguments")
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(i, a)| {
+                                        let mask = 1usize << (num_args - i - 1);
+                                        if bitmask & mask != 0 {
+                                            // Replace with `Dynamic`
+                                            TypeId::of::<Dynamic>()
+                                        } else {
+                                            a.type_id()
+                                        }
+                                    }),
                             );
                             hash = combine_hashes(hash_script, hash_params);
 
@@ -290,7 +329,10 @@ impl Engine {
             let mut backup: Option<ArgBackup> = None;
             if is_method_call && func.is_pure() && !args.is_empty() {
                 backup = Some(Default::default());
-                backup.as_mut().unwrap().change_first_arg_to_copy(args);
+                backup
+                    .as_mut()
+                    .expect("`backup` is `Some`")
+                    .change_first_arg_to_copy(args);
             }
 
             // Run external function
@@ -301,12 +343,10 @@ impl Engine {
 
             let result = if func.is_plugin_fn() {
                 func.get_plugin_fn()
-                    .expect("never fails because the function is a plugin")
+                    .expect("plugin function")
                     .call((self, name, source, mods, lib).into(), args)
             } else {
-                let func = func
-                    .get_native_fn()
-                    .expect("never fails because the function is native");
+                let func = func.get_native_fn().expect("native function");
                 func((self, name, source, mods, lib).into(), args)
             };
 
@@ -644,10 +684,8 @@ impl Engine {
             {
                 let fn_name = args[0]
                     .read_lock::<ImmutableString>()
-                    .expect("never fails because `args[0]` is `FnPtr`");
-                let num_params = args[1]
-                    .as_int()
-                    .expect("never fails because `args[1]` is `INT`");
+                    .expect("`args[0]` is `FnPtr`");
+                let num_params = args[1].as_int().expect("`args[1]` is `INT`");
 
                 return Ok((
                     if num_params < 0 {
@@ -691,9 +729,7 @@ impl Engine {
             // Script function call
             assert!(func.is_script());
 
-            let func = func
-                .get_script_fn_def()
-                .expect("never fails because the function is scripted");
+            let func = func.get_script_fn_def().expect("scripted function");
 
             if func.body.is_empty() {
                 return Ok((Dynamic::UNIT, false));
@@ -719,7 +755,7 @@ impl Engine {
                 // Method call of script function - map first argument to `this`
                 let (first, rest) = args
                     .split_first_mut()
-                    .expect("never fails because a method call always has a first parameter");
+                    .expect("method call has first parameter");
 
                 let orig_source = state.source.take();
                 state.source = source;
@@ -748,7 +784,10 @@ impl Engine {
                 let mut backup: Option<ArgBackup> = None;
                 if is_ref_mut && !args.is_empty() {
                     backup = Some(Default::default());
-                    backup.as_mut().unwrap().change_first_arg_to_copy(args);
+                    backup
+                        .as_mut()
+                        .expect("`backup` is `Some`")
+                        .change_first_arg_to_copy(args);
                 }
 
                 let orig_source = state.source.take();
@@ -871,9 +910,7 @@ impl Engine {
         let (result, updated) = match fn_name {
             KEYWORD_FN_PTR_CALL if target.is::<FnPtr>() => {
                 // FnPtr call
-                let fn_ptr = target
-                    .read_lock::<FnPtr>()
-                    .expect("never fails because `obj` is `FnPtr`");
+                let fn_ptr = target.read_lock::<FnPtr>().expect("`obj` is `FnPtr`");
                 // Redirect function name
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
@@ -938,9 +975,7 @@ impl Engine {
                     ));
                 }
 
-                let fn_ptr = target
-                    .read_lock::<FnPtr>()
-                    .expect("never fails because `obj` is `FnPtr`");
+                let fn_ptr = target.read_lock::<FnPtr>().expect("`obj` is `FnPtr`");
 
                 // Curry call
                 Ok((
@@ -1264,7 +1299,7 @@ impl Engine {
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
                     is_ref_mut = true;
-                    let obj_ref = target.take_ref().expect("never fails because `target` is a reference if it is not a value and not shared");
+                    let obj_ref = target.take_ref().expect("`target` is reference");
                     args.push(obj_ref);
                     args.extend(arg_values.iter_mut());
                 }
@@ -1345,9 +1380,9 @@ impl Engine {
                     // Turn it into a method call only if the object is not shared and not a simple value
                     let (first, rest) = arg_values
                         .split_first_mut()
-                        .expect("never fails because the arguments list is not empty");
+                        .expect("arguments list is not empty");
                     first_arg_value = Some(first);
-                    let obj_ref = target.take_ref().expect("never fails because `target` is a reference if it is not a value and not shared");
+                    let obj_ref = target.take_ref().expect("`target` is reference");
                     args.push(obj_ref);
                     args.extend(rest.iter_mut());
                 }
@@ -1393,9 +1428,7 @@ impl Engine {
         match func {
             #[cfg(not(feature = "no_function"))]
             Some(f) if f.is_script() => {
-                let fn_def = f
-                    .get_script_fn_def()
-                    .expect("never fails because the function is scripted");
+                let fn_def = f.get_script_fn_def().expect("scripted function");
 
                 if fn_def.body.is_empty() {
                     Ok(Dynamic::UNIT)
@@ -1419,15 +1452,13 @@ impl Engine {
 
             Some(f) if f.is_plugin_fn() => f
                 .get_plugin_fn()
-                .expect("never fails because the function is a plugin")
+                .expect("plugin function")
                 .clone()
                 .call((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
                 .map_err(|err| err.fill_position(pos)),
 
             Some(f) if f.is_native() => {
-                let func = f
-                    .get_native_fn()
-                    .expect("never fails because the function is native");
+                let func = f.get_native_fn().expect("native function");
                 func((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
                     .map_err(|err| err.fill_position(pos))
             }

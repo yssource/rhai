@@ -238,7 +238,7 @@ impl Module {
     /// # use rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
-    /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
+    /// assert_eq!(module.get_var_value::<i64>("answer").expect("answer should exist"), 42);
     /// ```
     #[inline(always)]
     #[must_use]
@@ -400,7 +400,7 @@ impl Module {
     /// # use rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
-    /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
+    /// assert_eq!(module.get_var_value::<i64>("answer").expect("answer should exist"), 42);
     /// ```
     #[inline(always)]
     #[must_use]
@@ -416,7 +416,7 @@ impl Module {
     /// # use rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
-    /// assert_eq!(module.get_var("answer").unwrap().cast::<i64>(), 42);
+    /// assert_eq!(module.get_var("answer").expect("answer should exist").cast::<i64>(), 42);
     /// ```
     #[inline(always)]
     #[must_use]
@@ -434,7 +434,7 @@ impl Module {
     /// # use rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
-    /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
+    /// assert_eq!(module.get_var_value::<i64>("answer").expect("answer should exist"), 42);
     /// ```
     #[inline]
     pub fn set_var(
@@ -1337,9 +1337,7 @@ impl Module {
                     f.access,
                     f.name.as_str(),
                     f.params,
-                    f.func
-                        .get_script_fn_def()
-                        .expect("never fails because the function is scripted"),
+                    f.func.get_script_fn_def().expect("scripted function"),
                 )
             })
     }
@@ -1407,7 +1405,7 @@ impl Module {
     /// let ast = engine.compile("let answer = 42; export answer;")?;
     /// let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
     /// assert!(module.contains_var("answer"));
-    /// assert_eq!(module.get_var_value::<i64>("answer").unwrap(), 42);
+    /// assert_eq!(module.get_var_value::<i64>("answer").expect("answer should exist"), 42);
     /// # Ok(())
     /// # }
     /// ```
@@ -1431,9 +1429,7 @@ impl Module {
             match aliases.len() {
                 0 => (),
                 1 => {
-                    let alias = aliases
-                        .pop()
-                        .expect("never fails because the list has one item");
+                    let alias = aliases.pop().expect("list has one item");
                     module.set_var(alias, value);
                 }
                 _ => aliases.into_iter().for_each(|alias| {
@@ -1465,7 +1461,7 @@ impl Module {
                 let mut func = f
                     .func
                     .get_script_fn_def()
-                    .expect("never fails because the function is scripted")
+                    .expect("scripted function")
                     .as_ref()
                     .clone();
                 func.lib = Some(ast.shared_lib());

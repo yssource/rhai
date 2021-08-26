@@ -14,8 +14,8 @@ use crate::FLOAT;
 #[cfg(feature = "decimal")]
 use rust_decimal::Decimal;
 
-/// The message: never fails because this is built-in code and the type is already checked
-const BUILTIN: &str = "never fails because this is built-in code and the type is already checked";
+/// The message: data type was checked
+const BUILTIN: &str = "data type was checked";
 
 /// Is the type a numeric type?
 #[inline]

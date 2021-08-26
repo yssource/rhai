@@ -45,7 +45,7 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
         namespace: Option<Identifier>,
         f: &ScriptFnDef,
     ) -> Map {
-        const DICT: &str = "never fails because the dictionary is pre-filled with all the keys";
+        const DICT: &str = "key exists";
 
         let mut map = Map::new();
 
