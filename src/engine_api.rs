@@ -208,6 +208,7 @@ impl Engine {
     ///     // Use `register_fn` to register methods on the type.
     ///     .register_fn("update", TestStruct::update);
     ///
+    /// # #[cfg(not(feature = "no_object"))]
     /// assert_eq!(
     ///     engine.eval::<TestStruct>("let x = new_ts(); x.update(41); x")?,
     ///     TestStruct { field: 42 }
