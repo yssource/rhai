@@ -53,21 +53,27 @@ struct FnParam {
 
 impl PartialOrd for FnParam {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(match self.name.partial_cmp(&other.name).unwrap() {
-            Ordering::Less => Ordering::Less,
-            Ordering::Greater => Ordering::Greater,
-            Ordering::Equal => match (self.typ.is_none(), other.typ.is_none()) {
-                (true, true) => Ordering::Equal,
-                (true, false) => Ordering::Greater,
-                (false, true) => Ordering::Less,
-                (false, false) => self
-                    .typ
-                    .as_ref()
-                    .unwrap()
-                    .partial_cmp(other.typ.as_ref().unwrap())
-                    .unwrap(),
+        Some(
+            match self
+                .name
+                .partial_cmp(&other.name)
+                .expect("String::partial_cmp should succeed")
+            {
+                Ordering::Less => Ordering::Less,
+                Ordering::Greater => Ordering::Greater,
+                Ordering::Equal => match (self.typ.is_none(), other.typ.is_none()) {
+                    (true, true) => Ordering::Equal,
+                    (true, false) => Ordering::Greater,
+                    (false, true) => Ordering::Less,
+                    (false, false) => self
+                        .typ
+                        .as_ref()
+                        .expect("`typ` is not `None`")
+                        .partial_cmp(other.typ.as_ref().expect("`typ` is not `None`"))
+                        .expect("String::partial_cmp should succeed"),
+                },
             },
-        })
+        )
     }
 }
 
@@ -157,7 +163,7 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
                 {
                     info.func
                         .get_script_fn_def()
-                        .expect("never fails because the function is scripted")
+                        .expect("scripted function")
                         .comments
                         .to_vec()
                 }
@@ -238,6 +244,7 @@ impl Engine {
         if include_global {
             self.global_modules
                 .iter()
+                .take(self.global_modules.len() - 1)
                 .flat_map(|m| m.iter_fn())
                 .for_each(|f| global.functions.push(f.into()));
         }
@@ -246,7 +253,7 @@ impl Engine {
             global.modules.insert(name.to_string(), m.as_ref().into());
         });
 
-        self.global_namespace
+        self.global_namespace()
             .iter_fn()
             .for_each(|f| global.functions.push(f.into()));
 

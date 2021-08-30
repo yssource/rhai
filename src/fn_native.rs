@@ -259,7 +259,7 @@ pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
 pub fn shared_take<T>(value: Shared<T>) -> T {
     shared_try_take(value)
         .ok()
-        .expect("resource should have no outstanding references")
+        .expect("no outstanding references")
 }
 
 /// A general function trail object.

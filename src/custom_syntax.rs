@@ -154,8 +154,8 @@ impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_> {
 
 /// Definition of a custom syntax definition.
 pub struct CustomSyntax {
-    /// A parsing function to return the next keyword in a custom syntax based on the
-    /// keywords parsed so far.
+    /// A parsing function to return the next token in a custom syntax based on the
+    /// symbols parsed so far.
     pub parse: Box<FnCustomSyntaxParse>,
     /// Custom syntax implementation function.
     pub func: Shared<FnCustomSyntaxEval>,
@@ -166,9 +166,16 @@ pub struct CustomSyntax {
 impl Engine {
     /// Register a custom syntax with the [`Engine`].
     ///
-    /// * `keywords` holds a slice of strings that define the custom syntax.  
+    /// * `symbols` holds a slice of strings that define the custom syntax.  
     /// * `scope_may_be_changed` specifies variables _may_ be added/removed by this custom syntax.
     /// * `func` is the implementation function.
+    ///
+    /// ## Note on `symbols`
+    ///
+    /// * Whitespaces around symbols are stripped.
+    /// * Symbols that are all-whitespace or empty are ignored.
+    /// * If `symbols` does not contain at least one valid token, then the custom syntax registration
+    ///   is simply ignored.
     ///
     /// ## Note on `scope_may_be_changed`
     ///
@@ -185,7 +192,7 @@ impl Engine {
     /// does NOT count, so `false` should be passed.
     pub fn register_custom_syntax<S: AsRef<str> + Into<Identifier>>(
         &mut self,
-        keywords: &[S],
+        symbols: &[S],
         scope_may_be_changed: bool,
         func: impl Fn(&mut EvalContext, &[Expression]) -> RhaiResult + SendSync + 'static,
     ) -> Result<&mut Self, ParseError> {
@@ -193,10 +200,10 @@ impl Engine {
 
         let mut segments: StaticVec<ImmutableString> = Default::default();
 
-        for s in keywords {
+        for s in symbols {
             let s = s.as_ref().trim();
 
-            // Skip empty keywords
+            // Skip empty symbols
             if s.is_empty() {
                 continue;
             }
@@ -220,10 +227,10 @@ impl Engine {
                 #[cfg(not(feature = "no_float"))]
                 CUSTOM_SYNTAX_MARKER_FLOAT if !segments.is_empty() => s.into(),
                 // Standard or reserved keyword/symbol not in first position
-                s if !segments.is_empty() && token.is_some() => {
+                _ if !segments.is_empty() && token.is_some() => {
                     // Make it a custom keyword/symbol if it is disabled or reserved
                     if (self.disabled_symbols.contains(s)
-                        || matches!(token, Some(Token::Reserved(_))))
+                        || token.map_or(false, |v| v.is_reserved()))
                         && !self.custom_keywords.contains_key(s)
                     {
                         self.custom_keywords.insert(s.into(), None);
@@ -273,7 +280,7 @@ impl Engine {
             segments.push(seg);
         }
 
-        // If the syntax has no keywords, just ignore the registration
+        // If the syntax has no symbols, just ignore the registration
         if segments.is_empty() {
             return Ok(self);
         }
@@ -307,8 +314,8 @@ impl Engine {
     /// * `parse` is the parsing function.
     /// * `func` is the implementation function.
     ///
-    /// All custom keywords must be manually registered via [`Engine::register_custom_operator`].
-    /// Otherwise, custom keywords won't be recognized.
+    /// All custom keywords used as symbols must be manually registered via [`Engine::register_custom_operator`].
+    /// Otherwise, they won't be recognized.
     pub fn register_custom_syntax_raw(
         &mut self,
         key: impl Into<Identifier>,

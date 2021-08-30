@@ -21,8 +21,26 @@ use crate::Array;
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
 
-/// Engine public API
 impl Engine {
+    /// Get the global namespace module (which is the last module in `global_modules`).
+    #[inline(always)]
+    #[allow(dead_code)]
+    pub(crate) fn global_namespace(&self) -> &Module {
+        self.global_modules
+            .last()
+            .expect("global_modules contains at least one module")
+    }
+    /// Get a mutable reference to the global namespace module
+    /// (which is the last module in `global_modules`).
+    #[inline(always)]
+    pub(crate) fn global_namespace_mut(&mut self) -> &mut Module {
+        Shared::get_mut(
+            self.global_modules
+                .last_mut()
+                .expect("global_modules contains at least one module"),
+        )
+        .expect("global namespace module is never shared")
+    }
     /// Register a custom function with the [`Engine`].
     ///
     /// # Example
@@ -75,7 +93,7 @@ impl Engine {
         #[cfg(not(feature = "metadata"))]
         let param_type_names: Option<[&str; 0]> = None;
 
-        self.global_namespace.set_fn(
+        self.global_namespace_mut().set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
@@ -133,7 +151,7 @@ impl Engine {
         #[cfg(not(feature = "metadata"))]
         let param_type_names: Option<[&str; 0]> = None;
 
-        self.global_namespace.set_fn(
+        self.global_namespace_mut().set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
@@ -172,7 +190,7 @@ impl Engine {
         N: AsRef<str> + Into<Identifier>,
         T: Variant + Clone,
     {
-        self.global_namespace.set_raw_fn(
+        self.global_namespace_mut().set_raw_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
@@ -184,8 +202,6 @@ impl Engine {
     /// Register a custom type for use with the [`Engine`].
     /// The type must implement [`Clone`].
     ///
-    /// Not available under `no_object`.
-    ///
     /// # Example
     ///
     /// ```
@@ -195,9 +211,8 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                    { Self { field: 1 } }
-    ///
-    ///     fn update(&mut self, offset: i64)   { self.field += offset; }
+    ///     fn new() -> Self { Self { field: 1 } }
+    ///     fn update(&mut self, offset: i64) { self.field += offset; }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -212,6 +227,7 @@ impl Engine {
     ///     // Use `register_fn` to register methods on the type.
     ///     .register_fn("update", TestStruct::update);
     ///
+    /// # #[cfg(not(feature = "no_object"))]
     /// assert_eq!(
     ///     engine.eval::<TestStruct>("let x = new_ts(); x.update(41); x")?,
     ///     TestStruct { field: 42 }
@@ -219,15 +235,12 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_object"))]
     #[inline(always)]
     pub fn register_type<T: Variant + Clone>(&mut self) -> &mut Self {
         self.register_type_with_name::<T>(type_name::<T>())
     }
     /// Register a custom type for use with the [`Engine`], with a pretty-print name
     /// for the `type_of` function. The type must implement [`Clone`].
-    ///
-    /// Not available under `no_object`.
     ///
     /// # Example
     ///
@@ -266,7 +279,6 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_object"))]
     #[inline(always)]
     pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) -> &mut Self {
         // Add the pretty-print type name into the map
@@ -282,7 +294,7 @@ impl Engine {
         T: Variant + Clone + IntoIterator,
         <T as IntoIterator>::Item: Variant + Clone,
     {
-        self.global_namespace.set_iterable::<T>();
+        self.global_namespace_mut().set_iterable::<T>();
         self
     }
     /// Register a getter function for a member of a registered type with the [`Engine`].
@@ -300,8 +312,7 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                { Self { field: 1 } }
-    ///
+    ///     fn new() -> Self { Self { field: 1 } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> i64  { self.field }
     /// }
@@ -349,7 +360,6 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { field: 1 } }
-    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self) -> Result<i64, Box<EvalAltResult>> {
     ///         Ok(self.field)
@@ -392,9 +402,8 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                        { Self { field: 1 } }
-    ///
-    ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
+    ///     fn new() -> Self { Self { field: 1 } }
+    ///     fn set_field(&mut self, new_val: i64) { self.field = new_val; }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -442,7 +451,6 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { field: 1 } }
-    ///
     ///     fn set_field(&mut self, new_val: i64) -> Result<(), Box<EvalAltResult>> {
     ///         self.field = new_val;
     ///         Ok(())
@@ -492,12 +500,10 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                        { Self { field: 1 } }
-    ///
+    ///     fn new() -> Self { Self { field: 1 } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self) -> i64          { self.field }
-    ///
-    ///     fn set_field(&mut self, new_val: i64)   { self.field = new_val; }
+    ///     fn get_field(&mut self) -> i64 { self.field }
+    ///     fn set_field(&mut self, new_val: i64) { self.field = new_val; }
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
@@ -549,7 +555,6 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
-    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> i64 { self.fields[index as usize] }
     /// }
@@ -623,7 +628,6 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
-    ///
     ///     // Even a getter must start with `&mut self` and not `&self`.
     ///     fn get_field(&mut self, index: i64) -> Result<i64, Box<EvalAltResult>> {
     ///         Ok(self.fields[index as usize])
@@ -697,7 +701,6 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
-    ///
     ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
     /// }
     ///
@@ -771,7 +774,6 @@ impl Engine {
     ///
     /// impl TestStruct {
     ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
-    ///
     ///     fn set_field(&mut self, index: i64, value: i64) -> Result<(), Box<EvalAltResult>> {
     ///         self.fields[index as usize] = value;
     ///         Ok(())
@@ -847,11 +849,9 @@ impl Engine {
     /// }
     ///
     /// impl TestStruct {
-    ///     fn new() -> Self                                { Self { fields: vec![1, 2, 3, 4, 5] } }
-    ///
+    ///     fn new() -> Self { Self { fields: vec![1, 2, 3, 4, 5] } }
     ///     // Even a getter must start with `&mut self` and not `&self`.
-    ///     fn get_field(&mut self, index: i64) -> i64      { self.fields[index as usize] }
-    ///
+    ///     fn get_field(&mut self, index: i64) -> i64 { self.fields[index as usize] }
     ///     fn set_field(&mut self, index: i64, value: i64) { self.fields[index as usize] = value; }
     /// }
     ///
@@ -957,14 +957,8 @@ impl Engine {
                 }
             } else {
                 let mut iter = name.as_ref().splitn(2, separator.as_ref());
-                let sub_module = iter
-                    .next()
-                    .expect("never fails because the name contains a separator")
-                    .trim();
-                let remainder = iter
-                    .next()
-                    .expect("never fails because the name contains a separator")
-                    .trim();
+                let sub_module = iter.next().expect("name contains separator").trim();
+                let remainder = iter.next().expect("name contains separator").trim();
 
                 if !root.contains_key(sub_module) {
                     let mut m: Module = Default::default();
@@ -974,7 +968,7 @@ impl Engine {
                 } else {
                     let m = root
                         .remove(sub_module)
-                        .expect("never fails because the root contains the sub-module");
+                        .expect("root contains the sub-module");
                     let mut m = crate::fn_native::shared_take_or_clone(m);
                     register_static_module_raw(m.sub_modules_mut(), remainder, module);
                     m.build_index();
@@ -1079,19 +1073,18 @@ impl Engine {
             resolver: &StaticModuleResolver,
             imports: &mut BTreeSet<Identifier>,
         ) {
-            ast.walk(&mut |path| match path
-                .last()
-                .expect("never fails because `path` always contains the current node")
-            {
-                // Collect all `import` statements with a string constant path
-                ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
-                    if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>
-                {
-                    imports.insert(s.clone().into());
-                    true
-                }
-                _ => true,
-            });
+            ast.walk(
+                &mut |path| match path.last().expect("`path` contains the current node") {
+                    // Collect all `import` statements with a string constant path
+                    ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
+                        if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>
+                    {
+                        imports.insert(s.clone().into());
+                        true
+                    }
+                    _ => true,
+                },
+            );
         }
 
         let mut ast = self.compile_scripts_with_scope(scope, &[script])?;
@@ -1335,12 +1328,12 @@ impl Engine {
     /// true)?;
     ///
     /// assert_eq!(map.len(), 4);
-    /// assert_eq!(map["a"].as_int().unwrap(), 123);
-    /// assert_eq!(map["b"].as_int().unwrap(), 42);
+    /// assert_eq!(map["a"].as_int().expect("a should exist"), 123);
+    /// assert_eq!(map["b"].as_int().expect("b should exist"), 42);
     /// assert!(map["d"].is::<()>());
     ///
-    /// let c = map["c"].read_lock::<Map>().unwrap();
-    /// assert_eq!(c["x"].as_bool().unwrap(), false);
+    /// let c = map["c"].read_lock::<Map>().expect("c should exist");
+    /// assert_eq!(c["x"].as_bool().expect("x should be bool"), false);
     /// # Ok(())
     /// # }
     /// ```
@@ -1933,7 +1926,7 @@ impl Engine {
     /// let mut value: Dynamic = 1_i64.into();
     /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "action", Some(&mut value), [ 41_i64.into() ])?;
     /// //                                                                    ^^^^^^^^^^^^^^^^ binding the 'this' pointer
-    /// assert_eq!(value.as_int().unwrap(), 42);
+    /// assert_eq!(value.as_int().expect("value should be INT"), 42);
     /// # }
     /// # Ok(())
     /// # }
@@ -2038,7 +2031,7 @@ impl Engine {
             .map(|f| {
                 f.func
                     .get_script_fn_def()
-                    .expect("never fails because the function is scripted")
+                    .expect("scripted function")
                     .clone()
             })
             .collect();
@@ -2062,7 +2055,7 @@ impl Engine {
     pub fn gen_fn_signatures(&self, include_packages: bool) -> Vec<String> {
         let mut signatures: Vec<_> = Default::default();
 
-        signatures.extend(self.global_namespace.gen_fn_signatures());
+        signatures.extend(self.global_namespace().gen_fn_signatures());
 
         self.global_sub_modules.iter().for_each(|(name, m)| {
             signatures.extend(m.gen_fn_signatures().map(|f| format!("{}::{}", name, f)))
@@ -2072,6 +2065,7 @@ impl Engine {
             signatures.extend(
                 self.global_modules
                     .iter()
+                    .take(self.global_modules.len() - 1)
                     .flat_map(|m| m.gen_fn_signatures()),
             );
         }

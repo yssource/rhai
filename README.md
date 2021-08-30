@@ -20,12 +20,12 @@ Rhai is an embedded scripting language and evaluation engine for Rust that gives
 to add scripting to any application.
 
 
-Supported targets and builds
----------------------------
+Targets and builds
+------------------
 
-* All common CPU targets for Windows, Linux and MacOS.
-* WebAssembly (WASM)
-* `no-std`
+* All CPU and O/S targets supported by Rust, including:
+  * WebAssembly (WASM)
+  * `no-std`
 * Minimum Rust version 1.49
 
 

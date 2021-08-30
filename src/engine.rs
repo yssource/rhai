@@ -501,7 +501,7 @@ impl<'a> Target<'a> {
 
                 let value = &mut *value
                     .write_lock::<crate::INT>()
-                    .expect("never fails because `BitField` always holds an `INT`");
+                    .expect("`BitField` holds `INT`");
 
                 let index = *index;
 
@@ -529,7 +529,7 @@ impl<'a> Target<'a> {
 
                 let s = &mut *s
                     .write_lock::<ImmutableString>()
-                    .expect("never fails because `StringChar` always holds an `ImmutableString`");
+                    .expect("`StringChar` holds `ImmutableString`");
 
                 let index = *index;
 
@@ -553,9 +553,7 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
             // Cloning is cheap for a shared value
             let container = value.clone();
             return Self::LockGuard((
-                value
-                    .write_lock::<Dynamic>()
-                    .expect("never fails when casting to `Dynamic`"),
+                value.write_lock::<Dynamic>().expect("cast to `Dynamic`"),
                 container,
             ));
         }
@@ -701,9 +699,9 @@ impl EvalState {
             // Push a new function resolution cache if the stack is empty
             self.fn_resolution_caches.push(Default::default());
         }
-        self.fn_resolution_caches.last_mut().expect(
-            "never fails because there is at least one function resolution cache by this point",
-        )
+        self.fn_resolution_caches
+            .last_mut()
+            .expect("at least one function resolution cache")
     }
     /// Push an empty function resolution cache onto the stack and make it current.
     #[allow(dead_code)]
@@ -720,7 +718,7 @@ impl EvalState {
     pub fn pop_fn_resolution_cache(&mut self) {
         self.fn_resolution_caches
             .pop()
-            .expect("there should be at least one function resolution cache");
+            .expect("at least one function resolution cache");
     }
 }
 
@@ -900,8 +898,6 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
 /// # }
 /// ```
 pub struct Engine {
-    /// A module containing all functions directly loaded into the Engine.
-    pub(crate) global_namespace: Module,
     /// A collection of all modules loaded into the global namespace of the Engine.
     pub(crate) global_modules: StaticVec<Shared<Module>>,
     /// A collection of all sub-modules directly loaded into the Engine.
@@ -1036,7 +1032,6 @@ impl Engine {
     #[must_use]
     pub fn new_raw() -> Self {
         let mut engine = Self {
-            global_namespace: Default::default(),
             global_modules: Default::default(),
             global_sub_modules: Default::default(),
 
@@ -1063,7 +1058,10 @@ impl Engine {
             limits: Default::default(),
         };
 
-        engine.global_namespace.internal = true;
+        // Add the global namespace module
+        let mut global_namespace = Module::new();
+        global_namespace.internal = true;
+        engine.global_modules.push(global_namespace.into());
 
         engine
     }
@@ -1088,16 +1086,10 @@ impl Engine {
 
         if let Some(index) = index {
             let offset = mods.len() - index.get();
-            Some(
-                mods.get(offset)
-                    .expect("never fails because offset should be within range"),
-            )
+            Some(mods.get(offset).expect("offset within range"))
         } else {
             mods.find(root)
-                .map(|n| {
-                    mods.get(n)
-                        .expect("never fails because the index came from `find`")
-                })
+                .map(|n| mods.get(n).expect("index is valid"))
                 .or_else(|| self.global_sub_modules.get(root).cloned())
         }
     }
@@ -1191,8 +1183,7 @@ impl Engine {
                 level: 0,
             };
             match resolve_var(
-                expr.get_variable_name(true)
-                    .expect("`expr` should be `Variable`"),
+                expr.get_variable_name(true).expect("`expr` is `Variable`"),
                 index,
                 &context,
             ) {
@@ -1209,9 +1200,7 @@ impl Engine {
             scope.len() - index
         } else {
             // Find the variable in the scope
-            let var_name = expr
-                .get_variable_name(true)
-                .expect("`expr` should be `Variable`");
+            let var_name = expr.get_variable_name(true).expect("`expr` is `Variable`");
             scope
                 .get_index(var_name)
                 .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(var_name.to_string(), var_pos))?
@@ -1245,9 +1234,7 @@ impl Engine {
         let _terminate_chaining = terminate_chaining;
 
         // Pop the last index value
-        let idx_val = idx_values
-            .pop()
-            .expect("never fails because an index chain is never empty");
+        let idx_val = idx_values.pop().expect("index chain is never empty");
 
         match chain_type {
             #[cfg(not(feature = "no_index"))]
@@ -1255,7 +1242,7 @@ impl Engine {
                 let pos = rhs.position();
                 let idx_val = idx_val
                     .into_index_value()
-                    .expect("never fails because `chain_type` is `ChainType::Index`");
+                    .expect("`chain_type` is `ChainType::Index`");
 
                 match rhs {
                     // xxx[idx].expr... | xxx[idx][expr]...
@@ -1277,7 +1264,7 @@ impl Engine {
                     // xxx[rhs] op= new_val
                     _ if new_val.is_some() => {
                         let ((new_val, new_pos), (op_info, op_pos)) =
-                            new_val.expect("never fails because `new_val` is `Some`");
+                            new_val.expect("`new_val` is `Some`");
                         let mut idx_val_for_setter = idx_val.clone();
 
                         let try_setter = match self.get_indexed_mut(
@@ -1333,7 +1320,7 @@ impl Engine {
                         let FnCallExpr { name, hashes, .. } = x.as_ref();
                         let call_args = &mut idx_val
                             .into_fn_call_args()
-                            .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
+                            .expect("`chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
                         self.make_method_call(
                             mods, state, lib, name, *hashes, target, call_args, *pos, level,
                         )
@@ -1350,7 +1337,7 @@ impl Engine {
                     Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
                         let (name, pos) = &x.2;
                         let ((new_val, new_pos), (op_info, op_pos)) =
-                            new_val.expect("never fails because `new_val` is `Some`");
+                            new_val.expect("`new_val` is `Some`");
                         let index = name.into();
                         {
                             let val_target = &mut self.get_indexed_mut(
@@ -1378,7 +1365,7 @@ impl Engine {
                     Expr::Property(x) if new_val.is_some() => {
                         let ((getter, hash_get), (setter, hash_set), (name, pos)) = x.as_ref();
                         let ((mut new_val, new_pos), (op_info, op_pos)) =
-                            new_val.expect("never fails because `new_val` is `Some`");
+                            new_val.expect("`new_val` is `Some`");
 
                         if op_info.is_some() {
                             let hash = FnCallHashes::from_native(*hash_get);
@@ -1498,9 +1485,9 @@ impl Engine {
                             // {xxx:map}.fn_name(arg_expr_list)[expr] | {xxx:map}.fn_name(arg_expr_list).expr
                             Expr::FnCall(ref x, pos) if !x.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = x.as_ref();
-                                let call_args = &mut idx_val
-                                    .into_fn_call_args()
-                                    .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
+                                let call_args = &mut idx_val.into_fn_call_args().expect(
+                                    "`chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`",
+                                );
                                 let (val, _) = self.make_method_call(
                                     mods, state, lib, name, *hashes, target, call_args, pos, level,
                                 )?;
@@ -1620,9 +1607,9 @@ impl Engine {
                             Expr::FnCall(ref f, pos) if !f.is_qualified() => {
                                 let FnCallExpr { name, hashes, .. } = f.as_ref();
                                 let rhs_chain = match_chaining_type(rhs);
-                                let args = &mut idx_val
-                                    .into_fn_call_args()
-                                    .expect("never fails because `chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
+                                let args = &mut idx_val.into_fn_call_args().expect(
+                                    "`chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`",
+                                );
                                 let (mut val, _) = self.make_method_call(
                                     mods, state, lib, name, *hashes, target, args, pos, level,
                                 )?;
@@ -2117,7 +2104,7 @@ impl Engine {
                 for (Ident { name: key, .. }, expr) in &x.0 {
                     let value_ref = map
                         .get_mut(key.as_str())
-                        .expect("never fails because the template should contain all the keys");
+                        .expect("template contains all keys");
                     *value_ref = self
                         .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                         .flatten();
@@ -2135,9 +2122,7 @@ impl Engine {
                     constants,
                     ..
                 } = x.as_ref();
-                let namespace = namespace
-                    .as_ref()
-                    .expect("never fails because function call is qualified");
+                let namespace = namespace.as_ref().expect("qualified function call");
                 let hash = hashes.native;
                 self.make_qualified_function_call(
                     scope, mods, state, lib, this_ptr, namespace, name, args, constants, hash,
@@ -2192,12 +2177,14 @@ impl Engine {
 
             Expr::Custom(custom, _) => {
                 let expressions: StaticVec<_> = custom.keywords.iter().map(Into::into).collect();
-                let key_token = custom.tokens.first().expect(
-                    "never fails because a custom syntax stream must contain at least one token",
-                );
+                let key_token = custom
+                    .tokens
+                    .first()
+                    .expect("custom syntax stream contains at least one token");
                 let custom_def = self
-                                    .custom_syntax.get(key_token)
-                                    .expect("never fails because the custom syntax leading token should match with definition");
+                    .custom_syntax
+                    .get(key_token)
+                    .expect("custom syntax leading token matches with definition");
                 let mut context = EvalContext {
                     engine: self,
                     scope,
@@ -2329,9 +2316,7 @@ impl Engine {
                 let target_is_shared = false;
 
                 if target_is_shared {
-                    lock_guard = target
-                        .write_lock::<Dynamic>()
-                        .expect("never fails when casting to `Dynamic`");
+                    lock_guard = target.write_lock::<Dynamic>().expect("cast to `Dynamic`");
                     lhs_ptr_inner = &mut *lock_guard;
                 } else {
                     lhs_ptr_inner = &mut *target;
@@ -2403,7 +2388,7 @@ impl Engine {
 
                 let var_name = lhs_expr
                     .get_variable_name(false)
-                    .expect("never fails because `lhs_ptr` is a `Variable`s");
+                    .expect("`lhs_ptr` is `Variable`");
 
                 if !lhs_ptr.is_ref() {
                     return EvalAltResult::ErrorAssignmentToConstant(var_name.to_string(), pos)
@@ -2633,13 +2618,9 @@ impl Engine {
                 // 3) Imported modules - functions marked with global namespace
                 // 4) Global sub-modules - functions marked with global namespace
                 let func = self
-                    .global_namespace
-                    .get_iter(iter_type)
-                    .or_else(|| {
-                        self.global_modules
-                            .iter()
-                            .find_map(|m| m.get_iter(iter_type))
-                    })
+                    .global_modules
+                    .iter()
+                    .find_map(|m| m.get_iter(iter_type))
                     .or_else(|| mods.get_iter(iter_type))
                     .or_else(|| {
                         self.global_sub_modules
@@ -2667,10 +2648,7 @@ impl Engine {
                             if x > INT::MAX as usize {
                                 return EvalAltResult::ErrorArithmetic(
                                     format!("for-loop counter overflow: {}", x),
-                                    counter
-                                        .as_ref()
-                                        .expect("never fails because `counter` is `Some`")
-                                        .pos,
+                                    counter.as_ref().expect("`counter` is `Some`").pos,
                                 )
                                 .into();
                             }
@@ -2678,7 +2656,7 @@ impl Engine {
                             let mut counter_var = scope
                                 .get_mut_by_index(c)
                                 .write_lock::<INT>()
-                                .expect("never fails because the counter always holds an `INT`");
+                                .expect("counter holds `INT`");
                             *counter_var = x as INT;
                         }
 
@@ -2691,9 +2669,7 @@ impl Engine {
                         let loop_var_is_shared = false;
 
                         if loop_var_is_shared {
-                            let mut value_ref = loop_var
-                                .write_lock()
-                                .expect("never fails when casting to `Dynamic`");
+                            let mut value_ref = loop_var.write_lock().expect("cast to `Dynamic`");
                             *value_ref = value;
                         } else {
                             *loop_var = value;
@@ -2744,9 +2720,7 @@ impl Engine {
                     constants,
                     ..
                 } = x.as_ref();
-                let namespace = namespace
-                    .as_ref()
-                    .expect("never fails because function call is qualified");
+                let namespace = namespace.as_ref().expect("qualified function call");
                 let hash = hashes.native;
                 self.make_qualified_function_call(
                     scope, mods, state, lib, this_ptr, namespace, name, args, constants, hash,
@@ -2805,11 +2779,16 @@ impl Engine {
                                 if err_pos.is_none() {
                                     // No position info
                                 } else {
-                                    let line = err_pos.line().expect("never fails because a non-NONE `Position` always has a line number") as INT;
+                                    let line = err_pos
+                                        .line()
+                                        .expect("non-NONE `Position` has line number")
+                                        as INT;
                                     let position = if err_pos.is_beginning_of_line() {
                                         0
                                     } else {
-                                        err_pos.position().expect("never fails because a non-NONE `Position` always has a character position")
+                                        err_pos
+                                            .position()
+                                            .expect("non-NONE `Position` has character position")
                                     } as INT;
                                     err_map.insert("line".into(), line.into());
                                     err_map.insert("position".into(), position.into());
@@ -2893,10 +2872,7 @@ impl Engine {
                     #[cfg(not(feature = "no_function"))]
                     if entry_type == AccessMode::ReadOnly && lib.iter().any(|&m| !m.is_empty()) {
                         let global = if let Some(index) = mods.find(KEYWORD_GLOBAL) {
-                            match mods
-                                .get_mut(index)
-                                .expect("never fails because the index came from `find`")
-                            {
+                            match mods.get_mut(index).expect("index is valid") {
                                 m if m.internal => Some(m),
                                 _ => None,
                             }
@@ -2905,15 +2881,12 @@ impl Engine {
                             let mut global = Module::new();
                             global.internal = true;
                             mods.push(KEYWORD_GLOBAL, global);
-                            Some(
-                                mods.get_mut(mods.len() - 1)
-                                    .expect("never fails because the global module was just added"),
-                            )
+                            Some(mods.get_mut(mods.len() - 1).expect("global module exists"))
                         };
 
                         if let Some(global) = global {
                             Shared::get_mut(global)
-                                .expect("never fails because the global module is never shared")
+                                .expect("global module is not shared")
                                 .set_var(name.clone(), value.clone());
                         }
                     }

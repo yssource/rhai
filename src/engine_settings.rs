@@ -279,7 +279,7 @@ impl Engine {
     ///
     /// // Register a custom operator called 'foo' and give it
     /// // a precedence of 160 (i.e. between +|- and *|/).
-    /// engine.register_custom_operator("foo", 160).unwrap();
+    /// engine.register_custom_operator("foo", 160).expect("should succeed");
     ///
     /// // Register a binary function named 'foo'
     /// engine.register_fn("foo", |x: i64, y: i64| (x * y) - (x + y));

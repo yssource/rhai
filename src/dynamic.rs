@@ -34,8 +34,8 @@ use fmt::Debug;
 #[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
 use instant::Instant;
 
-/// The message: never fails because the type was checked
-const CHECKED: &str = "never fails because the type was checked";
+/// The message: data type was checked
+const CHECKED: &str = "data type was checked";
 
 mod private {
     use crate::fn_native::SendSync;
@@ -259,9 +259,7 @@ impl<'d, T: Any + Clone> Deref for DynamicReadLock<'d, T> {
         match self.0 {
             DynamicReadLockInner::Reference(ref reference) => *reference,
             #[cfg(not(feature = "no_closure"))]
-            DynamicReadLockInner::Guard(ref guard) => guard.downcast_ref().expect(
-                "never fails because the read guard was created after checking the data type",
-            ),
+            DynamicReadLockInner::Guard(ref guard) => guard.downcast_ref().expect(CHECKED),
         }
     }
 }
@@ -302,9 +300,7 @@ impl<'d, T: Any + Clone> Deref for DynamicWriteLock<'d, T> {
         match self.0 {
             DynamicWriteLockInner::Reference(ref reference) => *reference,
             #[cfg(not(feature = "no_closure"))]
-            DynamicWriteLockInner::Guard(ref guard) => guard.downcast_ref().expect(
-                "never fails because the write guard was created after checking the data type",
-            ),
+            DynamicWriteLockInner::Guard(ref guard) => guard.downcast_ref().expect(CHECKED),
         }
     }
 }
@@ -315,9 +311,7 @@ impl<'d, T: Any + Clone> DerefMut for DynamicWriteLock<'d, T> {
         match self.0 {
             DynamicWriteLockInner::Reference(ref mut reference) => *reference,
             #[cfg(not(feature = "no_closure"))]
-            DynamicWriteLockInner::Guard(ref mut guard) => guard.downcast_mut().expect(
-                "never fails because the write guard was created after checking the data type",
-            ),
+            DynamicWriteLockInner::Guard(ref mut guard) => guard.downcast_mut().expect(CHECKED),
         }
     }
 }
@@ -1261,7 +1255,7 @@ impl Dynamic {
     ///
     /// let x = Dynamic::from(42_u32);
     ///
-    /// assert_eq!(x.try_cast::<u32>().unwrap(), 42);
+    /// assert_eq!(x.try_cast::<u32>().expect("x should be u32"), 42);
     /// ```
     #[inline]
     #[must_use]

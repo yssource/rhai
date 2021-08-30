@@ -303,7 +303,7 @@ impl EvalAltResult {
             format!("{:?}", self)
                 .split('(')
                 .next()
-                .expect("never fails because the debug format of an error is `ErrorXXX(...)`")
+                .expect("debug format of error is `ErrorXXX(...)`")
                 .into(),
         );
 
