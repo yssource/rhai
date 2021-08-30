@@ -199,12 +199,6 @@ impl Engine {
                             })
                         })
                         .or_else(|| {
-                            self.global_namespace
-                                .get_fn(hash)
-                                .cloned()
-                                .map(|func| FnResolutionCacheEntry { func, source: None })
-                        })
-                        .or_else(|| {
                             self.global_modules.iter().find_map(|m| {
                                 m.get_fn(hash).cloned().map(|func| FnResolutionCacheEntry {
                                     func,
@@ -619,8 +613,6 @@ impl Engine {
 
         // First check script-defined functions
         let result = lib.iter().any(|&m| m.contains_fn(hash_script))
-            // Then check registered functions
-            || self.global_namespace.contains_fn(hash_script)
             // Then check packages
             || self.global_modules.iter().any(|m| m.contains_fn(hash_script))
             // Then check imported modules

@@ -898,8 +898,6 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
 /// # }
 /// ```
 pub struct Engine {
-    /// A module containing all functions directly loaded into the Engine.
-    pub(crate) global_namespace: Module,
     /// A collection of all modules loaded into the global namespace of the Engine.
     pub(crate) global_modules: StaticVec<Shared<Module>>,
     /// A collection of all sub-modules directly loaded into the Engine.
@@ -1034,7 +1032,6 @@ impl Engine {
     #[must_use]
     pub fn new_raw() -> Self {
         let mut engine = Self {
-            global_namespace: Default::default(),
             global_modules: Default::default(),
             global_sub_modules: Default::default(),
 
@@ -1061,7 +1058,10 @@ impl Engine {
             limits: Default::default(),
         };
 
-        engine.global_namespace.internal = true;
+        // Add the global namespace module
+        let mut global_namespace = Module::new();
+        global_namespace.internal = true;
+        engine.global_modules.push(global_namespace.into());
 
         engine
     }
@@ -2618,13 +2618,9 @@ impl Engine {
                 // 3) Imported modules - functions marked with global namespace
                 // 4) Global sub-modules - functions marked with global namespace
                 let func = self
-                    .global_namespace
-                    .get_iter(iter_type)
-                    .or_else(|| {
-                        self.global_modules
-                            .iter()
-                            .find_map(|m| m.get_iter(iter_type))
-                    })
+                    .global_modules
+                    .iter()
+                    .find_map(|m| m.get_iter(iter_type))
                     .or_else(|| mods.get_iter(iter_type))
                     .or_else(|| {
                         self.global_sub_modules

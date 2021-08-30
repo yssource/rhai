@@ -22,6 +22,16 @@ use crate::Array;
 use crate::Map;
 
 impl Engine {
+    /// Get the global namespace module (which is the last module in `global_modules`).
+    #[inline(always)]
+    fn global_namespace(&mut self) -> &mut Module {
+        Shared::get_mut(
+            self.global_modules
+                .last_mut()
+                .expect("global_modules contains at least one module"),
+        )
+        .expect("global namespace module is never shared")
+    }
     /// Register a custom function with the [`Engine`].
     ///
     /// # Example
@@ -74,7 +84,7 @@ impl Engine {
         #[cfg(not(feature = "metadata"))]
         let param_type_names: Option<[&str; 0]> = None;
 
-        self.global_namespace.set_fn(
+        self.global_namespace().set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
@@ -132,7 +142,7 @@ impl Engine {
         #[cfg(not(feature = "metadata"))]
         let param_type_names: Option<[&str; 0]> = None;
 
-        self.global_namespace.set_fn(
+        self.global_namespace().set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
@@ -171,7 +181,7 @@ impl Engine {
         N: AsRef<str> + Into<Identifier>,
         T: Variant + Clone,
     {
-        self.global_namespace.set_raw_fn(
+        self.global_namespace().set_raw_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
@@ -275,7 +285,7 @@ impl Engine {
         T: Variant + Clone + IntoIterator,
         <T as IntoIterator>::Item: Variant + Clone,
     {
-        self.global_namespace.set_iterable::<T>();
+        self.global_namespace().set_iterable::<T>();
         self
     }
     /// Register a getter function for a member of a registered type with the [`Engine`].

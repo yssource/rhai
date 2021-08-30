@@ -148,10 +148,8 @@ impl<'a> OptimizerState<'a> {
         let hash_params = calc_fn_params_hash(arg_types.iter().cloned());
         let hash = combine_hashes(hash_script, hash_params);
 
-        // First check registered functions
-        self.engine.global_namespace.contains_fn(hash)
-            // Then check packages
-            || self.engine.global_modules.iter().any(|m| m.contains_fn(hash))
+        // First  check packages
+        self.engine.global_modules.iter().any(|m| m.contains_fn(hash))
             // Then check sub-modules
             || self.engine.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash))
     }
