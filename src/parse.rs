@@ -11,7 +11,8 @@ use crate::fn_hash::get_hasher;
 use crate::module::NamespaceRef;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::token::{
-    is_keyword_function, is_valid_identifier, Token, TokenStream, TokenizerControl,
+    is_keyword_function, is_valid_function_name, is_valid_identifier, Token, TokenStream,
+    TokenizerControl,
 };
 use crate::{
     calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Engine, Identifier,
@@ -478,7 +479,7 @@ fn parse_fn_call(
                 },
             );
 
-            let hashes = if is_valid_identifier(id.chars()) {
+            let hashes = if is_valid_function_name(&id) {
                 FnCallHashes::from_script(hash)
             } else {
                 FnCallHashes::from_native(hash)
@@ -528,7 +529,7 @@ fn parse_fn_call(
                     },
                 );
 
-                let hashes = if is_valid_identifier(id.chars()) {
+                let hashes = if is_valid_function_name(&id) {
                     FnCallHashes::from_script(hash)
                 } else {
                     FnCallHashes::from_native(hash)
@@ -1949,7 +1950,7 @@ fn parse_binary_op(
                 let hash = calc_fn_hash(&s, 2);
 
                 FnCallExpr {
-                    hashes: if is_valid_identifier(s.chars()) {
+                    hashes: if is_valid_function_name(&s) {
                         FnCallHashes::from_script(hash)
                     } else {
                         FnCallHashes::from_native(hash)

@@ -960,7 +960,7 @@ impl Token {
     #[inline]
     pub(crate) fn into_function_name_for_override(self) -> Result<String, Self> {
         match self {
-            Self::Custom(s) | Self::Identifier(s) if is_valid_identifier(s.chars()) => Ok(s),
+            Self::Custom(s) | Self::Identifier(s) if is_valid_function_name(&s) => Ok(s),
             _ => Err(self),
         }
     }
@@ -2013,6 +2013,13 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     }
 
     first_alphabetic
+}
+
+/// Is a text string a valid scripted function name?
+#[inline(always)]
+#[must_use]
+pub fn is_valid_function_name(name: &str) -> bool {
+    is_valid_identifier(name.chars())
 }
 
 /// Is a character valid to start an identifier?
