@@ -244,6 +244,7 @@ impl Engine {
         if include_global {
             self.global_modules
                 .iter()
+                .take(self.global_modules.len() - 1)
                 .flat_map(|m| m.iter_fn())
                 .for_each(|f| global.functions.push(f.into()));
         }
@@ -252,7 +253,7 @@ impl Engine {
             global.modules.insert(name.to_string(), m.as_ref().into());
         });
 
-        self.global_namespace
+        self.global_namespace()
             .iter_fn()
             .for_each(|f| global.functions.push(f.into()));
 

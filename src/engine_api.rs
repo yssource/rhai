@@ -24,7 +24,16 @@ use crate::Map;
 impl Engine {
     /// Get the global namespace module (which is the last module in `global_modules`).
     #[inline(always)]
-    fn global_namespace(&mut self) -> &mut Module {
+    #[allow(dead_code)]
+    pub(crate) fn global_namespace(&self) -> &Module {
+        self.global_modules
+            .last()
+            .expect("global_modules contains at least one module")
+    }
+    /// Get a mutable reference to the global namespace module
+    /// (which is the last module in `global_modules`).
+    #[inline(always)]
+    pub(crate) fn global_namespace_mut(&mut self) -> &mut Module {
         Shared::get_mut(
             self.global_modules
                 .last_mut()
@@ -84,7 +93,7 @@ impl Engine {
         #[cfg(not(feature = "metadata"))]
         let param_type_names: Option<[&str; 0]> = None;
 
-        self.global_namespace().set_fn(
+        self.global_namespace_mut().set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
@@ -142,7 +151,7 @@ impl Engine {
         #[cfg(not(feature = "metadata"))]
         let param_type_names: Option<[&str; 0]> = None;
 
-        self.global_namespace().set_fn(
+        self.global_namespace_mut().set_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
@@ -181,7 +190,7 @@ impl Engine {
         N: AsRef<str> + Into<Identifier>,
         T: Variant + Clone,
     {
-        self.global_namespace().set_raw_fn(
+        self.global_namespace_mut().set_raw_fn(
             name,
             FnNamespace::Global,
             FnAccess::Public,
@@ -285,7 +294,7 @@ impl Engine {
         T: Variant + Clone + IntoIterator,
         <T as IntoIterator>::Item: Variant + Clone,
     {
-        self.global_namespace().set_iterable::<T>();
+        self.global_namespace_mut().set_iterable::<T>();
         self
     }
     /// Register a getter function for a member of a registered type with the [`Engine`].
@@ -2046,7 +2055,7 @@ impl Engine {
     pub fn gen_fn_signatures(&self, include_packages: bool) -> Vec<String> {
         let mut signatures: Vec<_> = Default::default();
 
-        signatures.extend(self.global_namespace.gen_fn_signatures());
+        signatures.extend(self.global_namespace().gen_fn_signatures());
 
         self.global_sub_modules.iter().for_each(|(name, m)| {
             signatures.extend(m.gen_fn_signatures().map(|f| format!("{}::{}", name, f)))
@@ -2056,6 +2065,7 @@ impl Engine {
             signatures.extend(
                 self.global_modules
                     .iter()
+                    .take(self.global_modules.len() - 1)
                     .flat_map(|m| m.gen_fn_signatures()),
             );
         }
