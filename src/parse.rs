@@ -2929,6 +2929,7 @@ fn parse_try_catch(
         }
 
         let name = state.get_identifier(name);
+        state.stack.push((name.clone(), AccessMode::ReadWrite));
         Some(Ident { name, pos })
     } else {
         None
