@@ -875,6 +875,16 @@ impl<'a> From<&'a Expr> for ASTNode<'a> {
     }
 }
 
+impl ASTNode<'_> {
+    /// Get the [`Position`] of this [`ASTNode`].
+    pub const fn position(&self) -> Position {
+        match self {
+            ASTNode::Stmt(stmt) => stmt.position(),
+            ASTNode::Expr(expr) => expr.position(),
+        }
+    }
+}
+
 /// _(internals)_ A statements block.
 /// Exported under the `internals` feature only.
 ///

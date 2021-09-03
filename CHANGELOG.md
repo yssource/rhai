@@ -26,6 +26,7 @@ Enhancements
 * Added `Scope::is_constant` to check if a variable is constant.
 * Added `Scope::set_or_push` to add a new variable only if one doesn't already exist.
 * `Engine::register_type_XXX` are now available even under `no_object`.
+* Added `ASTNode::position`.
 
 
 Version 1.0.4
