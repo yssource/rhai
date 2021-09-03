@@ -13,19 +13,36 @@ Bug fixes
 Enhancements
 ------------
 
+### `Engine` API
+
 * `Engine::consume_XXX` methods are renamed to `Engine::run_XXX` to make meanings clearer. The `consume_XXX` API is deprecated.
+* `Engine::register_type_XXX` are now available even under `no_object`.
+
+### Custom Syntax
+
 * `$symbol$` is supported in custom syntax to match any symbol.
 * Custom syntax with `$block$`, `}` or `;` as the last symbol are now self-terminating (i.e. no need to attach a terminating `;`).
+
+### `Dynamic` Values
+
 * `Dynamic::as_string` and `Dynamic::as_immutable_string` are deprecated and replaced by `into_string` and `into_immutable_string` respectively.
 * Added a number of constants to `Dynamic`.
 * Added a number of constants and `fromXXX` constant methods to `Dynamic`.
+
+### `Decimal` Values
+
 * `parse_float()`, `PI()` and `E()` now defer to `Decimal` under `no_float` if `decimal` is turned on.
 * Added `log10()` for `Decimal`.
 * `ln` for `Decimal` is now checked and won't panic.
+
+### `Scope` API
+
 * `Scope::set_value` now takes anything that implements `Into<Cow<str>>`.
 * Added `Scope::is_constant` to check if a variable is constant.
 * Added `Scope::set_or_push` to add a new variable only if one doesn't already exist.
-* `Engine::register_type_XXX` are now available even under `no_object`.
+
+### `AST` API
+
 * Added `ASTNode::position`.
 
 
