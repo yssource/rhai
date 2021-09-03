@@ -28,7 +28,7 @@ Enhancements
 * `Engine::register_type_XXX` are now available even under `no_object`.
 
 
-Version 1.0.3
+Version 1.0.4
 =============
 
 * Fixed bug with `catch` variable used in `catch` block.
