@@ -2332,8 +2332,14 @@ mod tests {
         use crate::*;
         use std::mem::size_of;
 
-        assert_eq!(size_of::<Dynamic>(), 16);
-        assert_eq!(size_of::<Option<Dynamic>>(), 16);
+        let packed = cfg!(all(
+            target_pointer_width = "32",
+            feature = "only_i32",
+            feature = "no_float"
+        ));
+
+        assert_eq!(size_of::<Dynamic>(), if packed { 8 } else { 16 });
+        assert_eq!(size_of::<Option<Dynamic>>(), if packed { 8 } else { 16 });
         #[cfg(not(feature = "no_position"))]
         assert_eq!(size_of::<Position>(), 4);
         assert_eq!(size_of::<ast::Expr>(), 16);
