@@ -1,6 +1,12 @@
 Rhai Release Notes
 ==================
 
+Version 1.0.5
+=============
+
+* `FloatWrapper` is no longer erroneously exported under `no_float+internals`.
+
+
 Version 1.0.4
 =============
 
