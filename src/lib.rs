@@ -93,6 +93,7 @@ pub mod packages;
 mod parse;
 pub mod plugin;
 mod scope;
+mod tests;
 mod token;
 mod r#unsafe;
 
