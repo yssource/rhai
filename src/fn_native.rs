@@ -192,39 +192,46 @@ impl<'a> NativeCallContext<'a> {
     ///
     /// If `is_method` is [`true`], the first argument is assumed to be passed
     /// by reference and is not consumed.
-    #[inline]
+    #[inline(always)]
     pub fn call_fn_dynamic_raw(
         &self,
         fn_name: impl AsRef<str>,
         is_method_call: bool,
         args: &mut [&mut Dynamic],
     ) -> RhaiResult {
-        let fn_name = fn_name.as_ref();
+        fn call_fn_dynamic_inner(
+            context: &NativeCallContext,
+            is_method_call: bool,
+            fn_name: &str,
+            args: &mut [&mut Dynamic],
+        ) -> Result<Dynamic, Box<EvalAltResult>> {
+            let hash = if is_method_call {
+                FnCallHashes::from_script_and_native(
+                    calc_fn_hash(fn_name, args.len() - 1),
+                    calc_fn_hash(fn_name, args.len()),
+                )
+            } else {
+                FnCallHashes::from_script(calc_fn_hash(fn_name, args.len()))
+            };
+            context
+                .engine()
+                .exec_fn_call(
+                    &mut context.mods.cloned().unwrap_or_default(),
+                    &mut Default::default(),
+                    context.lib,
+                    fn_name,
+                    hash,
+                    args,
+                    is_method_call,
+                    is_method_call,
+                    Position::NONE,
+                    None,
+                    0,
+                )
+                .map(|(r, _)| r)
+        }
 
-        let hash = if is_method_call {
-            FnCallHashes::from_script_and_native(
-                calc_fn_hash(fn_name, args.len() - 1),
-                calc_fn_hash(fn_name, args.len()),
-            )
-        } else {
-            FnCallHashes::from_script(calc_fn_hash(fn_name, args.len()))
-        };
-
-        self.engine()
-            .exec_fn_call(
-                &mut self.mods.cloned().unwrap_or_default(),
-                &mut Default::default(),
-                self.lib,
-                fn_name,
-                hash,
-                args,
-                is_method_call,
-                is_method_call,
-                Position::NONE,
-                None,
-                0,
-            )
-            .map(|(r, _)| r)
+        call_fn_dynamic_inner(self, is_method_call, fn_name.as_ref(), args)
     }
 }
 

@@ -1338,6 +1338,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
+    #[inline(always)]
     pub fn parse_json(
         &self,
         json: impl AsRef<str>,
@@ -1345,52 +1346,51 @@ impl Engine {
     ) -> Result<Map, Box<EvalAltResult>> {
         use crate::token::Token;
 
-        let json = json.as_ref();
-        let mut scope = Default::default();
-
-        // Trims the JSON string and add a '#' in front
-        let json_text = json.trim_start();
-        let scripts = if json_text.starts_with(Token::MapStart.literal_syntax()) {
-            [json_text, ""]
-        } else if json_text.starts_with(Token::LeftBrace.literal_syntax()) {
-            ["#", json_text]
-        } else {
-            return Err(crate::ParseErrorType::MissingToken(
-                Token::LeftBrace.syntax().into(),
-                "to start a JSON object hash".into(),
-            )
-            .into_err(Position::new(1, (json.len() - json_text.len() + 1) as u16))
-            .into());
-        };
-
-        let (stream, tokenizer_control) = self.lex_raw(
-            &scripts,
-            Some(if has_null {
-                |token| match token {
-                    // If `null` is present, make sure `null` is treated as a variable
-                    Token::Reserved(s) if s == "null" => Token::Identifier(s),
-                    _ => token,
-                }
+        fn parse_json_inner(
+            engine: &Engine,
+            json: &str,
+            has_null: bool,
+        ) -> Result<Map, Box<EvalAltResult>> {
+            let mut scope = Default::default();
+            let json_text = json.trim_start();
+            let scripts = if json_text.starts_with(Token::MapStart.literal_syntax()) {
+                [json_text, ""]
+            } else if json_text.starts_with(Token::LeftBrace.literal_syntax()) {
+                ["#", json_text]
             } else {
-                |t| t
-            }),
-        );
-
-        let mut state = ParseState::new(self, tokenizer_control);
-
-        let ast = self.parse_global_expr(
-            &mut stream.peekable(),
-            &mut state,
-            &scope,
-            OptimizationLevel::None,
-        )?;
-
-        // Handle null - map to ()
-        if has_null {
-            scope.push_constant("null", ());
+                return Err(crate::ParseErrorType::MissingToken(
+                    Token::LeftBrace.syntax().into(),
+                    "to start a JSON object hash".into(),
+                )
+                .into_err(Position::new(1, (json.len() - json_text.len() + 1) as u16))
+                .into());
+            };
+            let (stream, tokenizer_control) = engine.lex_raw(
+                &scripts,
+                Some(if has_null {
+                    |token| match token {
+                        // If `null` is present, make sure `null` is treated as a variable
+                        Token::Reserved(s) if s == "null" => Token::Identifier(s),
+                        _ => token,
+                    }
+                } else {
+                    |t| t
+                }),
+            );
+            let mut state = ParseState::new(engine, tokenizer_control);
+            let ast = engine.parse_global_expr(
+                &mut stream.peekable(),
+                &mut state,
+                &scope,
+                OptimizationLevel::None,
+            )?;
+            if has_null {
+                scope.push_constant("null", ());
+            }
+            engine.eval_ast_with_scope(&mut scope, &ast)
         }
 
-        self.eval_ast_with_scope(&mut scope, &ast)
+        parse_json_inner(self, json.as_ref(), has_null)
     }
     /// Compile a string containing an expression into an [`AST`],
     /// which can be used later for evaluation.
