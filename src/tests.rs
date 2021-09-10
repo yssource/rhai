@@ -24,9 +24,9 @@ fn check_struct_sizes() {
     assert_eq!(
         size_of::<FnPtr>(),
         if cfg!(feature = "no_smartstring") {
-            80
+            64
         } else {
-            96
+            80
         }
     );
     assert_eq!(size_of::<Scope>(), 464);

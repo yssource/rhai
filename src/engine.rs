@@ -180,7 +180,7 @@ impl Imports {
 impl IntoIterator for Imports {
     type Item = (Identifier, Shared<Module>);
     type IntoIter =
-        Zip<Rev<smallvec::IntoIter<[Identifier; 4]>>, Rev<smallvec::IntoIter<[Shared<Module>; 4]>>>;
+        Zip<Rev<smallvec::IntoIter<[Identifier; 3]>>, Rev<smallvec::IntoIter<[Shared<Module>; 3]>>>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
