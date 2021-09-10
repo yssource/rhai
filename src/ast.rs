@@ -837,20 +837,6 @@ impl fmt::Debug for Ident {
     }
 }
 
-/// _(internals)_ A type encapsulating the mode of a `return`/`throw` statement.
-/// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
-#[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
-pub enum ReturnType {
-    /// `return` statement.
-    Return,
-    /// `throw` statement.
-    Exception,
-}
-
 /// _(internals)_ An [`AST`] node, consisting of either an [`Expr`] or a [`Stmt`].
 /// Exported under the `internals` feature only.
 ///
@@ -859,7 +845,9 @@ pub enum ReturnType {
 /// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
 pub enum ASTNode<'a> {
+    /// A statement ([`Stmt`]).
     Stmt(&'a Stmt),
+    /// An expression ([`Expr`]).
     Expr(&'a Expr),
 }
 
@@ -885,7 +873,7 @@ impl ASTNode<'_> {
     }
 }
 
-/// _(internals)_ A statements block.
+/// _(internals)_ A scoped block of statements.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -914,17 +902,11 @@ impl StmtBlock {
     pub fn len(&self) -> usize {
         self.0.len()
     }
-    /// Get the position of this statements block.
+    /// Get the position (location of the beginning `{`) of this statements block.
     #[inline(always)]
     #[must_use]
     pub const fn position(&self) -> Position {
         self.1
-    }
-    /// Get the statements of this statements block.
-    #[inline(always)]
-    #[must_use]
-    pub fn statements_mut(&mut self) -> &mut StaticVec<Stmt> {
-        &mut self.0
     }
 }
 
@@ -1026,12 +1008,15 @@ pub mod AST_OPTION_FLAGS {
     /// _(internals)_ The [`AST`][crate::AST] node is constant.
     /// Exported under the `internals` feature only.
     pub const AST_OPTION_CONSTANT: OptionFlags = OptionFlags(0b0000_0001);
-    /// _(internals)_ The [`AST`][crate::AST] node is exported.
+    /// _(internals)_ The [`AST`][crate::AST] node is public.
     /// Exported under the `internals` feature only.
-    pub const AST_OPTION_EXPORTED: OptionFlags = OptionFlags(0b0000_0010);
+    pub const AST_OPTION_PUBLIC: OptionFlags = OptionFlags(0b0000_0010);
     /// _(internals)_ The [`AST`][crate::AST] node is in negated mode.
     /// Exported under the `internals` feature only.
     pub const AST_OPTION_NEGATED: OptionFlags = OptionFlags(0b0000_0100);
+    /// _(internals)_ The [`AST`][crate::AST] node breaks out of normal control flow.
+    /// Exported under the `internals` feature only.
+    pub const AST_OPTION_BREAK_OUT: OptionFlags = OptionFlags(0b0000_1000);
 
     impl std::fmt::Debug for OptionFlags {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1056,8 +1041,9 @@ pub mod AST_OPTION_FLAGS {
 
             f.write_str("(")?;
             write_option(self, f, num_flags, AST_OPTION_CONSTANT, "Constant")?;
-            write_option(self, f, num_flags, AST_OPTION_EXPORTED, "Exported")?;
+            write_option(self, f, num_flags, AST_OPTION_PUBLIC, "Public")?;
             write_option(self, f, num_flags, AST_OPTION_NEGATED, "Negated")?;
+            write_option(self, f, num_flags, AST_OPTION_BREAK_OUT, "Break")?;
             f.write_str(")")?;
 
             Ok(())
@@ -1100,7 +1086,7 @@ pub enum Stmt {
     ///
     /// ### Option Flags
     ///
-    /// * [`AST_FLAG_EXPORTED`][AST_FLAGS::AST_FLAG_EXPORTED] = `export`
+    /// * [`AST_FLAG_PUBLIC`][AST_FLAGS::AST_FLAG_PUBLIC] = `export`
     /// * [`AST_FLAG_CONSTANT`][AST_FLAGS::AST_FLAG_CONSTANT] = `const`
     Var(Expr, Box<Ident>, OptionFlags, Position),
     /// expr op`=` expr
@@ -1116,12 +1102,20 @@ pub enum Stmt {
     TryCatch(Box<(StmtBlock, Option<Ident>, StmtBlock)>, Position),
     /// [expression][Expr]
     Expr(Expr),
-    /// `continue`
-    Continue(Position),
-    /// `break`
-    Break(Position),
+    /// `continue`/`break`
+    ///
+    /// ### Option Flags
+    ///
+    /// * [`AST_FLAG_NONE`][AST_FLAGS::AST_FLAG_NONE] = `continue`
+    /// * [`AST_FLAG_BREAK_OUT`][AST_FLAGS::AST_FLAG_BREAK_OUT] = `break`
+    BreakLoop(OptionFlags, Position),
     /// `return`/`throw`
-    Return(ReturnType, Option<Expr>, Position),
+    ///
+    /// ### Option Flags
+    ///
+    /// * [`AST_FLAG_NONE`][AST_FLAGS::AST_FLAG_NONE] = `return`
+    /// * [`AST_FLAG_BREAK_OUT`][AST_FLAGS::AST_FLAG_BREAK_OUT] = `throw`
+    Return(OptionFlags, Option<Expr>, Position),
     /// `import` expr `as` var
     ///
     /// Not available under `no_module`.
@@ -1135,6 +1129,11 @@ pub enum Stmt {
     /// Convert a variable to shared.
     ///
     /// Not available under `no_closure`.
+    ///
+    /// # Notes
+    ///
+    /// This variant does not map to any language structure.  It is currently only used only to
+    /// convert a normal variable into a shared variable when the variable is _captured_ by a closure.
     #[cfg(not(feature = "no_closure"))]
     Share(Identifier),
 }
@@ -1172,8 +1171,7 @@ impl Stmt {
     pub const fn position(&self) -> Position {
         match self {
             Self::Noop(pos)
-            | Self::Continue(pos)
-            | Self::Break(pos)
+            | Self::BreakLoop(_, pos)
             | Self::Block(_, pos)
             | Self::Assignment(_, pos)
             | Self::FnCall(_, pos)
@@ -1201,8 +1199,7 @@ impl Stmt {
     pub fn set_position(&mut self, new_pos: Position) -> &mut Self {
         match self {
             Self::Noop(pos)
-            | Self::Continue(pos)
-            | Self::Break(pos)
+            | Self::BreakLoop(_, pos)
             | Self::Block(_, pos)
             | Self::Assignment(_, pos)
             | Self::FnCall(_, pos)
@@ -1248,8 +1245,7 @@ impl Stmt {
 
             Self::Var(_, _, _, _)
             | Self::Assignment(_, _)
-            | Self::Continue(_)
-            | Self::Break(_)
+            | Self::BreakLoop(_, _)
             | Self::Return(_, _, _) => false,
 
             #[cfg(not(feature = "no_module"))]
@@ -1280,8 +1276,7 @@ impl Stmt {
             | Self::Expr(_)
             | Self::FnCall(_, _)
             | Self::Do(_, _, _, _)
-            | Self::Continue(_)
-            | Self::Break(_)
+            | Self::BreakLoop(_, _)
             | Self::Return(_, _, _) => false,
 
             #[cfg(not(feature = "no_module"))]
@@ -1330,7 +1325,7 @@ impl Stmt {
 
             Self::Var(_, _, _, _) | Self::Assignment(_, _) | Self::FnCall(_, _) => false,
             Self::Block(block, _) => block.iter().all(|stmt| stmt.is_pure()),
-            Self::Continue(_) | Self::Break(_) | Self::Return(_, _, _) => false,
+            Self::BreakLoop(_, _) | Self::Return(_, _, _) => false,
             Self::TryCatch(x, _) => {
                 (x.0).0.iter().all(Stmt::is_pure) && (x.2).0.iter().all(Stmt::is_pure)
             }
@@ -1348,8 +1343,8 @@ impl Stmt {
     ///
     /// An internally pure statement only has side effects that disappear outside the block.
     ///
-    /// Only variable declarations (i.e. `let` and `const`) and `import`/`export` statements
-    /// are internally pure.
+    /// Currently only variable declarations (i.e. `let` and `const`) and `import`/`export`
+    /// statements are internally pure.
     #[inline]
     #[must_use]
     pub fn is_internally_pure(&self) -> bool {
@@ -1373,7 +1368,7 @@ impl Stmt {
     #[must_use]
     pub const fn is_control_flow_break(&self) -> bool {
         match self {
-            Self::Return(_, _, _) | Self::Break(_) | Self::Continue(_) => true,
+            Self::Return(_, _, _) | Self::BreakLoop(_, _) => true,
             _ => false,
         }
     }
@@ -1516,7 +1511,8 @@ impl Stmt {
 pub struct CustomExpr {
     /// List of keywords.
     pub keywords: StaticVec<Expr>,
-    /// Is the current [`Scope`][crate::Scope] modified?
+    /// Is the current [`Scope`][crate::Scope] possibly modified by this custom statement
+    /// (e.g. introducing a new variable)?
     pub scope_may_be_changed: bool,
     /// List of tokens actually parsed.
     pub tokens: StaticVec<Identifier>,
@@ -1689,6 +1685,9 @@ pub struct FnCallExpr {
     /// List of function call argument expressions.
     pub args: StaticVec<Expr>,
     /// List of function call arguments that are constants.
+    ///
+    /// Any arguments in `args` that is [`Expr::Stack`][Expr::Stack] indexes into this
+    /// array to find the constant for use as its argument value.
     pub constants: smallvec::SmallVec<[Dynamic; 2]>,
     /// Function name.
     pub name: Identifier,
@@ -1889,6 +1888,12 @@ pub enum Expr {
         )>,
     ),
     /// Stack slot
+    ///
+    /// # Notes
+    ///
+    /// This variant does not map to any language structure.  It is currently only used in function
+    /// calls with constant arguments where the `usize` number indexes into an array containing a
+    /// list of constant arguments for the function call.  See [`FnCallExpr`] for more details.
     Stack(usize, Position),
     /// { [statement][Stmt] ... }
     Stmt(Box<StmtBlock>),

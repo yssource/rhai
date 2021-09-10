@@ -1,6 +1,6 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt, AST_OPTION_FLAGS::*};
+use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::custom_syntax::CustomSyntax;
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_hash::get_hasher;
@@ -2704,11 +2704,10 @@ impl Engine {
                 }
             }
 
-            // Continue statement
-            Stmt::Continue(pos) => EvalAltResult::LoopBreak(false, *pos).into(),
-
-            // Break statement
-            Stmt::Break(pos) => EvalAltResult::LoopBreak(true, *pos).into(),
+            // Continue/Break statement
+            Stmt::BreakLoop(options, pos) => {
+                EvalAltResult::LoopBreak(options.contains(AST_OPTION_BREAK_OUT), *pos).into()
+            }
 
             // Namespace-qualified function call
             Stmt::FnCall(x, pos) if x.is_qualified() => {
@@ -2828,8 +2827,23 @@ impl Engine {
                 }
             }
 
+            // Throw value
+            Stmt::Return(options, Some(expr), pos) if options.contains(AST_OPTION_BREAK_OUT) => {
+                EvalAltResult::ErrorRuntime(
+                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                        .flatten(),
+                    *pos,
+                )
+                .into()
+            }
+
+            // Empty throw
+            Stmt::Return(options, None, pos) if options.contains(AST_OPTION_BREAK_OUT) => {
+                EvalAltResult::ErrorRuntime(Dynamic::UNIT, *pos).into()
+            }
+
             // Return value
-            Stmt::Return(ReturnType::Return, Some(expr), pos) => EvalAltResult::Return(
+            Stmt::Return(_, Some(expr), pos) => EvalAltResult::Return(
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten(),
                 *pos,
@@ -2837,22 +2851,7 @@ impl Engine {
             .into(),
 
             // Empty return
-            Stmt::Return(ReturnType::Return, None, pos) => {
-                EvalAltResult::Return(Dynamic::UNIT, *pos).into()
-            }
-
-            // Throw value
-            Stmt::Return(ReturnType::Exception, Some(expr), pos) => EvalAltResult::ErrorRuntime(
-                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .flatten(),
-                *pos,
-            )
-            .into(),
-
-            // Empty throw
-            Stmt::Return(ReturnType::Exception, None, pos) => {
-                EvalAltResult::ErrorRuntime(Dynamic::UNIT, *pos).into()
-            }
+            Stmt::Return(_, None, pos) => EvalAltResult::Return(Dynamic::UNIT, *pos).into(),
 
             // Let/const statement
             Stmt::Var(expr, x, options, _) => {
@@ -2862,7 +2861,7 @@ impl Engine {
                 } else {
                     AccessMode::ReadWrite
                 };
-                let export = options.contains(AST_OPTION_EXPORTED);
+                let export = options.contains(AST_OPTION_PUBLIC);
 
                 let value = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?

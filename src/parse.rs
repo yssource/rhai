@@ -1,8 +1,8 @@
 //! Main module defining the lexer and parser.
 
 use crate::ast::{
-    BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ReturnType,
-    ScriptFnDef, Stmt, StmtBlock, AST_OPTION_FLAGS::*,
+    BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ScriptFnDef, Stmt,
+    StmtBlock, AST_OPTION_FLAGS::*,
 };
 use crate::custom_syntax::{markers::*, CustomSyntax};
 use crate::dynamic::AccessMode;
@@ -2428,7 +2428,7 @@ fn parse_let(
     state.stack.push((name, var_type));
 
     let export = if is_export {
-        AST_OPTION_EXPORTED
+        AST_OPTION_PUBLIC
     } else {
         AST_OPTION_NONE
     };
@@ -2829,11 +2829,11 @@ fn parse_stmt(
 
         Token::Continue if settings.is_breakable => {
             let pos = eat_token(input, Token::Continue);
-            Ok(Stmt::Continue(pos))
+            Ok(Stmt::BreakLoop(AST_OPTION_NONE, pos))
         }
         Token::Break if settings.is_breakable => {
             let pos = eat_token(input, Token::Break);
-            Ok(Stmt::Break(pos))
+            Ok(Stmt::BreakLoop(AST_OPTION_BREAK_OUT, pos))
         }
         Token::Continue | Token::Break => Err(PERR::LoopBreak.into_err(settings.pos)),
 
@@ -2843,8 +2843,8 @@ fn parse_stmt(
                 .map(|(token, pos)| {
                     (
                         match token {
-                            Token::Return => ReturnType::Return,
-                            Token::Throw => ReturnType::Exception,
+                            Token::Return => AST_OPTION_NONE,
+                            Token::Throw => AST_OPTION_BREAK_OUT,
                             _ => unreachable!(),
                         },
                         pos,

@@ -44,6 +44,8 @@ Enhancements
 ### `AST` API
 
 * Added `ASTNode::position`.
+* `ReturnType` is removed in favor of option flags for `Stmt::Return`.
+* `Stmt::Break` and `Stmt::Continue` are merged into `Stmt::BreakLoop` via an option flag.
 
 
 Version 1.0.4
