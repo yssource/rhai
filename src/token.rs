@@ -1421,7 +1421,7 @@ fn get_next_token_inner(
 
             // digit ...
             ('0'..='9', _) => {
-                let mut result: smallvec::SmallVec<[char; 16]> = Default::default();
+                let mut result = smallvec::SmallVec::<[char; 16]>::new();
                 let mut radix_base: Option<u32> = None;
                 let mut valid: fn(char) -> bool = is_numeric_digit;
                 result.push(c);
@@ -1951,7 +1951,7 @@ fn get_identifier(
     start_pos: Position,
     first_char: char,
 ) -> Option<(Token, Position)> {
-    let mut result: smallvec::SmallVec<[char; 8]> = Default::default();
+    let mut result = smallvec::SmallVec::<[char; 8]>::new();
     result.push(first_char);
 
     while let Some(next_char) = stream.peek_next() {

@@ -179,7 +179,7 @@ mod array_functions {
                 if n as usize > array.len() {
                     mem::take(array)
                 } else {
-                    let mut result: Array = Default::default();
+                    let mut result = Array::new();
                     result.extend(array.drain(array.len() - n as usize..));
                     result
                 }
@@ -189,7 +189,7 @@ mod array_functions {
         } else if start as usize >= array.len() {
             Default::default()
         } else {
-            let mut result: Array = Default::default();
+            let mut result = Array::new();
             result.extend(array.drain(start as usize..));
             result
         }

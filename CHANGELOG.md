@@ -9,6 +9,7 @@ Bug fixes
 
 * Custom syntax starting with a disabled standard keyword now works properly.
 * When calling `Engine::call_fn`, new variables defined during evaluation of the body script are removed and no longer spill into the function call.
+* `NamespaceRef::new` is fixed.
 
 Enhancements
 ------------

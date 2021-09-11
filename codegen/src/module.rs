@@ -49,7 +49,7 @@ impl ExportedParams for ExportedModParams {
 
     fn from_info(info: ExportInfo) -> syn::Result<Self> {
         let ExportInfo { items: attrs, .. } = info;
-        let mut name = Default::default();
+        let mut name = String::new();
         let mut skip = false;
         let mut scope = None;
         for attr in attrs {

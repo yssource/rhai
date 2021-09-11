@@ -82,7 +82,7 @@ pub struct ParseState<'e> {
     /// Interned strings.
     interned_strings: IdentifierBuilder,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
-    stack: Vec<(Identifier, AccessMode)>,
+    stack: StaticVec<(Identifier, AccessMode)>,
     /// Size of the local variables stack upon entry of the current block scope.
     entry_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
@@ -124,7 +124,7 @@ impl<'e> ParseState<'e> {
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
             interned_strings: Default::default(),
-            stack: Vec::with_capacity(16),
+            stack: Default::default(),
             entry_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
             modules: Default::default(),
@@ -828,8 +828,8 @@ fn parse_map_literal(
     // #{ ...
     settings.pos = eat_token(input, Token::MapStart);
 
-    let mut map: StaticVec<(Ident, Expr)> = Default::default();
-    let mut template: BTreeMap<Identifier, crate::Dynamic> = Default::default();
+    let mut map = StaticVec::<(Ident, Expr)>::new();
+    let mut template = BTreeMap::<Identifier, crate::Dynamic>::new();
 
     loop {
         const MISSING_RBRACE: &str = "to end this object map literal";
@@ -1179,7 +1179,7 @@ fn parse_primary(
 
         // Interpolated string
         Token::InterpolatedString(_) => {
-            let mut segments: StaticVec<Expr> = Default::default();
+            let mut segments = StaticVec::<Expr>::new();
 
             if let (Token::InterpolatedString(s), pos) = input.next().expect(NEVER_ENDS) {
                 segments.push(Expr::StringConstant(s.into(), pos));
@@ -1389,7 +1389,7 @@ fn parse_primary(
                 if let Some((ref mut namespace, _)) = namespace {
                     namespace.push(var_name_def);
                 } else {
-                    let mut ns: NamespaceRef = Default::default();
+                    let mut ns = NamespaceRef::new();
                     ns.push(var_name_def);
                     namespace = Some((ns, 42));
                 }
@@ -1977,9 +1977,9 @@ fn parse_custom_syntax(
     pos: Position,
 ) -> Result<Expr, ParseError> {
     let mut settings = settings;
-    let mut keywords: StaticVec<Expr> = Default::default();
-    let mut segments: StaticVec<_> = Default::default();
-    let mut tokens: StaticVec<_> = Default::default();
+    let mut keywords = StaticVec::<Expr>::new();
+    let mut segments = StaticVec::new();
+    let mut tokens = StaticVec::new();
 
     // Adjust the variables stack
     if syntax.scope_may_be_changed {
@@ -2699,7 +2699,7 @@ fn parse_stmt(
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     let comments = {
-        let mut comments: StaticVec<String> = Default::default();
+        let mut comments = StaticVec::<String>::new();
         let mut comments_pos = Position::NONE;
 
         // Handle doc-comments.
@@ -2982,7 +2982,7 @@ fn parse_fn(
         (_, pos) => return Err(PERR::FnMissingParams(name).into_err(*pos)),
     };
 
-    let mut params: StaticVec<_> = Default::default();
+    let mut params = StaticVec::new();
 
     if !match_token(input, Token::RightParen).0 {
         let sep_err = format!("to separate the parameters of function '{}'", name);
@@ -3115,7 +3115,7 @@ fn parse_anon_fn(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let mut params_list: StaticVec<_> = Default::default();
+    let mut params_list = StaticVec::new();
 
     if input.next().expect(NEVER_ENDS).0 != Token::Or && !match_token(input, Token::Pipe).0 {
         loop {

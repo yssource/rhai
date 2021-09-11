@@ -2766,7 +2766,7 @@ impl Engine {
                             }
                             #[cfg(not(feature = "no_object"))]
                             _ => {
-                                let mut err_map: Map = Default::default();
+                                let mut err_map = Map::new();
                                 let err_pos = err.take_position();
 
                                 err_map.insert("message".into(), err.to_string().into());

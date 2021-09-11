@@ -961,7 +961,7 @@ impl Engine {
                 let remainder = iter.next().expect("name contains separator").trim();
 
                 if !root.contains_key(sub_module) {
-                    let mut m: Module = Default::default();
+                    let mut m = Module::new();
                     register_static_module_raw(m.sub_modules_mut(), remainder, module);
                     m.build_index();
                     root.insert(sub_module.into(), m.into());
@@ -1351,7 +1351,7 @@ impl Engine {
             json: &str,
             has_null: bool,
         ) -> Result<Map, Box<EvalAltResult>> {
-            let mut scope = Default::default();
+            let mut scope = Scope::new();
             let json_text = json.trim_start();
             let scripts = if json_text.starts_with(Token::MapStart.literal_syntax()) {
                 [json_text, ""]
@@ -1860,7 +1860,7 @@ impl Engine {
         name: impl AsRef<str>,
         args: impl crate::FuncArgs,
     ) -> Result<T, Box<EvalAltResult>> {
-        let mut arg_values: crate::StaticVec<_> = Default::default();
+        let mut arg_values = crate::StaticVec::new();
         args.parse(&mut arg_values);
         let mut args: crate::StaticVec<_> = arg_values.iter_mut().collect();
         let name = name.as_ref();
@@ -2053,7 +2053,7 @@ impl Engine {
     #[inline]
     #[must_use]
     pub fn gen_fn_signatures(&self, include_packages: bool) -> Vec<String> {
-        let mut signatures: Vec<_> = Default::default();
+        let mut signatures = Vec::new();
 
         signatures.extend(self.global_namespace().gen_fn_signatures());
 

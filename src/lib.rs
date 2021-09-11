@@ -264,7 +264,7 @@ pub use module::NamespaceRef;
 /// being the third number, be reached, then, lobbest thou thy `SmallVec` towards thy heap, who,
 /// being slow and cache-naughty in My sight, shall snuff it."
 ///
-/// # Explanation on the Number Three
+/// # Why Three
 ///
 /// `StaticVec` is used frequently to keep small lists of items in inline (non-heap) storage in
 /// order to improve cache friendliness and reduce indirections.
@@ -274,14 +274,14 @@ pub use module::NamespaceRef;
 /// in that matter) contain fewer than 4 arguments, the exception being closures that capture a
 /// large number of external variables.
 ///
-/// In addition, most script blocks either contain many statements, or just a few lines;
+/// In addition, most script blocks either contain many statements, or just one or two lines;
 /// most scripts load fewer than 4 external modules; most module paths contain fewer than 4 levels
-/// (e.g. `std::collections::map::HashMap` is 4 levels).
+/// (e.g. `std::collections::map::HashMap` is 4 levels and it is just about as long as they get).
 #[cfg(not(feature = "internals"))]
 type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 
-/// _(internals)_ Alias to [`smallvec`](https://crates.io/crates/smallvec), which is a specialized
-/// [`Vec`] backed by a small, inline, fixed-size array when there are ≤ 3 items stored.
+/// _(internals)_ Alias to [`smallvec::SmallVec<[T; 3]>`](https://crates.io/crates/smallvec),
+/// which is a [`Vec`] backed by a small, inline, fixed-size array when there are ≤ 3 items stored.
 /// Exported under the `internals` feature only.
 ///
 /// # History
@@ -299,7 +299,7 @@ type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 /// being the third number, be reached, then, lobbest thou thy `SmallVec` towards thy heap, who,
 /// being slow and cache-naughty in My sight, shall snuff it."
 ///
-/// # Explanation on the Number Three
+/// # Why Three
 ///
 /// `StaticVec` is used frequently to keep small lists of items in inline (non-heap) storage in
 /// order to improve cache friendliness and reduce indirections.
@@ -309,9 +309,9 @@ type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 /// in that matter) contain fewer than 4 arguments, the exception being closures that capture a
 /// large number of external variables.
 ///
-/// In addition, most script blocks either contain many statements, or just a few lines;
+/// In addition, most script blocks either contain many statements, or just one or two lines;
 /// most scripts load fewer than 4 external modules; most module paths contain fewer than 4 levels
-/// (e.g. `std::collections::map::HashMap` is 4 levels).
+/// (e.g. `std::collections::map::HashMap` is 4 levels and it is just about as long as they get).
 #[cfg(feature = "internals")]
 pub type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 

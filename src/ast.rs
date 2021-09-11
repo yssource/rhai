@@ -201,13 +201,7 @@ pub struct AST {
 impl Default for AST {
     #[inline(always)]
     fn default() -> Self {
-        Self {
-            source: None,
-            body: Default::default(),
-            functions: Default::default(),
-            #[cfg(not(feature = "no_module"))]
-            resolver: None,
-        }
+        Self::new_empty()
     }
 }
 
@@ -223,6 +217,18 @@ impl AST {
             source: None,
             body: StmtBlock::new(statements, Position::NONE),
             functions: functions.into(),
+            #[cfg(not(feature = "no_module"))]
+            resolver: None,
+        }
+    }
+    /// Create an empty [`AST`].
+    #[inline]
+    #[must_use]
+    pub fn new_empty() -> Self {
+        Self {
+            source: None,
+            body: Default::default(),
+            functions: Default::default(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
         }

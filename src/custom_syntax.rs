@@ -198,7 +198,7 @@ impl Engine {
     ) -> Result<&mut Self, ParseError> {
         use markers::*;
 
-        let mut segments: StaticVec<ImmutableString> = Default::default();
+        let mut segments = StaticVec::<ImmutableString>::new();
 
         for s in symbols {
             let s = s.as_ref().trim();
