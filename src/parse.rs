@@ -3244,11 +3244,18 @@ impl Engine {
             }
         }
 
-        let expr = vec![Stmt::Expr(expr)];
+        let mut statements = StaticVec::new();
+        statements.push(Stmt::Expr(expr));
 
         Ok(
             // Optimize AST
-            optimize_into_ast(self, scope, expr, Default::default(), optimization_level),
+            optimize_into_ast(
+                self,
+                scope,
+                statements,
+                Default::default(),
+                optimization_level,
+            ),
         )
     }
 
@@ -3257,8 +3264,8 @@ impl Engine {
         &self,
         input: &mut TokenStream,
         state: &mut ParseState,
-    ) -> Result<(Vec<Stmt>, Vec<Shared<ScriptFnDef>>), ParseError> {
-        let mut statements = Vec::with_capacity(16);
+    ) -> Result<(StaticVec<Stmt>, StaticVec<Shared<ScriptFnDef>>), ParseError> {
+        let mut statements = StaticVec::new();
         let mut functions = BTreeMap::new();
 
         while !input.peek().expect(NEVER_ENDS).0.is_eof() {

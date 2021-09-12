@@ -2040,7 +2040,7 @@ impl Engine {
         let lib = Default::default();
 
         let stmt = std::mem::take(ast.statements_mut());
-        crate::optimize::optimize_into_ast(self, scope, stmt.into_vec(), lib, optimization_level)
+        crate::optimize::optimize_into_ast(self, scope, stmt, lib, optimization_level)
     }
     /// _(metadata)_ Generate a list of all registered functions.
     /// Exported under the `metadata` feature only.
@@ -2053,9 +2053,7 @@ impl Engine {
     #[inline]
     #[must_use]
     pub fn gen_fn_signatures(&self, include_packages: bool) -> Vec<String> {
-        let mut signatures = Vec::new();
-
-        signatures.extend(self.global_namespace().gen_fn_signatures());
+        let mut signatures = self.global_namespace().gen_fn_signatures();
 
         self.global_sub_modules.iter().for_each(|(name, m)| {
             signatures.extend(m.gen_fn_signatures().map(|f| format!("{}::{}", name, f)))
