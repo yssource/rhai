@@ -662,18 +662,18 @@ pub struct EvalState {
     pub num_operations: u64,
     /// Number of modules loaded.
     pub num_modules: usize,
+    /// Stack of function resolution caches.
+    fn_resolution_caches: StaticVec<FnResolutionCache>,
     /// Embedded module resolver.
     #[cfg(not(feature = "no_module"))]
     pub embedded_module_resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
-    /// Stack of function resolution caches.
-    fn_resolution_caches: Vec<FnResolutionCache>,
 }
 
 impl EvalState {
     /// Create a new [`EvalState`].
     #[inline(always)]
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             source: None,
             always_search_scope: false,
@@ -682,7 +682,7 @@ impl EvalState {
             num_modules: 0,
             #[cfg(not(feature = "no_module"))]
             embedded_module_resolver: None,
-            fn_resolution_caches: Vec::new(),
+            fn_resolution_caches: StaticVec::new(),
         }
     }
     /// Is the state currently at global (root) level?
@@ -697,7 +697,7 @@ impl EvalState {
     pub fn fn_resolution_cache_mut(&mut self) -> &mut FnResolutionCache {
         if self.fn_resolution_caches.is_empty() {
             // Push a new function resolution cache if the stack is empty
-            self.fn_resolution_caches.push(Default::default());
+            self.push_fn_resolution_cache();
         }
         self.fn_resolution_caches
             .last_mut()
@@ -713,7 +713,7 @@ impl EvalState {
     ///
     /// # Panics
     ///
-    /// Panics if there are no more function resolution cache in the stack.
+    /// Panics if there is no more function resolution cache in the stack.
     #[inline(always)]
     pub fn pop_fn_resolution_cache(&mut self) {
         self.fn_resolution_caches
