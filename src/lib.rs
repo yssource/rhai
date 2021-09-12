@@ -325,24 +325,32 @@ pub(crate) type SmartString = String;
 
 #[cfg(feature = "no_float")]
 #[cfg(feature = "f32_float")]
-compile_error!("'f32_float' cannot be used with 'no_float'");
+compile_error!("`f32_float` cannot be used with `no_float`");
+
+#[cfg(feature = "only_i32")]
+#[cfg(feature = "only_i64")]
+compile_error!("`only_i32` and `only_i64` cannot be used together");
 
 #[cfg(feature = "no_std")]
 #[cfg(feature = "wasm-bindgen")]
-compile_error!("'wasm-bindgen' cannot be used with 'no-std'");
+compile_error!("`wasm-bindgen` cannot be used with `no-std`");
 
 #[cfg(feature = "no_std")]
 #[cfg(feature = "stdweb")]
-compile_error!("'stdweb' cannot be used with 'no-std'");
+compile_error!("`stdweb` cannot be used with `no-std`");
 
 #[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
 #[cfg(feature = "no_std")]
-compile_error!("'no_std' cannot be used for WASM target");
+compile_error!("`no_std` cannot be used for WASM target");
 
 #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 #[cfg(feature = "wasm-bindgen")]
-compile_error!("'wasm-bindgen' should not be used non-WASM target");
+compile_error!("`wasm-bindgen` cannot be used for non-WASM target");
 
 #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 #[cfg(feature = "stdweb")]
-compile_error!("'stdweb' should not be used non-WASM target");
+compile_error!("`stdweb` cannot be used non-WASM target");
+
+#[cfg(feature = "wasm-bindgen")]
+#[cfg(feature = "stdweb")]
+compile_error!("`wasm-bindgen` and `stdweb` cannot be used together");
