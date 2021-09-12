@@ -2053,7 +2053,9 @@ impl Engine {
     #[inline]
     #[must_use]
     pub fn gen_fn_signatures(&self, include_packages: bool) -> Vec<String> {
-        let mut signatures = self.global_namespace().gen_fn_signatures();
+        let mut signatures = Vec::with_capacity(64);
+
+        signatures.extend(self.global_namespace().gen_fn_signatures());
 
         self.global_sub_modules.iter().for_each(|(name, m)| {
             signatures.extend(m.gen_fn_signatures().map(|f| format!("{}::{}", name, f)))
