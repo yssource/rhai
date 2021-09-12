@@ -271,7 +271,7 @@ pub use module::NamespaceRef;
 ///
 /// The number 3, other than being the holy number, is carefully chosen for a balance between
 /// storage space and reduce allocations. That is because most function calls (and most functions,
-/// in that matter) contain fewer than 4 arguments, the exception being closures that capture a
+/// for that matter) contain fewer than 4 arguments, the exception being closures that capture a
 /// large number of external variables.
 ///
 /// In addition, most script blocks either contain many statements, or just one or two lines;
@@ -306,7 +306,7 @@ type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 ///
 /// The number 3, other than being the holy number, is carefully chosen for a balance between
 /// storage space and reduce allocations. That is because most function calls (and most functions,
-/// in that matter) contain fewer than 4 arguments, the exception being closures that capture a
+/// for that matter) contain fewer than 4 arguments, the exception being closures that capture a
 /// large number of external variables.
 ///
 /// In addition, most script blocks either contain many statements, or just one or two lines;
