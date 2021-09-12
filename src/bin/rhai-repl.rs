@@ -163,9 +163,9 @@ fn main() {
 
     // REPL loop
     let mut input = String::new();
-    let mut main_ast = AST::new_empty();
-    let mut ast_u = AST::new_empty();
-    let mut ast = AST::new_empty();
+    let mut main_ast: AST = Default::default();
+    let mut ast_u: AST = Default::default();
+    let mut ast: AST = Default::default();
 
     'main_loop: loop {
         print!("rhai-repl> ");

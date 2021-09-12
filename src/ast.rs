@@ -16,7 +16,10 @@ use std::{
     hash::Hash,
     mem,
     num::{NonZeroU8, NonZeroUsize},
-    ops::{Add, AddAssign, Deref, DerefMut, Not, Sub, SubAssign},
+    ops::{
+        Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Deref, DerefMut, Not, Sub,
+        SubAssign,
+    },
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -201,7 +204,7 @@ pub struct AST {
 impl Default for AST {
     #[inline(always)]
     fn default() -> Self {
-        Self::new_empty()
+        Self::empty()
     }
 }
 
@@ -224,7 +227,7 @@ impl AST {
     /// Create an empty [`AST`].
     #[inline]
     #[must_use]
-    pub fn new_empty() -> Self {
+    pub(crate) fn empty() -> Self {
         Self {
             source: None,
             body: Default::default(),
@@ -954,7 +957,7 @@ impl From<StmtBlock> for Stmt {
 pub struct OptionFlags(u8);
 
 impl OptionFlags {
-    /// Does this [`BitOptions`] contain a particular option flag?
+    /// Does this [`OptionFlags`] contain a particular option flag?
     #[inline(always)]
     #[must_use]
     pub const fn contains(self, flag: Self) -> bool {
@@ -965,15 +968,17 @@ impl OptionFlags {
 impl Not for OptionFlags {
     type Output = Self;
 
+    /// Return the negation of the [`OptionFlags`].
     #[inline(always)]
     fn not(self) -> Self::Output {
-        Self(!self.0)
+        Self(!self.0) & AST_OPTION_FLAGS::AST_OPTION_ALL
     }
 }
 
 impl Add for OptionFlags {
     type Output = Self;
 
+    /// Return the union of two [`OptionFlags`].
     #[inline(always)]
     fn add(self, rhs: Self) -> Self::Output {
         Self(self.0 | rhs.0)
@@ -981,8 +986,27 @@ impl Add for OptionFlags {
 }
 
 impl AddAssign for OptionFlags {
+    /// Add the option flags in one [`OptionFlags`] to another.
     #[inline(always)]
     fn add_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0
+    }
+}
+
+impl BitOr for OptionFlags {
+    type Output = Self;
+
+    /// Return the union of two [`OptionFlags`].
+    #[inline(always)]
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl BitOrAssign for OptionFlags {
+    /// Add the option flags in one [`OptionFlags`] to another.
+    #[inline(always)]
+    fn bitor_assign(&mut self, rhs: Self) {
         self.0 |= rhs.0
     }
 }
@@ -990,6 +1014,7 @@ impl AddAssign for OptionFlags {
 impl Sub for OptionFlags {
     type Output = Self;
 
+    /// Return the difference of two [`OptionFlags`].
     #[inline(always)]
     fn sub(self, rhs: Self) -> Self::Output {
         Self(self.0 & !rhs.0)
@@ -997,8 +1022,27 @@ impl Sub for OptionFlags {
 }
 
 impl SubAssign for OptionFlags {
+    /// Remove the option flags in one [`OptionFlags`] from another.
     #[inline(always)]
     fn sub_assign(&mut self, rhs: Self) {
+        self.0 &= !rhs.0
+    }
+}
+
+impl BitAnd for OptionFlags {
+    type Output = Self;
+
+    /// Return the intersection of two [`OptionFlags`].
+    #[inline(always)]
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0 & !rhs.0)
+    }
+}
+
+impl BitAndAssign for OptionFlags {
+    /// Keep only the intersection of one [`OptionFlags`] with another.
+    #[inline(always)]
+    fn bitand_assign(&mut self, rhs: Self) {
         self.0 &= !rhs.0
     }
 }
@@ -1023,6 +1067,11 @@ pub mod AST_OPTION_FLAGS {
     /// _(internals)_ The [`AST`][crate::AST] node breaks out of normal control flow.
     /// Exported under the `internals` feature only.
     pub const AST_OPTION_BREAK_OUT: OptionFlags = OptionFlags(0b0000_1000);
+    /// _(internals)_ Mask of all options.
+    /// Exported under the `internals` feature only.
+    pub(crate) const AST_OPTION_ALL: OptionFlags = OptionFlags(
+        AST_OPTION_CONSTANT.0 | AST_OPTION_PUBLIC.0 | AST_OPTION_NEGATED.0 | AST_OPTION_BREAK_OUT.0,
+    );
 
     impl std::fmt::Debug for OptionFlags {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1083,8 +1132,8 @@ pub enum Stmt {
     ///
     /// ### Option Flags
     ///
-    /// * [`AST_FLAG_NONE`][AST_FLAGS::AST_FLAG_NONE] = `while`
-    /// * [`AST_FLAG_NEGATED`][AST_FLAGS::AST_FLAG_NEGATED] = `until`
+    /// * [`AST_OPTION_NONE`][AST_OPTION_FLAGS::AST_OPTION_NONE] = `while`
+    /// * [`AST_OPTION_NEGATED`][AST_OPTION_FLAGS::AST_OPTION_NEGATED] = `until`
     Do(Box<StmtBlock>, Expr, OptionFlags, Position),
     /// `for` `(` id `,` counter `)` `in` expr `{` stmt `}`
     For(Expr, Box<(Ident, Option<Ident>, StmtBlock)>, Position),
@@ -1092,8 +1141,8 @@ pub enum Stmt {
     ///
     /// ### Option Flags
     ///
-    /// * [`AST_FLAG_PUBLIC`][AST_FLAGS::AST_FLAG_PUBLIC] = `export`
-    /// * [`AST_FLAG_CONSTANT`][AST_FLAGS::AST_FLAG_CONSTANT] = `const`
+    /// * [`AST_OPTION_PUBLIC`][AST_OPTION_FLAGS::AST_OPTION_PUBLIC] = `export`
+    /// * [`AST_OPTION_CONSTANT`][AST_OPTION_FLAGS::AST_OPTION_CONSTANT] = `const`
     Var(Expr, Box<Ident>, OptionFlags, Position),
     /// expr op`=` expr
     Assignment(Box<(Expr, Option<OpAssignment<'static>>, Expr)>, Position),
@@ -1112,15 +1161,15 @@ pub enum Stmt {
     ///
     /// ### Option Flags
     ///
-    /// * [`AST_FLAG_NONE`][AST_FLAGS::AST_FLAG_NONE] = `continue`
-    /// * [`AST_FLAG_BREAK_OUT`][AST_FLAGS::AST_FLAG_BREAK_OUT] = `break`
+    /// * [`AST_OPTION_NONE`][AST_OPTION_FLAGS::AST_OPTION_NONE] = `continue`
+    /// * [`AST_OPTION_BREAK_OUT`][AST_OPTION_FLAGS::AST_OPTION_BREAK_OUT] = `break`
     BreakLoop(OptionFlags, Position),
     /// `return`/`throw`
     ///
     /// ### Option Flags
     ///
-    /// * [`AST_FLAG_NONE`][AST_FLAGS::AST_FLAG_NONE] = `return`
-    /// * [`AST_FLAG_BREAK_OUT`][AST_FLAGS::AST_FLAG_BREAK_OUT] = `throw`
+    /// * [`AST_OPTION_NONE`][AST_OPTION_FLAGS::AST_OPTION_NONE] = `return`
+    /// * [`AST_OPTION_BREAK_OUT`][AST_OPTION_FLAGS::AST_OPTION_BREAK_OUT] = `throw`
     Return(OptionFlags, Option<Expr>, Position),
     /// `import` expr `as` var
     ///
