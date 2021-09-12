@@ -88,11 +88,11 @@ mod map_functions {
     pub mod indexing {
         #[rhai_fn(pure)]
         pub fn keys(map: &mut Map) -> Array {
-            map.iter().map(|(k, _)| k.clone().into()).collect()
+            map.keys().cloned().map(Into::<Dynamic>::into).collect()
         }
         #[rhai_fn(pure)]
         pub fn values(map: &mut Map) -> Array {
-            map.iter().map(|(_, v)| v.clone()).collect()
+            map.values().cloned().collect()
         }
     }
 }
