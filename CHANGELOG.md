@@ -29,6 +29,7 @@ Enhancements
 * `Dynamic::as_string` and `Dynamic::as_immutable_string` are deprecated and replaced by `into_string` and `into_immutable_string` respectively.
 * Added a number of constants to `Dynamic`.
 * Added a number of constants and `fromXXX` constant methods to `Dynamic`.
+* Added `sin`, `cos` and `tan` for `Decimal` values.
 
 ### `Decimal` Values
 

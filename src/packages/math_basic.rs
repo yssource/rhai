@@ -325,6 +325,15 @@ mod decimal_functions {
         }
     }
 
+    pub fn sin(x: Decimal) -> Decimal {
+        x.sin()
+    }
+    pub fn cos(x: Decimal) -> Decimal {
+        x.cos()
+    }
+    pub fn tan(x: Decimal) -> Decimal {
+        x.tan()
+    }
     #[rhai_fn(return_raw)]
     pub fn sqrt(x: Decimal) -> Result<Decimal, Box<EvalAltResult>> {
         x.sqrt()
