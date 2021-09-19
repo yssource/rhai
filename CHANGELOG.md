@@ -51,6 +51,20 @@ Enhancements
 * `StaticVec` is changed to keep three items inline instead of four.
 
 
+Version 1.0.6
+=============
+
+
+Version 1.0.5
+=============
+
+Bug fixes
+---------
+
+* `FloatWrapper` is no longer erroneously exported under `no_float+internals`.
+* The `sign` function now works properly for float values that are `NaN`.
+
+
 Version 1.0.4
 =============
 
