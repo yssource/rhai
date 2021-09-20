@@ -66,11 +66,19 @@ mod string_functions {
 
     #[rhai_fn(name = "len", get = "len")]
     pub fn len(string: &str) -> INT {
-        string.chars().count() as INT
+        if string.is_empty() {
+            0
+        } else {
+            string.chars().count() as INT
+        }
     }
     #[rhai_fn(name = "bytes", get = "bytes")]
     pub fn bytes(string: &str) -> INT {
-        string.len() as INT
+        if string.is_empty() {
+            0
+        } else {
+            string.len() as INT
+        }
     }
     pub fn remove(string: &mut ImmutableString, sub_string: ImmutableString) {
         *string -= sub_string;
@@ -80,7 +88,9 @@ mod string_functions {
         *string -= character;
     }
     pub fn clear(string: &mut ImmutableString) {
-        string.make_mut().clear();
+        if !string.is_empty() {
+            string.make_mut().clear();
+        }
     }
     pub fn truncate(string: &mut ImmutableString, len: INT) {
         if len > 0 {
@@ -88,7 +98,7 @@ mod string_functions {
             let copy = string.make_mut();
             copy.clear();
             copy.extend(chars.into_iter().take(len as usize));
-        } else {
+        } else if !string.is_empty() {
             string.make_mut().clear();
         }
     }
@@ -99,11 +109,14 @@ mod string_functions {
             *string = trimmed.to_string().into();
         }
     }
-    #[rhai_fn(return_raw)]
-    pub fn pop(string: &mut ImmutableString) -> Result<char, Box<EvalAltResult>> {
-        match string.make_mut().pop() {
-            Some(c) => Ok(c.into()),
-            None => EvalAltResult::ErrorStringBounds(0, 0, Position::NONE).into(),
+    pub fn pop(string: &mut ImmutableString) -> Dynamic {
+        if string.is_empty() {
+            Dynamic::UNIT
+        } else {
+            match string.make_mut().pop() {
+                Some(c) => c.into(),
+                None => Dynamic::UNIT,
+            }
         }
     }
     #[rhai_fn(name = "pop")]
@@ -112,7 +125,7 @@ mod string_functions {
         string: &mut ImmutableString,
         len: INT,
     ) -> ImmutableString {
-        if len <= 0 {
+        if string.is_empty() || len <= 0 {
             return ctx.engine().empty_string.clone();
         }
 
@@ -128,17 +141,29 @@ mod string_functions {
         chars.into_iter().rev().collect::<SmartString>().into()
     }
 
-    pub fn to_upper(string: &str) -> ImmutableString {
-        string.to_uppercase().into()
+    pub fn to_upper(string: ImmutableString) -> ImmutableString {
+        if string.is_empty() {
+            string
+        } else {
+            string.to_uppercase().into()
+        }
     }
     pub fn make_upper(string: &mut ImmutableString) {
-        *string = to_upper(string);
+        if !string.is_empty() {
+            *string = string.to_uppercase().into();
+        }
     }
-    pub fn to_lower(string: &str) -> ImmutableString {
-        string.to_lowercase().into()
+    pub fn to_lower(string: ImmutableString) -> ImmutableString {
+        if string.is_empty() {
+            string
+        } else {
+            string.to_lowercase().into()
+        }
     }
     pub fn make_lower(string: &mut ImmutableString) {
-        *string = to_lower(string);
+        if !string.is_empty() {
+            *string = string.to_lowercase().into();
+        }
     }
 
     #[rhai_fn(name = "to_upper")]
@@ -174,6 +199,10 @@ mod string_functions {
 
     #[rhai_fn(name = "index_of")]
     pub fn index_of_char_starting_from(string: &str, character: char, start: INT) -> INT {
+        if string.is_empty() {
+            return -1;
+        }
+
         let start = if start < 0 {
             if let Some(n) = start.checked_abs() {
                 let chars: Vec<_> = string.chars().collect();
@@ -209,13 +238,21 @@ mod string_functions {
     }
     #[rhai_fn(name = "index_of")]
     pub fn index_of_char(string: &str, character: char) -> INT {
-        string
-            .find(character)
-            .map(|index| string[0..index].chars().count() as INT)
-            .unwrap_or(-1 as INT)
+        if string.is_empty() {
+            -1
+        } else {
+            string
+                .find(character)
+                .map(|index| string[0..index].chars().count() as INT)
+                .unwrap_or(-1 as INT)
+        }
     }
     #[rhai_fn(name = "index_of")]
     pub fn index_of_string_starting_from(string: &str, find_string: &str, start: INT) -> INT {
+        if string.is_empty() {
+            return -1;
+        }
+
         let start = if start < 0 {
             if let Some(n) = start.checked_abs() {
                 let chars = string.chars().collect::<Vec<_>>();
@@ -251,10 +288,14 @@ mod string_functions {
     }
     #[rhai_fn(name = "index_of")]
     pub fn index_of(string: &str, find_string: &str) -> INT {
-        string
-            .find(find_string)
-            .map(|index| string[0..index].chars().count() as INT)
-            .unwrap_or(-1 as INT)
+        if string.is_empty() {
+            -1
+        } else {
+            string
+                .find(find_string)
+                .map(|index| string[0..index].chars().count() as INT)
+                .unwrap_or(-1 as INT)
+        }
     }
 
     pub fn sub_string(
@@ -263,6 +304,10 @@ mod string_functions {
         start: INT,
         len: INT,
     ) -> ImmutableString {
+        if string.is_empty() {
+            return ctx.engine().empty_string.clone();
+        }
+
         let mut chars = StaticVec::with_capacity(string.len());
 
         let offset = if string.is_empty() || len <= 0 {
@@ -308,12 +353,20 @@ mod string_functions {
         string: &str,
         start: INT,
     ) -> ImmutableString {
-        let len = string.len() as INT;
-        sub_string(ctx, string, start, len)
+        if string.is_empty() {
+            ctx.engine().empty_string.clone()
+        } else {
+            let len = string.len() as INT;
+            sub_string(ctx, string, start, len)
+        }
     }
 
     #[rhai_fn(name = "crop")]
     pub fn crop(string: &mut ImmutableString, start: INT, len: INT) {
+        if string.is_empty() {
+            return;
+        }
+
         let mut chars = StaticVec::with_capacity(string.len());
 
         let offset = if string.is_empty() || len <= 0 {
@@ -358,7 +411,9 @@ mod string_functions {
 
     #[rhai_fn(name = "replace")]
     pub fn replace(string: &mut ImmutableString, find_string: &str, substitute_string: &str) {
-        *string = string.replace(find_string, substitute_string).into();
+        if !string.is_empty() {
+            *string = string.replace(find_string, substitute_string).into();
+        }
     }
     #[rhai_fn(name = "replace")]
     pub fn replace_string_with_char(
@@ -366,9 +421,11 @@ mod string_functions {
         find_string: &str,
         substitute_character: char,
     ) {
-        *string = string
-            .replace(find_string, &substitute_character.to_string())
-            .into();
+        if !string.is_empty() {
+            *string = string
+                .replace(find_string, &substitute_character.to_string())
+                .into();
+        }
     }
     #[rhai_fn(name = "replace")]
     pub fn replace_char_with_string(
@@ -376,9 +433,11 @@ mod string_functions {
         find_character: char,
         substitute_string: &str,
     ) {
-        *string = string
-            .replace(&find_character.to_string(), substitute_string)
-            .into();
+        if !string.is_empty() {
+            *string = string
+                .replace(&find_character.to_string(), substitute_string)
+                .into();
+        }
     }
     #[rhai_fn(name = "replace")]
     pub fn replace_char(
@@ -386,12 +445,14 @@ mod string_functions {
         find_character: char,
         substitute_character: char,
     ) {
-        *string = string
-            .replace(
-                &find_character.to_string(),
-                &substitute_character.to_string(),
-            )
-            .into();
+        if !string.is_empty() {
+            *string = string
+                .replace(
+                    &find_character.to_string(),
+                    &substitute_character.to_string(),
+                )
+                .into();
+        }
     }
 
     #[rhai_fn(return_raw)]
@@ -401,6 +462,10 @@ mod string_functions {
         len: INT,
         character: char,
     ) -> Result<(), Box<crate::EvalAltResult>> {
+        if len <= 0 {
+            return Ok(());
+        }
+
         let _ctx = ctx;
 
         // Check if string will be over max size limit
@@ -413,26 +478,23 @@ mod string_functions {
             .into();
         }
 
-        if len > 0 {
-            let orig_len = string.chars().count();
+        let orig_len = string.chars().count();
 
-            if len as usize > orig_len {
-                let p = string.make_mut();
+        if len as usize > orig_len {
+            let p = string.make_mut();
 
-                for _ in 0..(len as usize - orig_len) {
-                    p.push(character);
-                }
+            for _ in 0..(len as usize - orig_len) {
+                p.push(character);
+            }
 
-                #[cfg(not(feature = "unchecked"))]
-                if _ctx.engine().max_string_size() > 0
-                    && string.len() > _ctx.engine().max_string_size()
-                {
-                    return crate::EvalAltResult::ErrorDataTooLarge(
-                        "Length of string".to_string(),
-                        crate::Position::NONE,
-                    )
-                    .into();
-                }
+            #[cfg(not(feature = "unchecked"))]
+            if _ctx.engine().max_string_size() > 0 && string.len() > _ctx.engine().max_string_size()
+            {
+                return crate::EvalAltResult::ErrorDataTooLarge(
+                    "Length of string".to_string(),
+                    crate::Position::NONE,
+                )
+                .into();
             }
         }
 
@@ -445,6 +507,10 @@ mod string_functions {
         len: INT,
         padding: &str,
     ) -> Result<(), Box<crate::EvalAltResult>> {
+        if len <= 0 {
+            return Ok(());
+        }
+
         let _ctx = ctx;
 
         // Check if string will be over max size limit
@@ -457,33 +523,30 @@ mod string_functions {
             .into();
         }
 
-        if len > 0 {
-            let mut str_len = string.chars().count();
-            let padding_len = padding.chars().count();
+        let mut str_len = string.chars().count();
+        let padding_len = padding.chars().count();
 
-            if len as usize > str_len {
-                let p = string.make_mut();
+        if len as usize > str_len {
+            let p = string.make_mut();
 
-                while str_len < len as usize {
-                    if str_len + padding_len <= len as usize {
-                        p.push_str(padding);
-                        str_len += padding_len;
-                    } else {
-                        p.extend(padding.chars().take(len as usize - str_len));
-                        str_len = len as usize;
-                    }
+            while str_len < len as usize {
+                if str_len + padding_len <= len as usize {
+                    p.push_str(padding);
+                    str_len += padding_len;
+                } else {
+                    p.extend(padding.chars().take(len as usize - str_len));
+                    str_len = len as usize;
                 }
+            }
 
-                #[cfg(not(feature = "unchecked"))]
-                if _ctx.engine().max_string_size() > 0
-                    && string.len() > _ctx.engine().max_string_size()
-                {
-                    return crate::EvalAltResult::ErrorDataTooLarge(
-                        "Length of string".to_string(),
-                        crate::Position::NONE,
-                    )
-                    .into();
-                }
+            #[cfg(not(feature = "unchecked"))]
+            if _ctx.engine().max_string_size() > 0 && string.len() > _ctx.engine().max_string_size()
+            {
+                return crate::EvalAltResult::ErrorDataTooLarge(
+                    "Length of string".to_string(),
+                    crate::Position::NONE,
+                )
+                .into();
             }
         }
 
@@ -496,7 +559,11 @@ mod string_functions {
 
         #[rhai_fn(name = "split")]
         pub fn chars(string: &str) -> Array {
-            string.chars().map(Into::<Dynamic>::into).collect()
+            if string.is_empty() {
+                Array::new()
+            } else {
+                string.chars().map(Into::<Dynamic>::into).collect()
+            }
         }
         #[rhai_fn(name = "split")]
         pub fn split_at(ctx: NativeCallContext, string: ImmutableString, start: INT) -> Array {
