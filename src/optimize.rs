@@ -831,6 +831,8 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
         }
         // `... ${ ... } ...`
         Expr::InterpolatedString(x, _) => {
+            x.iter_mut().for_each(|expr| optimize_expr(expr, state, false));
+
             let mut n = 0;
 
             // Merge consecutive strings
