@@ -37,6 +37,10 @@ Enhancements
 * Added `log10()` for `Decimal`.
 * `ln` for `Decimal` is now checked and won't panic.
 
+### String Values
+
+* `SmartString` now uses `LazyCompact` instead of `Compact` to minimize allocations.
+
 ### `Scope` API
 
 * `Scope::set_value` now takes anything that implements `Into<Cow<str>>`.

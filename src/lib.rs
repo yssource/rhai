@@ -321,7 +321,7 @@ type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 pub type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 
 #[cfg(not(feature = "no_smartstring"))]
-pub(crate) type SmartString = smartstring::SmartString<smartstring::Compact>;
+pub(crate) type SmartString = smartstring::SmartString<smartstring::LazyCompact>;
 
 #[cfg(feature = "no_smartstring")]
 pub(crate) type SmartString = String;
