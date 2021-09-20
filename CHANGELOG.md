@@ -40,6 +40,7 @@ Enhancements
 ### String Values
 
 * `SmartString` now uses `LazyCompact` instead of `Compact` to minimize allocations.
+* Added `pop` for strings.
 
 ### `Scope` API
 

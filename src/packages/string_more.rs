@@ -14,7 +14,7 @@ def_package!(crate:MoreStringPackage:"Additional string utilities, including str
 
 #[export_module]
 mod string_functions {
-    use crate::ImmutableString;
+    use crate::{ImmutableString, SmartString};
 
     #[rhai_fn(name = "+", name = "append")]
     pub fn add_append(
@@ -98,6 +98,34 @@ mod string_functions {
         if trimmed.len() < string.len() {
             *string = trimmed.to_string().into();
         }
+    }
+    #[rhai_fn(return_raw)]
+    pub fn pop(string: &mut ImmutableString) -> Result<char, Box<EvalAltResult>> {
+        match string.make_mut().pop() {
+            Some(c) => Ok(c.into()),
+            None => EvalAltResult::ErrorStringBounds(0, 0, Position::NONE).into(),
+        }
+    }
+    #[rhai_fn(name = "pop")]
+    pub fn pop_string(
+        ctx: NativeCallContext,
+        string: &mut ImmutableString,
+        len: INT,
+    ) -> ImmutableString {
+        if len <= 0 {
+            return ctx.engine().empty_string.clone();
+        }
+
+        let mut chars = StaticVec::<char>::with_capacity(len as usize);
+
+        for _ in 0..len {
+            match string.make_mut().pop() {
+                Some(c) => chars.push(c),
+                None => break,
+            }
+        }
+
+        chars.into_iter().rev().collect::<SmartString>().into()
     }
 
     pub fn to_upper(string: &str) -> ImmutableString {
