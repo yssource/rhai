@@ -1368,15 +1368,17 @@ impl Engine {
             };
             let (stream, tokenizer_control) = engine.lex_raw(
                 &scripts,
-                Some(if has_null {
-                    &|token| match token {
-                        // If `null` is present, make sure `null` is treated as a variable
-                        Token::Reserved(s) if s == "null" => Token::Identifier(s),
-                        _ => token,
-                    }
+                if has_null {
+                    Some(&|token, _, _| {
+                        match token {
+                            // If `null` is present, make sure `null` is treated as a variable
+                            Token::Reserved(s) if s == "null" => Token::Identifier(s),
+                            _ => token,
+                        }
+                    })
                 } else {
-                    &|t| t
-                }),
+                    None
+                },
             );
             let mut state = ParseState::new(engine, tokenizer_control);
             let ast = engine.parse_global_expr(
@@ -2130,7 +2132,7 @@ impl Engine {
     /// let mut engine = Engine::new();
     ///
     /// // Register a token mapper.
-    /// engine.on_parse_token(|token| {
+    /// engine.on_parse_token(|token, _, _| {
     ///     match token {
     ///         // Convert all integer literals to strings
     ///         Token::IntegerConstant(n) => Token::StringConstant(n.to_string()),
@@ -2153,8 +2155,12 @@ impl Engine {
     #[inline(always)]
     pub fn on_parse_token(
         &mut self,
-        callback: impl Fn(crate::token::Token) -> crate::token::Token + SendSync + 'static,
+        callback: impl Fn(crate::token::Token, Position, &crate::token::TokenizeState) -> crate::token::Token
+            + SendSync
+            + 'static,
     ) -> &mut Self {
+        use std::string::ParseError;
+
         self.token_mapper = Some(Box::new(callback));
         self
     }

@@ -29,6 +29,10 @@ use rust_decimal::Decimal;
 use crate::engine::KEYWORD_IS_DEF_FN;
 
 /// _(internals)_ A type containing commands to control the tokenizer.
+///
+/// # Volatile Data Structure
+///
+/// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Copy, Default)]
 pub struct TokenizerControlBlock {
     /// Is the current tokenizer position within an interpolated text string?
@@ -992,7 +996,7 @@ pub struct TokenizeState {
     /// Maximum length of a string.
     pub max_string_size: Option<NonZeroUsize>,
     /// Can the next token be a unary operator?
-    pub non_unary: bool,
+    pub next_token_cannot_be_unary: bool,
     /// Is the tokenizer currently inside a block comment?
     pub comment_level: usize,
     /// Include comments?
@@ -1327,7 +1331,7 @@ pub fn get_next_token(
 
     // Save the last token's state
     if let Some((ref token, _)) = result {
-        state.non_unary = !token.is_next_unary();
+        state.next_token_cannot_be_unary = !token.is_next_unary();
     }
 
     result
@@ -1678,10 +1682,12 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
                 return Some((Token::Reserved("++".into()), start_pos));
             }
-            ('+', _) if !state.non_unary => return Some((Token::UnaryPlus, start_pos)),
+            ('+', _) if !state.next_token_cannot_be_unary => {
+                return Some((Token::UnaryPlus, start_pos))
+            }
             ('+', _) => return Some((Token::Plus, start_pos)),
 
-            ('-', '0'..='9') if !state.non_unary => negated = Some(start_pos),
+            ('-', '0'..='9') if !state.next_token_cannot_be_unary => negated = Some(start_pos),
             ('-', '0'..='9') => return Some((Token::Minus, start_pos)),
             ('-', '=') => {
                 eat_next(stream, pos);
@@ -1695,7 +1701,9 @@ fn get_next_token_inner(
                 eat_next(stream, pos);
                 return Some((Token::Reserved("--".into()), start_pos));
             }
-            ('-', _) if !state.non_unary => return Some((Token::UnaryMinus, start_pos)),
+            ('-', _) if !state.next_token_cannot_be_unary => {
+                return Some((Token::UnaryMinus, start_pos))
+            }
             ('-', _) => return Some((Token::Minus, start_pos)),
 
             ('*', ')') => {
@@ -2117,6 +2125,10 @@ impl InputStream for MultiInputsStream<'_> {
 
 /// _(internals)_ An iterator on a [`Token`] stream.
 /// Exported under the `internals` feature only.
+///
+/// # Volatile Data Structure
+///
+/// This type is volatile and may change.
 pub struct TokenIterator<'a> {
     /// Reference to the scripting `Engine`.
     pub engine: &'a Engine,
@@ -2224,7 +2236,7 @@ impl<'a> Iterator for TokenIterator<'a> {
 
         // Run the mapper, if any
         let token = if let Some(map_func) = self.token_mapper {
-            map_func(token)
+            map_func(token, pos, &self.state)
         } else {
             token
         };
@@ -2278,7 +2290,7 @@ impl Engine {
                     max_string_size: self.limits.max_string_size,
                     #[cfg(feature = "unchecked")]
                     max_string_size: None,
-                    non_unary: false,
+                    next_token_cannot_be_unary: false,
                     comment_level: 0,
                     include_comments: false,
                     is_within_text_terminated_by: None,
