@@ -59,6 +59,8 @@ Enhancements
 Version 1.0.6
 =============
 
+* `MultiInputsStream`, `ParseState`, `TokenIterator`, `IdentifierBuilder` and `AccessMode` are exported under the `internals` feature.
+
 
 Version 1.0.5
 =============
