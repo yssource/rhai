@@ -1,11 +1,12 @@
 //! Main module defining the script evaluation [`Engine`].
 
-use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, ReturnType, Stmt, AST_OPTION_FLAGS::*};
+use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::custom_syntax::CustomSyntax;
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_hash::get_hasher;
 use crate::fn_native::{
-    CallableFunction, IteratorFn, OnDebugCallback, OnPrintCallback, OnVarCallback,
+    CallableFunction, IteratorFn, OnDebugCallback, OnParseTokenCallback, OnPrintCallback,
+    OnVarCallback,
 };
 use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
@@ -180,7 +181,7 @@ impl Imports {
 impl IntoIterator for Imports {
     type Item = (Identifier, Shared<Module>);
     type IntoIter =
-        Zip<Rev<smallvec::IntoIter<[Identifier; 4]>>, Rev<smallvec::IntoIter<[Shared<Module>; 4]>>>;
+        Zip<Rev<smallvec::IntoIter<[Identifier; 3]>>, Rev<smallvec::IntoIter<[Shared<Module>; 3]>>>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -662,18 +663,18 @@ pub struct EvalState {
     pub num_operations: u64,
     /// Number of modules loaded.
     pub num_modules: usize,
+    /// Stack of function resolution caches.
+    fn_resolution_caches: StaticVec<FnResolutionCache>,
     /// Embedded module resolver.
     #[cfg(not(feature = "no_module"))]
     pub embedded_module_resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
-    /// Stack of function resolution caches.
-    fn_resolution_caches: Vec<FnResolutionCache>,
 }
 
 impl EvalState {
     /// Create a new [`EvalState`].
     #[inline(always)]
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             source: None,
             always_search_scope: false,
@@ -682,7 +683,7 @@ impl EvalState {
             num_modules: 0,
             #[cfg(not(feature = "no_module"))]
             embedded_module_resolver: None,
-            fn_resolution_caches: Vec::new(),
+            fn_resolution_caches: StaticVec::new(),
         }
     }
     /// Is the state currently at global (root) level?
@@ -697,7 +698,7 @@ impl EvalState {
     pub fn fn_resolution_cache_mut(&mut self) -> &mut FnResolutionCache {
         if self.fn_resolution_caches.is_empty() {
             // Push a new function resolution cache if the stack is empty
-            self.fn_resolution_caches.push(Default::default());
+            self.push_fn_resolution_cache();
         }
         self.fn_resolution_caches
             .last_mut()
@@ -713,7 +714,7 @@ impl EvalState {
     ///
     /// # Panics
     ///
-    /// Panics if there are no more function resolution cache in the stack.
+    /// Panics if there is no more function resolution cache in the stack.
     #[inline(always)]
     pub fn pop_fn_resolution_cache(&mut self) {
         self.fn_resolution_caches
@@ -921,6 +922,8 @@ pub struct Engine {
     pub(crate) custom_syntax: BTreeMap<Identifier, Box<CustomSyntax>>,
     /// Callback closure for resolving variable access.
     pub(crate) resolve_var: Option<OnVarCallback>,
+    /// Callback closure to remap tokens during parsing.
+    pub(crate) token_mapper: Option<Box<OnParseTokenCallback>>,
 
     /// Callback closure for implementing the `print` command.
     pub(crate) print: Option<OnPrintCallback>,
@@ -1045,6 +1048,7 @@ impl Engine {
             custom_syntax: Default::default(),
 
             resolve_var: None,
+            token_mapper: None,
 
             print: None,
             debug: None,
@@ -2704,11 +2708,10 @@ impl Engine {
                 }
             }
 
-            // Continue statement
-            Stmt::Continue(pos) => EvalAltResult::LoopBreak(false, *pos).into(),
-
-            // Break statement
-            Stmt::Break(pos) => EvalAltResult::LoopBreak(true, *pos).into(),
+            // Continue/Break statement
+            Stmt::BreakLoop(options, pos) => {
+                EvalAltResult::LoopBreak(options.contains(AST_OPTION_BREAK_OUT), *pos).into()
+            }
 
             // Namespace-qualified function call
             Stmt::FnCall(x, pos) if x.is_qualified() => {
@@ -2767,7 +2770,7 @@ impl Engine {
                             }
                             #[cfg(not(feature = "no_object"))]
                             _ => {
-                                let mut err_map: Map = Default::default();
+                                let mut err_map = Map::new();
                                 let err_pos = err.take_position();
 
                                 err_map.insert("message".into(), err.to_string().into());
@@ -2828,8 +2831,23 @@ impl Engine {
                 }
             }
 
+            // Throw value
+            Stmt::Return(options, Some(expr), pos) if options.contains(AST_OPTION_BREAK_OUT) => {
+                EvalAltResult::ErrorRuntime(
+                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                        .flatten(),
+                    *pos,
+                )
+                .into()
+            }
+
+            // Empty throw
+            Stmt::Return(options, None, pos) if options.contains(AST_OPTION_BREAK_OUT) => {
+                EvalAltResult::ErrorRuntime(Dynamic::UNIT, *pos).into()
+            }
+
             // Return value
-            Stmt::Return(ReturnType::Return, Some(expr), pos) => EvalAltResult::Return(
+            Stmt::Return(_, Some(expr), pos) => EvalAltResult::Return(
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten(),
                 *pos,
@@ -2837,22 +2855,7 @@ impl Engine {
             .into(),
 
             // Empty return
-            Stmt::Return(ReturnType::Return, None, pos) => {
-                EvalAltResult::Return(Dynamic::UNIT, *pos).into()
-            }
-
-            // Throw value
-            Stmt::Return(ReturnType::Exception, Some(expr), pos) => EvalAltResult::ErrorRuntime(
-                self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                    .flatten(),
-                *pos,
-            )
-            .into(),
-
-            // Empty throw
-            Stmt::Return(ReturnType::Exception, None, pos) => {
-                EvalAltResult::ErrorRuntime(Dynamic::UNIT, *pos).into()
-            }
+            Stmt::Return(_, None, pos) => EvalAltResult::Return(Dynamic::UNIT, *pos).into(),
 
             // Let/const statement
             Stmt::Var(expr, x, options, _) => {
@@ -2862,7 +2865,7 @@ impl Engine {
                 } else {
                     AccessMode::ReadWrite
                 };
-                let export = options.contains(AST_OPTION_EXPORTED);
+                let export = options.contains(AST_OPTION_PUBLIC);
 
                 let value = self
                     .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?

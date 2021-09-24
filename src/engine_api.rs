@@ -961,7 +961,7 @@ impl Engine {
                 let remainder = iter.next().expect("name contains separator").trim();
 
                 if !root.contains_key(sub_module) {
-                    let mut m: Module = Default::default();
+                    let mut m = Module::new();
                     register_static_module_raw(m.sub_modules_mut(), remainder, module);
                     m.build_index();
                     root.insert(sub_module.into(), m.into());
@@ -1181,7 +1181,8 @@ impl Engine {
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let (stream, tokenizer_control) = self.lex_raw(scripts, None);
+        let (stream, tokenizer_control) =
+            self.lex_raw(scripts, self.token_mapper.as_ref().map(Box::as_ref));
         let mut state = ParseState::new(self, tokenizer_control);
         self.parse(
             &mut stream.peekable(),
@@ -1338,6 +1339,7 @@ impl Engine {
     /// # }
     /// ```
     #[cfg(not(feature = "no_object"))]
+    #[inline(always)]
     pub fn parse_json(
         &self,
         json: impl AsRef<str>,
@@ -1345,52 +1347,51 @@ impl Engine {
     ) -> Result<Map, Box<EvalAltResult>> {
         use crate::token::Token;
 
-        let json = json.as_ref();
-        let mut scope = Default::default();
-
-        // Trims the JSON string and add a '#' in front
-        let json_text = json.trim_start();
-        let scripts = if json_text.starts_with(Token::MapStart.literal_syntax()) {
-            [json_text, ""]
-        } else if json_text.starts_with(Token::LeftBrace.literal_syntax()) {
-            ["#", json_text]
-        } else {
-            return Err(crate::ParseErrorType::MissingToken(
-                Token::LeftBrace.syntax().into(),
-                "to start a JSON object hash".into(),
-            )
-            .into_err(Position::new(1, (json.len() - json_text.len() + 1) as u16))
-            .into());
-        };
-
-        let (stream, tokenizer_control) = self.lex_raw(
-            &scripts,
-            Some(if has_null {
-                |token| match token {
-                    // If `null` is present, make sure `null` is treated as a variable
-                    Token::Reserved(s) if s == "null" => Token::Identifier(s),
-                    _ => token,
-                }
+        fn parse_json_inner(
+            engine: &Engine,
+            json: &str,
+            has_null: bool,
+        ) -> Result<Map, Box<EvalAltResult>> {
+            let mut scope = Scope::new();
+            let json_text = json.trim_start();
+            let scripts = if json_text.starts_with(Token::MapStart.literal_syntax()) {
+                [json_text, ""]
+            } else if json_text.starts_with(Token::LeftBrace.literal_syntax()) {
+                ["#", json_text]
             } else {
-                |t| t
-            }),
-        );
-
-        let mut state = ParseState::new(self, tokenizer_control);
-
-        let ast = self.parse_global_expr(
-            &mut stream.peekable(),
-            &mut state,
-            &scope,
-            OptimizationLevel::None,
-        )?;
-
-        // Handle null - map to ()
-        if has_null {
-            scope.push_constant("null", ());
+                return Err(crate::ParseErrorType::MissingToken(
+                    Token::LeftBrace.syntax().into(),
+                    "to start a JSON object hash".into(),
+                )
+                .into_err(Position::new(1, (json.len() - json_text.len() + 1) as u16))
+                .into());
+            };
+            let (stream, tokenizer_control) = engine.lex_raw(
+                &scripts,
+                Some(if has_null {
+                    &|token| match token {
+                        // If `null` is present, make sure `null` is treated as a variable
+                        Token::Reserved(s) if s == "null" => Token::Identifier(s),
+                        _ => token,
+                    }
+                } else {
+                    &|t| t
+                }),
+            );
+            let mut state = ParseState::new(engine, tokenizer_control);
+            let ast = engine.parse_global_expr(
+                &mut stream.peekable(),
+                &mut state,
+                &scope,
+                OptimizationLevel::None,
+            )?;
+            if has_null {
+                scope.push_constant("null", ());
+            }
+            engine.eval_ast_with_scope(&mut scope, &ast)
         }
 
-        self.eval_ast_with_scope(&mut scope, &ast)
+        parse_json_inner(self, json.as_ref(), has_null)
     }
     /// Compile a string containing an expression into an [`AST`],
     /// which can be used later for evaluation.
@@ -1462,7 +1463,8 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
-        let (stream, tokenizer_control) = self.lex_raw(&scripts, None);
+        let (stream, tokenizer_control) =
+            self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
 
         let mut peekable = stream.peekable();
         let mut state = ParseState::new(self, tokenizer_control);
@@ -1624,7 +1626,8 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
-        let (stream, tokenizer_control) = self.lex_raw(&scripts, None);
+        let (stream, tokenizer_control) =
+            self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
         let mut state = ParseState::new(self, tokenizer_control);
 
         // No need to optimize a lone expression
@@ -1769,7 +1772,8 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
-        let (stream, tokenizer_control) = self.lex_raw(&scripts, None);
+        let (stream, tokenizer_control) =
+            self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
         let mut state = ParseState::new(self, tokenizer_control);
 
         let ast = self.parse(
@@ -1860,7 +1864,7 @@ impl Engine {
         name: impl AsRef<str>,
         args: impl crate::FuncArgs,
     ) -> Result<T, Box<EvalAltResult>> {
-        let mut arg_values: crate::StaticVec<_> = Default::default();
+        let mut arg_values = crate::StaticVec::new();
         args.parse(&mut arg_values);
         let mut args: crate::StaticVec<_> = arg_values.iter_mut().collect();
         let name = name.as_ref();
@@ -2040,7 +2044,7 @@ impl Engine {
         let lib = Default::default();
 
         let stmt = std::mem::take(ast.statements_mut());
-        crate::optimize::optimize_into_ast(self, scope, stmt.into_vec(), lib, optimization_level)
+        crate::optimize::optimize_into_ast(self, scope, stmt, lib, optimization_level)
     }
     /// _(metadata)_ Generate a list of all registered functions.
     /// Exported under the `metadata` feature only.
@@ -2053,7 +2057,7 @@ impl Engine {
     #[inline]
     #[must_use]
     pub fn gen_fn_signatures(&self, include_packages: bool) -> Vec<String> {
-        let mut signatures: Vec<_> = Default::default();
+        let mut signatures = Vec::with_capacity(64);
 
         signatures.extend(self.global_namespace().gen_fn_signatures());
 
@@ -2112,6 +2116,46 @@ impl Engine {
             + 'static,
     ) -> &mut Self {
         self.resolve_var = Some(Box::new(callback));
+        self
+    }
+    /// _(internals)_ Provide a callback that will be invoked during parsing to remap certain tokens.
+    /// Exported under the `internals` feature only.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::{Engine, Token};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register a token mapper.
+    /// engine.on_parse_token(|token| {
+    ///     match token {
+    ///         // Convert all integer literals to strings
+    ///         Token::IntegerConstant(n) => Token::StringConstant(n.to_string()),
+    ///         // Convert 'begin' .. 'end' to '{' .. '}'
+    ///         Token::Identifier(s) if &s == "begin" => Token::LeftBrace,
+    ///         Token::Identifier(s) if &s == "end" => Token::RightBrace,
+    ///         // Pass through all other tokens unchanged
+    ///         _ => token
+    ///     }
+    /// });
+    ///
+    /// assert_eq!(engine.eval::<String>("42")?, "42");
+    /// assert_eq!(engine.eval::<bool>("true")?, true);
+    /// assert_eq!(engine.eval::<String>("let x = 42; begin let x = 0; end; x")?, "42");
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    pub fn on_parse_token(
+        &mut self,
+        callback: impl Fn(crate::token::Token) -> crate::token::Token + SendSync + 'static,
+    ) -> &mut Self {
+        self.token_mapper = Some(Box::new(callback));
         self
     }
     /// Register a callback for script evaluation progress.

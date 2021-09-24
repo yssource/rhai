@@ -9,23 +9,74 @@ Bug fixes
 
 * Custom syntax starting with a disabled standard keyword now works properly.
 * When calling `Engine::call_fn`, new variables defined during evaluation of the body script are removed and no longer spill into the function call.
+* `NamespaceRef::new` is fixed.
 
 Enhancements
 ------------
 
+### `Engine` API
+
 * `Engine::consume_XXX` methods are renamed to `Engine::run_XXX` to make meanings clearer. The `consume_XXX` API is deprecated.
+* `Engine::register_type_XXX` are now available even under `no_object`.
+* Added `Engine::on_parse_token` to allow remapping certain tokens during parsing.
+
+### Custom Syntax
+
 * `$symbol$` is supported in custom syntax to match any symbol.
 * Custom syntax with `$block$`, `}` or `;` as the last symbol are now self-terminating (i.e. no need to attach a terminating `;`).
+
+### `Dynamic` Values
+
 * `Dynamic::as_string` and `Dynamic::as_immutable_string` are deprecated and replaced by `into_string` and `into_immutable_string` respectively.
 * Added a number of constants to `Dynamic`.
 * Added a number of constants and `fromXXX` constant methods to `Dynamic`.
+* Added `sin`, `cos` and `tan` for `Decimal` values.
+
+### `Decimal` Values
+
 * `parse_float()`, `PI()` and `E()` now defer to `Decimal` under `no_float` if `decimal` is turned on.
 * Added `log10()` for `Decimal`.
 * `ln` for `Decimal` is now checked and won't panic.
+
+### String Values
+
+* `SmartString` now uses `LazyCompact` instead of `Compact` to minimize allocations.
+* Added `pop` for strings.
+
+### `Scope` API
+
 * `Scope::set_value` now takes anything that implements `Into<Cow<str>>`.
 * Added `Scope::is_constant` to check if a variable is constant.
 * Added `Scope::set_or_push` to add a new variable only if one doesn't already exist.
-* `Engine::register_type_XXX` are now available even under `no_object`.
+
+### `AST` API
+
+* Added `ASTNode::position`.
+* `ReturnType` is removed in favor of option flags for `Stmt::Return`.
+* `Stmt::Break` and `Stmt::Continue` are merged into `Stmt::BreakLoop` via an option flag.
+* `StaticVec` is changed to keep three items inline instead of four.
+
+
+Version 1.0.6
+=============
+
+* `MultiInputsStream`, `ParseState`, `TokenIterator`, `IdentifierBuilder` and `AccessMode` are exported under the `internals` feature.
+
+
+Version 1.0.5
+=============
+
+Bug fixes
+---------
+
+* `FloatWrapper` is no longer erroneously exported under `no_float+internals`.
+* The `sign` function now works properly for float values that are `NaN`.
+
+
+Version 1.0.4
+=============
+
+* Fixed bug with `catch` variable used in `catch` block.
 
 
 Version 1.0.2

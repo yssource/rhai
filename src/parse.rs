@@ -1,8 +1,8 @@
 //! Main module defining the lexer and parser.
 
 use crate::ast::{
-    BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ReturnType,
-    ScriptFnDef, Stmt, StmtBlock, AST_OPTION_FLAGS::*,
+    BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ScriptFnDef, Stmt,
+    StmtBlock, AST_OPTION_FLAGS::*,
 };
 use crate::custom_syntax::{markers::*, CustomSyntax};
 use crate::dynamic::AccessMode;
@@ -11,7 +11,8 @@ use crate::fn_hash::get_hasher;
 use crate::module::NamespaceRef;
 use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::token::{
-    is_keyword_function, is_valid_identifier, Token, TokenStream, TokenizerControl,
+    is_keyword_function, is_valid_function_name, is_valid_identifier, Token, TokenStream,
+    TokenizerControl,
 };
 use crate::{
     calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Engine, Identifier,
@@ -41,7 +42,8 @@ const SCOPE_SEARCH_BARRIER_MARKER: &str = "$BARRIER$";
 /// The message: `TokenStream` never ends
 const NEVER_ENDS: &str = "`TokenStream` never ends";
 
-/// A factory of identifiers from text strings.
+/// _(internals)_ A factory of identifiers from text strings.
+/// Exported under the `internals` feature only.
 ///
 /// When [`SmartString`](https://crates.io/crates/smartstring) is used as [`Identifier`],
 /// this just returns a copy because most identifiers in Rhai are short and ASCII-based.
@@ -71,38 +73,39 @@ impl IdentifierBuilder {
     }
 }
 
-/// A type that encapsulates the current state of the parser.
+/// _(internals)_ A type that encapsulates the current state of the parser.
+/// Exported under the `internals` feature only.
 #[derive(Debug)]
 pub struct ParseState<'e> {
     /// Reference to the scripting [`Engine`].
-    engine: &'e Engine,
+    pub engine: &'e Engine,
     /// Input stream buffer containing the next character to read.
-    tokenizer_control: TokenizerControl,
+    pub tokenizer_control: TokenizerControl,
     /// Interned strings.
-    interned_strings: IdentifierBuilder,
+    pub interned_strings: IdentifierBuilder,
     /// Encapsulates a local stack with variable names to simulate an actual runtime scope.
-    stack: Vec<(Identifier, AccessMode)>,
+    pub stack: StaticVec<(Identifier, AccessMode)>,
     /// Size of the local variables stack upon entry of the current block scope.
-    entry_stack_len: usize,
+    pub entry_stack_len: usize,
     /// Tracks a list of external variables (variables that are not explicitly declared in the scope).
     #[cfg(not(feature = "no_closure"))]
-    external_vars: BTreeMap<Identifier, Position>,
+    pub external_vars: BTreeMap<Identifier, Position>,
     /// An indicator that disables variable capturing into externals one single time
     /// up until the nearest consumed Identifier token.
     /// If set to false the next call to [`access_var`][ParseState::access_var] will not capture the variable.
     /// All consequent calls to [`access_var`][ParseState::access_var] will not be affected
     #[cfg(not(feature = "no_closure"))]
-    allow_capture: bool,
+    pub allow_capture: bool,
     /// Encapsulates a local stack with imported [module][crate::Module] names.
     #[cfg(not(feature = "no_module"))]
-    modules: StaticVec<Identifier>,
+    pub modules: StaticVec<Identifier>,
     /// Maximum levels of expression nesting.
     #[cfg(not(feature = "unchecked"))]
-    max_expr_depth: Option<NonZeroUsize>,
+    pub max_expr_depth: Option<NonZeroUsize>,
     /// Maximum levels of expression nesting in functions.
     #[cfg(not(feature = "unchecked"))]
     #[cfg(not(feature = "no_function"))]
-    max_function_expr_depth: Option<NonZeroUsize>,
+    pub max_function_expr_depth: Option<NonZeroUsize>,
 }
 
 impl<'e> ParseState<'e> {
@@ -123,7 +126,7 @@ impl<'e> ParseState<'e> {
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
             interned_strings: Default::default(),
-            stack: Vec::with_capacity(16),
+            stack: Default::default(),
             entry_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
             modules: Default::default(),
@@ -478,7 +481,7 @@ fn parse_fn_call(
                 },
             );
 
-            let hashes = if is_valid_identifier(id.chars()) {
+            let hashes = if is_valid_function_name(&id) {
                 FnCallHashes::from_script(hash)
             } else {
                 FnCallHashes::from_native(hash)
@@ -528,7 +531,7 @@ fn parse_fn_call(
                     },
                 );
 
-                let hashes = if is_valid_identifier(id.chars()) {
+                let hashes = if is_valid_function_name(&id) {
                     FnCallHashes::from_script(hash)
                 } else {
                     FnCallHashes::from_native(hash)
@@ -827,8 +830,8 @@ fn parse_map_literal(
     // #{ ...
     settings.pos = eat_token(input, Token::MapStart);
 
-    let mut map: StaticVec<(Ident, Expr)> = Default::default();
-    let mut template: BTreeMap<Identifier, crate::Dynamic> = Default::default();
+    let mut map = StaticVec::<(Ident, Expr)>::new();
+    let mut template = BTreeMap::<Identifier, crate::Dynamic>::new();
 
     loop {
         const MISSING_RBRACE: &str = "to end this object map literal";
@@ -1178,7 +1181,7 @@ fn parse_primary(
 
         // Interpolated string
         Token::InterpolatedString(_) => {
-            let mut segments: StaticVec<Expr> = Default::default();
+            let mut segments = StaticVec::<Expr>::new();
 
             if let (Token::InterpolatedString(s), pos) = input.next().expect(NEVER_ENDS) {
                 segments.push(Expr::StringConstant(s.into(), pos));
@@ -1388,7 +1391,7 @@ fn parse_primary(
                 if let Some((ref mut namespace, _)) = namespace {
                     namespace.push(var_name_def);
                 } else {
-                    let mut ns: NamespaceRef = Default::default();
+                    let mut ns = NamespaceRef::new();
                     ns.push(var_name_def);
                     namespace = Some((ns, 42));
                 }
@@ -1949,7 +1952,7 @@ fn parse_binary_op(
                 let hash = calc_fn_hash(&s, 2);
 
                 FnCallExpr {
-                    hashes: if is_valid_identifier(s.chars()) {
+                    hashes: if is_valid_function_name(&s) {
                         FnCallHashes::from_script(hash)
                     } else {
                         FnCallHashes::from_native(hash)
@@ -1976,9 +1979,9 @@ fn parse_custom_syntax(
     pos: Position,
 ) -> Result<Expr, ParseError> {
     let mut settings = settings;
-    let mut keywords: StaticVec<Expr> = Default::default();
-    let mut segments: StaticVec<_> = Default::default();
-    let mut tokens: StaticVec<_> = Default::default();
+    let mut keywords = StaticVec::<Expr>::new();
+    let mut segments = StaticVec::new();
+    let mut tokens = StaticVec::new();
 
     // Adjust the variables stack
     if syntax.scope_may_be_changed {
@@ -2427,7 +2430,7 @@ fn parse_let(
     state.stack.push((name, var_type));
 
     let export = if is_export {
-        AST_OPTION_EXPORTED
+        AST_OPTION_PUBLIC
     } else {
         AST_OPTION_NONE
     };
@@ -2698,7 +2701,7 @@ fn parse_stmt(
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     let comments = {
-        let mut comments: StaticVec<String> = Default::default();
+        let mut comments = StaticVec::<String>::new();
         let mut comments_pos = Position::NONE;
 
         // Handle doc-comments.
@@ -2828,11 +2831,11 @@ fn parse_stmt(
 
         Token::Continue if settings.is_breakable => {
             let pos = eat_token(input, Token::Continue);
-            Ok(Stmt::Continue(pos))
+            Ok(Stmt::BreakLoop(AST_OPTION_NONE, pos))
         }
         Token::Break if settings.is_breakable => {
             let pos = eat_token(input, Token::Break);
-            Ok(Stmt::Break(pos))
+            Ok(Stmt::BreakLoop(AST_OPTION_BREAK_OUT, pos))
         }
         Token::Continue | Token::Break => Err(PERR::LoopBreak.into_err(settings.pos)),
 
@@ -2842,8 +2845,8 @@ fn parse_stmt(
                 .map(|(token, pos)| {
                     (
                         match token {
-                            Token::Return => ReturnType::Return,
-                            Token::Throw => ReturnType::Exception,
+                            Token::Return => AST_OPTION_NONE,
+                            Token::Throw => AST_OPTION_BREAK_OUT,
                             _ => unreachable!(),
                         },
                         pos,
@@ -2915,7 +2918,7 @@ fn parse_try_catch(
     }
 
     // try { body } catch (
-    let var_def = if match_token(input, Token::LeftParen).0 {
+    let err_var = if match_token(input, Token::LeftParen).0 {
         let (name, pos) = parse_var_name(input)?;
         let (matched, err_pos) = match_token(input, Token::RightParen);
 
@@ -2928,6 +2931,7 @@ fn parse_try_catch(
         }
 
         let name = state.get_identifier(name);
+        state.stack.push((name.clone(), AccessMode::ReadWrite));
         Some(Ident { name, pos })
     } else {
         None
@@ -2936,8 +2940,16 @@ fn parse_try_catch(
     // try { body } catch ( var ) { catch_block }
     let catch_body = parse_block(input, state, lib, settings.level_up())?;
 
+    if err_var.is_some() {
+        // Remove the error variable from the stack
+        state
+            .stack
+            .pop()
+            .expect("stack contains at least one entry");
+    }
+
     Ok(Stmt::TryCatch(
-        (body.into(), var_def, catch_body.into()).into(),
+        (body.into(), err_var, catch_body.into()).into(),
         settings.pos,
     ))
 }
@@ -2972,7 +2984,7 @@ fn parse_fn(
         (_, pos) => return Err(PERR::FnMissingParams(name).into_err(*pos)),
     };
 
-    let mut params: StaticVec<_> = Default::default();
+    let mut params = StaticVec::new();
 
     if !match_token(input, Token::RightParen).0 {
         let sep_err = format!("to separate the parameters of function '{}'", name);
@@ -3105,7 +3117,7 @@ fn parse_anon_fn(
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
-    let mut params_list: StaticVec<_> = Default::default();
+    let mut params_list = StaticVec::new();
 
     if input.next().expect(NEVER_ENDS).0 != Token::Or && !match_token(input, Token::Pipe).0 {
         loop {
@@ -3234,11 +3246,18 @@ impl Engine {
             }
         }
 
-        let expr = vec![Stmt::Expr(expr)];
+        let mut statements = StaticVec::new();
+        statements.push(Stmt::Expr(expr));
 
         Ok(
             // Optimize AST
-            optimize_into_ast(self, scope, expr, Default::default(), optimization_level),
+            optimize_into_ast(
+                self,
+                scope,
+                statements,
+                Default::default(),
+                optimization_level,
+            ),
         )
     }
 
@@ -3247,8 +3266,8 @@ impl Engine {
         &self,
         input: &mut TokenStream,
         state: &mut ParseState,
-    ) -> Result<(Vec<Stmt>, Vec<Shared<ScriptFnDef>>), ParseError> {
-        let mut statements = Vec::with_capacity(16);
+    ) -> Result<(StaticVec<Stmt>, StaticVec<Shared<ScriptFnDef>>), ParseError> {
+        let mut statements = StaticVec::new();
         let mut functions = BTreeMap::new();
 
         while !input.peek().expect(NEVER_ENDS).0.is_eof() {

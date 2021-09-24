@@ -207,6 +207,13 @@ struct ModuleMetadata {
     pub functions: Vec<FnMetadata>,
 }
 
+impl ModuleMetadata {
+    #[inline(always)]
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
+
 impl From<&crate::Module> for ModuleMetadata {
     fn from(module: &crate::Module) -> Self {
         let mut functions: Vec<_> = module.iter_fn().map(|f| f.into()).collect();
@@ -239,7 +246,7 @@ impl Engine {
         include_global: bool,
     ) -> serde_json::Result<String> {
         let _ast = ast;
-        let mut global: ModuleMetadata = Default::default();
+        let mut global = ModuleMetadata::new();
 
         if include_global {
             self.global_modules

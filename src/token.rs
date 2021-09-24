@@ -4,6 +4,7 @@ use crate::engine::{
     Precedence, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
+use crate::fn_native::OnParseTokenCallback;
 use crate::{Engine, LexError, StaticVec, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -960,7 +961,7 @@ impl Token {
     #[inline]
     pub(crate) fn into_function_name_for_override(self) -> Result<String, Self> {
         match self {
-            Self::Custom(s) | Self::Identifier(s) if is_valid_identifier(s.chars()) => Ok(s),
+            Self::Custom(s) | Self::Identifier(s) if is_valid_function_name(&s) => Ok(s),
             _ => Err(self),
         }
     }
@@ -1421,7 +1422,7 @@ fn get_next_token_inner(
 
             // digit ...
             ('0'..='9', _) => {
-                let mut result: smallvec::SmallVec<[char; 16]> = Default::default();
+                let mut result = smallvec::SmallVec::<[char; 16]>::new();
                 let mut radix_base: Option<u32> = None;
                 let mut valid: fn(char) -> bool = is_numeric_digit;
                 result.push(c);
@@ -1951,7 +1952,7 @@ fn get_identifier(
     start_pos: Position,
     first_char: char,
 ) -> Option<(Token, Position)> {
-    let mut result: smallvec::SmallVec<[char; 8]> = Default::default();
+    let mut result = smallvec::SmallVec::<[char; 8]>::new();
     result.push(first_char);
 
     while let Some(next_char) = stream.peek_next() {
@@ -2015,6 +2016,13 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
     first_alphabetic
 }
 
+/// Is a text string a valid scripted function name?
+#[inline(always)]
+#[must_use]
+pub fn is_valid_function_name(name: &str) -> bool {
+    is_valid_identifier(name.chars())
+}
+
 /// Is a character valid to start an identifier?
 #[cfg(feature = "unicode-xid-ident")]
 #[inline(always)]
@@ -2047,15 +2055,17 @@ pub fn is_id_continue(x: char) -> bool {
     x.is_ascii_alphanumeric() || x == '_'
 }
 
-/// A type that implements the [`InputStream`] trait.
+/// _(internals)_ A type that implements the [`InputStream`] trait.
+/// Exported under the `internals` feature only.
+///
 /// Multiple character streams are jointed together to form one single stream.
 pub struct MultiInputsStream<'a> {
     /// Buffered character, if any.
-    buf: Option<char>,
+    pub buf: Option<char>,
     /// The current stream index.
-    index: usize,
+    pub index: usize,
     /// The input character streams.
-    streams: StaticVec<Peekable<Chars<'a>>>,
+    pub streams: StaticVec<Peekable<Chars<'a>>>,
 }
 
 impl InputStream for MultiInputsStream<'_> {
@@ -2105,20 +2115,21 @@ impl InputStream for MultiInputsStream<'_> {
     }
 }
 
-/// An iterator on a [`Token`] stream.
+/// _(internals)_ An iterator on a [`Token`] stream.
+/// Exported under the `internals` feature only.
 pub struct TokenIterator<'a> {
     /// Reference to the scripting `Engine`.
-    engine: &'a Engine,
+    pub engine: &'a Engine,
     /// Current state.
-    state: TokenizeState,
+    pub state: TokenizeState,
     /// Current position.
-    pos: Position,
-    /// External buffer containing the next character to read, if any.
-    tokenizer_control: TokenizerControl,
+    pub pos: Position,
+    /// Shared object to allow controlling the tokenizer externally.
+    pub tokenizer_control: TokenizerControl,
     /// Input character stream.
-    stream: MultiInputsStream<'a>,
+    pub stream: MultiInputsStream<'a>,
     /// A processor function that maps a token to another.
-    map: Option<fn(Token) -> Token>,
+    pub token_mapper: Option<&'a OnParseTokenCallback>,
 }
 
 impl<'a> Iterator for TokenIterator<'a> {
@@ -2212,7 +2223,7 @@ impl<'a> Iterator for TokenIterator<'a> {
         };
 
         // Run the mapper, if any
-        let token = if let Some(map_func) = self.map {
+        let token = if let Some(map_func) = self.token_mapper {
             map_func(token)
         } else {
             token
@@ -2244,9 +2255,9 @@ impl Engine {
     pub fn lex_with_map<'a>(
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
-        map: fn(Token) -> Token,
+        token_mapper: &'a OnParseTokenCallback,
     ) -> (TokenIterator<'a>, TokenizerControl) {
-        self.lex_raw(input, Some(map))
+        self.lex_raw(input, Some(token_mapper))
     }
     /// Tokenize an input text stream with an optional mapping function.
     #[inline]
@@ -2254,7 +2265,7 @@ impl Engine {
     pub(crate) fn lex_raw<'a>(
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
-        map: Option<fn(Token) -> Token>,
+        token_mapper: Option<&'a OnParseTokenCallback>,
     ) -> (TokenIterator<'a>, TokenizerControl) {
         let buffer: TokenizerControl = Default::default();
         let buffer2 = buffer.clone();
@@ -2279,7 +2290,7 @@ impl Engine {
                     streams: input.into_iter().map(|s| s.chars().peekable()).collect(),
                     index: 0,
                 },
-                map,
+                token_mapper,
             },
             buffer2,
         )

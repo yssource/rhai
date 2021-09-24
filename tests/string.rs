@@ -100,6 +100,11 @@ fn test_string_mut() -> Result<(), Box<EvalAltResult>> {
     engine.register_fn("bar", |s: String| s.len() as INT);
     engine.register_fn("baz", |s: &mut String| s.len());
 
+    assert_eq!(engine.eval::<char>(r#"pop("hello")"#)?, 'o');
+    assert_eq!(engine.eval::<String>(r#"pop("hello", 3)"#)?, "llo");
+    assert_eq!(engine.eval::<String>(r#"pop("hello", 10)"#)?, "hello");
+    assert_eq!(engine.eval::<String>(r#"pop("hello", -42)"#)?, "");
+
     assert_eq!(engine.eval::<INT>(r#"foo("hello")"#)?, 5);
     assert_eq!(engine.eval::<INT>(r#"bar("hello")"#)?, 5);
     assert!(

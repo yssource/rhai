@@ -1415,7 +1415,7 @@ impl Module {
         ast: &crate::AST,
         engine: &crate::Engine,
     ) -> Result<Self, Box<EvalAltResult>> {
-        let mut mods: crate::engine::Imports = Default::default();
+        let mut mods = crate::engine::Imports::new();
         let orig_mods_len = mods.len();
 
         // Run the script
@@ -1439,7 +1439,7 @@ impl Module {
         });
 
         // Extra modules left in the scope become sub-modules
-        let mut func_mods: crate::engine::Imports = Default::default();
+        let mut func_mods = crate::engine::Imports::new();
 
         mods.into_iter().skip(orig_mods_len).for_each(|(alias, m)| {
             func_mods.push(alias.clone(), m.clone());
@@ -1720,7 +1720,7 @@ impl NamespaceRef {
     /// Create a new [`NamespaceRef`].
     #[inline(always)]
     #[must_use]
-    pub fn new(&self) -> Self {
+    pub fn new() -> Self {
         Self {
             index: None,
             path: StaticVec::new(),

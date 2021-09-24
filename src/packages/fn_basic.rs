@@ -92,7 +92,7 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
     .map(|&s| s.into())
     .collect();
 
-    let mut list: Array = Default::default();
+    let mut list = Array::new();
 
     ctx.iter_namespaces()
         .flat_map(|m| m.iter_script_fn())

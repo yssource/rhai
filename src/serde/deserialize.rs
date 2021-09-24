@@ -142,7 +142,7 @@ impl<'d> Visitor<'d> for DynamicVisitor {
 
     #[cfg(not(feature = "no_index"))]
     fn visit_seq<A: SeqAccess<'d>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-        let mut arr: Array = Default::default();
+        let mut arr = Array::new();
 
         while let Some(v) = seq.next_element()? {
             arr.push(v);
@@ -153,7 +153,7 @@ impl<'d> Visitor<'d> for DynamicVisitor {
 
     #[cfg(not(feature = "no_object"))]
     fn visit_map<M: MapAccess<'d>>(self, mut map: M) -> Result<Self::Value, M::Error> {
-        let mut m: Map = Default::default();
+        let mut m = Map::new();
 
         while let Some((k, v)) = map.next_entry::<&str, _>()? {
             m.insert(k.into(), v);

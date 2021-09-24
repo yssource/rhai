@@ -27,15 +27,29 @@ mod array_functions {
     }
     #[rhai_fn(name = "append", name = "+=")]
     pub fn append(array: &mut Array, y: Array) {
-        array.extend(y);
+        if !y.is_empty() {
+            if array.is_empty() {
+                *array = y;
+            } else {
+                array.extend(y);
+            }
+        }
     }
     #[rhai_fn(name = "+")]
     pub fn concat(mut array: Array, y: Array) -> Array {
-        array.extend(y);
+        if !y.is_empty() {
+            if array.is_empty() {
+                array = y;
+            } else {
+                array.extend(y);
+            }
+        }
         array
     }
     pub fn insert(array: &mut Array, position: INT, item: Dynamic) {
-        if position < 0 {
+        if array.is_empty() {
+            array.push(item);
+        } else if position < 0 {
             if let Some(n) = position.checked_abs() {
                 if n as usize > array.len() {
                     array.insert(0, item);
@@ -46,7 +60,7 @@ mod array_functions {
                 array.insert(0, item);
             }
         } else if (position as usize) >= array.len() {
-            push(array, item);
+            array.push(item);
         } else {
             array.insert(position as usize, item);
         }
@@ -58,61 +72,78 @@ mod array_functions {
         len: INT,
         item: Dynamic,
     ) -> Result<(), Box<EvalAltResult>> {
+        if len <= 0 {
+            return Ok(());
+        }
+
         // Check if array will be over max size limit
         #[cfg(not(feature = "unchecked"))]
-        if _ctx.engine().max_array_size() > 0
-            && len > 0
-            && (len as usize) > _ctx.engine().max_array_size()
-        {
+        if _ctx.engine().max_array_size() > 0 && (len as usize) > _ctx.engine().max_array_size() {
             return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), Position::NONE)
                 .into();
         }
 
-        if len > 0 && len as usize > array.len() {
+        if len as usize > array.len() {
             array.resize(len as usize, item);
         }
 
         Ok(())
     }
     pub fn pop(array: &mut Array) -> Dynamic {
-        array.pop().unwrap_or_else(|| ().into())
+        if array.is_empty() {
+            Dynamic::UNIT
+        } else {
+            array.pop().unwrap_or_else(|| Dynamic::UNIT)
+        }
     }
     pub fn shift(array: &mut Array) -> Dynamic {
         if array.is_empty() {
-            ().into()
+            Dynamic::UNIT
         } else {
             array.remove(0)
         }
     }
     pub fn remove(array: &mut Array, len: INT) -> Dynamic {
         if len < 0 || (len as usize) >= array.len() {
-            ().into()
+            Dynamic::UNIT
         } else {
             array.remove(len as usize)
         }
     }
     pub fn clear(array: &mut Array) {
-        array.clear();
+        if !array.is_empty() {
+            array.clear();
+        }
     }
     pub fn truncate(array: &mut Array, len: INT) {
-        if len >= 0 {
-            array.truncate(len as usize);
-        } else {
-            array.clear();
+        if !array.is_empty() {
+            if len >= 0 {
+                array.truncate(len as usize);
+            } else {
+                array.clear();
+            }
         }
     }
     pub fn chop(array: &mut Array, len: INT) {
-        if len as usize >= array.len() {
-        } else if len >= 0 {
-            array.drain(0..array.len() - len as usize);
-        } else {
-            array.clear();
+        if !array.is_empty() && len as usize >= array.len() {
+            if len >= 0 {
+                array.drain(0..array.len() - len as usize);
+            } else {
+                array.clear();
+            }
         }
     }
     pub fn reverse(array: &mut Array) {
-        array.reverse();
+        if !array.is_empty() {
+            array.reverse();
+        }
     }
     pub fn splice(array: &mut Array, start: INT, len: INT, replace: Array) {
+        if array.is_empty() {
+            *array = replace;
+            return;
+        }
+
         let start = if start < 0 {
             let arr_len = array.len();
             start
@@ -136,18 +167,22 @@ mod array_functions {
         array.splice(start..start + len, replace.into_iter());
     }
     pub fn extract(array: &mut Array, start: INT, len: INT) -> Array {
+        if array.is_empty() || len <= 0 {
+            return Array::new();
+        }
+
         let start = if start < 0 {
             let arr_len = array.len();
             start
                 .checked_abs()
                 .map_or(0, |n| arr_len - (n as usize).min(arr_len))
         } else if start as usize >= array.len() {
-            return Default::default();
+            return Array::new();
         } else {
             start as usize
         };
 
-        let len = if len < 0 {
+        let len = if len <= 0 {
             0
         } else if len as usize > array.len() - start {
             array.len() - start
@@ -155,17 +190,25 @@ mod array_functions {
             len as usize
         };
 
-        array[start..start + len].to_vec()
+        if len == 0 {
+            Array::new()
+        } else {
+            array[start..start + len].to_vec()
+        }
     }
     #[rhai_fn(name = "extract")]
     pub fn extract_tail(array: &mut Array, start: INT) -> Array {
+        if array.is_empty() {
+            return Array::new();
+        }
+
         let start = if start < 0 {
             let arr_len = array.len();
             start
                 .checked_abs()
                 .map_or(0, |n| arr_len - (n as usize).min(arr_len))
         } else if start as usize >= array.len() {
-            return Default::default();
+            return Array::new();
         } else {
             start as usize
         };
@@ -174,12 +217,14 @@ mod array_functions {
     }
     #[rhai_fn(name = "split")]
     pub fn split_at(array: &mut Array, start: INT) -> Array {
-        if start < 0 {
+        if array.is_empty() {
+            Array::new()
+        } else if start < 0 {
             if let Some(n) = start.checked_abs() {
                 if n as usize > array.len() {
                     mem::take(array)
                 } else {
-                    let mut result: Array = Default::default();
+                    let mut result = Array::new();
                     result.extend(array.drain(array.len() - n as usize..));
                     result
                 }
@@ -187,9 +232,9 @@ mod array_functions {
                 mem::take(array)
             }
         } else if start as usize >= array.len() {
-            Default::default()
+            Array::new()
         } else {
-            let mut result: Array = Default::default();
+            let mut result = Array::new();
             result.extend(array.drain(start as usize..));
             result
         }
@@ -200,6 +245,10 @@ mod array_functions {
         array: &mut Array,
         mapper: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(array.clone());
+        }
+
         let mut ar = Array::with_capacity(array.len());
 
         for (i, item) in array.iter().enumerate() {
@@ -233,6 +282,10 @@ mod array_functions {
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(array.clone());
+        }
+
         let mut ar = Array::new();
 
         for (i, item) in array.iter().enumerate() {
@@ -269,6 +322,10 @@ mod array_functions {
         array: &mut Array,
         value: Dynamic,
     ) -> Result<bool, Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(false);
+        }
+
         for item in array.iter_mut() {
             if ctx
                 .call_fn_dynamic_raw(OP_EQUALS, true, &mut [item, &mut value.clone()])
@@ -300,7 +357,11 @@ mod array_functions {
         array: &mut Array,
         value: Dynamic,
     ) -> Result<INT, Box<EvalAltResult>> {
-        index_of_starting_from(ctx, array, value, 0)
+        if array.is_empty() {
+            Ok(-1)
+        } else {
+            index_of_starting_from(ctx, array, value, 0)
+        }
     }
     #[rhai_fn(name = "index_of", return_raw, pure)]
     pub fn index_of_starting_from(
@@ -309,6 +370,10 @@ mod array_functions {
         value: Dynamic,
         start: INT,
     ) -> Result<INT, Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(-1);
+        }
+
         let start = if start < 0 {
             let arr_len = array.len();
             start
@@ -351,7 +416,11 @@ mod array_functions {
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<INT, Box<EvalAltResult>> {
-        index_of_filter_starting_from(ctx, array, filter, 0)
+        if array.is_empty() {
+            Ok(-1)
+        } else {
+            index_of_filter_starting_from(ctx, array, filter, 0)
+        }
     }
     #[rhai_fn(name = "index_of", return_raw, pure)]
     pub fn index_of_filter_starting_from(
@@ -360,6 +429,10 @@ mod array_functions {
         filter: FnPtr,
         start: INT,
     ) -> Result<INT, Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(-1);
+        }
+
         let start = if start < 0 {
             let arr_len = array.len();
             start
@@ -405,6 +478,10 @@ mod array_functions {
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<bool, Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(false);
+        }
+
         for (i, item) in array.iter().enumerate() {
             if filter
                 .call_dynamic(&ctx, None, [item.clone()])
@@ -439,6 +516,10 @@ mod array_functions {
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<bool, Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(true);
+        }
+
         for (i, item) in array.iter().enumerate() {
             if !filter
                 .call_dynamic(&ctx, None, [item.clone()])
@@ -473,6 +554,10 @@ mod array_functions {
         array: &mut Array,
         reducer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(Dynamic::UNIT);
+        }
+
         let mut result = Dynamic::UNIT;
 
         for (i, item) in array.iter().enumerate() {
@@ -505,6 +590,10 @@ mod array_functions {
         reducer: FnPtr,
         initial: Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(initial);
+        }
+
         let mut result = initial;
 
         for (i, item) in array.iter().enumerate() {
@@ -536,6 +625,10 @@ mod array_functions {
         array: &mut Array,
         reducer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(Dynamic::UNIT);
+        }
+
         let mut result = Dynamic::UNIT;
 
         for (i, item) in array.iter().enumerate().rev() {
@@ -568,6 +661,10 @@ mod array_functions {
         reducer: FnPtr,
         initial: Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(initial);
+        }
+
         let mut result = initial;
 
         for (i, item) in array.iter().enumerate().rev() {
@@ -599,6 +696,10 @@ mod array_functions {
         array: &mut Array,
         comparer: FnPtr,
     ) -> Result<(), Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(());
+        }
+
         array.sort_by(|x, y| {
             comparer
                 .call_dynamic(&ctx, None, [x.clone(), y.clone()])
@@ -621,6 +722,10 @@ mod array_functions {
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(Array::new());
+        }
+
         let mut drained = Array::with_capacity(array.len());
 
         let mut i = 0;
@@ -660,18 +765,22 @@ mod array_functions {
     }
     #[rhai_fn(name = "drain")]
     pub fn drain_range(array: &mut Array, start: INT, len: INT) -> Array {
+        if array.is_empty() || len <= 0 {
+            return Array::new();
+        }
+
         let start = if start < 0 {
             let arr_len = array.len();
             start
                 .checked_abs()
                 .map_or(0, |n| arr_len - (n as usize).min(arr_len))
         } else if start as usize >= array.len() {
-            return Default::default();
+            return Array::new();
         } else {
             start as usize
         };
 
-        let len = if len < 0 {
+        let len = if len <= 0 {
             0
         } else if len as usize > array.len() - start {
             array.len() - start
@@ -687,6 +796,10 @@ mod array_functions {
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(Array::new());
+        }
+
         let mut drained = Array::new();
 
         let mut i = 0;
@@ -726,6 +839,10 @@ mod array_functions {
     }
     #[rhai_fn(name = "retain")]
     pub fn retain_range(array: &mut Array, start: INT, len: INT) -> Array {
+        if array.is_empty() || len <= 0 {
+            return Array::new();
+        }
+
         let start = if start < 0 {
             let arr_len = array.len();
             start

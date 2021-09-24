@@ -17,32 +17,56 @@ def_package!(crate:BasicMapPackage:"Basic object map utilities.", lib, {
 mod map_functions {
     #[rhai_fn(name = "has", pure)]
     pub fn contains(map: &mut Map, prop: ImmutableString) -> bool {
-        map.contains_key(prop.as_str())
+        if map.is_empty() {
+            false
+        } else {
+            map.contains_key(prop.as_str())
+        }
     }
     #[rhai_fn(pure)]
     pub fn len(map: &mut Map) -> INT {
         map.len() as INT
     }
     pub fn clear(map: &mut Map) {
-        map.clear();
+        if !map.is_empty() {
+            map.clear();
+        }
     }
     pub fn remove(map: &mut Map, name: ImmutableString) -> Dynamic {
-        map.remove(name.as_str()).unwrap_or_else(|| ().into())
+        if !map.is_empty() {
+            map.remove(name.as_str()).unwrap_or_else(|| Dynamic::UNIT)
+        } else {
+            Dynamic::UNIT
+        }
     }
     #[rhai_fn(name = "mixin", name = "+=")]
     pub fn mixin(map: &mut Map, map2: Map) {
-        map.extend(map2.into_iter());
+        if !map2.is_empty() {
+            map.extend(map2.into_iter());
+        }
     }
     #[rhai_fn(name = "+")]
     pub fn merge(map1: Map, map2: Map) -> Map {
-        let mut map1 = map1;
-        map1.extend(map2.into_iter());
-        map1
+        if map2.is_empty() {
+            map1
+        } else if map1.is_empty() {
+            map2
+        } else {
+            let mut map1 = map1;
+            map1.extend(map2.into_iter());
+            map1
+        }
     }
     pub fn fill_with(map: &mut Map, map2: Map) {
-        map2.into_iter().for_each(|(key, value)| {
-            map.entry(key).or_insert(value);
-        });
+        if !map2.is_empty() {
+            if map.is_empty() {
+                *map = map2;
+            } else {
+                map2.into_iter().for_each(|(key, value)| {
+                    map.entry(key).or_insert(value);
+                });
+            }
+        }
     }
     #[rhai_fn(name = "==", return_raw, pure)]
     pub fn equals(
@@ -53,23 +77,22 @@ mod map_functions {
         if map1.len() != map2.len() {
             return Ok(false);
         }
-        if map1.is_empty() {
-            return Ok(true);
-        }
 
-        let mut map2 = map2;
+        if !map1.is_empty() {
+            let mut map2 = map2;
 
-        for (m1, v1) in map1.iter_mut() {
-            if let Some(v2) = map2.get_mut(m1) {
-                let equals = ctx
-                    .call_fn_dynamic_raw(OP_EQUALS, true, &mut [v1, v2])
-                    .map(|v| v.as_bool().unwrap_or(false))?;
+            for (m1, v1) in map1.iter_mut() {
+                if let Some(v2) = map2.get_mut(m1) {
+                    let equals = ctx
+                        .call_fn_dynamic_raw(OP_EQUALS, true, &mut [v1, v2])
+                        .map(|v| v.as_bool().unwrap_or(false))?;
 
-                if !equals {
+                    if !equals {
+                        return Ok(false);
+                    }
+                } else {
                     return Ok(false);
                 }
-            } else {
-                return Ok(false);
             }
         }
 
@@ -88,11 +111,19 @@ mod map_functions {
     pub mod indexing {
         #[rhai_fn(pure)]
         pub fn keys(map: &mut Map) -> Array {
-            map.iter().map(|(k, _)| k.clone().into()).collect()
+            if map.is_empty() {
+                Array::new()
+            } else {
+                map.keys().cloned().map(Into::<Dynamic>::into).collect()
+            }
         }
         #[rhai_fn(pure)]
         pub fn values(map: &mut Map) -> Array {
-            map.iter().map(|(_, v)| v.clone()).collect()
+            if map.is_empty() {
+                Array::new()
+            } else {
+                map.values().cloned().collect()
+            }
         }
     }
 }

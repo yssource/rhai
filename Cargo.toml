@@ -49,7 +49,7 @@ wasm-bindgen = ["instant/wasm-bindgen"]
 stdweb = ["instant/stdweb"]
 
 # internal feature flags - volatile
-no_smartstring = []             # Do not use SmartString
+no_smartstring = []             # do not use SmartString
 
 [profile.release]
 lto = "fat"
@@ -92,7 +92,7 @@ default-features = false
 optional = true
 
 [dependencies.rust_decimal]
-version = "1.15"
+version = "1.16"
 default-features = false
 features = ["maths"]
 optional = true

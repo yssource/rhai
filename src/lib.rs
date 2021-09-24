@@ -93,6 +93,7 @@ pub mod packages;
 mod parse;
 pub mod plugin;
 mod scope;
+mod tests;
 mod token;
 mod r#unsafe;
 
@@ -213,7 +214,7 @@ pub use optimize::OptimizationLevel;
 
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
-pub use dynamic::{DynamicReadLock, DynamicWriteLock, Variant};
+pub use dynamic::{AccessMode, DynamicReadLock, DynamicWriteLock, Variant};
 
 // Expose internal data structures.
 #[cfg(feature = "internals")]
@@ -223,14 +224,26 @@ pub use token::{get_next_token, parse_string_literal};
 // Expose internal data structures.
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
-pub use token::{InputStream, Token, TokenizeState, TokenizerControl, TokenizerControlBlock};
+pub use token::{
+    InputStream, MultiInputsStream, Token, TokenIterator, TokenizeState, TokenizerControl,
+    TokenizerControlBlock,
+};
+
+#[cfg(feature = "internals")]
+#[deprecated = "this type is volatile and may change"]
+pub use parse::{IdentifierBuilder, ParseState};
 
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
 pub use ast::{
-    ASTNode, BinaryExpr, CustomExpr, Expr, FloatWrapper, FnCallExpr, FnCallHashes, Ident,
-    OpAssignment, OptionFlags, ReturnType, ScriptFnDef, Stmt, StmtBlock, AST_OPTION_FLAGS::*,
+    ASTNode, BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment,
+    OptionFlags, ScriptFnDef, Stmt, StmtBlock, AST_OPTION_FLAGS::*,
 };
+
+#[cfg(feature = "internals")]
+#[cfg(not(feature = "no_float"))]
+#[deprecated = "this type is volatile and may change"]
+pub use ast::FloatWrapper;
 
 #[cfg(feature = "internals")]
 #[deprecated = "this type is volatile and may change"]
@@ -245,8 +258,8 @@ pub use engine::Limits;
 #[deprecated = "this type is volatile and may change"]
 pub use module::NamespaceRef;
 
-/// Alias to [`smallvec::SmallVec<[T; 4]>`](https://crates.io/crates/smallvec), which is a
-/// specialized [`Vec`] backed by a small, inline, fixed-size array when there are ≤ 4 items stored.
+/// Alias to [`smallvec::SmallVec<[T; 3]>`](https://crates.io/crates/smallvec), which is a
+/// specialized [`Vec`] backed by a small, inline, fixed-size array when there are ≤ 3 items stored.
 ///
 /// # History
 ///
@@ -257,30 +270,30 @@ pub use module::NamespaceRef;
 /// and orangutans and breakfast cereals and fruit bats and large chu...
 ///
 /// And the Lord spake, saying, "First shalt thou depend on the [`smallvec`](https://crates.io/crates/smallvec) crate.
-/// Then, shalt thou keep four inline. No more. No less. Four shalt be the number thou shalt keep inline,
-/// and the number to keep inline shalt be four. Five shalt thou not keep inline, nor either keep inline
-/// thou two or three, excepting that thou then proceed to four. Six is right out. Once the number four,
-/// being the forth number, be reached, then, lobbest thou thy `SmallVec` towards thy heap, who,
+/// Then, shalt thou keep three inline. No more. No less. Three shalt be the number thou shalt keep inline,
+/// and the number to keep inline shalt be three. Four shalt thou not keep inline, nor either keep inline
+/// thou two, excepting that thou then proceed to three. Five is right out. Once the number three,
+/// being the third number, be reached, then, lobbest thou thy `SmallVec` towards thy heap, who,
 /// being slow and cache-naughty in My sight, shall snuff it."
 ///
-/// # Explanation on the Number Four
+/// # Why Three
 ///
 /// `StaticVec` is used frequently to keep small lists of items in inline (non-heap) storage in
 /// order to improve cache friendliness and reduce indirections.
 ///
-/// The number 4, other than being the holy number, is carefully chosen for a balance between
+/// The number 3, other than being the holy number, is carefully chosen for a balance between
 /// storage space and reduce allocations. That is because most function calls (and most functions,
-/// in that matter) contain fewer than 5 arguments, the exception being closures that capture a
+/// for that matter) contain fewer than 4 arguments, the exception being closures that capture a
 /// large number of external variables.
 ///
-/// In addition, most script blocks either contain many statements, or just a few lines;
-/// most scripts load fewer than 5 external modules; most module paths contain fewer than 5 levels
-/// (e.g. `std::collections::map::HashMap` is 4 levels, and that's already quite long).
+/// In addition, most script blocks either contain many statements, or just one or two lines;
+/// most scripts load fewer than 4 external modules; most module paths contain fewer than 4 levels
+/// (e.g. `std::collections::map::HashMap` is 4 levels and it is just about as long as they get).
 #[cfg(not(feature = "internals"))]
-type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
+type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 
-/// _(internals)_ Alias to [`smallvec`](https://crates.io/crates/smallvec), which is a specialized
-/// [`Vec`] backed by a small, inline, fixed-size array when there are ≤ 4 items stored.
+/// _(internals)_ Alias to [`smallvec::SmallVec<[T; 3]>`](https://crates.io/crates/smallvec),
+/// which is a [`Vec`] backed by a small, inline, fixed-size array when there are ≤ 3 items stored.
 /// Exported under the `internals` feature only.
 ///
 /// # History
@@ -292,30 +305,30 @@ type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
 /// and orangutans and breakfast cereals and fruit bats and large chu...
 ///
 /// And the Lord spake, saying, "First shalt thou depend on the [`smallvec`](https://crates.io/crates/smallvec) crate.
-/// Then, shalt thou keep four inline. No more. No less. Four shalt be the number thou shalt keep inline,
-/// and the number to keep inline shalt be four. Five shalt thou not keep inline, nor either keep inline
-/// thou two or three, excepting that thou then proceed to four. Six is right out. Once the number four,
-/// being the forth number, be reached, then, lobbest thou thy `SmallVec` towards thy heap, who,
+/// Then, shalt thou keep three inline. No more. No less. Three shalt be the number thou shalt keep inline,
+/// and the number to keep inline shalt be three. Four shalt thou not keep inline, nor either keep inline
+/// thou two, excepting that thou then proceed to three. Five is right out. Once the number three,
+/// being the third number, be reached, then, lobbest thou thy `SmallVec` towards thy heap, who,
 /// being slow and cache-naughty in My sight, shall snuff it."
 ///
-/// # Explanation on the Number Four
+/// # Why Three
 ///
 /// `StaticVec` is used frequently to keep small lists of items in inline (non-heap) storage in
 /// order to improve cache friendliness and reduce indirections.
 ///
-/// The number 4, other than being the holy number, is carefully chosen for a balance between
+/// The number 3, other than being the holy number, is carefully chosen for a balance between
 /// storage space and reduce allocations. That is because most function calls (and most functions,
-/// in that matter) contain fewer than 5 arguments, the exception being closures that capture a
+/// for that matter) contain fewer than 4 arguments, the exception being closures that capture a
 /// large number of external variables.
 ///
-/// In addition, most script blocks either contain many statements, or just a few lines;
-/// most scripts load fewer than 5 external modules; most module paths contain fewer than 5 levels
-/// (e.g. `std::collections::map::HashMap` is 4 levels, and that's already quite long).
+/// In addition, most script blocks either contain many statements, or just one or two lines;
+/// most scripts load fewer than 4 external modules; most module paths contain fewer than 4 levels
+/// (e.g. `std::collections::map::HashMap` is 4 levels and it is just about as long as they get).
 #[cfg(feature = "internals")]
-pub type StaticVec<T> = smallvec::SmallVec<[T; 4]>;
+pub type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 
 #[cfg(not(feature = "no_smartstring"))]
-pub(crate) type SmartString = smartstring::SmartString<smartstring::Compact>;
+pub(crate) type SmartString = smartstring::SmartString<smartstring::LazyCompact>;
 
 #[cfg(feature = "no_smartstring")]
 pub(crate) type SmartString = String;
@@ -324,24 +337,32 @@ pub(crate) type SmartString = String;
 
 #[cfg(feature = "no_float")]
 #[cfg(feature = "f32_float")]
-compile_error!("'f32_float' cannot be used with 'no_float'");
+compile_error!("`f32_float` cannot be used with `no_float`");
+
+#[cfg(feature = "only_i32")]
+#[cfg(feature = "only_i64")]
+compile_error!("`only_i32` and `only_i64` cannot be used together");
 
 #[cfg(feature = "no_std")]
 #[cfg(feature = "wasm-bindgen")]
-compile_error!("'wasm-bindgen' cannot be used with 'no-std'");
+compile_error!("`wasm-bindgen` cannot be used with `no-std`");
 
 #[cfg(feature = "no_std")]
 #[cfg(feature = "stdweb")]
-compile_error!("'stdweb' cannot be used with 'no-std'");
+compile_error!("`stdweb` cannot be used with `no-std`");
 
 #[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
 #[cfg(feature = "no_std")]
-compile_error!("'no_std' cannot be used for WASM target");
+compile_error!("`no_std` cannot be used for WASM target");
 
 #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 #[cfg(feature = "wasm-bindgen")]
-compile_error!("'wasm-bindgen' should not be used non-WASM target");
+compile_error!("`wasm-bindgen` cannot be used for non-WASM target");
 
 #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 #[cfg(feature = "stdweb")]
-compile_error!("'stdweb' should not be used non-WASM target");
+compile_error!("`stdweb` cannot be used non-WASM target");
+
+#[cfg(feature = "wasm-bindgen")]
+#[cfg(feature = "stdweb")]
+compile_error!("`wasm-bindgen` and `stdweb` cannot be used together");
