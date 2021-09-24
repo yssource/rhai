@@ -4,6 +4,7 @@ use crate::engine::{
     Precedence, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
+use crate::fn_native::OnParseTokenCallback;
 use crate::{Engine, LexError, StaticVec, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -2123,12 +2124,12 @@ pub struct TokenIterator<'a> {
     pub state: TokenizeState,
     /// Current position.
     pub pos: Position,
-    /// External buffer containing the next character to read, if any.
+    /// Shared object to allow controlling the tokenizer externally.
     pub tokenizer_control: TokenizerControl,
     /// Input character stream.
     pub stream: MultiInputsStream<'a>,
     /// A processor function that maps a token to another.
-    pub map: Option<fn(Token) -> Token>,
+    pub token_mapper: Option<&'a OnParseTokenCallback>,
 }
 
 impl<'a> Iterator for TokenIterator<'a> {
@@ -2222,7 +2223,7 @@ impl<'a> Iterator for TokenIterator<'a> {
         };
 
         // Run the mapper, if any
-        let token = if let Some(map_func) = self.map {
+        let token = if let Some(map_func) = self.token_mapper {
             map_func(token)
         } else {
             token
@@ -2254,9 +2255,9 @@ impl Engine {
     pub fn lex_with_map<'a>(
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
-        map: fn(Token) -> Token,
+        token_mapper: &'a OnParseTokenCallback,
     ) -> (TokenIterator<'a>, TokenizerControl) {
-        self.lex_raw(input, Some(map))
+        self.lex_raw(input, Some(token_mapper))
     }
     /// Tokenize an input text stream with an optional mapping function.
     #[inline]
@@ -2264,7 +2265,7 @@ impl Engine {
     pub(crate) fn lex_raw<'a>(
         &'a self,
         input: impl IntoIterator<Item = &'a &'a str>,
-        map: Option<fn(Token) -> Token>,
+        token_mapper: Option<&'a OnParseTokenCallback>,
     ) -> (TokenIterator<'a>, TokenizerControl) {
         let buffer: TokenizerControl = Default::default();
         let buffer2 = buffer.clone();
@@ -2289,7 +2290,7 @@ impl Engine {
                     streams: input.into_iter().map(|s| s.chars().peekable()).collect(),
                     index: 0,
                 },
-                map,
+                token_mapper,
             },
             buffer2,
         )

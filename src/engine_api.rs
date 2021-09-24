@@ -1181,7 +1181,8 @@ impl Engine {
         scripts: &[&str],
         optimization_level: OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let (stream, tokenizer_control) = self.lex_raw(scripts, None);
+        let (stream, tokenizer_control) =
+            self.lex_raw(scripts, self.token_mapper.as_ref().map(Box::as_ref));
         let mut state = ParseState::new(self, tokenizer_control);
         self.parse(
             &mut stream.peekable(),
@@ -1368,13 +1369,13 @@ impl Engine {
             let (stream, tokenizer_control) = engine.lex_raw(
                 &scripts,
                 Some(if has_null {
-                    |token| match token {
+                    &|token| match token {
                         // If `null` is present, make sure `null` is treated as a variable
                         Token::Reserved(s) if s == "null" => Token::Identifier(s),
                         _ => token,
                     }
                 } else {
-                    |t| t
+                    &|t| t
                 }),
             );
             let mut state = ParseState::new(engine, tokenizer_control);
@@ -1462,7 +1463,8 @@ impl Engine {
         script: &str,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
-        let (stream, tokenizer_control) = self.lex_raw(&scripts, None);
+        let (stream, tokenizer_control) =
+            self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
 
         let mut peekable = stream.peekable();
         let mut state = ParseState::new(self, tokenizer_control);
@@ -1624,7 +1626,8 @@ impl Engine {
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
         let scripts = [script];
-        let (stream, tokenizer_control) = self.lex_raw(&scripts, None);
+        let (stream, tokenizer_control) =
+            self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
         let mut state = ParseState::new(self, tokenizer_control);
 
         // No need to optimize a lone expression
@@ -1769,7 +1772,8 @@ impl Engine {
         script: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let scripts = [script];
-        let (stream, tokenizer_control) = self.lex_raw(&scripts, None);
+        let (stream, tokenizer_control) =
+            self.lex_raw(&scripts, self.token_mapper.as_ref().map(Box::as_ref));
         let mut state = ParseState::new(self, tokenizer_control);
 
         let ast = self.parse(
@@ -2112,6 +2116,46 @@ impl Engine {
             + 'static,
     ) -> &mut Self {
         self.resolve_var = Some(Box::new(callback));
+        self
+    }
+    /// _(internals)_ Provide a callback that will be invoked during parsing to remap certain tokens.
+    /// Exported under the `internals` feature only.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::{Engine, Token};
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Register a token mapper.
+    /// engine.on_parse_token(|token| {
+    ///     match token {
+    ///         // Convert all integer literals to strings
+    ///         Token::IntegerConstant(n) => Token::StringConstant(n.to_string()),
+    ///         // Convert 'begin' .. 'end' to '{' .. '}'
+    ///         Token::Identifier(s) if &s == "begin" => Token::LeftBrace,
+    ///         Token::Identifier(s) if &s == "end" => Token::RightBrace,
+    ///         // Pass through all other tokens unchanged
+    ///         _ => token
+    ///     }
+    /// });
+    ///
+    /// assert_eq!(engine.eval::<String>("42")?, "42");
+    /// assert_eq!(engine.eval::<bool>("true")?, true);
+    /// assert_eq!(engine.eval::<String>("let x = 42; begin let x = 0; end; x")?, "42");
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    pub fn on_parse_token(
+        &mut self,
+        callback: impl Fn(crate::token::Token) -> crate::token::Token + SendSync + 'static,
+    ) -> &mut Self {
+        self.token_mapper = Some(Box::new(callback));
         self
     }
     /// Register a callback for script evaluation progress.

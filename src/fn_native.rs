@@ -4,6 +4,7 @@ use crate::ast::{FnAccess, FnCallHashes};
 use crate::engine::Imports;
 use crate::fn_call::FnCallArgs;
 use crate::plugin::PluginFunction;
+use crate::token::Token;
 use crate::{
     calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, Module, Position, RhaiResult,
 };
@@ -306,6 +307,13 @@ pub type OnDebugCallback = Box<dyn Fn(&str, Option<&str>, Position) + 'static>;
 /// A standard callback function for debugging.
 #[cfg(feature = "sync")]
 pub type OnDebugCallback = Box<dyn Fn(&str, Option<&str>, Position) + Send + Sync + 'static>;
+
+/// A standard callback function for mapping tokens during parsing.
+#[cfg(not(feature = "sync"))]
+pub type OnParseTokenCallback = dyn Fn(Token) -> Token;
+/// A standard callback function for mapping tokens during parsing.
+#[cfg(feature = "sync")]
+pub type OnParseTokenCallback = dyn Fn(Token) -> Token + Send + Sync + 'static;
 
 /// A standard callback function for variable access.
 #[cfg(not(feature = "sync"))]

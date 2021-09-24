@@ -5,7 +5,8 @@ use crate::custom_syntax::CustomSyntax;
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_hash::get_hasher;
 use crate::fn_native::{
-    CallableFunction, IteratorFn, OnDebugCallback, OnPrintCallback, OnVarCallback,
+    CallableFunction, IteratorFn, OnDebugCallback, OnParseTokenCallback, OnPrintCallback,
+    OnVarCallback,
 };
 use crate::module::NamespaceRef;
 use crate::optimize::OptimizationLevel;
@@ -921,6 +922,8 @@ pub struct Engine {
     pub(crate) custom_syntax: BTreeMap<Identifier, Box<CustomSyntax>>,
     /// Callback closure for resolving variable access.
     pub(crate) resolve_var: Option<OnVarCallback>,
+    /// Callback closure to remap tokens during parsing.
+    pub(crate) token_mapper: Option<Box<OnParseTokenCallback>>,
 
     /// Callback closure for implementing the `print` command.
     pub(crate) print: Option<OnPrintCallback>,
@@ -1045,6 +1048,7 @@ impl Engine {
             custom_syntax: Default::default(),
 
             resolve_var: None,
+            token_mapper: None,
 
             print: None,
             debug: None,
