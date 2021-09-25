@@ -2080,12 +2080,28 @@ impl Engine {
     }
     /// Provide a callback that will be invoked before each variable access.
     ///
-    /// # Return Value of Callback
+    /// # Callback Function Signature
     ///
-    /// Return `Ok(None)` to continue with normal variable access.  
-    /// Return `Ok(Some(Dynamic))` as the variable's value.
+    /// The callback function signature takes the following form:
     ///
-    /// # Errors in Callback
+    /// > `Fn(name: &str, index: usize, context: &EvalContext)`  
+    /// > `   -> Result<Option<Dynamic>, Box<EvalAltResult>> + 'static`
+    ///
+    /// where:
+    /// * `index`: an offset from the bottom of the current [`Scope`] that the variable is supposed
+    ///   to reside. Offsets start from 1, with 1 meaning the last variable in the current
+    ///   [`Scope`].  Essentially the correct variable is at position `scope.len() - index`.
+    ///   If `index` is zero, then there is no pre-calculated offset position and a search through the
+    ///   current [`Scope`] must be performed.
+    ///
+    /// * `context`: the current [evaluation context][`EvalContext`].
+    ///
+    /// ## Return value
+    ///
+    /// * `Ok(None)`: continue with normal variable access.
+    /// * `Ok(Some(Dynamic))`: the variable's value.
+    ///
+    /// ## Raising errors
     ///
     /// Return `Err(...)` if there is an error.
     ///
@@ -2122,6 +2138,22 @@ impl Engine {
     }
     /// _(internals)_ Provide a callback that will be invoked during parsing to remap certain tokens.
     /// Exported under the `internals` feature only.
+    ///
+    /// # Callback Function Signature
+    ///
+    /// The callback function signature takes the following form:
+    ///
+    /// > `Fn(token: Token, pos: Position, state: &TokenizeState) -> Token`
+    ///
+    /// where:
+    /// * [`token`][crate::token::Token]: current token parsed
+    /// * [`pos`][`Position`]: location of the token
+    /// * [`state`][crate::token::TokenizeState]: current state of the tokenizer
+    ///
+    /// ## Raising errors
+    ///
+    /// It is possible to raise a parsing error by returning
+    /// [`Token::LexError`][crate::token::Token::LexError] as the mapped token.
     ///
     /// # Example
     ///
@@ -2167,6 +2199,17 @@ impl Engine {
     /// Register a callback for script evaluation progress.
     ///
     /// Not available under `unchecked`.
+    ///
+    /// # Callback Function Signature
+    ///
+    /// The callback function signature takes the following form:
+    ///
+    /// > `Fn(counter: u64) -> Option<Dynamic>`
+    ///
+    /// ## Return value
+    ///
+    /// * `None`: continue running the script.
+    /// * `Some(Dynamic)`: terminate the script with the specified exception value.
     ///
     /// # Example
     ///
@@ -2239,6 +2282,17 @@ impl Engine {
         self
     }
     /// Override default action of `debug` (print to stdout using [`println!`])
+    ///
+    /// # Callback Function Signature
+    ///
+    /// The callback function signature passed takes the following form:
+    ///
+    /// > `Fn(text: &str, source: Option<&str>, pos: Position)`
+    ///
+    /// where:
+    /// * `text`: the text to display
+    /// * `source`: current source, if any
+    /// * [`pos`][`Position`]: location of the `debug` call
     ///
     /// # Example
     ///
