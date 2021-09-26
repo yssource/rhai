@@ -2090,7 +2090,7 @@ impl Engine {
             // `... ${...} ...`
             Expr::InterpolatedString(x, pos) => {
                 let mut pos = *pos;
-                let mut result: Dynamic = self.const_empty_string().clone().into();
+                let mut result: Dynamic = self.const_empty_string().into();
 
                 for expr in x.iter() {
                     let item = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
@@ -3041,7 +3041,9 @@ impl Engine {
         match result {
             // Concentrate all empty strings into one instance to save memory
             #[cfg(feature = "no_closure")]
-            Ok(r) if r.as_str_ref().map_or(false, &str::is_empty) => Ok(self.empty_string().into()),
+            Ok(r) if r.as_str_ref().map_or(false, &str::is_empty) => {
+                Ok(self.const_empty_string().into())
+            }
             // Concentrate all empty strings into one instance to save memory
             #[cfg(not(feature = "no_closure"))]
             Ok(r) if !r.is_shared() && r.as_str_ref().map_or(false, &str::is_empty) => {
