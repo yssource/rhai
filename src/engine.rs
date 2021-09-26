@@ -796,8 +796,10 @@ pub struct GlobalConstants {
     /// An empty [`ImmutableString`] for cloning purposes.
     pub(crate) empty_string: ImmutableString,
     /// Function call hash to FN_IDX_GET
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     pub(crate) fn_hash_idx_get: u64,
     /// Function call hash to FN_IDX_SET
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     pub(crate) fn_hash_idx_set: u64,
 }
 
@@ -805,7 +807,9 @@ impl Default for GlobalConstants {
     fn default() -> Self {
         Self {
             empty_string: Default::default(),
+            #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
             fn_hash_idx_get: calc_fn_hash(FN_IDX_GET, 2),
+            #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
             fn_hash_idx_set: calc_fn_hash(FN_IDX_SET, 3),
         }
     }
