@@ -126,7 +126,7 @@ mod string_functions {
         len: INT,
     ) -> ImmutableString {
         if string.is_empty() || len <= 0 {
-            return ctx.engine().empty_string.clone();
+            return ctx.engine().empty_string().clone();
         }
 
         let mut chars = StaticVec::<char>::with_capacity(len as usize);
@@ -305,13 +305,13 @@ mod string_functions {
         len: INT,
     ) -> ImmutableString {
         if string.is_empty() {
-            return ctx.engine().empty_string.clone();
+            return ctx.engine().empty_string().clone();
         }
 
         let mut chars = StaticVec::with_capacity(string.len());
 
         let offset = if string.is_empty() || len <= 0 {
-            return ctx.engine().empty_string.clone();
+            return ctx.engine().empty_string().clone();
         } else if start < 0 {
             if let Some(n) = start.checked_abs() {
                 chars.extend(string.chars());
@@ -324,7 +324,7 @@ mod string_functions {
                 0
             }
         } else if start as usize >= string.chars().count() {
-            return ctx.engine().empty_string.clone();
+            return ctx.engine().empty_string().clone();
         } else {
             start as usize
         };
@@ -354,7 +354,7 @@ mod string_functions {
         start: INT,
     ) -> ImmutableString {
         if string.is_empty() {
-            ctx.engine().empty_string.clone()
+            ctx.engine().empty_string().clone()
         } else {
             let len = string.len() as INT;
             sub_string(ctx, string, start, len)
@@ -571,14 +571,14 @@ mod string_functions {
                 if let Some(n) = start.checked_abs() {
                     let num_chars = string.chars().count();
                     if n as usize > num_chars {
-                        vec![ctx.engine().empty_string.clone().into(), string.into()]
+                        vec![ctx.engine().empty_string().clone().into(), string.into()]
                     } else {
                         let prefix: String = string.chars().take(num_chars - n as usize).collect();
                         let prefix_len = prefix.len();
                         vec![prefix.into(), string[prefix_len..].into()]
                     }
                 } else {
-                    vec![ctx.engine().empty_string.clone().into(), string.into()]
+                    vec![ctx.engine().empty_string().clone().into(), string.into()]
                 }
             } else {
                 let prefix: String = string.chars().take(start as usize).collect();

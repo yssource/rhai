@@ -3,7 +3,7 @@
 use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::custom_syntax::CustomSyntax;
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
-use crate::fn_hash::get_hasher;
+use crate::fn_hash::{calc_fn_hash, get_hasher};
 use crate::fn_native::{
     CallableFunction, IteratorFn, OnDebugCallback, OnParseTokenCallback, OnPrintCallback,
     OnVarCallback,
@@ -790,6 +790,27 @@ impl Default for Limits {
     }
 }
 
+/// A type containing useful constants for the [`Engine`].
+#[derive(Debug)]
+pub struct GlobalConstants {
+    /// An empty [`ImmutableString`] for cloning purposes.
+    pub(crate) empty_string: ImmutableString,
+    /// Function call hash to FN_IDX_GET
+    pub(crate) fn_hash_idx_get: u64,
+    /// Function call hash to FN_IDX_SET
+    pub(crate) fn_hash_idx_set: u64,
+}
+
+impl Default for GlobalConstants {
+    fn default() -> Self {
+        Self {
+            empty_string: Default::default(),
+            fn_hash_idx_get: calc_fn_hash(FN_IDX_GET, 2),
+            fn_hash_idx_set: calc_fn_hash(FN_IDX_SET, 3),
+        }
+    }
+}
+
 /// Context of a script evaluation process.
 #[derive(Debug)]
 pub struct EvalContext<'a, 'x, 'px, 'm, 's, 'b, 't, 'pt> {
@@ -911,8 +932,8 @@ pub struct Engine {
     /// A map mapping type names to pretty-print names.
     pub(crate) type_names: BTreeMap<Identifier, Box<Identifier>>,
 
-    /// An empty [`ImmutableString`] for cloning purposes.
-    pub(crate) empty_string: ImmutableString,
+    /// Useful constants
+    pub(crate) constants: GlobalConstants,
 
     /// A set of symbols to disable.
     pub(crate) disabled_symbols: BTreeSet<Identifier>,
@@ -1042,7 +1063,7 @@ impl Engine {
             module_resolver: None,
 
             type_names: Default::default(),
-            empty_string: Default::default(),
+            constants: Default::default(),
             disabled_symbols: Default::default(),
             custom_keywords: Default::default(),
             custom_syntax: Default::default(),
@@ -1068,6 +1089,13 @@ impl Engine {
         engine.global_modules.push(global_namespace.into());
 
         engine
+    }
+
+    /// Get an empty [`ImmutableString`].
+    #[inline(always)]
+    #[must_use]
+    pub fn empty_string(&self) -> ImmutableString {
+        self.constants.empty_string.clone()
     }
 
     /// Search for a module within an imports stack.
@@ -1294,7 +1322,7 @@ impl Engine {
                         if let Some(mut new_val) = try_setter {
                             // Try to call index setter
                             let hash_set =
-                                FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_SET, 3));
+                                FnCallHashes::from_native(self.constants.fn_hash_idx_set);
                             let args = &mut [target, &mut idx_val_for_setter, &mut new_val];
                             let pos = Position::NONE;
 
@@ -1427,7 +1455,7 @@ impl Engine {
                             EvalAltResult::ErrorDotExpr(_, _) => {
                                 let args = &mut [target, &mut name.into(), &mut new_val];
                                 let hash_set =
-                                    FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_SET, 3));
+                                    FnCallHashes::from_native(self.constants.fn_hash_idx_set);
                                 let pos = Position::NONE;
 
                                 self.exec_fn_call(
@@ -1583,7 +1611,7 @@ impl Engine {
                                                 let args =
                                                     &mut [target.as_mut(), &mut name.into(), val];
                                                 let hash_set = FnCallHashes::from_native(
-                                                    crate::calc_fn_hash(FN_IDX_SET, 3),
+                                                    self.constants.fn_hash_idx_set,
                                                 );
                                                 self.exec_fn_call(
                                                     mods, state, lib, FN_IDX_SET, hash_set, args,
@@ -1987,7 +2015,7 @@ impl Engine {
 
             _ if use_indexers => {
                 let args = &mut [target, &mut idx];
-                let hash_get = FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_GET, 2));
+                let hash_get = FnCallHashes::from_native(self.constants.fn_hash_idx_get);
                 let idx_pos = Position::NONE;
 
                 self.exec_fn_call(
@@ -2059,7 +2087,7 @@ impl Engine {
             // `... ${...} ...`
             Expr::InterpolatedString(x, pos) => {
                 let mut pos = *pos;
-                let mut result: Dynamic = self.empty_string.clone().into();
+                let mut result: Dynamic = self.empty_string().clone().into();
 
                 for expr in x.iter() {
                     let item = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
@@ -3006,17 +3034,22 @@ impl Engine {
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
-    #[cfg(feature = "unchecked")]
-    #[inline(always)]
     fn check_return_value(&self, result: RhaiResult) -> RhaiResult {
-        result
-    }
-
-    /// Check a result to ensure that the data size is within allowable limit.
-    #[cfg(not(feature = "unchecked"))]
-    #[inline(always)]
-    fn check_return_value(&self, result: RhaiResult) -> RhaiResult {
-        result.and_then(|r| self.check_data_size(&r).map(|_| r))
+        match result {
+            // Concentrate all empty strings into one instance to save memory
+            #[cfg(feature = "no_closure")]
+            Ok(r) if r.as_str_ref().map_or(false, &str::is_empty) => Ok(self.empty_string().into()),
+            // Concentrate all empty strings into one instance to save memory
+            #[cfg(not(feature = "no_closure"))]
+            Ok(r) if !r.is_shared() && r.as_str_ref().map_or(false, &str::is_empty) => {
+                Ok(self.empty_string().into())
+            }
+            // Check data sizes
+            #[cfg(not(feature = "unchecked"))]
+            Ok(r) => self.check_data_size(&r).map(|_| r),
+            // Return all other results
+            _ => result,
+        }
     }
 
     #[cfg(feature = "unchecked")]

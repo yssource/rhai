@@ -1877,7 +1877,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Cast the [`Dynamic`] as an [`ImmutableString`] and return it.
+    /// Cast the [`Dynamic`] as an [`ImmutableString`] and return it as a string slice.
     /// Returns the name of the actual type if the cast fails.
     ///
     /// # Panics
@@ -1888,7 +1888,7 @@ impl Dynamic {
         match self.0 {
             Union::Str(ref s, _, _) => Ok(s),
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_, _, _) => panic!("as_str() cannot be called on shared values"),
+            Union::Shared(_, _, _) => panic!("as_str_ref() cannot be called on shared values"),
             _ => Err(self.type_name()),
         }
     }
