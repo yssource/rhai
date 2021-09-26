@@ -822,7 +822,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
         // ``
         Expr::InterpolatedString(x, pos) if x.is_empty() => {
             state.set_dirty();
-            *expr = Expr::StringConstant(state.engine.empty_string().clone(), *pos);
+            *expr = Expr::StringConstant(state.engine.const_empty_string().clone(), *pos);
         }
         // `...`
         Expr::InterpolatedString(x, _) if x.len() == 1 && matches!(x[0], Expr::StringConstant(_, _)) => {

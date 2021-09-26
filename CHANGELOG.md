@@ -19,6 +19,7 @@ Enhancements
 * `Engine::consume_XXX` methods are renamed to `Engine::run_XXX` to make meanings clearer. The `consume_XXX` API is deprecated.
 * `Engine::register_type_XXX` are now available even under `no_object`.
 * Added `Engine::on_parse_token` to allow remapping certain tokens during parsing.
+* Added `Engine::const_empty_string` to merge empty strings into a single instance.
 
 ### Custom Syntax
 

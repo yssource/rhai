@@ -1092,9 +1092,12 @@ impl Engine {
     }
 
     /// Get an empty [`ImmutableString`].
+    ///
+    /// [`Engine`] keeps a single instance of an empty [`ImmutableString`] and uses this to create
+    /// shared instances for subsequent uses. This minimizes unnecessary allocations for empty strings.
     #[inline(always)]
     #[must_use]
-    pub fn empty_string(&self) -> ImmutableString {
+    pub fn const_empty_string(&self) -> ImmutableString {
         self.constants.empty_string.clone()
     }
 
@@ -2087,7 +2090,7 @@ impl Engine {
             // `... ${...} ...`
             Expr::InterpolatedString(x, pos) => {
                 let mut pos = *pos;
-                let mut result: Dynamic = self.empty_string().clone().into();
+                let mut result: Dynamic = self.const_empty_string().clone().into();
 
                 for expr in x.iter() {
                     let item = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
@@ -3042,7 +3045,7 @@ impl Engine {
             // Concentrate all empty strings into one instance to save memory
             #[cfg(not(feature = "no_closure"))]
             Ok(r) if !r.is_shared() && r.as_str_ref().map_or(false, &str::is_empty) => {
-                Ok(self.empty_string().into())
+                Ok(self.const_empty_string().into())
             }
             // Check data sizes
             #[cfg(not(feature = "unchecked"))]
