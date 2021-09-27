@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_object"))]
 
-use rhai::{Engine, EvalAltResult, INT};
+use rhai::{Engine, EvalAltResult, Scope, INT};
 
 #[test]
 fn test_get_set() -> Result<(), Box<EvalAltResult>> {
@@ -70,7 +70,7 @@ fn test_get_set() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
-fn test_get_set_chain() -> Result<(), Box<EvalAltResult>> {
+fn test_get_set_chain_with_write_back() -> Result<(), Box<EvalAltResult>> {
     #[derive(Clone)]
     struct TestChild {
         x: INT,
@@ -121,9 +121,10 @@ fn test_get_set_chain() -> Result<(), Box<EvalAltResult>> {
 
     engine.register_fn("new_tp", TestParent::new);
 
+    assert_eq!(engine.eval::<INT>("let a = new_tp(); a.child.x")?, 1);
     assert_eq!(
-        engine.eval::<INT>("let a = new_tp(); a.child.x = 500; a.child.x")?,
-        500
+        engine.eval::<INT>("let a = new_tp(); a.child.x = 42; a.child.x")?,
+        42
     );
 
     assert_eq!(
@@ -163,6 +164,51 @@ fn test_get_set_op_assignment() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<Num>("let a = new_ts(); a.v += 2; a")?,
         Num(42)
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_get_set_chain_without_write_back() -> Result<(), Box<EvalAltResult>> {
+    #[derive(Debug, Clone)]
+    struct Outer {
+        pub inner: Inner,
+    }
+
+    #[derive(Debug, Clone)]
+    struct Inner {
+        pub value: INT,
+    }
+
+    let mut engine = Engine::new();
+    let mut scope = Scope::new();
+
+    scope.push(
+        "outer",
+        Outer {
+            inner: Inner { value: 42 },
+        },
+    );
+
+    engine
+        .register_type::<Inner>()
+        .register_get_set(
+            "value",
+            |t: &mut Inner| t.value,
+            |_: &mut Inner, new: INT| panic!("Inner::value setter called with {}", new),
+        )
+        .register_type::<Outer>()
+        .register_get_set(
+            "inner",
+            |t: &mut Outer| t.inner.clone(),
+            |_: &mut Outer, new: Inner| panic!("Outer::inner setter called with {:?}", new),
+        );
+
+    assert_eq!(
+        engine.eval_with_scope::<INT>(&mut scope, "outer.inner.value")?,
+        42
+    );
+    engine.consume_with_scope(&mut scope, "print(outer.inner.value)")?;
 
     Ok(())
 }

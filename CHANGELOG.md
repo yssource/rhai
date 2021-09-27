@@ -61,6 +61,14 @@ Enhancements
 Version 1.0.6
 =============
 
+Bug fixes
+---------
+
+* Eliminate unnecessary property write-back when accessed via a getter since property getters are assumed to be _pure_.
+
+Enhancements
+------------
+
 * `MultiInputsStream`, `ParseState`, `TokenIterator`, `IdentifierBuilder` and `AccessMode` are exported under the `internals` feature.
 
 
