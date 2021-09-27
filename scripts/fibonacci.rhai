@@ -3,6 +3,7 @@
 
 const TARGET = 28;
 const REPEAT = 5;
+const ANSWER = 317_811;
 
 fn fib(n) {
     if n < 2 {
@@ -26,6 +27,6 @@ print(`Finished. Run time = ${now.elapsed} seconds.`);
 
 print(`Fibonacci number #${TARGET} = ${result}`);
 
-if result != 317_811 {
-    print("The answer is WRONG! Should be 317,811!");
+if result != ANSWER {
+    print(`The answer is WRONG! Should be ${ANSWER}!`);
 }
