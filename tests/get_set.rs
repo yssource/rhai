@@ -208,7 +208,7 @@ fn test_get_set_chain_without_write_back() -> Result<(), Box<EvalAltResult>> {
         engine.eval_with_scope::<INT>(&mut scope, "outer.inner.value")?,
         42
     );
-    engine.consume_with_scope(&mut scope, "print(outer.inner.value)")?;
+    engine.run_with_scope(&mut scope, "print(outer.inner.value)")?;
 
     Ok(())
 }
