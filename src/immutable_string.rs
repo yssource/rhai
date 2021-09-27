@@ -538,4 +538,27 @@ impl ImmutableString {
     pub(crate) fn make_mut(&mut self) -> &mut SmartString {
         shared_make_mut(&mut self.0)
     }
+    /// Returns `true` if the two [`ImmutableString`]'s point to the same allocation.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rhai::ImmutableString;
+    ///
+    /// let s1: ImmutableString = "hello".into();
+    /// let s2 = s1.clone();
+    /// let s3: ImmutableString = "hello".into();
+    ///
+    /// assert_eq!(s1, s2);
+    /// assert_eq!(s1, s3);
+    /// assert_eq!(s2, s3);
+    ///
+    /// assert!(s1.ptr_eq(&s2));
+    /// assert!(!s1.ptr_eq(&s3));
+    /// assert!(!s2.ptr_eq(&s3));
+    /// ```
+    #[inline(always)]
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        Shared::ptr_eq(&self.0, &other.0)
+    }
 }

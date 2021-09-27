@@ -3044,24 +3044,23 @@ impl Engine {
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
-    fn check_return_value(&self, result: RhaiResult) -> RhaiResult {
-        match result {
+    fn check_return_value(&self, mut result: RhaiResult) -> RhaiResult {
+        if let Ok(ref mut r) = result {
             // Concentrate all empty strings into one instance to save memory
-            #[cfg(feature = "no_closure")]
-            Ok(r) if r.as_str_ref().map_or(false, &str::is_empty) => {
-                Ok(self.const_empty_string().into())
+            if let Dynamic(crate::dynamic::Union::Str(s, _, _)) = r {
+                if s.is_empty() {
+                    if !s.ptr_eq(&self.constants.empty_string) {
+                        *s = self.const_empty_string();
+                    }
+                    return result;
+                }
             }
-            // Concentrate all empty strings into one instance to save memory
-            #[cfg(not(feature = "no_closure"))]
-            Ok(r) if !r.is_shared() && r.as_str_ref().map_or(false, &str::is_empty) => {
-                Ok(self.const_empty_string().into())
-            }
-            // Check data sizes
+
             #[cfg(not(feature = "unchecked"))]
-            Ok(r) => self.check_data_size(&r).map(|_| r),
-            // Return all other results
-            _ => result,
+            self.check_data_size(&r)?;
         }
+
+        result
     }
 
     #[cfg(feature = "unchecked")]
