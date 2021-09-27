@@ -1480,6 +1480,7 @@ impl Engine {
                                 }
                                 _ => Err(err),
                             },
+                            // Assume getters are always pure
                             |(v, _)| Ok((v, false)),
                         )
                     }
@@ -1533,7 +1534,9 @@ impl Engine {
                                 let hash_set = FnCallHashes::from_native(*hash_set);
                                 let mut arg_values = [target.as_mut(), &mut Default::default()];
                                 let args = &mut arg_values[..1];
-                                let (mut val, updated) = self
+
+                                // Assume getters are always pure
+                                let (mut val, _) = self
                                     .exec_fn_call(
                                         mods, state, lib, getter, hash_get, args, is_ref_mut, true,
                                         *pos, None, level,
@@ -1577,7 +1580,7 @@ impl Engine {
                                     .map_err(|err| err.fill_position(*x_pos))?;
 
                                 // Feed the value back via a setter just in case it has been updated
-                                if updated || may_be_changed {
+                                if may_be_changed {
                                     // Re-use args because the first &mut parameter will not be consumed
                                     let mut arg_values = [target.as_mut(), val];
                                     let args = &mut arg_values;
