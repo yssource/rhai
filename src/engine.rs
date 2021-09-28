@@ -338,6 +338,7 @@ impl ChainArgument {
     /// Return the [position][Position].
     #[inline(always)]
     #[must_use]
+    #[allow(dead_code)]
     pub const fn position(&self) -> Position {
         match self {
             #[cfg(not(feature = "no_object"))]

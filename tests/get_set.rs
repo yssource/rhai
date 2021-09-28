@@ -224,25 +224,32 @@ fn test_get_set_chain_without_write_back() -> Result<(), Box<EvalAltResult>> {
             "inner",
             |t: &mut Outer| t.inner.clone(),
             |_: &mut Outer, new: Inner| panic!("Outer::inner setter called with {:?}", new),
-        )
-        .register_indexer_get_set(
-            |t: &mut Outer, n: INT| Inner {
-                value: t.inner.value * n,
-            },
-            |_: &mut Outer, n: INT, new: Inner| {
-                panic!("Outer::inner index setter called with {} and {:?}", n, new)
-            },
         );
+
+    #[cfg(not(feature = "no_index"))]
+    engine.register_indexer_get_set(
+        |t: &mut Outer, n: INT| Inner {
+            value: t.inner.value * n,
+        },
+        |_: &mut Outer, n: INT, new: Inner| {
+            panic!("Outer::inner index setter called with {} and {:?}", n, new)
+        },
+    );
 
     assert_eq!(
         engine.eval_with_scope::<INT>(&mut scope, "outer.inner.value")?,
         42
     );
+
+    #[cfg(not(feature = "no_index"))]
     assert_eq!(
         engine.eval_with_scope::<INT>(&mut scope, "outer[2].value")?,
         84
     );
+
     engine.consume_with_scope(&mut scope, "print(outer.inner.value)")?;
+
+    #[cfg(not(feature = "no_index"))]
     engine.consume_with_scope(&mut scope, "print(outer[0].value)")?;
 
     Ok(())
