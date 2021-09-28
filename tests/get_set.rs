@@ -119,7 +119,17 @@ fn test_get_set_chain_with_write_back() -> Result<(), Box<EvalAltResult>> {
     engine.register_get_set("x", TestChild::get_x, TestChild::set_x);
     engine.register_get_set("child", TestParent::get_child, TestParent::set_child);
 
+    #[cfg(not(feature = "no_index"))]
+    engine.register_indexer_get_set(
+        |parent: &mut TestParent, _: INT| parent.child.clone(),
+        |parent: &mut TestParent, n: INT, mut new_child: TestChild| {
+            new_child.x *= n;
+            parent.child = new_child;
+        },
+    );
+
     engine.register_fn("new_tp", TestParent::new);
+    engine.register_fn("new_tc", TestChild::new);
 
     assert_eq!(engine.eval::<INT>("let a = new_tp(); a.child.x")?, 1);
     assert_eq!(
@@ -130,6 +140,18 @@ fn test_get_set_chain_with_write_back() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval::<String>("let a = new_tp(); type_of(a)")?,
         "TestParent"
+    );
+
+    #[cfg(not(feature = "no_index"))]
+    assert_eq!(
+        engine.eval::<INT>("let a = new_tp(); let c = new_tc(); c.x = 123; a[2] = c; a.child.x")?,
+        246
+    );
+
+    #[cfg(not(feature = "no_index"))]
+    assert_eq!(
+        engine.eval::<INT>("let a = new_tp(); a[2].x = 42; a.child.x")?,
+        84
     );
 
     Ok(())
@@ -202,13 +224,26 @@ fn test_get_set_chain_without_write_back() -> Result<(), Box<EvalAltResult>> {
             "inner",
             |t: &mut Outer| t.inner.clone(),
             |_: &mut Outer, new: Inner| panic!("Outer::inner setter called with {:?}", new),
+        )
+        .register_indexer_get_set(
+            |t: &mut Outer, n: INT| Inner {
+                value: t.inner.value * n,
+            },
+            |_: &mut Outer, n: INT, new: Inner| {
+                panic!("Outer::inner index setter called with {} and {:?}", n, new)
+            },
         );
 
     assert_eq!(
         engine.eval_with_scope::<INT>(&mut scope, "outer.inner.value")?,
         42
     );
+    assert_eq!(
+        engine.eval_with_scope::<INT>(&mut scope, "outer[2].value")?,
+        84
+    );
     engine.consume_with_scope(&mut scope, "print(outer.inner.value)")?;
+    engine.consume_with_scope(&mut scope, "print(outer[0].value)")?;
 
     Ok(())
 }
