@@ -19,6 +19,7 @@ Enhancements
 * `Engine::consume_XXX` methods are renamed to `Engine::run_XXX` to make meanings clearer. The `consume_XXX` API is deprecated.
 * `Engine::register_type_XXX` are now available even under `no_object`.
 * Added `Engine::on_parse_token` to allow remapping certain tokens during parsing.
+* Added `Engine::const_empty_string` to merge empty strings into a single instance.
 
 ### Custom Syntax
 
@@ -42,6 +43,7 @@ Enhancements
 
 * `SmartString` now uses `LazyCompact` instead of `Compact` to minimize allocations.
 * Added `pop` for strings.
+* Added `ImmutableString::ptr_eq` to test if two strings point to the same allocation.
 
 ### `Scope` API
 
@@ -57,8 +59,21 @@ Enhancements
 * `StaticVec` is changed to keep three items inline instead of four.
 
 
+Version 1.0.7
+=============
+
+
 Version 1.0.6
 =============
+
+Bug fixes
+---------
+
+* Eliminate unnecessary property write-back when accessed via a getter since property getters are assumed to be _pure_.
+* Writing to a property of an indexed valued obtained via an indexer now works properly by writing back the changed value via an index setter.
+
+Enhancements
+------------
 
 * `MultiInputsStream`, `ParseState`, `TokenIterator`, `IdentifierBuilder` and `AccessMode` are exported under the `internals` feature.
 

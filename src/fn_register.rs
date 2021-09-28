@@ -44,9 +44,7 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
     if TypeId::of::<T>() == TypeId::of::<&str>() {
         // If T is `&str`, data must be `ImmutableString`, so map directly to it
         data.flatten_in_place();
-        let ref_str = data
-            .as_str_ref()
-            .expect("argument passed by value is not shared");
+        let ref_str = data.as_str_ref().expect("argument type is &str");
         let ref_t = unsafe { mem::transmute::<_, &T>(&ref_str) };
         ref_t.clone()
     } else if TypeId::of::<T>() == TypeId::of::<String>() {

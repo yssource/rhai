@@ -3,7 +3,7 @@
 use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::custom_syntax::CustomSyntax;
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
-use crate::fn_hash::get_hasher;
+use crate::fn_hash::{calc_fn_hash, get_hasher};
 use crate::fn_native::{
     CallableFunction, IteratorFn, OnDebugCallback, OnParseTokenCallback, OnPrintCallback,
     OnVarCallback,
@@ -334,6 +334,20 @@ impl ChainArgument {
         match self {
             Self::MethodCallArgs(values, pos) => Some((values, pos)),
             _ => None,
+        }
+    }
+    /// Return the [position][Position].
+    #[inline(always)]
+    #[must_use]
+    #[allow(dead_code)]
+    pub const fn position(&self) -> Position {
+        match self {
+            #[cfg(not(feature = "no_object"))]
+            ChainArgument::Property(pos) => *pos,
+            #[cfg(not(feature = "no_object"))]
+            ChainArgument::MethodCallArgs(_, pos) => *pos,
+            #[cfg(not(feature = "no_index"))]
+            ChainArgument::IndexValue(_, pos) => *pos,
         }
     }
 }
@@ -790,6 +804,31 @@ impl Default for Limits {
     }
 }
 
+/// A type containing useful constants for the [`Engine`].
+#[derive(Debug)]
+pub struct GlobalConstants {
+    /// An empty [`ImmutableString`] for cloning purposes.
+    pub(crate) empty_string: ImmutableString,
+    /// Function call hash to FN_IDX_GET
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+    pub(crate) fn_hash_idx_get: u64,
+    /// Function call hash to FN_IDX_SET
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+    pub(crate) fn_hash_idx_set: u64,
+}
+
+impl Default for GlobalConstants {
+    fn default() -> Self {
+        Self {
+            empty_string: Default::default(),
+            #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+            fn_hash_idx_get: calc_fn_hash(FN_IDX_GET, 2),
+            #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+            fn_hash_idx_set: calc_fn_hash(FN_IDX_SET, 3),
+        }
+    }
+}
+
 /// Context of a script evaluation process.
 #[derive(Debug)]
 pub struct EvalContext<'a, 'x, 'px, 'm, 's, 'b, 't, 'pt> {
@@ -911,8 +950,8 @@ pub struct Engine {
     /// A map mapping type names to pretty-print names.
     pub(crate) type_names: BTreeMap<Identifier, Box<Identifier>>,
 
-    /// An empty [`ImmutableString`] for cloning purposes.
-    pub(crate) empty_string: ImmutableString,
+    /// Useful constants
+    pub(crate) constants: GlobalConstants,
 
     /// A set of symbols to disable.
     pub(crate) disabled_symbols: BTreeSet<Identifier>,
@@ -1042,7 +1081,7 @@ impl Engine {
             module_resolver: None,
 
             type_names: Default::default(),
-            empty_string: Default::default(),
+            constants: Default::default(),
             disabled_symbols: Default::default(),
             custom_keywords: Default::default(),
             custom_syntax: Default::default(),
@@ -1068,6 +1107,16 @@ impl Engine {
         engine.global_modules.push(global_namespace.into());
 
         engine
+    }
+
+    /// Get an empty [`ImmutableString`].
+    ///
+    /// [`Engine`] keeps a single instance of an empty [`ImmutableString`] and uses this to create
+    /// shared instances for subsequent uses. This minimizes unnecessary allocations for empty strings.
+    #[inline(always)]
+    #[must_use]
+    pub fn const_empty_string(&self) -> ImmutableString {
+        self.constants.empty_string.clone()
     }
 
     /// Search for a module within an imports stack.
@@ -1244,6 +1293,7 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             ChainType::Indexing => {
                 let pos = rhs.position();
+                let root_pos = idx_val.position();
                 let idx_val = idx_val
                     .into_index_value()
                     .expect("`chain_type` is `ChainType::Index`");
@@ -1253,17 +1303,50 @@ impl Engine {
                     Expr::Dot(x, term, x_pos) | Expr::Index(x, term, x_pos)
                         if !_terminate_chaining =>
                     {
+                        let mut idx_val_for_setter = idx_val.clone();
                         let idx_pos = x.lhs.position();
-                        let obj_ptr = &mut self.get_indexed_mut(
-                            mods, state, lib, target, idx_val, idx_pos, false, true, level,
-                        )?;
-
                         let rhs_chain = match_chaining_type(rhs);
-                        self.eval_dot_index_chain_helper(
-                            mods, state, lib, this_ptr, obj_ptr, root, &x.rhs, *term, idx_values,
-                            rhs_chain, level, new_val,
-                        )
-                        .map_err(|err| err.fill_position(*x_pos))
+
+                        let (try_setter, result) = {
+                            let mut obj = self.get_indexed_mut(
+                                mods, state, lib, target, idx_val, idx_pos, false, true, level,
+                            )?;
+                            let is_obj_temp_val = obj.is_temp_value();
+                            let obj_ptr = &mut obj;
+
+                            match self.eval_dot_index_chain_helper(
+                                mods, state, lib, this_ptr, obj_ptr, root, &x.rhs, *term,
+                                idx_values, rhs_chain, level, new_val,
+                            ) {
+                                Ok((result, true)) if is_obj_temp_val => {
+                                    (Some(obj.take_or_clone()), (result, true))
+                                }
+                                Ok(result) => (None, result),
+                                Err(err) => return Err(err.fill_position(*x_pos)),
+                            }
+                        };
+
+                        if let Some(mut new_val) = try_setter {
+                            // Try to call index setter if value is changed
+                            let hash_set =
+                                FnCallHashes::from_native(self.constants.fn_hash_idx_set);
+                            let args = &mut [target, &mut idx_val_for_setter, &mut new_val];
+
+                            if let Err(err) = self.exec_fn_call(
+                                mods, state, lib, FN_IDX_SET, hash_set, args, is_ref_mut, true,
+                                root_pos, None, level,
+                            ) {
+                                // Just ignore if there is no index setter
+                                if !matches!(*err, EvalAltResult::ErrorFunctionNotFound(_, _)) {
+                                    return Err(err);
+                                }
+                            }
+                        }
+
+                        self.check_data_size(target.as_ref())
+                            .map_err(|err| err.fill_position(root.1))?;
+
+                        Ok(result)
                     }
                     // xxx[rhs] op= new_val
                     _ if new_val.is_some() => {
@@ -1294,13 +1377,12 @@ impl Engine {
                         if let Some(mut new_val) = try_setter {
                             // Try to call index setter
                             let hash_set =
-                                FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_SET, 3));
+                                FnCallHashes::from_native(self.constants.fn_hash_idx_set);
                             let args = &mut [target, &mut idx_val_for_setter, &mut new_val];
-                            let pos = Position::NONE;
 
                             self.exec_fn_call(
                                 mods, state, lib, FN_IDX_SET, hash_set, args, is_ref_mut, true,
-                                pos, None, level,
+                                root_pos, None, level,
                             )?;
                         }
 
@@ -1427,7 +1509,7 @@ impl Engine {
                             EvalAltResult::ErrorDotExpr(_, _) => {
                                 let args = &mut [target, &mut name.into(), &mut new_val];
                                 let hash_set =
-                                    FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_SET, 3));
+                                    FnCallHashes::from_native(self.constants.fn_hash_idx_set);
                                 let pos = Position::NONE;
 
                                 self.exec_fn_call(
@@ -1471,6 +1553,7 @@ impl Engine {
                                 }
                                 _ => Err(err),
                             },
+                            // Assume getters are always pure
                             |(v, _)| Ok((v, false)),
                         )
                     }
@@ -1524,7 +1607,9 @@ impl Engine {
                                 let hash_set = FnCallHashes::from_native(*hash_set);
                                 let mut arg_values = [target.as_mut(), &mut Default::default()];
                                 let args = &mut arg_values[..1];
-                                let (mut val, updated) = self
+
+                                // Assume getters are always pure
+                                let (mut val, _) = self
                                     .exec_fn_call(
                                         mods, state, lib, getter, hash_get, args, is_ref_mut, true,
                                         *pos, None, level,
@@ -1568,7 +1653,7 @@ impl Engine {
                                     .map_err(|err| err.fill_position(*x_pos))?;
 
                                 // Feed the value back via a setter just in case it has been updated
-                                if updated || may_be_changed {
+                                if may_be_changed {
                                     // Re-use args because the first &mut parameter will not be consumed
                                     let mut arg_values = [target.as_mut(), val];
                                     let args = &mut arg_values;
@@ -1583,7 +1668,7 @@ impl Engine {
                                                 let args =
                                                     &mut [target.as_mut(), &mut name.into(), val];
                                                 let hash_set = FnCallHashes::from_native(
-                                                    crate::calc_fn_hash(FN_IDX_SET, 3),
+                                                    self.constants.fn_hash_idx_set,
                                                 );
                                                 self.exec_fn_call(
                                                     mods, state, lib, FN_IDX_SET, hash_set, args,
@@ -1987,7 +2072,7 @@ impl Engine {
 
             _ if use_indexers => {
                 let args = &mut [target, &mut idx];
-                let hash_get = FnCallHashes::from_native(crate::calc_fn_hash(FN_IDX_GET, 2));
+                let hash_get = FnCallHashes::from_native(self.constants.fn_hash_idx_get);
                 let idx_pos = Position::NONE;
 
                 self.exec_fn_call(
@@ -2059,7 +2144,7 @@ impl Engine {
             // `... ${...} ...`
             Expr::InterpolatedString(x, pos) => {
                 let mut pos = *pos;
-                let mut result: Dynamic = self.empty_string.clone().into();
+                let mut result: Dynamic = self.const_empty_string().into();
 
                 for expr in x.iter() {
                     let item = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
@@ -2330,7 +2415,7 @@ impl Engine {
                 let args = &mut [lhs_ptr_inner, &mut new_val];
 
                 match self.call_native_fn(mods, state, lib, op, hash, args, true, true, op_pos) {
-                    Err(err) if matches!(err.as_ref(), EvalAltResult::ErrorFunctionNotFound(f, _) if f.starts_with(op)) =>
+                    Err(err) if matches!(*err, EvalAltResult::ErrorFunctionNotFound(ref f, _) if f.starts_with(op)) =>
                     {
                         // Expand to `var = var op rhs`
                         let op = &op[..op.len() - 1]; // extract operator without =
@@ -3006,17 +3091,23 @@ impl Engine {
     }
 
     /// Check a result to ensure that the data size is within allowable limit.
-    #[cfg(feature = "unchecked")]
-    #[inline(always)]
-    fn check_return_value(&self, result: RhaiResult) -> RhaiResult {
-        result
-    }
+    fn check_return_value(&self, mut result: RhaiResult) -> RhaiResult {
+        if let Ok(ref mut r) = result {
+            // Concentrate all empty strings into one instance to save memory
+            if let Dynamic(crate::dynamic::Union::Str(s, _, _)) = r {
+                if s.is_empty() {
+                    if !s.ptr_eq(&self.constants.empty_string) {
+                        *s = self.const_empty_string();
+                    }
+                    return result;
+                }
+            }
 
-    /// Check a result to ensure that the data size is within allowable limit.
-    #[cfg(not(feature = "unchecked"))]
-    #[inline(always)]
-    fn check_return_value(&self, result: RhaiResult) -> RhaiResult {
-        result.and_then(|r| self.check_data_size(&r).map(|_| r))
+            #[cfg(not(feature = "unchecked"))]
+            self.check_data_size(&r)?;
+        }
+
+        result
     }
 
     #[cfg(feature = "unchecked")]

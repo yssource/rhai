@@ -316,6 +316,24 @@ impl Engine {
     ///
     /// All custom keywords used as symbols must be manually registered via [`Engine::register_custom_operator`].
     /// Otherwise, they won't be recognized.
+    ///
+    /// # Implementation Function Signature
+    ///
+    /// The implementation function has the following signature:
+    ///
+    /// > `Fn(symbols: &[ImmutableString], look_ahead: &str) -> Result<Option<ImmutableString>, ParseError>`
+    ///
+    /// where:
+    /// * `symbols`: a slice of symbols that have been parsed so far, possibly containing `$expr$` and/or `$block$`;
+    ///   `$ident$` and other literal markers are replaced by the actual text
+    /// * `look_ahead`: a string slice containing the next symbol that is about to be read
+    ///
+    /// ## Return value
+    ///
+    /// * `Ok(None)`: parsing complete and there are no more symbols to match.
+    /// * `Ok(Some(symbol))`: the next symbol to match, which can also be `$expr$`, `$ident$` or `$block$`.
+    /// * `Err(ParseError)`: error that is reflected back to the [`Engine`], normally `ParseError(ParseErrorType::BadInput(LexError::ImproperSymbol(message)), Position::NONE)` to indicate a syntax error, but it can be any [`ParseError`].
+    ///
     pub fn register_custom_syntax_raw(
         &mut self,
         key: impl Into<Identifier>,
