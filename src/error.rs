@@ -225,10 +225,7 @@ impl<T: AsRef<str>> From<T> for EvalAltResult {
 impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
     #[inline(always)]
     fn from(err: T) -> Self {
-        Box::new(EvalAltResult::ErrorRuntime(
-            err.as_ref().to_string().into(),
-            Position::NONE,
-        ))
+        EvalAltResult::ErrorRuntime(err.as_ref().to_string().into(), Position::NONE).into()
     }
 }
 

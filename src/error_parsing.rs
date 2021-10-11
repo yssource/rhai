@@ -299,7 +299,7 @@ impl fmt::Display for ParseError {
 impl From<ParseErrorType> for Box<EvalAltResult> {
     #[inline(always)]
     fn from(err: ParseErrorType) -> Self {
-        Box::new(err.into())
+        err.into()
     }
 }
 
@@ -313,7 +313,7 @@ impl From<ParseErrorType> for EvalAltResult {
 impl From<ParseError> for Box<EvalAltResult> {
     #[inline(always)]
     fn from(err: ParseError) -> Self {
-        Box::new(err.into())
+        err.into()
     }
 }
 

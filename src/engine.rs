@@ -1959,12 +1959,11 @@ impl Engine {
                         - index
                             .checked_abs()
                             .ok_or_else(|| {
-                                Box::new(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos))
+                                EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into()
                             })
                             .and_then(|n| {
                                 if n as usize > arr_len {
-                                    Err(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos)
-                                        .into())
+                                    EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into()
                                 } else {
                                     Ok(n as usize)
                                 }
