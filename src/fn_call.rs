@@ -681,12 +681,12 @@ impl Engine {
 
                 return Ok((
                     if num_params < 0 {
-                        Dynamic::FALSE
+                        false
                     } else {
                         let hash_script = calc_fn_hash(fn_name.as_str(), num_params as usize);
                         self.has_script_fn(Some(mods), state, lib, hash_script)
-                            .into()
-                    },
+                    }
+                    .into(),
                     false,
                 ));
             }
@@ -1189,12 +1189,12 @@ impl Engine {
                     .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, arg_pos))?;
 
                 return Ok(if num_params < 0 {
-                    Dynamic::FALSE
+                    false
                 } else {
                     let hash_script = calc_fn_hash(&fn_name, num_params as usize);
                     self.has_script_fn(Some(mods), state, lib, hash_script)
-                        .into()
-                });
+                }
+                .into());
             }
 
             // Handle is_def_var()

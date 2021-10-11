@@ -44,6 +44,7 @@ Enhancements
 * `SmartString` now uses `LazyCompact` instead of `Compact` to minimize allocations.
 * Added `pop` for strings.
 * Added `ImmutableString::ptr_eq` to test if two strings point to the same allocation.
+* The `serde` feature of `SmartString` is turned on under `metadata` to make `Map` serializable.
 
 ### `Scope` API
 
