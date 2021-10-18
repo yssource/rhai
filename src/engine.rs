@@ -2722,12 +2722,10 @@ impl Engine {
                 if let Some(func) = func {
                     // Add the loop variables
                     let orig_scope_len = scope.len();
-                    let counter_index = if let Some(Ident { name, .. }) = counter {
+                    let counter_index = counter.as_ref().map(|Ident { name, .. }| {
                         scope.push(unsafe_cast_var_name_to_lifetime(name), 0 as INT);
-                        Some(scope.len() - 1)
-                    } else {
-                        None
-                    };
+                        scope.len() - 1
+                    });
                     scope.push(unsafe_cast_var_name_to_lifetime(name), ());
                     let index = scope.len() - 1;
                     state.scope_level += 1;

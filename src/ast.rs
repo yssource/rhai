@@ -2003,14 +2003,12 @@ impl fmt::Debug for Expr {
             }
             Self::Variable(i, _, x) => {
                 f.write_str("Variable(")?;
-                match x.1 {
-                    Some((_, ref namespace)) => write!(f, "{}", namespace)?,
-                    _ => (),
+                if let Some((_, ref namespace)) = x.1 {
+                    write!(f, "{}", namespace)?
                 }
                 f.write_str(&x.2)?;
-                match i.map_or_else(|| x.0, |n| NonZeroUsize::new(n.get() as usize)) {
-                    Some(n) => write!(f, " #{}", n)?,
-                    _ => (),
+                if let Some(n) = i.map_or_else(|| x.0, |n| NonZeroUsize::new(n.get() as usize)) {
+                    write!(f, " #{}", n)?
                 }
                 f.write_str(")")
             }
