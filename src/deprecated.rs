@@ -168,3 +168,12 @@ impl NativeCallContext<'_> {
         self.call_fn_raw(fn_name.as_ref(), is_method_call, is_method_call, args)
     }
 }
+
+#[allow(useless_deprecated)]
+#[deprecated(since = "1.2.0", note = "explicitly wrap `EvalAltResult` in `Err`")]
+impl<T> From<EvalAltResult> for Result<T, Box<EvalAltResult>> {
+    #[inline(always)]
+    fn from(err: EvalAltResult) -> Self {
+        Err(err.into())
+    }
+}

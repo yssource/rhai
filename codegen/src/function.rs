@@ -696,7 +696,7 @@ impl ExportedFn {
                         unpack_statements.push(
                         syn::parse2::<syn::Stmt>(quote! {
                             if args[0usize].is_read_only() {
-                                return EvalAltResult::ErrorAssignmentToConstant(#arg_lit_str.to_string(), Position::NONE).into();
+                                return Err(EvalAltResult::ErrorAssignmentToConstant(#arg_lit_str.to_string(), Position::NONE).into());
                             }
                         })
                         .unwrap(),

@@ -183,6 +183,9 @@ impl<'a> NativeCallContext<'a> {
     }
     /// Call a function inside the call context.
     ///
+    /// If `is_method_call` is [`true`], the first argument is assumed to be the
+    /// `this` pointer for a script-defined function (or the object of a method call).
+    ///
     /// # WARNING
     ///
     /// All arguments may be _consumed_, meaning that they may be replaced by `()`.
@@ -193,9 +196,6 @@ impl<'a> NativeCallContext<'a> {
     ///
     /// If `is_ref_mut` is [`true`], the first argument is assumed to be passed
     /// by reference and is not consumed.
-    ///
-    /// If `is_method_call` is [`true`], the first argument is assumed to be the
-    /// `this` pointer for a script-defined function (or the object of a method call).
     pub fn call_fn_raw(
         &self,
         fn_name: &str,

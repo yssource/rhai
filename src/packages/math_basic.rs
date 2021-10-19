@@ -114,11 +114,11 @@ mod int_functions {
     #[rhai_fn(name = "parse_int", return_raw)]
     pub fn parse_int_radix(string: &str, radix: INT) -> Result<INT, Box<EvalAltResult>> {
         if !(2..=36).contains(&radix) {
-            return EvalAltResult::ErrorArithmetic(
+            return Err(EvalAltResult::ErrorArithmetic(
                 format!("Invalid radix: '{}'", radix),
                 Position::NONE,
             )
-            .into();
+            .into());
         }
 
         INT::from_str_radix(string.trim(), radix as u32).map_err(|err| {
@@ -261,11 +261,11 @@ mod float_functions {
     #[rhai_fn(name = "to_int", return_raw)]
     pub fn f32_to_int(x: f32) -> Result<INT, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f32) {
-            EvalAltResult::ErrorArithmetic(
+            Err(EvalAltResult::ErrorArithmetic(
                 format!("Integer overflow: to_int({})", x),
                 Position::NONE,
             )
-            .into()
+            .into())
         } else {
             Ok(x.trunc() as INT)
         }
@@ -273,11 +273,11 @@ mod float_functions {
     #[rhai_fn(name = "to_int", return_raw)]
     pub fn f64_to_int(x: f64) -> Result<INT, Box<EvalAltResult>> {
         if cfg!(not(feature = "unchecked")) && x > (MAX_INT as f64) {
-            EvalAltResult::ErrorArithmetic(
+            Err(EvalAltResult::ErrorArithmetic(
                 format!("Integer overflow: to_int({})", x),
                 Position::NONE,
             )
-            .into()
+            .into())
         } else {
             Ok(x.trunc() as INT)
         }

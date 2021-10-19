@@ -38,12 +38,12 @@ impl<'de> DynamicDeserializer<'de> {
     }
     /// Shortcut for a type conversion error.
     fn type_error_str<T>(&self, error: &str) -> Result<T, Box<EvalAltResult>> {
-        EvalAltResult::ErrorMismatchOutputType(
+        Err(EvalAltResult::ErrorMismatchOutputType(
             error.into(),
             self.value.type_name().into(),
             Position::NONE,
         )
-        .into()
+        .into())
     }
     fn deserialize_int<V: Visitor<'de>>(
         &mut self,

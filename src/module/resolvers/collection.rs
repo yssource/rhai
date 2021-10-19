@@ -136,7 +136,7 @@ impl ModuleResolver for ModuleResolversCollection {
             }
         }
 
-        EvalAltResult::ErrorModuleNotFound(path.into(), pos).into()
+        Err(EvalAltResult::ErrorModuleNotFound(path.into(), pos).into())
     }
 }
 

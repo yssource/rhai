@@ -7,9 +7,14 @@ Version 1.2.0
 Enhancements
 ------------
 
-* `NativeCallContext::call_fn_dynamic_raw` is deprecated and `NativeCallContext::call_fn_raw` is added.
 * Array methods now avoid cloning as much as possible (although most predicates will involve cloning anyway if passed a closure).
-* Inlining is disabled for error-path functions because, most of the time, the script fails completely when an error is encountered.
+* Inlining is disabled for error-path functions because errors are exceptional and scripts usually fail completely when an error is encountered.
+
+Deprecated API's
+----------------
+
+* `NativeCallContext::call_fn_dynamic_raw` is deprecated and `NativeCallContext::call_fn_raw` is added.
+* `From<EvalAltResult>` for `Result<T, Box<EvalAltResult>>` is deprecated so it will no longer be possible to do `EvalAltResult::ErrorXXXXX.into()` to convert to a `Result`; instead, `Err(EvalAltResult:ErrorXXXXX.into())` must be used. Code is clearer if errors are explicitly wrapped in `Err`.
 
 
 Version 1.1.0

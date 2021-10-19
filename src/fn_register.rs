@@ -123,7 +123,7 @@ macro_rules! def_register {
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
                     if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
-                        return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
+                        return Err(EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into());
                     }
 
                     // The arguments are assumed to be of the correct number and types!
@@ -151,7 +151,7 @@ macro_rules! def_register {
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
                     if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
-                        return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
+                        return Err(EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into());
                     }
 
                     // The arguments are assumed to be of the correct number and types!
@@ -179,7 +179,7 @@ macro_rules! def_register {
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
                     if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
-                        return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
+                        return Err(EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into());
                     }
 
                     // The arguments are assumed to be of the correct number and types!
@@ -204,7 +204,7 @@ macro_rules! def_register {
             #[inline(always)] fn into_callable_function(self) -> CallableFunction {
                 CallableFunction::$abi(Box::new(move |ctx: NativeCallContext, args: &mut FnCallArgs| {
                     if args.len() == 2 && args[0].is_read_only() && is_setter(ctx.fn_name()) {
-                        return EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into();
+                        return Err(EvalAltResult::ErrorAssignmentToConstant(Default::default(), Position::NONE).into());
                     }
 
                     // The arguments are assumed to be of the correct number and types!

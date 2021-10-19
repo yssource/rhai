@@ -471,11 +471,11 @@ mod string_functions {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
-            return crate::EvalAltResult::ErrorDataTooLarge(
+            return Err(crate::EvalAltResult::ErrorDataTooLarge(
                 "Length of string".to_string(),
                 crate::Position::NONE,
             )
-            .into();
+            .into());
         }
 
         let orig_len = string.chars().count();
@@ -490,11 +490,11 @@ mod string_functions {
             #[cfg(not(feature = "unchecked"))]
             if _ctx.engine().max_string_size() > 0 && string.len() > _ctx.engine().max_string_size()
             {
-                return crate::EvalAltResult::ErrorDataTooLarge(
+                return Err(crate::EvalAltResult::ErrorDataTooLarge(
                     "Length of string".to_string(),
                     crate::Position::NONE,
                 )
-                .into();
+                .into());
             }
         }
 
@@ -516,11 +516,11 @@ mod string_functions {
         // Check if string will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_string_size() > 0 && len as usize > _ctx.engine().max_string_size() {
-            return crate::EvalAltResult::ErrorDataTooLarge(
+            return Err(crate::EvalAltResult::ErrorDataTooLarge(
                 "Length of string".to_string(),
                 crate::Position::NONE,
             )
-            .into();
+            .into());
         }
 
         let mut str_len = string.chars().count();
@@ -542,11 +542,11 @@ mod string_functions {
             #[cfg(not(feature = "unchecked"))]
             if _ctx.engine().max_string_size() > 0 && string.len() > _ctx.engine().max_string_size()
             {
-                return crate::EvalAltResult::ErrorDataTooLarge(
+                return Err(crate::EvalAltResult::ErrorDataTooLarge(
                     "Length of string".to_string(),
                     crate::Position::NONE,
                 )
-                .into();
+                .into());
             }
         }
 

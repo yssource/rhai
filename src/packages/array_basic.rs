@@ -79,8 +79,11 @@ mod array_functions {
         // Check if array will be over max size limit
         #[cfg(not(feature = "unchecked"))]
         if _ctx.engine().max_array_size() > 0 && (len as usize) > _ctx.engine().max_array_size() {
-            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), Position::NONE)
-                .into();
+            return Err(EvalAltResult::ErrorDataTooLarge(
+                "Size of array".to_string(),
+                Position::NONE,
+            )
+            .into());
         }
 
         if len as usize > array.len() {
@@ -267,13 +270,13 @@ mod array_functions {
                             ctx.call_fn_raw(fn_name, true, false, &mut args)?
                         }
                         _ => {
-                            return EvalAltResult::ErrorInFunctionCall(
-                                "drain".to_string(),
+                            return Err(EvalAltResult::ErrorInFunctionCall(
+                                "map".to_string(),
                                 ctx.source().unwrap_or("").to_string(),
                                 err,
                                 Position::NONE,
                             )
-                            .into()
+                            .into())
                         }
                     },
                 },
@@ -309,13 +312,13 @@ mod array_functions {
                         ctx.call_fn_raw(fn_name, true, false, &mut args)?
                     }
                     _ => {
-                        return EvalAltResult::ErrorInFunctionCall(
-                            "drain".to_string(),
+                        return Err(EvalAltResult::ErrorInFunctionCall(
+                            "filter".to_string(),
                             ctx.source().unwrap_or("").to_string(),
                             err,
                             Position::NONE,
                         )
-                        .into()
+                        .into())
                     }
                 },
             }
@@ -473,13 +476,13 @@ mod array_functions {
                         ctx.call_fn_raw(fn_name, true, false, &mut args)?
                     }
                     _ => {
-                        return EvalAltResult::ErrorInFunctionCall(
-                            "drain".to_string(),
+                        return Err(EvalAltResult::ErrorInFunctionCall(
+                            "index_of".to_string(),
                             ctx.source().unwrap_or("").to_string(),
                             err,
                             Position::NONE,
                         )
-                        .into()
+                        .into())
                     }
                 },
             }
@@ -519,13 +522,13 @@ mod array_functions {
                         ctx.call_fn_raw(fn_name, true, false, &mut args)?
                     }
                     _ => {
-                        return EvalAltResult::ErrorInFunctionCall(
-                            "drain".to_string(),
+                        return Err(EvalAltResult::ErrorInFunctionCall(
+                            "some".to_string(),
                             ctx.source().unwrap_or("").to_string(),
                             err,
                             Position::NONE,
                         )
-                        .into()
+                        .into())
                     }
                 },
             }
@@ -565,13 +568,13 @@ mod array_functions {
                         ctx.call_fn_raw(fn_name, true, false, &mut args)?
                     }
                     _ => {
-                        return EvalAltResult::ErrorInFunctionCall(
-                            "drain".to_string(),
+                        return Err(EvalAltResult::ErrorInFunctionCall(
+                            "all".to_string(),
                             ctx.source().unwrap_or("").to_string(),
                             err,
                             Position::NONE,
                         )
-                        .into()
+                        .into())
                     }
                 },
             }
@@ -781,13 +784,13 @@ mod array_functions {
                         ctx.call_fn_raw(fn_name, true, false, &mut args)?
                     }
                     _ => {
-                        return EvalAltResult::ErrorInFunctionCall(
+                        return Err(EvalAltResult::ErrorInFunctionCall(
                             "drain".to_string(),
                             ctx.source().unwrap_or("").to_string(),
                             err,
                             Position::NONE,
                         )
-                        .into()
+                        .into())
                     }
                 },
             }
@@ -875,13 +878,13 @@ mod array_functions {
                         ctx.call_fn_raw(fn_name, true, false, &mut args)?
                     }
                     _ => {
-                        return EvalAltResult::ErrorInFunctionCall(
-                            "drain".to_string(),
+                        return Err(EvalAltResult::ErrorInFunctionCall(
+                            "retain".to_string(),
                             ctx.source().unwrap_or("").to_string(),
                             err,
                             Position::NONE,
                         )
-                        .into()
+                        .into())
                     }
                 },
             }

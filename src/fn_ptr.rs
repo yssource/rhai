@@ -148,7 +148,7 @@ impl TryFrom<Identifier> for FnPtr {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, Default::default()))
         } else {
-            EvalAltResult::ErrorFunctionNotFound(value.to_string(), Position::NONE).into()
+            Err(EvalAltResult::ErrorFunctionNotFound(value.to_string(), Position::NONE).into())
         }
     }
 }
