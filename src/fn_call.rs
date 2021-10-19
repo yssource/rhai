@@ -481,6 +481,7 @@ impl Engine {
         pos: Position,
         level: usize,
     ) -> RhaiResult {
+        #[inline(never)]
         fn make_error(
             name: String,
             fn_def: &crate::ast::ScriptFnDef,

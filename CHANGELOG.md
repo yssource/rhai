@@ -9,6 +9,7 @@ Enhancements
 
 * `NativeCallContext::call_fn_dynamic_raw` is deprecated and `NativeCallContext::call_fn_raw` is added.
 * Array methods now avoid cloning as much as possible (although most predicates will involve cloning anyway if passed a closure).
+* Inlining is disabled for error-path functions because, most of the time, the script fails completely when an error is encountered.
 
 
 Version 1.1.0

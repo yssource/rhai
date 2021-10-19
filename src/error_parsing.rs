@@ -266,7 +266,7 @@ impl fmt::Display for ParseErrorType {
 }
 
 impl From<LexError> for ParseErrorType {
-    #[inline(always)]
+    #[inline(never)]
     fn from(err: LexError) -> Self {
         match err {
             LexError::StringTooLong(max) => {
