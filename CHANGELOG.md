@@ -4,6 +4,12 @@ Rhai Release Notes
 Version 1.2.0
 =============
 
+Enhancements
+------------
+
+* `NativeCallContext::call_fn_dynamic_raw` is deprecated and `NativeCallContext::call_fn_raw` is added.
+* Array methods now avoid cloning as much as possible (although most predicates will involve cloning anyway if passed a closure).
+
 
 Version 1.1.0
 =============

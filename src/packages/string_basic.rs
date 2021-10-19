@@ -28,7 +28,7 @@ pub fn print_with_func(
     ctx: &NativeCallContext,
     value: &mut Dynamic,
 ) -> crate::ImmutableString {
-    match ctx.call_fn_dynamic_raw(fn_name, true, &mut [value]) {
+    match ctx.call_fn_raw(fn_name, true, false, &mut [value]) {
         Ok(result) if result.is::<crate::ImmutableString>() => result
             .into_immutable_string()
             .expect("result is `ImmutableString`"),

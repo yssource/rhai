@@ -1,6 +1,8 @@
 //! Module containing all deprecated API that will be removed in the next major version.
 
-use crate::{Dynamic, Engine, EvalAltResult, ImmutableString, Scope, AST};
+use crate::{
+    Dynamic, Engine, EvalAltResult, ImmutableString, NativeCallContext, RhaiResult, Scope, AST,
+};
 
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -139,5 +141,30 @@ impl Dynamic {
     #[inline(always)]
     pub fn as_immutable_string(self) -> Result<ImmutableString, &'static str> {
         self.into_immutable_string()
+    }
+}
+
+impl NativeCallContext<'_> {
+    /// Call a function inside the call context.
+    ///
+    /// # WARNING
+    ///
+    /// All arguments may be _consumed_, meaning that they may be replaced by `()`.
+    /// This is to avoid unnecessarily cloning the arguments.
+    ///
+    /// Do not use the arguments after this call. If they are needed afterwards,
+    /// clone them _before_ calling this function.
+    ///
+    /// If `is_method` is [`true`], the first argument is assumed to be passed
+    /// by reference and is not consumed.
+    #[deprecated(since = "1.2.0", note = "use `call_fn_raw` instead")]
+    #[inline(always)]
+    pub fn call_fn_dynamic_raw(
+        &self,
+        fn_name: impl AsRef<str>,
+        is_method_call: bool,
+        args: &mut [&mut Dynamic],
+    ) -> RhaiResult {
+        self.call_fn_raw(fn_name.as_ref(), is_method_call, is_method_call, args)
     }
 }

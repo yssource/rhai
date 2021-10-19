@@ -130,7 +130,7 @@ impl FnPtr {
         }
         args.extend(arg_values.iter_mut());
 
-        ctx.call_fn_dynamic_raw(self.fn_name(), is_method, &mut args)
+        ctx.call_fn_raw(self.fn_name(), is_method, is_method, &mut args)
     }
 }
 

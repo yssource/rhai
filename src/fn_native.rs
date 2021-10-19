@@ -191,48 +191,42 @@ impl<'a> NativeCallContext<'a> {
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
     ///
-    /// If `is_method` is [`true`], the first argument is assumed to be passed
+    /// If `is_ref_mut` is [`true`], the first argument is assumed to be passed
     /// by reference and is not consumed.
-    #[inline(always)]
-    pub fn call_fn_dynamic_raw(
+    ///
+    /// If `is_method_call` is [`true`], the first argument is assumed to be the
+    /// `this` pointer for a script-defined function (or the object of a method call).
+    pub fn call_fn_raw(
         &self,
-        fn_name: impl AsRef<str>,
+        fn_name: &str,
+        is_ref_mut: bool,
         is_method_call: bool,
         args: &mut [&mut Dynamic],
-    ) -> RhaiResult {
-        fn call_fn_dynamic_inner(
-            context: &NativeCallContext,
-            is_method_call: bool,
-            fn_name: &str,
-            args: &mut [&mut Dynamic],
-        ) -> Result<Dynamic, Box<EvalAltResult>> {
-            let hash = if is_method_call {
-                FnCallHashes::from_script_and_native(
-                    calc_fn_hash(fn_name, args.len() - 1),
-                    calc_fn_hash(fn_name, args.len()),
-                )
-            } else {
-                FnCallHashes::from_script(calc_fn_hash(fn_name, args.len()))
-            };
-            context
-                .engine()
-                .exec_fn_call(
-                    &mut context.mods.cloned().unwrap_or_default(),
-                    &mut Default::default(),
-                    context.lib,
-                    fn_name,
-                    hash,
-                    args,
-                    is_method_call,
-                    is_method_call,
-                    Position::NONE,
-                    None,
-                    0,
-                )
-                .map(|(r, _)| r)
-        }
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let hash = if is_method_call {
+            FnCallHashes::from_script_and_native(
+                calc_fn_hash(fn_name, args.len() - 1),
+                calc_fn_hash(fn_name, args.len()),
+            )
+        } else {
+            FnCallHashes::from_script(calc_fn_hash(fn_name, args.len()))
+        };
 
-        call_fn_dynamic_inner(self, is_method_call, fn_name.as_ref(), args)
+        self.engine()
+            .exec_fn_call(
+                &mut self.mods.cloned().unwrap_or_default(),
+                &mut Default::default(),
+                self.lib,
+                fn_name,
+                hash,
+                args,
+                is_ref_mut,
+                is_method_call,
+                Position::NONE,
+                None,
+                0,
+            )
+            .map(|(r, _)| r)
     }
 }
 
