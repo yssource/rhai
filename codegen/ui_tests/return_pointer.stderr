@@ -1,8 +1,10 @@
+WARN rustc_metadata::locator no metadata found: failed to mmap rmeta metadata: '\\?\$WORKSPACE/target\tests\target\x86_64-pc-windows-msvc\debug\deps\librhai_codegen_tests-13fbbdaa684db49e.rmeta'
+WARN rustc_metadata::locator no metadata found: failed to mmap rmeta metadata: '\\?\$WORKSPACE/target\tests\target\x86_64-pc-windows-msvc\debug\deps\librhai_codegen_tests-1b00becb051b9b4f.rmeta'
 error: Rhai functions cannot return pointers
   --> ui_tests/return_pointer.rs:12:33
    |
 12 | pub fn test_fn(input: Clonable) -> *const str {
-   |                                 ^^
+   |                                 ^^^^^^^^^^^^^
 
 error[E0425]: cannot find function `test_fn` in this scope
   --> ui_tests/return_pointer.rs:24:19

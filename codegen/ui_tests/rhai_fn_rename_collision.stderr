@@ -1,14 +1,16 @@
+WARN rustc_metadata::locator no metadata found: failed to mmap rmeta metadata: '\\?\$WORKSPACE/target\tests\target\x86_64-pc-windows-msvc\debug\deps\librhai_codegen_tests-13fbbdaa684db49e.rmeta'
+WARN rustc_metadata::locator no metadata found: failed to mmap rmeta metadata: '\\?\$WORKSPACE/target\tests\target\x86_64-pc-windows-msvc\debug\deps\librhai_codegen_tests-1b00becb051b9b4f.rmeta'
 error: duplicate Rhai signature for 'foo'
   --> ui_tests/rhai_fn_rename_collision.rs:17:15
    |
 17 |     #[rhai_fn(name = "foo")]
-   |               ^^^^
+   |               ^^^^^^^^^^^^
 
 error: duplicated function renamed 'foo'
   --> ui_tests/rhai_fn_rename_collision.rs:12:15
    |
 12 |     #[rhai_fn(name = "foo")]
-   |               ^^^^
+   |               ^^^^^^^^^^^^
 
 error[E0433]: failed to resolve: use of undeclared crate or module `test_module`
   --> ui_tests/rhai_fn_rename_collision.rs:28:8

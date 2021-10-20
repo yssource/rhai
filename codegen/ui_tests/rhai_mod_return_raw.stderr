@@ -1,11 +1,13 @@
+WARN rustc_metadata::locator no metadata found: failed to mmap rmeta metadata: '\\?\$WORKSPACE/target\tests\target\x86_64-pc-windows-msvc\debug\deps\librhai_codegen_tests-13fbbdaa684db49e.rmeta'
+WARN rustc_metadata::locator no metadata found: failed to mmap rmeta metadata: '\\?\$WORKSPACE/target\tests\target\x86_64-pc-windows-msvc\debug\deps\librhai_codegen_tests-1b00becb051b9b4f.rmeta'
 error: unknown attribute 'return_raw'
-  --> $DIR/rhai_mod_return_raw.rs:11:12
+  --> ui_tests/rhai_mod_return_raw.rs:11:12
    |
 11 | #[rhai_mod(return_raw = "yes")]
    |            ^^^^^^^^^^
 
 error[E0433]: failed to resolve: use of undeclared crate or module `test_module`
-  --> $DIR/rhai_mod_return_raw.rs:24:8
+  --> ui_tests/rhai_mod_return_raw.rs:24:8
    |
 24 |     if test_module::test_fn(n) {
    |        ^^^^^^^^^^^ use of undeclared crate or module `test_module`

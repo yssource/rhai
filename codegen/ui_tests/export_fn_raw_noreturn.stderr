@@ -1,11 +1,13 @@
+WARN rustc_metadata::locator no metadata found: failed to mmap rmeta metadata: '\\?\$WORKSPACE/target\tests\target\x86_64-pc-windows-msvc\debug\deps\librhai_codegen_tests-13fbbdaa684db49e.rmeta'
+WARN rustc_metadata::locator no metadata found: failed to mmap rmeta metadata: '\\?\$WORKSPACE/target\tests\target\x86_64-pc-windows-msvc\debug\deps\librhai_codegen_tests-1b00becb051b9b4f.rmeta'
 error: functions marked with 'return_raw' must return Result<T, Box<EvalAltResult>>
- --> $DIR/export_fn_raw_noreturn.rs:9:13
+ --> ui_tests/export_fn_raw_noreturn.rs:9:13
   |
 9 | #[export_fn(return_raw)]
   |             ^^^^^^^^^^
 
 error[E0425]: cannot find function `test_fn` in this scope
-  --> $DIR/export_fn_raw_noreturn.rs:19:5
+  --> ui_tests/export_fn_raw_noreturn.rs:19:5
    |
 19 |     test_fn(&mut n);
    |     ^^^^^^^ not found in this scope

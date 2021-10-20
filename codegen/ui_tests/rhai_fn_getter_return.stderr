@@ -1,8 +1,10 @@
+WARN rustc_metadata::locator no metadata found: failed to mmap rmeta metadata: '\\?\$WORKSPACE/target\tests\target\x86_64-pc-windows-msvc\debug\deps\librhai_codegen_tests-13fbbdaa684db49e.rmeta'
+WARN rustc_metadata::locator no metadata found: failed to mmap rmeta metadata: '\\?\$WORKSPACE/target\tests\target\x86_64-pc-windows-msvc\debug\deps\librhai_codegen_tests-1b00becb051b9b4f.rmeta'
 error: property getter must return a value
   --> ui_tests/rhai_fn_getter_return.rs:13:9
    |
 13 |     pub fn test_fn(input: &mut Point) {
-   |         ^^
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0433]: failed to resolve: use of undeclared crate or module `test_module`
   --> ui_tests/rhai_fn_getter_return.rs:23:5
