@@ -1,3 +1,4 @@
+use proc_macro2::{Ident, Span, TokenStream};
 use syn::{
     parse::{ParseStream, Parser},
     spanned::Spanned,
@@ -24,14 +25,14 @@ pub trait ExportedParams: Sized {
 
 #[derive(Debug, Clone)]
 pub struct AttrItem {
-    pub key: proc_macro2::Ident,
+    pub key: Ident,
     pub value: Option<syn::LitStr>,
-    pub span: proc_macro2::Span,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct ExportInfo {
-    pub item_span: proc_macro2::Span,
+    pub item_span: Span,
     pub items: Vec<AttrItem>,
 }
 
@@ -42,8 +43,7 @@ pub fn parse_attr_items(args: ParseStream) -> syn::Result<ExportInfo> {
             items: Vec::new(),
         });
     }
-    let arg_list = args
-        .call(syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_separated_nonempty)?;
+    let arg_list = args.call(syn::punctuated::Punctuated::parse_separated_nonempty)?;
 
     parse_punctuated_items(arg_list)
 }
@@ -53,7 +53,8 @@ pub fn parse_punctuated_items(
 ) -> syn::Result<ExportInfo> {
     let list_span = arg_list.span();
 
-    let mut attrs: Vec<AttrItem> = Vec::new();
+    let mut attrs = Vec::new();
+
     for arg in arg_list {
         let arg_span = arg.span();
         let (key, value) = match arg {
@@ -62,7 +63,7 @@ pub fn parse_punctuated_items(
                 ref right,
                 ..
             }) => {
-                let attr_name: syn::Ident = match left.as_ref() {
+                let attr_name = match left.as_ref() {
                     syn::Expr::Path(syn::ExprPath {
                         path: attr_path, ..
                     }) => attr_path.get_ident().cloned().ok_or_else(|| {
@@ -79,13 +80,11 @@ pub fn parse_punctuated_items(
                 };
                 (attr_name, Some(attr_value))
             }
-            syn::Expr::Path(syn::ExprPath {
-                path: attr_path, ..
-            }) => attr_path
+            syn::Expr::Path(syn::ExprPath { path, .. }) => path
                 .get_ident()
                 .cloned()
                 .map(|a| (a, None))
-                .ok_or_else(|| syn::Error::new(attr_path.span(), "expecting attribute name"))?,
+                .ok_or_else(|| syn::Error::new(path.span(), "expecting attribute name"))?,
             x => return Err(syn::Error::new(x.span(), "expecting identifier")),
         };
         attrs.push(AttrItem {
@@ -102,18 +101,16 @@ pub fn parse_punctuated_items(
 }
 
 pub fn outer_item_attributes<T: ExportedParams>(
-    args: proc_macro2::TokenStream,
+    args: TokenStream,
     _attr_name: &str,
 ) -> syn::Result<T> {
     if args.is_empty() {
         return Ok(T::no_attrs());
     }
 
-    let parser = syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_separated_nonempty;
-    let arg_list = parser.parse2(args)?;
+    let arg_list = syn::punctuated::Punctuated::parse_separated_nonempty.parse2(args)?;
 
-    let export_info = parse_punctuated_items(arg_list)?;
-    T::from_info(export_info)
+    T::from_info(parse_punctuated_items(arg_list)?)
 }
 
 pub fn inner_item_attributes<T: ExportedParams>(

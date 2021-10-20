@@ -1,14 +1,6 @@
 use quote::{quote, ToTokens};
 use syn::{parse::Parse, parse::ParseStream};
 
-use crate::function::ExportedFn;
-use crate::rhai_module::ExportedConst;
-
-#[cfg(no_std)]
-use alloc::vec as new_vec;
-#[cfg(not(no_std))]
-use std::vec as new_vec;
-
 #[cfg(no_std)]
 use core::mem;
 #[cfg(not(no_std))]
@@ -17,7 +9,8 @@ use std::mem;
 use std::borrow::Cow;
 
 use crate::attrs::{AttrItem, ExportInfo, ExportScope, ExportedParams};
-use crate::function::ExportedFnParams;
+use crate::function::ExportedFn;
+use crate::rhai_module::ExportedConst;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
 pub struct ExportedModParams {
@@ -32,9 +25,7 @@ impl Parse for ExportedModParams {
             return Ok(ExportedModParams::default());
         }
 
-        let info = crate::attrs::parse_attr_items(args)?;
-
-        Self::from_info(info)
+        Self::from_info(crate::attrs::parse_attr_items(args)?)
     }
 }
 
@@ -115,8 +106,8 @@ impl Parse for Module {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut mod_all: syn::ItemMod = input.parse()?;
         let fns: Vec<_>;
-        let mut consts: Vec<_> = new_vec![];
-        let mut sub_modules: Vec<_> = Vec::new();
+        let mut consts = Vec::new();
+        let mut sub_modules = Vec::new();
         if let Some((_, ref mut content)) = mod_all.content {
             // Gather and parse functions.
             fns = content
@@ -129,11 +120,9 @@ impl Parse for Module {
                     // #[cfg] attributes are not allowed on functions
                     crate::attrs::deny_cfg_attr(&item_fn.attrs)?;
 
-                    let params: ExportedFnParams =
-                        match crate::attrs::inner_item_attributes(&mut item_fn.attrs, "rhai_fn") {
-                            Ok(p) => p,
-                            Err(e) => return Err(e),
-                        };
+                    let params =
+                        crate::attrs::inner_item_attributes(&mut item_fn.attrs, "rhai_fn")?;
+
                     syn::parse2::<ExportedFn>(item_fn.to_token_stream())
                         .and_then(|mut f| {
                             f.set_params(params)?;
@@ -155,11 +144,9 @@ impl Parse for Module {
                     }) => {
                         // #[cfg] attributes are not allowed on const declarations
                         crate::attrs::deny_cfg_attr(&attrs)?;
-                        match vis {
-                            syn::Visibility::Public(_) => {
-                                consts.push((ident.to_string(), ty.clone(), expr.as_ref().clone()))
-                            }
-                            _ => {}
+
+                        if matches!(vis, syn::Visibility::Public(_)) {
+                            consts.push((ident.to_string(), ty.clone(), expr.as_ref().clone()))
                         }
                     }
                     _ => {}
@@ -192,7 +179,7 @@ impl Parse for Module {
                 }
             }
         } else {
-            fns = new_vec![];
+            fns = Vec::new();
         }
         Ok(Module {
             mod_all,
@@ -205,7 +192,7 @@ impl Parse for Module {
 }
 
 impl Module {
-    pub fn attrs(&self) -> &Vec<syn::Attribute> {
+    pub fn attrs(&self) -> &[syn::Attribute] {
         &self.mod_all.attrs
     }
 
@@ -273,10 +260,12 @@ impl Module {
 
             // NB: sub-modules must have their new items for exporting generated in depth-first order
             // to avoid issues caused by re-parsing them
-            let inner_modules: Vec<proc_macro2::TokenStream> = sub_modules.drain(..)
-                .try_fold::<Vec<proc_macro2::TokenStream>, _,
-                            Result<Vec<proc_macro2::TokenStream>, syn::Error>>(
-                    Vec::new(), |mut acc, m| { acc.push(m.generate_inner()?); Ok(acc) })?;
+            let inner_modules = sub_modules
+                .drain(..)
+                .try_fold::<_, _, Result<_, syn::Error>>(Vec::new(), |mut acc, m| {
+                    acc.push(m.generate_inner()?);
+                    Ok(acc)
+                })?;
 
             // Regenerate the module with the new content added.
             Ok(quote! {
@@ -319,7 +308,7 @@ impl Module {
     }
 
     #[allow(dead_code)]
-    pub fn content(&self) -> Option<&Vec<syn::Item>> {
+    pub fn content(&self) -> Option<&[syn::Item]> {
         match self.mod_all {
             syn::ItemMod {
                 content: Some((_, ref vec)),

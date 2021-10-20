@@ -126,7 +126,7 @@ mod function_tests {
         let err = syn::parse2::<ExportedFn>(input_tokens).unwrap_err();
         assert_eq!(
             format!("{}", err),
-            "this type in this position passes from Rhai by value"
+            "function parameters other than the first one cannot be passed by reference"
         );
     }
 
@@ -139,7 +139,7 @@ mod function_tests {
         let err = syn::parse2::<ExportedFn>(input_tokens).unwrap_err();
         assert_eq!(
             format!("{}", err),
-            "this type in this position passes from Rhai by value"
+            "function parameters other than the first one cannot be passed by reference"
         );
     }
 

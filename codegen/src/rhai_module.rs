@@ -1,6 +1,7 @@
-use std::collections::BTreeMap;
-
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
+
+use std::collections::BTreeMap;
 
 use crate::attrs::ExportScope;
 use crate::function::{
@@ -16,17 +17,17 @@ pub fn generate_body(
     consts: &[ExportedConst],
     sub_modules: &mut [Module],
     parent_scope: &ExportScope,
-) -> proc_macro2::TokenStream {
-    let mut set_fn_statements: Vec<syn::Stmt> = Vec::new();
-    let mut set_const_statements: Vec<syn::Stmt> = Vec::new();
-    let mut add_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
-    let mut set_flattened_mod_blocks: Vec<syn::ExprBlock> = Vec::new();
+) -> TokenStream {
+    let mut set_fn_statements = Vec::new();
+    let mut set_const_statements = Vec::new();
+    let mut add_mod_blocks = Vec::new();
+    let mut set_flattened_mod_blocks = Vec::new();
     let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
     let string_type_path = syn::parse2::<syn::Path>(quote! { String }).unwrap();
 
     for (const_name, _, _) in consts {
-        let const_literal = syn::LitStr::new(&const_name, proc_macro2::Span::call_site());
-        let const_ref = syn::Ident::new(&const_name, proc_macro2::Span::call_site());
+        let const_literal = syn::LitStr::new(&const_name, Span::call_site());
+        let const_ref = syn::Ident::new(&const_name, Span::call_site());
         set_const_statements.push(
             syn::parse2::<syn::Stmt>(quote! {
                 m.set_var(#const_literal, #const_ref);
@@ -41,11 +42,9 @@ pub fn generate_body(
             continue;
         }
         let module_name = item_mod.module_name();
-        let exported_name: syn::LitStr = syn::LitStr::new(
-            item_mod.exported_name().as_ref(),
-            proc_macro2::Span::call_site(),
-        );
-        let cfg_attrs: Vec<&syn::Attribute> = item_mod
+        let exported_name: syn::LitStr =
+            syn::LitStr::new(item_mod.exported_name().as_ref(), Span::call_site());
+        let cfg_attrs: Vec<_> = item_mod
             .attrs()
             .iter()
             .filter(|&a| a.path.get_ident().map(|i| *i == "cfg").unwrap_or(false))
@@ -71,7 +70,8 @@ pub fn generate_body(
     }
 
     // NB: these are token streams, because re-parsing messes up "> >" vs ">>"
-    let mut gen_fn_tokens: Vec<proc_macro2::TokenStream> = Vec::new();
+    let mut gen_fn_tokens = Vec::new();
+
     for function in fns {
         function.update_scope(&parent_scope);
         if function.skipped() {
@@ -83,7 +83,7 @@ pub fn generate_body(
         );
         let reg_names = function.exported_names();
 
-        let fn_input_types: Vec<syn::Expr> = function
+        let fn_input_types: Vec<_> = function
             .arg_list()
             .map(|fn_arg| match fn_arg {
                 syn::FnArg::Receiver(_) => panic!("internal error: receiver fn outside impl!?"),
@@ -229,8 +229,8 @@ pub fn check_rename_collisions(fns: &[ExportedFn]) -> Result<(), syn::Error> {
             })
     }
 
-    let mut renames = BTreeMap::<String, proc_macro2::Span>::new();
-    let mut fn_defs = BTreeMap::<String, proc_macro2::Span>::new();
+    let mut renames = BTreeMap::new();
+    let mut fn_defs = BTreeMap::new();
 
     for item_fn in fns.iter() {
         if !item_fn.params().name.is_empty() || item_fn.params().special != FnSpecialAccess::None {
