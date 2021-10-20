@@ -129,16 +129,10 @@ pub fn inner_item_attributes<T: ExportedParams>(
     }
 }
 
-pub fn deny_cfg_attr(attrs: &[syn::Attribute]) -> syn::Result<()> {
-    if let Some(cfg_attr) = attrs
+pub fn collect_cfg_attr(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
+    attrs
         .iter()
-        .find(|a| a.path.get_ident().map(|i| *i == "cfg").unwrap_or(false))
-    {
-        Err(syn::Error::new(
-            cfg_attr.span(),
-            "cfg attributes not allowed on this item",
-        ))
-    } else {
-        Ok(())
-    }
+        .filter(|&a| a.path.get_ident().map(|i| *i == "cfg").unwrap_or(false))
+        .cloned()
+        .collect()
 }

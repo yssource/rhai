@@ -281,6 +281,7 @@ pub struct ExportedFn {
     pass_context: bool,
     mut_receiver: bool,
     params: ExportedFnParams,
+    cfg_attrs: Vec<syn::Attribute>,
 }
 
 impl Parse for ExportedFn {
@@ -294,8 +295,7 @@ impl Parse for ExportedFn {
             syn::parse2::<syn::Path>(quote! { rhai::NativeCallContext }).unwrap();
         let mut pass_context = false;
 
-        // #[cfg] attributes are not allowed on functions due to what is generated for them
-        crate::attrs::deny_cfg_attr(&fn_all.attrs)?;
+        let cfg_attrs = crate::attrs::collect_cfg_attr(&fn_all.attrs);
 
         let visibility = fn_all.vis;
 
@@ -403,6 +403,7 @@ impl Parse for ExportedFn {
             pass_context,
             mut_receiver,
             params: Default::default(),
+            cfg_attrs,
         })
     }
 }
@@ -412,6 +413,10 @@ impl ExportedFn {
 
     pub fn params(&self) -> &ExportedFnParams {
         &self.params
+    }
+
+    pub fn cfg_attrs(&self) -> &[syn::Attribute] {
+        &self.cfg_attrs
     }
 
     pub fn update_scope(&mut self, parent_scope: &ExportScope) {
@@ -496,6 +501,10 @@ impl ExportedFn {
             syn::ReturnType::Type(_, ref ret_type) => Some(flatten_type_groups(ret_type)),
             _ => None,
         }
+    }
+
+    pub fn set_cfg_attrs(&mut self, cfg_attrs: Vec<syn::Attribute>) {
+        self.cfg_attrs = cfg_attrs
     }
 
     pub fn set_params(&mut self, mut params: ExportedFnParams) -> syn::Result<()> {
@@ -831,11 +840,19 @@ impl ExportedFn {
         #[cfg(not(feature = "metadata"))]
         let param_names = quote! {};
 
+        let cfg_attrs: Vec<_> = self
+            .cfg_attrs()
+            .iter()
+            .map(syn::Attribute::to_token_stream)
+            .collect();
+
         quote! {
+            #(#cfg_attrs)*
             impl #type_name {
                 #param_names
                 #[inline(always)] pub fn param_types() -> [TypeId; #arg_count] { [#(#input_type_exprs),*] }
             }
+            #(#cfg_attrs)*
             impl PluginFunction for #type_name {
                 #[inline(always)]
                 fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {

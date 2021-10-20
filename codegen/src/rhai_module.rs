@@ -1,5 +1,5 @@
 use proc_macro2::{Span, TokenStream};
-use quote::quote;
+use quote::{quote, ToTokens};
 
 use std::collections::BTreeMap;
 
@@ -10,7 +10,7 @@ use crate::function::{
 };
 use crate::module::Module;
 
-pub type ExportedConst = (String, Box<syn::Type>, syn::Expr);
+pub type ExportedConst = (String, Box<syn::Type>, syn::Expr, Vec<syn::Attribute>);
 
 pub fn generate_body(
     fns: &mut [ExportedFn],
@@ -25,11 +25,18 @@ pub fn generate_body(
     let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
     let string_type_path = syn::parse2::<syn::Path>(quote! { String }).unwrap();
 
-    for (const_name, _, _) in consts {
+    for (const_name, _, _, cfg_attrs) in consts {
         let const_literal = syn::LitStr::new(&const_name, Span::call_site());
         let const_ref = syn::Ident::new(&const_name, Span::call_site());
+
+        let cfg_attrs: Vec<_> = cfg_attrs
+            .iter()
+            .map(syn::Attribute::to_token_stream)
+            .collect();
+
         set_const_statements.push(
             syn::parse2::<syn::Stmt>(quote! {
+                #(#cfg_attrs)*
                 m.set_var(#const_literal, #const_ref);
             })
             .unwrap(),
@@ -42,13 +49,8 @@ pub fn generate_body(
             continue;
         }
         let module_name = item_mod.module_name();
-        let exported_name: syn::LitStr =
-            syn::LitStr::new(item_mod.exported_name().as_ref(), Span::call_site());
-        let cfg_attrs: Vec<_> = item_mod
-            .attrs()
-            .iter()
-            .filter(|&a| a.path.get_ident().map(|i| *i == "cfg").unwrap_or(false))
-            .collect();
+        let exported_name = syn::LitStr::new(item_mod.exported_name().as_ref(), Span::call_site());
+        let cfg_attrs = crate::attrs::collect_cfg_attr(item_mod.attrs());
         add_mod_blocks.push(
             syn::parse2::<syn::ExprBlock>(quote! {
                 {
@@ -126,6 +128,12 @@ pub fn generate_body(
             })
             .collect();
 
+        let cfg_attrs: Vec<_> = function
+            .cfg_attrs()
+            .iter()
+            .map(syn::Attribute::to_token_stream)
+            .collect();
+
         for fn_literal in reg_names {
             let mut namespace = FnNamespaceAccess::Internal;
 
@@ -166,6 +174,7 @@ pub fn generate_body(
 
             set_fn_statements.push(
                 syn::parse2::<syn::Stmt>(quote! {
+                    #(#cfg_attrs)*
                     m.set_fn(#fn_literal, FnNamespace::#ns_str, FnAccess::Public,
                              #param_names, &[#(#fn_input_types),*], #fn_token_name().into());
                 })
@@ -174,9 +183,11 @@ pub fn generate_body(
         }
 
         gen_fn_tokens.push(quote! {
+            #(#cfg_attrs)*
             #[allow(non_camel_case_types)]
             pub struct #fn_token_name();
         });
+
         gen_fn_tokens.push(function.generate_impl(&fn_token_name.to_string()));
     }
 

@@ -108,6 +108,7 @@ impl Parse for Module {
         let fns: Vec<_>;
         let mut consts = Vec::new();
         let mut sub_modules = Vec::new();
+
         if let Some((_, ref mut content)) = mod_all.content {
             // Gather and parse functions.
             fns = content
@@ -117,15 +118,13 @@ impl Parse for Module {
                     _ => None,
                 })
                 .try_fold(Vec::new(), |mut vec, item_fn| {
-                    // #[cfg] attributes are not allowed on functions
-                    crate::attrs::deny_cfg_attr(&item_fn.attrs)?;
-
                     let params =
                         crate::attrs::inner_item_attributes(&mut item_fn.attrs, "rhai_fn")?;
 
                     syn::parse2::<ExportedFn>(item_fn.to_token_stream())
                         .and_then(|mut f| {
                             f.set_params(params)?;
+                            f.set_cfg_attrs(crate::attrs::collect_cfg_attr(&item_fn.attrs));
                             Ok(f)
                         })
                         .map(|f| vec.push(f))
@@ -141,14 +140,12 @@ impl Parse for Module {
                         attrs,
                         ty,
                         ..
-                    }) => {
-                        // #[cfg] attributes are not allowed on const declarations
-                        crate::attrs::deny_cfg_attr(&attrs)?;
-
-                        if matches!(vis, syn::Visibility::Public(_)) {
-                            consts.push((ident.to_string(), ty.clone(), expr.as_ref().clone()))
-                        }
-                    }
+                    }) if matches!(vis, syn::Visibility::Public(_)) => consts.push((
+                        ident.to_string(),
+                        ty.clone(),
+                        expr.as_ref().clone(),
+                        crate::attrs::collect_cfg_attr(&attrs),
+                    )),
                     _ => {}
                 }
             }

@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 1.2.0
 =============
 
+New features
+------------
+
+* `#[cfg(...)]` attributes can now be put directly on plugin functions or function defined in a plugin module.
+
 Enhancements
 ------------
 
