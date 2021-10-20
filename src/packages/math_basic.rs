@@ -293,11 +293,9 @@ mod float_functions {
         })
     }
     #[cfg(not(feature = "f32_float"))]
-    pub mod f32_f64 {
-        #[rhai_fn(name = "to_float")]
-        pub fn f32_to_f64(x: f32) -> f64 {
-            x as f64
-        }
+    #[rhai_fn(name = "to_float")]
+    pub fn f32_to_f64(x: f32) -> f64 {
+        x as f64
     }
 }
 
@@ -308,21 +306,23 @@ mod decimal_functions {
         prelude::{FromStr, RoundingStrategy},
         Decimal, MathematicalOps,
     };
+    #[cfg(not(feature = "no_float"))]
+    use std::convert::TryFrom;
 
     #[cfg(feature = "no_float")]
-    pub mod float_polyfills {
-        #[rhai_fn(name = "PI")]
-        pub fn pi() -> Decimal {
-            Decimal::PI
-        }
-        #[rhai_fn(name = "E")]
-        pub fn e() -> Decimal {
-            Decimal::E
-        }
-        #[rhai_fn(return_raw)]
-        pub fn parse_float(s: &str) -> Result<Decimal, Box<EvalAltResult>> {
-            super::parse_decimal(s)
-        }
+    #[rhai_fn(name = "PI")]
+    pub fn pi() -> Decimal {
+        Decimal::PI
+    }
+    #[cfg(feature = "no_float")]
+    #[rhai_fn(name = "E")]
+    pub fn e() -> Decimal {
+        Decimal::E
+    }
+    #[cfg(feature = "no_float")]
+    #[rhai_fn(return_raw)]
+    pub fn parse_float(s: &str) -> Result<Decimal, Box<EvalAltResult>> {
+        super::parse_decimal(s)
     }
 
     pub fn sin(x: Decimal) -> Decimal {
@@ -480,39 +480,37 @@ mod decimal_functions {
     }
 
     #[cfg(not(feature = "no_float"))]
-    pub mod float {
-        use std::convert::TryFrom;
-
-        #[rhai_fn(name = "to_decimal", return_raw)]
-        pub fn f32_to_decimal(x: f32) -> Result<Decimal, Box<EvalAltResult>> {
-            Decimal::try_from(x).map_err(|_| {
-                EvalAltResult::ErrorArithmetic(
-                    format!("Cannot convert to Decimal: to_decimal({})", x),
-                    Position::NONE,
-                )
-                .into()
-            })
-        }
-        #[rhai_fn(name = "to_decimal", return_raw)]
-        pub fn f64_to_decimal(x: f64) -> Result<Decimal, Box<EvalAltResult>> {
-            Decimal::try_from(x).map_err(|_| {
-                EvalAltResult::ErrorArithmetic(
-                    format!("Cannot convert to Decimal: to_decimal({})", x),
-                    Position::NONE,
-                )
-                .into()
-            })
-        }
-        #[rhai_fn(return_raw)]
-        pub fn to_float(x: Decimal) -> Result<FLOAT, Box<EvalAltResult>> {
-            FLOAT::try_from(x).map_err(|_| {
-                EvalAltResult::ErrorArithmetic(
-                    format!("Cannot convert to floating-point: to_float({})", x),
-                    Position::NONE,
-                )
-                .into()
-            })
-        }
+    #[rhai_fn(name = "to_decimal", return_raw)]
+    pub fn f32_to_decimal(x: f32) -> Result<Decimal, Box<EvalAltResult>> {
+        Decimal::try_from(x).map_err(|_| {
+            EvalAltResult::ErrorArithmetic(
+                format!("Cannot convert to Decimal: to_decimal({})", x),
+                Position::NONE,
+            )
+            .into()
+        })
+    }
+    #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "to_decimal", return_raw)]
+    pub fn f64_to_decimal(x: f64) -> Result<Decimal, Box<EvalAltResult>> {
+        Decimal::try_from(x).map_err(|_| {
+            EvalAltResult::ErrorArithmetic(
+                format!("Cannot convert to Decimal: to_decimal({})", x),
+                Position::NONE,
+            )
+            .into()
+        })
+    }
+    #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(return_raw)]
+    pub fn to_float(x: Decimal) -> Result<FLOAT, Box<EvalAltResult>> {
+        FLOAT::try_from(x).map_err(|_| {
+            EvalAltResult::ErrorArithmetic(
+                format!("Cannot convert to floating-point: to_float({})", x),
+                Position::NONE,
+            )
+            .into()
+        })
     }
 }
 

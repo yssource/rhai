@@ -108,22 +108,21 @@ mod map_functions {
     }
 
     #[cfg(not(feature = "no_index"))]
-    pub mod indexing {
-        #[rhai_fn(pure)]
-        pub fn keys(map: &mut Map) -> Array {
-            if map.is_empty() {
-                Array::new()
-            } else {
-                map.keys().cloned().map(Into::<Dynamic>::into).collect()
-            }
+    #[rhai_fn(pure)]
+    pub fn keys(map: &mut Map) -> Array {
+        if map.is_empty() {
+            Array::new()
+        } else {
+            map.keys().cloned().map(Into::<Dynamic>::into).collect()
         }
-        #[rhai_fn(pure)]
-        pub fn values(map: &mut Map) -> Array {
-            if map.is_empty() {
-                Array::new()
-            } else {
-                map.values().cloned().collect()
-            }
+    }
+    #[cfg(not(feature = "no_index"))]
+    #[rhai_fn(pure)]
+    pub fn values(map: &mut Map) -> Array {
+        if map.is_empty() {
+            Array::new()
+        } else {
+            map.values().cloned().collect()
         }
     }
 }
