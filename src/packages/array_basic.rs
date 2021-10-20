@@ -242,6 +242,14 @@ mod array_functions {
             result
         }
     }
+    #[rhai_fn(name = "map", return_raw, pure)]
+    pub fn map_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        mapper: &str,
+    ) -> Result<Array, Box<EvalAltResult>> {
+        map(ctx, array, FnPtr::new(mapper)?)
+    }
     #[rhai_fn(return_raw, pure)]
     pub fn map(
         ctx: NativeCallContext,
@@ -284,6 +292,14 @@ mod array_functions {
         }
 
         Ok(ar)
+    }
+    #[rhai_fn(name = "filter", return_raw, pure)]
+    pub fn filter_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter_func: &str,
+    ) -> Result<Array, Box<EvalAltResult>> {
+        filter(ctx, array, FnPtr::new(filter_func)?)
     }
     #[rhai_fn(return_raw, pure)]
     pub fn filter(
@@ -427,6 +443,14 @@ mod array_functions {
         Ok(-1 as INT)
     }
     #[rhai_fn(name = "index_of", return_raw, pure)]
+    pub fn index_of_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter: &str,
+    ) -> Result<INT, Box<EvalAltResult>> {
+        index_of_filter(ctx, array, FnPtr::new(filter)?)
+    }
+    #[rhai_fn(name = "index_of", return_raw, pure)]
     pub fn index_of_filter(
         ctx: NativeCallContext,
         array: &mut Array,
@@ -437,6 +461,15 @@ mod array_functions {
         } else {
             index_of_filter_starting_from(ctx, array, filter, 0)
         }
+    }
+    #[rhai_fn(name = "index_of", return_raw, pure)]
+    pub fn index_of_with_fn_name_starting_from(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter: &str,
+        start: INT,
+    ) -> Result<INT, Box<EvalAltResult>> {
+        index_of_filter_starting_from(ctx, array, FnPtr::new(filter)?, start)
     }
     #[rhai_fn(name = "index_of", return_raw, pure)]
     pub fn index_of_filter_starting_from(
@@ -496,6 +529,14 @@ mod array_functions {
 
         Ok(-1 as INT)
     }
+    #[rhai_fn(name = "some", return_raw, pure)]
+    pub fn some_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter: &str,
+    ) -> Result<bool, Box<EvalAltResult>> {
+        some(ctx, array, FnPtr::new(filter)?)
+    }
     #[rhai_fn(return_raw, pure)]
     pub fn some(
         ctx: NativeCallContext,
@@ -541,6 +582,14 @@ mod array_functions {
         }
 
         Ok(false)
+    }
+    #[rhai_fn(name = "all", return_raw, pure)]
+    pub fn all_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter: &str,
+    ) -> Result<bool, Box<EvalAltResult>> {
+        all(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(return_raw, pure)]
     pub fn all(
@@ -588,6 +637,14 @@ mod array_functions {
 
         Ok(true)
     }
+    #[rhai_fn(name = "reduce", return_raw, pure)]
+    pub fn reduce_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        reducer: &str,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        reduce(ctx, array, FnPtr::new(reducer)?)
+    }
     #[rhai_fn(return_raw, pure)]
     pub fn reduce(
         ctx: NativeCallContext,
@@ -622,6 +679,15 @@ mod array_functions {
         }
 
         Ok(result)
+    }
+    #[rhai_fn(name = "reduce", return_raw, pure)]
+    pub fn reduce_with_fn_name_with_initial(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        reducer: &str,
+        initial: Dynamic,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        reduce_with_initial(ctx, array, FnPtr::new(reducer)?, initial)
     }
     #[rhai_fn(name = "reduce", return_raw, pure)]
     pub fn reduce_with_initial(
@@ -659,6 +725,14 @@ mod array_functions {
 
         Ok(result)
     }
+    #[rhai_fn(name = "reduce_ref", return_raw, pure)]
+    pub fn reduce_rev_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        reducer: &str,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        reduce_rev(ctx, array, FnPtr::new(reducer)?)
+    }
     #[rhai_fn(return_raw, pure)]
     pub fn reduce_rev(
         ctx: NativeCallContext,
@@ -693,6 +767,15 @@ mod array_functions {
         }
 
         Ok(result)
+    }
+    #[rhai_fn(name = "reduce_ref", return_raw, pure)]
+    pub fn reduce_rev_with_fn_name_with_initial(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        reducer: &str,
+        initial: Dynamic,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        reduce_rev_with_initial(ctx, array, FnPtr::new(reducer)?, initial)
     }
     #[rhai_fn(name = "reduce_rev", return_raw, pure)]
     pub fn reduce_rev_with_initial(
@@ -730,6 +813,14 @@ mod array_functions {
 
         Ok(result)
     }
+    #[rhai_fn(name = "sort", return_raw)]
+    pub fn sort_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        comparer: &str,
+    ) -> Result<(), Box<EvalAltResult>> {
+        sort(ctx, array, FnPtr::new(comparer)?)
+    }
     #[rhai_fn(return_raw)]
     pub fn sort(
         ctx: NativeCallContext,
@@ -755,6 +846,14 @@ mod array_functions {
         });
 
         Ok(())
+    }
+    #[rhai_fn(name = "drain", return_raw, pure)]
+    pub fn drain_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter: &str,
+    ) -> Result<Array, Box<EvalAltResult>> {
+        drain(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(return_raw)]
     pub fn drain(
@@ -849,6 +948,14 @@ mod array_functions {
         };
 
         array.drain(start..start + len).collect()
+    }
+    #[rhai_fn(name = "retain", return_raw, pure)]
+    pub fn retain_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter: &str,
+    ) -> Result<Array, Box<EvalAltResult>> {
+        retain(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(return_raw)]
     pub fn retain(

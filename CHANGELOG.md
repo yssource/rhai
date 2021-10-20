@@ -8,6 +8,7 @@ Enhancements
 ------------
 
 * Array methods now avoid cloning as much as possible (although most predicates will involve cloning anyway if passed a closure).
+* Array methods that take function pointers (e.g. closures) now optionally take the function name as a string.
 * Inlining is disabled for error-path functions because errors are exceptional and scripts usually fail completely when an error is encountered.
 
 Deprecated API's
