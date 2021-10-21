@@ -57,7 +57,7 @@ impl<'a> ArgBackup<'a> {
     /// # Panics
     ///
     /// Panics when `args` is empty.
-    #[inline(always)]
+    #[inline]
     fn change_first_arg_to_copy(&mut self, args: &mut FnCallArgs<'a>) {
         // Clone the original value.
         self.value_copy = args[0].clone();
@@ -91,7 +91,7 @@ impl<'a> ArgBackup<'a> {
 }
 
 impl Drop for ArgBackup<'_> {
-    #[inline(always)]
+    #[inline]
     fn drop(&mut self) {
         // Panic if the shorter lifetime leaks.
         assert!(

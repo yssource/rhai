@@ -144,7 +144,7 @@ impl Imports {
     }
     /// Does the specified function hash key exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn contains_fn(&self, hash: u64) -> bool {
         self.modules.iter().any(|m| m.contains_qualified_fn(hash))
@@ -161,7 +161,7 @@ impl Imports {
     /// Does the specified [`TypeId`][std::any::TypeId] iterator exist in this stack of
     /// imported [modules][Module]?
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn contains_iter(&self, id: TypeId) -> bool {
         self.modules.iter().any(|m| m.contains_qualified_iter(id))
@@ -888,7 +888,7 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
         self.mods
     }
     /// Get an iterator over the namespaces containing definition of all script-defined functions.
-    #[inline(always)]
+    #[inline]
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
     }
@@ -3262,7 +3262,7 @@ impl Engine {
     ///
     /// If a type is registered via [`register_type_with_name`][Engine::register_type_with_name],
     /// the type name provided for the registration will be used.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
@@ -3272,7 +3272,7 @@ impl Engine {
     }
 
     /// Make a `Box<`[`EvalAltResult<ErrorMismatchDataType>`][EvalAltResult::ErrorMismatchDataType]`>`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
         EvalAltResult::ErrorMismatchDataType(

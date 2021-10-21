@@ -1287,7 +1287,7 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-    #[inline(always)]
+    #[inline]
     pub fn compile_file_with_scope(
         &self,
         scope: &Scope,
@@ -1491,7 +1491,7 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-    #[inline(always)]
+    #[inline]
     pub fn eval_file<T: Variant + Clone>(
         &self,
         path: std::path::PathBuf,
@@ -1521,7 +1521,7 @@ impl Engine {
     /// ```
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-    #[inline(always)]
+    #[inline]
     pub fn eval_file_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1569,7 +1569,7 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[inline(always)]
+    #[inline]
     pub fn eval_with_scope<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
@@ -1744,7 +1744,7 @@ impl Engine {
     /// Not available under `no_std` or `WASM`.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-    #[inline(always)]
+    #[inline]
     pub fn run_file(&self, path: std::path::PathBuf) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.run(&contents))
     }
@@ -1753,7 +1753,7 @@ impl Engine {
     /// Not available under `no_std` or `WASM`.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-    #[inline(always)]
+    #[inline]
     pub fn run_file_with_scope(
         &self,
         scope: &mut Scope,

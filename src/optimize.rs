@@ -123,7 +123,7 @@ impl<'a> OptimizerState<'a> {
         })
     }
     /// Call a registered function
-    #[inline(always)]
+    #[inline]
     pub fn call_fn_with_constant_arguments(
         &self,
         fn_name: &str,

@@ -76,7 +76,7 @@ impl ModuleResolversCollection {
         self.0.remove(index)
     }
     /// Get an iterator of all the [module resolvers][ModuleResolver].
-    #[inline(always)]
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &dyn ModuleResolver> {
         self.0.iter().map(|v| v.as_ref())
     }
@@ -100,7 +100,7 @@ impl ModuleResolversCollection {
     }
     /// Add another [`ModuleResolversCollection`] to the end of this collection.
     /// The other [`ModuleResolversCollection`] is consumed.
-    #[inline(always)]
+    #[inline]
     pub fn append(&mut self, other: Self) -> &mut Self {
         self.0.extend(other.0.into_iter());
         self

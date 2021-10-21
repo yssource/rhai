@@ -90,26 +90,29 @@ impl Borrow<str> for ImmutableString {
 impl From<&str> for ImmutableString {
     #[inline(always)]
     fn from(value: &str) -> Self {
-        Self(Into::<SmartString>::into(value).into())
+        let value: SmartString = value.into();
+        Self(value.into())
     }
 }
 impl From<&String> for ImmutableString {
     #[inline(always)]
     fn from(value: &String) -> Self {
-        Self(Into::<SmartString>::into(value).into())
+        let value: SmartString = value.into();
+        Self(value.into())
     }
 }
 impl From<String> for ImmutableString {
     #[inline(always)]
     fn from(value: String) -> Self {
-        Self(Into::<SmartString>::into(value).into())
+        let value: SmartString = value.into();
+        Self(value.into())
     }
 }
 #[cfg(not(feature = "no_smartstring"))]
 impl From<&SmartString> for ImmutableString {
     #[inline(always)]
     fn from(value: &SmartString) -> Self {
-        Self(Into::<SmartString>::into(value.as_str()).into())
+        Self(value.clone().into())
     }
 }
 #[cfg(not(feature = "no_smartstring"))]
@@ -137,33 +140,34 @@ impl FromStr for ImmutableString {
 
     #[inline(always)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(Into::<SmartString>::into(s).into()))
+        let s: SmartString = s.into();
+        Ok(Self(s.into()))
     }
 }
 
 impl FromIterator<char> for ImmutableString {
-    #[inline(always)]
+    #[inline]
     fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<SmartString>().into())
     }
 }
 
 impl<'a> FromIterator<&'a char> for ImmutableString {
-    #[inline(always)]
+    #[inline]
     fn from_iter<T: IntoIterator<Item = &'a char>>(iter: T) -> Self {
         Self(iter.into_iter().cloned().collect::<SmartString>().into())
     }
 }
 
 impl<'a> FromIterator<&'a str> for ImmutableString {
-    #[inline(always)]
+    #[inline]
     fn from_iter<T: IntoIterator<Item = &'a str>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<SmartString>().into())
     }
 }
 
 impl<'a> FromIterator<String> for ImmutableString {
-    #[inline(always)]
+    #[inline]
     fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<SmartString>().into())
     }
@@ -171,7 +175,7 @@ impl<'a> FromIterator<String> for ImmutableString {
 
 #[cfg(not(feature = "no_smartstring"))]
 impl<'a> FromIterator<SmartString> for ImmutableString {
-    #[inline(always)]
+    #[inline]
     fn from_iter<T: IntoIterator<Item = SmartString>>(iter: T) -> Self {
         Self(iter.into_iter().collect::<SmartString>().into())
     }
@@ -278,7 +282,7 @@ impl Add<&str> for &ImmutableString {
 }
 
 impl AddAssign<&str> for ImmutableString {
-    #[inline(always)]
+    #[inline]
     fn add_assign(&mut self, rhs: &str) {
         if !rhs.is_empty() {
             self.make_mut().push_str(rhs);
@@ -324,7 +328,8 @@ impl AddAssign<String> for ImmutableString {
     fn add_assign(&mut self, rhs: String) {
         if !rhs.is_empty() {
             if self.is_empty() {
-                self.0 = Into::<SmartString>::into(rhs).into();
+                let rhs: SmartString = rhs.into();
+                self.0 = rhs.into();
             } else {
                 self.make_mut().push_str(&rhs);
             }
@@ -335,7 +340,7 @@ impl AddAssign<String> for ImmutableString {
 impl Add<char> for ImmutableString {
     type Output = Self;
 
-    #[inline(always)]
+    #[inline]
     fn add(mut self, rhs: char) -> Self::Output {
         self.make_mut().push(rhs);
         self
@@ -345,7 +350,7 @@ impl Add<char> for ImmutableString {
 impl Add<char> for &ImmutableString {
     type Output = ImmutableString;
 
-    #[inline(always)]
+    #[inline]
     fn add(self, rhs: char) -> Self::Output {
         let mut s = self.clone();
         s.make_mut().push(rhs);
@@ -354,7 +359,7 @@ impl Add<char> for &ImmutableString {
 }
 
 impl AddAssign<char> for ImmutableString {
-    #[inline(always)]
+    #[inline]
     fn add_assign(&mut self, rhs: char) {
         self.make_mut().push(rhs);
     }
@@ -397,7 +402,8 @@ impl SubAssign<&ImmutableString> for ImmutableString {
             if self.is_empty() {
                 self.0 = rhs.0.clone();
             } else {
-                self.0 = Into::<SmartString>::into(self.replace(rhs.as_str(), "")).into();
+                let rhs: SmartString = self.replace(rhs.as_str(), "").into();
+                self.0 = rhs.into();
             }
         }
     }
@@ -410,7 +416,8 @@ impl SubAssign<ImmutableString> for ImmutableString {
             if self.is_empty() {
                 self.0 = rhs.0;
             } else {
-                self.0 = Into::<SmartString>::into(self.replace(rhs.as_str(), "")).into();
+                let rhs: SmartString = self.replace(rhs.as_str(), "").into();
+                self.0 = rhs.into();
             }
         }
     }
@@ -447,9 +454,10 @@ impl Sub<String> for &ImmutableString {
 }
 
 impl SubAssign<String> for ImmutableString {
-    #[inline(always)]
+    #[inline]
     fn sub_assign(&mut self, rhs: String) {
-        self.0 = Into::<SmartString>::into(self.replace(&rhs, "")).into();
+        let rhs: SmartString = self.replace(&rhs, "").into();
+        self.0 = rhs.into();
     }
 }
 
@@ -472,9 +480,10 @@ impl Sub<char> for &ImmutableString {
 }
 
 impl SubAssign<char> for ImmutableString {
-    #[inline(always)]
+    #[inline]
     fn sub_assign(&mut self, rhs: char) {
-        self.0 = Into::<SmartString>::into(self.replace(rhs, "")).into();
+        let rhs: SmartString = self.replace(rhs, "").into();
+        self.0 = rhs.into();
     }
 }
 
@@ -527,7 +536,7 @@ impl ImmutableString {
     }
     /// Consume the [`ImmutableString`] and convert it into a [`String`].
     /// If there are other references to the same string, a cloned copy is returned.
-    #[inline(always)]
+    #[inline]
     pub fn into_owned(mut self) -> String {
         self.make_mut(); // Make sure it is unique reference
         shared_take(self.0).into() // Should succeed

@@ -251,7 +251,7 @@ impl Iterator for CharsStream {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self.0.len() - self.1;
         (remaining, Some(remaining))
@@ -261,7 +261,7 @@ impl Iterator for CharsStream {
 impl FusedIterator for CharsStream {}
 
 impl ExactSizeIterator for CharsStream {
-    #[inline(always)]
+    #[inline]
     fn len(&self) -> usize {
         self.0.len() - self.1
     }

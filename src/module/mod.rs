@@ -204,7 +204,7 @@ impl AsRef<Module> for Module {
 impl<M: AsRef<Module>> Add<M> for &Module {
     type Output = Module;
 
-    #[inline(always)]
+    #[inline]
     fn add(self, rhs: M) -> Self::Output {
         let mut module = self.clone();
         module.merge(rhs.as_ref());
@@ -240,7 +240,7 @@ impl Module {
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").expect("answer should exist"), 42);
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -269,7 +269,7 @@ impl Module {
     /// module.set_id("hello");
     /// assert_eq!(module.id(), Some("hello"));
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn id(&self) -> Option<&str> {
         self.id_raw().map(|s| s.as_str())
@@ -365,7 +365,7 @@ impl Module {
     /// Generate signatures for all the non-private functions in the [`Module`].
     /// Exported under the `metadata` feature only.
     #[cfg(feature = "metadata")]
-    #[inline(always)]
+    #[inline]
     pub fn gen_fn_signatures(&self) -> impl Iterator<Item = String> + '_ {
         self.functions
             .values()
@@ -402,7 +402,7 @@ impl Module {
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").expect("answer should exist"), 42);
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get_var_value<T: Variant + Clone>(&self, name: &str) -> Option<T> {
         self.get_var(name).and_then(Dynamic::try_cast::<T>)
@@ -559,7 +559,7 @@ impl Module {
     /// module.set_sub_module("question", sub_module);
     /// assert!(module.get_sub_module("question").is_some());
     /// ```
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn get_sub_module(&self, name: &str) -> Option<&Module> {
         self.modules.get(name).map(|m| m.as_ref())
@@ -1113,7 +1113,7 @@ impl Module {
     /// Get a Rust function.
     ///
     /// The [`u64`] hash is returned by the [`set_native_fn`][Module::set_native_fn] call.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn get_fn(&self, hash_fn: u64) -> Option<&CallableFunction> {
         self.functions.get(&hash_fn).map(|f| f.func.as_ref())
@@ -1131,7 +1131,7 @@ impl Module {
     /// Get a namespace-qualified function.
     ///
     /// The [`u64`] hash is calculated by [`build_index`][Module::build_index].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn get_qualified_fn(&self, hash_qualified_fn: u64) -> Option<&CallableFunction> {
         self.all_functions
@@ -1289,19 +1289,19 @@ impl Module {
     }
 
     /// Get an iterator to the sub-modules in the [`Module`].
-    #[inline(always)]
+    #[inline]
     pub fn iter_sub_modules(&self) -> impl Iterator<Item = (&str, Shared<Module>)> {
         self.modules.iter().map(|(k, m)| (k.as_str(), m.clone()))
     }
 
     /// Get an iterator to the variables in the [`Module`].
-    #[inline(always)]
+    #[inline]
     pub fn iter_var(&self) -> impl Iterator<Item = (&str, &Dynamic)> {
         self.variables.iter().map(|(k, v)| (k.as_str(), v))
     }
 
     /// Get an iterator to the functions in the [`Module`].
-    #[inline(always)]
+    #[inline]
     #[allow(dead_code)]
     pub(crate) fn iter_fn(&self) -> impl Iterator<Item = &FuncInfo> {
         self.functions.values().map(Box::as_ref)
@@ -1316,7 +1316,7 @@ impl Module {
     /// 4) Number of parameters.
     /// 5) Shared reference to function definition [`ScriptFnDef`][crate::ast::ScriptFnDef].
     #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn iter_script_fn(
         &self,
     ) -> impl Iterator<
@@ -1351,7 +1351,7 @@ impl Module {
     /// 4) Number of parameters.
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "internals"))]
-    #[inline(always)]
+    #[inline]
     pub fn iter_script_fn_info(
         &self,
     ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize)> {
@@ -1610,7 +1610,7 @@ impl Module {
     }
 
     /// Set a type iterator into the [`Module`].
-    #[inline(always)]
+    #[inline]
     pub fn set_iterable<T>(&mut self) -> &mut Self
     where
         T: Variant + Clone + IntoIterator,
@@ -1622,7 +1622,7 @@ impl Module {
     }
 
     /// Set an iterator type into the [`Module`] as a type iterator.
-    #[inline(always)]
+    #[inline]
     pub fn set_iterator<T>(&mut self) -> &mut Self
     where
         T: Variant + Clone + Iterator,
@@ -1634,14 +1634,14 @@ impl Module {
     }
 
     /// Get the specified type iterator.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn get_qualified_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.all_type_iterators.get(&id).cloned()
     }
 
     /// Get the specified type iterator.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn get_iter(&self, id: TypeId) -> Option<IteratorFn> {
         self.type_iterators.get(&id).cloned()
@@ -1709,8 +1709,7 @@ impl DerefMut for NamespaceRef {
 
 impl From<StaticVec<Ident>> for NamespaceRef {
     #[inline(always)]
-    fn from(path: StaticVec<Ident>) -> Self {
-        let mut path = path;
+    fn from(mut path: StaticVec<Ident>) -> Self {
         path.shrink_to_fit();
         Self { index: None, path }
     }

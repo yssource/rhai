@@ -144,14 +144,14 @@ impl<'a> NativeCallContext<'a> {
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
-    #[inline(always)]
+    #[inline]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.mods.iter().flat_map(|&m| m.iter())
     }
     /// Get an iterator over the current set of modules imported via `import` statements.
     #[cfg(not(feature = "no_module"))]
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn iter_imports_raw(
         &self,
     ) -> impl Iterator<Item = (&crate::Identifier, &Shared<Module>)> {
@@ -169,7 +169,7 @@ impl<'a> NativeCallContext<'a> {
         self.mods
     }
     /// Get an iterator over the namespaces containing definitions of all script-defined functions.
-    #[inline(always)]
+    #[inline]
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
     }
@@ -239,7 +239,7 @@ pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
 }
 
 /// Consume a [`Shared`] resource if is unique (i.e. not shared), or clone it otherwise.
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn shared_take_or_clone<T: Clone>(value: Shared<T>) -> T {
     shared_try_take(value).unwrap_or_else(|v| v.as_ref().clone())
@@ -256,7 +256,7 @@ pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
 /// # Panics
 ///
 /// Panics if the resource is shared (i.e. has other outstanding references).
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn shared_take<T>(value: Shared<T>) -> T {
     shared_try_take(value)

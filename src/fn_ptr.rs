@@ -69,7 +69,7 @@ impl FnPtr {
         self
     }
     /// Set curried arguments to the function pointer.
-    #[inline(always)]
+    #[inline]
     pub fn set_curry(&mut self, values: impl IntoIterator<Item = Dynamic>) -> &mut Self {
         self.1 = values.into_iter().collect();
         self

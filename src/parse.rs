@@ -3322,7 +3322,7 @@ impl Engine {
     }
 
     /// Run the parser on an input stream, returning an AST.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn parse(
         &self,
         input: &mut TokenStream,

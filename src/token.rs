@@ -113,7 +113,7 @@ impl Position {
     /// If `line` is zero, then [`None`] is returned.
     ///
     /// If `position` is zero, then it is at the beginning of a line.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn new_const(line: u16, position: u16) -> Option<Self> {
         if line == 0 {
@@ -129,7 +129,7 @@ impl Position {
         })
     }
     /// Get the line number (1-based), or [`None`] if there is no position.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn line(self) -> Option<usize> {
         #[cfg(not(feature = "no_position"))]
@@ -143,7 +143,7 @@ impl Position {
         return None;
     }
     /// Get the character position (1-based), or [`None`] if at beginning of a line.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn position(self) -> Option<usize> {
         #[cfg(not(feature = "no_position"))]
@@ -157,7 +157,7 @@ impl Position {
         return None;
     }
     /// Advance by one character position.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn advance(&mut self) {
         #[cfg(not(feature = "no_position"))]
         {
@@ -174,7 +174,7 @@ impl Position {
     /// # Panics
     ///
     /// Panics if already at beginning of a line - cannot rewind to a previous line.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn rewind(&mut self) {
         #[cfg(not(feature = "no_position"))]
         {
@@ -184,7 +184,7 @@ impl Position {
         }
     }
     /// Advance to the next line.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn new_line(&mut self) {
         #[cfg(not(feature = "no_position"))]
         {
@@ -198,7 +198,7 @@ impl Position {
         }
     }
     /// Is this [`Position`] at the beginning of a line?
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_beginning_of_line(self) -> bool {
         #[cfg(not(feature = "no_position"))]
@@ -207,7 +207,7 @@ impl Position {
         return false;
     }
     /// Is there no [`Position`]?
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_none(self) -> bool {
         #[cfg(not(feature = "no_position"))]
@@ -216,7 +216,7 @@ impl Position {
         return true;
     }
     /// Print this [`Position`] for debug purposes.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn debug_print(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(not(feature = "no_position"))]
         if !self.is_none() {
@@ -1352,7 +1352,7 @@ fn is_numeric_digit(c: char) -> bool {
 /// Test if the comment block is a doc-comment.
 #[cfg(not(feature = "no_function"))]
 #[cfg(feature = "metadata")]
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn is_doc_comment(comment: &str) -> bool {
     (comment.starts_with("///") && !comment.starts_with("////"))
