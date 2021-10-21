@@ -637,6 +637,43 @@ mod array_functions {
 
         Ok(true)
     }
+    #[rhai_fn(return_raw)]
+    pub fn dedup(ctx: NativeCallContext, array: &mut Array) -> Result<(), Box<EvalAltResult>> {
+        dedup_with_fn_name(ctx, array, OP_EQUALS)
+    }
+    #[rhai_fn(name = "dedup", return_raw)]
+    pub fn dedup_by_comparer(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        comparer: FnPtr,
+    ) -> Result<(), Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(());
+        }
+
+        dedup_with_fn_name(ctx, array, comparer.fn_name())
+    }
+    #[rhai_fn(name = "dedup", return_raw)]
+    fn dedup_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        comparer: &str,
+    ) -> Result<(), Box<EvalAltResult>> {
+        if array.is_empty() {
+            return Ok(());
+        }
+
+        array.dedup_by(|x, y| {
+            let mut args = [x, &mut y.clone()];
+
+            ctx.call_fn_raw(comparer, true, false, &mut args)
+                .unwrap_or_else(|_| Dynamic::FALSE)
+                .as_bool()
+                .unwrap_or(false)
+        });
+
+        Ok(())
+    }
     #[rhai_fn(name = "reduce", return_raw, pure)]
     pub fn reduce_with_fn_name(
         ctx: NativeCallContext,
