@@ -16,6 +16,7 @@ Enhancements
 * Array methods that take function pointers (e.g. closures) now optionally take the function name as a string.
 * Array adds the `dedup` method.
 * Inlining is disabled for error-path functions because errors are exceptional and scripts usually fail completely when an error is encountered.
+* The `optimize` module is completely eliminated under `no_optimize`, which should yield smaller code size.
 
 Deprecated API's
 ----------------

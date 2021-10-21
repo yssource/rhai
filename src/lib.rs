@@ -88,6 +88,7 @@ mod fn_ptr;
 mod fn_register;
 mod immutable_string;
 mod module;
+#[cfg(not(feature = "no_optimize"))]
 mod optimize;
 pub mod packages;
 mod parse;

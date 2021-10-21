@@ -9,7 +9,6 @@ use crate::fn_native::{
     OnVarCallback,
 };
 use crate::module::NamespaceRef;
-use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::token::Token;
@@ -979,7 +978,8 @@ pub struct Engine {
     pub(crate) progress: Option<crate::fn_native::OnProgressCallback>,
 
     /// Optimize the AST after compilation.
-    pub(crate) optimization_level: OptimizationLevel,
+    #[cfg(not(feature = "no_optimize"))]
+    pub(crate) optimization_level: crate::OptimizationLevel,
 
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
@@ -1101,6 +1101,7 @@ impl Engine {
             #[cfg(not(feature = "unchecked"))]
             progress: None,
 
+            #[cfg(not(feature = "no_optimize"))]
             optimization_level: Default::default(),
 
             #[cfg(not(feature = "unchecked"))]

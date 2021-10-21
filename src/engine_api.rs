@@ -5,7 +5,6 @@ use crate::engine::{EvalContext, EvalState, Imports};
 use crate::fn_call::FnCallArgs;
 use crate::fn_native::SendSync;
 use crate::fn_register::RegisterNativeFunction;
-use crate::optimize::OptimizationLevel;
 use crate::parse::ParseState;
 use crate::{
     scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Identifier, Module,
@@ -1171,7 +1170,12 @@ impl Engine {
         scope: &Scope,
         scripts: &[&str],
     ) -> Result<AST, ParseError> {
-        self.compile_with_scope_and_optimization_level(scope, scripts, self.optimization_level)
+        self.compile_with_scope_and_optimization_level(
+            scope,
+            scripts,
+            #[cfg(not(feature = "no_optimize"))]
+            self.optimization_level,
+        )
     }
     /// Join a list of strings and compile into an [`AST`] using own scope at a specific optimization level.
     #[inline]
@@ -1179,7 +1183,7 @@ impl Engine {
         &self,
         scope: &Scope,
         scripts: &[&str],
-        optimization_level: OptimizationLevel,
+        #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
     ) -> Result<AST, ParseError> {
         let (stream, tokenizer_control) =
             self.lex_raw(scripts, self.token_mapper.as_ref().map(Box::as_ref));
@@ -1188,6 +1192,7 @@ impl Engine {
             &mut stream.peekable(),
             &mut state,
             scope,
+            #[cfg(not(feature = "no_optimize"))]
             optimization_level,
         )
     }
@@ -1385,7 +1390,8 @@ impl Engine {
                 &mut stream.peekable(),
                 &mut state,
                 &scope,
-                OptimizationLevel::None,
+                #[cfg(not(feature = "no_optimize"))]
+                crate::OptimizationLevel::None,
             )?;
             if has_null {
                 scope.push_constant("null", ());
@@ -1470,7 +1476,13 @@ impl Engine {
 
         let mut peekable = stream.peekable();
         let mut state = ParseState::new(self, tokenizer_control);
-        self.parse_global_expr(&mut peekable, &mut state, scope, self.optimization_level)
+        self.parse_global_expr(
+            &mut peekable,
+            &mut state,
+            scope,
+            #[cfg(not(feature = "no_optimize"))]
+            self.optimization_level,
+        )
     }
     /// Evaluate a script file.
     ///
@@ -1578,6 +1590,7 @@ impl Engine {
         let ast = self.compile_with_scope_and_optimization_level(
             scope,
             &[script],
+            #[cfg(not(feature = "no_optimize"))]
             self.optimization_level,
         )?;
         self.eval_ast_with_scope(scope, &ast)
@@ -1637,7 +1650,8 @@ impl Engine {
             &mut stream.peekable(),
             &mut state,
             scope,
-            OptimizationLevel::None,
+            #[cfg(not(feature = "no_optimize"))]
+            crate::OptimizationLevel::None,
         )?;
 
         self.eval_ast_with_scope(scope, &ast)
@@ -1782,6 +1796,7 @@ impl Engine {
             &mut stream.peekable(),
             &mut state,
             scope,
+            #[cfg(not(feature = "no_optimize"))]
             self.optimization_level,
         )?;
 
@@ -2027,7 +2042,7 @@ impl Engine {
         &self,
         scope: &Scope,
         mut ast: AST,
-        optimization_level: OptimizationLevel,
+        optimization_level: crate::OptimizationLevel,
     ) -> AST {
         #[cfg(not(feature = "no_function"))]
         let lib = ast

@@ -9,7 +9,6 @@ use crate::engine::{
 use crate::fn_builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 use crate::fn_native::FnAny;
 use crate::module::NamespaceRef;
-use crate::optimize::OptimizationLevel;
 use crate::{
     ast::{Expr, Stmt},
     fn_native::CallableFunction,
@@ -859,7 +858,8 @@ impl Engine {
         let ast = self.compile_with_scope_and_optimization_level(
             &Default::default(),
             &[script],
-            OptimizationLevel::None,
+            #[cfg(not(feature = "no_optimize"))]
+            crate::OptimizationLevel::None,
         )?;
 
         // If new functions are defined within the eval string, it is an error
