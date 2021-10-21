@@ -242,64 +242,53 @@ mod array_functions {
             result
         }
     }
-    #[rhai_fn(name = "map", return_raw, pure)]
-    pub fn map_with_fn_name(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        mapper: &str,
-    ) -> Result<Array, Box<EvalAltResult>> {
-        map(ctx, array, FnPtr::new(mapper)?)
-    }
     #[rhai_fn(return_raw, pure)]
     pub fn map(
         ctx: NativeCallContext,
         array: &mut Array,
         mapper: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
+        map_with_fn_name(ctx, array, mapper.fn_name())
+    }
+    #[rhai_fn(name = "map", return_raw, pure)]
+    pub fn map_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        mapper: &str,
+    ) -> Result<Array, Box<EvalAltResult>> {
         if array.is_empty() {
             return Ok(Array::new());
         }
 
-        let fn_name = mapper.fn_name();
         let mut ar = Array::with_capacity(array.len());
         let mut index_val = Dynamic::UNIT;
 
         for (i, item) in array.iter_mut().enumerate() {
             let mut args = [item, &mut index_val];
 
-            ar.push(
-                match ctx.call_fn_raw(fn_name, true, false, &mut args[..1]) {
-                    Ok(r) => r,
-                    Err(err) => match *err {
-                        EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                            if fn_sig.starts_with(fn_name) =>
-                        {
-                            *args[1] = Dynamic::from(i as INT);
-                            ctx.call_fn_raw(fn_name, true, false, &mut args)?
-                        }
-                        _ => {
-                            return Err(EvalAltResult::ErrorInFunctionCall(
-                                "map".to_string(),
-                                ctx.source().unwrap_or("").to_string(),
-                                err,
-                                Position::NONE,
-                            )
-                            .into())
-                        }
-                    },
+            ar.push(match ctx.call_fn_raw(mapper, true, false, &mut args[..1]) {
+                Ok(r) => r,
+                Err(err) => match *err {
+                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                        if fn_sig.starts_with(mapper) =>
+                    {
+                        *args[1] = Dynamic::from(i as INT);
+                        ctx.call_fn_raw(mapper, true, false, &mut args)?
+                    }
+                    _ => {
+                        return Err(EvalAltResult::ErrorInFunctionCall(
+                            "map".to_string(),
+                            ctx.source().unwrap_or("").to_string(),
+                            err,
+                            Position::NONE,
+                        )
+                        .into())
+                    }
                 },
-            );
+            });
         }
 
         Ok(ar)
-    }
-    #[rhai_fn(name = "filter", return_raw, pure)]
-    pub fn filter_with_fn_name(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter_func: &str,
-    ) -> Result<Array, Box<EvalAltResult>> {
-        filter(ctx, array, FnPtr::new(filter_func)?)
     }
     #[rhai_fn(return_raw, pure)]
     pub fn filter(
@@ -307,25 +296,32 @@ mod array_functions {
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
+        filter_with_fn_name(ctx, array, filter.fn_name())
+    }
+    #[rhai_fn(name = "filter", return_raw, pure)]
+    pub fn filter_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter: &str,
+    ) -> Result<Array, Box<EvalAltResult>> {
         if array.is_empty() {
             return Ok(array.clone());
         }
 
-        let fn_name = filter.fn_name();
         let mut ar = Array::new();
         let mut index_val = Dynamic::UNIT;
 
         for (i, item) in array.iter_mut().enumerate() {
             let mut args = [item, &mut index_val];
 
-            let keep = match ctx.call_fn_raw(fn_name, true, false, &mut args[..1]) {
+            let keep = match ctx.call_fn_raw(filter, true, false, &mut args[..1]) {
                 Ok(r) => r,
                 Err(err) => match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(fn_name) =>
+                        if fn_sig.starts_with(filter) =>
                     {
                         *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(fn_name, true, false, &mut args)?
+                        ctx.call_fn_raw(filter, true, false, &mut args)?
                     }
                     _ => {
                         return Err(EvalAltResult::ErrorInFunctionCall(
@@ -463,19 +459,19 @@ mod array_functions {
         }
     }
     #[rhai_fn(name = "index_of", return_raw, pure)]
-    pub fn index_of_with_fn_name_starting_from(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: &str,
-        start: INT,
-    ) -> Result<INT, Box<EvalAltResult>> {
-        index_of_filter_starting_from(ctx, array, FnPtr::new(filter)?, start)
-    }
-    #[rhai_fn(name = "index_of", return_raw, pure)]
     pub fn index_of_filter_starting_from(
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
+        start: INT,
+    ) -> Result<INT, Box<EvalAltResult>> {
+        index_of_with_fn_name_filter_starting_from(ctx, array, filter.fn_name(), start)
+    }
+    #[rhai_fn(name = "index_of", return_raw, pure)]
+    pub fn index_of_with_fn_name_filter_starting_from(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter: &str,
         start: INT,
     ) -> Result<INT, Box<EvalAltResult>> {
         if array.is_empty() {
@@ -493,20 +489,19 @@ mod array_functions {
             start as usize
         };
 
-        let fn_name = filter.fn_name();
         let mut index_val = Dynamic::UNIT;
 
         for (i, item) in array.iter_mut().enumerate().skip(start) {
             let mut args = [item, &mut index_val];
 
-            let found = match ctx.call_fn_raw(fn_name, true, false, &mut args[..1]) {
+            let found = match ctx.call_fn_raw(filter, true, false, &mut args[..1]) {
                 Ok(r) => r,
                 Err(err) => match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(fn_name) =>
+                        if fn_sig.starts_with(filter) =>
                     {
                         *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(fn_name, true, false, &mut args)?
+                        ctx.call_fn_raw(filter, true, false, &mut args)?
                     }
                     _ => {
                         return Err(EvalAltResult::ErrorInFunctionCall(
@@ -529,38 +524,37 @@ mod array_functions {
 
         Ok(-1 as INT)
     }
-    #[rhai_fn(name = "some", return_raw, pure)]
-    pub fn some_with_fn_name(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: &str,
-    ) -> Result<bool, Box<EvalAltResult>> {
-        some(ctx, array, FnPtr::new(filter)?)
-    }
     #[rhai_fn(return_raw, pure)]
     pub fn some(
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<bool, Box<EvalAltResult>> {
+        some_with_fn_name(ctx, array, filter.fn_name())
+    }
+    #[rhai_fn(name = "some", return_raw, pure)]
+    pub fn some_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter: &str,
+    ) -> Result<bool, Box<EvalAltResult>> {
         if array.is_empty() {
             return Ok(false);
         }
 
-        let fn_name = filter.fn_name();
         let mut index_val = Dynamic::UNIT;
 
         for (i, item) in array.iter_mut().enumerate() {
             let mut args = [item, &mut index_val];
 
-            let found = match ctx.call_fn_raw(fn_name, true, false, &mut args[..1]) {
+            let found = match ctx.call_fn_raw(filter, true, false, &mut args[..1]) {
                 Ok(r) => r,
                 Err(err) => match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(fn_name) =>
+                        if fn_sig.starts_with(filter) =>
                     {
                         *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(fn_name, true, false, &mut args)?
+                        ctx.call_fn_raw(filter, true, false, &mut args)?
                     }
                     _ => {
                         return Err(EvalAltResult::ErrorInFunctionCall(
@@ -583,38 +577,37 @@ mod array_functions {
 
         Ok(false)
     }
-    #[rhai_fn(name = "all", return_raw, pure)]
-    pub fn all_with_fn_name(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: &str,
-    ) -> Result<bool, Box<EvalAltResult>> {
-        all(ctx, array, FnPtr::new(filter)?)
-    }
     #[rhai_fn(return_raw, pure)]
     pub fn all(
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<bool, Box<EvalAltResult>> {
+        all_with_fn_name(ctx, array, filter.fn_name())
+    }
+    #[rhai_fn(name = "all", return_raw, pure)]
+    pub fn all_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter: &str,
+    ) -> Result<bool, Box<EvalAltResult>> {
         if array.is_empty() {
             return Ok(true);
         }
 
-        let fn_name = filter.fn_name();
         let mut index_val = Dynamic::UNIT;
 
         for (i, item) in array.iter_mut().enumerate() {
             let mut args = [item, &mut index_val];
 
-            let found = match ctx.call_fn_raw(fn_name, true, false, &mut args[..1]) {
+            let found = match ctx.call_fn_raw(filter, true, false, &mut args[..1]) {
                 Ok(r) => r,
                 Err(err) => match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(fn_name) =>
+                        if fn_sig.starts_with(filter) =>
                     {
                         *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(fn_name, true, false, &mut args)?
+                        ctx.call_fn_raw(filter, true, false, &mut args)?
                     }
                     _ => {
                         return Err(EvalAltResult::ErrorInFunctionCall(
@@ -647,10 +640,6 @@ mod array_functions {
         array: &mut Array,
         comparer: FnPtr,
     ) -> Result<(), Box<EvalAltResult>> {
-        if array.is_empty() {
-            return Ok(());
-        }
-
         dedup_with_fn_name(ctx, array, comparer.fn_name())
     }
     #[rhai_fn(name = "dedup", return_raw)]
@@ -674,57 +663,21 @@ mod array_functions {
 
         Ok(())
     }
-    #[rhai_fn(name = "reduce", return_raw, pure)]
-    pub fn reduce_with_fn_name(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        reducer: &str,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        reduce(ctx, array, FnPtr::new(reducer)?)
-    }
     #[rhai_fn(return_raw, pure)]
     pub fn reduce(
         ctx: NativeCallContext,
         array: &mut Array,
         reducer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        if array.is_empty() {
-            return Ok(Dynamic::UNIT);
-        }
-
-        let mut result = Dynamic::UNIT;
-
-        for (i, item) in array.iter().enumerate() {
-            result = reducer
-                .call_dynamic(&ctx, None, [result.clone(), item.clone()])
-                .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(reducer.fn_name()) =>
-                    {
-                        reducer.call_dynamic(&ctx, None, [result, item.clone(), (i as INT).into()])
-                    }
-                    _ => Err(err),
-                })
-                .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
-                        "reduce".to_string(),
-                        ctx.source().unwrap_or("").to_string(),
-                        err,
-                        Position::NONE,
-                    ))
-                })?;
-        }
-
-        Ok(result)
+        reduce_with_fn_name(ctx, array, reducer.fn_name())
     }
     #[rhai_fn(name = "reduce", return_raw, pure)]
-    pub fn reduce_with_fn_name_with_initial(
+    pub fn reduce_with_fn_name(
         ctx: NativeCallContext,
         array: &mut Array,
         reducer: &str,
-        initial: Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        reduce_with_initial(ctx, array, FnPtr::new(reducer)?, initial)
+        reduce_with_fn_name_with_initial(ctx, array, reducer, Dynamic::UNIT)
     }
     #[rhai_fn(name = "reduce", return_raw, pure)]
     pub fn reduce_with_initial(
@@ -733,20 +686,34 @@ mod array_functions {
         reducer: FnPtr,
         initial: Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        reduce_with_fn_name_with_initial(ctx, array, reducer.fn_name(), initial)
+    }
+    #[rhai_fn(name = "reduce", return_raw, pure)]
+    pub fn reduce_with_fn_name_with_initial(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        reducer: &str,
+        initial: Dynamic,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         if array.is_empty() {
             return Ok(initial);
         }
 
         let mut result = initial;
+        let mut index_val = Dynamic::UNIT;
 
-        for (i, item) in array.iter().enumerate() {
-            result = reducer
-                .call_dynamic(&ctx, None, [result.clone(), item.clone()])
+        for (i, item) in array.iter_mut().enumerate() {
+            let mut args = [&mut result, &mut item.clone(), &mut index_val];
+
+            result = ctx
+                .call_fn_raw(reducer, true, false, &mut args[..2])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(reducer.fn_name()) =>
+                        if fn_sig.starts_with(reducer) =>
                     {
-                        reducer.call_dynamic(&ctx, None, [result, item.clone(), (i as INT).into()])
+                        *args[1] = item.clone();
+                        *args[2] = Dynamic::from(i as INT);
+                        ctx.call_fn_raw(reducer, true, false, &mut args)
                     }
                     _ => Err(err),
                 })
@@ -762,57 +729,21 @@ mod array_functions {
 
         Ok(result)
     }
-    #[rhai_fn(name = "reduce_ref", return_raw, pure)]
-    pub fn reduce_rev_with_fn_name(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        reducer: &str,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
-        reduce_rev(ctx, array, FnPtr::new(reducer)?)
-    }
     #[rhai_fn(return_raw, pure)]
     pub fn reduce_rev(
         ctx: NativeCallContext,
         array: &mut Array,
         reducer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        if array.is_empty() {
-            return Ok(Dynamic::UNIT);
-        }
-
-        let mut result = Dynamic::UNIT;
-
-        for (i, item) in array.iter().enumerate().rev() {
-            result = reducer
-                .call_dynamic(&ctx, None, [result.clone(), item.clone()])
-                .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(reducer.fn_name()) =>
-                    {
-                        reducer.call_dynamic(&ctx, None, [result, item.clone(), (i as INT).into()])
-                    }
-                    _ => Err(err),
-                })
-                .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
-                        "reduce_rev".to_string(),
-                        ctx.source().unwrap_or("").to_string(),
-                        err,
-                        Position::NONE,
-                    ))
-                })?;
-        }
-
-        Ok(result)
+        reduce_rev_with_fn_name(ctx, array, reducer.fn_name())
     }
-    #[rhai_fn(name = "reduce_ref", return_raw, pure)]
-    pub fn reduce_rev_with_fn_name_with_initial(
+    #[rhai_fn(name = "reduce_rev", return_raw, pure)]
+    pub fn reduce_rev_with_fn_name(
         ctx: NativeCallContext,
         array: &mut Array,
         reducer: &str,
-        initial: Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        reduce_rev_with_initial(ctx, array, FnPtr::new(reducer)?, initial)
+        reduce_rev_with_fn_name_with_initial(ctx, array, reducer, Dynamic::UNIT)
     }
     #[rhai_fn(name = "reduce_rev", return_raw, pure)]
     pub fn reduce_rev_with_initial(
@@ -821,20 +752,34 @@ mod array_functions {
         reducer: FnPtr,
         initial: Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        reduce_rev_with_fn_name_with_initial(ctx, array, reducer.fn_name(), initial)
+    }
+    #[rhai_fn(name = "reduce_rev", return_raw, pure)]
+    pub fn reduce_rev_with_fn_name_with_initial(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        reducer: &str,
+        initial: Dynamic,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
         if array.is_empty() {
             return Ok(initial);
         }
 
         let mut result = initial;
+        let mut index_val = Dynamic::UNIT;
 
-        for (i, item) in array.iter().enumerate().rev() {
-            result = reducer
-                .call_dynamic(&ctx, None, [result.clone(), item.clone()])
+        for (i, item) in array.iter_mut().enumerate().rev() {
+            let mut args = [&mut result, &mut item.clone(), &mut index_val];
+
+            result = ctx
+                .call_fn_raw(reducer, true, false, &mut args[..2])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(reducer.fn_name()) =>
+                        if fn_sig.starts_with(reducer) =>
                     {
-                        reducer.call_dynamic(&ctx, None, [result, item.clone(), (i as INT).into()])
+                        *args[1] = item.clone();
+                        *args[2] = Dynamic::from(i as INT);
+                        ctx.call_fn_raw(reducer, true, false, &mut args)
                     }
                     _ => Err(err),
                 })
@@ -884,25 +829,24 @@ mod array_functions {
 
         Ok(())
     }
-    #[rhai_fn(name = "drain", return_raw, pure)]
-    pub fn drain_with_fn_name(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: &str,
-    ) -> Result<Array, Box<EvalAltResult>> {
-        drain(ctx, array, FnPtr::new(filter)?)
-    }
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, pure)]
     pub fn drain(
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
+        drain_with_fn_name(ctx, array, filter.fn_name())
+    }
+    #[rhai_fn(name = "drain", return_raw)]
+    pub fn drain_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter: &str,
+    ) -> Result<Array, Box<EvalAltResult>> {
         if array.is_empty() {
             return Ok(Array::new());
         }
 
-        let fn_name = filter.fn_name();
         let mut index_val = Dynamic::UNIT;
         let mut removed = Vec::with_capacity(array.len());
         let mut count = 0;
@@ -910,14 +854,14 @@ mod array_functions {
         for (i, item) in array.iter_mut().enumerate() {
             let mut args = [item, &mut index_val];
 
-            let remove = match ctx.call_fn_raw(fn_name, true, false, &mut args[..1]) {
+            let remove = match ctx.call_fn_raw(filter, true, false, &mut args[..1]) {
                 Ok(r) => r,
                 Err(err) => match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(fn_name) =>
+                        if fn_sig.starts_with(filter) =>
                     {
                         *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(fn_name, true, false, &mut args)?
+                        ctx.call_fn_raw(filter, true, false, &mut args)?
                     }
                     _ => {
                         return Err(EvalAltResult::ErrorInFunctionCall(
@@ -986,25 +930,24 @@ mod array_functions {
 
         array.drain(start..start + len).collect()
     }
-    #[rhai_fn(name = "retain", return_raw, pure)]
-    pub fn retain_with_fn_name(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: &str,
-    ) -> Result<Array, Box<EvalAltResult>> {
-        retain(ctx, array, FnPtr::new(filter)?)
-    }
-    #[rhai_fn(return_raw)]
+    #[rhai_fn(return_raw, pure)]
     pub fn retain(
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
+        retain_with_fn_name(ctx, array, filter.fn_name())
+    }
+    #[rhai_fn(name = "retain", return_raw)]
+    pub fn retain_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter: &str,
+    ) -> Result<Array, Box<EvalAltResult>> {
         if array.is_empty() {
             return Ok(Array::new());
         }
 
-        let fn_name = filter.fn_name();
         let mut index_val = Dynamic::UNIT;
         let mut removed = Vec::with_capacity(array.len());
         let mut count = 0;
@@ -1012,14 +955,14 @@ mod array_functions {
         for (i, item) in array.iter_mut().enumerate() {
             let mut args = [item, &mut index_val];
 
-            let keep = match ctx.call_fn_raw(fn_name, true, false, &mut args[..1]) {
+            let keep = match ctx.call_fn_raw(filter, true, false, &mut args[..1]) {
                 Ok(r) => r,
                 Err(err) => match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(fn_name) =>
+                        if fn_sig.starts_with(filter) =>
                     {
                         *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(fn_name, true, false, &mut args)?
+                        ctx.call_fn_raw(filter, true, false, &mut args)?
                     }
                     _ => {
                         return Err(EvalAltResult::ErrorInFunctionCall(
