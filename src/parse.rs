@@ -3332,18 +3332,19 @@ impl Engine {
         #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
     ) -> Result<AST, ParseError> {
         let _scope = scope;
-        let (statements, lib) = self.parse_global_level(input, state)?;
+        let (statements, _lib) = self.parse_global_level(input, state)?;
 
         #[cfg(not(feature = "no_optimize"))]
         return Ok(crate::optimize::optimize_into_ast(
             self,
             _scope,
             statements,
-            lib,
+            _lib,
             optimization_level,
         ));
 
         #[cfg(feature = "no_optimize")]
+        #[cfg(not(feature = "no_function"))]
         {
             let mut m = crate::Module::new();
 
@@ -3353,5 +3354,9 @@ impl Engine {
 
             return Ok(AST::new(statements, m));
         }
+
+        #[cfg(feature = "no_optimize")]
+        #[cfg(feature = "no_function")]
+        return Ok(AST::new(statements, crate::Module::new()));
     }
 }

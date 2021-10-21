@@ -322,7 +322,7 @@ mod decimal_functions {
     #[cfg(feature = "no_float")]
     #[rhai_fn(return_raw)]
     pub fn parse_float(s: &str) -> Result<Decimal, Box<EvalAltResult>> {
-        super::parse_decimal(s)
+        parse_decimal(s)
     }
 
     pub fn sin(x: Decimal) -> Decimal {
