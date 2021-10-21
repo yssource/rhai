@@ -3348,7 +3348,7 @@ impl Engine {
         {
             let mut m = crate::Module::new();
 
-            lib.into_iter().for_each(|fn_def| {
+            _lib.into_iter().for_each(|fn_def| {
                 m.set_script_fn(fn_def);
             });
 
