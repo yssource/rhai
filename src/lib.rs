@@ -116,7 +116,7 @@ pub type INT = i32;
 /// The system floating-point type. It is defined as [`f64`].
 /// Not available under `no_float`.
 ///
-/// If the `f32_float` feature is enabled, this will be [`i32`] instead.
+/// If the `f32_float` feature is enabled, this will be [`f32`] instead.
 #[cfg(not(feature = "no_float"))]
 #[cfg(not(feature = "f32_float"))]
 pub type FLOAT = f64;
