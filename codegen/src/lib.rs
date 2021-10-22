@@ -184,7 +184,7 @@ pub fn export_module(
     proc_macro::TokenStream::from(tokens)
 }
 
-/// Macro to generate a Rhai `Module` from a _plugin module_ defined via [`#[export_module]`][export_module].
+/// Macro to generate a Rhai `Module` from a _plugin module_ defined via [`#[export_module]`][macro@export_module].
 ///
 /// # Usage
 ///
@@ -265,7 +265,7 @@ pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro
     }
 }
 
-/// Macro to register a _plugin function_ (defined via [`#[export_fn]`][export_fn]) into an `Engine`.
+/// Macro to register a _plugin function_ (defined via [`#[export_fn]`][macro@export_fn]) into an `Engine`.
 ///
 /// # Usage
 ///
