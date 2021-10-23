@@ -25,7 +25,7 @@ where
         #[cfg(not(feature = "unchecked"))]
         if let Some(r) = from.checked_add(&step) {
             if r == from {
-                return EvalAltResult::ErrorInFunctionCall(
+                return Err(EvalAltResult::ErrorInFunctionCall(
                     "range".to_string(),
                     Default::default(),
                     EvalAltResult::ErrorArithmetic(
@@ -35,7 +35,7 @@ where
                     .into(),
                     crate::Position::NONE,
                 )
-                .into();
+                .into());
             }
         }
 
@@ -122,21 +122,27 @@ impl BitRange {
 
             #[cfg(not(feature = "unchecked"))]
             if offset >= BITS {
-                return EvalAltResult::ErrorBitFieldBounds(BITS, from, crate::Position::NONE)
-                    .into();
+                return Err(
+                    EvalAltResult::ErrorBitFieldBounds(BITS, from, crate::Position::NONE).into(),
+                );
             }
             offset
         } else {
             #[cfg(not(feature = "unchecked"))]
             if let Some(abs_from) = from.checked_abs() {
                 if (abs_from as usize) > BITS {
-                    return EvalAltResult::ErrorBitFieldBounds(BITS, from, crate::Position::NONE)
-                        .into();
+                    return Err(EvalAltResult::ErrorBitFieldBounds(
+                        BITS,
+                        from,
+                        crate::Position::NONE,
+                    )
+                    .into());
                 }
                 BITS - (abs_from as usize)
             } else {
-                return EvalAltResult::ErrorBitFieldBounds(BITS, from, crate::Position::NONE)
-                    .into();
+                return Err(
+                    EvalAltResult::ErrorBitFieldBounds(BITS, from, crate::Position::NONE).into(),
+                );
             }
 
             #[cfg(feature = "unchecked")]
@@ -245,7 +251,7 @@ impl Iterator for CharsStream {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self.0.len() - self.1;
         (remaining, Some(remaining))
@@ -255,7 +261,7 @@ impl Iterator for CharsStream {
 impl FusedIterator for CharsStream {}
 
 impl ExactSizeIterator for CharsStream {
-    #[inline(always)]
+    #[inline]
     fn len(&self) -> usize {
         self.0.len() - self.1
     }
@@ -325,10 +331,10 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
             pub fn new(from: FLOAT, to: FLOAT, step: FLOAT) -> Result<Self, Box<EvalAltResult>> {
                 #[cfg(not(feature = "unchecked"))]
                 if step == 0.0 {
-                    return EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
+                    return Err(EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
                         EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE).into(),
                         crate::Position::NONE,
-                    ).into();
+                    ).into());
                 }
 
                 Ok(Self(from, to, step))
@@ -387,10 +393,10 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
             pub fn new(from: Decimal, to: Decimal, step: Decimal) -> Result<Self, Box<EvalAltResult>> {
                 #[cfg(not(feature = "unchecked"))]
                 if step.is_zero() {
-                    return EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
+                    return Err(EvalAltResult::ErrorInFunctionCall("range".to_string(), "".to_string(),
                         EvalAltResult::ErrorArithmetic("step value cannot be zero".to_string(), crate::Position::NONE).into(),
                         crate::Position::NONE,
-                    ).into();
+                    ).into());
                 }
 
                 Ok(Self(from, to, step))

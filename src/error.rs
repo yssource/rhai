@@ -216,14 +216,14 @@ impl fmt::Display for EvalAltResult {
 }
 
 impl<T: AsRef<str>> From<T> for EvalAltResult {
-    #[inline(always)]
+    #[inline(never)]
     fn from(err: T) -> Self {
         Self::ErrorRuntime(err.as_ref().to_string().into(), Position::NONE)
     }
 }
 
 impl<T: AsRef<str>> From<T> for Box<EvalAltResult> {
-    #[inline(always)]
+    #[inline(never)]
     fn from(err: T) -> Self {
         EvalAltResult::ErrorRuntime(err.as_ref().to_string().into(), Position::NONE).into()
     }
@@ -444,19 +444,12 @@ impl EvalAltResult {
     }
     /// Consume the current [`EvalAltResult`] and return a new one with the specified [`Position`]
     /// if the current position is [`Position::None`].
-    #[inline]
+    #[inline(never)]
     #[must_use]
     pub(crate) fn fill_position(mut self: Box<Self>, new_position: Position) -> Box<Self> {
         if self.position().is_none() {
             self.set_position(new_position);
         }
         self
-    }
-}
-
-impl<T> From<EvalAltResult> for Result<T, Box<EvalAltResult>> {
-    #[inline(always)]
-    fn from(err: EvalAltResult) -> Self {
-        Err(err.into())
     }
 }

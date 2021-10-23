@@ -1,15 +1,16 @@
+use proc_macro2::{Span, TokenStream};
+use quote::{quote, quote_spanned, ToTokens};
+use syn::{
+    parse::{Parse, ParseStream},
+    spanned::Spanned,
+};
+
 #[cfg(no_std)]
 use alloc::format;
 #[cfg(not(no_std))]
 use std::format;
 
 use std::borrow::Cow;
-
-use quote::{quote, quote_spanned, ToTokens};
-use syn::{
-    parse::{Parse, ParseStream},
-    spanned::Spanned,
-};
 
 use crate::attrs::{ExportInfo, ExportScope, ExportedParams};
 
@@ -52,7 +53,7 @@ impl Default for FnSpecialAccess {
 }
 
 impl FnSpecialAccess {
-    pub fn get_fn_name(&self) -> Option<(String, String, proc_macro2::Span)> {
+    pub fn get_fn_name(&self) -> Option<(String, String, Span)> {
         match self {
             FnSpecialAccess::None => None,
             FnSpecialAccess::Property(Property::Get(ref g)) => {
@@ -64,12 +65,12 @@ impl FnSpecialAccess {
             FnSpecialAccess::Index(Index::Get) => Some((
                 FN_IDX_GET.to_string(),
                 "index_get".to_string(),
-                proc_macro2::Span::call_site(),
+                Span::call_site(),
             )),
             FnSpecialAccess::Index(Index::Set) => Some((
                 FN_IDX_SET.to_string(),
                 "index_set".to_string(),
-                proc_macro2::Span::call_site(),
+                Span::call_site(),
             )),
         }
     }
@@ -98,12 +99,12 @@ pub fn print_type(ty: &syn::Type) -> String {
 #[derive(Debug, Default)]
 pub struct ExportedFnParams {
     pub name: Vec<String>,
-    pub return_raw: Option<proc_macro2::Span>,
-    pub pure: Option<proc_macro2::Span>,
+    pub return_raw: Option<Span>,
+    pub pure: Option<Span>,
     pub skip: bool,
     pub special: FnSpecialAccess,
     pub namespace: FnNamespaceAccess,
-    pub span: Option<proc_macro2::Span>,
+    pub span: Option<Span>,
 }
 
 pub const FN_GET: &str = "get$";
@@ -274,12 +275,13 @@ impl ExportedParams for ExportedFnParams {
 
 #[derive(Debug)]
 pub struct ExportedFn {
-    entire_span: proc_macro2::Span,
+    entire_span: Span,
     signature: syn::Signature,
     visibility: syn::Visibility,
     pass_context: bool,
     mut_receiver: bool,
     params: ExportedFnParams,
+    cfg_attrs: Vec<syn::Attribute>,
 }
 
 impl Parse for ExportedFn {
@@ -293,8 +295,7 @@ impl Parse for ExportedFn {
             syn::parse2::<syn::Path>(quote! { rhai::NativeCallContext }).unwrap();
         let mut pass_context = false;
 
-        // #[cfg] attributes are not allowed on functions due to what is generated for them
-        crate::attrs::deny_cfg_attr(&fn_all.attrs)?;
+        let cfg_attrs = crate::attrs::collect_cfg_attr(&fn_all.attrs);
 
         let visibility = fn_all.vis;
 
@@ -369,7 +370,7 @@ impl Parse for ExportedFn {
             if !is_ok {
                 return Err(syn::Error::new(
                     ty.span(),
-                    "this type in this position passes from Rhai by value",
+                    "function parameters other than the first one cannot be passed by reference",
                 ));
             }
         }
@@ -402,6 +403,7 @@ impl Parse for ExportedFn {
             pass_context,
             mut_receiver,
             params: Default::default(),
+            cfg_attrs,
         })
     }
 }
@@ -411,6 +413,10 @@ impl ExportedFn {
 
     pub fn params(&self) -> &ExportedFnParams {
         &self.params
+    }
+
+    pub fn cfg_attrs(&self) -> &[syn::Attribute] {
+        &self.cfg_attrs
     }
 
     pub fn update_scope(&mut self, parent_scope: &ExportScope) {
@@ -443,7 +449,7 @@ impl ExportedFn {
         !matches!(self.visibility, syn::Visibility::Inherited)
     }
 
-    pub fn span(&self) -> &proc_macro2::Span {
+    pub fn span(&self) -> &Span {
         &self.entire_span
     }
 
@@ -456,7 +462,7 @@ impl ExportedFn {
             .params
             .name
             .iter()
-            .map(|s| syn::LitStr::new(s, proc_macro2::Span::call_site()))
+            .map(|s| syn::LitStr::new(s, Span::call_site()))
             .collect();
 
         if let Some((s, _, span)) = self.params.special.get_fn_name() {
@@ -495,6 +501,10 @@ impl ExportedFn {
             syn::ReturnType::Type(_, ref ret_type) => Some(flatten_type_groups(ret_type)),
             _ => None,
         }
+    }
+
+    pub fn set_cfg_attrs(&mut self, cfg_attrs: Vec<syn::Attribute>) {
+        self.cfg_attrs = cfg_attrs
     }
 
     pub fn set_params(&mut self, mut params: ExportedFnParams) -> syn::Result<()> {
@@ -586,7 +596,7 @@ impl ExportedFn {
         Ok(())
     }
 
-    pub fn generate(self) -> proc_macro2::TokenStream {
+    pub fn generate(self) -> TokenStream {
         let name: syn::Ident =
             syn::Ident::new(&format!("rhai_fn_{}", self.name()), self.name().span());
         let impl_block = self.generate_impl("Token");
@@ -603,17 +613,16 @@ impl ExportedFn {
         }
     }
 
-    pub fn generate_dynamic_fn(&self) -> proc_macro2::TokenStream {
+    pub fn generate_dynamic_fn(&self) -> TokenStream {
         let name = self.name().clone();
 
         let mut dynamic_signature = self.signature.clone();
-        dynamic_signature.ident =
-            syn::Ident::new("dynamic_result_fn", proc_macro2::Span::call_site());
+        dynamic_signature.ident = syn::Ident::new("dynamic_result_fn", Span::call_site());
         dynamic_signature.output = syn::parse2::<syn::ReturnType>(quote! {
             -> RhaiResult
         })
         .unwrap();
-        let arguments: Vec<syn::Ident> = dynamic_signature
+        let arguments: Vec<_> = dynamic_signature
             .inputs
             .iter()
             .filter_map(|fn_arg| match fn_arg {
@@ -628,7 +637,7 @@ impl ExportedFn {
         let return_span = self
             .return_type()
             .map(|r| r.span())
-            .unwrap_or_else(proc_macro2::Span::call_site);
+            .unwrap_or_else(Span::call_site);
         if self.params.return_raw.is_some() {
             quote_spanned! { return_span =>
                 pub #dynamic_signature {
@@ -646,16 +655,16 @@ impl ExportedFn {
         }
     }
 
-    pub fn generate_impl(&self, on_type_name: &str) -> proc_macro2::TokenStream {
+    pub fn generate_impl(&self, on_type_name: &str) -> TokenStream {
         let sig_name = self.name().clone();
         let arg_count = self.arg_count();
         let is_method_call = self.mutable_receiver();
 
-        let mut unpack_statements: Vec<syn::Stmt> = Vec::new();
-        let mut unpack_exprs: Vec<syn::Expr> = Vec::new();
+        let mut unpack_statements = Vec::new();
+        let mut unpack_exprs = Vec::new();
         #[cfg(feature = "metadata")]
-        let mut input_type_names: Vec<String> = Vec::new();
-        let mut input_type_exprs: Vec<syn::Expr> = Vec::new();
+        let mut input_type_names = Vec::new();
+        let mut input_type_exprs = Vec::new();
 
         let return_type = self
             .return_type()
@@ -672,7 +681,7 @@ impl ExportedFn {
         if is_method_call {
             skip_first_arg = true;
             let first_arg = self.arg_list().next().unwrap();
-            let var = syn::Ident::new("arg0", proc_macro2::Span::call_site());
+            let var = syn::Ident::new("arg0", Span::call_site());
             match first_arg {
                 syn::FnArg::Typed(syn::PatType { pat, ty, .. }) => {
                     #[cfg(feature = "metadata")]
@@ -696,7 +705,7 @@ impl ExportedFn {
                         unpack_statements.push(
                         syn::parse2::<syn::Stmt>(quote! {
                             if args[0usize].is_read_only() {
-                                return EvalAltResult::ErrorAssignmentToConstant(#arg_lit_str.to_string(), Position::NONE).into();
+                                return Err(EvalAltResult::ErrorAssignmentToConstant(#arg_lit_str.to_string(), Position::NONE).into());
                             }
                         })
                         .unwrap(),
@@ -725,7 +734,7 @@ impl ExportedFn {
         let str_type_path = syn::parse2::<syn::Path>(quote! { str }).unwrap();
         let string_type_path = syn::parse2::<syn::Path>(quote! { String }).unwrap();
         for (i, arg) in self.arg_list().enumerate().skip(skip_first_arg as usize) {
-            let var = syn::Ident::new(&format!("arg{}", i), proc_macro2::Span::call_site());
+            let var = syn::Ident::new(&format!("arg{}", i), Span::call_site());
             let is_string;
             let is_ref;
             match arg {
@@ -811,7 +820,7 @@ impl ExportedFn {
         let return_span = self
             .return_type()
             .map(|r| r.span())
-            .unwrap_or_else(proc_macro2::Span::call_site);
+            .unwrap_or_else(Span::call_site);
         let return_expr = if self.params.return_raw.is_none() {
             quote_spanned! { return_span =>
                 Ok(Dynamic::from(#sig_name(#(#unpack_exprs),*)))
@@ -822,7 +831,7 @@ impl ExportedFn {
             }
         };
 
-        let type_name = syn::Ident::new(on_type_name, proc_macro2::Span::call_site());
+        let type_name = syn::Ident::new(on_type_name, Span::call_site());
 
         #[cfg(feature = "metadata")]
         let param_names = quote! {
@@ -831,11 +840,19 @@ impl ExportedFn {
         #[cfg(not(feature = "metadata"))]
         let param_names = quote! {};
 
+        let cfg_attrs: Vec<_> = self
+            .cfg_attrs()
+            .iter()
+            .map(syn::Attribute::to_token_stream)
+            .collect();
+
         quote! {
+            #(#cfg_attrs)*
             impl #type_name {
                 #param_names
                 #[inline(always)] pub fn param_types() -> [TypeId; #arg_count] { [#(#input_type_exprs),*] }
             }
+            #(#cfg_attrs)*
             impl PluginFunction for #type_name {
                 #[inline(always)]
                 fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {

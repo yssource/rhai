@@ -8,7 +8,7 @@ use std::{
 };
 
 /// Cast a type into another type.
-#[inline(always)]
+#[inline]
 pub fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Result<B, A> {
     if TypeId::of::<B>() == a.type_id() {
         // SAFETY: Just checked we have the right type. We explicitly forget the
@@ -25,7 +25,7 @@ pub fn unsafe_try_cast<A: Any, B: Any>(a: A) -> Result<B, A> {
 }
 
 /// Cast a Boxed type into another type.
-#[inline(always)]
+#[inline]
 pub fn unsafe_cast_box<X: Any, T: Any>(item: Box<X>) -> Result<Box<T>, Box<X>> {
     // Only allow casting to the exact same type
     if TypeId::of::<X>() == TypeId::of::<T>() {

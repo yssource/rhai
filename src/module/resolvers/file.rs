@@ -215,7 +215,7 @@ impl FileModuleResolver {
         return self.cache.write().unwrap().contains_key(&file_path);
     }
     /// Empty the internal cache.
-    #[inline(always)]
+    #[inline]
     pub fn clear_cache(&mut self) -> &mut Self {
         #[cfg(not(feature = "sync"))]
         self.cache.borrow_mut().clear();

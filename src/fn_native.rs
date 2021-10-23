@@ -144,14 +144,14 @@ impl<'a> NativeCallContext<'a> {
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
-    #[inline(always)]
+    #[inline]
     pub fn iter_imports(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.mods.iter().flat_map(|&m| m.iter())
     }
     /// Get an iterator over the current set of modules imported via `import` statements.
     #[cfg(not(feature = "no_module"))]
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn iter_imports_raw(
         &self,
     ) -> impl Iterator<Item = (&crate::Identifier, &Shared<Module>)> {
@@ -169,7 +169,7 @@ impl<'a> NativeCallContext<'a> {
         self.mods
     }
     /// Get an iterator over the namespaces containing definitions of all script-defined functions.
-    #[inline(always)]
+    #[inline]
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
     }
@@ -183,6 +183,9 @@ impl<'a> NativeCallContext<'a> {
     }
     /// Call a function inside the call context.
     ///
+    /// If `is_method_call` is [`true`], the first argument is assumed to be the
+    /// `this` pointer for a script-defined function (or the object of a method call).
+    ///
     /// # WARNING
     ///
     /// All arguments may be _consumed_, meaning that they may be replaced by `()`.
@@ -191,48 +194,39 @@ impl<'a> NativeCallContext<'a> {
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
     ///
-    /// If `is_method` is [`true`], the first argument is assumed to be passed
+    /// If `is_ref_mut` is [`true`], the first argument is assumed to be passed
     /// by reference and is not consumed.
-    #[inline(always)]
-    pub fn call_fn_dynamic_raw(
+    pub fn call_fn_raw(
         &self,
-        fn_name: impl AsRef<str>,
+        fn_name: &str,
+        is_ref_mut: bool,
         is_method_call: bool,
         args: &mut [&mut Dynamic],
-    ) -> RhaiResult {
-        fn call_fn_dynamic_inner(
-            context: &NativeCallContext,
-            is_method_call: bool,
-            fn_name: &str,
-            args: &mut [&mut Dynamic],
-        ) -> Result<Dynamic, Box<EvalAltResult>> {
-            let hash = if is_method_call {
-                FnCallHashes::from_script_and_native(
-                    calc_fn_hash(fn_name, args.len() - 1),
-                    calc_fn_hash(fn_name, args.len()),
-                )
-            } else {
-                FnCallHashes::from_script(calc_fn_hash(fn_name, args.len()))
-            };
-            context
-                .engine()
-                .exec_fn_call(
-                    &mut context.mods.cloned().unwrap_or_default(),
-                    &mut Default::default(),
-                    context.lib,
-                    fn_name,
-                    hash,
-                    args,
-                    is_method_call,
-                    is_method_call,
-                    Position::NONE,
-                    None,
-                    0,
-                )
-                .map(|(r, _)| r)
-        }
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let hash = if is_method_call {
+            FnCallHashes::from_script_and_native(
+                calc_fn_hash(fn_name, args.len() - 1),
+                calc_fn_hash(fn_name, args.len()),
+            )
+        } else {
+            FnCallHashes::from_script(calc_fn_hash(fn_name, args.len()))
+        };
 
-        call_fn_dynamic_inner(self, is_method_call, fn_name.as_ref(), args)
+        self.engine()
+            .exec_fn_call(
+                &mut self.mods.cloned().unwrap_or_default(),
+                &mut Default::default(),
+                self.lib,
+                fn_name,
+                hash,
+                args,
+                is_ref_mut,
+                is_method_call,
+                Position::NONE,
+                None,
+                0,
+            )
+            .map(|(r, _)| r)
     }
 }
 
@@ -245,7 +239,7 @@ pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
 }
 
 /// Consume a [`Shared`] resource if is unique (i.e. not shared), or clone it otherwise.
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn shared_take_or_clone<T: Clone>(value: Shared<T>) -> T {
     shared_try_take(value).unwrap_or_else(|v| v.as_ref().clone())
@@ -262,7 +256,7 @@ pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
 /// # Panics
 ///
 /// Panics if the resource is shared (i.e. has other outstanding references).
-#[inline(always)]
+#[inline]
 #[must_use]
 pub fn shared_take<T>(value: Shared<T>) -> T {
     shared_try_take(value)

@@ -9,7 +9,6 @@ use crate::fn_native::{
     OnVarCallback,
 };
 use crate::module::NamespaceRef;
-use crate::optimize::OptimizationLevel;
 use crate::packages::{Package, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::token::Token;
@@ -144,7 +143,7 @@ impl Imports {
     }
     /// Does the specified function hash key exist in this stack of imported [modules][Module]?
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn contains_fn(&self, hash: u64) -> bool {
         self.modules.iter().any(|m| m.contains_qualified_fn(hash))
@@ -161,7 +160,7 @@ impl Imports {
     /// Does the specified [`TypeId`][std::any::TypeId] iterator exist in this stack of
     /// imported [modules][Module]?
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn contains_iter(&self, id: TypeId) -> bool {
         self.modules.iter().any(|m| m.contains_qualified_iter(id))
@@ -888,7 +887,7 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
         self.mods
     }
     /// Get an iterator over the namespaces containing definition of all script-defined functions.
-    #[inline(always)]
+    #[inline]
     pub fn iter_namespaces(&self) -> impl Iterator<Item = &Module> {
         self.lib.iter().cloned()
     }
@@ -979,7 +978,8 @@ pub struct Engine {
     pub(crate) progress: Option<crate::fn_native::OnProgressCallback>,
 
     /// Optimize the AST after compilation.
-    pub(crate) optimization_level: OptimizationLevel,
+    #[cfg(not(feature = "no_optimize"))]
+    pub(crate) optimization_level: crate::OptimizationLevel,
 
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
@@ -1101,6 +1101,7 @@ impl Engine {
             #[cfg(not(feature = "unchecked"))]
             progress: None,
 
+            #[cfg(not(feature = "no_optimize"))]
             optimization_level: Default::default(),
 
             #[cfg(not(feature = "unchecked"))]
@@ -1221,7 +1222,7 @@ impl Engine {
                 return if let Some(val) = this_ptr {
                     Ok(((*val).into(), *pos))
                 } else {
-                    EvalAltResult::ErrorUnboundThis(*pos).into()
+                    Err(EvalAltResult::ErrorUnboundThis(*pos).into())
                 }
             }
             _ if state.always_search_scope => (0, expr.position()),
@@ -1723,7 +1724,7 @@ impl Engine {
                         }
                     }
                     // Syntax error
-                    _ => EvalAltResult::ErrorDotExpr("".into(), rhs.position()).into(),
+                    _ => Err(EvalAltResult::ErrorDotExpr("".into(), rhs.position()).into()),
                 }
             }
         }
@@ -1958,12 +1959,11 @@ impl Engine {
                     arr_len
                         - index
                             .checked_abs()
-                            .ok_or_else(|| {
-                                EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into()
-                            })
+                            .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos))
                             .and_then(|n| {
                                 if n as usize > arr_len {
-                                    EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into()
+                                    Err(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos)
+                                        .into())
                                 } else {
                                     Ok(n as usize)
                                 }
@@ -2014,7 +2014,9 @@ impl Engine {
                     let offset = index as usize;
                     (
                         if offset >= bits {
-                            return EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into();
+                            return Err(
+                                EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into()
+                            );
                         } else {
                             (*value & (1 << offset)) != 0
                         },
@@ -2025,14 +2027,16 @@ impl Engine {
                     (
                         // Count from end if negative
                         if offset > bits {
-                            return EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into();
+                            return Err(
+                                EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into()
+                            );
                         } else {
                             (*value & (1 << (bits - offset))) != 0
                         },
                         offset,
                     )
                 } else {
-                    return EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into();
+                    return Err(EvalAltResult::ErrorBitFieldBounds(bits, index, idx_pos).into());
                 };
 
                 Ok(Target::BitField(target, offset, bit_value.into()))
@@ -2066,7 +2070,7 @@ impl Engine {
                     )
                 } else {
                     let chars_len = s.chars().count();
-                    return EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos).into();
+                    return Err(EvalAltResult::ErrorStringBounds(chars_len, index, idx_pos).into());
                 };
 
                 Ok(Target::StringChar(target, offset, ch.into()))
@@ -2083,7 +2087,7 @@ impl Engine {
                 .map(|(v, _)| v.into())
             }
 
-            _ => EvalAltResult::ErrorIndexingType(
+            _ => Err(EvalAltResult::ErrorIndexingType(
                 format!(
                     "{} [{}]",
                     self.map_type_name(target.type_name()),
@@ -2091,7 +2095,7 @@ impl Engine {
                 ),
                 Position::NONE,
             )
-            .into(),
+            .into()),
         }
     }
 
@@ -2386,7 +2390,9 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         if target.is_read_only() {
             // Assignment to constant variable
-            return EvalAltResult::ErrorAssignmentToConstant(root.0.to_string(), root.1).into();
+            return Err(
+                EvalAltResult::ErrorAssignmentToConstant(root.0.to_string(), root.1).into(),
+            );
         }
 
         let mut new_val = new_val;
@@ -2482,8 +2488,11 @@ impl Engine {
                     .expect("`lhs_ptr` is `Variable`");
 
                 if !lhs_ptr.is_ref() {
-                    return EvalAltResult::ErrorAssignmentToConstant(var_name.to_string(), pos)
-                        .into();
+                    return Err(EvalAltResult::ErrorAssignmentToConstant(
+                        var_name.to_string(),
+                        pos,
+                    )
+                    .into());
                 }
 
                 #[cfg(not(feature = "unchecked"))]
@@ -2722,12 +2731,10 @@ impl Engine {
                 if let Some(func) = func {
                     // Add the loop variables
                     let orig_scope_len = scope.len();
-                    let counter_index = if let Some(Ident { name, .. }) = counter {
+                    let counter_index = counter.as_ref().map(|Ident { name, .. }| {
                         scope.push(unsafe_cast_var_name_to_lifetime(name), 0 as INT);
-                        Some(scope.len() - 1)
-                    } else {
-                        None
-                    };
+                        scope.len() - 1
+                    });
                     scope.push(unsafe_cast_var_name_to_lifetime(name), ());
                     let index = scope.len() - 1;
                     state.scope_level += 1;
@@ -2737,11 +2744,11 @@ impl Engine {
                         if let Some(c) = counter_index {
                             #[cfg(not(feature = "unchecked"))]
                             if x > INT::MAX as usize {
-                                return EvalAltResult::ErrorArithmetic(
+                                return Err(EvalAltResult::ErrorArithmetic(
                                     format!("for-loop counter overflow: {}", x),
                                     counter.as_ref().expect("`counter` is `Some`").pos,
                                 )
-                                .into();
+                                .into());
                             }
 
                             let mut counter_var = scope
@@ -2791,13 +2798,13 @@ impl Engine {
                     scope.rewind(orig_scope_len);
                     Ok(Dynamic::UNIT)
                 } else {
-                    EvalAltResult::ErrorFor(expr.position()).into()
+                    Err(EvalAltResult::ErrorFor(expr.position()).into())
                 }
             }
 
             // Continue/Break statement
             Stmt::BreakLoop(options, pos) => {
-                EvalAltResult::LoopBreak(options.contains(AST_OPTION_BREAK_OUT), *pos).into()
+                Err(EvalAltResult::LoopBreak(options.contains(AST_OPTION_BREAK_OUT), *pos).into())
             }
 
             // Namespace-qualified function call
@@ -2920,29 +2927,29 @@ impl Engine {
 
             // Throw value
             Stmt::Return(options, Some(expr), pos) if options.contains(AST_OPTION_BREAK_OUT) => {
-                EvalAltResult::ErrorRuntime(
+                Err(EvalAltResult::ErrorRuntime(
                     self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                         .flatten(),
                     *pos,
                 )
-                .into()
+                .into())
             }
 
             // Empty throw
             Stmt::Return(options, None, pos) if options.contains(AST_OPTION_BREAK_OUT) => {
-                EvalAltResult::ErrorRuntime(Dynamic::UNIT, *pos).into()
+                Err(EvalAltResult::ErrorRuntime(Dynamic::UNIT, *pos).into())
             }
 
             // Return value
-            Stmt::Return(_, Some(expr), pos) => EvalAltResult::Return(
+            Stmt::Return(_, Some(expr), pos) => Err(EvalAltResult::Return(
                 self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
                     .flatten(),
                 *pos,
             )
-            .into(),
+            .into()),
 
             // Empty return
-            Stmt::Return(_, None, pos) => EvalAltResult::Return(Dynamic::UNIT, *pos).into(),
+            Stmt::Return(_, None, pos) => Err(EvalAltResult::Return(Dynamic::UNIT, *pos).into()),
 
             // Let/const statement
             Stmt::Var(expr, x, options, _) => {
@@ -3005,7 +3012,7 @@ impl Engine {
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
                 if state.num_modules >= self.max_modules() {
-                    return EvalAltResult::ErrorTooManyModules(*_pos).into();
+                    return Err(EvalAltResult::ErrorTooManyModules(*_pos).into());
                 }
 
                 if let Some(path) = self
@@ -3034,7 +3041,10 @@ impl Engine {
                                 .map(|r| r.resolve(self, source, &path, path_pos))
                         })
                         .unwrap_or_else(|| {
-                            EvalAltResult::ErrorModuleNotFound(path.to_string(), path_pos).into()
+                            Err(
+                                EvalAltResult::ErrorModuleNotFound(path.to_string(), path_pos)
+                                    .into(),
+                            )
                         })?;
 
                     if let Some(name) = export.as_ref().map(|x| x.name.clone()) {
@@ -3067,7 +3077,9 @@ impl Engine {
                             if rename.is_empty() { name } else { rename }.clone(),
                         );
                     } else {
-                        return EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos).into();
+                        return Err(
+                            EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos).into()
+                        );
                     }
                 }
                 Ok(Dynamic::UNIT)
@@ -3184,11 +3196,11 @@ impl Engine {
             .max_string_size
             .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return EvalAltResult::ErrorDataTooLarge(
+            return Err(EvalAltResult::ErrorDataTooLarge(
                 "Length of string".to_string(),
                 Position::NONE,
             )
-            .into();
+            .into());
         }
 
         #[cfg(not(feature = "no_index"))]
@@ -3198,8 +3210,11 @@ impl Engine {
                 .max_array_size
                 .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return EvalAltResult::ErrorDataTooLarge("Size of array".to_string(), Position::NONE)
-                .into();
+            return Err(EvalAltResult::ErrorDataTooLarge(
+                "Size of array".to_string(),
+                Position::NONE,
+            )
+            .into());
         }
 
         #[cfg(not(feature = "no_object"))]
@@ -3209,11 +3224,11 @@ impl Engine {
                 .max_map_size
                 .map_or(usize::MAX, NonZeroUsize::get)
         {
-            return EvalAltResult::ErrorDataTooLarge(
+            return Err(EvalAltResult::ErrorDataTooLarge(
                 "Size of object map".to_string(),
                 Position::NONE,
             )
-            .into();
+            .into());
         }
 
         Ok(())
@@ -3230,14 +3245,14 @@ impl Engine {
 
         // Guard against too many operations
         if self.max_operations() > 0 && state.num_operations > self.max_operations() {
-            return EvalAltResult::ErrorTooManyOperations(pos).into();
+            return Err(EvalAltResult::ErrorTooManyOperations(pos).into());
         }
 
         // Report progress - only in steps
         if let Some(ref progress) = self.progress {
             if let Some(token) = progress(state.num_operations) {
                 // Terminate script if progress returns a termination token
-                return EvalAltResult::ErrorTerminated(token, pos).into();
+                return Err(EvalAltResult::ErrorTerminated(token, pos).into());
             }
         }
 
@@ -3248,7 +3263,7 @@ impl Engine {
     ///
     /// If a type is registered via [`register_type_with_name`][Engine::register_type_with_name],
     /// the type name provided for the registration will be used.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn map_type_name<'a>(&'a self, name: &'a str) -> &'a str {
         self.type_names
@@ -3258,7 +3273,7 @@ impl Engine {
     }
 
     /// Make a `Box<`[`EvalAltResult<ErrorMismatchDataType>`][EvalAltResult::ErrorMismatchDataType]`>`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn make_type_mismatch_err<T>(&self, typ: &str, pos: Position) -> Box<EvalAltResult> {
         EvalAltResult::ErrorMismatchDataType(

@@ -9,7 +9,6 @@ use crate::dynamic::AccessMode;
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
 use crate::fn_hash::get_hasher;
 use crate::module::NamespaceRef;
-use crate::optimize::{optimize_into_ast, OptimizationLevel};
 use crate::token::{
     is_keyword_function, is_valid_function_name, is_valid_identifier, Token, TokenStream,
     TokenizerControl,
@@ -3219,8 +3218,9 @@ impl Engine {
         input: &mut TokenStream,
         state: &mut ParseState,
         scope: &Scope,
-        optimization_level: OptimizationLevel,
+        #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
     ) -> Result<AST, ParseError> {
+        let _scope = scope;
         let mut functions = Default::default();
 
         let settings = ParseSettings {
@@ -3249,16 +3249,17 @@ impl Engine {
         let mut statements = StaticVec::new();
         statements.push(Stmt::Expr(expr));
 
-        Ok(
-            // Optimize AST
-            optimize_into_ast(
-                self,
-                scope,
-                statements,
-                Default::default(),
-                optimization_level,
-            ),
-        )
+        #[cfg(not(feature = "no_optimize"))]
+        return Ok(crate::optimize::optimize_into_ast(
+            self,
+            _scope,
+            statements,
+            Default::default(),
+            optimization_level,
+        ));
+
+        #[cfg(feature = "no_optimize")]
+        return Ok(AST::new(statements, crate::Module::new()));
     }
 
     /// Parse the global level statements.
@@ -3322,19 +3323,40 @@ impl Engine {
     }
 
     /// Run the parser on an input stream, returning an AST.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn parse(
         &self,
         input: &mut TokenStream,
         state: &mut ParseState,
         scope: &Scope,
-        optimization_level: OptimizationLevel,
+        #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
     ) -> Result<AST, ParseError> {
-        let (statements, lib) = self.parse_global_level(input, state)?;
+        let _scope = scope;
+        let (statements, _lib) = self.parse_global_level(input, state)?;
 
-        Ok(
-            // Optimize AST
-            optimize_into_ast(self, scope, statements, lib, optimization_level),
-        )
+        #[cfg(not(feature = "no_optimize"))]
+        return Ok(crate::optimize::optimize_into_ast(
+            self,
+            _scope,
+            statements,
+            _lib,
+            optimization_level,
+        ));
+
+        #[cfg(feature = "no_optimize")]
+        #[cfg(not(feature = "no_function"))]
+        {
+            let mut m = crate::Module::new();
+
+            _lib.into_iter().for_each(|fn_def| {
+                m.set_script_fn(fn_def);
+            });
+
+            return Ok(AST::new(statements, m));
+        }
+
+        #[cfg(feature = "no_optimize")]
+        #[cfg(feature = "no_function")]
+        return Ok(AST::new(statements, crate::Module::new()));
     }
 }

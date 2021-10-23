@@ -88,7 +88,7 @@
 //!
 
 use quote::quote;
-use syn::parse_macro_input;
+use syn::{parse_macro_input, spanned::Spanned};
 
 mod attrs;
 mod function;
@@ -130,9 +130,19 @@ pub fn export_fn(
 
     let parsed_params = match crate::attrs::outer_item_attributes(args.into(), "export_fn") {
         Ok(args) => args,
-        Err(err) => return proc_macro::TokenStream::from(err.to_compile_error()),
+        Err(err) => return err.to_compile_error().into(),
     };
     let mut function_def = parse_macro_input!(input as function::ExportedFn);
+
+    if !function_def.cfg_attrs().is_empty() {
+        return syn::Error::new(
+            function_def.cfg_attrs()[0].span(),
+            "`cfg` attributes are not allowed for `export_fn`",
+        )
+        .to_compile_error()
+        .into();
+    }
+
     if let Err(e) = function_def.set_params(parsed_params) {
         return e.to_compile_error().into();
     }
@@ -173,7 +183,7 @@ pub fn export_module(
 ) -> proc_macro::TokenStream {
     let parsed_params = match crate::attrs::outer_item_attributes(args.into(), "export_module") {
         Ok(args) => args,
-        Err(err) => return proc_macro::TokenStream::from(err.to_compile_error()),
+        Err(err) => return err.to_compile_error().into(),
     };
     let mut module_def = parse_macro_input!(input as module::Module);
     if let Err(e) = module_def.set_params(parsed_params) {

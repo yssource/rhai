@@ -22,10 +22,11 @@ type RegisterMacroInput = (syn::Expr, proc_macro2::TokenStream, syn::Path);
 pub fn parse_register_macro(
     args: proc_macro::TokenStream,
 ) -> Result<RegisterMacroInput, syn::Error> {
-    let parser = syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_separated_nonempty;
-    let args = parser.parse(args).unwrap();
+    let args = syn::punctuated::Punctuated::<_, syn::Token![,]>::parse_separated_nonempty
+        .parse(args)
+        .unwrap();
     let arg_span = args.span();
-    let mut items: Vec<syn::Expr> = args.into_iter().collect();
+    let mut items: Vec<_> = args.into_iter().collect();
     if items.len() != 3 {
         return Err(syn::Error::new(
             arg_span,

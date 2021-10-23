@@ -482,7 +482,7 @@ impl<'a> Scope<'a> {
     /// # Panics
     ///
     /// Panics if the index is out of bounds.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn get_mut_by_index(&mut self, index: usize) -> &mut Dynamic {
         self.values.get_mut(index).expect("index is out of bounds")
@@ -565,7 +565,7 @@ impl<'a> Scope<'a> {
     /// assert!(is_constant);
     /// assert_eq!(value.cast::<String>(), "hello");
     /// ```
-    #[inline(always)]
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (&str, bool, Dynamic)> {
         self.iter_raw()
             .map(|(name, constant, value)| (name, constant, value.flatten_clone()))
@@ -582,7 +582,7 @@ impl<'a> Scope<'a> {
 }
 
 impl<'a, K: Into<Cow<'a, str>>> Extend<(K, Dynamic)> for Scope<'a> {
-    #[inline(always)]
+    #[inline]
     fn extend<T: IntoIterator<Item = (K, Dynamic)>>(&mut self, iter: T) {
         iter.into_iter().for_each(|(name, value)| {
             self.names.push((name.into(), Default::default()));

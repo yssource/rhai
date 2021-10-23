@@ -9,7 +9,6 @@ use crate::engine::{
 use crate::fn_builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 use crate::fn_native::FnAny;
 use crate::module::NamespaceRef;
-use crate::optimize::OptimizationLevel;
 use crate::{
     ast::{Expr, Stmt},
     fn_native::CallableFunction,
@@ -57,7 +56,7 @@ impl<'a> ArgBackup<'a> {
     /// # Panics
     ///
     /// Panics when `args` is empty.
-    #[inline(always)]
+    #[inline]
     fn change_first_arg_to_copy(&mut self, args: &mut FnCallArgs<'a>) {
         // Clone the original value.
         self.value_copy = args[0].clone();
@@ -91,7 +90,7 @@ impl<'a> ArgBackup<'a> {
 }
 
 impl Drop for ArgBackup<'_> {
-    #[inline(always)]
+    #[inline]
     fn drop(&mut self) {
         // Panic if the shorter lifetime leaks.
         assert!(
@@ -115,11 +114,11 @@ pub fn ensure_no_data_race(
         .skip(if is_method_call { 1 } else { 0 })
         .find(|(_, a)| a.is_locked())
     {
-        return EvalAltResult::ErrorDataRace(
+        return Err(EvalAltResult::ErrorDataRace(
             format!("argument #{} of function '{}'", n + 1, fn_name),
             Position::NONE,
         )
-        .into();
+        .into());
     }
 
     Ok(())
@@ -392,7 +391,7 @@ impl Engine {
             crate::engine::FN_IDX_GET => {
                 assert!(args.len() == 2);
 
-                EvalAltResult::ErrorIndexingType(
+                Err(EvalAltResult::ErrorIndexingType(
                     format!(
                         "{} [{}]",
                         self.map_type_name(args[0].type_name()),
@@ -400,7 +399,7 @@ impl Engine {
                     ),
                     pos,
                 )
-                .into()
+                .into())
             }
 
             // index setter function not found?
@@ -408,7 +407,7 @@ impl Engine {
             crate::engine::FN_IDX_SET => {
                 assert!(args.len() == 3);
 
-                EvalAltResult::ErrorIndexingType(
+                Err(EvalAltResult::ErrorIndexingType(
                     format!(
                         "{} [{}] = {}",
                         self.map_type_name(args[0].type_name()),
@@ -417,7 +416,7 @@ impl Engine {
                     ),
                     pos,
                 )
-                .into()
+                .into())
             }
 
             // Getter function not found?
@@ -425,7 +424,7 @@ impl Engine {
             _ if name.starts_with(crate::engine::FN_GET) => {
                 assert!(args.len() == 1);
 
-                EvalAltResult::ErrorDotExpr(
+                Err(EvalAltResult::ErrorDotExpr(
                     format!(
                         "Unknown property '{}' - a getter is not registered for type '{}'",
                         &name[crate::engine::FN_GET.len()..],
@@ -433,7 +432,7 @@ impl Engine {
                     ),
                     pos,
                 )
-                .into()
+                .into())
             }
 
             // Setter function not found?
@@ -441,7 +440,7 @@ impl Engine {
             _ if name.starts_with(crate::engine::FN_SET) => {
                 assert!(args.len() == 2);
 
-                EvalAltResult::ErrorDotExpr(
+                Err(EvalAltResult::ErrorDotExpr(
                     format!(
                         "No writable property '{}' - a setter is not registered for type '{}' to handle '{}'",
                         &name[crate::engine::FN_SET.len()..],
@@ -450,14 +449,15 @@ impl Engine {
                     ),
                     pos,
                 )
-                .into()
+                .into())
             }
 
             // Raise error
-            _ => {
-                EvalAltResult::ErrorFunctionNotFound(self.gen_call_signature(None, name, args), pos)
-                    .into()
-            }
+            _ => Err(EvalAltResult::ErrorFunctionNotFound(
+                self.gen_call_signature(None, name, args),
+                pos,
+            )
+            .into()),
         }
     }
 
@@ -481,6 +481,7 @@ impl Engine {
         pos: Position,
         level: usize,
     ) -> RhaiResult {
+        #[inline(never)]
         fn make_error(
             name: String,
             fn_def: &crate::ast::ScriptFnDef,
@@ -488,7 +489,7 @@ impl Engine {
             err: Box<EvalAltResult>,
             pos: Position,
         ) -> RhaiResult {
-            EvalAltResult::ErrorInFunctionCall(
+            Err(EvalAltResult::ErrorInFunctionCall(
                 name,
                 fn_def
                     .lib
@@ -499,7 +500,7 @@ impl Engine {
                 err,
                 pos,
             )
-            .into()
+            .into())
         }
 
         #[cfg(not(feature = "unchecked"))]
@@ -513,7 +514,7 @@ impl Engine {
         #[cfg(not(feature = "no_function"))]
         #[cfg(not(feature = "unchecked"))]
         if level > self.max_call_levels() {
-            return EvalAltResult::ErrorStackOverflow(pos).into();
+            return Err(EvalAltResult::ErrorStackOverflow(pos).into());
         }
 
         let orig_scope_level = state.scope_level;
@@ -577,7 +578,7 @@ impl Engine {
                 // System errors are passed straight-through
                 mut err if err.is_system_exception() => {
                     err.set_position(pos);
-                    err.into()
+                    Err(err.into())
                 }
                 // Other errors are wrapped in `ErrorInFunctionCall`
                 _ => make_error(fn_def.name.to_string(), fn_def, state, err, pos),
@@ -650,7 +651,7 @@ impl Engine {
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         fn no_method_err(name: &str, pos: Position) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
             let msg = format!("'{0}' should not be called this way. Try {0}(...);", name);
-            EvalAltResult::ErrorRuntime(msg.into(), pos).into()
+            Err(EvalAltResult::ErrorRuntime(msg.into(), pos).into())
         }
 
         // Check for data race.
@@ -857,7 +858,8 @@ impl Engine {
         let ast = self.compile_with_scope_and_optimization_level(
             &Default::default(),
             &[script],
-            OptimizationLevel::None,
+            #[cfg(not(feature = "no_optimize"))]
+            crate::OptimizationLevel::None,
         )?;
 
         // If new functions are defined within the eval string, it is an error
@@ -1457,11 +1459,11 @@ impl Engine {
 
             Some(f) => unreachable!("unknown function type: {:?}", f),
 
-            None => EvalAltResult::ErrorFunctionNotFound(
+            None => Err(EvalAltResult::ErrorFunctionNotFound(
                 self.gen_call_signature(Some(namespace), fn_name, &args),
                 pos,
             )
-            .into(),
+            .into()),
         }
     }
 }

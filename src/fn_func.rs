@@ -96,13 +96,13 @@ macro_rules! def_anonymous_fn {
             #[cfg(not(feature = "sync"))]
             type Output = Box<dyn Fn($($par),*) -> Result<RET, Box<EvalAltResult>>>;
 
-            #[inline(always)]
+            #[inline]
             fn create_from_ast(self, ast: AST, entry_point: &str) -> Self::Output {
                 let fn_name: SmartString = entry_point.into();
                 Box::new(move |$($par),*| self.call_fn(&mut Scope::new(), &ast, &fn_name, ($($par,)*)))
             }
 
-            #[inline(always)]
+            #[inline]
             fn create_from_script(self, script: &str, entry_point: &str) -> Result<Self::Output, ParseError> {
                 let ast = self.compile(script)?;
                 Ok(Func::<($($par,)*), RET>::create_from_ast(self, ast, entry_point))

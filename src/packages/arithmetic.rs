@@ -9,7 +9,7 @@ use std::prelude::v1::*;
 #[cfg(not(feature = "no_float"))]
 use num_traits::Float;
 
-#[inline(always)]
+#[inline(never)]
 pub fn make_err(msg: impl Into<String>) -> Box<EvalAltResult> {
     EvalAltResult::ErrorArithmetic(msg.into(), Position::NONE).into()
 }

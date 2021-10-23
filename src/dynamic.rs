@@ -255,7 +255,7 @@ enum DynamicReadLockInner<'d, T: Clone> {
 impl<'d, T: Any + Clone> Deref for DynamicReadLock<'d, T> {
     type Target = T;
 
-    #[inline(always)]
+    #[inline]
     fn deref(&self) -> &Self::Target {
         match self.0 {
             DynamicReadLockInner::Reference(ref reference) => *reference,
@@ -296,7 +296,7 @@ enum DynamicWriteLockInner<'d, T: Clone> {
 impl<'d, T: Any + Clone> Deref for DynamicWriteLock<'d, T> {
     type Target = T;
 
-    #[inline(always)]
+    #[inline]
     fn deref(&self) -> &Self::Target {
         match self.0 {
             DynamicWriteLockInner::Reference(ref reference) => *reference,
@@ -307,7 +307,7 @@ impl<'d, T: Any + Clone> Deref for DynamicWriteLock<'d, T> {
 }
 
 impl<'d, T: Any + Clone> DerefMut for DynamicWriteLock<'d, T> {
-    #[inline(always)]
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self.0 {
             DynamicWriteLockInner::Reference(ref mut reference) => *reference,
@@ -384,17 +384,16 @@ impl Dynamic {
     #[inline(always)]
     #[must_use]
     pub const fn is_shared(&self) -> bool {
-        match self.0 {
-            #[cfg(not(feature = "no_closure"))]
-            Union::Shared(_, _, _) => true,
-            _ => false,
-        }
+        #[cfg(not(feature = "no_closure"))]
+        return matches!(self.0, Union::Shared(_, _, _));
+        #[cfg(feature = "no_closure")]
+        return false;
     }
     /// Is the value held by this [`Dynamic`] a particular type?
     ///
     /// If the [`Dynamic`] is a shared variant checking is performed on
     /// top of its internal value.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn is<T: Any + Clone>(&self) -> bool {
         if TypeId::of::<T>() == TypeId::of::<String>() {
@@ -1221,7 +1220,7 @@ impl Dynamic {
     ///
     /// If the [`Dynamic`] value is already shared, this method returns itself.
     #[cfg(not(feature = "no_closure"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_shared(self) -> Self {
         let _access = self.access_mode();
@@ -1452,7 +1451,7 @@ impl Dynamic {
     /// If the [`Dynamic`] is not a shared value, it returns a cloned copy.
     ///
     /// If the [`Dynamic`] is a shared value, it returns a cloned copy of the shared value.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn flatten_clone(&self) -> Self {
         match self.0 {
@@ -1471,7 +1470,7 @@ impl Dynamic {
     ///
     /// If the [`Dynamic`] is a shared value, it returns the shared value if there are no
     /// outstanding references, or a cloned copy.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn flatten(self) -> Self {
         match self.0 {
@@ -1495,7 +1494,7 @@ impl Dynamic {
     ///
     /// If the [`Dynamic`] is a shared value, it is set to the shared value if there are no
     /// outstanding references, or a cloned copy otherwise.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn flatten_in_place(&mut self) -> &mut Self {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
@@ -1528,7 +1527,7 @@ impl Dynamic {
     /// Access just waits until the [`RwLock`][std::sync::RwLock] is released.
     /// So this method always returns [`false`] under [`Sync`].
     #[cfg(not(feature = "no_closure"))]
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn is_locked(&self) -> bool {
         #[cfg(not(feature = "no_closure"))]
@@ -1895,7 +1894,7 @@ impl Dynamic {
     /// Convert the [`Dynamic`] into a [`String`] and return it.
     /// If there are other references to the same string, a cloned copy is returned.
     /// Returns the name of the actual type if the cast fails.
-    #[inline(always)]
+    #[inline]
     pub fn into_string(self) -> Result<String, &'static str> {
         self.into_immutable_string()
             .map(ImmutableString::into_owned)
@@ -1997,7 +1996,7 @@ impl Dynamic {
 }
 #[cfg(not(feature = "no_index"))]
 impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
-    #[inline(always)]
+    #[inline]
     fn from(value: Vec<T>) -> Self {
         Self(Union::Array(
             Box::new(value.into_iter().map(Dynamic::from).collect()),
@@ -2008,7 +2007,7 @@ impl<T: Variant + Clone> From<Vec<T>> for Dynamic {
 }
 #[cfg(not(feature = "no_index"))]
 impl<T: Variant + Clone> From<&[T]> for Dynamic {
-    #[inline(always)]
+    #[inline]
     fn from(value: &[T]) -> Self {
         Self(Union::Array(
             Box::new(value.iter().cloned().map(Dynamic::from).collect()),
@@ -2019,7 +2018,7 @@ impl<T: Variant + Clone> From<&[T]> for Dynamic {
 }
 #[cfg(not(feature = "no_index"))]
 impl<T: Variant + Clone> std::iter::FromIterator<T> for Dynamic {
-    #[inline(always)]
+    #[inline]
     fn from_iter<X: IntoIterator<Item = T>>(iter: X) -> Self {
         Self(Union::Array(
             Box::new(iter.into_iter().map(Dynamic::from).collect()),

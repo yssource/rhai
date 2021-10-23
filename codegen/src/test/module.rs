@@ -1096,7 +1096,7 @@ mod generate_tests {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         if args[0usize].is_read_only() {
-                            return EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into();
+                            return Err(EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into());
                         }
                         let arg0 = &mut args[0usize].write_lock::<FLOAT>().unwrap();
                         Ok(Dynamic::from(increment(arg0)))
@@ -1155,7 +1155,7 @@ mod generate_tests {
                         #[inline(always)]
                         fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                             if args[0usize].is_read_only() {
-                                return EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into();
+                                return Err(EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into());
                             }
                             let arg0 = &mut args[0usize].write_lock::<FLOAT>().unwrap();
                             Ok(Dynamic::from(increment(arg0)))
@@ -1235,7 +1235,7 @@ mod generate_tests {
                         #[inline(always)]
                         fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                             if args[0usize].is_read_only() {
-                                return EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into();
+                                return Err(EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into());
                             }
                             let arg0 = &mut args[0usize].write_lock::<FLOAT>().unwrap();
                             Ok(Dynamic::from(increment(arg0)))
@@ -1316,7 +1316,7 @@ mod generate_tests {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         if args[0usize].is_read_only() {
-                            return EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into();
+                            return Err(EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into());
                         }
                         let arg0 = &mut args[0usize].write_lock::<u64>().unwrap();
                         Ok(Dynamic::from(int_foo(arg0)))
@@ -1376,7 +1376,7 @@ mod generate_tests {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         if args[0usize].is_read_only() {
-                            return EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into();
+                            return Err(EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into());
                         }
                         let arg0 = &mut args[0usize].write_lock::<u64>().unwrap();
                         Ok(Dynamic::from(int_foo(arg0)))
@@ -1433,7 +1433,7 @@ mod generate_tests {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         if args[0usize].is_read_only() {
-                            return EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into();
+                            return Err(EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into());
                         }
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg0 = &mut args[0usize].write_lock::<u64>().unwrap();
@@ -1494,7 +1494,7 @@ mod generate_tests {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         if args[0usize].is_read_only() {
-                            return EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into();
+                            return Err(EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into());
                         }
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg0 = &mut args[0usize].write_lock::<u64>().unwrap();
@@ -1552,7 +1552,73 @@ mod generate_tests {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         if args[0usize].is_read_only() {
-                            return EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into();
+                            return Err(EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into());
+                        }
+                        let arg1 = mem::take(args[1usize]).cast::<u64>();
+                        let arg0 = &mut args[0usize].write_lock::<MyCollection>().unwrap();
+                        Ok(Dynamic::from(get_by_index(arg0, arg1)))
+                    }
+
+                    #[inline(always)] fn is_method_call(&self) -> bool { true }
+                }
+            }
+        };
+
+        let item_mod = syn::parse2::<Module>(input_tokens).unwrap();
+        assert_streams_eq(item_mod.generate(), expected_tokens);
+    }
+
+    #[test]
+    fn one_index_getter_fn_with_cfg_attr_module() {
+        let input_tokens: TokenStream = quote! {
+            pub mod one_index_fn {
+                #[cfg(hello)]
+                #[rhai_fn(index_get)]
+                #[some_other_attr]
+                pub fn get_by_index(x: &mut MyCollection, i: u64) -> FLOAT {
+                    x.get(i)
+                }
+            }
+        };
+
+        let expected_tokens = quote! {
+            pub mod one_index_fn {
+                #[cfg(hello)]
+                #[some_other_attr]
+                pub fn get_by_index(x: &mut MyCollection, i: u64) -> FLOAT {
+                    x.get(i)
+                }
+                #[allow(unused_imports)]
+                use super::*;
+
+                pub fn rhai_module_generate() -> Module {
+                    let mut m = Module::new();
+                    rhai_generate_into_module(&mut m, false);
+                    m.build_index();
+                    m
+                }
+                #[allow(unused_mut)]
+                pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                    #[cfg(hello)]
+                    m.set_fn("index$get$", FnNamespace::Global, FnAccess::Public, Some(get_by_index_token::PARAM_NAMES),
+                             &[TypeId::of::<MyCollection>(), TypeId::of::<u64>()],
+                             get_by_index_token().into());
+                    if flatten {} else {}
+                }
+                #[cfg(hello)]
+                #[allow(non_camel_case_types)]
+                pub struct get_by_index_token();
+                #[cfg(hello)]
+                impl get_by_index_token {
+                    pub const PARAM_NAMES: &'static [&'static str] = &["x: &mut MyCollection", "i: u64", "FLOAT"];
+                    #[inline(always)] pub fn param_types() -> [TypeId; 2usize] { [TypeId::of::<MyCollection>(), TypeId::of::<u64>()] }
+                }
+                #[cfg(hello)]
+                impl PluginFunction for get_by_index_token {
+                    #[inline(always)]
+                    fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
+                        if args[0usize].is_read_only() {
+                            return Err(EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into());
                         }
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg0 = &mut args[0usize].write_lock::<MyCollection>().unwrap();
@@ -1613,7 +1679,7 @@ mod generate_tests {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         if args[0usize].is_read_only() {
-                            return EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into();
+                            return Err(EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into());
                         }
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg0 = &mut args[0usize].write_lock::<MyCollection>().unwrap();
@@ -1671,7 +1737,7 @@ mod generate_tests {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         if args[0usize].is_read_only() {
-                            return EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into();
+                            return Err(EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into());
                         }
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg2 = mem::take(args[2usize]).cast::<FLOAT>();
@@ -1733,7 +1799,7 @@ mod generate_tests {
                     #[inline(always)]
                     fn call(&self, context: NativeCallContext, args: &mut [&mut Dynamic]) -> RhaiResult {
                         if args[0usize].is_read_only() {
-                            return EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into();
+                            return Err(EvalAltResult::ErrorAssignmentToConstant("x".to_string(), Position::NONE).into());
                         }
                         let arg1 = mem::take(args[1usize]).cast::<u64>();
                         let arg2 = mem::take(args[2usize]).cast::<FLOAT>();
@@ -1811,6 +1877,7 @@ mod generate_tests {
                     pub const MYSTIC_NUMBER: INT = 42;
                 }
                 pub mod second_is {
+                    #[cfg(hello)]
                     pub const SPECIAL_CPU_NUMBER: INT = 68000;
                 }
             }
@@ -1836,6 +1903,7 @@ mod generate_tests {
                     }
                 }
                 pub mod second_is {
+                    #[cfg(hello)]
                     pub const SPECIAL_CPU_NUMBER: INT = 68000;
                     #[allow(unused_imports)]
                     use super::*;
@@ -1848,6 +1916,7 @@ mod generate_tests {
                     }
                     #[allow(unused_mut)]
                     pub fn rhai_generate_into_module(m: &mut Module, flatten: bool) {
+                        #[cfg(hello)]
                         m.set_var("SPECIAL_CPU_NUMBER", SPECIAL_CPU_NUMBER);
                         if flatten {} else {}
                     }

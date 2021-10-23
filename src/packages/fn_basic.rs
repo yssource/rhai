@@ -15,20 +15,16 @@ mod fn_ptr_functions {
     }
 
     #[cfg(not(feature = "no_function"))]
-    pub mod functions {
-        #[rhai_fn(name = "is_anonymous", get = "is_anonymous", pure)]
-        pub fn is_anonymous(fn_ptr: &mut FnPtr) -> bool {
-            fn_ptr.is_anonymous()
-        }
+    #[rhai_fn(name = "is_anonymous", get = "is_anonymous", pure)]
+    pub fn is_anonymous(fn_ptr: &mut FnPtr) -> bool {
+        fn_ptr.is_anonymous()
     }
 
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "no_index"))]
     #[cfg(not(feature = "no_object"))]
-    pub mod functions_and_maps {
-        pub fn get_fn_metadata_list(ctx: NativeCallContext) -> crate::Array {
-            collect_fn_metadata(ctx)
-        }
+    pub fn get_fn_metadata_list(ctx: NativeCallContext) -> crate::Array {
+        collect_fn_metadata(ctx)
     }
 }
 

@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Func, FuncArgs, Scope, INT};
+use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Func, FuncArgs, Scope, AST, INT};
 use std::{any::TypeId, iter::once};
 
 #[test]
@@ -222,6 +222,91 @@ fn test_anonymous_fn() -> Result<(), Box<EvalAltResult>> {
     )?;
 
     assert_eq!(calc_func(42, "hello", 9)?, 423);
+
+    Ok(())
+}
+
+#[test]
+fn test_call_fn_events() -> Result<(), Box<EvalAltResult>> {
+    // Event handler
+    struct Handler {
+        // Scripting engine
+        pub engine: Engine,
+        // Use a custom 'Scope' to keep stored state
+        pub scope: Scope<'static>,
+        // Program script
+        pub ast: AST,
+    }
+
+    const SCRIPT: &str = r#"
+        fn start(data) { 42 + data }
+        fn end(data) { 0 }
+    "#;
+
+    impl Handler {
+        pub fn new() -> Self {
+            let engine = Engine::new();
+
+            // Create a custom 'Scope' to hold state
+            let mut scope = Scope::new();
+
+            // Add initialized state into the custom 'Scope'
+            scope.push("state", false);
+
+            // Compile the handler script.
+            let ast = engine.compile(SCRIPT).unwrap();
+
+            // Evaluate the script to initialize it and other state variables.
+            // In a real application you'd again be handling errors...
+            engine.run_ast_with_scope(&mut scope, &ast).unwrap();
+
+            // The event handler is essentially these three items:
+            Handler { engine, scope, ast }
+        }
+
+        // Say there are three events: 'start', 'end', 'update'.
+        // In a real application you'd be handling errors...
+        pub fn on_event(&mut self, event_name: &str, event_data: INT) -> Dynamic {
+            let engine = &self.engine;
+            let scope = &mut self.scope;
+            let ast = &self.ast;
+
+            match event_name {
+                // The 'start' event maps to function 'start'.
+                // In a real application you'd be handling errors...
+                "start" => engine.call_fn(scope, ast, "start", (event_data,)).unwrap(),
+
+                // The 'end' event maps to function 'end'.
+                // In a real application you'd be handling errors...
+                "end" => engine.call_fn(scope, ast, "end", (event_data,)).unwrap(),
+
+                // The 'update' event maps to function 'update'.
+                // This event provides a default implementation when the scripted function is not found.
+                "update" => engine
+                    .call_fn(scope, ast, "update", (event_data,))
+                    .or_else(|err| match *err {
+                        EvalAltResult::ErrorFunctionNotFound(fn_name, _)
+                            if fn_name.starts_with("update") =>
+                        {
+                            // Default implementation of 'update' event handler
+                            self.scope.set_value("state", true);
+                            // Turn function-not-found into a success
+                            Ok(Dynamic::UNIT)
+                        }
+                        _ => Err(err),
+                    })
+                    .unwrap(),
+                // In a real application you'd be handling unknown events...
+                _ => panic!("unknown event: {}", event_name),
+            }
+        }
+    }
+
+    let mut handler = Handler::new();
+    assert!(!handler.scope.get_value::<bool>("state").unwrap());
+    handler.on_event("update", 999);
+    assert!(handler.scope.get_value::<bool>("state").unwrap());
+    assert_eq!(handler.on_event("start", 999).as_int().unwrap(), 1041);
 
     Ok(())
 }

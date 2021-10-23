@@ -45,6 +45,6 @@ impl ModuleResolver for DummyModuleResolver {
         path: &str,
         pos: Position,
     ) -> Result<Shared<Module>, Box<EvalAltResult>> {
-        EvalAltResult::ErrorModuleNotFound(path.into(), pos).into()
+        Err(EvalAltResult::ErrorModuleNotFound(path.into(), pos).into())
     }
 }

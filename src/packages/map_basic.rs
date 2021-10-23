@@ -84,7 +84,7 @@ mod map_functions {
             for (m1, v1) in map1.iter_mut() {
                 if let Some(v2) = map2.get_mut(m1) {
                     let equals = ctx
-                        .call_fn_dynamic_raw(OP_EQUALS, true, &mut [v1, v2])
+                        .call_fn_raw(OP_EQUALS, true, false, &mut [v1, v2])
                         .map(|v| v.as_bool().unwrap_or(false))?;
 
                     if !equals {
@@ -108,22 +108,21 @@ mod map_functions {
     }
 
     #[cfg(not(feature = "no_index"))]
-    pub mod indexing {
-        #[rhai_fn(pure)]
-        pub fn keys(map: &mut Map) -> Array {
-            if map.is_empty() {
-                Array::new()
-            } else {
-                map.keys().cloned().map(Into::<Dynamic>::into).collect()
-            }
+    #[rhai_fn(pure)]
+    pub fn keys(map: &mut Map) -> Array {
+        if map.is_empty() {
+            Array::new()
+        } else {
+            map.keys().cloned().map(Into::<Dynamic>::into).collect()
         }
-        #[rhai_fn(pure)]
-        pub fn values(map: &mut Map) -> Array {
-            if map.is_empty() {
-                Array::new()
-            } else {
-                map.values().cloned().collect()
-            }
+    }
+    #[cfg(not(feature = "no_index"))]
+    #[rhai_fn(pure)]
+    pub fn values(map: &mut Map) -> Array {
+        if map.is_empty() {
+            Array::new()
+        } else {
+            map.values().cloned().collect()
         }
     }
 }

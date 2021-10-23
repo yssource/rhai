@@ -1,6 +1,31 @@
 Rhai Release Notes
 ==================
 
+Version 1.2.0
+=============
+
+New features
+------------
+
+* `#[cfg(...)]` attributes can now be put directly on plugin functions or function defined in a plugin module.
+
+Enhancements
+------------
+
+* Array methods now avoid cloning as much as possible (although most predicates will involve cloning anyway if passed a closure).
+* Array methods that take function pointers (e.g. closures) now optionally take the function name as a string.
+* Array adds the `dedup` method.
+* Array adds a `sort` method with no parameters which sorts homogeneous arrays of built-in comparable types (e.g. `INT`).
+* Inlining is disabled for error-path functions because errors are exceptional and scripts usually fail completely when an error is encountered.
+* The `optimize` module is completely eliminated under `no_optimize`, which should yield smaller code size.
+
+Deprecated API's
+----------------
+
+* `NativeCallContext::call_fn_dynamic_raw` is deprecated and `NativeCallContext::call_fn_raw` is added.
+* `From<EvalAltResult>` for `Result<T, Box<EvalAltResult>>` is deprecated so it will no longer be possible to do `EvalAltResult::ErrorXXXXX.into()` to convert to a `Result`; instead, `Err(EvalAltResult:ErrorXXXXX.into())` must be used. Code is clearer if errors are explicitly wrapped in `Err`.
+
+
 Version 1.1.0
 =============
 
@@ -58,10 +83,6 @@ Enhancements
 * `ReturnType` is removed in favor of option flags for `Stmt::Return`.
 * `Stmt::Break` and `Stmt::Continue` are merged into `Stmt::BreakLoop` via an option flag.
 * `StaticVec` is changed to keep three items inline instead of four.
-
-
-Version 1.0.7
-=============
 
 
 Version 1.0.6

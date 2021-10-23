@@ -48,7 +48,7 @@ impl StaticModuleResolver {
         Default::default()
     }
     /// Add a [module][Module] keyed by its path.
-    #[inline(always)]
+    #[inline]
     pub fn insert(&mut self, path: impl Into<Identifier>, mut module: Module) {
         module.build_index();
         self.0.insert(path.into(), module.into());
@@ -65,17 +65,17 @@ impl StaticModuleResolver {
         self.0.contains_key(path)
     }
     /// Get an iterator of all the [modules][Module].
-    #[inline(always)]
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Shared<Module>)> {
         self.0.iter().map(|(k, v)| (k.as_str(), v))
     }
     /// Get a mutable iterator of all the [modules][Module].
-    #[inline(always)]
+    #[inline]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&str, &mut Shared<Module>)> {
         self.0.iter_mut().map(|(k, v)| (k.as_str(), v))
     }
     /// Get an iterator of all the [module][Module] paths.
-    #[inline(always)]
+    #[inline]
     pub fn paths(&self) -> impl Iterator<Item = &str> {
         self.0.keys().map(|s| s.as_str())
     }
@@ -105,7 +105,7 @@ impl StaticModuleResolver {
     /// The other [`StaticModuleResolver`] is consumed.
     ///
     /// Existing modules of the same path name are overwritten.
-    #[inline(always)]
+    #[inline]
     pub fn merge(&mut self, other: Self) -> &mut Self {
         if !other.is_empty() {
             self.0.extend(other.0.into_iter());
@@ -124,7 +124,7 @@ impl IntoIterator for StaticModuleResolver {
 }
 
 impl ModuleResolver for StaticModuleResolver {
-    #[inline(always)]
+    #[inline]
     fn resolve(
         &self,
         _: &Engine,

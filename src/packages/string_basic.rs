@@ -28,7 +28,7 @@ pub fn print_with_func(
     ctx: &NativeCallContext,
     value: &mut Dynamic,
 ) -> crate::ImmutableString {
-    match ctx.call_fn_dynamic_raw(fn_name, true, &mut [value]) {
+    match ctx.call_fn_raw(fn_name, true, false, &mut [value]) {
         Ok(result) if result.is::<crate::ImmutableString>() => result
             .into_immutable_string()
             .expect("result is `ImmutableString`"),
@@ -71,82 +71,73 @@ mod print_debug_functions {
     }
 
     #[cfg(not(feature = "no_float"))]
-    pub mod float_functions {
-        use crate::ast::FloatWrapper;
-
-        #[rhai_fn(name = "print", name = "to_string")]
-        pub fn print_f64(number: f64) -> ImmutableString {
-            FloatWrapper::new(number).to_string().into()
-        }
-        #[rhai_fn(name = "print", name = "to_string")]
-        pub fn print_f32(number: f32) -> ImmutableString {
-            FloatWrapper::new(number).to_string().into()
-        }
-        #[rhai_fn(name = "debug", name = "to_debug")]
-        pub fn debug_f64(number: f64) -> ImmutableString {
-            format!("{:?}", FloatWrapper::new(number)).into()
-        }
-        #[rhai_fn(name = "debug", name = "to_debug")]
-        pub fn debug_f32(number: f32) -> ImmutableString {
-            format!("{:?}", FloatWrapper::new(number)).into()
-        }
+    #[rhai_fn(name = "print", name = "to_string")]
+    pub fn print_f64(number: f64) -> ImmutableString {
+        crate::ast::FloatWrapper::new(number).to_string().into()
+    }
+    #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "print", name = "to_string")]
+    pub fn print_f32(number: f32) -> ImmutableString {
+        crate::ast::FloatWrapper::new(number).to_string().into()
+    }
+    #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "debug", name = "to_debug")]
+    pub fn debug_f64(number: f64) -> ImmutableString {
+        format!("{:?}", crate::ast::FloatWrapper::new(number)).into()
+    }
+    #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "debug", name = "to_debug")]
+    pub fn debug_f32(number: f32) -> ImmutableString {
+        format!("{:?}", crate::ast::FloatWrapper::new(number)).into()
     }
 
     #[cfg(not(feature = "no_index"))]
-    pub mod array_functions {
-        use super::*;
+    #[rhai_fn(
+        name = "print",
+        name = "to_string",
+        name = "debug",
+        name = "to_debug",
+        pure
+    )]
+    pub fn format_array(ctx: NativeCallContext, array: &mut Array) -> ImmutableString {
+        let len = array.len();
+        let mut result = String::with_capacity(len * 5 + 2);
+        result.push('[');
 
-        #[rhai_fn(
-            name = "print",
-            name = "to_string",
-            name = "debug",
-            name = "to_debug",
-            pure
-        )]
-        pub fn format_array(ctx: NativeCallContext, array: &mut Array) -> ImmutableString {
-            let len = array.len();
-            let mut result = String::with_capacity(len * 5 + 2);
-            result.push('[');
+        array.iter_mut().enumerate().for_each(|(i, x)| {
+            result.push_str(&print_with_func(FUNC_TO_DEBUG, &ctx, x));
+            if i < len - 1 {
+                result.push_str(", ");
+            }
+        });
 
-            array.iter_mut().enumerate().for_each(|(i, x)| {
-                result.push_str(&print_with_func(FUNC_TO_DEBUG, &ctx, x));
-                if i < len - 1 {
-                    result.push_str(", ");
-                }
-            });
-
-            result.push(']');
-            result.into()
-        }
+        result.push(']');
+        result.into()
     }
     #[cfg(not(feature = "no_object"))]
-    pub mod map_functions {
-        use super::*;
+    #[rhai_fn(
+        name = "print",
+        name = "to_string",
+        name = "debug",
+        name = "to_debug",
+        pure
+    )]
+    pub fn format_map(ctx: NativeCallContext, map: &mut Map) -> ImmutableString {
+        let len = map.len();
+        let mut result = String::with_capacity(len * 5 + 3);
+        result.push_str("#{");
 
-        #[rhai_fn(
-            name = "print",
-            name = "to_string",
-            name = "debug",
-            name = "to_debug",
-            pure
-        )]
-        pub fn format_map(ctx: NativeCallContext, map: &mut Map) -> ImmutableString {
-            let len = map.len();
-            let mut result = String::with_capacity(len * 5 + 3);
-            result.push_str("#{");
+        map.iter_mut().enumerate().for_each(|(i, (k, v))| {
+            result.push_str(&format!(
+                "{:?}: {}{}",
+                k,
+                &print_with_func(FUNC_TO_DEBUG, &ctx, v),
+                if i < len - 1 { ", " } else { "" }
+            ));
+        });
 
-            map.iter_mut().enumerate().for_each(|(i, (k, v))| {
-                result.push_str(&format!(
-                    "{:?}: {}{}",
-                    k,
-                    &print_with_func(FUNC_TO_DEBUG, &ctx, v),
-                    if i < len - 1 { ", " } else { "" }
-                ));
-            });
-
-            result.push('}');
-            result.into()
-        }
+        result.push('}');
+        result.into()
     }
 }
 

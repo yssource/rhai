@@ -46,13 +46,39 @@ fn test_stack_overflow_parsing() -> Result<(), Box<EvalAltResult>> {
          ParseErrorType::ExprTooDeep
     );
 
+    engine.compile("1 + 2")?;
+
+    #[cfg(debug_assertions)]
+    engine.compile(
+        "
+            1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 0 +
+            1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 0 +
+            1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 0
+        ",
+    )?;
+
+    #[cfg(debug_assertions)]
+    assert_eq!(
+        *engine
+            .compile(
+                "
+                    1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 0 +
+                    1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 0 +
+                    1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 0 +
+                    1
+                "
+            )
+            .expect_err("should error")
+            .0,
+        ParseErrorType::ExprTooDeep
+    );
+
     engine.set_max_expr_depths(
         100,
         #[cfg(not(feature = "no_function"))]
         6,
     );
 
-    engine.compile("1 + 2")?;
     engine.compile(
         "
             1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 0 +

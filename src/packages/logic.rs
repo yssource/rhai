@@ -202,7 +202,7 @@ mod bit_field_functions {
             let offset = index as usize;
 
             if offset >= BITS {
-                EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into()
+                Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
             } else {
                 Ok((value & (1 << offset)) != 0)
             }
@@ -211,12 +211,12 @@ mod bit_field_functions {
 
             // Count from end if negative
             if offset > BITS {
-                EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into()
+                Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
             } else {
                 Ok((value & (1 << (BITS - offset))) != 0)
             }
         } else {
-            EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into()
+            Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
         }
     }
     #[rhai_fn(return_raw)]
@@ -225,7 +225,7 @@ mod bit_field_functions {
             let offset = index as usize;
 
             if offset >= BITS {
-                EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into()
+                Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
             } else {
                 let mask = 1 << offset;
                 if new_value {
@@ -240,7 +240,7 @@ mod bit_field_functions {
 
             // Count from end if negative
             if offset > BITS {
-                EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into()
+                Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
             } else {
                 let mask = 1 << offset;
                 if new_value {
@@ -251,7 +251,7 @@ mod bit_field_functions {
                 Ok(())
             }
         } else {
-            EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into()
+            Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
         }
     }
     #[rhai_fn(return_raw)]
@@ -264,7 +264,7 @@ mod bit_field_functions {
             let offset = index as usize;
 
             if offset >= BITS {
-                return EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into();
+                return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
             }
 
             offset
@@ -273,11 +273,11 @@ mod bit_field_functions {
 
             // Count from end if negative
             if offset > BITS {
-                return EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into();
+                return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
             }
             BITS - offset
         } else {
-            return EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into();
+            return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
         };
 
         let bits = if offset + bits as usize > BITS {
@@ -311,7 +311,7 @@ mod bit_field_functions {
             let offset = index as usize;
 
             if offset >= BITS {
-                return EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into();
+                return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
             }
 
             offset
@@ -320,11 +320,11 @@ mod bit_field_functions {
 
             // Count from end if negative
             if offset > BITS {
-                return EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into();
+                return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
             }
             BITS - offset
         } else {
-            return EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into();
+            return Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into());
         };
 
         let bits = if offset + bits as usize > BITS {

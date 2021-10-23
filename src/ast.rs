@@ -718,7 +718,7 @@ impl AST {
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[cfg(not(feature = "no_module"))]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn iter_fn_def(&self) -> impl Iterator<Item = &ScriptFnDef> {
         self.functions
             .iter_script_fn()
@@ -728,7 +728,7 @@ impl AST {
     ///
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
-    #[inline(always)]
+    #[inline]
     pub fn iter_functions<'a>(&'a self) -> impl Iterator<Item = ScriptFnMetadata> + 'a {
         self.functions
             .iter_script_fn()
@@ -944,7 +944,7 @@ impl fmt::Debug for StmtBlock {
 }
 
 impl From<StmtBlock> for Stmt {
-    #[inline(always)]
+    #[inline]
     fn from(block: StmtBlock) -> Self {
         let block_pos = block.position();
         Self::Block(block.0.into_boxed_slice(), block_pos)
@@ -1852,7 +1852,7 @@ impl<F: Float> From<F> for FloatWrapper<F> {
 impl<F: Float + FromStr> FromStr for FloatWrapper<F> {
     type Err = <F as FromStr>::Err;
 
-    #[inline(always)]
+    #[inline]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         F::from_str(s).map(Into::<Self>::into)
     }
@@ -2003,14 +2003,12 @@ impl fmt::Debug for Expr {
             }
             Self::Variable(i, _, x) => {
                 f.write_str("Variable(")?;
-                match x.1 {
-                    Some((_, ref namespace)) => write!(f, "{}", namespace)?,
-                    _ => (),
+                if let Some((_, ref namespace)) = x.1 {
+                    write!(f, "{}", namespace)?
                 }
                 f.write_str(&x.2)?;
-                match i.map_or_else(|| x.0, |n| NonZeroUsize::new(n.get() as usize)) {
-                    Some(n) => write!(f, " #{}", n)?,
-                    _ => (),
+                if let Some(n) = i.map_or_else(|| x.0, |n| NonZeroUsize::new(n.get() as usize)) {
+                    write!(f, " #{}", n)?
                 }
                 f.write_str(")")
             }
@@ -2134,7 +2132,7 @@ impl Expr {
         }
     }
     /// Is the expression a simple variable access?
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) const fn is_variable_access(&self, non_qualified: bool) -> bool {
         match self {
@@ -2143,7 +2141,7 @@ impl Expr {
         }
     }
     /// Return the variable name if the expression a simple variable access.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn get_variable_name(&self, non_qualified: bool) -> Option<&str> {
         match self {

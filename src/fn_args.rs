@@ -57,7 +57,7 @@ pub trait FuncArgs {
 }
 
 impl<T: Variant + Clone> FuncArgs for Vec<T> {
-    #[inline(always)]
+    #[inline]
     fn parse<CONTAINER: Extend<Dynamic>>(self, container: &mut CONTAINER) {
         container.extend(self.into_iter().map(Variant::into_dynamic));
     }
@@ -69,7 +69,7 @@ macro_rules! impl_args {
     ($($p:ident),*) => {
         impl<$($p: Variant + Clone),*> FuncArgs for ($($p,)*)
         {
-            #[inline(always)]
+            #[inline]
             #[allow(unused_variables)]
             fn parse<CONTAINER: Extend<Dynamic>>(self, container: &mut CONTAINER) {
                 let ($($p,)*) = self;

@@ -69,7 +69,7 @@ impl FnPtr {
         self
     }
     /// Set curried arguments to the function pointer.
-    #[inline(always)]
+    #[inline]
     pub fn set_curry(&mut self, values: impl IntoIterator<Item = Dynamic>) -> &mut Self {
         self.1 = values.into_iter().collect();
         self
@@ -130,7 +130,7 @@ impl FnPtr {
         }
         args.extend(arg_values.iter_mut());
 
-        ctx.call_fn_dynamic_raw(self.fn_name(), is_method, &mut args)
+        ctx.call_fn_raw(self.fn_name(), is_method, is_method, &mut args)
     }
 }
 
@@ -148,7 +148,7 @@ impl TryFrom<Identifier> for FnPtr {
         if is_valid_identifier(value.chars()) {
             Ok(Self(value, Default::default()))
         } else {
-            EvalAltResult::ErrorFunctionNotFound(value.to_string(), Position::NONE).into()
+            Err(EvalAltResult::ErrorFunctionNotFound(value.to_string(), Position::NONE).into())
         }
     }
 }
