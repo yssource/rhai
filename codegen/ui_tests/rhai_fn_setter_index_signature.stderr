@@ -1,5 +1,3 @@
-WARN rustc_metadata::locator no metadata found: failed to mmap rmeta metadata: '\\?\$WORKSPACE/target\tests\target\x86_64-pc-windows-msvc\debug\deps\librhai_codegen_tests-13fbbdaa684db49e.rmeta'
-WARN rustc_metadata::locator no metadata found: failed to mmap rmeta metadata: '\\?\$WORKSPACE/target\tests\target\x86_64-pc-windows-msvc\debug\deps\librhai_codegen_tests-1b00becb051b9b4f.rmeta'
 error: index setter requires exactly 3 parameters
   --> ui_tests/rhai_fn_setter_index_signature.rs:13:20
    |

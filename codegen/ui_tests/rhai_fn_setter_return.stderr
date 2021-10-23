@@ -1,5 +1,3 @@
-WARN rustc_metadata::locator no metadata found: failed to mmap rmeta metadata: '\\?\$WORKSPACE/target\tests\target\x86_64-pc-windows-msvc\debug\deps\librhai_codegen_tests-13fbbdaa684db49e.rmeta'
-WARN rustc_metadata::locator no metadata found: failed to mmap rmeta metadata: '\\?\$WORKSPACE/target\tests\target\x86_64-pc-windows-msvc\debug\deps\librhai_codegen_tests-1b00becb051b9b4f.rmeta'
 error: property setter cannot return any value
   --> ui_tests/rhai_fn_setter_return.rs:13:51
    |
