@@ -809,7 +809,7 @@ mod array_functions {
         array: &mut Array,
         comparer: FnPtr,
     ) -> Result<(), Box<EvalAltResult>> {
-        if array.is_empty() {
+        if array.len() <= 1 {
             return Ok(());
         }
 
@@ -826,6 +826,82 @@ mod array_functions {
                 })
                 .unwrap_or_else(|| x.type_id().cmp(&y.type_id()))
         });
+
+        Ok(())
+    }
+    #[rhai_fn(name = "sort", return_raw)]
+    pub fn sort_with_builtin(array: &mut Array) -> Result<(), Box<EvalAltResult>> {
+        if array.len() <= 1 {
+            return Ok(());
+        }
+
+        let type_id = array[0].type_id();
+
+        if array.iter().any(|a| a.type_id() != type_id) {
+            return Err(EvalAltResult::ErrorFunctionNotFound(
+                "sort() cannot be called with elements of different types".into(),
+                Position::NONE,
+            )
+            .into());
+        }
+
+        if type_id == TypeId::of::<INT>() {
+            array.sort_by(|a, b| {
+                let a = a.as_int().expect("a is INT");
+                let b = b.as_int().expect("b is INT");
+                a.cmp(&b)
+            });
+            return Ok(());
+        }
+        if type_id == TypeId::of::<char>() {
+            array.sort_by(|a, b| {
+                let a = a.as_char().expect("a is char");
+                let b = b.as_char().expect("b is char");
+                a.cmp(&b)
+            });
+            return Ok(());
+        }
+        #[cfg(not(feature = "no_float"))]
+        if type_id == TypeId::of::<crate::FLOAT>() {
+            array.sort_by(|a, b| {
+                let a = a.as_float().expect("a is FLOAT");
+                let b = b.as_float().expect("b is FLOAT");
+                a.partial_cmp(&b).unwrap_or(Ordering::Equal)
+            });
+            return Ok(());
+        }
+        if type_id == TypeId::of::<ImmutableString>() {
+            array.sort_by(|a, b| {
+                let a = a
+                    .read_lock::<ImmutableString>()
+                    .expect("a is ImmutableString");
+                let b = b
+                    .read_lock::<ImmutableString>()
+                    .expect("b is ImmutableString");
+                a.as_str().cmp(b.as_str())
+            });
+            return Ok(());
+        }
+        #[cfg(feature = "decimal")]
+        if type_id == TypeId::of::<rust_decimal::Decimal>() {
+            array.sort_by(|a, b| {
+                let a = a.as_decimal().expect("a is Decimal");
+                let b = b.as_decimal().expect("b is Decimal");
+                a.cmp(&b)
+            });
+            return Ok(());
+        }
+        if type_id == TypeId::of::<bool>() {
+            array.sort_by(|a, b| {
+                let a = a.as_bool().expect("a is bool");
+                let b = b.as_bool().expect("b is bool");
+                a.cmp(&b)
+            });
+            return Ok(());
+        }
+        if type_id == TypeId::of::<()>() {
+            return Ok(());
+        }
 
         Ok(())
     }
