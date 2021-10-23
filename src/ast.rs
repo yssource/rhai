@@ -717,7 +717,6 @@ impl AST {
     ///
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
-    #[cfg(not(feature = "no_module"))]
     #[inline]
     pub(crate) fn iter_fn_def(&self) -> impl Iterator<Item = &ScriptFnDef> {
         self.functions
