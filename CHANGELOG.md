@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 1.1.1
 =============
 
+Bug fixes
+---------
+
+* The `no_module` and `internals` features now work together without a compilation error.
+
 
 Version 1.1.0
 =============
