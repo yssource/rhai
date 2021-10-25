@@ -194,7 +194,8 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
             0 => unreachable!(),
             1 => Ok(Some("$ident$".into())),
             2 => match stream[1].as_str() {
-                "world" | "kitty" => Ok(None),
+                "world" => Ok(Some("$$hello".into())),
+                "kitty" => Ok(None),
                 s => Err(LexError::ImproperSymbol(s.to_string(), Default::default())
                     .into_err(Position::NONE)
                     .into()),
@@ -206,7 +207,17 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
             context.scope_mut().push("foo", 999 as INT);
 
             Ok(match inputs[0].get_variable_name().unwrap() {
+                "world"
+                    if inputs
+                        .last()
+                        .unwrap()
+                        .get_literal_value::<ImmutableString>()
+                        .map_or(false, |s| s == "$$hello") =>
+                {
+                    0 as INT
+                }
                 "world" => 123 as INT,
+                "kitty" if inputs.len() > 1 => 999 as INT,
                 "kitty" => 42 as INT,
                 _ => unreachable!(),
             }
@@ -214,7 +225,7 @@ fn test_custom_syntax_raw() -> Result<(), Box<EvalAltResult>> {
         },
     );
 
-    assert_eq!(engine.eval::<INT>("hello world")?, 123);
+    assert_eq!(engine.eval::<INT>("hello world")?, 0);
     assert_eq!(engine.eval::<INT>("hello kitty")?, 42);
     assert_eq!(
         engine.eval::<INT>("let foo = 0; (hello kitty) + foo")?,

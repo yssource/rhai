@@ -2271,7 +2271,7 @@ impl Engine {
             Expr::Unit(_) => Ok(Dynamic::UNIT),
 
             Expr::Custom(custom, _) => {
-                let expressions: StaticVec<_> = custom.keywords.iter().map(Into::into).collect();
+                let expressions: StaticVec<_> = custom.inputs.iter().map(Into::into).collect();
                 let key_token = custom
                     .tokens
                     .first()

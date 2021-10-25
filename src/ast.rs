@@ -1564,7 +1564,7 @@ impl Stmt {
 #[derive(Debug, Clone, Hash)]
 pub struct CustomExpr {
     /// List of keywords.
-    pub keywords: StaticVec<Expr>,
+    pub inputs: StaticVec<Expr>,
     /// Is the current [`Scope`][crate::Scope] possibly modified by this custom statement
     /// (e.g. introducing a new variable)?
     pub scope_may_be_changed: bool,
@@ -2366,7 +2366,7 @@ impl Expr {
                 }
             }
             Self::Custom(x, _) => {
-                for e in &x.keywords {
+                for e in &x.inputs {
                     if !e.walk(path, on_node) {
                         return false;
                     }

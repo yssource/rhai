@@ -1978,7 +1978,7 @@ fn parse_custom_syntax(
     pos: Position,
 ) -> Result<Expr, ParseError> {
     let mut settings = settings;
-    let mut keywords = StaticVec::<Expr>::new();
+    let mut inputs = StaticVec::<Expr>::new();
     let mut segments = StaticVec::new();
     let mut tokens = StaticVec::new();
 
@@ -2002,6 +2002,13 @@ fn parse_custom_syntax(
         let settings = settings.level_up();
 
         required_token = match parse_func(&segments, fwd_token.syntax().as_ref()) {
+            Ok(Some(seg))
+                if seg.starts_with(CUSTOM_SYNTAX_MARKER_SYNTAX_VARIANT)
+                    && seg.len() > CUSTOM_SYNTAX_MARKER_SYNTAX_VARIANT.len() =>
+            {
+                inputs.push(Expr::StringConstant(state.get_identifier(seg).into(), pos));
+                break;
+            }
             Ok(Some(seg)) => seg,
             Ok(None) => break,
             Err(err) => return Err(err.0.into_err(settings.pos)),
@@ -2013,24 +2020,24 @@ fn parse_custom_syntax(
                 let name = state.get_identifier(name);
                 segments.push(name.clone().into());
                 tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_IDENT));
-                keywords.push(Expr::Variable(None, pos, (None, None, name).into()));
+                inputs.push(Expr::Variable(None, pos, (None, None, name).into()));
             }
             CUSTOM_SYNTAX_MARKER_SYMBOL => {
                 let (symbol, pos) = parse_symbol(input)?;
                 let symbol: ImmutableString = state.get_identifier(symbol).into();
                 segments.push(symbol.clone());
                 tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_SYMBOL));
-                keywords.push(Expr::StringConstant(symbol, pos));
+                inputs.push(Expr::StringConstant(symbol, pos));
             }
             CUSTOM_SYNTAX_MARKER_EXPR => {
-                keywords.push(parse_expr(input, state, lib, settings)?);
+                inputs.push(parse_expr(input, state, lib, settings)?);
                 let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_EXPR);
                 segments.push(keyword.clone().into());
                 tokens.push(keyword);
             }
             CUSTOM_SYNTAX_MARKER_BLOCK => match parse_block(input, state, lib, settings)? {
                 block @ Stmt::Block(_, _) => {
-                    keywords.push(Expr::Stmt(Box::new(block.into())));
+                    inputs.push(Expr::Stmt(Box::new(block.into())));
                     let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_BLOCK);
                     segments.push(keyword.clone().into());
                     tokens.push(keyword);
@@ -2039,7 +2046,7 @@ fn parse_custom_syntax(
             },
             CUSTOM_SYNTAX_MARKER_BOOL => match input.next().expect(NEVER_ENDS) {
                 (b @ Token::True, pos) | (b @ Token::False, pos) => {
-                    keywords.push(Expr::BoolConstant(b == Token::True, pos));
+                    inputs.push(Expr::BoolConstant(b == Token::True, pos));
                     segments.push(state.get_identifier(b.literal_syntax()).into());
                     tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_BOOL));
                 }
@@ -2052,7 +2059,7 @@ fn parse_custom_syntax(
             },
             CUSTOM_SYNTAX_MARKER_INT => match input.next().expect(NEVER_ENDS) {
                 (Token::IntegerConstant(i), pos) => {
-                    keywords.push(Expr::IntegerConstant(i, pos));
+                    inputs.push(Expr::IntegerConstant(i, pos));
                     segments.push(i.to_string().into());
                     tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_INT));
                 }
@@ -2066,7 +2073,7 @@ fn parse_custom_syntax(
             #[cfg(not(feature = "no_float"))]
             CUSTOM_SYNTAX_MARKER_FLOAT => match input.next().expect(NEVER_ENDS) {
                 (Token::FloatConstant(f), pos) => {
-                    keywords.push(Expr::FloatConstant(f, pos));
+                    inputs.push(Expr::FloatConstant(f, pos));
                     segments.push(f.to_string().into());
                     tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_FLOAT));
                 }
@@ -2080,7 +2087,7 @@ fn parse_custom_syntax(
             CUSTOM_SYNTAX_MARKER_STRING => match input.next().expect(NEVER_ENDS) {
                 (Token::StringConstant(s), pos) => {
                     let s: ImmutableString = state.get_identifier(s).into();
-                    keywords.push(Expr::StringConstant(s.clone(), pos));
+                    inputs.push(Expr::StringConstant(s.clone(), pos));
                     segments.push(s);
                     tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_STRING));
                 }
@@ -2105,7 +2112,7 @@ fn parse_custom_syntax(
         }
     }
 
-    keywords.shrink_to_fit();
+    inputs.shrink_to_fit();
     tokens.shrink_to_fit();
 
     const KEYWORD_SEMICOLON: &str = Token::SemiColon.literal_syntax();
@@ -2121,7 +2128,7 @@ fn parse_custom_syntax(
 
     Ok(Expr::Custom(
         CustomExpr {
-            keywords,
+            inputs,
             tokens,
             scope_may_be_changed: syntax.scope_may_be_changed,
             self_terminated,

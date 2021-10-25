@@ -1079,7 +1079,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             if x.scope_may_be_changed {
                 state.propagate_constants = false;
             }
-            x.keywords.iter_mut().for_each(|expr| optimize_expr(expr, state, false));
+            x.inputs.iter_mut().for_each(|expr| optimize_expr(expr, state, false));
         }
 
         // All other expressions - skip
