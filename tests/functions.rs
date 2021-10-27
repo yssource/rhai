@@ -43,6 +43,20 @@ fn test_functions_trait_object() -> Result<(), Box<EvalAltResult>> {
 fn test_functions_namespaces() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
+    #[cfg(not(feature = "no_function"))]
+    {
+        assert_eq!(
+            engine.eval::<INT>(
+                "
+                    const ANSWER = 42;
+                    fn foo() { global::ANSWER }
+                    foo()
+                "
+            )?,
+            42
+        );
+    }
+
     #[cfg(not(feature = "no_module"))]
     {
         let mut m = Module::new();
@@ -50,6 +64,11 @@ fn test_functions_namespaces() -> Result<(), Box<EvalAltResult>> {
         m.update_fn_namespace(hash, FnNamespace::Global);
 
         engine.register_static_module("hello", m.into());
+
+        let mut m = Module::new();
+        m.set_var("ANSWER", 123 as INT);
+
+        engine.register_static_module("global", m.into());
 
         assert_eq!(engine.eval::<INT>("test()")?, 999);
 
@@ -75,7 +94,7 @@ fn test_functions_namespaces() -> Result<(), Box<EvalAltResult>> {
                     foo()
                 "
             )?,
-            42
+            123
         );
     }
 

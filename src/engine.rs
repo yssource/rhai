@@ -660,7 +660,7 @@ pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct EvalState {
     /// Source of the current context.
     pub source: Option<Identifier>,
@@ -681,9 +681,17 @@ pub struct EvalState {
     /// Embedded module resolver.
     #[cfg(not(feature = "no_module"))]
     pub embedded_module_resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
-    /// Function call hashes to FN_IDX_GET and FN_IDX_SET
+    /// Function call hashes to FN_IDX_GET and FN_IDX_SET.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn_hash_indexing: (u64, u64),
+    /// Cache of globally-defined constants.
+    pub global_constants: BTreeMap<Identifier, Dynamic>,
+}
+
+impl Default for EvalState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EvalState {
@@ -702,6 +710,7 @@ impl EvalState {
             fn_resolution_caches: StaticVec::new(),
             #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
             fn_hash_indexing: (0, 0),
+            global_constants: BTreeMap::new(),
         }
     }
     /// Is the state currently at global (root) level?
@@ -1174,26 +1183,40 @@ impl Engine {
                 (_, None, _) => self.search_scope_only(scope, mods, state, lib, this_ptr, expr),
                 // Qualified variable
                 (_, Some((namespace, hash_var)), var_name) => {
-                    let module = self.search_imports(mods, state, namespace).ok_or_else(|| {
-                        EvalAltResult::ErrorModuleNotFound(
+                    if let Some(module) = self.search_imports(mods, state, namespace) {
+                        let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
+                            match *err {
+                                EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
+                                    *err_name = format!("{}{}", namespace, var_name);
+                                }
+                                _ => (),
+                            }
+                            err.fill_position(*var_pos)
+                        })?;
+
+                        // Module variables are constant
+                        let mut target = target.clone();
+                        target.set_access_mode(AccessMode::ReadOnly);
+                        Ok((target.into(), *var_pos))
+                    } else if namespace.len() == 1 && namespace[0].name == KEYWORD_GLOBAL {
+                        if let Some(value) = state.global_constants.get_mut(var_name) {
+                            let mut target: Target = value.clone().into();
+                            target.set_access_mode(AccessMode::ReadOnly);
+                            Ok((target.into(), *var_pos))
+                        } else {
+                            Err(EvalAltResult::ErrorVariableNotFound(
+                                format!("{}{}", namespace, var_name),
+                                namespace[0].pos,
+                            )
+                            .into())
+                        }
+                    } else {
+                        Err(EvalAltResult::ErrorModuleNotFound(
                             namespace[0].name.to_string(),
                             namespace[0].pos,
                         )
-                    })?;
-                    let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
-                        match *err {
-                            EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
-                                *err_name = format!("{}{}", namespace, var_name);
-                            }
-                            _ => (),
-                        }
-                        err.fill_position(*var_pos)
-                    })?;
-
-                    // Module variables are constant
-                    let mut target = target.clone();
-                    target.set_access_mode(AccessMode::ReadOnly);
-                    Ok((target.into(), *var_pos))
+                        .into())
+                    }
                 }
             },
             _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
@@ -2968,24 +2991,7 @@ impl Engine {
                 let (var_name, _alias): (Cow<'_, str>, _) = if state.is_global() {
                     #[cfg(not(feature = "no_function"))]
                     if entry_type == AccessMode::ReadOnly && lib.iter().any(|&m| !m.is_empty()) {
-                        let global = if let Some(index) = mods.find(KEYWORD_GLOBAL) {
-                            match mods.get_mut(index).expect("index is valid") {
-                                m if m.internal => Some(m),
-                                _ => None,
-                            }
-                        } else {
-                            // Create automatic global module
-                            let mut global = Module::new();
-                            global.internal = true;
-                            mods.push(KEYWORD_GLOBAL, global);
-                            Some(mods.get_mut(mods.len() - 1).expect("global module exists"))
-                        };
-
-                        if let Some(global) = global {
-                            Shared::get_mut(global)
-                                .expect("global module is not shared")
-                                .set_var(name.clone(), value.clone());
-                        }
+                        state.global_constants.insert(name.clone(), value.clone());
                     }
 
                     (
