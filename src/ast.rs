@@ -2003,7 +2003,7 @@ impl fmt::Debug for Expr {
             Self::Variable(i, _, x) => {
                 f.write_str("Variable(")?;
                 if let Some((_, ref namespace)) = x.1 {
-                    write!(f, "{}", namespace)?
+                    write!(f, "{}{}", namespace, Token::DoubleColon.literal_syntax())?
                 }
                 f.write_str(&x.2)?;
                 if let Some(n) = i.map_or_else(|| x.0, |n| NonZeroUsize::new(n.get() as usize)) {

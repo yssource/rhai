@@ -9,14 +9,13 @@ use crate::engine::{
 use crate::fn_builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 use crate::fn_native::FnAny;
 use crate::module::NamespaceRef;
+use crate::token::Token;
 use crate::{
     ast::{Expr, Stmt},
+    calc_fn_hash, calc_fn_params_hash, combine_hashes,
     fn_native::CallableFunction,
-    RhaiResult,
-};
-use crate::{
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, EvalAltResult, FnPtr,
-    Identifier, ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec,
+    Dynamic, Engine, EvalAltResult, FnPtr, Identifier, ImmutableString, Module, ParseErrorType,
+    Position, RhaiResult, Scope, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -135,8 +134,13 @@ impl Engine {
         args: &[&mut Dynamic],
     ) -> String {
         format!(
-            "{}{} ({})",
+            "{}{}{} ({})",
             namespace.map_or(String::new(), |ns| ns.to_string()),
+            if namespace.is_some() {
+                Token::DoubleColon.literal_syntax()
+            } else {
+                ""
+            },
             fn_name,
             args.iter()
                 .map(|a| if a.is::<ImmutableString>() {
@@ -1393,7 +1397,7 @@ impl Engine {
         }
 
         let module = self.search_imports(mods, state, namespace).ok_or_else(|| {
-            EvalAltResult::ErrorModuleNotFound(namespace[0].name.to_string(), namespace[0].pos)
+            EvalAltResult::ErrorModuleNotFound(namespace.to_string(), namespace[0].pos)
         })?;
 
         // First search in script-defined functions (can override built-in)

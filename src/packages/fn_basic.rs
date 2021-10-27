@@ -107,7 +107,12 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
                 list.push(make_metadata(dict, Some(namespace.clone()), f).into())
             });
             module.iter_sub_modules().for_each(|(ns, m)| {
-                let ns = format!("{}::{}", namespace, ns);
+                let ns = format!(
+                    "{}{}{}",
+                    namespace,
+                    crate::token::Token::DoubleColon.literal_syntax(),
+                    ns
+                );
                 scan_module(list, dict, ns.into(), m.as_ref())
             });
         }

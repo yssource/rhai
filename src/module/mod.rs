@@ -1677,17 +1677,21 @@ impl fmt::Debug for NamespaceRef {
                 .iter()
                 .map(|Ident { name, .. }| name.as_str())
                 .collect::<StaticVec<_>>()
-                .join("::"),
+                .join(Token::DoubleColon.literal_syntax()),
         )
     }
 }
 
 impl fmt::Display for NamespaceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for Ident { name, .. } in self.path.iter() {
-            write!(f, "{}{}", name, Token::DoubleColon.syntax())?;
-        }
-        Ok(())
+        f.write_str(
+            &self
+                .path
+                .iter()
+                .map(|Ident { name, .. }| name.as_str())
+                .collect::<StaticVec<_>>()
+                .join(Token::DoubleColon.literal_syntax()),
+        )
     }
 }
 

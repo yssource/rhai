@@ -1181,38 +1181,54 @@ impl Engine {
             Expr::Variable(None, var_pos, v) => match v.as_ref() {
                 // Normal variable access
                 (_, None, _) => self.search_scope_only(scope, mods, state, lib, this_ptr, expr),
-                // Qualified variable
+                // Qualified variable access
                 (_, Some((namespace, hash_var)), var_name) => {
                     if let Some(module) = self.search_imports(mods, state, namespace) {
-                        let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
-                            match *err {
-                                EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
-                                    *err_name = format!("{}{}", namespace, var_name);
-                                }
-                                _ => (),
+                        // foo:bar::baz::VARIABLE
+                        match module.get_qualified_var(*hash_var) {
+                            Ok(target) => {
+                                let mut target = target.clone();
+                                // Module variables are constant
+                                target.set_access_mode(AccessMode::ReadOnly);
+                                Ok((target.into(), *var_pos))
                             }
-                            err.fill_position(*var_pos)
-                        })?;
-
-                        // Module variables are constant
-                        let mut target = target.clone();
-                        target.set_access_mode(AccessMode::ReadOnly);
-                        Ok((target.into(), *var_pos))
+                            Err(mut err) => {
+                                match *err {
+                                    EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
+                                        *err_name = format!(
+                                            "{}{}{}",
+                                            namespace,
+                                            Token::DoubleColon.literal_syntax(),
+                                            var_name
+                                        );
+                                    }
+                                    _ => (),
+                                }
+                                Err(err.fill_position(*var_pos))
+                            }
+                        }
                     } else if namespace.len() == 1 && namespace[0].name == KEYWORD_GLOBAL {
+                        // global::VARIABLE
                         if let Some(value) = state.global_constants.get_mut(var_name) {
                             let mut target: Target = value.clone().into();
+                            // Module variables are constant
                             target.set_access_mode(AccessMode::ReadOnly);
                             Ok((target.into(), *var_pos))
                         } else {
                             Err(EvalAltResult::ErrorVariableNotFound(
-                                format!("{}{}", namespace, var_name),
+                                format!(
+                                    "{}{}{}",
+                                    namespace,
+                                    Token::DoubleColon.literal_syntax(),
+                                    var_name
+                                ),
                                 namespace[0].pos,
                             )
                             .into())
                         }
                     } else {
                         Err(EvalAltResult::ErrorModuleNotFound(
-                            namespace[0].name.to_string(),
+                            namespace.to_string(),
                             namespace[0].pos,
                         )
                         .into())
