@@ -1187,7 +1187,7 @@ impl Engine {
                 (_, Some((namespace, hash_var)), var_name) => {
                     if let Some(module) = self.search_imports(mods, state, namespace) {
                         // foo:bar::baz::VARIABLE
-                        match module.get_qualified_var(*hash_var) {
+                        return match module.get_qualified_var(*hash_var) {
                             Ok(target) => {
                                 let mut target = target.clone();
                                 // Module variables are constant
@@ -1208,10 +1208,13 @@ impl Engine {
                                 }
                                 Err(err.fill_position(*_var_pos))
                             }
-                        }
-                    } else if namespace.len() == 1 && namespace[0].name == KEYWORD_GLOBAL {
+                        };
+                    }
+
+                    #[cfg(not(feature = "no_function"))]
+                    if namespace.len() == 1 && namespace[0].name == KEYWORD_GLOBAL {
                         // global::VARIABLE
-                        if let Some(value) = state.global_constants.get_mut(var_name) {
+                        return if let Some(value) = state.global_constants.get_mut(var_name) {
                             let mut target: Target = value.clone().into();
                             // Module variables are constant
                             target.set_access_mode(AccessMode::ReadOnly);
@@ -1227,17 +1230,16 @@ impl Engine {
                                 namespace[0].pos,
                             )
                             .into())
-                        }
-                    } else {
-                        Err(EvalAltResult::ErrorModuleNotFound(
-                            namespace.to_string(),
-                            namespace[0].pos,
-                        )
-                        .into())
+                        };
                     }
+
+                    Err(
+                        EvalAltResult::ErrorModuleNotFound(namespace.to_string(), namespace[0].pos)
+                            .into(),
+                    )
                 }
                 #[cfg(feature = "no_module")]
-                (_, Some((_, _)), _) => unreachable!("no_module is active"),
+                (_, Some((_, _)), _) => unreachable!("qualified access under no_module"),
             },
             _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
         }
