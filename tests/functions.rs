@@ -44,6 +44,7 @@ fn test_functions_namespaces() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
     #[cfg(not(feature = "no_function"))]
+    #[cfg(not(feature = "no_module"))]
     {
         assert_eq!(
             engine.eval::<INT>(
@@ -81,6 +82,7 @@ fn test_functions_namespaces() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(engine.eval::<INT>("test()")?, 42);
 
     #[cfg(not(feature = "no_function"))]
+    #[cfg(not(feature = "no_module"))]
     {
         assert_eq!(engine.eval::<INT>("fn test() { 123 } test()")?, 123);
 
