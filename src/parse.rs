@@ -1379,6 +1379,7 @@ fn parse_primary(
                 parse_fn_call(input, state, lib, name, false, ns, settings.level_up())?
             }
             // module access
+            #[cfg(not(feature = "no_module"))]
             (Expr::Variable(_, var_pos, x), Token::DoubleColon) => {
                 let (id2, pos2) = parse_var_name(input)?;
                 let (_, mut namespace, var_name) = *x;

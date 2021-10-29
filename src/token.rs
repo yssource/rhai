@@ -1829,6 +1829,7 @@ fn get_next_token_inner(
             }
             ('=', _) => return Some((Token::Equals, start_pos)),
 
+            #[cfg(not(feature = "no_module"))]
             (':', ':') => {
                 eat_next(stream, pos);
 

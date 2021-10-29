@@ -262,6 +262,7 @@ pub const KEYWORD_IS_DEF_VAR: &str = "is_def_var";
 pub const KEYWORD_IS_DEF_FN: &str = "is_def_fn";
 pub const KEYWORD_THIS: &str = "this";
 #[cfg(not(feature = "no_function"))]
+#[cfg(not(feature = "no_module"))]
 pub const KEYWORD_GLOBAL: &str = "global";
 #[cfg(not(feature = "no_object"))]
 pub const FN_GET: &str = "get$";
@@ -1178,10 +1179,11 @@ impl Engine {
             Expr::Variable(Some(_), _, _) => {
                 self.search_scope_only(scope, mods, state, lib, this_ptr, expr)
             }
-            Expr::Variable(None, var_pos, v) => match v.as_ref() {
+            Expr::Variable(None, _var_pos, v) => match v.as_ref() {
                 // Normal variable access
                 (_, None, _) => self.search_scope_only(scope, mods, state, lib, this_ptr, expr),
                 // Qualified variable access
+                #[cfg(not(feature = "no_module"))]
                 (_, Some((namespace, hash_var)), var_name) => {
                     if let Some(module) = self.search_imports(mods, state, namespace) {
                         // foo:bar::baz::VARIABLE
@@ -1190,7 +1192,7 @@ impl Engine {
                                 let mut target = target.clone();
                                 // Module variables are constant
                                 target.set_access_mode(AccessMode::ReadOnly);
-                                Ok((target.into(), *var_pos))
+                                Ok((target.into(), *_var_pos))
                             }
                             Err(mut err) => {
                                 match *err {
@@ -1204,7 +1206,7 @@ impl Engine {
                                     }
                                     _ => (),
                                 }
-                                Err(err.fill_position(*var_pos))
+                                Err(err.fill_position(*_var_pos))
                             }
                         }
                     } else if namespace.len() == 1 && namespace[0].name == KEYWORD_GLOBAL {
@@ -1213,7 +1215,7 @@ impl Engine {
                             let mut target: Target = value.clone().into();
                             // Module variables are constant
                             target.set_access_mode(AccessMode::ReadOnly);
-                            Ok((target.into(), *var_pos))
+                            Ok((target.into(), *_var_pos))
                         } else {
                             Err(EvalAltResult::ErrorVariableNotFound(
                                 format!(
@@ -1234,6 +1236,8 @@ impl Engine {
                         .into())
                     }
                 }
+                #[cfg(feature = "no_module")]
+                (_, Some((_, _)), _) => unreachable!("no_module is active"),
             },
             _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
         }

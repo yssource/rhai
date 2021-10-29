@@ -9,7 +9,7 @@ use crate::parse::IdentifierBuilder;
 use crate::token::Token;
 use crate::{
     calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, EvalAltResult,
-    Identifier, ImmutableString, NativeCallContext, Position, Shared, StaticVec,
+    Identifier, ImmutableString, NativeCallContext, Shared, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -455,10 +455,11 @@ impl Module {
 
     /// Get a reference to a namespace-qualified variable.
     /// Name and Position in [`EvalAltResult`] are [`None`] and [`NONE`][Position::NONE] and must be set afterwards.
+    #[cfg(not(feature = "no_module"))]
     #[inline]
     pub(crate) fn get_qualified_var(&self, hash_var: u64) -> Result<&Dynamic, Box<EvalAltResult>> {
         self.all_variables.get(&hash_var).ok_or_else(|| {
-            EvalAltResult::ErrorVariableNotFound(String::new(), Position::NONE).into()
+            EvalAltResult::ErrorVariableNotFound(String::new(), crate::Position::NONE).into()
         })
     }
 
