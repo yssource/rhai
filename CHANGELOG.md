@@ -8,6 +8,7 @@ Bug fixes
 ---------
 
 * The `no_module` and `internals` features now work together without a compilation error.
+* String literal operations (such as `"hello" + ", world"`) now optimizes correctly.
 
 
 Version 1.1.0
