@@ -989,7 +989,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                     state.set_dirty();
                     *expr = Expr::from_dynamic(state.engine.map_type_name(arg_values[0].type_name()).into(), *pos);
                     return;
-                }    
+                }
                 #[cfg(not(feature = "no_closure"))]
                 KEYWORD_IS_SHARED if arg_values.len() == 1 => {
                     state.set_dirty();
