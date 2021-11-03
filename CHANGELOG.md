@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 1.1.2
+=============
+
+Bug fixes
+---------
+
+* `0.0` now prints correctly (used to print `0e0`).
+
+
 Version 1.1.1
 =============
 
