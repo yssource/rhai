@@ -8,6 +8,7 @@ Bug fixes
 ---------
 
 * `0.0` now prints correctly (used to print `0e0`).
+* Unary operators are now properly recognized as an expression statement.
 
 
 Version 1.1.1
