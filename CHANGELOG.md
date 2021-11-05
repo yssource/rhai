@@ -8,6 +8,7 @@ Bug fixes
 ---------
 
 * Reverses a regression on string `+` operations.
+* The global namespace is now searched before packages, which is the correct behavior.
 
 
 Version 1.1.2

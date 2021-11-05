@@ -9,6 +9,8 @@ use std::{any::TypeId, mem};
 use super::string_basic::{print_with_func, FUNC_TO_STRING};
 
 def_package!(crate:MoreStringPackage:"Additional string utilities, including string building.", lib, {
+    lib.standard = true;
+
     combine_with_exported_module!(lib, "string", string_functions);
 });
 
