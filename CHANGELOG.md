@@ -19,6 +19,7 @@ Enhancements
 * Array adds a `sort` method with no parameters which sorts homogeneous arrays of built-in comparable types (e.g. `INT`).
 * Inlining is disabled for error-path functions because errors are exceptional and scripts usually fail completely when an error is encountered.
 * The `optimize` module is completely eliminated under `no_optimize`, which should yield smaller code size.
+* Add `NativeCallContext::position` to return the position of the function call.
 
 Deprecated API's
 ----------------

@@ -339,12 +339,14 @@ impl Engine {
                 .map(|s| s.as_str());
 
             let result = if func.is_plugin_fn() {
+                let context = (self, name, source, mods, lib, pos).into();
                 func.get_plugin_fn()
                     .expect("plugin function")
-                    .call((self, name, source, mods, lib).into(), args)
+                    .call(context, args)
             } else {
                 let func = func.get_native_fn().expect("native function");
-                func((self, name, source, mods, lib).into(), args)
+                let context = (self, name, source, mods, lib, pos).into();
+                func(context, args)
             };
 
             // Restore the original reference
@@ -1448,17 +1450,19 @@ impl Engine {
                 }
             }
 
-            Some(f) if f.is_plugin_fn() => f
-                .get_plugin_fn()
-                .expect("plugin function")
-                .clone()
-                .call((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
-                .map_err(|err| err.fill_position(pos)),
+            Some(f) if f.is_plugin_fn() => {
+                let context = (self, fn_name, module.id(), &*mods, lib, pos).into();
+                f.get_plugin_fn()
+                    .expect("plugin function")
+                    .clone()
+                    .call(context, &mut args)
+                    .map_err(|err| err.fill_position(pos))
+            }
 
             Some(f) if f.is_native() => {
                 let func = f.get_native_fn().expect("native function");
-                func((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
-                    .map_err(|err| err.fill_position(pos))
+                let context = (self, fn_name, module.id(), &*mods, lib, pos).into();
+                func(context, &mut args).map_err(|err| err.fill_position(pos))
             }
 
             Some(f) => unreachable!("unknown function type: {:?}", f),

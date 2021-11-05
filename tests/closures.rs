@@ -338,7 +338,7 @@ fn test_closures_external() -> Result<(), Box<EvalAltResult>> {
 
     // Create native call context
     let fn_name = fn_ptr.fn_name().to_string();
-    let context = NativeCallContext::new(&engine, &fn_name, &lib);
+    let context = NativeCallContext::new(&engine, &fn_name, &lib, rhai::Position::NONE);
 
     // Closure  'f' captures: the engine, the AST, and the curried function pointer
     let f = move |x: INT| fn_ptr.call_dynamic(&context, None, [x.into()]);

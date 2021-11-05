@@ -1000,9 +1000,9 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 _ if x.args.len() == 2 && !state.has_native_fn(x.hashes.native, arg_types.as_ref()) => {
                     if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
                         .and_then(|f| {
-                            let ctx = (state.engine, x.name.as_ref(), state.lib).into();
+                            let context = (state.engine, x.name.as_ref(), state.lib, Position::NONE).into();
                             let (first, second) = arg_values.split_first_mut().expect("`arg_values` is not empty");
-                            (f)(ctx, &mut [ first, &mut second[0] ]).ok()
+                            (f)(context, &mut [ first, &mut second[0] ]).ok()
                         }) {
                             state.set_dirty();
                             *expr = Expr::from_dynamic(result, *pos);

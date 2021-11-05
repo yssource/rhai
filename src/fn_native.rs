@@ -54,34 +54,53 @@ pub struct NativeCallContext<'a> {
     source: Option<&'a str>,
     mods: Option<&'a Imports>,
     lib: &'a [&'a Module],
+    pos: Position,
 }
 
 impl<'a, M: AsRef<[&'a Module]> + ?Sized>
-    From<(&'a Engine, &'a str, Option<&'a str>, &'a Imports, &'a M)> for NativeCallContext<'a>
+    From<(
+        &'a Engine,
+        &'a str,
+        Option<&'a str>,
+        &'a Imports,
+        &'a M,
+        Position,
+    )> for NativeCallContext<'a>
 {
     #[inline(always)]
-    fn from(value: (&'a Engine, &'a str, Option<&'a str>, &'a Imports, &'a M)) -> Self {
+    fn from(
+        value: (
+            &'a Engine,
+            &'a str,
+            Option<&'a str>,
+            &'a Imports,
+            &'a M,
+            Position,
+        ),
+    ) -> Self {
         Self {
             engine: value.0,
             fn_name: value.1,
             source: value.2,
             mods: Some(value.3),
             lib: value.4.as_ref(),
+            pos: value.5,
         }
     }
 }
 
-impl<'a, M: AsRef<[&'a Module]> + ?Sized> From<(&'a Engine, &'a str, &'a M)>
+impl<'a, M: AsRef<[&'a Module]> + ?Sized> From<(&'a Engine, &'a str, &'a M, Position)>
     for NativeCallContext<'a>
 {
     #[inline(always)]
-    fn from(value: (&'a Engine, &'a str, &'a M)) -> Self {
+    fn from(value: (&'a Engine, &'a str, &'a M, Position)) -> Self {
         Self {
             engine: value.0,
             fn_name: value.1,
             source: None,
             mods: None,
             lib: value.2.as_ref(),
+            pos: value.3,
         }
     }
 }
@@ -90,13 +109,19 @@ impl<'a> NativeCallContext<'a> {
     /// Create a new [`NativeCallContext`].
     #[inline(always)]
     #[must_use]
-    pub const fn new(engine: &'a Engine, fn_name: &'a str, lib: &'a [&Module]) -> Self {
+    pub const fn new(
+        engine: &'a Engine,
+        fn_name: &'a str,
+        lib: &'a [&Module],
+        pos: Position,
+    ) -> Self {
         Self {
             engine,
             fn_name,
             source: None,
             mods: None,
             lib,
+            pos,
         }
     }
     /// _(internals)_ Create a new [`NativeCallContext`].
@@ -113,6 +138,7 @@ impl<'a> NativeCallContext<'a> {
         source: Option<&'a str>,
         imports: &'a Imports,
         lib: &'a [&Module],
+        pos: Position,
     ) -> Self {
         Self {
             engine,
@@ -120,6 +146,7 @@ impl<'a> NativeCallContext<'a> {
             source,
             mods: Some(imports),
             lib,
+            pos,
         }
     }
     /// The current [`Engine`].
@@ -133,6 +160,12 @@ impl<'a> NativeCallContext<'a> {
     #[must_use]
     pub const fn fn_name(&self) -> &str {
         self.fn_name
+    }
+    /// [Position][`Position`] of the function call.
+    #[inline(always)]
+    #[must_use]
+    pub const fn position(&self) -> Position {
+        self.pos
     }
     /// The current source.
     #[inline(always)]
