@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 1.1.3
+=============
+
+Bug fixes
+---------
+
+* Reverses a regression on string `+` operations.
+
+
 Version 1.1.2
 =============
 
