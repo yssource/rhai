@@ -36,5 +36,12 @@ fn check_struct_sizes() {
         if cfg!(feature = "no_position") { 8 } else { 16 }
     );
     assert_eq!(size_of::<EvalAltResult>(), 72);
-    assert_eq!(size_of::<NativeCallContext>(), 72);
+    assert_eq!(
+        size_of::<NativeCallContext>(),
+        if cfg!(feature = "no_position") {
+            64
+        } else {
+            72
+        }
+    );
 }
