@@ -50,12 +50,21 @@ const NEVER_ENDS: &str = "`TokenStream` never ends";
 /// When [`ImmutableString`] is used as [`Identifier`], this type acts as an interner which keeps a
 /// collection of strings and returns shared instances, only creating a new string when it is not
 /// yet interned.
-#[derive(Debug, Clone, Default, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub struct IdentifierBuilder(
     #[cfg(feature = "no_smartstring")] std::collections::BTreeSet<Identifier>,
 );
 
 impl IdentifierBuilder {
+    /// Create a new IdentifierBuilder.
+    #[inline]
+    #[must_use]
+    pub fn new() -> Self {
+        Self(
+            #[cfg(feature = "no_smartstring")]
+            std::collections::BTreeSet::new(),
+        )
+    }
     /// Get an identifier from a text string.
     #[inline]
     #[must_use]
@@ -121,14 +130,14 @@ impl<'e> ParseState<'e> {
             #[cfg(not(feature = "no_function"))]
             max_function_expr_depth: NonZeroUsize::new(engine.max_function_expr_depth()),
             #[cfg(not(feature = "no_closure"))]
-            external_vars: Default::default(),
+            external_vars: BTreeMap::new(),
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
-            interned_strings: Default::default(),
-            stack: Default::default(),
+            interned_strings: IdentifierBuilder::new(),
+            stack: StaticVec::new(),
             entry_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
-            modules: Default::default(),
+            modules: StaticVec::new(),
         }
     }
 
@@ -398,7 +407,7 @@ fn parse_symbol(input: &mut TokenStream) -> Result<(String, Position), ParseErro
         // Bad identifier
         (Token::LexError(err), pos) => Err(err.into_err(pos)),
         // Not a symbol
-        (_, pos) => Err(PERR::MissingSymbol(Default::default()).into_err(pos)),
+        (_, pos) => Err(PERR::MissingSymbol(String::new()).into_err(pos)),
     }
 }
 
@@ -902,7 +911,7 @@ fn parse_map_literal(
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
         let name = state.get_identifier(name);
-        template.insert(name.clone(), Default::default());
+        template.insert(name.clone(), crate::Dynamic::UNIT);
         map.push((Ident { name, pos }, expr));
 
         match input.peek().expect(NEVER_ENDS) {
@@ -2556,7 +2565,7 @@ fn parse_export(
             }
             (name, pos)
         } else {
-            (Default::default(), Position::NONE)
+            (String::new(), Position::NONE)
         };
 
         exports.push((
@@ -3075,7 +3084,7 @@ fn parse_fn(
         body,
         lib: None,
         #[cfg(not(feature = "no_module"))]
-        mods: Default::default(),
+        mods: crate::engine::Imports::new(),
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
         comments,
@@ -3216,17 +3225,17 @@ fn parse_anon_fn(
         access: FnAccess::Public,
         params,
         #[cfg(not(feature = "no_closure"))]
-        externals: Default::default(),
+        externals: std::collections::BTreeSet::new(),
         body: body.into(),
         lib: None,
         #[cfg(not(feature = "no_module"))]
-        mods: Default::default(),
+        mods: crate::engine::Imports::new(),
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
-        comments: Default::default(),
+        comments: StaticVec::new(),
     };
 
-    let fn_ptr = crate::FnPtr::new_unchecked(fn_name, Default::default());
+    let fn_ptr = crate::FnPtr::new_unchecked(fn_name, StaticVec::new());
     let expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), settings.pos);
 
     #[cfg(not(feature = "no_closure"))]
@@ -3245,7 +3254,7 @@ impl Engine {
         #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
     ) -> Result<AST, ParseError> {
         let _scope = scope;
-        let mut functions = Default::default();
+        let mut functions = BTreeMap::new();
 
         let settings = ParseSettings {
             allow_if_expr: false,
@@ -3278,7 +3287,7 @@ impl Engine {
             self,
             _scope,
             statements,
-            Default::default(),
+            StaticVec::new(),
             optimization_level,
         ));
 

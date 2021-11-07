@@ -22,7 +22,7 @@ use std::{collections::BTreeMap, ops::AddAssign};
 ///
 /// engine.set_module_resolver(resolver);
 /// ```
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct StaticModuleResolver(BTreeMap<Identifier, Shared<Module>>);
 
 impl StaticModuleResolver {
@@ -45,7 +45,7 @@ impl StaticModuleResolver {
     #[inline(always)]
     #[must_use]
     pub fn new() -> Self {
-        Default::default()
+        Self(BTreeMap::new())
     }
     /// Add a [module][Module] keyed by its path.
     #[inline]

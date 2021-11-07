@@ -60,8 +60,8 @@ mod print_debug_functions {
         ctx.engine().map_type_name(&format!("{:?}", item)).into()
     }
     #[rhai_fn(name = "print", name = "debug")]
-    pub fn print_empty_string() -> ImmutableString {
-        Default::default()
+    pub fn print_empty_string(ctx: NativeCallContext) -> ImmutableString {
+        ctx.engine().const_empty_string()
     }
     #[rhai_fn(name = "print", name = "to_string")]
     pub fn print_string(s: ImmutableString) -> ImmutableString {

@@ -1,7 +1,7 @@
 //! Module defining interfaces to native-Rust functions.
 
 use crate::ast::{FnAccess, FnCallHashes};
-use crate::engine::Imports;
+use crate::engine::{EvalState, Imports};
 use crate::fn_call::FnCallArgs;
 use crate::plugin::PluginFunction;
 use crate::token::{Token, TokenizeState};
@@ -89,18 +89,18 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized>
     }
 }
 
-impl<'a, M: AsRef<[&'a Module]> + ?Sized> From<(&'a Engine, &'a str, &'a M, Position)>
+impl<'a, M: AsRef<[&'a Module]> + ?Sized> From<(&'a Engine, &'a str, &'a M)>
     for NativeCallContext<'a>
 {
     #[inline(always)]
-    fn from(value: (&'a Engine, &'a str, &'a M, Position)) -> Self {
+    fn from(value: (&'a Engine, &'a str, &'a M)) -> Self {
         Self {
             engine: value.0,
             fn_name: value.1,
             source: None,
             mods: None,
             lib: value.2.as_ref(),
-            pos: value.3,
+            pos: Position::NONE,
         }
     }
 }
@@ -109,19 +109,14 @@ impl<'a> NativeCallContext<'a> {
     /// Create a new [`NativeCallContext`].
     #[inline(always)]
     #[must_use]
-    pub const fn new(
-        engine: &'a Engine,
-        fn_name: &'a str,
-        lib: &'a [&Module],
-        pos: Position,
-    ) -> Self {
+    pub const fn new(engine: &'a Engine, fn_name: &'a str, lib: &'a [&Module]) -> Self {
         Self {
             engine,
             fn_name,
             source: None,
             mods: None,
             lib,
-            pos,
+            pos: Position::NONE,
         }
     }
     /// _(internals)_ Create a new [`NativeCallContext`].
@@ -247,8 +242,8 @@ impl<'a> NativeCallContext<'a> {
 
         self.engine()
             .exec_fn_call(
-                &mut self.mods.cloned().unwrap_or_default(),
-                &mut Default::default(),
+                &mut self.mods.cloned().unwrap_or_else(|| Imports::new()),
+                &mut EvalState::new(),
                 self.lib,
                 fn_name,
                 hash,

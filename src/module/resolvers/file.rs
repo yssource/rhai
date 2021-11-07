@@ -1,4 +1,4 @@
-use crate::{Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Shared};
+use crate::{Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Scope, Shared};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -49,13 +49,6 @@ pub struct FileModuleResolver {
     cache: std::cell::RefCell<BTreeMap<PathBuf, Shared<Module>>>,
     #[cfg(feature = "sync")]
     cache: std::sync::RwLock<BTreeMap<PathBuf, Shared<Module>>>,
-}
-
-impl Default for FileModuleResolver {
-    #[inline(always)]
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl FileModuleResolver {
@@ -301,7 +294,7 @@ impl ModuleResolver for FileModuleResolver {
         }
 
         // Load the script file and compile it
-        let scope = Default::default();
+        let scope = Scope::new();
 
         let mut ast = engine
             .compile_file(file_path.clone())

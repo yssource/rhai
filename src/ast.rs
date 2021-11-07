@@ -227,11 +227,11 @@ impl AST {
     /// Create an empty [`AST`].
     #[inline]
     #[must_use]
-    pub(crate) fn empty() -> Self {
+    pub fn empty() -> Self {
         Self {
             source: None,
-            body: Default::default(),
-            functions: Default::default(),
+            body: StmtBlock::empty(),
+            functions: Module::new().into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
         }
@@ -399,11 +399,11 @@ impl AST {
         &self,
         filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> Self {
-        let mut functions: Module = Default::default();
+        let mut functions = Module::new();
         functions.merge_filtered(&self.functions, &filter);
         Self {
             source: self.source.clone(),
-            body: Default::default(),
+            body: StmtBlock::empty(),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: self.resolver.clone(),
@@ -417,7 +417,7 @@ impl AST {
         Self {
             source: self.source.clone(),
             body: self.body.clone(),
-            functions: Default::default(),
+            functions: Module::new().into(),
             #[cfg(not(feature = "no_module"))]
             resolver: self.resolver.clone(),
         }
@@ -599,7 +599,7 @@ impl AST {
             }
             (false, true) => body.clone(),
             (true, false) => other.body.clone(),
-            (true, true) => Default::default(),
+            (true, true) => StmtBlock::empty(),
         };
 
         let source = other.source.clone().or_else(|| self.source.clone());
@@ -740,13 +740,13 @@ impl AST {
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     pub fn clear_functions(&mut self) -> &mut Self {
-        self.functions = Default::default();
+        self.functions = Module::new().into();
         self
     }
     /// Clear all statements in the [`AST`], leaving only function definitions.
     #[inline(always)]
     pub fn clear_statements(&mut self) -> &mut Self {
-        self.body = Default::default();
+        self.body = StmtBlock::empty();
         self
     }
     /// Recursively walk the [`AST`], including function bodies (if any).
@@ -755,7 +755,7 @@ impl AST {
     #[cfg(not(feature = "no_module"))]
     #[inline]
     pub(crate) fn walk(&self, on_node: &mut impl FnMut(&[ASTNode]) -> bool) -> bool {
-        let path = &mut Default::default();
+        let path = &mut Vec::new();
 
         for stmt in self.statements() {
             if !stmt.walk(path, on_node) {
@@ -777,7 +777,7 @@ impl AST {
     #[cfg(feature = "internals")]
     #[inline]
     pub fn walk(&self, on_node: &mut impl FnMut(&[ASTNode]) -> bool) -> bool {
-        let path = &mut Default::default();
+        let path = &mut Vec::new();
 
         for stmt in self.statements() {
             if !stmt.walk(path, on_node) {
@@ -898,6 +898,12 @@ impl StmtBlock {
         let mut statements: StaticVec<_> = statements.into_iter().collect();
         statements.shrink_to_fit();
         Self(statements, pos)
+    }
+    /// Create an empty [`StmtBlock`].
+    #[inline(always)]
+    #[must_use]
+    pub fn empty() -> Self {
+        Default::default()
     }
     /// Is this statements block empty?
     #[inline(always)]
@@ -1205,7 +1211,7 @@ impl From<Stmt> for StmtBlock {
     fn from(stmt: Stmt) -> Self {
         match stmt {
             Stmt::Block(mut block, pos) => Self(block.iter_mut().map(mem::take).collect(), pos),
-            Stmt::Noop(pos) => Self(Default::default(), pos),
+            Stmt::Noop(pos) => Self(StaticVec::new(), pos),
             _ => {
                 let pos = stmt.position();
                 Self(vec![stmt].into(), pos)

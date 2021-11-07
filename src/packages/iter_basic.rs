@@ -27,7 +27,7 @@ where
             if r == from {
                 return Err(EvalAltResult::ErrorInFunctionCall(
                     "range".to_string(),
-                    Default::default(),
+                    String::new(),
                     EvalAltResult::ErrorArithmetic(
                         "step value cannot be zero".to_string(),
                         crate::Position::NONE,
@@ -201,7 +201,7 @@ struct CharsStream(Vec<char>, usize);
 impl CharsStream {
     pub fn new(string: &str, from: INT, len: INT) -> Self {
         if len <= 0 {
-            return Self(Default::default(), 0);
+            return Self(Vec::new(), 0);
         }
         if from >= 0 {
             return Self(

@@ -146,7 +146,7 @@ impl TryFrom<Identifier> for FnPtr {
     #[inline]
     fn try_from(value: Identifier) -> Result<Self, Self::Error> {
         if is_valid_identifier(value.chars()) {
-            Ok(Self(value, Default::default()))
+            Ok(Self(value, StaticVec::new()))
         } else {
             Err(EvalAltResult::ErrorFunctionNotFound(value.to_string(), Position::NONE).into())
         }

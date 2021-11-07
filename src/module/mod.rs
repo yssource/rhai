@@ -37,13 +37,6 @@ pub enum FnNamespace {
     Internal,
 }
 
-impl Default for FnNamespace {
-    #[inline(always)]
-    fn default() -> Self {
-        Self::Internal
-    }
-}
-
 /// Data structure containing a single registered function.
 #[derive(Debug, Clone)]
 pub struct FuncInfo {
@@ -249,16 +242,16 @@ impl Module {
             id: None,
             internal: false,
             standard: false,
-            modules: Default::default(),
-            variables: Default::default(),
-            all_variables: Default::default(),
-            functions: Default::default(),
-            all_functions: Default::default(),
-            type_iterators: Default::default(),
-            all_type_iterators: Default::default(),
+            modules: BTreeMap::new(),
+            variables: BTreeMap::new(),
+            all_variables: BTreeMap::new(),
+            functions: BTreeMap::new(),
+            all_functions: BTreeMap::new(),
+            type_iterators: BTreeMap::new(),
+            all_type_iterators: BTreeMap::new(),
             indexed: true,
             contains_indexed_global_functions: false,
-            identifiers: Default::default(),
+            identifiers: IdentifierBuilder::new(),
         }
     }
 
@@ -486,7 +479,7 @@ impl Module {
                 namespace: FnNamespace::Internal,
                 access: fn_def.access,
                 params: num_params,
-                param_types: Default::default(),
+                param_types: StaticVec::new(),
                 #[cfg(feature = "metadata")]
                 param_names,
                 func: Into::<CallableFunction>::into(fn_def).into(),
@@ -1565,9 +1558,9 @@ impl Module {
 
         if !self.indexed {
             let mut path = Vec::with_capacity(4);
-            let mut variables = Default::default();
-            let mut functions = Default::default();
-            let mut type_iterators = Default::default();
+            let mut variables = BTreeMap::new();
+            let mut functions = BTreeMap::new();
+            let mut type_iterators = BTreeMap::new();
 
             path.push("");
 

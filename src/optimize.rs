@@ -2,7 +2,9 @@
 
 use crate::ast::{Expr, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::dynamic::AccessMode;
-use crate::engine::{KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF};
+use crate::engine::{
+    EvalState, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
+};
 use crate::fn_builtin::get_builtin_binary_op_fn;
 use crate::fn_hash::get_hasher;
 use crate::token::Token;
@@ -131,8 +133,8 @@ impl<'a> OptimizerState<'a> {
     ) -> Option<Dynamic> {
         self.engine
             .call_native_fn(
-                &Default::default(),
-                &mut Default::default(),
+                &Imports::new(),
+                &mut EvalState::new(),
                 self.lib,
                 fn_name,
                 calc_fn_hash(fn_name, arg_values.len()),
@@ -959,7 +961,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                     state.set_dirty();
                     let fn_ptr = FnPtr::new_unchecked(
                                     fn_name.as_str_ref().expect("`fn_name` is `ImmutableString`").into(),
-                                    Default::default()
+                                    StaticVec::new()
                                  );
                     *expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), *pos);
                 }
@@ -1001,7 +1003,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 _ if x.args.len() == 2 && !state.has_native_fn_override(x.hashes.native, arg_types.as_ref()) => {
                     if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
                         .and_then(|f| {
-                            let context = (state.engine, x.name.as_ref(), state.lib, Position::NONE).into();
+                            let context = (state.engine, x.name.as_ref(), state.lib).into();
                             let (first, second) = arg_values.split_first_mut().expect("`arg_values` is not empty");
                             (f)(context, &mut [ first, &mut second[0] ]).ok()
                         }) {
@@ -1154,16 +1156,16 @@ pub fn optimize_into_ast(
                 .map(|fn_def| crate::ast::ScriptFnDef {
                     name: fn_def.name.clone(),
                     access: fn_def.access,
-                    body: Default::default(),
+                    body: crate::ast::StmtBlock::empty(),
                     params: fn_def.params.clone(),
                     #[cfg(not(feature = "no_closure"))]
                     externals: fn_def.externals.clone(),
                     lib: None,
                     #[cfg(not(feature = "no_module"))]
-                    mods: Default::default(),
+                    mods: crate::engine::Imports::new(),
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
-                    comments: Default::default(),
+                    comments: StaticVec::new(),
                 })
                 .for_each(|fn_def| {
                     lib2.set_script_fn(fn_def);
@@ -1198,7 +1200,7 @@ pub fn optimize_into_ast(
     };
 
     #[cfg(feature = "no_function")]
-    let lib = Default::default();
+    let lib = Module::new();
 
     statements.shrink_to_fit();
 

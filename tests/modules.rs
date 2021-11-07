@@ -444,7 +444,7 @@ fn test_module_ast_namespace() -> Result<(), Box<EvalAltResult>> {
 
     let ast = engine.compile(script)?;
 
-    let module = Module::eval_ast_as_new(Default::default(), &ast, &engine)?;
+    let module = Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
 
     let mut resolver = StaticModuleResolver::new();
     resolver.insert("testing", module);
@@ -512,6 +512,6 @@ fn test_module_file() -> Result<(), Box<EvalAltResult>> {
             print("top");
         "#,
     )?;
-    Module::eval_ast_as_new(Default::default(), &ast, &engine)?;
+    Module::eval_ast_as_new(Scope::new(), &ast, &engine)?;
     Ok(())
 }

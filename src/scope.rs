@@ -243,7 +243,7 @@ impl<'a> Scope<'a> {
         access: AccessMode,
         mut value: Dynamic,
     ) -> &mut Self {
-        self.names.push((name.into(), Default::default()));
+        self.names.push((name.into(), None));
         value.set_access_mode(access);
         self.values.push(value);
         self
@@ -592,7 +592,7 @@ impl<'a, K: Into<Cow<'a, str>>> Extend<(K, Dynamic)> for Scope<'a> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, Dynamic)>>(&mut self, iter: T) {
         iter.into_iter().for_each(|(name, value)| {
-            self.names.push((name.into(), Default::default()));
+            self.names.push((name.into(), None));
             self.values.push(value);
         });
     }

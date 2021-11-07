@@ -33,13 +33,20 @@ pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
 /// A type that temporarily stores a mutable reference to a `Dynamic`,
 /// replacing it with a cloned copy.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct ArgBackup<'a> {
     orig_mut: Option<&'a mut Dynamic>,
     value_copy: Dynamic,
 }
 
 impl<'a> ArgBackup<'a> {
+    /// Create a new `ArgBackup`.
+    pub fn new() -> Self {
+        Self {
+            orig_mut: None,
+            value_copy: Dynamic::UNIT,
+        }
+    }
     /// This function replaces the first argument of a method call with a clone copy.
     /// This is to prevent a pure function unintentionally consuming the first argument.
     ///
@@ -325,7 +332,7 @@ impl Engine {
             // Calling pure function but the first argument is a reference?
             let mut backup: Option<ArgBackup> = None;
             if is_method_call && func.is_pure() && !args.is_empty() {
-                backup = Some(Default::default());
+                backup = Some(ArgBackup::new());
                 backup
                     .as_mut()
                     .expect("`backup` is `Some`")
@@ -523,9 +530,6 @@ impl Engine {
             return Err(EvalAltResult::ErrorStackOverflow(pos).into());
         }
 
-        let orig_scope_level = state.scope_level;
-        state.scope_level += 1;
-
         let prev_scope_len = scope.len();
         let prev_mods_len = mods.len();
 
@@ -593,7 +597,6 @@ impl Engine {
         // Remove all local variables
         scope.rewind(prev_scope_len);
         mods.truncate(prev_mods_len);
-        state.scope_level = orig_scope_level;
 
         if unified {
             state.pop_fn_resolution_cache();
@@ -782,7 +785,7 @@ impl Engine {
                 // The first argument is a reference?
                 let mut backup: Option<ArgBackup> = None;
                 if is_ref_mut && !args.is_empty() {
-                    backup = Some(Default::default());
+                    backup = Some(ArgBackup::new());
                     backup
                         .as_mut()
                         .expect("`backup` is `Some`")
@@ -862,7 +865,7 @@ impl Engine {
         // Compile the script text
         // No optimizations because we only run it once
         let ast = self.compile_with_scope_and_optimization_level(
-            &Default::default(),
+            &Scope::new(),
             &[script],
             #[cfg(not(feature = "no_optimize"))]
             crate::OptimizationLevel::None,
@@ -1352,7 +1355,7 @@ impl Engine {
                 // func(x, ...) -> x.func(...)
                 for index in 0..args_expr.len() {
                     if index == 0 {
-                        arg_values.push(Default::default());
+                        arg_values.push(Dynamic::UNIT);
                     } else {
                         let (value, _) = self.get_arg_value(
                             scope, mods, state, lib, this_ptr, level, args_expr, constants, index,
@@ -1433,7 +1436,7 @@ impl Engine {
                 if fn_def.body.is_empty() {
                     Ok(Dynamic::UNIT)
                 } else {
-                    let new_scope = &mut Default::default();
+                    let new_scope = &mut Scope::new();
 
                     let mut source = module.id_raw().cloned();
                     mem::swap(&mut state.source, &mut source);

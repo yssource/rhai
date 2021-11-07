@@ -168,7 +168,7 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
                         .to_vec()
                 }
             } else {
-                Default::default()
+                Vec::new()
             },
         }
     }
@@ -198,7 +198,7 @@ impl From<crate::ast::ScriptFnMetadata<'_>> for FnMetadata {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ModuleMetadata {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -210,7 +210,10 @@ struct ModuleMetadata {
 impl ModuleMetadata {
     #[inline(always)]
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            modules: BTreeMap::new(),
+            functions: Vec::new(),
+        }
     }
 }
 
@@ -281,6 +284,6 @@ impl Engine {
     /// 2) Functions in static modules
     /// 3) Functions in global modules (optional)
     pub fn gen_fn_metadata_to_json(&self, include_global: bool) -> serde_json::Result<String> {
-        self.gen_fn_metadata_with_ast_to_json(&Default::default(), include_global)
+        self.gen_fn_metadata_with_ast_to_json(&AST::empty(), include_global)
     }
 }

@@ -114,7 +114,7 @@ fn main() {
                 .map_err(|err| err.into())
                 .and_then(|mut ast| {
                     ast.set_source(filename.to_string_lossy().to_string());
-                    Module::eval_ast_as_new(Default::default(), &ast, &engine)
+                    Module::eval_ast_as_new(Scope::new(), &ast, &engine)
                 }) {
                 Err(err) => {
                     let filename = filename.to_string_lossy();
@@ -163,9 +163,9 @@ fn main() {
 
     // REPL loop
     let mut input = String::new();
-    let mut main_ast: AST = Default::default();
-    let mut ast_u: AST = Default::default();
-    let mut ast: AST = Default::default();
+    let mut main_ast = AST::empty();
+    let mut ast_u = AST::empty();
+    let mut ast = AST::empty();
 
     'main_loop: loop {
         print!("rhai-repl> ");

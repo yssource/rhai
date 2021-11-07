@@ -33,11 +33,22 @@ use crate::engine::KEYWORD_IS_DEF_FN;
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Copy, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Copy)]
 pub struct TokenizerControlBlock {
     /// Is the current tokenizer position within an interpolated text string?
     /// This flag allows switching the tokenizer back to _text_ parsing after an interpolation stream.
     pub is_within_text: bool,
+}
+
+impl TokenizerControlBlock {
+    /// Create a new `TokenizerControlBlock`.
+    #[inline(always)]
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            is_within_text: false,
+        }
+    }
 }
 
 /// _(internals)_ A shared object that allows control of the tokenizer from outside.
@@ -2281,7 +2292,7 @@ impl Engine {
         input: impl IntoIterator<Item = &'a &'a str>,
         token_mapper: Option<&'a OnParseTokenCallback>,
     ) -> (TokenIterator<'a>, TokenizerControl) {
-        let buffer: TokenizerControl = Default::default();
+        let buffer: TokenizerControl = Cell::new(TokenizerControlBlock::new()).into();
         let buffer2 = buffer.clone();
 
         (

@@ -1002,7 +1002,7 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn compile(&self, script: &str) -> Result<AST, ParseError> {
-        self.compile_with_scope(&Default::default(), script)
+        self.compile_with_scope(&Scope::new(), script)
     }
     /// Compile a string into an [`AST`] using own scope, which can be used later for evaluation.
     ///
@@ -1091,7 +1091,7 @@ impl Engine {
 
         if let Some(ref module_resolver) = self.module_resolver {
             let mut resolver = StaticModuleResolver::new();
-            let mut imports = Default::default();
+            let mut imports = BTreeSet::new();
 
             collect_imports(&ast, &resolver, &mut imports);
 
@@ -1256,7 +1256,7 @@ impl Engine {
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline(always)]
     pub fn compile_file(&self, path: std::path::PathBuf) -> Result<AST, Box<EvalAltResult>> {
-        self.compile_file_with_scope(&Default::default(), path)
+        self.compile_file_with_scope(&Scope::new(), path)
     }
     /// Compile a script file into an [`AST`] using own scope, which can be used later for evaluation.
     ///
@@ -1424,7 +1424,7 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn compile_expression(&self, script: &str) -> Result<AST, ParseError> {
-        self.compile_expression_with_scope(&Default::default(), script)
+        self.compile_expression_with_scope(&Scope::new(), script)
     }
     /// Compile a string containing an expression into an [`AST`] using own scope,
     /// which can be used later for evaluation.
@@ -1558,7 +1558,7 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn eval<T: Variant + Clone>(&self, script: &str) -> Result<T, Box<EvalAltResult>> {
-        self.eval_with_scope(&mut Default::default(), script)
+        self.eval_with_scope(&mut Scope::new(), script)
     }
     /// Evaluate a string with own scope.
     ///
@@ -1615,7 +1615,7 @@ impl Engine {
         &self,
         script: &str,
     ) -> Result<T, Box<EvalAltResult>> {
-        self.eval_expression_with_scope(&mut Default::default(), script)
+        self.eval_expression_with_scope(&mut Scope::new(), script)
     }
     /// Evaluate a string containing an expression with own scope.
     ///
@@ -1677,7 +1677,7 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn eval_ast<T: Variant + Clone>(&self, ast: &AST) -> Result<T, Box<EvalAltResult>> {
-        self.eval_ast_with_scope(&mut Default::default(), ast)
+        self.eval_ast_with_scope(&mut Scope::new(), ast)
     }
     /// Evaluate an [`AST`] with own scope.
     ///
@@ -1714,7 +1714,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<T, Box<EvalAltResult>> {
-        let mods = &mut Default::default();
+        let mods = &mut Imports::new();
 
         let result = self.eval_ast_with_scope_raw(scope, mods, ast, 0)?;
 
@@ -1779,7 +1779,7 @@ impl Engine {
     /// Evaluate a script, returning any error (if any).
     #[inline(always)]
     pub fn run(&self, script: &str) -> Result<(), Box<EvalAltResult>> {
-        self.run_with_scope(&mut Default::default(), script)
+        self.run_with_scope(&mut Scope::new(), script)
     }
     /// Evaluate a script with own scope, returning any error (if any).
     #[inline]
@@ -1806,7 +1806,7 @@ impl Engine {
     /// Evaluate an AST, returning any error (if any).
     #[inline(always)]
     pub fn run_ast(&self, ast: &AST) -> Result<(), Box<EvalAltResult>> {
-        self.run_ast_with_scope(&mut Default::default(), ast)
+        self.run_ast_with_scope(&mut Scope::new(), ast)
     }
     /// Evaluate an [`AST`] with own scope, returning any error (if any).
     #[inline]
@@ -1815,7 +1815,7 @@ impl Engine {
         scope: &mut Scope,
         ast: &AST,
     ) -> Result<(), Box<EvalAltResult>> {
-        let mods = &mut Default::default();
+        let mods = &mut Imports::new();
         let mut state = EvalState::new();
         state.source = ast.source_raw().cloned();
         #[cfg(not(feature = "no_module"))]
@@ -1989,7 +1989,7 @@ impl Engine {
         args: &mut FnCallArgs,
     ) -> RhaiResult {
         let state = &mut EvalState::new();
-        let mods = &mut Default::default();
+        let mods = &mut Imports::new();
         let lib = &[ast.lib()];
         let statements = ast.statements();
 
@@ -2059,7 +2059,7 @@ impl Engine {
             .collect();
 
         #[cfg(feature = "no_function")]
-        let lib = Default::default();
+        let lib = StaticVec::new();
 
         let stmt = std::mem::take(ast.statements_mut());
         crate::optimize::optimize_into_ast(self, scope, stmt, lib, optimization_level)

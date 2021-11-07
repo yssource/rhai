@@ -20,7 +20,6 @@ use std::prelude::v1::*;
 /// let mut engine = Engine::new();
 /// engine.set_module_resolver(collection);
 /// ```
-#[derive(Default)]
 pub struct ModuleResolversCollection(Vec<Box<dyn ModuleResolver>>);
 
 impl ModuleResolversCollection {
@@ -43,7 +42,7 @@ impl ModuleResolversCollection {
     #[inline(always)]
     #[must_use]
     pub fn new() -> Self {
-        Default::default()
+        Self(Vec::new())
     }
     /// Append a [module resolver][ModuleResolver] to the end.
     #[inline(always)]

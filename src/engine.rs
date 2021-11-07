@@ -56,7 +56,7 @@ pub type Precedence = NonZeroU8;
 // This implementation splits the module names from the shared modules to improve data locality.
 // Most usage will be looking up a particular key from the list and then getting the module that
 // corresponds to that key.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Imports {
     keys: StaticVec<Identifier>,
     modules: StaticVec<Shared<Module>>,
@@ -689,12 +689,6 @@ pub struct EvalState {
     pub global_constants: BTreeMap<Identifier, Dynamic>,
 }
 
-impl Default for EvalState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl EvalState {
     /// Create a new [`EvalState`].
     #[inline(always)]
@@ -736,7 +730,7 @@ impl EvalState {
     #[allow(dead_code)]
     #[inline(always)]
     pub fn push_fn_resolution_cache(&mut self) {
-        self.fn_resolution_caches.push(Default::default());
+        self.fn_resolution_caches.push(BTreeMap::new());
     }
     /// Remove the current function resolution cache from the stack and make the last one current.
     ///
@@ -824,8 +818,8 @@ pub struct Limits {
 }
 
 #[cfg(not(feature = "unchecked"))]
-impl Default for Limits {
-    fn default() -> Self {
+impl Limits {
+    pub const fn new() -> Self {
         Self {
             #[cfg(not(feature = "no_function"))]
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
@@ -1090,17 +1084,17 @@ impl Engine {
     #[must_use]
     pub fn new_raw() -> Self {
         let mut engine = Self {
-            global_modules: Default::default(),
-            global_sub_modules: Default::default(),
+            global_modules: StaticVec::new(),
+            global_sub_modules: BTreeMap::new(),
 
             #[cfg(not(feature = "no_module"))]
             module_resolver: None,
 
-            type_names: Default::default(),
-            empty_string: Default::default(),
-            disabled_symbols: Default::default(),
-            custom_keywords: Default::default(),
-            custom_syntax: Default::default(),
+            type_names: BTreeMap::new(),
+            empty_string: ImmutableString::new(),
+            disabled_symbols: BTreeSet::new(),
+            custom_keywords: BTreeMap::new(),
+            custom_syntax: BTreeMap::new(),
 
             resolve_var: None,
             token_mapper: None,
@@ -1115,7 +1109,7 @@ impl Engine {
             optimization_level: Default::default(),
 
             #[cfg(not(feature = "unchecked"))]
-            limits: Default::default(),
+            limits: Limits::new(),
         };
 
         // Add the global namespace module
@@ -1654,7 +1648,7 @@ impl Engine {
                                 let rhs_chain = match_chaining_type(rhs);
                                 let hash_get = FnCallHashes::from_native(*hash_get);
                                 let hash_set = FnCallHashes::from_native(*hash_set);
-                                let mut arg_values = [target.as_mut(), &mut Default::default()];
+                                let mut arg_values = [target.as_mut(), &mut Dynamic::UNIT.clone()];
                                 let args = &mut arg_values[..1];
 
                                 // Assume getters are always pure
@@ -1796,7 +1790,7 @@ impl Engine {
             _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
         };
 
-        let idx_values = &mut Default::default();
+        let idx_values = &mut StaticVec::new();
 
         self.eval_dot_index_chain_arguments(
             scope, mods, state, lib, this_ptr, rhs, term, chain_type, idx_values, 0, level,
@@ -2037,7 +2031,7 @@ impl Engine {
                 })?;
 
                 if _add_if_not_found && !map.contains_key(index.as_str()) {
-                    map.insert(index.clone().into(), Default::default());
+                    map.insert(index.clone().into(), Dynamic::UNIT);
                 }
 
                 Ok(map
@@ -2782,7 +2776,6 @@ impl Engine {
                     });
                     scope.push(unsafe_cast_var_name_to_lifetime(name), ());
                     let index = scope.len() - 1;
-                    state.scope_level += 1;
 
                     for (x, iter_value) in func(iter_obj).enumerate() {
                         // Increment counter
@@ -2839,7 +2832,6 @@ impl Engine {
                         }
                     }
 
-                    state.scope_level -= 1;
                     scope.rewind(orig_scope_len);
                     Ok(Dynamic::UNIT)
                 } else {
@@ -2942,7 +2934,6 @@ impl Engine {
                         };
 
                         let orig_scope_len = scope.len();
-                        state.scope_level += 1;
 
                         err_var.as_ref().map(|Ident { name, .. }| {
                             scope.push(unsafe_cast_var_name_to_lifetime(name), err_value)
@@ -2952,7 +2943,6 @@ impl Engine {
                             scope, mods, state, lib, this_ptr, catch_stmt, true, level,
                         );
 
-                        state.scope_level -= 1;
                         scope.rewind(orig_scope_len);
 
                         match result {
