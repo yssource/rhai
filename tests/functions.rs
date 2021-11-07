@@ -68,50 +68,48 @@ fn test_functions_namespaces() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[cfg(not(feature = "no_module"))]
 #[test]
 fn test_functions_global_module() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    #[cfg(not(feature = "no_module"))]
-    {
-        assert_eq!(
-            engine.eval::<INT>(
-                "
-                    const ANSWER = 42;
-                    fn foo() { global::ANSWER }
-                    foo()
-                "
-            )?,
-            42
-        );
-
-        assert!(matches!(*engine.run("
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                const ANSWER = 42;
                 fn foo() { global::ANSWER }
+                foo()
+            "
+        )?,
+        42
+    );
 
-                {
-                    const ANSWER = 42;
-                    foo()
-                }
-            ").expect_err("should error"),
-            EvalAltResult::ErrorInFunctionCall(_, _, err, _)
-                if matches!(&*err, EvalAltResult::ErrorVariableNotFound(v, _) if v == "global::ANSWER")
-        ));
+    assert!(matches!(*engine.run("
+            fn foo() { global::ANSWER }
 
-        let mut module = Module::new();
-        module.set_var("ANSWER", 123 as INT);
-        engine.register_static_module("global", module.into());
+            {
+                const ANSWER = 42;
+                foo()
+            }
+        ").expect_err("should error"),
+        EvalAltResult::ErrorInFunctionCall(_, _, err, _)
+            if matches!(&*err, EvalAltResult::ErrorVariableNotFound(v, _) if v == "global::ANSWER")
+    ));
 
-        assert_eq!(
-            engine.eval::<INT>(
-                "
-                    const ANSWER = 42;
-                    fn foo() { global::ANSWER }
-                    foo()
-                "
-            )?,
-            123
-        );
-    }
+    let mut module = Module::new();
+    module.set_var("ANSWER", 123 as INT);
+    engine.register_static_module("global", module.into());
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                const ANSWER = 42;
+                fn foo() { global::ANSWER }
+                foo()
+            "
+        )?,
+        123
+    );
 
     engine.register_result_fn(
         "do_stuff",

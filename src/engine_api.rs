@@ -2059,7 +2059,7 @@ impl Engine {
             .collect();
 
         #[cfg(feature = "no_function")]
-        let lib = StaticVec::new();
+        let lib = crate::StaticVec::new();
 
         let stmt = std::mem::take(ast.statements_mut());
         crate::optimize::optimize_into_ast(self, scope, stmt, lib, optimization_level)
