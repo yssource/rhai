@@ -1,4 +1,6 @@
+use crate::fn_native::shared_write_lock;
 use crate::{Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Scope, Shared};
+
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -202,19 +204,12 @@ impl FileModuleResolver {
 
         let file_path = self.get_file_path(path, source_path);
 
-        #[cfg(not(feature = "sync"))]
-        return self.cache.borrow_mut().contains_key(&file_path);
-        #[cfg(feature = "sync")]
-        return self.cache.write().unwrap().contains_key(&file_path);
+        shared_write_lock(&self.cache).contains_key(&file_path)
     }
     /// Empty the internal cache.
     #[inline]
     pub fn clear_cache(&mut self) -> &mut Self {
-        #[cfg(not(feature = "sync"))]
-        self.cache.borrow_mut().clear();
-        #[cfg(feature = "sync")]
-        self.cache.write().unwrap().clear();
-
+        shared_write_lock(&self.cache).clear();
         self
     }
     /// Remove the specified path from internal cache.
@@ -229,19 +224,9 @@ impl FileModuleResolver {
     ) -> Option<Shared<Module>> {
         let file_path = self.get_file_path(path, source_path);
 
-        #[cfg(not(feature = "sync"))]
-        return self
-            .cache
-            .borrow_mut()
+        shared_write_lock(&self.cache)
             .remove_entry(&file_path)
-            .map(|(_, v)| v);
-        #[cfg(feature = "sync")]
-        return self
-            .cache
-            .write()
-            .unwrap()
-            .remove_entry(&file_path)
-            .map(|(_, v)| v);
+            .map(|(_, v)| v)
     }
     /// Construct a full file path.
     #[must_use]
@@ -314,10 +299,7 @@ impl ModuleResolver for FileModuleResolver {
 
         // Put it into the cache
         if self.is_cache_enabled() {
-            #[cfg(not(feature = "sync"))]
-            self.cache.borrow_mut().insert(file_path, m.clone());
-            #[cfg(feature = "sync")]
-            self.cache.write().unwrap().insert(file_path, m.clone());
+            shared_write_lock(&self.cache).insert(file_path, m.clone());
         }
 
         Ok(m)

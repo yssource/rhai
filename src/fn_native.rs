@@ -39,12 +39,27 @@ pub use std::sync::Arc as Shared;
 #[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "sync"))]
 pub use std::cell::RefCell as Locked;
+
+/// Lock guard for synchronized shared object.
+///
+/// Not available under `no_closure`.
+#[cfg(not(feature = "no_closure"))]
+#[cfg(not(feature = "sync"))]
+pub type LockGuard<'a, T> = std::cell::RefMut<'a, T>;
+
 /// Synchronized shared object.
 ///
 /// Not available under `no_closure`.
 #[cfg(not(feature = "no_closure"))]
 #[cfg(feature = "sync")]
 pub use std::sync::RwLock as Locked;
+
+/// Lock guard for synchronized shared object.
+///
+/// Not available under `no_closure`.
+#[cfg(not(feature = "no_closure"))]
+#[cfg(feature = "sync")]
+pub type LockGuard<'a, T> = std::sync::RwLockWriteGuard<'a, T>;
 
 /// Context of a native Rust function call.
 #[derive(Debug)]
@@ -290,6 +305,16 @@ pub fn shared_take<T>(value: Shared<T>) -> T {
     shared_try_take(value)
         .ok()
         .expect("no outstanding references")
+}
+
+#[inline(always)]
+#[must_use]
+pub fn shared_write_lock<'a, T>(value: &'a Locked<T>) -> LockGuard<'a, T> {
+    #[cfg(not(feature = "sync"))]
+    return value.borrow_mut();
+
+    #[cfg(feature = "sync")]
+    return value.write().unwrap();
 }
 
 /// A general function trail object.

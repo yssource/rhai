@@ -5,16 +5,16 @@ use crate::custom_syntax::CustomSyntax;
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_hash::get_hasher;
 use crate::fn_native::{
-    CallableFunction, IteratorFn, OnDebugCallback, OnParseTokenCallback, OnPrintCallback,
-    OnVarCallback,
+    shared_write_lock, CallableFunction, IteratorFn, Locked, OnDebugCallback, OnParseTokenCallback,
+    OnPrintCallback, OnVarCallback,
 };
 use crate::module::NamespaceRef;
 use crate::packages::{Package, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
 use crate::token::Token;
 use crate::{
-    Dynamic, EvalAltResult, Identifier, ImmutableString, Locked, Module, Position, RhaiResult,
-    Scope, Shared, StaticVec, INT,
+    Dynamic, EvalAltResult, Identifier, ImmutableString, Module, Position, RhaiResult, Scope,
+    Shared, StaticVec, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -205,12 +205,8 @@ impl Imports {
     pub(crate) fn global_constants_mut<'a>(
         &'a mut self,
     ) -> Option<impl DerefMut<Target = BTreeMap<Identifier, Dynamic>> + 'a> {
-        if let Some(ref mut global_constants) = self.global_constants {
-            #[cfg(not(feature = "sync"))]
-            return Some(global_constants.borrow_mut());
-
-            #[cfg(feature = "sync")]
-            return Some(global_constants.lock().unwrap());
+        if let Some(ref global_constants) = self.global_constants {
+            Some(shared_write_lock(global_constants))
         } else {
             None
         }
@@ -222,19 +218,12 @@ impl Imports {
             self.global_constants = Some(dict.into());
         }
 
-        #[cfg(not(feature = "sync"))]
-        self.global_constants
-            .as_mut()
-            .unwrap()
-            .borrow_mut()
-            .insert(name.into(), value);
-
-        #[cfg(feature = "sync")]
-        self.global_constants
-            .as_mut()
-            .lock()
-            .unwrap()
-            .insert(name.into(), value);
+        shared_write_lock(
+            self.global_constants
+                .as_mut()
+                .expect("`global_constants` is `Some`"),
+        )
+        .insert(name.into(), value);
     }
     /// Get the pre-calculated index getter hash.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]

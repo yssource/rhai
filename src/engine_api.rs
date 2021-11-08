@@ -2211,8 +2211,6 @@ impl Engine {
             + SendSync
             + 'static,
     ) -> &mut Self {
-        use std::string::ParseError;
-
         self.token_mapper = Some(Box::new(callback));
         self
     }
