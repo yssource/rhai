@@ -4,6 +4,8 @@ use crate::{def_package, FnPtr, ImmutableString, NativeCallContext};
 use std::prelude::v1::*;
 
 def_package!(crate:BasicFnPackage:"Basic Fn functions.", lib, {
+    lib.standard = true;
+
     combine_with_exported_module!(lib, "FnPtr", fn_ptr_functions);
 });
 
@@ -107,7 +109,12 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
                 list.push(make_metadata(dict, Some(namespace.clone()), f).into())
             });
             module.iter_sub_modules().for_each(|(ns, m)| {
-                let ns = format!("{}::{}", namespace, ns);
+                let ns = format!(
+                    "{}{}{}",
+                    namespace,
+                    crate::token::Token::DoubleColon.literal_syntax(),
+                    ns
+                );
                 scan_module(list, dict, ns.into(), m.as_ref())
             });
         }

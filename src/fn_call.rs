@@ -9,14 +9,13 @@ use crate::engine::{
 use crate::fn_builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 use crate::fn_native::FnAny;
 use crate::module::NamespaceRef;
+use crate::token::Token;
 use crate::{
     ast::{Expr, Stmt},
+    calc_fn_hash, calc_fn_params_hash, combine_hashes,
     fn_native::CallableFunction,
-    RhaiResult,
-};
-use crate::{
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, EvalAltResult, FnPtr,
-    Identifier, ImmutableString, Module, ParseErrorType, Position, Scope, StaticVec,
+    Dynamic, Engine, EvalAltResult, FnPtr, Identifier, ImmutableString, Module, ParseErrorType,
+    Position, RhaiResult, Scope, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -34,13 +33,20 @@ pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
 /// A type that temporarily stores a mutable reference to a `Dynamic`,
 /// replacing it with a cloned copy.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct ArgBackup<'a> {
     orig_mut: Option<&'a mut Dynamic>,
     value_copy: Dynamic,
 }
 
 impl<'a> ArgBackup<'a> {
+    /// Create a new `ArgBackup`.
+    pub fn new() -> Self {
+        Self {
+            orig_mut: None,
+            value_copy: Dynamic::UNIT,
+        }
+    }
     /// This function replaces the first argument of a method call with a clone copy.
     /// This is to prevent a pure function unintentionally consuming the first argument.
     ///
@@ -135,8 +141,13 @@ impl Engine {
         args: &[&mut Dynamic],
     ) -> String {
         format!(
-            "{}{} ({})",
+            "{}{}{} ({})",
             namespace.map_or(String::new(), |ns| ns.to_string()),
+            if namespace.is_some() {
+                Token::DoubleColon.literal_syntax()
+            } else {
+                ""
+            },
             fn_name,
             args.iter()
                 .map(|a| if a.is::<ImmutableString>() {
@@ -168,7 +179,7 @@ impl Engine {
         args: Option<&mut FnCallArgs>,
         allow_dynamic: bool,
         is_op_assignment: bool,
-    ) -> &'s Option<Box<FnResolutionCacheEntry>> {
+    ) -> Option<&'s FnResolutionCacheEntry> {
         let mut hash = args.as_ref().map_or(hash_script, |args| {
             combine_hashes(
                 hash_script,
@@ -176,7 +187,7 @@ impl Engine {
             )
         });
 
-        &*state
+        let result = state
             .fn_resolution_cache_mut()
             .entry(hash)
             .or_insert_with(|| {
@@ -284,7 +295,9 @@ impl Engine {
                         }
                     }
                 }
-            })
+            });
+
+        result.as_ref().map(Box::as_ref)
     }
 
     /// Call a native Rust function registered with the [`Engine`].
@@ -296,7 +309,7 @@ impl Engine {
     /// **DO NOT** reuse the argument values unless for the first `&mut` argument - all others are silently replaced by `()`!
     pub(crate) fn call_native_fn(
         &self,
-        mods: &Imports,
+        mods: &mut Imports,
         state: &mut EvalState,
         lib: &[&Module],
         name: &str,
@@ -307,21 +320,20 @@ impl Engine {
         pos: Position,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(state, pos)?;
+        self.inc_operations(&mut mods.num_operations, pos)?;
 
-        let state_source = state.source.clone();
+        let parent_source = mods.source.clone();
 
         // Check if function access already in the cache
         let func = self.resolve_fn(mods, state, lib, name, hash, Some(args), true, is_op_assign);
 
-        if let Some(f) = func {
-            let FnResolutionCacheEntry { func, source } = f.as_ref();
+        if let Some(FnResolutionCacheEntry { func, source }) = func {
             assert!(func.is_native());
 
             // Calling pure function but the first argument is a reference?
             let mut backup: Option<ArgBackup> = None;
             if is_method_call && func.is_pure() && !args.is_empty() {
-                backup = Some(Default::default());
+                backup = Some(ArgBackup::new());
                 backup
                     .as_mut()
                     .expect("`backup` is `Some`")
@@ -331,16 +343,17 @@ impl Engine {
             // Run external function
             let source = source
                 .as_ref()
-                .or_else(|| state_source.as_ref())
+                .or_else(|| parent_source.as_ref())
                 .map(|s| s.as_str());
+
+            let context = (self, name, source, &*mods, lib, pos).into();
 
             let result = if func.is_plugin_fn() {
                 func.get_plugin_fn()
                     .expect("plugin function")
-                    .call((self, name, source, mods, lib).into(), args)
+                    .call(context, args)
             } else {
-                let func = func.get_native_fn().expect("native function");
-                func((self, name, source, mods, lib).into(), args)
+                func.get_native_fn().expect("native function")(context, args)
             };
 
             // Restore the original reference
@@ -375,7 +388,7 @@ impl Engine {
                                 pos,
                             )
                         })?;
-                        let source = state.source.as_ref().map(|s| s.as_str());
+                        let source = mods.source.as_ref().map(|s| s.as_str());
                         (debug(&text, source, pos).into(), false)
                     } else {
                         (Dynamic::UNIT, false)
@@ -485,7 +498,7 @@ impl Engine {
         fn make_error(
             name: String,
             fn_def: &crate::ast::ScriptFnDef,
-            state: &EvalState,
+            mods: &Imports,
             err: Box<EvalAltResult>,
             pos: Position,
         ) -> RhaiResult {
@@ -495,7 +508,7 @@ impl Engine {
                     .lib
                     .as_ref()
                     .and_then(|m| m.id().map(|id| id.to_string()))
-                    .or_else(|| state.source.as_ref().map(|s| s.to_string()))
+                    .or_else(|| mods.source.as_ref().map(|s| s.to_string()))
                     .unwrap_or_default(),
                 err,
                 pos,
@@ -504,7 +517,7 @@ impl Engine {
         }
 
         #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(state, pos)?;
+        self.inc_operations(&mut mods.num_operations, pos)?;
 
         if fn_def.body.is_empty() {
             return Ok(Dynamic::UNIT);
@@ -516,9 +529,6 @@ impl Engine {
         if level > self.max_call_levels() {
             return Err(EvalAltResult::ErrorStackOverflow(pos).into());
         }
-
-        let orig_scope_level = state.scope_level;
-        state.scope_level += 1;
 
         let prev_scope_len = scope.len();
         let prev_mods_len = mods.len();
@@ -559,7 +569,6 @@ impl Engine {
 
         // Evaluate the function
         let body = &fn_def.body;
-
         let result = self
             .eval_stmt_block(scope, mods, state, unified_lib, this_ptr, body, true, level)
             .or_else(|err| match *err {
@@ -573,7 +582,7 @@ impl Engine {
                         format!("{} @ '{}' < {}", name, src, fn_def.name)
                     };
 
-                    make_error(fn_name, fn_def, state, err, pos)
+                    make_error(fn_name, fn_def, mods, err, pos)
                 }
                 // System errors are passed straight-through
                 mut err if err.is_system_exception() => {
@@ -581,13 +590,12 @@ impl Engine {
                     Err(err.into())
                 }
                 // Other errors are wrapped in `ErrorInFunctionCall`
-                _ => make_error(fn_def.name.to_string(), fn_def, state, err, pos),
+                _ => make_error(fn_def.name.to_string(), fn_def, mods, err, pos),
             });
 
         // Remove all local variables
         scope.rewind(prev_scope_len);
         mods.truncate(prev_mods_len);
-        state.scope_level = orig_scope_level;
 
         if unified {
             state.pop_fn_resolution_cache();
@@ -614,7 +622,7 @@ impl Engine {
 
         // First check script-defined functions
         let result = lib.iter().any(|&m| m.contains_fn(hash_script))
-            // Then check packages
+            // Then check the global namespace and packages
             || self.global_modules.iter().any(|m| m.contains_fn(hash_script))
             // Then check imported modules
             || mods.map_or(false, |m| m.contains_fn(hash_script))
@@ -714,11 +722,10 @@ impl Engine {
         let hash_script = hashes.script;
 
         #[cfg(not(feature = "no_function"))]
-        if let Some(f) = hash_script.and_then(|hash| {
+        if let Some(FnResolutionCacheEntry { func, source }) = hash_script.and_then(|hash| {
             self.resolve_fn(mods, state, lib, fn_name, hash, None, false, false)
-                .clone()
+                .cloned()
         }) {
-            let FnResolutionCacheEntry { func, source } = *f;
             // Script function call
             assert!(func.is_script());
 
@@ -728,7 +735,7 @@ impl Engine {
                 return Ok((Dynamic::UNIT, false));
             }
 
-            let scope: &mut Scope = &mut Default::default();
+            let scope = &mut Scope::new();
 
             // Move captured variables into scope
             #[cfg(not(feature = "no_closure"))]
@@ -750,8 +757,8 @@ impl Engine {
                     .split_first_mut()
                     .expect("method call has first parameter");
 
-                let orig_source = state.source.take();
-                state.source = source;
+                let orig_source = mods.source.take();
+                mods.source = source;
 
                 let level = _level + 1;
 
@@ -768,7 +775,7 @@ impl Engine {
                 );
 
                 // Restore the original source
-                state.source = orig_source;
+                mods.source = orig_source;
 
                 result?
             } else {
@@ -776,15 +783,15 @@ impl Engine {
                 // The first argument is a reference?
                 let mut backup: Option<ArgBackup> = None;
                 if is_ref_mut && !args.is_empty() {
-                    backup = Some(Default::default());
+                    backup = Some(ArgBackup::new());
                     backup
                         .as_mut()
                         .expect("`backup` is `Some`")
                         .change_first_arg_to_copy(args);
                 }
 
-                let orig_source = state.source.take();
-                state.source = source;
+                let orig_source = mods.source.take();
+                mods.source = source;
 
                 let level = _level + 1;
 
@@ -792,7 +799,7 @@ impl Engine {
                     self.call_script_fn(scope, mods, state, lib, &mut None, func, args, pos, level);
 
                 // Restore the original source
-                state.source = orig_source;
+                mods.source = orig_source;
 
                 // Restore the original reference
                 if let Some(bk) = backup {
@@ -839,14 +846,13 @@ impl Engine {
         &self,
         scope: &mut Scope,
         mods: &mut Imports,
-        state: &mut EvalState,
         lib: &[&Module],
         script: &str,
         _pos: Position,
         level: usize,
     ) -> RhaiResult {
         #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(state, _pos)?;
+        self.inc_operations(&mut mods.num_operations, _pos)?;
 
         let script = script.trim();
         if script.is_empty() {
@@ -856,7 +862,7 @@ impl Engine {
         // Compile the script text
         // No optimizations because we only run it once
         let ast = self.compile_with_scope_and_optimization_level(
-            &Default::default(),
+            &Scope::new(),
             &[script],
             #[cfg(not(feature = "no_optimize"))]
             crate::OptimizationLevel::None,
@@ -873,16 +879,7 @@ impl Engine {
         }
 
         // Evaluate the AST
-        let mut new_state = EvalState::new();
-        new_state.source = state.source.clone();
-        new_state.num_operations = state.num_operations;
-
-        let result =
-            self.eval_global_statements(scope, mods, &mut new_state, statements, lib, level);
-
-        state.num_operations = new_state.num_operations;
-
-        result
+        self.eval_global_statements(scope, mods, &mut EvalState::new(), statements, lib, level)
     }
 
     /// Call a dot method.
@@ -1221,7 +1218,7 @@ impl Engine {
                     .into_immutable_string()
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, pos))?;
                 let result =
-                    self.eval_script_expr_in_place(scope, mods, state, lib, script, pos, level + 1);
+                    self.eval_script_expr_in_place(scope, mods, lib, script, pos, level + 1);
 
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
@@ -1232,8 +1229,7 @@ impl Engine {
                 return result.map_err(|err| {
                     EvalAltResult::ErrorInFunctionCall(
                         KEYWORD_EVAL.to_string(),
-                        state
-                            .source
+                        mods.source
                             .as_ref()
                             .map(Identifier::to_string)
                             .unwrap_or_default(),
@@ -1280,7 +1276,7 @@ impl Engine {
                 }
 
                 #[cfg(not(feature = "unchecked"))]
-                self.inc_operations(state, _pos)?;
+                self.inc_operations(&mut mods.num_operations, _pos)?;
 
                 #[cfg(not(feature = "no_closure"))]
                 let target_is_shared = target.is_shared();
@@ -1346,7 +1342,7 @@ impl Engine {
                 // func(x, ...) -> x.func(...)
                 for index in 0..args_expr.len() {
                     if index == 0 {
-                        arg_values.push(Default::default());
+                        arg_values.push(Dynamic::UNIT);
                     } else {
                         let (value, _) = self.get_arg_value(
                             scope, mods, state, lib, this_ptr, level, args_expr, constants, index,
@@ -1360,7 +1356,7 @@ impl Engine {
                     self.search_scope_only(scope, mods, state, lib, this_ptr, &args_expr[0])?;
 
                 #[cfg(not(feature = "unchecked"))]
-                self.inc_operations(state, _pos)?;
+                self.inc_operations(&mut mods.num_operations, _pos)?;
 
                 #[cfg(not(feature = "no_closure"))]
                 let target_is_shared = target.is_shared();
@@ -1393,7 +1389,7 @@ impl Engine {
         }
 
         let module = self.search_imports(mods, state, namespace).ok_or_else(|| {
-            EvalAltResult::ErrorModuleNotFound(namespace[0].name.to_string(), namespace[0].pos)
+            EvalAltResult::ErrorModuleNotFound(namespace.to_string(), namespace[0].pos)
         })?;
 
         // First search in script-defined functions (can override built-in)
@@ -1401,7 +1397,7 @@ impl Engine {
             // Then search in Rust functions
             None => {
                 #[cfg(not(feature = "unchecked"))]
-                self.inc_operations(state, pos)?;
+                self.inc_operations(&mut mods.num_operations, pos)?;
 
                 let hash_params = calc_fn_params_hash(args.iter().map(|a| a.type_id()));
                 let hash_qualified_fn = combine_hashes(hash, hash_params);
@@ -1427,10 +1423,10 @@ impl Engine {
                 if fn_def.body.is_empty() {
                     Ok(Dynamic::UNIT)
                 } else {
-                    let new_scope = &mut Default::default();
+                    let new_scope = &mut Scope::new();
 
                     let mut source = module.id_raw().cloned();
-                    mem::swap(&mut state.source, &mut source);
+                    mem::swap(&mut mods.source, &mut source);
 
                     let level = level + 1;
 
@@ -1438,23 +1434,25 @@ impl Engine {
                         new_scope, mods, state, lib, &mut None, fn_def, &mut args, pos, level,
                     );
 
-                    state.source = source;
+                    mods.source = source;
 
                     result
                 }
             }
 
-            Some(f) if f.is_plugin_fn() => f
-                .get_plugin_fn()
-                .expect("plugin function")
-                .clone()
-                .call((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
-                .map_err(|err| err.fill_position(pos)),
+            Some(f) if f.is_plugin_fn() => {
+                let context = (self, fn_name, module.id(), &*mods, lib, pos).into();
+                f.get_plugin_fn()
+                    .expect("plugin function")
+                    .clone()
+                    .call(context, &mut args)
+                    .map_err(|err| err.fill_position(pos))
+            }
 
             Some(f) if f.is_native() => {
                 let func = f.get_native_fn().expect("native function");
-                func((self, fn_name, module.id(), &*mods, lib).into(), &mut args)
-                    .map_err(|err| err.fill_position(pos))
+                let context = (self, fn_name, module.id(), &*mods, lib, pos).into();
+                func(context, &mut args).map_err(|err| err.fill_position(pos))
             }
 
             Some(f) => unreachable!("unknown function type: {:?}", f),

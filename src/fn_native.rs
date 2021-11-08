@@ -1,7 +1,7 @@
 //! Module defining interfaces to native-Rust functions.
 
 use crate::ast::{FnAccess, FnCallHashes};
-use crate::engine::Imports;
+use crate::engine::{EvalState, Imports};
 use crate::fn_call::FnCallArgs;
 use crate::plugin::PluginFunction;
 use crate::token::{Token, TokenizeState};
@@ -34,17 +34,24 @@ pub use std::rc::Rc as Shared;
 pub use std::sync::Arc as Shared;
 
 /// Synchronized shared object.
-///
-/// Not available under `no_closure`.
-#[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "sync"))]
+#[allow(dead_code)]
 pub use std::cell::RefCell as Locked;
+
+/// Lock guard for synchronized shared object.
+#[cfg(not(feature = "sync"))]
+#[allow(dead_code)]
+pub type LockGuard<'a, T> = std::cell::RefMut<'a, T>;
+
 /// Synchronized shared object.
-///
-/// Not available under `no_closure`.
-#[cfg(not(feature = "no_closure"))]
 #[cfg(feature = "sync")]
+#[allow(dead_code)]
 pub use std::sync::RwLock as Locked;
+
+/// Lock guard for synchronized shared object.
+#[cfg(feature = "sync")]
+#[allow(dead_code)]
+pub type LockGuard<'a, T> = std::sync::RwLockWriteGuard<'a, T>;
 
 /// Context of a native Rust function call.
 #[derive(Debug)]
@@ -54,19 +61,37 @@ pub struct NativeCallContext<'a> {
     source: Option<&'a str>,
     mods: Option<&'a Imports>,
     lib: &'a [&'a Module],
+    pos: Position,
 }
 
 impl<'a, M: AsRef<[&'a Module]> + ?Sized>
-    From<(&'a Engine, &'a str, Option<&'a str>, &'a Imports, &'a M)> for NativeCallContext<'a>
+    From<(
+        &'a Engine,
+        &'a str,
+        Option<&'a str>,
+        &'a Imports,
+        &'a M,
+        Position,
+    )> for NativeCallContext<'a>
 {
     #[inline(always)]
-    fn from(value: (&'a Engine, &'a str, Option<&'a str>, &'a Imports, &'a M)) -> Self {
+    fn from(
+        value: (
+            &'a Engine,
+            &'a str,
+            Option<&'a str>,
+            &'a Imports,
+            &'a M,
+            Position,
+        ),
+    ) -> Self {
         Self {
             engine: value.0,
             fn_name: value.1,
             source: value.2,
             mods: Some(value.3),
             lib: value.4.as_ref(),
+            pos: value.5,
         }
     }
 }
@@ -82,6 +107,7 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized> From<(&'a Engine, &'a str, &'a M)>
             source: None,
             mods: None,
             lib: value.2.as_ref(),
+            pos: Position::NONE,
         }
     }
 }
@@ -97,6 +123,7 @@ impl<'a> NativeCallContext<'a> {
             source: None,
             mods: None,
             lib,
+            pos: Position::NONE,
         }
     }
     /// _(internals)_ Create a new [`NativeCallContext`].
@@ -113,6 +140,7 @@ impl<'a> NativeCallContext<'a> {
         source: Option<&'a str>,
         imports: &'a Imports,
         lib: &'a [&Module],
+        pos: Position,
     ) -> Self {
         Self {
             engine,
@@ -120,6 +148,7 @@ impl<'a> NativeCallContext<'a> {
             source,
             mods: Some(imports),
             lib,
+            pos,
         }
     }
     /// The current [`Engine`].
@@ -133,6 +162,12 @@ impl<'a> NativeCallContext<'a> {
     #[must_use]
     pub const fn fn_name(&self) -> &str {
         self.fn_name
+    }
+    /// [Position][`Position`] of the function call.
+    #[inline(always)]
+    #[must_use]
+    pub const fn position(&self) -> Position {
+        self.pos
     }
     /// The current source.
     #[inline(always)]
@@ -214,8 +249,8 @@ impl<'a> NativeCallContext<'a> {
 
         self.engine()
             .exec_fn_call(
-                &mut self.mods.cloned().unwrap_or_default(),
-                &mut Default::default(),
+                &mut self.mods.cloned().unwrap_or_else(|| Imports::new()),
+                &mut EvalState::new(),
                 self.lib,
                 fn_name,
                 hash,
@@ -234,6 +269,7 @@ impl<'a> NativeCallContext<'a> {
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
 #[inline(always)]
 #[must_use]
+#[allow(dead_code)]
 pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
     Shared::make_mut(value)
 }
@@ -241,12 +277,14 @@ pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
 /// Consume a [`Shared`] resource if is unique (i.e. not shared), or clone it otherwise.
 #[inline]
 #[must_use]
+#[allow(dead_code)]
 pub fn shared_take_or_clone<T: Clone>(value: Shared<T>) -> T {
     shared_try_take(value).unwrap_or_else(|v| v.as_ref().clone())
 }
 
 /// Consume a [`Shared`] resource if is unique (i.e. not shared).
 #[inline(always)]
+#[allow(dead_code)]
 pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
     Shared::try_unwrap(value)
 }
@@ -258,10 +296,23 @@ pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
 /// Panics if the resource is shared (i.e. has other outstanding references).
 #[inline]
 #[must_use]
+#[allow(dead_code)]
 pub fn shared_take<T>(value: Shared<T>) -> T {
     shared_try_take(value)
         .ok()
         .expect("no outstanding references")
+}
+
+/// Lock a [`Shared`] resource.
+#[inline(always)]
+#[must_use]
+#[allow(dead_code)]
+pub fn shared_write_lock<'a, T>(value: &'a Locked<T>) -> LockGuard<'a, T> {
+    #[cfg(not(feature = "sync"))]
+    return value.borrow_mut();
+
+    #[cfg(feature = "sync")]
+    return value.write().unwrap();
 }
 
 /// A general function trail object.

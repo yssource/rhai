@@ -8,6 +8,7 @@ New features
 ------------
 
 * `#[cfg(...)]` attributes can now be put directly on plugin functions or function defined in a plugin module.
+* A custom syntax parser can now return a symbol starting with `$$` to inform the implementation function which syntax variant was actually parsed.
 
 Enhancements
 ------------
@@ -18,12 +19,44 @@ Enhancements
 * Array adds a `sort` method with no parameters which sorts homogeneous arrays of built-in comparable types (e.g. `INT`).
 * Inlining is disabled for error-path functions because errors are exceptional and scripts usually fail completely when an error is encountered.
 * The `optimize` module is completely eliminated under `no_optimize`, which should yield smaller code size.
+* Add `NativeCallContext::position` to return the position of the function call.
 
 Deprecated API's
 ----------------
 
 * `NativeCallContext::call_fn_dynamic_raw` is deprecated and `NativeCallContext::call_fn_raw` is added.
 * `From<EvalAltResult>` for `Result<T, Box<EvalAltResult>>` is deprecated so it will no longer be possible to do `EvalAltResult::ErrorXXXXX.into()` to convert to a `Result`; instead, `Err(EvalAltResult:ErrorXXXXX.into())` must be used. Code is clearer if errors are explicitly wrapped in `Err`.
+
+
+Version 1.1.3
+=============
+
+Bug fixes
+---------
+
+* Reverses a regression on string `+` operations.
+* The global namespace is now searched before packages, which is the correct behavior.
+
+
+Version 1.1.2
+=============
+
+Bug fixes
+---------
+
+* `0.0` now prints correctly (used to print `0e0`).
+* Unary operators are now properly recognized as an expression statement.
+
+
+Version 1.1.1
+=============
+
+Bug fixes
+---------
+
+* Assignment to indexing expression with dot expressions inside no longer cause a compilation error.
+* The `no_module` and `internals` features now work together without a compilation error.
+* String literal operations (such as `"hello" + ", world"`) now optimizes correctly.
 
 
 Version 1.1.0

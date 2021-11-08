@@ -40,7 +40,7 @@ use crate::ast::FnCallHashes;
 
 pub type Precedence = NonZeroU8;
 
-/// _(internals)_ A stack of imported [modules][Module].
+/// _(internals)_ A stack of imported [modules][Module] plus mutable runtime global states.
 /// Exported under the `internals` feature only.
 ///
 /// # Volatile Data Structure
@@ -49,17 +49,38 @@ pub type Precedence = NonZeroU8;
 //
 // # Implementation Notes
 //
-// We cannot use Cow<str> here because `eval` may load a [module][Module] and
-// the module name will live beyond the AST of the eval script text.
-// The best we can do is a shared reference.
-//
 // This implementation splits the module names from the shared modules to improve data locality.
 // Most usage will be looking up a particular key from the list and then getting the module that
 // corresponds to that key.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Imports {
+    /// Stack of module names.
+    //
+    // # Implementation Notes
+    //
+    // We cannot use Cow<str> here because `eval` may load a [module][Module] and
+    // the module name will live beyond the AST of the eval script text.
     keys: StaticVec<Identifier>,
+    /// Stack of imported modules.
     modules: StaticVec<Shared<Module>>,
+    /// Source of the current context.
+    pub source: Option<Identifier>,
+    /// Number of operations performed.
+    pub num_operations: u64,
+    /// Number of modules loaded.
+    pub num_modules: usize,
+    /// Function call hashes to FN_IDX_GET and FN_IDX_SET.
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+    fn_hash_indexing: (u64, u64),
+    /// Embedded module resolver.
+    ///
+    /// Not available under `no_module`.
+    #[cfg(not(feature = "no_module"))]
+    pub embedded_module_resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
+    /// Cache of globally-defined constants.
+    #[cfg(not(feature = "no_module"))]
+    #[cfg(not(feature = "no_function"))]
+    global_constants: Option<Shared<crate::Locked<BTreeMap<Identifier, Dynamic>>>>,
 }
 
 impl Imports {
@@ -70,6 +91,16 @@ impl Imports {
         Self {
             keys: StaticVec::new(),
             modules: StaticVec::new(),
+            source: None,
+            num_operations: 0,
+            num_modules: 0,
+            #[cfg(not(feature = "no_module"))]
+            embedded_module_resolver: None,
+            #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+            fn_hash_indexing: (0, 0),
+            #[cfg(not(feature = "no_module"))]
+            #[cfg(not(feature = "no_function"))]
+            global_constants: None,
         }
     }
     /// Get the length of this stack of imported [modules][Module].
@@ -175,6 +206,61 @@ impl Imports {
             .rev()
             .find_map(|m| m.get_qualified_iter(id))
     }
+    /// Get a mutable reference to the cache of globally-defined constants.
+    #[cfg(not(feature = "no_module"))]
+    #[cfg(not(feature = "no_function"))]
+    #[must_use]
+    pub(crate) fn global_constants_mut<'a>(
+        &'a mut self,
+    ) -> Option<impl DerefMut<Target = BTreeMap<Identifier, Dynamic>> + 'a> {
+        if let Some(ref global_constants) = self.global_constants {
+            Some(crate::fn_native::shared_write_lock(global_constants))
+        } else {
+            None
+        }
+    }
+    /// Set a constant into the cache of globally-defined constants.
+    #[cfg(not(feature = "no_module"))]
+    #[cfg(not(feature = "no_function"))]
+    pub(crate) fn set_global_constant(&mut self, name: &str, value: Dynamic) {
+        if self.global_constants.is_none() {
+            let dict: crate::Locked<_> = BTreeMap::new().into();
+            self.global_constants = Some(dict.into());
+        }
+
+        crate::fn_native::shared_write_lock(
+            self.global_constants
+                .as_mut()
+                .expect("`global_constants` is `Some`"),
+        )
+        .insert(name.into(), value);
+    }
+    /// Get the pre-calculated index getter hash.
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+    #[must_use]
+    pub(crate) fn fn_hash_idx_get(&mut self) -> u64 {
+        if self.fn_hash_indexing != (0, 0) {
+            self.fn_hash_indexing.0
+        } else {
+            let n1 = crate::calc_fn_hash(FN_IDX_GET, 2);
+            let n2 = crate::calc_fn_hash(FN_IDX_SET, 3);
+            self.fn_hash_indexing = (n1, n2);
+            n1
+        }
+    }
+    /// Get the pre-calculated index setter hash.
+    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
+    #[must_use]
+    pub(crate) fn fn_hash_idx_set(&mut self) -> u64 {
+        if self.fn_hash_indexing != (0, 0) {
+            self.fn_hash_indexing.1
+        } else {
+            let n1 = crate::calc_fn_hash(FN_IDX_GET, 2);
+            let n2 = crate::calc_fn_hash(FN_IDX_SET, 3);
+            self.fn_hash_indexing = (n1, n2);
+            n2
+        }
+    }
 }
 
 impl IntoIterator for Imports {
@@ -262,6 +348,7 @@ pub const KEYWORD_IS_DEF_VAR: &str = "is_def_var";
 pub const KEYWORD_IS_DEF_FN: &str = "is_def_fn";
 pub const KEYWORD_THIS: &str = "this";
 #[cfg(not(feature = "no_function"))]
+#[cfg(not(feature = "no_module"))]
 pub const KEYWORD_GLOBAL: &str = "global";
 #[cfg(not(feature = "no_object"))]
 pub const FN_GET: &str = "get$";
@@ -660,10 +747,8 @@ pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct EvalState {
-    /// Source of the current context.
-    pub source: Option<Identifier>,
     /// Normally, access to variables are parsed with a relative offset into the [`Scope`] to avoid a lookup.
     /// In some situation, e.g. after running an `eval` statement, or after a custom syntax statement,
     /// subsequent offsets may become mis-aligned.
@@ -672,18 +757,8 @@ pub struct EvalState {
     /// Level of the current scope.  The global (root) level is zero, a new block (or function call)
     /// is one level higher, and so on.
     pub scope_level: usize,
-    /// Number of operations performed.
-    pub num_operations: u64,
-    /// Number of modules loaded.
-    pub num_modules: usize,
     /// Stack of function resolution caches.
     fn_resolution_caches: StaticVec<FnResolutionCache>,
-    /// Embedded module resolver.
-    #[cfg(not(feature = "no_module"))]
-    pub embedded_module_resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
-    /// Function call hashes to FN_IDX_GET and FN_IDX_SET
-    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    fn_hash_indexing: (u64, u64),
 }
 
 impl EvalState {
@@ -692,16 +767,9 @@ impl EvalState {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            source: None,
             always_search_scope: false,
             scope_level: 0,
-            num_operations: 0,
-            num_modules: 0,
-            #[cfg(not(feature = "no_module"))]
-            embedded_module_resolver: None,
             fn_resolution_caches: StaticVec::new(),
-            #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-            fn_hash_indexing: (0, 0),
         }
     }
     /// Is the state currently at global (root) level?
@@ -726,7 +794,7 @@ impl EvalState {
     #[allow(dead_code)]
     #[inline(always)]
     pub fn push_fn_resolution_cache(&mut self) {
-        self.fn_resolution_caches.push(Default::default());
+        self.fn_resolution_caches.push(BTreeMap::new());
     }
     /// Remove the current function resolution cache from the stack and make the last one current.
     ///
@@ -738,32 +806,6 @@ impl EvalState {
         self.fn_resolution_caches
             .pop()
             .expect("at least one function resolution cache");
-    }
-    /// Get the pre-calculated index getter hash.
-    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[must_use]
-    pub fn fn_hash_idx_get(&mut self) -> u64 {
-        if self.fn_hash_indexing != (0, 0) {
-            self.fn_hash_indexing.0
-        } else {
-            let n1 = crate::calc_fn_hash(FN_IDX_GET, 2);
-            let n2 = crate::calc_fn_hash(FN_IDX_SET, 3);
-            self.fn_hash_indexing = (n1, n2);
-            n1
-        }
-    }
-    /// Get the pre-calculated index setter hash.
-    #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-    #[must_use]
-    pub fn fn_hash_idx_set(&mut self) -> u64 {
-        if self.fn_hash_indexing != (0, 0) {
-            self.fn_hash_indexing.1
-        } else {
-            let n1 = crate::calc_fn_hash(FN_IDX_GET, 2);
-            let n2 = crate::calc_fn_hash(FN_IDX_SET, 3);
-            self.fn_hash_indexing = (n1, n2);
-            n2
-        }
     }
 }
 
@@ -814,8 +856,8 @@ pub struct Limits {
 }
 
 #[cfg(not(feature = "unchecked"))]
-impl Default for Limits {
-    fn default() -> Self {
+impl Limits {
+    pub const fn new() -> Self {
         Self {
             #[cfg(not(feature = "no_function"))]
             max_call_stack_depth: MAX_CALL_STACK_DEPTH,
@@ -857,7 +899,7 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
     #[inline(always)]
     #[must_use]
     pub fn source(&self) -> Option<&str> {
-        self.state.source.as_ref().map(|s| s.as_str())
+        self.mods.source.as_ref().map(|s| s.as_str())
     }
     /// The current [`Scope`].
     #[inline(always)]
@@ -1080,17 +1122,17 @@ impl Engine {
     #[must_use]
     pub fn new_raw() -> Self {
         let mut engine = Self {
-            global_modules: Default::default(),
-            global_sub_modules: Default::default(),
+            global_modules: StaticVec::new(),
+            global_sub_modules: BTreeMap::new(),
 
             #[cfg(not(feature = "no_module"))]
             module_resolver: None,
 
-            type_names: Default::default(),
-            empty_string: Default::default(),
-            disabled_symbols: Default::default(),
-            custom_keywords: Default::default(),
-            custom_syntax: Default::default(),
+            type_names: BTreeMap::new(),
+            empty_string: ImmutableString::new(),
+            disabled_symbols: BTreeSet::new(),
+            custom_keywords: BTreeMap::new(),
+            custom_syntax: BTreeMap::new(),
 
             resolve_var: None,
             token_mapper: None,
@@ -1105,7 +1147,7 @@ impl Engine {
             optimization_level: Default::default(),
 
             #[cfg(not(feature = "unchecked"))]
-            limits: Default::default(),
+            limits: Limits::new(),
         };
 
         // Add the global namespace module
@@ -1169,32 +1211,74 @@ impl Engine {
             Expr::Variable(Some(_), _, _) => {
                 self.search_scope_only(scope, mods, state, lib, this_ptr, expr)
             }
-            Expr::Variable(None, var_pos, v) => match v.as_ref() {
+            Expr::Variable(None, _var_pos, v) => match v.as_ref() {
                 // Normal variable access
                 (_, None, _) => self.search_scope_only(scope, mods, state, lib, this_ptr, expr),
-                // Qualified variable
+
+                // Qualified variable access
+                #[cfg(not(feature = "no_module"))]
                 (_, Some((namespace, hash_var)), var_name) => {
-                    let module = self.search_imports(mods, state, namespace).ok_or_else(|| {
-                        EvalAltResult::ErrorModuleNotFound(
-                            namespace[0].name.to_string(),
+                    if let Some(module) = self.search_imports(mods, state, namespace) {
+                        // foo:bar::baz::VARIABLE
+                        return match module.get_qualified_var(*hash_var) {
+                            Ok(target) => {
+                                let mut target = target.clone();
+                                // Module variables are constant
+                                target.set_access_mode(AccessMode::ReadOnly);
+                                Ok((target.into(), *_var_pos))
+                            }
+                            Err(err) => Err(match *err {
+                                EvalAltResult::ErrorVariableNotFound(_, _) => {
+                                    EvalAltResult::ErrorVariableNotFound(
+                                        format!(
+                                            "{}{}{}",
+                                            namespace,
+                                            Token::DoubleColon.literal_syntax(),
+                                            var_name
+                                        ),
+                                        namespace[0].pos,
+                                    )
+                                    .into()
+                                }
+                                _ => err.fill_position(*_var_pos),
+                            }),
+                        };
+                    }
+
+                    #[cfg(not(feature = "no_function"))]
+                    if namespace.len() == 1 && namespace[0].name == KEYWORD_GLOBAL {
+                        // global::VARIABLE
+                        let global_constants = mods.global_constants_mut();
+
+                        if let Some(mut guard) = global_constants {
+                            if let Some(value) = guard.get_mut(var_name) {
+                                let mut target: Target = value.clone().into();
+                                // Module variables are constant
+                                target.set_access_mode(AccessMode::ReadOnly);
+                                return Ok((target.into(), *_var_pos));
+                            }
+                        }
+
+                        return Err(EvalAltResult::ErrorVariableNotFound(
+                            format!(
+                                "{}{}{}",
+                                namespace,
+                                Token::DoubleColon.literal_syntax(),
+                                var_name
+                            ),
                             namespace[0].pos,
                         )
-                    })?;
-                    let target = module.get_qualified_var(*hash_var).map_err(|mut err| {
-                        match *err {
-                            EvalAltResult::ErrorVariableNotFound(ref mut err_name, _) => {
-                                *err_name = format!("{}{}", namespace, var_name);
-                            }
-                            _ => (),
-                        }
-                        err.fill_position(*var_pos)
-                    })?;
+                        .into());
+                    }
 
-                    // Module variables are constant
-                    let mut target = target.clone();
-                    target.set_access_mode(AccessMode::ReadOnly);
-                    Ok((target.into(), *var_pos))
+                    Err(
+                        EvalAltResult::ErrorModuleNotFound(namespace.to_string(), namespace[0].pos)
+                            .into(),
+                    )
                 }
+
+                #[cfg(feature = "no_module")]
+                (_, Some((_, _)), _) => unreachable!("qualified access under no_module"),
             },
             _ => unreachable!("Expr::Variable expected, but gets {:?}", expr),
         }
@@ -1335,7 +1419,7 @@ impl Engine {
 
                         if let Some(mut new_val) = try_setter {
                             // Try to call index setter if value is changed
-                            let hash_set = FnCallHashes::from_native(state.fn_hash_idx_set());
+                            let hash_set = FnCallHashes::from_native(mods.fn_hash_idx_set());
                             let args = &mut [target, &mut idx_val_for_setter, &mut new_val];
 
                             if let Err(err) = self.exec_fn_call(
@@ -1382,7 +1466,7 @@ impl Engine {
 
                         if let Some(mut new_val) = try_setter {
                             // Try to call index setter
-                            let hash_set = FnCallHashes::from_native(state.fn_hash_idx_set());
+                            let hash_set = FnCallHashes::from_native(mods.fn_hash_idx_set());
                             let args = &mut [target, &mut idx_val_for_setter, &mut new_val];
 
                             self.exec_fn_call(
@@ -1513,7 +1597,7 @@ impl Engine {
                             // Try an indexer if property does not exist
                             EvalAltResult::ErrorDotExpr(_, _) => {
                                 let args = &mut [target, &mut name.into(), &mut new_val];
-                                let hash_set = FnCallHashes::from_native(state.fn_hash_idx_set());
+                                let hash_set = FnCallHashes::from_native(mods.fn_hash_idx_set());
                                 let pos = Position::NONE;
 
                                 self.exec_fn_call(
@@ -1609,7 +1693,7 @@ impl Engine {
                                 let rhs_chain = match_chaining_type(rhs);
                                 let hash_get = FnCallHashes::from_native(*hash_get);
                                 let hash_set = FnCallHashes::from_native(*hash_set);
-                                let mut arg_values = [target.as_mut(), &mut Default::default()];
+                                let mut arg_values = [target.as_mut(), &mut Dynamic::UNIT.clone()];
                                 let args = &mut arg_values[..1];
 
                                 // Assume getters are always pure
@@ -1672,7 +1756,7 @@ impl Engine {
                                                 let args =
                                                     &mut [target.as_mut(), &mut name.into(), val];
                                                 let hash_set = FnCallHashes::from_native(
-                                                    state.fn_hash_idx_set(),
+                                                    mods.fn_hash_idx_set(),
                                                 );
                                                 self.exec_fn_call(
                                                     mods, state, lib, FN_IDX_SET, hash_set, args,
@@ -1751,7 +1835,7 @@ impl Engine {
             _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
         };
 
-        let idx_values = &mut Default::default();
+        let idx_values = &mut StaticVec::new();
 
         self.eval_dot_index_chain_arguments(
             scope, mods, state, lib, this_ptr, rhs, term, chain_type, idx_values, 0, level,
@@ -1761,7 +1845,7 @@ impl Engine {
             // id.??? or id[???]
             Expr::Variable(_, var_pos, x) => {
                 #[cfg(not(feature = "unchecked"))]
-                self.inc_operations(state, *var_pos)?;
+                self.inc_operations(&mut mods.num_operations, *var_pos)?;
 
                 let (mut target, _) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, lhs)?;
@@ -1812,7 +1896,7 @@ impl Engine {
         level: usize,
     ) -> Result<(), Box<EvalAltResult>> {
         #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(state, expr.position())?;
+        self.inc_operations(&mut mods.num_operations, expr.position())?;
 
         let _parent_chain_type = parent_chain_type;
 
@@ -1938,7 +2022,7 @@ impl Engine {
         level: usize,
     ) -> Result<Target<'t>, Box<EvalAltResult>> {
         #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(state, Position::NONE)?;
+        self.inc_operations(&mut mods.num_operations, Position::NONE)?;
 
         let mut idx = idx;
         let _add_if_not_found = add_if_not_found;
@@ -1992,7 +2076,7 @@ impl Engine {
                 })?;
 
                 if _add_if_not_found && !map.contains_key(index.as_str()) {
-                    map.insert(index.clone().into(), Default::default());
+                    map.insert(index.clone().into(), Dynamic::UNIT);
                 }
 
                 Ok(map
@@ -2078,7 +2162,7 @@ impl Engine {
 
             _ if use_indexers => {
                 let args = &mut [target, &mut idx];
-                let hash_get = FnCallHashes::from_native(state.fn_hash_idx_get());
+                let hash_get = FnCallHashes::from_native(mods.fn_hash_idx_get());
                 let idx_pos = Position::NONE;
 
                 self.exec_fn_call(
@@ -2111,7 +2195,7 @@ impl Engine {
         level: usize,
     ) -> RhaiResult {
         #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(state, expr.position())?;
+        self.inc_operations(&mut mods.num_operations, expr.position())?;
 
         let result = match expr {
             Expr::DynamicConstant(x, _) => Ok(x.as_ref().clone()),
@@ -2271,7 +2355,7 @@ impl Engine {
             Expr::Unit(_) => Ok(Dynamic::UNIT),
 
             Expr::Custom(custom, _) => {
-                let expressions: StaticVec<_> = custom.keywords.iter().map(Into::into).collect();
+                let expressions: StaticVec<_> = custom.inputs.iter().map(Into::into).collect();
                 let key_token = custom
                     .tokens
                     .first()
@@ -2463,7 +2547,7 @@ impl Engine {
         level: usize,
     ) -> RhaiResult {
         #[cfg(not(feature = "unchecked"))]
-        self.inc_operations(state, stmt.position())?;
+        self.inc_operations(&mut mods.num_operations, stmt.position())?;
 
         let result = match stmt {
             // No-op
@@ -2496,7 +2580,7 @@ impl Engine {
                 }
 
                 #[cfg(not(feature = "unchecked"))]
-                self.inc_operations(state, pos)?;
+                self.inc_operations(&mut mods.num_operations, pos)?;
 
                 self.eval_op_assignment(
                     mods,
@@ -2649,7 +2733,7 @@ impl Engine {
                     }
                 } else {
                     #[cfg(not(feature = "unchecked"))]
-                    self.inc_operations(state, body.position())?;
+                    self.inc_operations(&mut mods.num_operations, body.position())?;
                 }
             },
 
@@ -2737,7 +2821,6 @@ impl Engine {
                     });
                     scope.push(unsafe_cast_var_name_to_lifetime(name), ());
                     let index = scope.len() - 1;
-                    state.scope_level += 1;
 
                     for (x, iter_value) in func(iter_obj).enumerate() {
                         // Increment counter
@@ -2774,7 +2857,7 @@ impl Engine {
                         }
 
                         #[cfg(not(feature = "unchecked"))]
-                        self.inc_operations(state, statements.position())?;
+                        self.inc_operations(&mut mods.num_operations, statements.position())?;
 
                         if statements.is_empty() {
                             continue;
@@ -2794,7 +2877,6 @@ impl Engine {
                         }
                     }
 
-                    state.scope_level -= 1;
                     scope.rewind(orig_scope_len);
                     Ok(Dynamic::UNIT)
                 } else {
@@ -2869,7 +2951,7 @@ impl Engine {
 
                                 err_map.insert("message".into(), err.to_string().into());
 
-                                if let Some(ref source) = state.source {
+                                if let Some(ref source) = mods.source {
                                     err_map.insert("source".into(), source.as_str().into());
                                 }
 
@@ -2897,7 +2979,6 @@ impl Engine {
                         };
 
                         let orig_scope_len = scope.len();
-                        state.scope_level += 1;
 
                         err_var.as_ref().map(|Ident { name, .. }| {
                             scope.push(unsafe_cast_var_name_to_lifetime(name), err_value)
@@ -2907,7 +2988,6 @@ impl Engine {
                             scope, mods, state, lib, this_ptr, catch_stmt, true, level,
                         );
 
-                        state.scope_level -= 1;
                         scope.rewind(orig_scope_len);
 
                         match result {
@@ -2967,25 +3047,9 @@ impl Engine {
 
                 let (var_name, _alias): (Cow<'_, str>, _) = if state.is_global() {
                     #[cfg(not(feature = "no_function"))]
+                    #[cfg(not(feature = "no_module"))]
                     if entry_type == AccessMode::ReadOnly && lib.iter().any(|&m| !m.is_empty()) {
-                        let global = if let Some(index) = mods.find(KEYWORD_GLOBAL) {
-                            match mods.get_mut(index).expect("index is valid") {
-                                m if m.internal => Some(m),
-                                _ => None,
-                            }
-                        } else {
-                            // Create automatic global module
-                            let mut global = Module::new();
-                            global.internal = true;
-                            mods.push(KEYWORD_GLOBAL, global);
-                            Some(mods.get_mut(mods.len() - 1).expect("global module exists"))
-                        };
-
-                        if let Some(global) = global {
-                            Shared::get_mut(global)
-                                .expect("global module is not shared")
-                                .set_var(name.clone(), value.clone());
-                        }
+                        mods.set_global_constant(name, value.clone());
                     }
 
                     (
@@ -3011,7 +3075,7 @@ impl Engine {
             Stmt::Import(expr, export, _pos) => {
                 // Guard against too many modules
                 #[cfg(not(feature = "unchecked"))]
-                if state.num_modules >= self.max_modules() {
+                if mods.num_modules >= self.max_modules() {
                     return Err(EvalAltResult::ErrorTooManyModules(*_pos).into());
                 }
 
@@ -3021,10 +3085,10 @@ impl Engine {
                 {
                     use crate::ModuleResolver;
 
-                    let source = state.source.as_ref().map(|s| s.as_str());
+                    let source = mods.source.as_ref().map(|s| s.as_str());
                     let path_pos = expr.position();
 
-                    let module = state
+                    let module = mods
                         .embedded_module_resolver
                         .as_ref()
                         .and_then(|r| match r.resolve(self, source, &path, path_pos) {
@@ -3058,7 +3122,7 @@ impl Engine {
                         }
                     }
 
-                    state.num_modules += 1;
+                    mods.num_modules += 1;
 
                     Ok(Dynamic::UNIT)
                 } else {
@@ -3238,19 +3302,19 @@ impl Engine {
     #[cfg(not(feature = "unchecked"))]
     pub(crate) fn inc_operations(
         &self,
-        state: &mut EvalState,
+        num_operations: &mut u64,
         pos: Position,
     ) -> Result<(), Box<EvalAltResult>> {
-        state.num_operations += 1;
+        *num_operations += 1;
 
         // Guard against too many operations
-        if self.max_operations() > 0 && state.num_operations > self.max_operations() {
+        if self.max_operations() > 0 && *num_operations > self.max_operations() {
             return Err(EvalAltResult::ErrorTooManyOperations(pos).into());
         }
 
         // Report progress - only in steps
         if let Some(ref progress) = self.progress {
-            if let Some(token) = progress(state.num_operations) {
+            if let Some(token) = progress(*num_operations) {
                 // Terminate script if progress returns a termination token
                 return Err(EvalAltResult::ErrorTerminated(token, pos).into());
             }

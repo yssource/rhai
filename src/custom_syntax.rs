@@ -33,6 +33,8 @@ pub mod markers {
     pub const CUSTOM_SYNTAX_MARKER_FLOAT: &str = "$float$";
     /// Special marker for matching a boolean value.
     pub const CUSTOM_SYNTAX_MARKER_BOOL: &str = "$bool$";
+    /// Special marker for identifying the custom syntax variant.
+    pub const CUSTOM_SYNTAX_MARKER_SYNTAX_VARIANT: &str = "$$";
 }
 
 /// A general expression evaluation trait object.

@@ -59,7 +59,7 @@ fn test_expressions_eval() -> Result<(), Box<EvalAltResult>> {
     engine.register_get("gender", AGENT::get_gender);
     engine.register_get("age", AGENT::get_age);
 
-    // Create your context, add the agent as a constant
+    // Create your scope, add the agent as a constant
     let mut scope = Scope::new();
     scope.push_constant("agent", my_agent);
 

@@ -28,7 +28,7 @@ impl DynamicSerializer {
     #[must_use]
     pub fn new(_value: Dynamic) -> Self {
         Self {
-            _key: Default::default(),
+            _key: Dynamic::UNIT,
             _value,
         }
     }
@@ -83,7 +83,7 @@ impl DynamicSerializer {
 /// # }
 /// ```
 pub fn to_dynamic<T: Serialize>(value: T) -> RhaiResult {
-    let mut s = DynamicSerializer::new(Default::default());
+    let mut s = DynamicSerializer::new(Dynamic::UNIT);
     value.serialize(&mut s)
 }
 
@@ -397,7 +397,7 @@ impl Serializer for &mut DynamicSerializer {
         #[cfg(not(feature = "no_object"))]
         return Ok(StructVariantSerializer {
             variant: _variant,
-            map: Default::default(),
+            map: Map::new(),
         });
         #[cfg(feature = "no_object")]
         return Err(EvalAltResult::ErrorMismatchDataType(

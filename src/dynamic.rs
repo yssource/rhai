@@ -283,14 +283,11 @@ enum DynamicWriteLockInner<'d, T: Clone> {
     /// A simple mutable reference to a non-shared value.
     Reference(&'d mut T),
 
-    /// A write guard to a shared [`RefCell`][std::cell::RefCell].
+    /// A write guard to a shared value.
+    ///
+    /// Not available under `no_closure`.
     #[cfg(not(feature = "no_closure"))]
-    #[cfg(not(feature = "sync"))]
-    Guard(std::cell::RefMut<'d, Dynamic>),
-    /// A write guard to a shared [`RwLock`][std::sync::RwLock].
-    #[cfg(not(feature = "no_closure"))]
-    #[cfg(feature = "sync")]
-    Guard(std::sync::RwLockWriteGuard<'d, Dynamic>),
+    Guard(crate::fn_native::LockGuard<'d, Dynamic>),
 }
 
 impl<'d, T: Any + Clone> Deref for DynamicWriteLock<'d, T> {
@@ -1593,10 +1590,7 @@ impl Dynamic {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell, _, _) => {
-                #[cfg(not(feature = "sync"))]
-                let value = cell.borrow_mut();
-                #[cfg(feature = "sync")]
-                let value = cell.write().unwrap();
+                let value = crate::fn_native::shared_write_lock(cell);
 
                 if (*value).type_id() != TypeId::of::<T>()
                     && TypeId::of::<Dynamic>() != TypeId::of::<T>()

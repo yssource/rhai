@@ -50,12 +50,21 @@ const NEVER_ENDS: &str = "`TokenStream` never ends";
 /// When [`ImmutableString`] is used as [`Identifier`], this type acts as an interner which keeps a
 /// collection of strings and returns shared instances, only creating a new string when it is not
 /// yet interned.
-#[derive(Debug, Clone, Default, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub struct IdentifierBuilder(
     #[cfg(feature = "no_smartstring")] std::collections::BTreeSet<Identifier>,
 );
 
 impl IdentifierBuilder {
+    /// Create a new IdentifierBuilder.
+    #[inline]
+    #[must_use]
+    pub fn new() -> Self {
+        Self(
+            #[cfg(feature = "no_smartstring")]
+            std::collections::BTreeSet::new(),
+        )
+    }
     /// Get an identifier from a text string.
     #[inline]
     #[must_use]
@@ -121,14 +130,14 @@ impl<'e> ParseState<'e> {
             #[cfg(not(feature = "no_function"))]
             max_function_expr_depth: NonZeroUsize::new(engine.max_function_expr_depth()),
             #[cfg(not(feature = "no_closure"))]
-            external_vars: Default::default(),
+            external_vars: BTreeMap::new(),
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
-            interned_strings: Default::default(),
-            stack: Default::default(),
+            interned_strings: IdentifierBuilder::new(),
+            stack: StaticVec::new(),
             entry_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
-            modules: Default::default(),
+            modules: StaticVec::new(),
         }
     }
 
@@ -398,7 +407,7 @@ fn parse_symbol(input: &mut TokenStream) -> Result<(String, Position), ParseErro
         // Bad identifier
         (Token::LexError(err), pos) => Err(err.into_err(pos)),
         // Not a symbol
-        (_, pos) => Err(PERR::MissingSymbol(Default::default()).into_err(pos)),
+        (_, pos) => Err(PERR::MissingSymbol(String::new()).into_err(pos)),
     }
 }
 
@@ -902,7 +911,7 @@ fn parse_map_literal(
 
         let expr = parse_expr(input, state, lib, settings.level_up())?;
         let name = state.get_identifier(name);
-        template.insert(name.clone(), Default::default());
+        template.insert(name.clone(), crate::Dynamic::UNIT);
         map.push((Ident { name, pos }, expr));
 
         match input.peek().expect(NEVER_ENDS) {
@@ -1379,6 +1388,7 @@ fn parse_primary(
                 parse_fn_call(input, state, lib, name, false, ns, settings.level_up())?
             }
             // module access
+            #[cfg(not(feature = "no_module"))]
             (Expr::Variable(_, var_pos, x), Token::DoubleColon) => {
                 let (id2, pos2) = parse_var_name(input)?;
                 let (_, mut namespace, var_name) = *x;
@@ -1572,13 +1582,18 @@ fn make_assignment_stmt(
     #[must_use]
     fn check_lvalue(expr: &Expr, parent_is_dot: bool) -> Option<Position> {
         match expr {
-            Expr::Index(x, _, _) | Expr::Dot(x, _, _) if parent_is_dot => match x.lhs {
-                Expr::Property(_) => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _, _))),
+            Expr::Index(x, term, _) | Expr::Dot(x, term, _) if parent_is_dot => match x.lhs {
+                Expr::Property(_) if !term => {
+                    check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _, _)))
+                }
+                Expr::Property(_) => None,
+                // Anything other than a property after dotting (e.g. a method call) is not an l-value
                 ref e => Some(e.position()),
             },
-            Expr::Index(x, _, _) | Expr::Dot(x, _, _) => match x.lhs {
+            Expr::Index(x, term, _) | Expr::Dot(x, term, _) => match x.lhs {
                 Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
-                _ => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _, _))),
+                _ if !term => check_lvalue(&x.rhs, matches!(expr, Expr::Dot(_, _, _))),
+                _ => None,
             },
             Expr::Property(_) if parent_is_dot => None,
             Expr::Property(_) => unreachable!("unexpected Expr::Property in indexing"),
@@ -1618,19 +1633,30 @@ fn make_assignment_stmt(
             }
         }
         // xxx[???]... = rhs, xxx.prop... = rhs
-        Expr::Index(ref x, _, _) | Expr::Dot(ref x, _, _) => {
-            match check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _, _))) {
-                None => match x.lhs {
-                    // var[???] = rhs, var.??? = rhs
-                    Expr::Variable(_, _, _) => {
-                        Ok(Stmt::Assignment((lhs, op_info, rhs).into(), op_pos))
+        Expr::Index(ref x, term, _) | Expr::Dot(ref x, term, _) => {
+            let valid_lvalue = if term {
+                None
+            } else {
+                check_lvalue(&x.rhs, matches!(lhs, Expr::Dot(_, _, _)))
+            };
+
+            match valid_lvalue {
+                None => {
+                    match x.lhs {
+                        // var[???] = rhs, var.??? = rhs
+                        Expr::Variable(_, _, _) => {
+                            Ok(Stmt::Assignment((lhs, op_info, rhs).into(), op_pos))
+                        }
+                        // expr[???] = rhs, expr.??? = rhs
+                        ref expr => {
+                            Err(PERR::AssignmentToInvalidLHS("".to_string())
+                                .into_err(expr.position()))
+                        }
                     }
-                    // expr[???] = rhs, expr.??? = rhs
-                    ref expr => {
-                        Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(expr.position()))
-                    }
-                },
-                Some(pos) => Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(pos)),
+                }
+                Some(err_pos) => {
+                    Err(PERR::AssignmentToInvalidLHS("".to_string()).into_err(err_pos))
+                }
             }
         }
         // ??? && ??? = rhs, ??? || ??? = rhs
@@ -1978,7 +2004,7 @@ fn parse_custom_syntax(
     pos: Position,
 ) -> Result<Expr, ParseError> {
     let mut settings = settings;
-    let mut keywords = StaticVec::<Expr>::new();
+    let mut inputs = StaticVec::<Expr>::new();
     let mut segments = StaticVec::new();
     let mut tokens = StaticVec::new();
 
@@ -2002,6 +2028,13 @@ fn parse_custom_syntax(
         let settings = settings.level_up();
 
         required_token = match parse_func(&segments, fwd_token.syntax().as_ref()) {
+            Ok(Some(seg))
+                if seg.starts_with(CUSTOM_SYNTAX_MARKER_SYNTAX_VARIANT)
+                    && seg.len() > CUSTOM_SYNTAX_MARKER_SYNTAX_VARIANT.len() =>
+            {
+                inputs.push(Expr::StringConstant(state.get_identifier(seg).into(), pos));
+                break;
+            }
             Ok(Some(seg)) => seg,
             Ok(None) => break,
             Err(err) => return Err(err.0.into_err(settings.pos)),
@@ -2013,24 +2046,24 @@ fn parse_custom_syntax(
                 let name = state.get_identifier(name);
                 segments.push(name.clone().into());
                 tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_IDENT));
-                keywords.push(Expr::Variable(None, pos, (None, None, name).into()));
+                inputs.push(Expr::Variable(None, pos, (None, None, name).into()));
             }
             CUSTOM_SYNTAX_MARKER_SYMBOL => {
                 let (symbol, pos) = parse_symbol(input)?;
                 let symbol: ImmutableString = state.get_identifier(symbol).into();
                 segments.push(symbol.clone());
                 tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_SYMBOL));
-                keywords.push(Expr::StringConstant(symbol, pos));
+                inputs.push(Expr::StringConstant(symbol, pos));
             }
             CUSTOM_SYNTAX_MARKER_EXPR => {
-                keywords.push(parse_expr(input, state, lib, settings)?);
+                inputs.push(parse_expr(input, state, lib, settings)?);
                 let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_EXPR);
                 segments.push(keyword.clone().into());
                 tokens.push(keyword);
             }
             CUSTOM_SYNTAX_MARKER_BLOCK => match parse_block(input, state, lib, settings)? {
                 block @ Stmt::Block(_, _) => {
-                    keywords.push(Expr::Stmt(Box::new(block.into())));
+                    inputs.push(Expr::Stmt(Box::new(block.into())));
                     let keyword = state.get_identifier(CUSTOM_SYNTAX_MARKER_BLOCK);
                     segments.push(keyword.clone().into());
                     tokens.push(keyword);
@@ -2039,7 +2072,7 @@ fn parse_custom_syntax(
             },
             CUSTOM_SYNTAX_MARKER_BOOL => match input.next().expect(NEVER_ENDS) {
                 (b @ Token::True, pos) | (b @ Token::False, pos) => {
-                    keywords.push(Expr::BoolConstant(b == Token::True, pos));
+                    inputs.push(Expr::BoolConstant(b == Token::True, pos));
                     segments.push(state.get_identifier(b.literal_syntax()).into());
                     tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_BOOL));
                 }
@@ -2052,7 +2085,7 @@ fn parse_custom_syntax(
             },
             CUSTOM_SYNTAX_MARKER_INT => match input.next().expect(NEVER_ENDS) {
                 (Token::IntegerConstant(i), pos) => {
-                    keywords.push(Expr::IntegerConstant(i, pos));
+                    inputs.push(Expr::IntegerConstant(i, pos));
                     segments.push(i.to_string().into());
                     tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_INT));
                 }
@@ -2066,7 +2099,7 @@ fn parse_custom_syntax(
             #[cfg(not(feature = "no_float"))]
             CUSTOM_SYNTAX_MARKER_FLOAT => match input.next().expect(NEVER_ENDS) {
                 (Token::FloatConstant(f), pos) => {
-                    keywords.push(Expr::FloatConstant(f, pos));
+                    inputs.push(Expr::FloatConstant(f, pos));
                     segments.push(f.to_string().into());
                     tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_FLOAT));
                 }
@@ -2080,7 +2113,7 @@ fn parse_custom_syntax(
             CUSTOM_SYNTAX_MARKER_STRING => match input.next().expect(NEVER_ENDS) {
                 (Token::StringConstant(s), pos) => {
                     let s: ImmutableString = state.get_identifier(s).into();
-                    keywords.push(Expr::StringConstant(s.clone(), pos));
+                    inputs.push(Expr::StringConstant(s.clone(), pos));
                     segments.push(s);
                     tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_STRING));
                 }
@@ -2105,7 +2138,7 @@ fn parse_custom_syntax(
         }
     }
 
-    keywords.shrink_to_fit();
+    inputs.shrink_to_fit();
     tokens.shrink_to_fit();
 
     const KEYWORD_SEMICOLON: &str = Token::SemiColon.literal_syntax();
@@ -2121,7 +2154,7 @@ fn parse_custom_syntax(
 
     Ok(Expr::Custom(
         CustomExpr {
-            keywords,
+            inputs,
             tokens,
             scope_may_be_changed: syntax.scope_may_be_changed,
             self_terminated,
@@ -2532,7 +2565,7 @@ fn parse_export(
             }
             (name, pos)
         } else {
-            (Default::default(), Position::NONE)
+            (String::new(), Position::NONE)
         };
 
         exports.push((
@@ -3051,7 +3084,7 @@ fn parse_fn(
         body,
         lib: None,
         #[cfg(not(feature = "no_module"))]
-        mods: Default::default(),
+        mods: crate::engine::Imports::new(),
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
         comments,
@@ -3192,17 +3225,17 @@ fn parse_anon_fn(
         access: FnAccess::Public,
         params,
         #[cfg(not(feature = "no_closure"))]
-        externals: Default::default(),
+        externals: std::collections::BTreeSet::new(),
         body: body.into(),
         lib: None,
         #[cfg(not(feature = "no_module"))]
-        mods: Default::default(),
+        mods: crate::engine::Imports::new(),
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
-        comments: Default::default(),
+        comments: StaticVec::new(),
     };
 
-    let fn_ptr = crate::FnPtr::new_unchecked(fn_name, Default::default());
+    let fn_ptr = crate::FnPtr::new_unchecked(fn_name, StaticVec::new());
     let expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), settings.pos);
 
     #[cfg(not(feature = "no_closure"))]
@@ -3221,7 +3254,7 @@ impl Engine {
         #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
     ) -> Result<AST, ParseError> {
         let _scope = scope;
-        let mut functions = Default::default();
+        let mut functions = BTreeMap::new();
 
         let settings = ParseSettings {
             allow_if_expr: false,
@@ -3254,7 +3287,7 @@ impl Engine {
             self,
             _scope,
             statements,
-            Default::default(),
+            StaticVec::new(),
             optimization_level,
         ));
 

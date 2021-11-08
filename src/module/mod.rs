@@ -9,7 +9,7 @@ use crate::parse::IdentifierBuilder;
 use crate::token::Token;
 use crate::{
     calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, EvalAltResult,
-    Identifier, ImmutableString, NativeCallContext, Position, Shared, StaticVec,
+    Identifier, ImmutableString, NativeCallContext, Shared, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -35,13 +35,6 @@ pub enum FnNamespace {
     Global,
     /// Module namespace only.
     Internal,
-}
-
-impl Default for FnNamespace {
-    #[inline(always)]
-    fn default() -> Self {
-        Self::Internal
-    }
 }
 
 /// Data structure containing a single registered function.
@@ -131,6 +124,8 @@ pub struct Module {
     id: Option<Identifier>,
     /// Is this module internal?
     pub(crate) internal: bool,
+    /// Is this module part of a standard library?
+    pub(crate) standard: bool,
     /// Sub-modules.
     modules: BTreeMap<Identifier, Shared<Module>>,
     /// [`Module`] variables.
@@ -246,16 +241,17 @@ impl Module {
         Self {
             id: None,
             internal: false,
-            modules: Default::default(),
-            variables: Default::default(),
-            all_variables: Default::default(),
-            functions: Default::default(),
-            all_functions: Default::default(),
-            type_iterators: Default::default(),
-            all_type_iterators: Default::default(),
+            standard: false,
+            modules: BTreeMap::new(),
+            variables: BTreeMap::new(),
+            all_variables: BTreeMap::new(),
+            functions: BTreeMap::new(),
+            all_functions: BTreeMap::new(),
+            type_iterators: BTreeMap::new(),
+            all_type_iterators: BTreeMap::new(),
             indexed: true,
             contains_indexed_global_functions: false,
-            identifiers: Default::default(),
+            identifiers: IdentifierBuilder::new(),
         }
     }
 
@@ -455,10 +451,11 @@ impl Module {
 
     /// Get a reference to a namespace-qualified variable.
     /// Name and Position in [`EvalAltResult`] are [`None`] and [`NONE`][Position::NONE] and must be set afterwards.
+    #[cfg(not(feature = "no_module"))]
     #[inline]
     pub(crate) fn get_qualified_var(&self, hash_var: u64) -> Result<&Dynamic, Box<EvalAltResult>> {
         self.all_variables.get(&hash_var).ok_or_else(|| {
-            EvalAltResult::ErrorVariableNotFound(String::new(), Position::NONE).into()
+            EvalAltResult::ErrorVariableNotFound(String::new(), crate::Position::NONE).into()
         })
     }
 
@@ -482,7 +479,7 @@ impl Module {
                 namespace: FnNamespace::Internal,
                 access: fn_def.access,
                 params: num_params,
-                param_types: Default::default(),
+                param_types: StaticVec::new(),
                 #[cfg(feature = "metadata")]
                 param_names,
                 func: Into::<CallableFunction>::into(fn_def).into(),
@@ -1561,9 +1558,9 @@ impl Module {
 
         if !self.indexed {
             let mut path = Vec::with_capacity(4);
-            let mut variables = Default::default();
-            let mut functions = Default::default();
-            let mut type_iterators = Default::default();
+            let mut variables = BTreeMap::new();
+            let mut functions = BTreeMap::new();
+            let mut type_iterators = BTreeMap::new();
 
             path.push("");
 
@@ -1677,17 +1674,21 @@ impl fmt::Debug for NamespaceRef {
                 .iter()
                 .map(|Ident { name, .. }| name.as_str())
                 .collect::<StaticVec<_>>()
-                .join("::"),
+                .join(Token::DoubleColon.literal_syntax()),
         )
     }
 }
 
 impl fmt::Display for NamespaceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for Ident { name, .. } in self.path.iter() {
-            write!(f, "{}{}", name, Token::DoubleColon.syntax())?;
-        }
-        Ok(())
+        f.write_str(
+            &self
+                .path
+                .iter()
+                .map(|Ident { name, .. }| name.as_str())
+                .collect::<StaticVec<_>>()
+                .join(Token::DoubleColon.literal_syntax()),
+        )
     }
 }
 

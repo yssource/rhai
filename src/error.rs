@@ -122,11 +122,11 @@ impl fmt::Display for EvalAltResult {
             Self::ErrorInModule(s, err, _) if s.is_empty() => {
                 write!(f, "Error in module: {}", err)?
             }
-            Self::ErrorInModule(s, err, _) => write!(f, "Error in module '{}': {}", s, err)?,
+            Self::ErrorInModule(s, err, _) => write!(f, "Error in module {}: {}", s, err)?,
 
             Self::ErrorFunctionNotFound(s, _) => write!(f, "Function not found: {}", s)?,
             Self::ErrorVariableNotFound(s, _) => write!(f, "Variable not found: {}", s)?,
-            Self::ErrorModuleNotFound(s, _) => write!(f, "Module not found: '{}'", s)?,
+            Self::ErrorModuleNotFound(s, _) => write!(f, "Module not found: {}", s)?,
             Self::ErrorDataRace(s, _) => {
                 write!(f, "Data race detected when accessing variable: {}", s)?
             }
@@ -134,7 +134,7 @@ impl fmt::Display for EvalAltResult {
                 "" => f.write_str("Malformed dot expression"),
                 s => f.write_str(s),
             }?,
-            Self::ErrorIndexingType(s, _) => write!(f, "Indexer not registered for '{}'", s)?,
+            Self::ErrorIndexingType(s, _) => write!(f, "Indexer not registered for {}", s)?,
             Self::ErrorUnboundThis(_) => f.write_str("'this' is not bound")?,
             Self::ErrorFor(_) => f.write_str("For loop expects a type with an iterator defined")?,
             Self::ErrorTooManyOperations(_) => f.write_str("Too many operations")?,
