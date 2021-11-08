@@ -133,7 +133,7 @@ impl<'a> OptimizerState<'a> {
     ) -> Option<Dynamic> {
         self.engine
             .call_native_fn(
-                &Imports::new(),
+                &mut Imports::new(),
                 &mut EvalState::new(),
                 self.lib,
                 fn_name,

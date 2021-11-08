@@ -1739,10 +1739,12 @@ impl Engine {
         level: usize,
     ) -> RhaiResult {
         let mut state = EvalState::new();
-        state.source = ast.source_raw().cloned();
+        if ast.source_raw().is_some() {
+            mods.source = ast.source_raw().cloned();
+        }
         #[cfg(not(feature = "no_module"))]
         {
-            state.embedded_module_resolver = ast.resolver();
+            mods.embedded_module_resolver = ast.resolver();
         }
 
         let statements = ast.statements();
@@ -1817,10 +1819,12 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         let mods = &mut Imports::new();
         let mut state = EvalState::new();
-        state.source = ast.source_raw().cloned();
+        if ast.source_raw().is_some() {
+            mods.source = ast.source_raw().cloned();
+        }
         #[cfg(not(feature = "no_module"))]
         {
-            state.embedded_module_resolver = ast.resolver();
+            mods.embedded_module_resolver = ast.resolver();
         }
 
         let statements = ast.statements();

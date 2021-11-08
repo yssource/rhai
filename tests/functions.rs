@@ -96,21 +96,6 @@ fn test_functions_global_module() -> Result<(), Box<EvalAltResult>> {
             if matches!(&*err, EvalAltResult::ErrorVariableNotFound(v, _) if v == "global::ANSWER")
     ));
 
-    let mut module = Module::new();
-    module.set_var("ANSWER", 123 as INT);
-    engine.register_static_module("global", module.into());
-
-    assert_eq!(
-        engine.eval::<INT>(
-            "
-                const ANSWER = 42;
-                fn foo() { global::ANSWER }
-                foo()
-            "
-        )?,
-        123
-    );
-
     engine.register_result_fn(
         "do_stuff",
         |context: NativeCallContext, callback: rhai::FnPtr| {
@@ -128,6 +113,33 @@ fn test_functions_global_module() -> Result<(), Box<EvalAltResult>> {
         EvalAltResult::ErrorInFunctionCall(_, _, err, _)
             if matches!(&*err, EvalAltResult::ErrorVariableNotFound(v, _) if v == "global::LOCAL_VALUE")
     ));
+
+    #[cfg(not(feature = "no_closure"))]
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                const GLOBAL_VALUE = 42;
+                do_stuff(|| global::GLOBAL_VALUE);
+            "
+        )?,
+        42
+    );
+
+    // Override global
+    let mut module = Module::new();
+    module.set_var("ANSWER", 123 as INT);
+    engine.register_static_module("global", module.into());
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                const ANSWER = 42;
+                fn foo() { global::ANSWER }
+                foo()
+            "
+        )?,
+        123
+    );
 
     Ok(())
 }
