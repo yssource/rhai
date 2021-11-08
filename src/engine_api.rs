@@ -1006,8 +1006,11 @@ impl Engine {
     }
     /// Compile a string into an [`AST`] using own scope, which can be used later for evaluation.
     ///
-    /// The scope is useful for passing constants into the script for optimization
-    /// when using [`OptimizationLevel::Full`].
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
     ///
     /// # Example
     ///
@@ -1018,10 +1021,6 @@ impl Engine {
     /// use rhai::{Engine, Scope, OptimizationLevel};
     ///
     /// let mut engine = Engine::new();
-    ///
-    /// // Set optimization level to 'Full' so the Engine can fold constants
-    /// // into function calls and operators.
-    /// engine.set_optimization_level(OptimizationLevel::Full);
     ///
     /// // Create initialized scope
     /// let mut scope = Scope::new();
@@ -1130,6 +1129,12 @@ impl Engine {
     /// All strings are simply parsed one after another with nothing inserted in between, not even
     /// a newline or space.
     ///
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
+    ///
     /// # Example
     ///
     /// ```
@@ -1139,10 +1144,6 @@ impl Engine {
     /// use rhai::{Engine, Scope, OptimizationLevel};
     ///
     /// let mut engine = Engine::new();
-    ///
-    /// // Set optimization level to 'Full' so the Engine can fold constants
-    /// // into function calls and operators.
-    /// engine.set_optimization_level(OptimizationLevel::Full);
     ///
     /// // Create initialized scope
     /// let mut scope = Scope::new();
@@ -1179,6 +1180,12 @@ impl Engine {
         )
     }
     /// Join a list of strings and compile into an [`AST`] using own scope at a specific optimization level.
+    ///
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
     #[inline]
     pub(crate) fn compile_with_scope_and_optimization_level(
         &self,
@@ -1262,8 +1269,11 @@ impl Engine {
     ///
     /// Not available under `no_std` or `WASM`.
     ///
-    /// The scope is useful for passing constants into the script for optimization
-    /// when using [`OptimizationLevel::Full`].
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
     ///
     /// # Example
     ///
@@ -1274,9 +1284,6 @@ impl Engine {
     /// use rhai::{Engine, Scope, OptimizationLevel};
     ///
     /// let mut engine = Engine::new();
-    ///
-    /// // Set optimization level to 'Full' so the Engine can fold constants.
-    /// engine.set_optimization_level(OptimizationLevel::Full);
     ///
     /// // Create initialized scope
     /// let mut scope = Scope::new();
@@ -1429,9 +1436,6 @@ impl Engine {
     /// Compile a string containing an expression into an [`AST`] using own scope,
     /// which can be used later for evaluation.
     ///
-    /// The scope is useful for passing constants into the script for optimization
-    /// when using [`OptimizationLevel::Full`].
-    ///
     /// # Example
     ///
     /// ```
@@ -1441,10 +1445,6 @@ impl Engine {
     /// use rhai::{Engine, Scope, OptimizationLevel};
     ///
     /// let mut engine = Engine::new();
-    ///
-    /// // Set optimization level to 'Full' so the Engine can fold constants
-    /// // into function calls and operators.
-    /// engine.set_optimization_level(OptimizationLevel::Full);
     ///
     /// // Create initialized scope
     /// let mut scope = Scope::new();
@@ -1515,6 +1515,12 @@ impl Engine {
     ///
     /// Not available under `no_std` or `WASM`.
     ///
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
+    ///
     /// # Example
     ///
     /// ```no_run
@@ -1561,6 +1567,12 @@ impl Engine {
         self.eval_with_scope(&mut Scope::new(), script)
     }
     /// Evaluate a string with own scope.
+    ///
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
     ///
     /// # Example
     ///
@@ -1768,6 +1780,12 @@ impl Engine {
     /// Evaluate a file with own scope, returning any error (if any).
     ///
     /// Not available under `no_std` or `WASM`.
+    ///
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline]
@@ -1784,6 +1802,12 @@ impl Engine {
         self.run_with_scope(&mut Scope::new(), script)
     }
     /// Evaluate a script with own scope, returning any error (if any).
+    ///
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
     #[inline]
     pub fn run_with_scope(
         &self,
@@ -2065,8 +2089,9 @@ impl Engine {
         #[cfg(feature = "no_function")]
         let lib = crate::StaticVec::new();
 
-        let stmt = std::mem::take(ast.statements_mut());
-        crate::optimize::optimize_into_ast(self, scope, stmt, lib, optimization_level)
+        let statements = std::mem::take(ast.statements_mut());
+
+        crate::optimize::optimize_into_ast(self, scope, statements, lib, optimization_level)
     }
     /// _(metadata)_ Generate a list of all registered functions.
     /// Exported under the `metadata` feature only.

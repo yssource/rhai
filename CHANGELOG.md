@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 1.2.0
 =============
 
+Bug fixes
+---------
+
+* `Engine::XXX_with_scope` API's now properly propagate constants within the provided scope also to _functions_ in the script.
+
 New features
 ------------
 
@@ -28,16 +33,6 @@ Deprecated API's
 * `From<EvalAltResult>` for `Result<T, Box<EvalAltResult>>` is deprecated so it will no longer be possible to do `EvalAltResult::ErrorXXXXX.into()` to convert to a `Result`; instead, `Err(EvalAltResult:ErrorXXXXX.into())` must be used. Code is clearer if errors are explicitly wrapped in `Err`.
 
 
-Version 1.1.3
-=============
-
-Bug fixes
----------
-
-* Reverses a regression on string `+` operations.
-* The global namespace is now searched before packages, which is the correct behavior.
-
-
 Version 1.1.2
 =============
 
@@ -46,6 +41,8 @@ Bug fixes
 
 * `0.0` now prints correctly (used to print `0e0`).
 * Unary operators are now properly recognized as an expression statement.
+* Reverses a regression on string `+` operations.
+* The global namespace is now searched before packages, which is the correct behavior.
 
 
 Version 1.1.1

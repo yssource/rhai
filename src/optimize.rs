@@ -113,16 +113,16 @@ impl<'a> OptimizerState<'a> {
             return None;
         }
 
-        self.variables.iter().rev().find_map(|(n, access, value)| {
+        for (n, access, value) in self.variables.iter().rev() {
             if n == name {
-                match access {
+                return match access {
                     AccessMode::ReadWrite => None,
                     AccessMode::ReadOnly => value.as_ref(),
-                }
-            } else {
-                None
+                };
             }
-        })
+        }
+
+        None
     }
     /// Call a registered function
     #[inline]
@@ -1095,6 +1095,8 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
 }
 
 /// Optimize a block of [statements][Stmt] at top level.
+///
+/// Constants and variables from the scope are added.
 fn optimize_top_level(
     statements: StaticVec<Stmt>,
     engine: &Engine,
@@ -1179,11 +1181,9 @@ pub fn optimize_into_ast(
                     let mut fn_def = crate::fn_native::shared_take_or_clone(fn_def);
 
                     // Optimize the function body
-                    let state = &mut OptimizerState::new(engine, lib2, level);
-
                     let body = mem::take(fn_def.body.deref_mut());
 
-                    *fn_def.body = optimize_stmt_block(body, state, true, true, true);
+                    *fn_def.body = optimize_top_level(body, engine, scope, lib2, level);
 
                     fn_def
                 })
