@@ -108,21 +108,27 @@ fn test_optimizer_parse() -> Result<(), Box<EvalAltResult>> {
     Ok(())
 }
 
+#[cfg(not(feature = "no_function"))]
 #[test]
 fn test_optimizer_scope() -> Result<(), Box<EvalAltResult>> {
+    const SCRIPT: &str = "
+        fn foo() { FOO }
+        foo()
+    ";
+
     let engine = Engine::new();
     let mut scope = Scope::new();
 
     scope.push_constant("FOO", 42 as INT);
 
-    let ast = engine.compile_with_scope(&scope, "fn foo() { FOO } foo()")?;
+    let ast = engine.compile_with_scope(&scope, SCRIPT)?;
 
     scope.push("FOO", 123 as INT);
 
     assert_eq!(engine.eval_ast::<INT>(&ast)?, 42);
     assert_eq!(engine.eval_ast_with_scope::<INT>(&mut scope, &ast)?, 42);
 
-    let ast = engine.compile_with_scope(&scope, "fn foo() { FOO } foo()")?;
+    let ast = engine.compile_with_scope(&scope, SCRIPT)?;
 
     assert!(engine.eval_ast_with_scope::<INT>(&mut scope, &ast).is_err());
 
