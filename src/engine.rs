@@ -5,8 +5,8 @@ use crate::custom_syntax::CustomSyntax;
 use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::fn_hash::get_hasher;
 use crate::fn_native::{
-    shared_write_lock, CallableFunction, IteratorFn, Locked, OnDebugCallback, OnParseTokenCallback,
-    OnPrintCallback, OnVarCallback,
+    CallableFunction, IteratorFn, OnDebugCallback, OnParseTokenCallback, OnPrintCallback,
+    OnVarCallback,
 };
 use crate::module::NamespaceRef;
 use crate::packages::{Package, StandardPackage};
@@ -73,10 +73,14 @@ pub struct Imports {
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn_hash_indexing: (u64, u64),
     /// Embedded module resolver.
+    ///
+    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     pub embedded_module_resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
     /// Cache of globally-defined constants.
-    global_constants: Option<Shared<Locked<BTreeMap<Identifier, Dynamic>>>>,
+    #[cfg(not(feature = "no_module"))]
+    #[cfg(not(feature = "no_function"))]
+    global_constants: Option<Shared<crate::Locked<BTreeMap<Identifier, Dynamic>>>>,
 }
 
 impl Imports {
@@ -94,6 +98,8 @@ impl Imports {
             embedded_module_resolver: None,
             #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
             fn_hash_indexing: (0, 0),
+            #[cfg(not(feature = "no_module"))]
+            #[cfg(not(feature = "no_function"))]
             global_constants: None,
         }
     }
@@ -201,24 +207,28 @@ impl Imports {
             .find_map(|m| m.get_qualified_iter(id))
     }
     /// Get a mutable reference to the cache of globally-defined constants.
+    #[cfg(not(feature = "no_module"))]
+    #[cfg(not(feature = "no_function"))]
     #[must_use]
     pub(crate) fn global_constants_mut<'a>(
         &'a mut self,
     ) -> Option<impl DerefMut<Target = BTreeMap<Identifier, Dynamic>> + 'a> {
         if let Some(ref global_constants) = self.global_constants {
-            Some(shared_write_lock(global_constants))
+            Some(crate::fn_native::shared_write_lock(global_constants))
         } else {
             None
         }
     }
     /// Set a constant into the cache of globally-defined constants.
+    #[cfg(not(feature = "no_module"))]
+    #[cfg(not(feature = "no_function"))]
     pub(crate) fn set_global_constant(&mut self, name: &str, value: Dynamic) {
         if self.global_constants.is_none() {
-            let dict: Locked<_> = BTreeMap::new().into();
+            let dict: crate::Locked<_> = BTreeMap::new().into();
             self.global_constants = Some(dict.into());
         }
 
-        shared_write_lock(
+        crate::fn_native::shared_write_lock(
             self.global_constants
                 .as_mut()
                 .expect("`global_constants` is `Some`"),
@@ -1204,6 +1214,7 @@ impl Engine {
             Expr::Variable(None, _var_pos, v) => match v.as_ref() {
                 // Normal variable access
                 (_, None, _) => self.search_scope_only(scope, mods, state, lib, this_ptr, expr),
+
                 // Qualified variable access
                 #[cfg(not(feature = "no_module"))]
                 (_, Some((namespace, hash_var)), var_name) => {
@@ -1265,6 +1276,7 @@ impl Engine {
                             .into(),
                     )
                 }
+
                 #[cfg(feature = "no_module")]
                 (_, Some((_, _)), _) => unreachable!("qualified access under no_module"),
             },

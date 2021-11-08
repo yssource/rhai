@@ -1,6 +1,6 @@
 //! Helper module which defines the [`Any`] trait to to allow dynamic value handling.
 
-use crate::fn_native::{shared_write_lock, SendSync};
+use crate::fn_native::SendSync;
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
 use crate::{FnPtr, ImmutableString, INT};
 #[cfg(feature = "no_std")]
@@ -1590,7 +1590,7 @@ impl Dynamic {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell, _, _) => {
-                let value = shared_write_lock(cell);
+                let value = crate::fn_native::shared_write_lock(cell);
 
                 if (*value).type_id() != TypeId::of::<T>()
                     && TypeId::of::<Dynamic>() != TypeId::of::<T>()

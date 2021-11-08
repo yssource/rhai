@@ -34,31 +34,23 @@ pub use std::rc::Rc as Shared;
 pub use std::sync::Arc as Shared;
 
 /// Synchronized shared object.
-///
-/// Not available under `no_closure`.
-#[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "sync"))]
+#[allow(dead_code)]
 pub use std::cell::RefCell as Locked;
 
 /// Lock guard for synchronized shared object.
-///
-/// Not available under `no_closure`.
-#[cfg(not(feature = "no_closure"))]
 #[cfg(not(feature = "sync"))]
+#[allow(dead_code)]
 pub type LockGuard<'a, T> = std::cell::RefMut<'a, T>;
 
 /// Synchronized shared object.
-///
-/// Not available under `no_closure`.
-#[cfg(not(feature = "no_closure"))]
 #[cfg(feature = "sync")]
+#[allow(dead_code)]
 pub use std::sync::RwLock as Locked;
 
 /// Lock guard for synchronized shared object.
-///
-/// Not available under `no_closure`.
-#[cfg(not(feature = "no_closure"))]
 #[cfg(feature = "sync")]
+#[allow(dead_code)]
 pub type LockGuard<'a, T> = std::sync::RwLockWriteGuard<'a, T>;
 
 /// Context of a native Rust function call.
@@ -277,6 +269,7 @@ impl<'a> NativeCallContext<'a> {
 /// If the resource is shared (i.e. has other outstanding references), a cloned copy is used.
 #[inline(always)]
 #[must_use]
+#[allow(dead_code)]
 pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
     Shared::make_mut(value)
 }
@@ -284,12 +277,14 @@ pub fn shared_make_mut<T: Clone>(value: &mut Shared<T>) -> &mut T {
 /// Consume a [`Shared`] resource if is unique (i.e. not shared), or clone it otherwise.
 #[inline]
 #[must_use]
+#[allow(dead_code)]
 pub fn shared_take_or_clone<T: Clone>(value: Shared<T>) -> T {
     shared_try_take(value).unwrap_or_else(|v| v.as_ref().clone())
 }
 
 /// Consume a [`Shared`] resource if is unique (i.e. not shared).
 #[inline(always)]
+#[allow(dead_code)]
 pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
     Shared::try_unwrap(value)
 }
@@ -301,14 +296,17 @@ pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
 /// Panics if the resource is shared (i.e. has other outstanding references).
 #[inline]
 #[must_use]
+#[allow(dead_code)]
 pub fn shared_take<T>(value: Shared<T>) -> T {
     shared_try_take(value)
         .ok()
         .expect("no outstanding references")
 }
 
+/// Lock a [`Shared`] resource.
 #[inline(always)]
 #[must_use]
+#[allow(dead_code)]
 pub fn shared_write_lock<'a, T>(value: &'a Locked<T>) -> LockGuard<'a, T> {
     #[cfg(not(feature = "sync"))]
     return value.borrow_mut();

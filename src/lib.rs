@@ -171,8 +171,8 @@ pub type Identifier = ImmutableString;
 /// Alias to [`Rc`][std::rc::Rc] or [`Arc`][std::sync::Arc] depending on the `sync` feature flag.
 pub use fn_native::Shared;
 
-#[cfg(not(feature = "no_closure"))]
-use fn_native::Locked;
+//// Alias to [`RefCell`][std::cell::RefCell] or [`RwLock`][std::sync::RwLock] depending on the `sync` feature flag.
+pub use fn_native::Locked;
 
 pub(crate) use fn_hash::{
     calc_fn_hash, calc_fn_params_hash, calc_qualified_fn_hash, calc_qualified_var_hash,
