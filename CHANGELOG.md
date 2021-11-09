@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 1.1.3
 =============
 
+Bug fixes
+---------
+
+* Printing of integral floating-point numbers is fixed (used to only prints `0.0`).
+
 
 Version 1.1.2
 =============
