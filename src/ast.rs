@@ -780,6 +780,7 @@ impl AST {
     /// let mut iter = ast.iter_literal_variables(true, false)
     ///                   .map(|(name, is_const, value)| (name, is_const, value.as_int().unwrap()));
     ///
+    /// # #[cfg(not(feature = "no_optimize"))]
     /// assert_eq!(iter.next(), Some(("A", true, 42)));
     /// assert_eq!(iter.next(), Some(("C", true, 999)));
     /// assert_eq!(iter.next(), None);
@@ -793,6 +794,7 @@ impl AST {
     /// let mut iter = ast.iter_literal_variables(true, true)
     ///                   .map(|(name, is_const, value)| (name, is_const, value.as_int().unwrap()));
     ///
+    /// # #[cfg(not(feature = "no_optimize"))]
     /// assert_eq!(iter.next(), Some(("A", true, 42)));
     /// assert_eq!(iter.next(), Some(("b", false, 123)));
     /// assert_eq!(iter.next(), Some(("C", true, 999)));

@@ -2070,9 +2070,11 @@ impl Engine {
     pub fn optimize_ast(
         &self,
         scope: &Scope,
-        mut ast: AST,
+        ast: AST,
         optimization_level: crate::OptimizationLevel,
     ) -> AST {
+        let mut ast = ast;
+
         #[cfg(not(feature = "no_function"))]
         let lib = ast
             .lib()
