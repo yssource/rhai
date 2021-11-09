@@ -33,6 +33,15 @@ Deprecated API's
 * `From<EvalAltResult>` for `Result<T, Box<EvalAltResult>>` is deprecated so it will no longer be possible to do `EvalAltResult::ErrorXXXXX.into()` to convert to a `Result`; instead, `Err(EvalAltResult:ErrorXXXXX.into())` must be used. Code is clearer if errors are explicitly wrapped in `Err`.
 
 
+Version 1.1.3
+=============
+
+Bug fixes
+---------
+
+* Printing of integral floating-point numbers is fixed (used to only prints `0.0`).
+
+
 Version 1.1.2
 =============
 
