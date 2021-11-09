@@ -749,6 +749,86 @@ impl AST {
         self.body = StmtBlock::empty();
         self
     }
+    /// Extract all top-level literal constant and/or variable definitions.
+    /// This is useful for extracting all global constants from a script without actually running it.
+    ///
+    /// A literal constant/variable definition takes the form of:
+    /// `const VAR = `_value_`;` and `let VAR = `_value_`;`
+    /// where _value_ is a literal expression or will be optimized into a literal.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::{Engine, Scope};
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let ast = engine.compile(
+    /// "
+    ///     const A = 40 + 2;   // constant that optimizes into a literal
+    ///     let b = 123;        // literal variable
+    ///     const B = b * A;    // non-literal constant
+    ///     const C = 999;      // literal constant
+    ///     b = A + C;          // expression
+    ///
+    ///     {                   // <- new block scope
+    ///         const Z = 0;    // <- literal constant not at top-level
+    ///     }
+    /// ")?;
+    ///
+    /// let mut iter = ast.iter_literal_variables(true, false)
+    ///                   .map(|(name, is_const, value)| (name, is_const, value.as_int().unwrap()));
+    ///
+    /// assert_eq!(iter.next(), Some(("A", true, 42)));
+    /// assert_eq!(iter.next(), Some(("C", true, 999)));
+    /// assert_eq!(iter.next(), None);
+    ///
+    /// let mut iter = ast.iter_literal_variables(false, true)
+    ///                   .map(|(name, is_const, value)| (name, is_const, value.as_int().unwrap()));
+    ///
+    /// assert_eq!(iter.next(), Some(("b", false, 123)));
+    /// assert_eq!(iter.next(), None);
+    ///
+    /// let mut iter = ast.iter_literal_variables(true, true)
+    ///                   .map(|(name, is_const, value)| (name, is_const, value.as_int().unwrap()));
+    ///
+    /// assert_eq!(iter.next(), Some(("A", true, 42)));
+    /// assert_eq!(iter.next(), Some(("b", false, 123)));
+    /// assert_eq!(iter.next(), Some(("C", true, 999)));
+    /// assert_eq!(iter.next(), None);
+    ///
+    /// let scope: Scope = ast.iter_literal_variables(true, false).collect();
+    ///
+    /// assert_eq!(scope.len(), 2);
+    ///
+    /// Ok(())
+    /// # }
+    /// ```
+    pub fn iter_literal_variables(
+        &self,
+        include_constants: bool,
+        include_variables: bool,
+    ) -> impl Iterator<Item = (&str, bool, Dynamic)> {
+        self.statements().iter().filter_map(move |stmt| match stmt {
+            Stmt::Var(expr, name, options, _)
+                if options.contains(AST_OPTION_FLAGS::AST_OPTION_CONSTANT) && include_constants
+                    || !options.contains(AST_OPTION_FLAGS::AST_OPTION_CONSTANT)
+                        && include_variables =>
+            {
+                if let Some(value) = expr.get_literal_value() {
+                    Some((
+                        name.as_str(),
+                        options.contains(AST_OPTION_FLAGS::AST_OPTION_CONSTANT),
+                        value,
+                    ))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
+    }
     /// Recursively walk the [`AST`], including function bodies (if any).
     /// Return `false` from the callback to terminate the walk.
     #[cfg(not(feature = "internals"))]
@@ -835,7 +915,7 @@ impl AsRef<Module> for AST {
 pub struct Ident {
     /// Identifier name.
     pub name: Identifier,
-    /// Declaration position.
+    /// Position.
     pub pos: Position,
 }
 
@@ -843,6 +923,20 @@ impl fmt::Debug for Ident {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.name)?;
         self.pos.debug_print(f)
+    }
+}
+
+impl AsRef<str> for Ident {
+    #[inline(always)]
+    fn as_ref(&self) -> &str {
+        self.name.as_ref()
+    }
+}
+
+impl Ident {
+    #[inline(always)]
+    pub fn as_str(&self) -> &str {
+        self.name.as_str()
     }
 }
 
@@ -1404,7 +1498,7 @@ impl Stmt {
     ///
     /// An internally pure statement only has side effects that disappear outside the block.
     ///
-    /// Currently only variable declarations (i.e. `let` and `const`) and `import`/`export`
+    /// Currently only variable definitions (i.e. `let` and `const`) and `import`/`export`
     /// statements are internally pure.
     #[inline]
     #[must_use]

@@ -2,6 +2,7 @@
 
 use crate::dynamic::{AccessMode, Variant};
 use crate::{Dynamic, Identifier, StaticVec};
+use std::iter::FromIterator;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{borrow::Cow, iter::Extend};
@@ -592,8 +593,42 @@ impl<'a, K: Into<Cow<'a, str>>> Extend<(K, Dynamic)> for Scope<'a> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, Dynamic)>>(&mut self, iter: T) {
         iter.into_iter().for_each(|(name, value)| {
-            self.names.push((name.into(), None));
-            self.values.push(value);
+            self.push_dynamic_value(name, AccessMode::ReadWrite, value);
         });
+    }
+}
+
+impl<'a, K: Into<Cow<'a, str>>> FromIterator<(K, Dynamic)> for Scope<'a> {
+    #[inline]
+    fn from_iter<T: IntoIterator<Item = (K, Dynamic)>>(iter: T) -> Self {
+        let mut scope = Self::new();
+        scope.extend(iter);
+        scope
+    }
+}
+
+impl<'a, K: Into<Cow<'a, str>>> Extend<(K, bool, Dynamic)> for Scope<'a> {
+    #[inline]
+    fn extend<T: IntoIterator<Item = (K, bool, Dynamic)>>(&mut self, iter: T) {
+        iter.into_iter().for_each(|(name, is_constant, value)| {
+            self.push_dynamic_value(
+                name,
+                if is_constant {
+                    AccessMode::ReadOnly
+                } else {
+                    AccessMode::ReadWrite
+                },
+                value,
+            );
+        });
+    }
+}
+
+impl<'a, K: Into<Cow<'a, str>>> FromIterator<(K, bool, Dynamic)> for Scope<'a> {
+    #[inline]
+    fn from_iter<T: IntoIterator<Item = (K, bool, Dynamic)>>(iter: T) -> Self {
+        let mut scope = Self::new();
+        scope.extend(iter);
+        scope
     }
 }

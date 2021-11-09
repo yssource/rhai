@@ -14,6 +14,7 @@ New features
 
 * `#[cfg(...)]` attributes can now be put directly on plugin functions or function defined in a plugin module.
 * A custom syntax parser can now return a symbol starting with `$$` to inform the implementation function which syntax variant was actually parsed.
+* `AST::iter_literal_variables` extracts all top-level literal constant/variable definitions from a script without running it.
 
 Enhancements
 ------------
