@@ -113,7 +113,6 @@ pub fn ensure_no_data_race(
     args: &FnCallArgs,
     is_method_call: bool,
 ) -> Result<(), Box<EvalAltResult>> {
-    #[cfg(not(feature = "no_closure"))]
     if let Some((n, _)) = args
         .iter()
         .enumerate()
@@ -255,18 +254,16 @@ impl Engine {
                                         }
                                     })
                                 } else {
-                                    let (first, second) = args
-                                        .split_first()
-                                        .expect("op-assignment has two arguments");
+                                    let (first_arg, rest_args) =
+                                        args.split_first().expect("has two arguments");
 
-                                    get_builtin_op_assignment_fn(fn_name, *first, second[0]).map(
-                                        |f| FnResolutionCacheEntry {
+                                    get_builtin_op_assignment_fn(fn_name, *first_arg, rest_args[0])
+                                        .map(|f| FnResolutionCacheEntry {
                                             func: CallableFunction::from_method(
                                                 Box::new(f) as Box<FnAny>
                                             ),
                                             source: None,
-                                        },
-                                    )
+                                        })
                                 }
                                 .map(Box::new)
                             });
@@ -654,7 +651,7 @@ impl Engine {
         is_ref_mut: bool,
         is_method_call: bool,
         pos: Position,
-        _capture_scope: Option<Scope>,
+        captured_scope: Option<Scope>,
         _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         fn no_method_err(name: &str, pos: Position) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
@@ -735,27 +732,11 @@ impl Engine {
                 return Ok((Dynamic::UNIT, false));
             }
 
-            let scope = &mut Scope::new();
-
-            // Move captured variables into scope
-            #[cfg(not(feature = "no_closure"))]
-            if !func.externals.is_empty() {
-                if let Some(captured) = _capture_scope {
-                    captured
-                        .into_iter()
-                        .filter(|(name, _, _)| func.externals.contains(name.as_ref()))
-                        .for_each(|(name, value, _)| {
-                            // Consume the scope values.
-                            scope.push_dynamic(name, value);
-                        })
-                }
-            }
+            let mut scope = captured_scope.unwrap_or_else(|| Scope::new());
 
             let result = if _is_method_call {
                 // Method call of script function - map first argument to `this`
-                let (first, rest) = args
-                    .split_first_mut()
-                    .expect("method call has first parameter");
+                let (first_arg, rest_args) = args.split_first_mut().expect("has arguments");
 
                 let orig_source = mods.source.take();
                 mods.source = source;
@@ -763,13 +744,13 @@ impl Engine {
                 let level = _level + 1;
 
                 let result = self.call_script_fn(
-                    scope,
+                    &mut scope,
                     mods,
                     state,
                     lib,
-                    &mut Some(*first),
+                    &mut Some(*first_arg),
                     func,
-                    rest,
+                    rest_args,
                     pos,
                     level,
                 );
@@ -795,8 +776,9 @@ impl Engine {
 
                 let level = _level + 1;
 
-                let result =
-                    self.call_script_fn(scope, mods, state, lib, &mut None, func, args, pos, level);
+                let result = self.call_script_fn(
+                    &mut scope, mods, state, lib, &mut None, func, args, pos, level,
+                );
 
                 // Restore the original source
                 mods.source = orig_source;
@@ -1261,15 +1243,17 @@ impl Engine {
             // avoid cloning the value
             if curry.is_empty() && !args_expr.is_empty() && args_expr[0].is_variable_access(false) {
                 // func(x, ...) -> x.func(...)
-                for index in 1..args_expr.len() {
+                let (first_expr, rest_expr) = args_expr.split_first().expect("has arguments");
+
+                for index in 0..rest_expr.len() {
                     let (value, _) = self.get_arg_value(
-                        scope, mods, state, lib, this_ptr, level, args_expr, constants, index,
+                        scope, mods, state, lib, this_ptr, level, rest_expr, constants, index,
                     )?;
                     arg_values.push(value.flatten());
                 }
 
                 let (mut target, _pos) =
-                    self.search_namespace(scope, mods, state, lib, this_ptr, &args_expr[0])?;
+                    self.search_namespace(scope, mods, state, lib, this_ptr, first_expr)?;
 
                 if target.as_ref().is_read_only() {
                     target = target.into_owned();
@@ -1368,9 +1352,7 @@ impl Engine {
                     args.extend(arg_values.iter_mut());
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
-                    let (first, rest) = arg_values
-                        .split_first_mut()
-                        .expect("arguments list is not empty");
+                    let (first, rest) = arg_values.split_first_mut().expect("has arguments");
                     first_arg_value = Some(first);
                     let obj_ref = target.take_ref().expect("`target` is reference");
                     args.push(obj_ref);
