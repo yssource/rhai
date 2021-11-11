@@ -8,6 +8,7 @@ Bug fixes
 ---------
 
 * Printing of integral floating-point numbers is fixed (used to only prints `0.0`).
+* `func!()` calls now work properly under `no_closure`.
 
 
 Version 1.1.2
