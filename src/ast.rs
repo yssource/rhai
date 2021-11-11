@@ -77,7 +77,7 @@ pub struct ScriptFnDef {
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
-    pub comments: StaticVec<String>,
+    pub comments: StaticVec<Box<str>>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -156,7 +156,7 @@ impl<'a> From<&'a ScriptFnDef> for ScriptFnMetadata<'a> {
         Self {
             #[cfg(not(feature = "no_function"))]
             #[cfg(feature = "metadata")]
-            comments: value.comments.iter().map(|s| s.as_str()).collect(),
+            comments: value.comments.iter().map(Box::as_ref).collect(),
             access: value.access,
             name: &value.name,
             params: value.params.iter().map(|s| s.as_str()).collect(),

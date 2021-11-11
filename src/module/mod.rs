@@ -66,11 +66,11 @@ impl FuncInfo {
         let mut sig = format!("{}(", self.name);
 
         if !self.param_names.is_empty() {
-            let mut params: StaticVec<String> =
+            let mut params: StaticVec<Box<str>> =
                 self.param_names.iter().map(|s| s.as_str().into()).collect();
             let return_type = params.pop().unwrap_or_else(|| "()".into());
             sig.push_str(&params.join(", "));
-            if return_type != "()" {
+            if &*return_type != "()" {
                 sig.push_str(") -> ");
                 sig.push_str(&return_type);
             } else {

@@ -174,6 +174,16 @@ impl TryFrom<String> for FnPtr {
     }
 }
 
+impl TryFrom<Box<str>> for FnPtr {
+    type Error = Box<EvalAltResult>;
+
+    #[inline(always)]
+    fn try_from(value: Box<str>) -> Result<Self, Self::Error> {
+        let s: Identifier = value.into();
+        Self::try_from(s)
+    }
+}
+
 impl TryFrom<&str> for FnPtr {
     type Error = Box<EvalAltResult>;
 

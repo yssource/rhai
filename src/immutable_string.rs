@@ -94,6 +94,13 @@ impl From<&str> for ImmutableString {
         Self(value.into())
     }
 }
+impl From<Box<str>> for ImmutableString {
+    #[inline(always)]
+    fn from(value: Box<str>) -> Self {
+        let value: SmartString = value.into();
+        Self(value.into())
+    }
+}
 impl From<&String> for ImmutableString {
     #[inline(always)]
     fn from(value: &String) -> Self {

@@ -1385,7 +1385,7 @@ impl Engine {
                     Some(&|token, _, _| {
                         match token {
                             // If `null` is present, make sure `null` is treated as a variable
-                            Token::Reserved(s) if s == "null" => Token::Identifier(s),
+                            Token::Reserved(s) if &*s == "null" => Token::Identifier(s),
                             _ => token,
                         }
                     })
@@ -2118,7 +2118,7 @@ impl Engine {
             signatures.extend(
                 self.global_modules
                     .iter()
-                    .take(self.global_modules.len() - 1)
+                    .skip(1)
                     .flat_map(|m| m.gen_fn_signatures()),
             );
         }
@@ -2214,10 +2214,10 @@ impl Engine {
     /// engine.on_parse_token(|token, _, _| {
     ///     match token {
     ///         // Convert all integer literals to strings
-    ///         Token::IntegerConstant(n) => Token::StringConstant(n.to_string()),
+    ///         Token::IntegerConstant(n) => Token::StringConstant(n.to_string().into()),
     ///         // Convert 'begin' .. 'end' to '{' .. '}'
-    ///         Token::Identifier(s) if &s == "begin" => Token::LeftBrace,
-    ///         Token::Identifier(s) if &s == "end" => Token::RightBrace,
+    ///         Token::Identifier(s) if &*s == "begin" => Token::LeftBrace,
+    ///         Token::Identifier(s) if &*s == "end" => Token::RightBrace,
     ///         // Pass through all other tokens unchanged
     ///         _ => token
     ///     }
