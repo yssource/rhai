@@ -802,6 +802,7 @@ impl AST {
     ///
     /// let scope: Scope = ast.iter_literal_variables(true, false).collect();
     ///
+    /// # #[cfg(not(feature = "no_optimize"))]
     /// assert_eq!(scope.len(), 2);
     ///
     /// Ok(())
