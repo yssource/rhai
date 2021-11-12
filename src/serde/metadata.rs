@@ -165,7 +165,8 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
                         .get_script_fn_def()
                         .expect("scripted function")
                         .comments
-                        .to_vec()
+                        .as_ref()
+                        .map_or_else(|| Vec::new(), |v| v.to_vec())
                 }
             } else {
                 Vec::new()

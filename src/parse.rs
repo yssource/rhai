@@ -2733,7 +2733,7 @@ fn parse_stmt(
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     let comments = {
-        let mut comments = StaticVec::<Box<str>>::new();
+        let mut comments = Vec::<Box<str>>::new();
         let mut comments_pos = Position::NONE;
 
         // Handle doc-comments.
@@ -2996,7 +2996,7 @@ fn parse_fn(
     settings: ParseSettings,
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
-    comments: StaticVec<Box<str>>,
+    comments: Vec<Box<str>>,
 ) -> Result<ScriptFnDef, ParseError> {
     let mut settings = settings;
 
@@ -3078,7 +3078,11 @@ fn parse_fn(
         mods: crate::engine::Imports::new(),
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
-        comments,
+        comments: if comments.is_empty() {
+            None
+        } else {
+            Some(comments.into())
+        },
     })
 }
 
@@ -3223,7 +3227,7 @@ fn parse_anon_fn(
         mods: crate::engine::Imports::new(),
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
-        comments: StaticVec::new(),
+        comments: None,
     };
 
     let fn_ptr = crate::FnPtr::new_unchecked(fn_name, StaticVec::new());

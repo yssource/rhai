@@ -1165,7 +1165,7 @@ pub fn optimize_into_ast(
                     mods: crate::engine::Imports::new(),
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
-                    comments: StaticVec::new(),
+                    comments: None,
                 })
                 .for_each(|fn_def| {
                     lib2.set_script_fn(fn_def);
