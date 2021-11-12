@@ -1160,8 +1160,6 @@ pub fn optimize_into_ast(
                     access: fn_def.access,
                     body: crate::ast::StmtBlock::empty(),
                     params: fn_def.params.clone(),
-                    #[cfg(not(feature = "no_closure"))]
-                    externals: fn_def.externals.clone(),
                     lib: None,
                     #[cfg(not(feature = "no_module"))]
                     mods: crate::engine::Imports::new(),

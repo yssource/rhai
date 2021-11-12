@@ -3068,21 +3068,10 @@ fn parse_fn(
     let mut params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
     params.shrink_to_fit();
 
-    #[cfg(not(feature = "no_closure"))]
-    let externals = state
-        .external_vars
-        .iter()
-        .map(|(name, _)| name)
-        .filter(|name| !params.contains(name))
-        .cloned()
-        .collect();
-
     Ok(ScriptFnDef {
         name: state.get_identifier(name),
         access,
         params,
-        #[cfg(not(feature = "no_closure"))]
-        externals,
         body,
         lib: None,
         #[cfg(not(feature = "no_module"))]
@@ -3228,8 +3217,6 @@ fn parse_anon_fn(
         name: fn_name.clone(),
         access: FnAccess::Public,
         params,
-        #[cfg(not(feature = "no_closure"))]
-        externals: std::collections::BTreeSet::new(),
         body: body.into(),
         lib: None,
         #[cfg(not(feature = "no_module"))]

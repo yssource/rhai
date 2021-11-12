@@ -66,11 +66,6 @@ pub struct ScriptFnDef {
     pub access: FnAccess,
     /// Names of function parameters.
     pub params: StaticVec<Identifier>,
-    /// Access to external variables.
-    ///
-    /// Not available under `no_closure`.
-    #[cfg(not(feature = "no_closure"))]
-    pub externals: std::collections::BTreeSet<Identifier>,
     /// _(metadata)_ Function doc-comments (if any).
     /// Exported under the `metadata` feature only.
     ///
