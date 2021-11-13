@@ -806,6 +806,7 @@ impl Token {
         match self {
             LexError(_)      |
             SemiColon        | // ; - is unary
+            Colon            | // #{ foo: - is unary
             Comma            | // ( ... , -expr ) - is unary
             //Period           |
             LeftBrace        | // { -expr } - is unary

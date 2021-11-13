@@ -347,14 +347,18 @@ fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
 }
 
 /// Consume a particular [token][Token], checking that it is the expected one.
+///
+/// # Panics
+///
+/// Panics if the next token is not the expected one.
 #[inline]
-fn eat_token(input: &mut TokenStream, token: Token) -> Position {
+fn eat_token(input: &mut TokenStream, expected_token: Token) -> Position {
     let (t, pos) = input.next().expect(NEVER_ENDS);
 
-    if t != token {
+    if t != expected_token {
         unreachable!(
             "expecting {} (found {}) at {}",
-            token.syntax(),
+            expected_token.syntax(),
             t.syntax(),
             pos
         );
@@ -1479,8 +1483,9 @@ fn parse_unary(
 
     match token {
         // -expr
-        Token::UnaryMinus => {
-            let pos = eat_token(input, Token::UnaryMinus);
+        Token::Minus | Token::UnaryMinus => {
+            let token = token.clone();
+            let pos = eat_token(input, token);
 
             match parse_unary(input, state, lib, settings.level_up())? {
                 // Negative integer
@@ -1516,8 +1521,9 @@ fn parse_unary(
             }
         }
         // +expr
-        Token::UnaryPlus => {
-            let pos = eat_token(input, Token::UnaryPlus);
+        Token::Plus | Token::UnaryPlus => {
+            let token = token.clone();
+            let pos = eat_token(input, token);
 
             match parse_unary(input, state, lib, settings.level_up())? {
                 expr @ Expr::IntegerConstant(_, _) => Ok(expr),
@@ -2753,9 +2759,9 @@ fn parse_stmt(
 
     let (token, token_pos) = match input.peek().expect(NEVER_ENDS) {
         (Token::EOF, pos) => return Ok(Stmt::Noop(*pos)),
-        x => x,
+        (x, pos) => (x, *pos),
     };
-    settings.pos = *token_pos;
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2764,7 +2770,7 @@ fn parse_stmt(
         // ; - empty statement
         Token::SemiColon => {
             eat_token(input, Token::SemiColon);
-            Ok(Stmt::Noop(settings.pos))
+            Ok(Stmt::Noop(token_pos))
         }
 
         // { - statements block
@@ -2772,7 +2778,7 @@ fn parse_stmt(
 
         // fn ...
         #[cfg(not(feature = "no_function"))]
-        Token::Fn if !settings.is_global => Err(PERR::WrongFnDefinition.into_err(settings.pos)),
+        Token::Fn if !settings.is_global => Err(PERR::WrongFnDefinition.into_err(token_pos)),
 
         #[cfg(not(feature = "no_function"))]
         Token::Fn | Token::Private => {
@@ -2853,7 +2859,7 @@ fn parse_stmt(
             let pos = eat_token(input, Token::Break);
             Ok(Stmt::BreakLoop(AST_OPTION_BREAK_OUT, pos))
         }
-        Token::Continue | Token::Break => Err(PERR::LoopBreak.into_err(settings.pos)),
+        Token::Continue | Token::Break => Err(PERR::LoopBreak.into_err(token_pos)),
 
         Token::Return | Token::Throw => {
             let (return_type, token_pos) = input
@@ -2896,7 +2902,7 @@ fn parse_stmt(
         Token::Import => parse_import(input, state, lib, settings.level_up()),
 
         #[cfg(not(feature = "no_module"))]
-        Token::Export if !settings.is_global => Err(PERR::WrongExport.into_err(settings.pos)),
+        Token::Export if !settings.is_global => Err(PERR::WrongExport.into_err(token_pos)),
 
         #[cfg(not(feature = "no_module"))]
         Token::Export => parse_export(input, state, lib, settings.level_up()),

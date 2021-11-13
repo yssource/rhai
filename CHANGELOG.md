@@ -9,6 +9,7 @@ Bug fixes
 
 * Printing of integral floating-point numbers is fixed (used to only prints `0.0`).
 * `func!()` calls now work properly under `no_closure`.
+* Fixed parsing of unary negation such that expressions like `if foo { ... } -x` parses correctly.
 
 
 Version 1.1.2
