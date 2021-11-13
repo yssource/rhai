@@ -1,10 +1,10 @@
 //! Module defining interfaces to native-Rust functions.
 
+use super::call::FnCallArgs;
 use crate::ast::{FnAccess, FnCallHashes};
 use crate::engine::{EvalState, Imports};
-use crate::fn_call::FnCallArgs;
 use crate::plugin::PluginFunction;
-use crate::token::{Token, TokenizeState};
+use crate::tokenizer::{Token, TokenizeState};
 use crate::{
     calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, Module, Position, RhaiResult,
 };

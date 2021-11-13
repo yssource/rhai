@@ -1,7 +1,7 @@
 //! Implement deserialization support of [`Dynamic`][crate::Dynamic] for [`serde`].
 
 use super::str::StringSliceDeserializer;
-use crate::dynamic::Union;
+use crate::types::dynamic::Union;
 use crate::{Dynamic, EvalAltResult, ImmutableString, LexError, Position};
 use serde::de::{DeserializeSeed, Error, IntoDeserializer, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};

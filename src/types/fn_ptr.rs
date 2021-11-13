@@ -1,6 +1,6 @@
 //! The `FnPtr` type.
 
-use crate::token::is_valid_identifier;
+use crate::tokenizer::is_valid_identifier;
 use crate::{
     Dynamic, EvalAltResult, Identifier, NativeCallContext, Position, RhaiResult, StaticVec,
 };

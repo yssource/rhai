@@ -1,14 +1,12 @@
-//! Module that defines the extern API of [`Engine`].
+//! Module that defines the public API of [`Engine`].
 
-use crate::dynamic::Variant;
 use crate::engine::{EvalContext, EvalState, Imports};
-use crate::fn_call::FnCallArgs;
-use crate::fn_native::SendSync;
-use crate::fn_register::RegisterNativeFunction;
-use crate::parse::ParseState;
+use crate::func::{call::FnCallArgs, native::SendSync, register::RegisterNativeFunction};
+use crate::parser::ParseState;
+use crate::types::dynamic::Variant;
 use crate::{
-    scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Identifier, Module,
-    NativeCallContext, ParseError, Position, RhaiResult, Shared, AST,
+    Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Identifier, Module, NativeCallContext,
+    ParseError, Position, RhaiResult, Scope, Shared, AST,
 };
 use std::any::{type_name, TypeId};
 #[cfg(feature = "no_std")]
@@ -937,12 +935,12 @@ impl Engine {
             name: impl AsRef<str> + Into<Identifier>,
             module: Shared<Module>,
         ) {
-            let separator = crate::token::Token::DoubleColon.syntax();
+            let separator = crate::tokenizer::Token::DoubleColon.syntax();
 
             if !name.as_ref().contains(separator.as_ref()) {
                 if !module.is_indexed() {
                     // Index the module (making a clone copy if necessary) if it is not indexed
-                    let mut module = crate::fn_native::shared_take_or_clone(module);
+                    let mut module = crate::func::native::shared_take_or_clone(module);
                     module.build_index();
                     root.insert(name.into(), module.into());
                 } else {
@@ -960,7 +958,7 @@ impl Engine {
                     root.insert(sub_module.into(), m.into());
                 } else {
                     let m = root.remove(sub_module).expect("contains sub-module");
-                    let mut m = crate::fn_native::shared_take_or_clone(m);
+                    let mut m = crate::func::native::shared_take_or_clone(m);
                     register_static_module_raw(m.sub_modules_mut(), remainder, module);
                     m.build_index();
                     root.insert(sub_module.into(), m.into());
@@ -1053,7 +1051,7 @@ impl Engine {
     ) -> Result<AST, Box<EvalAltResult>> {
         use crate::{
             ast::{ASTNode, Expr, Stmt},
-            fn_native::shared_take_or_clone,
+            func::native::shared_take_or_clone,
             module::resolvers::StaticModuleResolver,
         };
         use std::collections::BTreeSet;
@@ -1349,7 +1347,7 @@ impl Engine {
         json: impl AsRef<str>,
         has_null: bool,
     ) -> Result<Map, Box<EvalAltResult>> {
-        use crate::token::Token;
+        use crate::tokenizer::Token;
 
         fn parse_json_inner(
             engine: &Engine,
@@ -2026,7 +2024,7 @@ impl Engine {
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
-        crate::fn_call::ensure_no_data_race(name, args, false)?;
+        crate::func::call::ensure_no_data_race(name, args, false)?;
 
         self.call_script_fn(
             scope,
@@ -2084,7 +2082,7 @@ impl Engine {
 
         let statements = std::mem::take(ast.statements_mut());
 
-        crate::optimize::optimize_into_ast(self, scope, statements, lib, optimization_level)
+        crate::optimizer::optimize_into_ast(self, scope, statements, lib, optimization_level)
     }
     /// _(metadata)_ Generate a list of all registered functions.
     /// Exported under the `metadata` feature only.
@@ -2184,14 +2182,14 @@ impl Engine {
     /// > `Fn(token: Token, pos: Position, state: &TokenizeState) -> Token`
     ///
     /// where:
-    /// * [`token`][crate::token::Token]: current token parsed
+    /// * [`token`][crate::tokenizer::Token]: current token parsed
     /// * [`pos`][`Position`]: location of the token
-    /// * [`state`][crate::token::TokenizeState]: current state of the tokenizer
+    /// * [`state`][crate::tokenizer::TokenizeState]: current state of the tokenizer
     ///
     /// ## Raising errors
     ///
     /// It is possible to raise a parsing error by returning
-    /// [`Token::LexError`][crate::token::Token::LexError] as the mapped token.
+    /// [`Token::LexError`][crate::tokenizer::Token::LexError] as the mapped token.
     ///
     /// # Example
     ///
@@ -2225,7 +2223,11 @@ impl Engine {
     #[inline(always)]
     pub fn on_parse_token(
         &mut self,
-        callback: impl Fn(crate::token::Token, Position, &crate::token::TokenizeState) -> crate::token::Token
+        callback: impl Fn(
+                crate::tokenizer::Token,
+                Position,
+                &crate::tokenizer::TokenizeState,
+            ) -> crate::tokenizer::Token
             + SendSync
             + 'static,
     ) -> &mut Self {

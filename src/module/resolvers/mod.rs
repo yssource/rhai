@@ -1,4 +1,4 @@
-use crate::fn_native::SendSync;
+use crate::func::native::SendSync;
 use crate::{Engine, EvalAltResult, Module, Position, Shared, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;

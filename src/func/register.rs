@@ -2,11 +2,11 @@
 
 #![allow(non_snake_case)]
 
-use crate::dynamic::{DynamicWriteLock, Variant};
-use crate::fn_call::FnCallArgs;
-use crate::fn_native::{CallableFunction, FnAny, SendSync};
+use crate::func::call::FnCallArgs;
+use crate::func::native::{CallableFunction, FnAny, SendSync};
 use crate::r#unsafe::unsafe_try_cast;
-use crate::token::Position;
+use crate::tokenizer::Position;
+use crate::types::dynamic::{DynamicWriteLock, Variant};
 use crate::{Dynamic, EvalAltResult, NativeCallContext};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;

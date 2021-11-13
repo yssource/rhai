@@ -1,9 +1,8 @@
 //! Built-in implementations for common operators.
 
+use super::call::FnCallArgs;
 use crate::engine::OP_CONTAINS;
-use crate::fn_call::FnCallArgs;
-use crate::fn_native::NativeCallContext;
-use crate::{Dynamic, ImmutableString, RhaiResult, INT};
+use crate::{Dynamic, ImmutableString, NativeCallContext, RhaiResult, INT};
 use std::any::TypeId;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;

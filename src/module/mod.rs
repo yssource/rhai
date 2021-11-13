@@ -1,12 +1,14 @@
 //! Module defining external-loaded modules for Rhai.
 
 use crate::ast::{FnAccess, Ident};
-use crate::dynamic::Variant;
-use crate::fn_call::FnCallArgs;
-use crate::fn_native::{shared_take_or_clone, CallableFunction, IteratorFn, SendSync};
-use crate::fn_register::RegisterNativeFunction;
-use crate::parse::IdentifierBuilder;
-use crate::token::Token;
+use crate::func::{
+    call::FnCallArgs,
+    native::{shared_take_or_clone, CallableFunction, IteratorFn, SendSync},
+    register::RegisterNativeFunction,
+};
+use crate::parser::IdentifierBuilder;
+use crate::tokenizer::Token;
+use crate::types::dynamic::Variant;
 use crate::{
     calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, EvalAltResult,
     Identifier, ImmutableString, NativeCallContext, Shared, StaticVec,

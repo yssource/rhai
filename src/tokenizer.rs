@@ -4,7 +4,7 @@ use crate::engine::{
     Precedence, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
-use crate::fn_native::OnParseTokenCallback;
+use crate::func::native::OnParseTokenCallback;
 use crate::{Engine, LexError, StaticVec, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;

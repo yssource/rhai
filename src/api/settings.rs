@@ -1,6 +1,6 @@
 //! Configuration settings for [`Engine`].
 
-use crate::token::Token;
+use crate::tokenizer::Token;
 use crate::Engine;
 use crate::{engine::Precedence, Identifier};
 #[cfg(feature = "no_std")]

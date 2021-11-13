@@ -1,6 +1,6 @@
 //! Module that defines the [`Scope`] type representing a function call-stack scope.
 
-use crate::dynamic::{AccessMode, Variant};
+use super::dynamic::{AccessMode, Variant};
 use crate::{Dynamic, Identifier, StaticVec};
 use std::iter::FromIterator;
 #[cfg(feature = "no_std")]

@@ -1,6 +1,6 @@
 //! Helper module which defines the [`Any`] trait to to allow dynamic value handling.
 
-use crate::fn_native::SendSync;
+use crate::func::native::SendSync;
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
 use crate::{FnPtr, ImmutableString, INT};
 #[cfg(feature = "no_std")]
@@ -38,7 +38,7 @@ use instant::Instant;
 const CHECKED: &str = "data type was checked";
 
 mod private {
-    use crate::fn_native::SendSync;
+    use crate::func::native::SendSync;
     use std::any::Any;
 
     /// A sealed trait that prevents other crates from implementing [`Variant`].
@@ -287,7 +287,7 @@ enum DynamicWriteLockInner<'d, T: Clone> {
     ///
     /// Not available under `no_closure`.
     #[cfg(not(feature = "no_closure"))]
-    Guard(crate::fn_native::LockGuard<'d, Dynamic>),
+    Guard(crate::func::native::LockGuard<'d, Dynamic>),
 }
 
 impl<'d, T: Any + Clone> Deref for DynamicWriteLock<'d, T> {
@@ -1472,7 +1472,7 @@ impl Dynamic {
     pub fn flatten(self) -> Self {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(cell, _, _) => crate::fn_native::shared_try_take(cell).map_or_else(
+            Union::Shared(cell, _, _) => crate::func::native::shared_try_take(cell).map_or_else(
                 #[cfg(not(feature = "sync"))]
                 |cell| cell.borrow().clone(),
                 #[cfg(feature = "sync")]
@@ -1497,7 +1497,7 @@ impl Dynamic {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _, _) => match std::mem::take(self).0 {
                 Union::Shared(cell, _, _) => {
-                    *self = crate::fn_native::shared_try_take(cell).map_or_else(
+                    *self = crate::func::native::shared_try_take(cell).map_or_else(
                         #[cfg(not(feature = "sync"))]
                         |cell| cell.borrow().clone(),
                         #[cfg(feature = "sync")]
@@ -1590,7 +1590,7 @@ impl Dynamic {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell, _, _) => {
-                let value = crate::fn_native::shared_write_lock(cell);
+                let value = crate::func::native::shared_write_lock(cell);
 
                 if (*value).type_id() != TypeId::of::<T>()
                     && TypeId::of::<Dynamic>() != TypeId::of::<T>()

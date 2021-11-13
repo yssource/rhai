@@ -1,10 +1,10 @@
 //! Module defining the AST (abstract syntax tree).
 
 use crate::calc_fn_hash;
-use crate::dynamic::Union;
-use crate::fn_native::shared_make_mut;
+use crate::func::native::shared_make_mut;
 use crate::module::NamespaceRef;
-use crate::token::Token;
+use crate::tokenizer::Token;
+use crate::types::dynamic::Union;
 use crate::{
     Dynamic, FnNamespace, Identifier, ImmutableString, Module, Position, Shared, StaticVec, INT,
 };

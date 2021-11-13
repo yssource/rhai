@@ -1,21 +1,19 @@
 //! Implement function-calling mechanism for [`Engine`].
 
+use super::builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
+use super::native::{CallableFunction, FnAny};
 use crate::ast::FnCallHashes;
 use crate::engine::{
     EvalState, FnResolutionCacheEntry, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
     KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
     MAX_DYNAMIC_PARAMETERS,
 };
-use crate::fn_builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
-use crate::fn_native::FnAny;
 use crate::module::NamespaceRef;
-use crate::token::Token;
+use crate::tokenizer::Token;
 use crate::{
     ast::{Expr, Stmt},
-    calc_fn_hash, calc_fn_params_hash, combine_hashes,
-    fn_native::CallableFunction,
-    Dynamic, Engine, EvalAltResult, FnPtr, Identifier, ImmutableString, Module, ParseErrorType,
-    Position, RhaiResult, Scope, StaticVec,
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, EvalAltResult, FnPtr,
+    Identifier, ImmutableString, Module, ParseErrorType, Position, RhaiResult, Scope, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;

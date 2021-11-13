@@ -5,14 +5,14 @@ use crate::ast::{
     StmtBlock, AST_OPTION_FLAGS::*,
 };
 use crate::custom_syntax::{markers::*, CustomSyntax};
-use crate::dynamic::AccessMode;
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
-use crate::fn_hash::get_hasher;
+use crate::func::hashing::get_hasher;
 use crate::module::NamespaceRef;
-use crate::token::{
+use crate::tokenizer::{
     is_keyword_function, is_valid_function_name, is_valid_identifier, Token, TokenStream,
     TokenizerControl,
 };
+use crate::types::dynamic::AccessMode;
 use crate::{
     calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Engine, Identifier,
     ImmutableString, LexError, ParseError, ParseErrorType, Position, Scope, Shared, StaticVec, AST,
@@ -2745,7 +2745,7 @@ fn parse_stmt(
                 comments_pos = *pos;
             }
 
-            if !crate::token::is_doc_comment(comment) {
+            if !crate::tokenizer::is_doc_comment(comment) {
                 unreachable!("expecting doc-comment, but gets {:?}", comment);
             }
 
@@ -3278,7 +3278,7 @@ impl Engine {
         statements.push(Stmt::Expr(expr));
 
         #[cfg(not(feature = "no_optimize"))]
-        return Ok(crate::optimize::optimize_into_ast(
+        return Ok(crate::optimizer::optimize_into_ast(
             self,
             _scope,
             statements,
@@ -3363,7 +3363,7 @@ impl Engine {
         let (statements, _lib) = self.parse_global_level(input, state)?;
 
         #[cfg(not(feature = "no_optimize"))]
-        return Ok(crate::optimize::optimize_into_ast(
+        return Ok(crate::optimizer::optimize_into_ast(
             self,
             _scope,
             statements,

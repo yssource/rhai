@@ -1,13 +1,13 @@
 //! Module implementing the [`AST`] optimizer.
 
 use crate::ast::{Expr, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
-use crate::dynamic::AccessMode;
 use crate::engine::{
     EvalState, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
-use crate::fn_builtin::get_builtin_binary_op_fn;
-use crate::fn_hash::get_hasher;
-use crate::token::Token;
+use crate::func::builtin::get_builtin_binary_op_fn;
+use crate::func::hashing::get_hasher;
+use crate::tokenizer::Token;
+use crate::types::dynamic::AccessMode;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, ImmutableString,
     Module, Position, Scope, StaticVec, AST,
@@ -1157,7 +1157,7 @@ pub fn optimize_into_ast(
             _functions
                 .into_iter()
                 .map(|fn_def| {
-                    let mut fn_def = crate::fn_native::shared_take_or_clone(fn_def);
+                    let mut fn_def = crate::func::native::shared_take_or_clone(fn_def);
 
                     // Optimize the function body
                     let body = mem::take(fn_def.body.deref_mut());

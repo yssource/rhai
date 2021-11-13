@@ -2,16 +2,18 @@
 
 use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::custom_syntax::CustomSyntax;
-use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
-use crate::fn_hash::get_hasher;
-use crate::fn_native::{
-    CallableFunction, IteratorFn, OnDebugCallback, OnParseTokenCallback, OnPrintCallback,
-    OnVarCallback,
+use crate::func::{
+    hashing::get_hasher,
+    native::{
+        CallableFunction, IteratorFn, OnDebugCallback, OnParseTokenCallback, OnPrintCallback,
+        OnVarCallback,
+    },
 };
 use crate::module::NamespaceRef;
 use crate::packages::{Package, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
-use crate::token::Token;
+use crate::tokenizer::Token;
+use crate::types::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::{
     Dynamic, EvalAltResult, Identifier, ImmutableString, Module, Position, RhaiResult, Scope,
     Shared, StaticVec, INT,
@@ -214,7 +216,7 @@ impl Imports {
         &'a mut self,
     ) -> Option<impl DerefMut<Target = BTreeMap<Identifier, Dynamic>> + 'a> {
         if let Some(ref global_constants) = self.global_constants {
-            Some(crate::fn_native::shared_write_lock(global_constants))
+            Some(crate::func::native::shared_write_lock(global_constants))
         } else {
             None
         }
@@ -228,7 +230,7 @@ impl Imports {
             self.global_constants = Some(dict.into());
         }
 
-        crate::fn_native::shared_write_lock(self.global_constants.as_mut().expect("`Some`"))
+        crate::func::native::shared_write_lock(self.global_constants.as_mut().expect("`Some`"))
             .insert(name.into(), value);
     }
     /// Get the pre-calculated index getter hash.
@@ -470,7 +472,12 @@ pub enum Target<'a> {
     /// The target is a mutable reference to a Shared `Dynamic` value.
     /// It holds both the access guard and the original shared value.
     #[cfg(not(feature = "no_closure"))]
-    LockGuard((crate::dynamic::DynamicWriteLock<'a, Dynamic>, Dynamic)),
+    LockGuard(
+        (
+            crate::types::dynamic::DynamicWriteLock<'a, Dynamic>,
+            Dynamic,
+        ),
+    ),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
     TempValue(Dynamic),
     /// The target is a bit inside an [`INT`][crate::INT].
@@ -1004,7 +1011,7 @@ pub struct Engine {
     pub(crate) debug: Option<OnDebugCallback>,
     /// Callback closure for progress reporting.
     #[cfg(not(feature = "unchecked"))]
-    pub(crate) progress: Option<crate::fn_native::OnProgressCallback>,
+    pub(crate) progress: Option<crate::func::native::OnProgressCallback>,
 
     /// Optimize the AST after compilation.
     #[cfg(not(feature = "no_optimize"))]
@@ -3081,7 +3088,7 @@ impl Engine {
                     if let Some(name) = export.as_ref().map(|x| x.name.clone()) {
                         if !module.is_indexed() {
                             // Index the module (making a clone copy if necessary) if it is not indexed
-                            let mut module = crate::fn_native::shared_take_or_clone(module);
+                            let mut module = crate::func::native::shared_take_or_clone(module);
                             module.build_index();
                             mods.push(name, module);
                         } else {
@@ -3139,7 +3146,7 @@ impl Engine {
     fn check_return_value(&self, mut result: RhaiResult) -> RhaiResult {
         if let Ok(ref mut r) = result {
             // Concentrate all empty strings into one instance to save memory
-            if let Dynamic(crate::dynamic::Union::Str(s, _, _)) = r {
+            if let Dynamic(crate::types::dynamic::Union::Str(s, _, _)) = r {
                 if s.is_empty() {
                     if !s.ptr_eq(&self.empty_string) {
                         *s = self.const_empty_string();

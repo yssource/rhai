@@ -1,11 +1,11 @@
 //! Module implementing custom syntax for [`Engine`].
 
 use crate::ast::Expr;
-use crate::dynamic::Variant;
 use crate::engine::EvalContext;
-use crate::fn_native::SendSync;
+use crate::func::native::SendSync;
 use crate::r#unsafe::unsafe_try_cast;
-use crate::token::{is_valid_identifier, Token};
+use crate::tokenizer::{is_valid_identifier, Token};
+use crate::types::dynamic::Variant;
 use crate::{
     Engine, Identifier, ImmutableString, LexError, ParseError, Position, RhaiResult, Shared,
     StaticVec, INT,

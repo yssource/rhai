@@ -112,7 +112,7 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
                 let ns = format!(
                     "{}{}{}",
                     namespace,
-                    crate::token::Token::DoubleColon.literal_syntax(),
+                    crate::tokenizer::Token::DoubleColon.literal_syntax(),
                     ns
                 );
                 scan_module(list, dict, ns.into(), m.as_ref())
