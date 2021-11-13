@@ -27,7 +27,7 @@ impl Engine {
     pub(crate) fn global_namespace(&self) -> &Module {
         self.global_modules
             .first()
-            .expect("global_modules contains at least one module")
+            .expect("global_modules not empty")
     }
     /// Get a mutable reference to the global namespace module
     /// (which is the first module in `global_modules`).
@@ -36,9 +36,9 @@ impl Engine {
         Shared::get_mut(
             self.global_modules
                 .first_mut()
-                .expect("global_modules contains at least one module"),
+                .expect("global_modules not empty"),
         )
-        .expect("global namespace module is never shared")
+        .expect("global namespace never shared")
     }
     /// Register a custom function with the [`Engine`].
     ///
