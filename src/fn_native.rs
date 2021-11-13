@@ -298,9 +298,7 @@ pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
 #[must_use]
 #[allow(dead_code)]
 pub fn shared_take<T>(value: Shared<T>) -> T {
-    shared_try_take(value)
-        .ok()
-        .expect("no outstanding references")
+    shared_try_take(value).ok().expect("not shared")
 }
 
 /// Lock a [`Shared`] resource.

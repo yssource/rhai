@@ -53,27 +53,21 @@ struct FnParam {
 
 impl PartialOrd for FnParam {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(
-            match self
-                .name
-                .partial_cmp(&other.name)
-                .expect("String::partial_cmp should succeed")
-            {
-                Ordering::Less => Ordering::Less,
-                Ordering::Greater => Ordering::Greater,
-                Ordering::Equal => match (self.typ.is_none(), other.typ.is_none()) {
-                    (true, true) => Ordering::Equal,
-                    (true, false) => Ordering::Greater,
-                    (false, true) => Ordering::Less,
-                    (false, false) => self
-                        .typ
-                        .as_ref()
-                        .expect("`typ` is not `None`")
-                        .partial_cmp(other.typ.as_ref().expect("`typ` is not `None`"))
-                        .expect("String::partial_cmp should succeed"),
-                },
+        Some(match self.name.partial_cmp(&other.name).expect("succeed") {
+            Ordering::Less => Ordering::Less,
+            Ordering::Greater => Ordering::Greater,
+            Ordering::Equal => match (self.typ.is_none(), other.typ.is_none()) {
+                (true, true) => Ordering::Equal,
+                (true, false) => Ordering::Greater,
+                (false, true) => Ordering::Less,
+                (false, false) => self
+                    .typ
+                    .as_ref()
+                    .expect("`Some`")
+                    .partial_cmp(other.typ.as_ref().expect("`Some`"))
+                    .expect("succeed"),
             },
-        )
+        })
     }
 }
 

@@ -568,7 +568,7 @@ where
     ) -> Result<V::Value, Box<EvalAltResult>> {
         // Deserialize each value item coming out of the iterator.
         seed.deserialize(&mut DynamicDeserializer::from_dynamic(
-            self.values.next().expect("value should exist"),
+            self.values.next().expect("exists"),
         ))
     }
 }

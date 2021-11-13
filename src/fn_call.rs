@@ -255,7 +255,7 @@ impl Engine {
                                     })
                                 } else {
                                     let (first_arg, rest_args) =
-                                        args.split_first().expect("has two arguments");
+                                        args.split_first().expect("two arguments");
 
                                     get_builtin_op_assignment_fn(fn_name, *first_arg, rest_args[0])
                                         .map(|f| FnResolutionCacheEntry {
@@ -273,7 +273,7 @@ impl Engine {
                         None => {
                             let hash_params = calc_fn_params_hash(
                                 args.as_ref()
-                                    .expect("no permutations if no arguments")
+                                    .expect("no permutations")
                                     .iter()
                                     .enumerate()
                                     .map(|(i, a)| {
@@ -333,7 +333,7 @@ impl Engine {
                 backup = Some(ArgBackup::new());
                 backup
                     .as_mut()
-                    .expect("`backup` is `Some`")
+                    .expect("`Some`")
                     .change_first_arg_to_copy(args);
             }
 
@@ -680,10 +680,8 @@ impl Engine {
             crate::engine::KEYWORD_IS_DEF_FN
                 if args.len() == 2 && args[0].is::<FnPtr>() && args[1].is::<crate::INT>() =>
             {
-                let fn_name = args[0]
-                    .read_lock::<ImmutableString>()
-                    .expect("`args[0]` is `FnPtr`");
-                let num_params = args[1].as_int().expect("`args[1]` is `INT`");
+                let fn_name = args[0].read_lock::<ImmutableString>().expect("`FnPtr`");
+                let num_params = args[1].as_int().expect("`INT`");
 
                 return Ok((
                     if num_params < 0 {
@@ -736,7 +734,7 @@ impl Engine {
 
             let result = if _is_method_call {
                 // Method call of script function - map first argument to `this`
-                let (first_arg, rest_args) = args.split_first_mut().expect("has arguments");
+                let (first_arg, rest_args) = args.split_first_mut().expect("not empty");
 
                 let orig_source = mods.source.take();
                 mods.source = source;
@@ -767,7 +765,7 @@ impl Engine {
                     backup = Some(ArgBackup::new());
                     backup
                         .as_mut()
-                        .expect("`backup` is `Some`")
+                        .expect("`Some`")
                         .change_first_arg_to_copy(args);
                 }
 
@@ -883,7 +881,7 @@ impl Engine {
         let (result, updated) = match fn_name {
             KEYWORD_FN_PTR_CALL if target.is::<FnPtr>() => {
                 // FnPtr call
-                let fn_ptr = target.read_lock::<FnPtr>().expect("`obj` is `FnPtr`");
+                let fn_ptr = target.read_lock::<FnPtr>().expect("`FnPtr`");
                 // Redirect function name
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
@@ -948,7 +946,7 @@ impl Engine {
                     ));
                 }
 
-                let fn_ptr = target.read_lock::<FnPtr>().expect("`obj` is `FnPtr`");
+                let fn_ptr = target.read_lock::<FnPtr>().expect("`FnPtr`");
 
                 // Curry call
                 Ok((
@@ -1243,7 +1241,7 @@ impl Engine {
             // avoid cloning the value
             if curry.is_empty() && !args_expr.is_empty() && args_expr[0].is_variable_access(false) {
                 // func(x, ...) -> x.func(...)
-                let (first_expr, rest_expr) = args_expr.split_first().expect("has arguments");
+                let (first_expr, rest_expr) = args_expr.split_first().expect("not empty");
 
                 for index in 0..rest_expr.len() {
                     let (value, _) = self.get_arg_value(
@@ -1273,7 +1271,7 @@ impl Engine {
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
                     is_ref_mut = true;
-                    let obj_ref = target.take_ref().expect("`target` is reference");
+                    let obj_ref = target.take_ref().expect("reference");
                     args.push(obj_ref);
                     args.extend(arg_values.iter_mut());
                 }
@@ -1352,9 +1350,9 @@ impl Engine {
                     args.extend(arg_values.iter_mut());
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
-                    let (first, rest) = arg_values.split_first_mut().expect("has arguments");
+                    let (first, rest) = arg_values.split_first_mut().expect("not empty");
                     first_arg_value = Some(first);
-                    let obj_ref = target.take_ref().expect("`target` is reference");
+                    let obj_ref = target.take_ref().expect("reference");
                     args.push(obj_ref);
                     args.extend(rest.iter_mut());
                 }

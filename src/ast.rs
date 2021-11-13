@@ -1651,7 +1651,7 @@ impl Stmt {
             _ => (),
         }
 
-        path.pop().expect("`path` contains current node");
+        path.pop().expect("contains current node");
 
         true
     }
@@ -1727,7 +1727,7 @@ impl OpAssignment<'_> {
     pub fn new(op: Token) -> Self {
         let op_raw = op
             .map_op_assignment()
-            .expect("token is op-assignment operator")
+            .expect("op-assignment")
             .literal_syntax();
         let op_assignment = op.literal_syntax();
 
@@ -1842,13 +1842,19 @@ pub struct FnCallExpr {
     pub args: StaticVec<Expr>,
     /// List of function call arguments that are constants.
     ///
-    /// Any arguments in `args` that is [`Expr::Stack`][Expr::Stack] indexes into this
+    /// Any arguments in `args` that is [`Expr::Stack`] indexes into this
     /// array to find the constant for use as its argument value.
+    ///
+    /// # Notes
+    ///
+    /// Constant arguments are very common in function calls, and keeping each constant in
+    /// an [`Expr::DynamicConstant`] involves an additional allocation.  Keeping the constant
+    /// values in an inlined array avoids these extra allocations.
     pub constants: smallvec::SmallVec<[Dynamic; 2]>,
     /// Function name.
     pub name: Identifier,
     /// Does this function call capture the parent scope?
-    pub capture: bool,
+    pub capture_parent_scope: bool,
 }
 
 impl FnCallExpr {
@@ -1858,7 +1864,7 @@ impl FnCallExpr {
     pub const fn is_qualified(&self) -> bool {
         self.namespace.is_some()
     }
-    /// Convert this into a [`FnCall`][Expr::FnCall].
+    /// Convert this into an [`Expr::FnCall`].
     #[inline(always)]
     #[must_use]
     pub fn into_fn_call_expr(self, pos: Position) -> Expr {
@@ -1996,8 +2002,9 @@ impl FloatWrapper<FLOAT> {
 #[derive(Clone, Hash)]
 pub enum Expr {
     /// Dynamic constant.
-    /// Used to hold either an [`Array`] or [`Map`][crate::Map] literal for quick cloning.
-    /// All other primitive data types should use the appropriate variants for better speed.
+    ///
+    /// Used to hold complex constants such as [`Array`] or [`Map`][crate::Map] for quick cloning.
+    /// Primitive data types should use the appropriate variants to avoid an allocation.
     DynamicConstant(Box<Dynamic>, Position),
     /// Boolean constant.
     BoolConstant(bool, Position),
@@ -2045,13 +2052,11 @@ pub enum Expr {
             (ImmutableString, Position),
         )>,
     ),
-    /// Stack slot
+    /// Stack slot for function calls.  See [`FnCallExpr`] for more details.
     ///
-    /// # Notes
-    ///
-    /// This variant does not map to any language structure.  It is currently only used in function
-    /// calls with constant arguments where the `usize` number indexes into an array containing a
-    /// list of constant arguments for the function call.  See [`FnCallExpr`] for more details.
+    /// This variant does not map to any language structure.  It is used in function calls with
+    /// constant arguments where the `usize` number indexes into an array containing a list of
+    /// constant arguments for the function call.
     Stack(usize, Position),
     /// { [statement][Stmt] ... }
     Stmt(Box<StmtBlock>),
@@ -2130,8 +2135,8 @@ impl fmt::Debug for Expr {
                 if !x.constants.is_empty() {
                     ff.field("constants", &x.constants);
                 }
-                if x.capture {
-                    ff.field("capture", &x.capture);
+                if x.capture_parent_scope {
+                    ff.field("capture_parent_scope", &x.capture_parent_scope);
                 }
                 ff.finish()
             }
@@ -2186,10 +2191,10 @@ impl Expr {
             #[cfg(not(feature = "no_index"))]
             Self::Array(x, _) if self.is_constant() => {
                 let mut arr = Array::with_capacity(x.len());
-                arr.extend(x.iter().map(|v| {
-                    v.get_literal_value()
-                        .expect("constant array has constant value")
-                }));
+                arr.extend(
+                    x.iter()
+                        .map(|v| v.get_literal_value().expect("constant value")),
+                );
                 Dynamic::from_array(arr)
             }
 
@@ -2197,10 +2202,8 @@ impl Expr {
             Self::Map(x, _) if self.is_constant() => {
                 let mut map = x.1.clone();
                 x.0.iter().for_each(|(k, v)| {
-                    *map.get_mut(k.name.as_str())
-                        .expect("template contains all keys") = v
-                        .get_literal_value()
-                        .expect("constant map has constant value")
+                    *map.get_mut(k.name.as_str()).expect("contains all keys") =
+                        v.get_literal_value().expect("constant value")
                 });
                 Dynamic::from_map(map)
             }
@@ -2479,7 +2482,7 @@ impl Expr {
             _ => (),
         }
 
-        path.pop().expect("`path` contains current node");
+        path.pop().expect("contains current node");
 
         true
     }

@@ -1426,7 +1426,7 @@ impl Module {
             match aliases.len() {
                 0 => (),
                 1 => {
-                    let alias = aliases.pop().expect("list has one item");
+                    let alias = aliases.pop().expect("not empty");
                     module.set_var(alias, value);
                 }
                 _ => aliases.into_iter().for_each(|alias| {

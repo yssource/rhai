@@ -405,7 +405,7 @@ impl<'a> Scope<'a> {
                 self.push(name, value);
             }
             Some((index, AccessMode::ReadWrite)) => {
-                let value_ref = self.values.get_mut(index).expect("index is valid");
+                let value_ref = self.values.get_mut(index).expect("valid index");
                 *value_ref = Dynamic::from(value);
             }
         }
@@ -445,7 +445,7 @@ impl<'a> Scope<'a> {
             }
             Some((_, AccessMode::ReadOnly)) => panic!("variable {} is constant", name.as_ref()),
             Some((index, AccessMode::ReadWrite)) => {
-                let value_ref = self.values.get_mut(index).expect("index is valid");
+                let value_ref = self.values.get_mut(index).expect("valid index");
                 *value_ref = Dynamic::from(value);
             }
         }
@@ -491,7 +491,7 @@ impl<'a> Scope<'a> {
     #[inline]
     #[must_use]
     pub(crate) fn get_mut_by_index(&mut self, index: usize) -> &mut Dynamic {
-        self.values.get_mut(index).expect("index is out of bounds")
+        self.values.get_mut(index).expect("valid index")
     }
     /// Update the access type of an entry in the [`Scope`].
     ///
@@ -501,7 +501,7 @@ impl<'a> Scope<'a> {
     #[cfg(not(feature = "no_module"))]
     #[inline]
     pub(crate) fn add_entry_alias(&mut self, index: usize, alias: Identifier) -> &mut Self {
-        let (_, aliases) = self.names.get_mut(index).expect("index is out of bounds");
+        let (_, aliases) = self.names.get_mut(index).expect("valid index");
         match aliases {
             None => {
                 let mut list = StaticVec::new();

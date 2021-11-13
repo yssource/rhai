@@ -25,20 +25,13 @@ impl Engine {
     #[inline(always)]
     #[allow(dead_code)]
     pub(crate) fn global_namespace(&self) -> &Module {
-        self.global_modules
-            .first()
-            .expect("global_modules not empty")
+        self.global_modules.first().expect("not empty")
     }
     /// Get a mutable reference to the global namespace module
     /// (which is the first module in `global_modules`).
     #[inline(always)]
     pub(crate) fn global_namespace_mut(&mut self) -> &mut Module {
-        Shared::get_mut(
-            self.global_modules
-                .first_mut()
-                .expect("global_modules not empty"),
-        )
-        .expect("global namespace never shared")
+        Shared::get_mut(self.global_modules.first_mut().expect("not empty")).expect("not shared")
     }
     /// Register a custom function with the [`Engine`].
     ///
@@ -957,8 +950,8 @@ impl Engine {
                 }
             } else {
                 let mut iter = name.as_ref().splitn(2, separator.as_ref());
-                let sub_module = iter.next().expect("name contains separator").trim();
-                let remainder = iter.next().expect("name contains separator").trim();
+                let sub_module = iter.next().expect("contains separator").trim();
+                let remainder = iter.next().expect("contains separator").trim();
 
                 if !root.contains_key(sub_module) {
                     let mut m = Module::new();
@@ -966,9 +959,7 @@ impl Engine {
                     m.build_index();
                     root.insert(sub_module.into(), m.into());
                 } else {
-                    let m = root
-                        .remove(sub_module)
-                        .expect("root contains the sub-module");
+                    let m = root.remove(sub_module).expect("contains sub-module");
                     let mut m = crate::fn_native::shared_take_or_clone(m);
                     register_static_module_raw(m.sub_modules_mut(), remainder, module);
                     m.build_index();
@@ -1073,7 +1064,7 @@ impl Engine {
             imports: &mut BTreeSet<Identifier>,
         ) {
             ast.walk(
-                &mut |path| match path.last().expect("`path` contains the current node") {
+                &mut |path| match path.last().expect("contains current node") {
                     // Collect all `import` statements with a string constant path
                     ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
                         if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>

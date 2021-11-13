@@ -456,7 +456,7 @@ fn parse_fn_call(
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     id: Identifier,
-    capture: bool,
+    capture_parent_scope: bool,
     namespace: Option<NamespaceRef>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
@@ -503,7 +503,7 @@ fn parse_fn_call(
 
             return Ok(FnCallExpr {
                 name: state.get_identifier(id),
-                capture,
+                capture_parent_scope,
                 namespace,
                 hashes,
                 args,
@@ -553,7 +553,7 @@ fn parse_fn_call(
 
                 return Ok(FnCallExpr {
                     name: state.get_identifier(id),
-                    capture,
+                    capture_parent_scope,
                     namespace,
                     hashes,
                     args,
@@ -1727,9 +1727,7 @@ fn make_dot_expr(
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(_, _, x)) => {
-            return Err(
-                PERR::PropertyExpected.into_err(x.1.expect("the namespace is `Some`").0[0].pos)
-            )
+            return Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0[0].pos))
         }
         // lhs.prop
         (lhs, prop @ Expr::Property(_)) => {
@@ -1801,7 +1799,7 @@ fn make_dot_expr(
             .into_err(pos))
         }
         // lhs.func!(...)
-        (_, Expr::FnCall(x, pos)) if x.capture => {
+        (_, Expr::FnCall(x, pos)) if x.capture_parent_scope => {
             return Err(PERR::MalformedCapture(
                 "method-call style does not support capturing".into(),
             )
@@ -1901,7 +1899,6 @@ fn parse_binary_op(
         let op_base = FnCallExpr {
             name: state.get_identifier(op.as_ref()),
             hashes: FnCallHashes::from_native(hash),
-            capture: false,
             ..Default::default()
         };
 
@@ -1934,8 +1931,8 @@ fn parse_binary_op(
             | Token::GreaterThanEqualsTo => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
 
             Token::Or => {
-                let rhs = args.pop().expect("`||` has two arguments");
-                let current_lhs = args.pop().expect("`||` has two arguments");
+                let rhs = args.pop().expect("two arguments");
+                let current_lhs = args.pop().expect("two arguments");
                 Expr::Or(
                     BinaryExpr {
                         lhs: current_lhs.ensure_bool_expr()?,
@@ -1946,8 +1943,8 @@ fn parse_binary_op(
                 )
             }
             Token::And => {
-                let rhs = args.pop().expect("`&&` has two arguments");
-                let current_lhs = args.pop().expect("`&&` has two arguments");
+                let rhs = args.pop().expect("two arguments");
+                let current_lhs = args.pop().expect("two arguments");
                 Expr::And(
                     BinaryExpr {
                         lhs: current_lhs.ensure_bool_expr()?,
@@ -2423,7 +2420,7 @@ fn parse_for(
             },
             counter_var.map(|name| Ident {
                 name,
-                pos: counter_pos.expect("`counter_var` is `Some`"),
+                pos: counter_pos.expect("`Some`"),
             }),
             body.into(),
         )),
@@ -2980,10 +2977,7 @@ fn parse_try_catch(
 
     if err_var.is_some() {
         // Remove the error variable from the stack
-        state
-            .stack
-            .pop()
-            .expect("stack contains at least one entry");
+        state.stack.pop().expect("not empty");
     }
 
     Ok(Stmt::TryCatch(
