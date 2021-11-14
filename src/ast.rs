@@ -1836,6 +1836,8 @@ impl FnCallHashes {
 pub struct FnCallExpr {
     /// Namespace of the function, if any.
     pub namespace: Option<NamespaceRef>,
+    /// Function name.
+    pub name: Identifier,
     /// Pre-calculated hashes.
     pub hashes: FnCallHashes,
     /// List of function call argument expressions.
@@ -1851,8 +1853,6 @@ pub struct FnCallExpr {
     /// an [`Expr::DynamicConstant`] involves an additional allocation.  Keeping the constant
     /// values in an inlined array avoids these extra allocations.
     pub constants: smallvec::SmallVec<[Dynamic; 2]>,
-    /// Function name.
-    pub name: Identifier,
     /// Does this function call capture the parent scope?
     pub capture_parent_scope: bool,
 }

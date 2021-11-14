@@ -517,7 +517,7 @@ impl<'a> Scope<'a> {
     /// Shadowed variables are omitted in the copy.
     #[inline]
     #[must_use]
-    pub(crate) fn clone_visible(&self) -> Self {
+    pub fn clone_visible(&self) -> Self {
         let mut entries = Self::new();
 
         self.names

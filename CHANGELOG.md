@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 1.2.0
 =============
 
+Breaking changes
+----------------
+
+* As originally intended, function calls with a bang (`!`) now operates directly on the caller's scope, allowing variables inside the scope to be mutated.
+
 Bug fixes
 ---------
 
@@ -15,6 +20,7 @@ New features
 * `#[cfg(...)]` attributes can now be put directly on plugin functions or function defined in a plugin module.
 * A custom syntax parser can now return a symbol starting with `$$` to inform the implementation function which syntax variant was actually parsed.
 * `AST::iter_literal_variables` extracts all top-level literal constant/variable definitions from a script without running it.
+* `Scope::clone_visible` is added that copies only the last instance of each variable, omitting all shadowed variables.
 
 Enhancements
 ------------

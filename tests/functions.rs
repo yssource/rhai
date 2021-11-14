@@ -164,5 +164,22 @@ fn test_functions_bang() -> Result<(), Box<EvalAltResult>> {
         165
     );
 
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                fn foo() {
+                    hello = 0;
+                    hello + bar
+                }
+
+                let hello = 42;
+                let bar = 123;
+
+                foo!()
+            ",
+        )?,
+        123
+    );
+
     Ok(())
 }

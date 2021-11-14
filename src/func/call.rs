@@ -649,7 +649,7 @@ impl Engine {
         is_ref_mut: bool,
         is_method_call: bool,
         pos: Position,
-        captured_scope: Option<Scope>,
+        scope: Option<&mut Scope>,
         _level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         fn no_method_err(name: &str, pos: Position) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
@@ -728,7 +728,14 @@ impl Engine {
                 return Ok((Dynamic::UNIT, false));
             }
 
-            let mut scope = captured_scope.unwrap_or_else(|| Scope::new());
+            let mut empty_scope;
+            let scope = if let Some(scope) = scope {
+                scope
+            } else {
+                empty_scope = Scope::new();
+                &mut empty_scope
+            };
+            let orig_scope_len = scope.len();
 
             let result = if _is_method_call {
                 // Method call of script function - map first argument to `this`
@@ -740,7 +747,7 @@ impl Engine {
                 let level = _level + 1;
 
                 let result = self.call_script_fn(
-                    &mut scope,
+                    scope,
                     mods,
                     state,
                     lib,
@@ -772,9 +779,8 @@ impl Engine {
 
                 let level = _level + 1;
 
-                let result = self.call_script_fn(
-                    &mut scope, mods, state, lib, &mut None, func, args, pos, level,
-                );
+                let result =
+                    self.call_script_fn(scope, mods, state, lib, &mut None, func, args, pos, level);
 
                 // Restore the original source
                 mods.source = orig_source;
@@ -786,6 +792,8 @@ impl Engine {
 
                 result?
             };
+
+            scope.rewind(orig_scope_len);
 
             return Ok((result, false));
         }
@@ -1225,12 +1233,30 @@ impl Engine {
         let mut arg_values = StaticVec::with_capacity(args_expr.len());
         let mut args = StaticVec::with_capacity(args_expr.len() + curry.len());
         let mut is_ref_mut = false;
-        let capture = if capture_scope && !scope.is_empty() {
-            Some(scope.clone_visible())
-        } else {
-            None
-        };
 
+        // Capture parent scope?
+        if capture_scope && !scope.is_empty() {
+            // func(..., ...)
+            for index in 0..args_expr.len() {
+                let (value, _) = self.get_arg_value(
+                    scope, mods, state, lib, this_ptr, level, args_expr, constants, index,
+                )?;
+                arg_values.push(value.flatten());
+            }
+            args.extend(curry.iter_mut());
+            args.extend(arg_values.iter_mut());
+
+            // Use parent scope
+            let scope = Some(scope);
+
+            return self
+                .exec_fn_call(
+                    mods, state, lib, name, hashes, &mut args, is_ref_mut, false, pos, scope, level,
+                )
+                .map(|(v, _)| v);
+        }
+
+        // Call with blank scope
         if args_expr.is_empty() && curry.is_empty() {
             // No arguments
         } else {
@@ -1287,7 +1313,7 @@ impl Engine {
         }
 
         self.exec_fn_call(
-            mods, state, lib, name, hashes, &mut args, is_ref_mut, false, pos, capture, level,
+            mods, state, lib, name, hashes, &mut args, is_ref_mut, false, pos, None, level,
         )
         .map(|(v, _)| v)
     }

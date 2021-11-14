@@ -1801,7 +1801,7 @@ fn make_dot_expr(
         // lhs.func!(...)
         (_, Expr::FnCall(x, pos)) if x.capture_parent_scope => {
             return Err(PERR::MalformedCapture(
-                "method-call style does not support capturing".into(),
+                "method-call style does not support running within the caller's scope".into(),
             )
             .into_err(pos))
         }
