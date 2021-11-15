@@ -22,9 +22,9 @@ fn test_call_fn() -> Result<(), Box<EvalAltResult>> {
             fn hello() {
                 41 + foo
             }
-            fn define_var() {
+            fn define_var(scale) {
                 let bar = 21;
-                bar * 2
+                bar * scale
             }
         ",
     )?;
@@ -38,17 +38,33 @@ fn test_call_fn() -> Result<(), Box<EvalAltResult>> {
     let r: INT = engine.call_fn(&mut scope, &ast, "hello", ())?;
     assert_eq!(r, 42);
 
-    let r: INT = engine.call_fn(&mut scope, &ast, "define_var", ())?;
-    assert_eq!(r, 42);
-
-    assert!(!scope.contains("bar"));
-
     assert_eq!(
         scope
             .get_value::<INT>("foo")
             .expect("variable foo should exist"),
         1
     );
+
+    let r: INT = engine.call_fn(&mut scope, &ast, "define_var", (2 as INT,))?;
+    assert_eq!(r, 42);
+
+    assert!(!scope.contains("bar"));
+
+    let args = [(2 as INT).into()];
+    let r = engine
+        .call_fn_raw(&mut scope, &ast, false, false, "define_var", None, args)?
+        .as_int()
+        .unwrap();
+    assert_eq!(r, 42);
+
+    assert_eq!(
+        scope
+            .get_value::<INT>("bar")
+            .expect("variable bar should exist"),
+        21
+    );
+
+    assert!(!scope.contains("scale"));
 
     Ok(())
 }

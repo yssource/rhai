@@ -487,6 +487,7 @@ impl Engine {
         fn_def: &crate::ast::ScriptFnDef,
         args: &mut FnCallArgs,
         pos: Position,
+        rewind_scope: bool,
         level: usize,
     ) -> RhaiResult {
         #[inline(never)]
@@ -510,6 +511,8 @@ impl Engine {
             )
             .into())
         }
+
+        assert!(fn_def.params.len() == args.len());
 
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut mods.num_operations, pos)?;
@@ -565,7 +568,17 @@ impl Engine {
         // Evaluate the function
         let body = &fn_def.body;
         let result = self
-            .eval_stmt_block(scope, mods, state, unified_lib, this_ptr, body, true, level)
+            .eval_stmt_block(
+                scope,
+                mods,
+                state,
+                unified_lib,
+                this_ptr,
+                body,
+                true,
+                rewind_scope,
+                level,
+            )
             .or_else(|err| match *err {
                 // Convert return statement to return value
                 EvalAltResult::Return(x, _) => Ok(x),
@@ -589,7 +602,9 @@ impl Engine {
             });
 
         // Remove all local variables
-        scope.rewind(prev_scope_len);
+        if rewind_scope {
+            scope.rewind(prev_scope_len);
+        }
         mods.truncate(prev_mods_len);
 
         if unified {
@@ -735,7 +750,6 @@ impl Engine {
                 empty_scope = Scope::new();
                 &mut empty_scope
             };
-            let orig_scope_len = scope.len();
 
             let result = if _is_method_call {
                 // Method call of script function - map first argument to `this`
@@ -755,6 +769,7 @@ impl Engine {
                     func,
                     rest_args,
                     pos,
+                    true,
                     level,
                 );
 
@@ -779,8 +794,9 @@ impl Engine {
 
                 let level = _level + 1;
 
-                let result =
-                    self.call_script_fn(scope, mods, state, lib, &mut None, func, args, pos, level);
+                let result = self.call_script_fn(
+                    scope, mods, state, lib, &mut None, func, args, pos, true, level,
+                );
 
                 // Restore the original source
                 mods.source = orig_source;
@@ -792,8 +808,6 @@ impl Engine {
 
                 result?
             };
-
-            scope.rewind(orig_scope_len);
 
             return Ok((result, false));
         }
@@ -817,14 +831,16 @@ impl Engine {
         lib: &[&Module],
         level: usize,
     ) -> RhaiResult {
-        self.eval_stmt_block(scope, mods, state, lib, &mut None, statements, false, level)
-            .or_else(|err| match *err {
-                EvalAltResult::Return(out, _) => Ok(out),
-                EvalAltResult::LoopBreak(_, _) => {
-                    unreachable!("no outer loop scope to break out of")
-                }
-                _ => Err(err),
-            })
+        self.eval_stmt_block(
+            scope, mods, state, lib, &mut None, statements, false, false, level,
+        )
+        .or_else(|err| match *err {
+            EvalAltResult::Return(out, _) => Ok(out),
+            EvalAltResult::LoopBreak(_, _) => {
+                unreachable!("no outer loop scope to break out of")
+            }
+            _ => Err(err),
+        })
     }
 
     /// Evaluate a text script in place - used primarily for 'eval'.
@@ -1435,7 +1451,7 @@ impl Engine {
                     let level = level + 1;
 
                     let result = self.call_script_fn(
-                        new_scope, mods, state, lib, &mut None, fn_def, &mut args, pos, level,
+                        new_scope, mods, state, lib, &mut None, fn_def, &mut args, pos, true, level,
                     );
 
                     mods.source = source;

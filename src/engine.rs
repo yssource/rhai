@@ -2205,7 +2205,7 @@ impl Engine {
             // Statement block
             Expr::Stmt(x) if x.is_empty() => Ok(Dynamic::UNIT),
             Expr::Stmt(x) => {
-                self.eval_stmt_block(scope, mods, state, lib, this_ptr, x, true, level)
+                self.eval_stmt_block(scope, mods, state, lib, this_ptr, x, true, true, level)
             }
 
             // lhs[idx_expr]
@@ -2374,6 +2374,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         statements: &[Stmt],
         restore_prev_state: bool,
+        rewind_scope: bool,
         level: usize,
     ) -> RhaiResult {
         if statements.is_empty() {
@@ -2385,7 +2386,7 @@ impl Engine {
         let prev_scope_len = scope.len();
         let prev_mods_len = mods.len();
 
-        if restore_prev_state {
+        if rewind_scope {
             state.scope_level += 1;
         }
 
@@ -2427,10 +2428,12 @@ impl Engine {
             state.pop_fn_resolution_cache();
         }
 
-        if restore_prev_state {
+        if rewind_scope {
             scope.rewind(prev_scope_len);
-            mods.truncate(prev_mods_len);
             state.scope_level -= 1;
+        }
+        if restore_prev_state {
+            mods.truncate(prev_mods_len);
 
             // The impact of new local variables goes away at the end of a block
             // because any new variables introduced will go out of scope
@@ -2617,9 +2620,9 @@ impl Engine {
 
             // Block scope
             Stmt::Block(statements, _) if statements.is_empty() => Ok(Dynamic::UNIT),
-            Stmt::Block(statements, _) => {
-                self.eval_stmt_block(scope, mods, state, lib, this_ptr, statements, true, level)
-            }
+            Stmt::Block(statements, _) => self.eval_stmt_block(
+                scope, mods, state, lib, this_ptr, statements, true, true, level,
+            ),
 
             // If statement
             Stmt::If(expr, x, _) => {
@@ -2630,13 +2633,17 @@ impl Engine {
 
                 if guard_val {
                     if !x.0.is_empty() {
-                        self.eval_stmt_block(scope, mods, state, lib, this_ptr, &x.0, true, level)
+                        self.eval_stmt_block(
+                            scope, mods, state, lib, this_ptr, &x.0, true, true, level,
+                        )
                     } else {
                         Ok(Dynamic::UNIT)
                     }
                 } else {
                     if !x.1.is_empty() {
-                        self.eval_stmt_block(scope, mods, state, lib, this_ptr, &x.1, true, level)
+                        self.eval_stmt_block(
+                            scope, mods, state, lib, this_ptr, &x.1, true, true, level,
+                        )
                     } else {
                         Ok(Dynamic::UNIT)
                     }
@@ -2676,7 +2683,7 @@ impl Engine {
 
                         Some(if !statements.is_empty() {
                             self.eval_stmt_block(
-                                scope, mods, state, lib, this_ptr, statements, true, level,
+                                scope, mods, state, lib, this_ptr, statements, true, true, level,
                             )
                         } else {
                             Ok(Dynamic::UNIT)
@@ -2690,7 +2697,7 @@ impl Engine {
                     // Default match clause
                     if !def_stmt.is_empty() {
                         self.eval_stmt_block(
-                            scope, mods, state, lib, this_ptr, def_stmt, true, level,
+                            scope, mods, state, lib, this_ptr, def_stmt, true, true, level,
                         )
                     } else {
                         Ok(Dynamic::UNIT)
@@ -2701,7 +2708,8 @@ impl Engine {
             // Loop
             Stmt::While(Expr::Unit(_), body, _) => loop {
                 if !body.is_empty() {
-                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    match self
+                        .eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, true, level)
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
@@ -2727,7 +2735,8 @@ impl Engine {
                     return Ok(Dynamic::UNIT);
                 }
                 if !body.is_empty() {
-                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    match self
+                        .eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, true, level)
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
@@ -2744,7 +2753,8 @@ impl Engine {
                 let is_while = !options.contains(AST_OPTION_NEGATED);
 
                 if !body.is_empty() {
-                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    match self
+                        .eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, true, level)
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
@@ -2843,7 +2853,7 @@ impl Engine {
                         }
 
                         let result = self.eval_stmt_block(
-                            scope, mods, state, lib, this_ptr, statements, true, level,
+                            scope, mods, state, lib, this_ptr, statements, true, true, level,
                         );
 
                         match result {
@@ -2907,7 +2917,9 @@ impl Engine {
                 let (try_stmt, err_var, catch_stmt) = x.as_ref();
 
                 let result = self
-                    .eval_stmt_block(scope, mods, state, lib, this_ptr, try_stmt, true, level)
+                    .eval_stmt_block(
+                        scope, mods, state, lib, this_ptr, try_stmt, true, true, level,
+                    )
                     .map(|_| Dynamic::UNIT);
 
                 match result {
@@ -2959,7 +2971,7 @@ impl Engine {
                         });
 
                         let result = self.eval_stmt_block(
-                            scope, mods, state, lib, this_ptr, catch_stmt, true, level,
+                            scope, mods, state, lib, this_ptr, catch_stmt, true, true, level,
                         );
 
                         scope.rewind(orig_scope_len);

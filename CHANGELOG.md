@@ -19,8 +19,8 @@ New features
 
 * `#[cfg(...)]` attributes can now be put directly on plugin functions or function defined in a plugin module.
 * A custom syntax parser can now return a symbol starting with `$$` to inform the implementation function which syntax variant was actually parsed.
-* `AST::iter_literal_variables` extracts all top-level literal constant/variable definitions from a script without running it.
-* `Scope::clone_visible` is added that copies only the last instance of each variable, omitting all shadowed variables.
+* `AST::iter_literal_variables` is added to extract all top-level literal constant/variable definitions from a script without running it.
+* `Engine::call_fn_dynamic` is deprecated and `Engine::call_fn_raw` is added which allows keeping new variables in the custom scope.
 
 Enhancements
 ------------
@@ -31,7 +31,8 @@ Enhancements
 * Array adds a `sort` method with no parameters which sorts homogeneous arrays of built-in comparable types (e.g. `INT`).
 * Inlining is disabled for error-path functions because errors are exceptional and scripts usually fail completely when an error is encountered.
 * The `optimize` module is completely eliminated under `no_optimize`, which should yield smaller code size.
-* Add `NativeCallContext::position` to return the position of the function call.
+* `NativeCallContext::position` is added to return the position of the function call.
+* `Scope::clone_visible` is added that copies only the last instance of each variable, omitting all shadowed variables.
 
 Deprecated API's
 ----------------

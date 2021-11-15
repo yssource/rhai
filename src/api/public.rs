@@ -1901,10 +1901,8 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = crate::StaticVec::new();
         args.parse(&mut arg_values);
-        let mut args: crate::StaticVec<_> = arg_values.iter_mut().collect();
-        let name = name.as_ref();
 
-        let result = self.call_fn_dynamic_raw(scope, ast, true, name, &mut None, &mut args)?;
+        let result = self.call_fn_raw(scope, ast, true, true, name, None, arg_values)?;
 
         let typ = self.map_type_name(result.type_name());
 
@@ -1918,11 +1916,13 @@ impl Engine {
         })
     }
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments
-    /// and optionally a value for binding to the `this` pointer.
+    /// and the following options:
+    ///
+    /// * whether to evaluate the [`AST`] to load necessary modules before calling the function
+    /// * whether to rewind the [`Scope`] after the function call
+    /// * a value for binding to the `this` pointer (if any)
     ///
     /// Not available under `no_function`.
-    ///
-    /// There is an option to evaluate the [`AST`] to load necessary modules before calling the function.
     ///
     /// # WARNING
     ///
@@ -1946,76 +1946,66 @@ impl Engine {
     ///     fn add1(x)   { len(x) + 1 + foo }
     ///     fn bar()     { foo/2 }
     ///     fn action(x) { this += x; }         // function using 'this' pointer
+    ///     fn decl(x)   { let hello = x; }     // declaring variables
     /// ")?;
     ///
     /// let mut scope = Scope::new();
     /// scope.push("foo", 42_i64);
     ///
     /// // Call the script-defined function
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "add", None, [ "abc".into(), 123_i64.into() ])?;
-    /// //                                                                 ^^^^ no 'this' pointer
+    /// let result = engine.call_fn_raw(&mut scope, &ast, true, true, "add", None, [ "abc".into(), 123_i64.into() ])?;
+    /// //                                                                   ^^^^ no 'this' pointer
     /// assert_eq!(result.cast::<i64>(), 168);
     ///
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "add1", None, [ "abc".into() ])?;
+    /// let result = engine.call_fn_raw(&mut scope, &ast, true, true, "add1", None, [ "abc".into() ])?;
     /// assert_eq!(result.cast::<i64>(), 46);
     ///
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "bar", None, [])?;
+    /// let result = engine.call_fn_raw(&mut scope, &ast, true, true, "bar", None, [])?;
     /// assert_eq!(result.cast::<i64>(), 21);
     ///
     /// let mut value: Dynamic = 1_i64.into();
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "action", Some(&mut value), [ 41_i64.into() ])?;
-    /// //                                                                    ^^^^^^^^^^^^^^^^ binding the 'this' pointer
+    /// let result = engine.call_fn_raw(&mut scope, &ast, true, true, "action", Some(&mut value), [ 41_i64.into() ])?;
+    /// //                                                                      ^^^^^^^^^^^^^^^^ binding the 'this' pointer
     /// assert_eq!(value.as_int().expect("value should be INT"), 42);
+    ///
+    /// engine.call_fn_raw(&mut scope, &ast, true, false, "decl", None, [ 42_i64.into() ])?;
+    /// //                                         ^^^^^ do not rewind scope
+    /// assert_eq!(scope.get_value::<i64>("hello").unwrap(), 42);
     /// # }
     /// # Ok(())
     /// # }
     /// ```
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub fn call_fn_dynamic(
+    pub fn call_fn_raw(
         &self,
         scope: &mut Scope,
         ast: &AST,
         eval_ast: bool,
+        rewind_scope: bool,
         name: impl AsRef<str>,
-        mut this_ptr: Option<&mut Dynamic>,
-        mut arg_values: impl AsMut<[Dynamic]>,
-    ) -> RhaiResult {
-        let name = name.as_ref();
-        let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
-
-        self.call_fn_dynamic_raw(scope, ast, eval_ast, name, &mut this_ptr, &mut args)
-    }
-    /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments.
-    ///
-    /// # WARNING
-    ///
-    /// All the arguments are _consumed_, meaning that they're replaced by `()`.
-    /// This is to avoid unnecessarily cloning the arguments.
-    /// Do not use the arguments after this call. If they are needed afterwards,
-    /// clone them _before_ calling this function.
-    #[cfg(not(feature = "no_function"))]
-    #[inline]
-    pub(crate) fn call_fn_dynamic_raw(
-        &self,
-        scope: &mut Scope,
-        ast: &AST,
-        eval_ast: bool,
-        name: &str,
-        this_ptr: &mut Option<&mut Dynamic>,
-        args: &mut FnCallArgs,
+        this_ptr: Option<&mut Dynamic>,
+        arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
         let state = &mut EvalState::new();
         let mods = &mut Imports::new();
-        let lib = &[ast.lib()];
         let statements = ast.statements();
+
+        let orig_scope_len = scope.len();
 
         if eval_ast && !statements.is_empty() {
             // Make sure new variables introduced at global level do not _spill_ into the function call
-            let orig_scope_len = scope.len();
-            self.eval_global_statements(scope, mods, state, statements, lib, 0)?;
-            scope.rewind(orig_scope_len);
+            self.eval_global_statements(scope, mods, state, statements, &[ast.lib()], 0)?;
+
+            if rewind_scope {
+                scope.rewind(orig_scope_len);
+            }
         }
+
+        let name = name.as_ref();
+        let mut this_ptr = this_ptr;
+        let mut arg_values = arg_values;
+        let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
         let fn_def = ast
             .lib()
@@ -2024,19 +2014,27 @@ impl Engine {
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
-        crate::func::call::ensure_no_data_race(name, args, false)?;
+        crate::func::call::ensure_no_data_race(name, &mut args, false)?;
 
-        self.call_script_fn(
+        let result = self.call_script_fn(
             scope,
             mods,
             state,
-            lib,
-            this_ptr,
+            &[ast.lib()],
+            &mut this_ptr,
             fn_def,
-            args,
+            &mut args,
             Position::NONE,
+            rewind_scope,
             0,
-        )
+        );
+
+        // Remove arguments
+        if !rewind_scope && !args.is_empty() {
+            scope.remove_range(orig_scope_len, args.len())
+        }
+
+        result
     }
     /// Optimize the [`AST`] with constants defined in an external Scope.
     /// An optimized copy of the [`AST`] is returned while the original [`AST`] is consumed.

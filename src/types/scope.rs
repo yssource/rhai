@@ -587,6 +587,16 @@ impl<'a> Scope<'a> {
             .zip(self.values.iter())
             .map(|((name, _), value)| (name.as_ref(), value.is_read_only(), value))
     }
+    /// Remove a range of entries within the [`Scope`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the range is out of bounds.
+    #[inline]
+    pub(crate) fn remove_range(&mut self, start: usize, len: usize) {
+        self.values.drain(start..start + len).for_each(|_| {});
+        self.names.drain(start..start + len).for_each(|_| {});
+    }
 }
 
 impl<'a, K: Into<Cow<'a, str>>> Extend<(K, Dynamic)> for Scope<'a> {
