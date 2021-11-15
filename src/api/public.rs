@@ -2029,11 +2029,6 @@ impl Engine {
             0,
         );
 
-        // Remove arguments
-        if !rewind_scope && !args.is_empty() {
-            scope.remove_range(orig_scope_len, args.len())
-        }
-
         result
     }
     /// Optimize the [`AST`] with constants defined in an external Scope.

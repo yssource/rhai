@@ -1898,15 +1898,15 @@ impl Engine {
                 let mut arg_values = StaticVec::with_capacity(args.len());
                 let mut first_arg_pos = Position::NONE;
 
-                for index in 0..args.len() {
-                    let (value, pos) = self.get_arg_value(
-                        scope, mods, state, lib, this_ptr, level, args, constants, index,
-                    )?;
-                    arg_values.push(value.flatten());
-                    if index == 0 {
-                        first_arg_pos = pos
-                    }
-                }
+                args.iter().try_for_each(|expr| {
+                    self.get_arg_value(scope, mods, state, lib, this_ptr, level, expr, constants)
+                        .map(|(value, pos)| {
+                            if arg_values.is_empty() {
+                                first_arg_pos = pos
+                            }
+                            arg_values.push(value.flatten());
+                        })
+                })?;
 
                 idx_values.push((arg_values, first_arg_pos).into());
             }
@@ -1942,15 +1942,17 @@ impl Engine {
                         let mut arg_values = StaticVec::with_capacity(args.len());
                         let mut first_arg_pos = Position::NONE;
 
-                        for index in 0..args.len() {
-                            let (value, pos) = self.get_arg_value(
-                                scope, mods, state, lib, this_ptr, level, args, constants, index,
-                            )?;
-                            arg_values.push(value.flatten());
-                            if index == 0 {
-                                first_arg_pos = pos;
-                            }
-                        }
+                        args.iter().try_for_each(|expr| {
+                            self.get_arg_value(
+                                scope, mods, state, lib, this_ptr, level, expr, constants,
+                            )
+                            .map(|(value, pos)| {
+                                if arg_values.is_empty() {
+                                    first_arg_pos = pos
+                                }
+                                arg_values.push(value.flatten());
+                            })
+                        })?;
 
                         (arg_values, first_arg_pos).into()
                     }
@@ -2225,7 +2227,7 @@ impl Engine {
                 let mut pos = *pos;
                 let mut result: Dynamic = self.const_empty_string().into();
 
-                for expr in x.iter() {
+                x.iter().try_for_each(|expr| {
                     let item = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
 
                     self.eval_op_assignment(
@@ -2243,8 +2245,8 @@ impl Engine {
                     pos = expr.position();
 
                     self.check_data_size(&result)
-                        .map_err(|err| err.fill_position(pos))?;
-                }
+                        .map_err(|err| err.fill_position(pos))
+                })?;
 
                 assert!(
                     result.is::<ImmutableString>(),
@@ -2257,24 +2259,21 @@ impl Engine {
             #[cfg(not(feature = "no_index"))]
             Expr::Array(x, _) => {
                 let mut arr = Array::with_capacity(x.len());
-                for item in x.as_ref() {
-                    arr.push(
-                        self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?
-                            .flatten(),
-                    );
-                }
+                x.iter().try_for_each(|item| {
+                    self.eval_expr(scope, mods, state, lib, this_ptr, item, level)
+                        .map(|value| arr.push(value.flatten()))
+                })?;
                 Ok(arr.into())
             }
 
             #[cfg(not(feature = "no_object"))]
             Expr::Map(x, _) => {
                 let mut map = x.1.clone();
-                for (Ident { name: key, .. }, expr) in &x.0 {
+                x.0.iter().try_for_each(|(Ident { name: key, .. }, expr)| {
                     let value_ref = map.get_mut(key.as_str()).expect("contains all keys");
-                    *value_ref = self
-                        .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                        .flatten();
-                }
+                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
+                        .map(|value| *value_ref = value.flatten())
+                })?;
                 Ok(map.into())
             }
 
@@ -3119,19 +3118,20 @@ impl Engine {
             // Export statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(list, _) => {
-                for (Ident { name, pos, .. }, Ident { name: rename, .. }) in list.as_ref() {
-                    // Mark scope variables as public
-                    if let Some((index, _)) = scope.get_index(name) {
-                        scope.add_entry_alias(
-                            index,
-                            if rename.is_empty() { name } else { rename }.clone(),
-                        );
-                    } else {
-                        return Err(
-                            EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos).into()
-                        );
-                    }
-                }
+                list.iter().try_for_each(
+                    |(Ident { name, pos, .. }, Ident { name: rename, .. })| {
+                        // Mark scope variables as public
+                        if let Some((index, _)) = scope.get_index(name) {
+                            scope.add_entry_alias(
+                                index,
+                                if rename.is_empty() { name } else { rename }.clone(),
+                            );
+                            Ok(()) as Result<_, Box<EvalAltResult>>
+                        } else {
+                            Err(EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos).into())
+                        }
+                    },
+                )?;
                 Ok(Dynamic::UNIT)
             }
 

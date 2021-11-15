@@ -999,13 +999,14 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             x.args.iter_mut().for_each(|a| optimize_expr(a, state, false));
 
             // Move constant arguments
-            for arg in x.args.iter_mut() {
+            let constants = &mut x.constants;
+            x.args.iter_mut().for_each(|arg| {
                 if let Some(value) = arg.get_literal_value() {
                     state.set_dirty();
-                    x.constants.push(value);
-                    *arg = Expr::Stack(x.constants.len()-1, arg.position());
+                    constants.push(value);
+                    *arg = Expr::Stack(constants.len()-1, arg.position());
                 }
-            }
+            });
         }
 
         // Eagerly call functions

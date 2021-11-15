@@ -60,9 +60,8 @@ impl Serialize for Dynamic {
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref m, _, _) => {
                 let mut map = ser.serialize_map(Some(m.len()))?;
-                for (k, v) in m.iter() {
-                    map.serialize_entry(k.as_str(), v)?;
-                }
+                m.iter()
+                    .try_for_each(|(k, v)| map.serialize_entry(k.as_str(), v))?;
                 map.end()
             }
             Union::FnPtr(ref f, _, _) => ser.serialize_str(f.fn_name()),
