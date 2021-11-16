@@ -589,6 +589,7 @@ impl<'a> Scope<'a> {
     ///
     /// Panics if the range is out of bounds.
     #[inline]
+    #[allow(dead_code)]
     pub(crate) fn remove_range(&mut self, start: usize, len: usize) {
         self.values.drain(start..start + len).for_each(|_| {});
         self.names.drain(start..start + len).for_each(|_| {});

@@ -239,12 +239,13 @@ impl<'a> NativeCallContext<'a> {
         args: &mut [&mut Dynamic],
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let hash = if is_method_call {
-            FnCallHashes::from_script_and_native(
+            FnCallHashes::from_all(
+                #[cfg(not(feature = "no_function"))]
                 calc_fn_hash(fn_name, args.len() - 1),
                 calc_fn_hash(fn_name, args.len()),
             )
         } else {
-            FnCallHashes::from_script(calc_fn_hash(fn_name, args.len()))
+            calc_fn_hash(fn_name, args.len()).into()
         };
 
         self.engine()

@@ -1771,6 +1771,7 @@ impl OpAssignment<'_> {
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct FnCallHashes {
     /// Pre-calculated hash for a script-defined function ([`None`] if native functions only).
+    #[cfg(not(feature = "no_function"))]
     pub script: Option<u64>,
     /// Pre-calculated hash for a native Rust function with no parameter types.
     pub native: u64,
@@ -1778,14 +1779,26 @@ pub struct FnCallHashes {
 
 impl fmt::Debug for FnCallHashes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        #[cfg(not(feature = "no_function"))]
         if let Some(script) = self.script {
-            if script == self.native {
+            return if script == self.native {
                 fmt::Debug::fmt(&self.native, f)
             } else {
                 write!(f, "({}, {})", script, self.native)
-            }
-        } else {
-            write!(f, "{} (native only)", self.native)
+            };
+        }
+
+        write!(f, "{} (native only)", self.native)
+    }
+}
+
+impl From<u64> for FnCallHashes {
+    #[inline(always)]
+    fn from(hash: u64) -> Self {
+        Self {
+            #[cfg(not(feature = "no_function"))]
+            script: Some(hash),
+            native: hash,
         }
     }
 }
@@ -1796,24 +1809,17 @@ impl FnCallHashes {
     #[must_use]
     pub const fn from_native(hash: u64) -> Self {
         Self {
+            #[cfg(not(feature = "no_function"))]
             script: None,
-            native: hash,
-        }
-    }
-    /// Create a [`FnCallHashes`] with both native Rust and script function hashes set to the same value.
-    #[inline(always)]
-    #[must_use]
-    pub const fn from_script(hash: u64) -> Self {
-        Self {
-            script: Some(hash),
             native: hash,
         }
     }
     /// Create a [`FnCallHashes`] with both native Rust and script function hashes.
     #[inline(always)]
     #[must_use]
-    pub const fn from_script_and_native(script: u64, native: u64) -> Self {
+    pub const fn from_all(#[cfg(not(feature = "no_function"))] script: u64, native: u64) -> Self {
         Self {
+            #[cfg(not(feature = "no_function"))]
             script: Some(script),
             native,
         }
@@ -1822,7 +1828,11 @@ impl FnCallHashes {
     #[inline(always)]
     #[must_use]
     pub const fn is_native_only(&self) -> bool {
-        self.script.is_none()
+        #[cfg(not(feature = "no_function"))]
+        return self.script.is_none();
+
+        #[cfg(feature = "no_function")]
+        return true;
     }
 }
 

@@ -494,7 +494,7 @@ fn parse_fn_call(
             );
 
             let hashes = if is_valid_function_name(&id) {
-                FnCallHashes::from_script(hash)
+                hash.into()
             } else {
                 FnCallHashes::from_native(hash)
             };
@@ -544,7 +544,7 @@ fn parse_fn_call(
                 );
 
                 let hashes = if is_valid_function_name(&id) {
-                    FnCallHashes::from_script(hash)
+                    hash.into()
                 } else {
                     FnCallHashes::from_native(hash)
                 };
@@ -1758,7 +1758,8 @@ fn make_dot_expr(
                 }
                 Expr::FnCall(mut func, func_pos) => {
                     // Recalculate hash
-                    func.hashes = FnCallHashes::from_script_and_native(
+                    func.hashes = FnCallHashes::from_all(
+                        #[cfg(not(feature = "no_function"))]
                         calc_fn_hash(&func.name, func.args.len()),
                         calc_fn_hash(&func.name, func.args.len() + 1),
                     );
@@ -1808,10 +1809,12 @@ fn make_dot_expr(
         // lhs.func(...)
         (lhs, Expr::FnCall(mut func, func_pos)) => {
             // Recalculate hash
-            func.hashes = FnCallHashes::from_script_and_native(
+            func.hashes = FnCallHashes::from_all(
+                #[cfg(not(feature = "no_function"))]
                 calc_fn_hash(&func.name, func.args.len()),
                 calc_fn_hash(&func.name, func.args.len() + 1),
             );
+
             let rhs = Expr::FnCall(func, func_pos);
             Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
         }
@@ -1962,7 +1965,7 @@ fn parse_binary_op(
 
                 // Convert into a call to `contains`
                 FnCallExpr {
-                    hashes: FnCallHashes::from_script(calc_fn_hash(OP_CONTAINS, 2)),
+                    hashes: calc_fn_hash(OP_CONTAINS, 2).into(),
                     args,
                     name: state.get_identifier(OP_CONTAINS),
                     ..op_base
@@ -1981,7 +1984,7 @@ fn parse_binary_op(
 
                 FnCallExpr {
                     hashes: if is_valid_function_name(&s) {
-                        FnCallHashes::from_script(hash)
+                        hash.into()
                     } else {
                         FnCallHashes::from_native(hash)
                     },

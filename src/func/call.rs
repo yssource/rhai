@@ -671,7 +671,7 @@ impl Engine {
         is_method_call: bool,
         pos: Position,
         scope: Option<&mut Scope>,
-        _level: usize,
+        level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         fn no_method_err(name: &str, pos: Position) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
             let msg = format!("'{0}' should not be called this way. Try {0}(...);", name);
@@ -682,6 +682,8 @@ impl Engine {
         #[cfg(not(feature = "no_closure"))]
         ensure_no_data_race(fn_name, args, is_ref_mut)?;
 
+        let _scope = scope;
+        let _level = level;
         let _is_method_call = is_method_call;
 
         // These may be redirected from method style calls.
@@ -750,7 +752,7 @@ impl Engine {
             }
 
             let mut empty_scope;
-            let scope = if let Some(scope) = scope {
+            let scope = if let Some(scope) = _scope {
                 scope
             } else {
                 empty_scope = Scope::new();
@@ -914,7 +916,7 @@ impl Engine {
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hashes
-                let new_hash = FnCallHashes::from_script(calc_fn_hash(fn_name, args_len));
+                let new_hash = calc_fn_hash(fn_name, args_len).into();
                 // Arguments are passed as-is, adding the curried arguments
                 let mut curry = StaticVec::with_capacity(fn_ptr.num_curried());
                 curry.extend(fn_ptr.curry().iter().cloned());
@@ -948,7 +950,8 @@ impl Engine {
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hash
-                let new_hash = FnCallHashes::from_script_and_native(
+                let new_hash = FnCallHashes::from_all(
+                    #[cfg(not(feature = "no_function"))]
                     calc_fn_hash(fn_name, args_len),
                     calc_fn_hash(fn_name, args_len + 1),
                 );
@@ -1019,7 +1022,8 @@ impl Engine {
                                 call_args.insert_many(0, fn_ptr.curry().iter().cloned());
                             }
                             // Recalculate the hash based on the new function name and new arguments
-                            hash = FnCallHashes::from_script_and_native(
+                            hash = FnCallHashes::from_all(
+                                #[cfg(not(feature = "no_function"))]
                                 calc_fn_hash(fn_name, call_args.len()),
                                 calc_fn_hash(fn_name, call_args.len() + 1),
                             );
@@ -1120,7 +1124,7 @@ impl Engine {
                 // Recalculate hash
                 let args_len = total_args + curry.len();
                 hashes = if !hashes.is_native_only() {
-                    FnCallHashes::from_script(calc_fn_hash(name, args_len))
+                    calc_fn_hash(name, args_len).into()
                 } else {
                     FnCallHashes::from_native(calc_fn_hash(name, args_len))
                 };
