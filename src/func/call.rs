@@ -1153,13 +1153,19 @@ impl Engine {
                     ));
                 }
 
-                let (name, mut fn_curry) = arg.cast::<FnPtr>().take_data();
+                let (name, fn_curry) = arg.cast::<FnPtr>().take_data();
 
                 // Append the new curried arguments to the existing list.
-                a_expr.iter().skip(1).try_for_each(|expr| {
-                    self.get_arg_value(scope, mods, state, lib, this_ptr, level, expr, constants)
-                        .map(|(value, _)| fn_curry.push(value))
-                })?;
+                let fn_curry = a_expr.iter().skip(1).try_fold(
+                    fn_curry,
+                    |mut curried, expr| -> Result<_, Box<EvalAltResult>> {
+                        let (value, _) = self.get_arg_value(
+                            scope, mods, state, lib, this_ptr, level, expr, constants,
+                        )?;
+                        curried.push(value);
+                        Ok(curried)
+                    },
+                )?;
 
                 return Ok(FnPtr::new_unchecked(name, fn_curry).into());
             }

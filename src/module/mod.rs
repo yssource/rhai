@@ -1409,10 +1409,11 @@ impl Module {
     /// ```
     #[cfg(not(feature = "no_module"))]
     pub fn eval_ast_as_new(
-        mut scope: crate::Scope,
+        scope: crate::Scope,
         ast: &crate::AST,
         engine: &crate::Engine,
     ) -> Result<Self, Box<EvalAltResult>> {
+        let mut scope = scope;
         let mut mods = crate::engine::Imports::new();
         let orig_mods_len = mods.len();
 
@@ -1420,21 +1421,28 @@ impl Module {
         engine.eval_ast_with_scope_raw(&mut scope, &mut mods, &ast, 0)?;
 
         // Create new module
-        let mut module = Module::new();
-
-        scope.into_iter().for_each(|(_, value, mut aliases)| {
-            // Variables with an alias left in the scope become module variables
-            match aliases.len() {
-                0 => (),
-                1 => {
-                    let alias = aliases.pop().expect("not empty");
-                    module.set_var(alias, value);
-                }
-                _ => aliases.into_iter().for_each(|alias| {
-                    module.set_var(alias, value.clone());
-                }),
-            }
-        });
+        let mut module =
+            scope
+                .into_iter()
+                .fold(Module::new(), |mut module, (_, value, mut aliases)| {
+                    // Variables with an alias left in the scope become module variables
+                    match aliases.len() {
+                        0 => (),
+                        1 => {
+                            let alias = aliases.pop().expect("not empty");
+                            module.set_var(alias, value);
+                        }
+                        _ => {
+                            let last_alias = aliases.pop().expect("not empty");
+                            aliases.into_iter().for_each(|alias| {
+                                module.set_var(alias, value.clone());
+                            });
+                            // Avoid cloning the last value
+                            module.set_var(last_alias, value);
+                        }
+                    }
+                    module
+                });
 
         // Extra modules left in the scope become sub-modules
         let mut func_mods = crate::engine::Imports::new();

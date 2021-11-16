@@ -2200,12 +2200,11 @@ impl Expr {
 
             #[cfg(not(feature = "no_object"))]
             Self::Map(x, _) if self.is_constant() => {
-                let mut map = x.1.clone();
-                x.0.iter().for_each(|(k, v)| {
-                    *map.get_mut(k.name.as_str()).expect("contains all keys") =
-                        v.get_literal_value().expect("constant value")
-                });
-                Dynamic::from_map(map)
+                Dynamic::from_map(x.0.iter().fold(x.1.clone(), |mut map, (k, v)| {
+                    let value_ref = map.get_mut(k.name.as_str()).expect("contains all keys");
+                    *value_ref = v.get_literal_value().expect("constant value");
+                    map
+                }))
             }
 
             _ => return None,

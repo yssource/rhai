@@ -1893,20 +1893,22 @@ impl Engine {
                 let crate::ast::FnCallExpr {
                     args, constants, ..
                 } = x.as_ref();
-                let mut arg_values = StaticVec::with_capacity(args.len());
-                let mut first_arg_pos = Position::NONE;
 
-                args.iter().try_for_each(|expr| {
-                    self.get_arg_value(scope, mods, state, lib, this_ptr, level, expr, constants)
-                        .map(|(value, pos)| {
-                            if arg_values.is_empty() {
-                                first_arg_pos = pos
-                            }
-                            arg_values.push(value.flatten());
-                        })
-                })?;
+                let (values, pos) = args.iter().try_fold(
+                    (StaticVec::with_capacity(args.len()), Position::NONE),
+                    |(mut values, mut pos), expr| -> Result<_, Box<EvalAltResult>> {
+                        let (value, arg_pos) = self.get_arg_value(
+                            scope, mods, state, lib, this_ptr, level, expr, constants,
+                        )?;
+                        if values.is_empty() {
+                            pos = arg_pos;
+                        }
+                        values.push(value.flatten());
+                        Ok((values, pos))
+                    },
+                )?;
 
-                idx_values.push((arg_values, first_arg_pos).into());
+                idx_values.push((values, pos).into());
             }
             #[cfg(not(feature = "no_object"))]
             Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dotting => {
@@ -1937,22 +1939,22 @@ impl Engine {
                         let crate::ast::FnCallExpr {
                             args, constants, ..
                         } = x.as_ref();
-                        let mut arg_values = StaticVec::with_capacity(args.len());
-                        let mut first_arg_pos = Position::NONE;
 
-                        args.iter().try_for_each(|expr| {
-                            self.get_arg_value(
-                                scope, mods, state, lib, this_ptr, level, expr, constants,
-                            )
-                            .map(|(value, pos)| {
-                                if arg_values.is_empty() {
-                                    first_arg_pos = pos
-                                }
-                                arg_values.push(value.flatten());
-                            })
-                        })?;
-
-                        (arg_values, first_arg_pos).into()
+                        args.iter()
+                            .try_fold(
+                                (StaticVec::with_capacity(args.len()), Position::NONE),
+                                |(mut values, mut pos), expr| -> Result<_, Box<EvalAltResult>> {
+                                    let (value, arg_pos) = self.get_arg_value(
+                                        scope, mods, state, lib, this_ptr, level, expr, constants,
+                                    )?;
+                                    if values.is_empty() {
+                                        pos = arg_pos
+                                    }
+                                    values.push(value.flatten());
+                                    Ok((values, pos))
+                                },
+                            )?
+                            .into()
                     }
                     #[cfg(not(feature = "no_object"))]
                     Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dotting => {
@@ -2255,25 +2257,35 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Array(x, _) => {
-                let mut arr = Array::with_capacity(x.len());
-                x.iter().try_for_each(|item| {
-                    self.eval_expr(scope, mods, state, lib, this_ptr, item, level)
-                        .map(|value| arr.push(value.flatten()))
-                })?;
-                Ok(arr.into())
-            }
+            Expr::Array(x, _) => Ok(x
+                .iter()
+                .try_fold(
+                    Array::with_capacity(x.len()),
+                    |mut arr, item| -> Result<_, Box<EvalAltResult>> {
+                        arr.push(
+                            self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?
+                                .flatten(),
+                        );
+                        Ok(arr)
+                    },
+                )?
+                .into()),
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Map(x, _) => {
-                let mut map = x.1.clone();
-                x.0.iter().try_for_each(|(Ident { name: key, .. }, expr)| {
-                    let value_ref = map.get_mut(key.as_str()).expect("contains all keys");
-                    self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)
-                        .map(|value| *value_ref = value.flatten())
-                })?;
-                Ok(map.into())
-            }
+            Expr::Map(x, _) => Ok(x
+                .0
+                .iter()
+                .try_fold(
+                    x.1.clone(),
+                    |mut map, (Ident { name: key, .. }, expr)| -> Result<_, Box<EvalAltResult>> {
+                        let value_ref = map.get_mut(key.as_str()).expect("contains all keys");
+                        *value_ref = self
+                            .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                            .flatten();
+                        Ok(map)
+                    },
+                )?
+                .into()),
 
             // Namespace-qualified function call
             Expr::FnCall(x, pos) if x.is_qualified() => {

@@ -518,22 +518,18 @@ impl<'a> Scope<'a> {
     #[inline]
     #[must_use]
     pub fn clone_visible(&self) -> Self {
-        let mut entries = Self::new();
-
-        self.names
-            .iter()
-            .rev()
-            .enumerate()
-            .for_each(|(index, (name, alias))| {
+        self.names.iter().rev().enumerate().fold(
+            Self::new(),
+            |mut entries, (index, (name, alias))| {
                 if !entries.names.iter().any(|(key, _)| key == name) {
                     entries.names.push((name.clone(), alias.clone()));
                     entries
                         .values
                         .push(self.values[self.len() - 1 - index].clone());
                 }
-            });
-
-        entries
+                entries
+            },
+        )
     }
     /// Get an iterator to entries in the [`Scope`].
     #[inline]

@@ -90,11 +90,13 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
     .map(|&s| s.into())
     .collect();
 
-    let mut list = Array::new();
-
-    ctx.iter_namespaces()
-        .flat_map(|m| m.iter_script_fn())
-        .for_each(|(_, _, _, _, f)| list.push(make_metadata(&dict, None, f).into()));
+    let mut list = ctx.iter_namespaces().flat_map(Module::iter_script_fn).fold(
+        Array::new(),
+        |mut list, (_, _, _, _, f)| {
+            list.push(make_metadata(&dict, None, f).into());
+            list
+        },
+    );
 
     #[cfg(not(feature = "no_module"))]
     {
