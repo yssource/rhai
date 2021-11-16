@@ -1667,11 +1667,11 @@ impl Stmt {
 pub struct CustomExpr {
     /// List of keywords.
     pub inputs: StaticVec<Expr>,
+    /// List of tokens actually parsed.
+    pub tokens: StaticVec<Identifier>,
     /// Is the current [`Scope`][crate::Scope] possibly modified by this custom statement
     /// (e.g. introducing a new variable)?
     pub scope_may_be_changed: bool,
-    /// List of tokens actually parsed.
-    pub tokens: StaticVec<Identifier>,
     /// Is this custom syntax self-terminated?
     pub self_terminated: bool,
 }
@@ -1693,7 +1693,7 @@ impl CustomExpr {
 /// # Volatile Data Structure
 ///
 /// This type is volatile and may change.
-#[derive(Clone, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub struct BinaryExpr {
     /// LHS expression.
     pub lhs: Expr,
@@ -1711,7 +1711,7 @@ pub struct BinaryExpr {
 pub struct OpAssignment<'a> {
     /// Hash of the op-assignment call.
     pub hash_op_assign: u64,
-    /// Hash of the underlying operator call.
+    /// Hash of the underlying operator call (for fallback).
     pub hash_op: u64,
     /// Op-assignment operator.
     pub op: &'a str,
@@ -1739,31 +1739,31 @@ impl OpAssignment<'_> {
     }
 }
 
-/// _(internals)_ An set of function call hashes.
-/// Exported under the `internals` feature only.
+/// _(internals)_ A set of function call hashes. Exported under the `internals` feature only.
 ///
-/// Two separate hashes are pre-calculated because of the following pattern:
+/// Two separate hashes are pre-calculated because of the following patterns:
 ///
 /// ```ignore
-/// func(a, b, c);      // Native: func(a, b, c) - 3 parameters
-///                     // Script: func(a, b, c) - 3 parameters
+/// func(a, b, c);      // Native: func(a, b, c)        - 3 parameters
+///                     // Script: func(a, b, c)        - 3 parameters
 ///
-/// a.func(b, c);       // Native: func(&mut a, b, c) - 3 parameters
-///                     // Script: func(b, c) - 2 parameters
+/// a.func(b, c);       // Native: func(&mut a, b, c)   - 3 parameters
+///                     // Script: func(b, c)           - 2 parameters
 /// ```
 ///
 /// For normal function calls, the native hash equals the script hash.
+///
 /// For method-style calls, the script hash contains one fewer parameter.
 ///
 /// Function call hashes are used in the following manner:
 ///
 /// * First, the script hash is tried, which contains only the called function's name plus the
-///   of parameters.
+///   number of parameters.
 ///
 /// * Next, the actual types of arguments are hashed and _combined_ with the native hash, which is
-///   then used to search for a native function.
-///   In other words, a native function call hash always contains the called function's name plus
-///   the types of the arguments.  This is to due to possible function overloading for different parameter types.
+///   then used to search for a native function. In other words, a complete native function call
+///   hash always contains the called function's name plus the types of the arguments.  This is due
+///   to possible function overloading for different parameter types.
 ///
 /// # Volatile Data Structure
 ///
