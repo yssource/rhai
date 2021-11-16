@@ -4,8 +4,8 @@ Rhai Release Notes
 Version 1.2.0
 =============
 
-Breaking changes for scripts
----------------------------
+Bug fixes with breaking script changes
+-------------------------------------
 
 * As originally intended, function calls with a bang (`!`) now operates directly on the caller's scope, allowing variables inside the scope to be mutated.
 * As originally intended, `Engine::XXX_with_scope` API's now properly propagate constants within the provided scope also to _functions_ in the script.

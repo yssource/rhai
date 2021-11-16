@@ -3,11 +3,9 @@
 use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::custom_syntax::CustomSyntax;
 use crate::func::{
-    hashing::get_hasher,
-    native::{
-        CallableFunction, IteratorFn, OnDebugCallback, OnParseTokenCallback, OnPrintCallback,
-        OnVarCallback,
-    },
+    get_hasher,
+    native::{OnDebugCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback},
+    CallableFunction, IteratorFn,
 };
 use crate::module::NamespaceRef;
 use crate::packages::{Package, StandardPackage};

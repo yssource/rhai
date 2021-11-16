@@ -14,7 +14,7 @@ use std::{
 ///
 /// Panics when hashing any data type other than a [`u64`].
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct StraightHasher(u64);
+struct StraightHasher(u64);
 
 impl Hasher for StraightHasher {
     #[inline(always)]
@@ -34,7 +34,7 @@ impl Hasher for StraightHasher {
 
 /// A hash builder for `StraightHasher`.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
-pub struct StraightHasherBuilder;
+struct StraightHasherBuilder;
 
 impl BuildHasher for StraightHasherBuilder {
     type Hasher = StraightHasher;
@@ -135,6 +135,6 @@ pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
 /// Combine two [`u64`] hashes by taking the XOR of them.
 #[inline(always)]
 #[must_use]
-pub(crate) const fn combine_hashes(a: u64, b: u64) -> u64 {
+pub const fn combine_hashes(a: u64, b: u64) -> u64 {
     a ^ b
 }

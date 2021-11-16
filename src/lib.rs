@@ -119,16 +119,11 @@ pub type FLOAT = f32;
 pub use ast::{FnAccess, AST};
 pub use custom_syntax::Expression;
 pub use engine::{Engine, EvalContext, OP_CONTAINS, OP_EQUALS};
-pub use func::{native::NativeCallContext, register::RegisterNativeFunction};
+pub use func::{NativeCallContext, RegisterNativeFunction};
 pub use module::{FnNamespace, Module};
 pub use tokenizer::Position;
 pub use types::{
-    dynamic::Dynamic,
-    error::EvalAltResult,
-    fn_ptr::FnPtr,
-    immutable_string::ImmutableString,
-    parse_error::{LexError, ParseError, ParseErrorType},
-    scope::Scope,
+    Dynamic, EvalAltResult, FnPtr, ImmutableString, LexError, ParseError, ParseErrorType, Scope,
 };
 
 /// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
@@ -156,12 +151,12 @@ pub type Identifier = SmartString;
 pub type Identifier = ImmutableString;
 
 /// Alias to [`Rc`][std::rc::Rc] or [`Arc`][std::sync::Arc] depending on the `sync` feature flag.
-pub use func::native::Shared;
+pub use func::Shared;
 
 /// Alias to [`RefCell`][std::cell::RefCell] or [`RwLock`][std::sync::RwLock] depending on the `sync` feature flag.
-pub use func::native::Locked;
+pub use func::Locked;
 
-pub(crate) use func::hashing::{
+pub(crate) use func::{
     calc_fn_hash, calc_fn_params_hash, calc_qualified_fn_hash, calc_qualified_var_hash,
     combine_hashes,
 };
@@ -171,7 +166,7 @@ pub use rhai_codegen::*;
 pub use func::plugin;
 
 #[cfg(not(feature = "no_function"))]
-pub use func::{args::FuncArgs, func::Func};
+pub use func::{Func, FuncArgs};
 
 #[cfg(not(feature = "no_function"))]
 pub use ast::ScriptFnMetadata;

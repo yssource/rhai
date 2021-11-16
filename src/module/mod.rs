@@ -2,9 +2,8 @@
 
 use crate::ast::{FnAccess, Ident};
 use crate::func::{
-    call::FnCallArgs,
-    native::{shared_take_or_clone, CallableFunction, IteratorFn, SendSync},
-    register::RegisterNativeFunction,
+    shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, RegisterNativeFunction,
+    SendSync,
 };
 use crate::parser::IdentifierBuilder;
 use crate::tokenizer::Token;

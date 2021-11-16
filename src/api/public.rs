@@ -1,7 +1,7 @@
 //! Module that defines the public API of [`Engine`].
 
 use crate::engine::{EvalContext, EvalState, Imports};
-use crate::func::{call::FnCallArgs, native::SendSync, register::RegisterNativeFunction};
+use crate::func::{FnCallArgs, RegisterNativeFunction, SendSync};
 use crate::parser::ParseState;
 use crate::types::dynamic::Variant;
 use crate::{
