@@ -1,6 +1,6 @@
 //! The `ImmutableString` type.
 
-use crate::fn_native::{shared_make_mut, shared_take};
+use crate::func::native::{shared_make_mut, shared_take};
 use crate::{Shared, SmartString};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -90,6 +90,13 @@ impl Borrow<str> for ImmutableString {
 impl From<&str> for ImmutableString {
     #[inline(always)]
     fn from(value: &str) -> Self {
+        let value: SmartString = value.into();
+        Self(value.into())
+    }
+}
+impl From<Box<str>> for ImmutableString {
+    #[inline(always)]
+    fn from(value: Box<str>) -> Self {
         let value: SmartString = value.into();
         Self(value.into())
     }

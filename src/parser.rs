@@ -5,14 +5,14 @@ use crate::ast::{
     StmtBlock, AST_OPTION_FLAGS::*,
 };
 use crate::custom_syntax::{markers::*, CustomSyntax};
-use crate::dynamic::AccessMode;
 use crate::engine::{Precedence, KEYWORD_THIS, OP_CONTAINS};
-use crate::fn_hash::get_hasher;
+use crate::func::hashing::get_hasher;
 use crate::module::NamespaceRef;
-use crate::token::{
+use crate::tokenizer::{
     is_keyword_function, is_valid_function_name, is_valid_identifier, Token, TokenStream,
     TokenizerControl,
 };
+use crate::types::dynamic::AccessMode;
 use crate::{
     calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Engine, Identifier,
     ImmutableString, LexError, ParseError, ParseErrorType, Position, Scope, Shared, StaticVec, AST,
@@ -355,14 +355,18 @@ fn ensure_not_assignment(input: &mut TokenStream) -> Result<(), ParseError> {
 }
 
 /// Consume a particular [token][Token], checking that it is the expected one.
+///
+/// # Panics
+///
+/// Panics if the next token is not the expected one.
 #[inline]
-fn eat_token(input: &mut TokenStream, token: Token) -> Position {
+fn eat_token(input: &mut TokenStream, expected_token: Token) -> Position {
     let (t, pos) = input.next().expect(NEVER_ENDS);
 
-    if t != token {
+    if t != expected_token {
         unreachable!(
             "expecting {} (found {}) at {}",
-            token.syntax(),
+            expected_token.syntax(),
             t.syntax(),
             pos
         );
@@ -382,13 +386,13 @@ fn match_token(input: &mut TokenStream, token: Token) -> (bool, Position) {
 }
 
 /// Parse a variable name.
-fn parse_var_name(input: &mut TokenStream) -> Result<(String, Position), ParseError> {
+fn parse_var_name(input: &mut TokenStream) -> Result<(Box<str>, Position), ParseError> {
     match input.next().expect(NEVER_ENDS) {
         // Variable name
         (Token::Identifier(s), pos) => Ok((s, pos)),
         // Reserved keyword
         (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
-            Err(PERR::Reserved(s).into_err(pos))
+            Err(PERR::Reserved(s.to_string()).into_err(pos))
         }
         // Bad identifier
         (Token::LexError(err), pos) => Err(err.into_err(pos)),
@@ -398,7 +402,7 @@ fn parse_var_name(input: &mut TokenStream) -> Result<(String, Position), ParseEr
 }
 
 /// Parse a symbol.
-fn parse_symbol(input: &mut TokenStream) -> Result<(String, Position), ParseError> {
+fn parse_symbol(input: &mut TokenStream) -> Result<(Box<str>, Position), ParseError> {
     match input.next().expect(NEVER_ENDS) {
         // Symbol
         (token, pos) if token.is_standard_symbol() => Ok((token.literal_syntax().into(), pos)),
@@ -452,7 +456,7 @@ fn parse_fn_call(
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     id: Identifier,
-    capture: bool,
+    capture_parent_scope: bool,
     namespace: Option<NamespaceRef>,
     settings: ParseSettings,
 ) -> Result<Expr, ParseError> {
@@ -490,7 +494,7 @@ fn parse_fn_call(
             );
 
             let hashes = if is_valid_function_name(&id) {
-                FnCallHashes::from_script(hash)
+                hash.into()
             } else {
                 FnCallHashes::from_native(hash)
             };
@@ -499,7 +503,7 @@ fn parse_fn_call(
 
             return Ok(FnCallExpr {
                 name: state.get_identifier(id),
-                capture,
+                capture_parent_scope,
                 namespace,
                 hashes,
                 args,
@@ -540,7 +544,7 @@ fn parse_fn_call(
                 );
 
                 let hashes = if is_valid_function_name(&id) {
-                    FnCallHashes::from_script(hash)
+                    hash.into()
                 } else {
                     FnCallHashes::from_native(hash)
                 };
@@ -549,7 +553,7 @@ fn parse_fn_call(
 
                 return Ok(FnCallExpr {
                     name: state.get_identifier(id),
-                    capture,
+                    capture_parent_scope,
                     namespace,
                     hashes,
                     args,
@@ -860,14 +864,14 @@ fn parse_map_literal(
 
         let (name, pos) = match input.next().expect(NEVER_ENDS) {
             (Token::Identifier(s), pos) | (Token::StringConstant(s), pos) => {
-                if map.iter().any(|(p, _)| p.name == s) {
-                    return Err(PERR::DuplicatedProperty(s).into_err(pos));
+                if map.iter().any(|(p, _)| p.name == &*s) {
+                    return Err(PERR::DuplicatedProperty(s.to_string()).into_err(pos));
                 }
                 (s, pos)
             }
             (Token::InterpolatedString(_), pos) => return Err(PERR::PropertyExpected.into_err(pos)),
             (Token::Reserved(s), pos) if is_valid_identifier(s.chars()) => {
-                return Err(PERR::Reserved(s).into_err(pos));
+                return Err(PERR::Reserved(s.to_string()).into_err(pos));
             }
             (Token::LexError(err), pos) => return Err(err.into_err(pos)),
             (Token::EOF, pos) => {
@@ -1313,20 +1317,20 @@ fn parse_primary(
                     (None, None, state.get_identifier(s)).into(),
                 ),
                 // Access to `this` as a variable is OK within a function scope
-                _ if s == KEYWORD_THIS && settings.is_function_scope => Expr::Variable(
+                _ if &*s == KEYWORD_THIS && settings.is_function_scope => Expr::Variable(
                     None,
                     settings.pos,
                     (None, None, state.get_identifier(s)).into(),
                 ),
                 // Cannot access to `this` as a variable not in a function scope
-                _ if s == KEYWORD_THIS => {
+                _ if &*s == KEYWORD_THIS => {
                     let msg = format!("'{}' can only be used in functions", s);
-                    return Err(LexError::ImproperSymbol(s, msg).into_err(settings.pos));
+                    return Err(LexError::ImproperSymbol(s.to_string(), msg).into_err(settings.pos));
                 }
                 _ if is_valid_identifier(s.chars()) => {
-                    return Err(PERR::Reserved(s).into_err(settings.pos))
+                    return Err(PERR::Reserved(s.to_string()).into_err(settings.pos))
                 }
-                _ => return Err(LexError::UnexpectedInput(s).into_err(settings.pos)),
+                _ => return Err(LexError::UnexpectedInput(s.to_string()).into_err(settings.pos)),
             }
         }
 
@@ -1488,8 +1492,9 @@ fn parse_unary(
 
     match token {
         // -expr
-        Token::UnaryMinus => {
-            let pos = eat_token(input, Token::UnaryMinus);
+        Token::Minus | Token::UnaryMinus => {
+            let token = token.clone();
+            let pos = eat_token(input, token);
 
             match parse_unary(input, state, lib, settings.level_up())? {
                 // Negative integer
@@ -1525,8 +1530,9 @@ fn parse_unary(
             }
         }
         // +expr
-        Token::UnaryPlus => {
-            let pos = eat_token(input, Token::UnaryPlus);
+        Token::Plus | Token::UnaryPlus => {
+            let token = token.clone();
+            let pos = eat_token(input, token);
 
             match parse_unary(input, state, lib, settings.level_up())? {
                 expr @ Expr::IntegerConstant(_, _) => Ok(expr),
@@ -1721,9 +1727,7 @@ fn make_dot_expr(
         }
         // lhs.module::id - syntax error
         (_, Expr::Variable(_, _, x)) => {
-            return Err(
-                PERR::PropertyExpected.into_err(x.1.expect("the namespace is `Some`").0[0].pos)
-            )
+            return Err(PERR::PropertyExpected.into_err(x.1.expect("`Some`").0[0].pos))
         }
         // lhs.prop
         (lhs, prop @ Expr::Property(_)) => {
@@ -1754,7 +1758,8 @@ fn make_dot_expr(
                 }
                 Expr::FnCall(mut func, func_pos) => {
                     // Recalculate hash
-                    func.hashes = FnCallHashes::from_script_and_native(
+                    func.hashes = FnCallHashes::from_all(
+                        #[cfg(not(feature = "no_function"))]
                         calc_fn_hash(&func.name, func.args.len()),
                         calc_fn_hash(&func.name, func.args.len() + 1),
                     );
@@ -1795,19 +1800,21 @@ fn make_dot_expr(
             .into_err(pos))
         }
         // lhs.func!(...)
-        (_, Expr::FnCall(x, pos)) if x.capture => {
+        (_, Expr::FnCall(x, pos)) if x.capture_parent_scope => {
             return Err(PERR::MalformedCapture(
-                "method-call style does not support capturing".into(),
+                "method-call style does not support running within the caller's scope".into(),
             )
             .into_err(pos))
         }
         // lhs.func(...)
         (lhs, Expr::FnCall(mut func, func_pos)) => {
             // Recalculate hash
-            func.hashes = FnCallHashes::from_script_and_native(
+            func.hashes = FnCallHashes::from_all(
+                #[cfg(not(feature = "no_function"))]
                 calc_fn_hash(&func.name, func.args.len()),
                 calc_fn_hash(&func.name, func.args.len() + 1),
             );
+
             let rhs = Expr::FnCall(func, func_pos);
             Expr::Dot(BinaryExpr { lhs, rhs }.into(), false, op_pos)
         }
@@ -1840,11 +1847,11 @@ fn parse_binary_op(
             Token::Custom(c) => state
                 .engine
                 .custom_keywords
-                .get(c.as_str())
+                .get(c.as_ref())
                 .cloned()
-                .ok_or_else(|| PERR::Reserved(c.clone()).into_err(*current_pos))?,
+                .ok_or_else(|| PERR::Reserved(c.to_string()).into_err(*current_pos))?,
             Token::Reserved(c) if !is_valid_identifier(c.chars()) => {
-                return Err(PERR::UnknownOperator(c.into()).into_err(*current_pos))
+                return Err(PERR::UnknownOperator(c.to_string()).into_err(*current_pos))
             }
             _ => current_op.precedence(),
         };
@@ -1865,11 +1872,11 @@ fn parse_binary_op(
             Token::Custom(c) => state
                 .engine
                 .custom_keywords
-                .get(c.as_str())
+                .get(c.as_ref())
                 .cloned()
-                .ok_or_else(|| PERR::Reserved(c.clone()).into_err(*next_pos))?,
+                .ok_or_else(|| PERR::Reserved(c.to_string()).into_err(*next_pos))?,
             Token::Reserved(c) if !is_valid_identifier(c.chars()) => {
-                return Err(PERR::UnknownOperator(c.into()).into_err(*next_pos))
+                return Err(PERR::UnknownOperator(c.to_string()).into_err(*next_pos))
             }
             _ => next_op.precedence(),
         };
@@ -1895,7 +1902,6 @@ fn parse_binary_op(
         let op_base = FnCallExpr {
             name: state.get_identifier(op.as_ref()),
             hashes: FnCallHashes::from_native(hash),
-            capture: false,
             ..Default::default()
         };
 
@@ -1928,8 +1934,8 @@ fn parse_binary_op(
             | Token::GreaterThanEqualsTo => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
 
             Token::Or => {
-                let rhs = args.pop().expect("`||` has two arguments");
-                let current_lhs = args.pop().expect("`||` has two arguments");
+                let rhs = args.pop().expect("two arguments");
+                let current_lhs = args.pop().expect("two arguments");
                 Expr::Or(
                     BinaryExpr {
                         lhs: current_lhs.ensure_bool_expr()?,
@@ -1940,8 +1946,8 @@ fn parse_binary_op(
                 )
             }
             Token::And => {
-                let rhs = args.pop().expect("`&&` has two arguments");
-                let current_lhs = args.pop().expect("`&&` has two arguments");
+                let rhs = args.pop().expect("two arguments");
+                let current_lhs = args.pop().expect("two arguments");
                 Expr::And(
                     BinaryExpr {
                         lhs: current_lhs.ensure_bool_expr()?,
@@ -1959,7 +1965,7 @@ fn parse_binary_op(
 
                 // Convert into a call to `contains`
                 FnCallExpr {
-                    hashes: FnCallHashes::from_script(calc_fn_hash(OP_CONTAINS, 2)),
+                    hashes: calc_fn_hash(OP_CONTAINS, 2).into(),
                     args,
                     name: state.get_identifier(OP_CONTAINS),
                     ..op_base
@@ -1971,14 +1977,14 @@ fn parse_binary_op(
                 if state
                     .engine
                     .custom_keywords
-                    .get(s.as_str())
+                    .get(s.as_ref())
                     .map_or(false, Option::is_some) =>
             {
                 let hash = calc_fn_hash(&s, 2);
 
                 FnCallExpr {
                     hashes: if is_valid_function_name(&s) {
-                        FnCallHashes::from_script(hash)
+                        hash.into()
                     } else {
                         FnCallHashes::from_native(hash)
                     },
@@ -2027,7 +2033,7 @@ fn parse_custom_syntax(
         settings.pos = *fwd_pos;
         let settings = settings.level_up();
 
-        required_token = match parse_func(&segments, fwd_token.syntax().as_ref()) {
+        required_token = match parse_func(&segments, &*fwd_token.syntax()) {
             Ok(Some(seg))
                 if seg.starts_with(CUSTOM_SYNTAX_MARKER_SYNTAX_VARIANT)
                     && seg.len() > CUSTOM_SYNTAX_MARKER_SYNTAX_VARIANT.len() =>
@@ -2123,7 +2129,7 @@ fn parse_custom_syntax(
             },
             s => match input.next().expect(NEVER_ENDS) {
                 (Token::LexError(err), pos) => return Err(err.into_err(pos)),
-                (t, _) if t.syntax().as_ref() == s => {
+                (t, _) if &*t.syntax() == s => {
                     segments.push(required_token.clone());
                     tokens.push(required_token.clone().into());
                 }
@@ -2185,7 +2191,7 @@ fn parse_expr(
 
         match token {
             Token::Custom(key) | Token::Reserved(key) | Token::Identifier(key) => {
-                if let Some((key, syntax)) = state.engine.custom_syntax.get_key_value(key.as_str())
+                if let Some((key, syntax)) = state.engine.custom_syntax.get_key_value(key.as_ref())
                 {
                     input.next().expect(NEVER_ENDS);
                     return parse_custom_syntax(
@@ -2355,7 +2361,7 @@ fn parse_for(
         let (counter_name, counter_pos) = parse_var_name(input)?;
 
         if counter_name == name {
-            return Err(PERR::DuplicatedVariable(counter_name).into_err(counter_pos));
+            return Err(PERR::DuplicatedVariable(counter_name.to_string()).into_err(counter_pos));
         }
 
         let (has_close_paren, pos) = match_token(input, Token::RightParen);
@@ -2417,7 +2423,7 @@ fn parse_for(
             },
             counter_var.map(|name| Ident {
                 name,
-                pos: counter_pos.expect("`counter_var` is `Some`"),
+                pos: counter_pos.expect("`Some`"),
             }),
             body.into(),
         )),
@@ -2560,12 +2566,12 @@ fn parse_export(
 
         let (rename, rename_pos) = if match_token(input, Token::As).0 {
             let (name, pos) = parse_var_name(input)?;
-            if exports.iter().any(|(_, alias)| alias.name == name) {
-                return Err(PERR::DuplicatedVariable(name).into_err(pos));
+            if exports.iter().any(|(_, alias)| alias.name == name.as_ref()) {
+                return Err(PERR::DuplicatedVariable(name.to_string()).into_err(pos));
             }
-            (name, pos)
+            (Some(name), pos)
         } else {
-            (String::new(), Position::NONE)
+            (None, Position::NONE)
         };
 
         exports.push((
@@ -2574,7 +2580,7 @@ fn parse_export(
                 pos: id_pos,
             },
             Ident {
-                name: state.get_identifier(rename),
+                name: state.get_identifier(rename.as_ref().map_or("", |s| s.as_ref())),
                 pos: rename_pos,
             },
         ));
@@ -2733,7 +2739,7 @@ fn parse_stmt(
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     let comments = {
-        let mut comments = StaticVec::<String>::new();
+        let mut comments = Vec::<Box<str>>::new();
         let mut comments_pos = Position::NONE;
 
         // Handle doc-comments.
@@ -2742,7 +2748,7 @@ fn parse_stmt(
                 comments_pos = *pos;
             }
 
-            if !crate::token::is_doc_comment(comment) {
+            if !crate::tokenizer::is_doc_comment(comment) {
                 unreachable!("expecting doc-comment, but gets {:?}", comment);
             }
 
@@ -2769,9 +2775,9 @@ fn parse_stmt(
 
     let (token, token_pos) = match input.peek().expect(NEVER_ENDS) {
         (Token::EOF, pos) => return Ok(Stmt::Noop(*pos)),
-        x => x,
+        (x, pos) => (x, *pos),
     };
-    settings.pos = *token_pos;
+    settings.pos = token_pos;
 
     #[cfg(not(feature = "unchecked"))]
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
@@ -2780,7 +2786,7 @@ fn parse_stmt(
         // ; - empty statement
         Token::SemiColon => {
             eat_token(input, Token::SemiColon);
-            Ok(Stmt::Noop(settings.pos))
+            Ok(Stmt::Noop(token_pos))
         }
 
         // { - statements block
@@ -2788,7 +2794,7 @@ fn parse_stmt(
 
         // fn ...
         #[cfg(not(feature = "no_function"))]
-        Token::Fn if !settings.is_global => Err(PERR::WrongFnDefinition.into_err(settings.pos)),
+        Token::Fn if !settings.is_global => Err(PERR::WrongFnDefinition.into_err(token_pos)),
 
         #[cfg(not(feature = "no_function"))]
         Token::Fn | Token::Private => {
@@ -2869,7 +2875,7 @@ fn parse_stmt(
             let pos = eat_token(input, Token::Break);
             Ok(Stmt::BreakLoop(AST_OPTION_BREAK_OUT, pos))
         }
-        Token::Continue | Token::Break => Err(PERR::LoopBreak.into_err(settings.pos)),
+        Token::Continue | Token::Break => Err(PERR::LoopBreak.into_err(token_pos)),
 
         Token::Return | Token::Throw => {
             let (return_type, token_pos) = input
@@ -2912,7 +2918,7 @@ fn parse_stmt(
         Token::Import => parse_import(input, state, lib, settings.level_up()),
 
         #[cfg(not(feature = "no_module"))]
-        Token::Export if !settings.is_global => Err(PERR::WrongExport.into_err(settings.pos)),
+        Token::Export if !settings.is_global => Err(PERR::WrongExport.into_err(token_pos)),
 
         #[cfg(not(feature = "no_module"))]
         Token::Export => parse_export(input, state, lib, settings.level_up()),
@@ -2974,10 +2980,7 @@ fn parse_try_catch(
 
     if err_var.is_some() {
         // Remove the error variable from the stack
-        state
-            .stack
-            .pop()
-            .expect("stack contains at least one entry");
+        state.stack.pop().expect("not empty");
     }
 
     Ok(Stmt::TryCatch(
@@ -2996,7 +2999,7 @@ fn parse_fn(
     settings: ParseSettings,
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
-    comments: StaticVec<String>,
+    comments: Vec<Box<str>>,
 ) -> Result<ScriptFnDef, ParseError> {
     let mut settings = settings;
 
@@ -3007,13 +3010,13 @@ fn parse_fn(
 
     let name = match token.into_function_name_for_override() {
         Ok(r) => r,
-        Err(Token::Reserved(s)) => return Err(PERR::Reserved(s).into_err(pos)),
+        Err(Token::Reserved(s)) => return Err(PERR::Reserved(s.to_string()).into_err(pos)),
         Err(_) => return Err(PERR::FnMissingName.into_err(pos)),
     };
 
     match input.peek().expect(NEVER_ENDS) {
         (Token::LeftParen, _) => eat_token(input, Token::LeftParen),
-        (_, pos) => return Err(PERR::FnMissingParams(name).into_err(*pos)),
+        (_, pos) => return Err(PERR::FnMissingParams(name.to_string()).into_err(*pos)),
     };
 
     let mut params = StaticVec::new();
@@ -3025,8 +3028,10 @@ fn parse_fn(
             match input.next().expect(NEVER_ENDS) {
                 (Token::RightParen, _) => break,
                 (Token::Identifier(s), pos) => {
-                    if params.iter().any(|(p, _)| p == &s) {
-                        return Err(PERR::FnDuplicatedParam(name, s).into_err(pos));
+                    if params.iter().any(|(p, _)| p == &*s) {
+                        return Err(
+                            PERR::FnDuplicatedParam(name.to_string(), s.to_string()).into_err(pos)
+                        );
                     }
                     let s = state.get_identifier(s);
                     state.stack.push((s.clone(), AccessMode::ReadWrite));
@@ -3059,35 +3064,28 @@ fn parse_fn(
             settings.is_breakable = false;
             parse_block(input, state, lib, settings.level_up())?
         }
-        (_, pos) => return Err(PERR::FnMissingBody(name).into_err(*pos)),
+        (_, pos) => return Err(PERR::FnMissingBody(name.to_string()).into_err(*pos)),
     }
     .into();
 
     let mut params: StaticVec<_> = params.into_iter().map(|(p, _)| p).collect();
     params.shrink_to_fit();
 
-    #[cfg(not(feature = "no_closure"))]
-    let externals = state
-        .external_vars
-        .iter()
-        .map(|(name, _)| name)
-        .filter(|name| !params.contains(name))
-        .cloned()
-        .collect();
-
     Ok(ScriptFnDef {
-        name: state.get_identifier(&name),
+        name: state.get_identifier(name),
         access,
         params,
-        #[cfg(not(feature = "no_closure"))]
-        externals,
         body,
         lib: None,
         #[cfg(not(feature = "no_module"))]
         mods: crate::engine::Imports::new(),
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
-        comments,
+        comments: if comments.is_empty() {
+            None
+        } else {
+            Some(comments.into())
+        },
     })
 }
 
@@ -3156,8 +3154,10 @@ fn parse_anon_fn(
             match input.next().expect(NEVER_ENDS) {
                 (Token::Pipe, _) => break,
                 (Token::Identifier(s), pos) => {
-                    if params_list.iter().any(|p| p == &s) {
-                        return Err(PERR::FnDuplicatedParam("".to_string(), s).into_err(pos));
+                    if params_list.iter().any(|p| p == &*s) {
+                        return Err(
+                            PERR::FnDuplicatedParam("".to_string(), s.to_string()).into_err(pos)
+                        );
                     }
                     let s = state.get_identifier(s);
                     state.stack.push((s.clone(), AccessMode::ReadWrite));
@@ -3224,15 +3224,13 @@ fn parse_anon_fn(
         name: fn_name.clone(),
         access: FnAccess::Public,
         params,
-        #[cfg(not(feature = "no_closure"))]
-        externals: std::collections::BTreeSet::new(),
         body: body.into(),
         lib: None,
         #[cfg(not(feature = "no_module"))]
         mods: crate::engine::Imports::new(),
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
-        comments: StaticVec::new(),
+        comments: None,
     };
 
     let fn_ptr = crate::FnPtr::new_unchecked(fn_name, StaticVec::new());
@@ -3283,7 +3281,7 @@ impl Engine {
         statements.push(Stmt::Expr(expr));
 
         #[cfg(not(feature = "no_optimize"))]
-        return Ok(crate::optimize::optimize_into_ast(
+        return Ok(crate::optimizer::optimize_into_ast(
             self,
             _scope,
             statements,
@@ -3368,7 +3366,7 @@ impl Engine {
         let (statements, _lib) = self.parse_global_level(input, state)?;
 
         #[cfg(not(feature = "no_optimize"))]
-        return Ok(crate::optimize::optimize_into_ast(
+        return Ok(crate::optimizer::optimize_into_ast(
             self,
             _scope,
             statements,

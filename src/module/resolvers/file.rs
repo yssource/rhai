@@ -1,4 +1,4 @@
-use crate::fn_native::shared_write_lock;
+use crate::func::native::shared_write_lock;
 use crate::{Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Scope, Shared};
 
 #[cfg(feature = "no_std")]

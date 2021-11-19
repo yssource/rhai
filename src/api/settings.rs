@@ -1,6 +1,6 @@
 //! Configuration settings for [`Engine`].
 
-use crate::token::Token;
+use crate::tokenizer::Token;
 use crate::Engine;
 use crate::{engine::Precedence, Identifier};
 #[cfg(feature = "no_std")]
@@ -308,18 +308,18 @@ impl Engine {
             // Active standard keywords cannot be made custom
             // Disabled keywords are OK
             Some(token) if token.is_standard_keyword() => {
-                if !self.disabled_symbols.contains(token.syntax().as_ref()) {
+                if !self.disabled_symbols.contains(&*token.syntax()) {
                     return Err(format!("'{}' is a reserved keyword", keyword.as_ref()));
                 }
             }
             // Active standard symbols cannot be made custom
             Some(token) if token.is_standard_symbol() => {
-                if !self.disabled_symbols.contains(token.syntax().as_ref()) {
+                if !self.disabled_symbols.contains(&*token.syntax()) {
                     return Err(format!("'{}' is a reserved operator", keyword.as_ref()));
                 }
             }
             // Active standard symbols cannot be made custom
-            Some(token) if !self.disabled_symbols.contains(token.syntax().as_ref()) => {
+            Some(token) if !self.disabled_symbols.contains(&*token.syntax()) => {
                 return Err(format!("'{}' is a reserved symbol", keyword.as_ref()))
             }
             // Disabled symbols are OK

@@ -1,10 +1,10 @@
 //! Module defining the AST (abstract syntax tree).
 
 use crate::calc_fn_hash;
-use crate::dynamic::Union;
-use crate::fn_native::shared_make_mut;
+use crate::func::native::shared_make_mut;
 use crate::module::NamespaceRef;
-use crate::token::Token;
+use crate::tokenizer::Token;
+use crate::types::dynamic::Union;
 use crate::{
     Dynamic, FnNamespace, Identifier, ImmutableString, Module, Position, Shared, StaticVec, INT,
 };
@@ -66,18 +66,13 @@ pub struct ScriptFnDef {
     pub access: FnAccess,
     /// Names of function parameters.
     pub params: StaticVec<Identifier>,
-    /// Access to external variables.
-    ///
-    /// Not available under `no_closure`.
-    #[cfg(not(feature = "no_closure"))]
-    pub externals: std::collections::BTreeSet<Identifier>,
     /// _(metadata)_ Function doc-comments (if any).
     /// Exported under the `metadata` feature only.
     ///
     /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
-    pub comments: StaticVec<String>,
+    pub comments: Option<Box<[Box<str>]>>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -156,7 +151,10 @@ impl<'a> From<&'a ScriptFnDef> for ScriptFnMetadata<'a> {
         Self {
             #[cfg(not(feature = "no_function"))]
             #[cfg(feature = "metadata")]
-            comments: value.comments.iter().map(|s| s.as_str()).collect(),
+            comments: value
+                .comments
+                .as_ref()
+                .map_or_else(|| Vec::new(), |v| v.iter().map(Box::as_ref).collect()),
             access: value.access,
             name: &value.name,
             params: value.params.iter().map(|s| s.as_str()).collect(),
@@ -749,6 +747,89 @@ impl AST {
         self.body = StmtBlock::empty();
         self
     }
+    /// Extract all top-level literal constant and/or variable definitions.
+    /// This is useful for extracting all global constants from a script without actually running it.
+    ///
+    /// A literal constant/variable definition takes the form of:
+    /// `const VAR = `_value_`;` and `let VAR = `_value_`;`
+    /// where _value_ is a literal expression or will be optimized into a literal.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::{Engine, Scope};
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let ast = engine.compile(
+    /// "
+    ///     const A = 40 + 2;   // constant that optimizes into a literal
+    ///     let b = 123;        // literal variable
+    ///     const B = b * A;    // non-literal constant
+    ///     const C = 999;      // literal constant
+    ///     b = A + C;          // expression
+    ///
+    ///     {                   // <- new block scope
+    ///         const Z = 0;    // <- literal constant not at top-level
+    ///     }
+    /// ")?;
+    ///
+    /// let mut iter = ast.iter_literal_variables(true, false)
+    ///                   .map(|(name, is_const, value)| (name, is_const, value.as_int().unwrap()));
+    ///
+    /// # #[cfg(not(feature = "no_optimize"))]
+    /// assert_eq!(iter.next(), Some(("A", true, 42)));
+    /// assert_eq!(iter.next(), Some(("C", true, 999)));
+    /// assert_eq!(iter.next(), None);
+    ///
+    /// let mut iter = ast.iter_literal_variables(false, true)
+    ///                   .map(|(name, is_const, value)| (name, is_const, value.as_int().unwrap()));
+    ///
+    /// assert_eq!(iter.next(), Some(("b", false, 123)));
+    /// assert_eq!(iter.next(), None);
+    ///
+    /// let mut iter = ast.iter_literal_variables(true, true)
+    ///                   .map(|(name, is_const, value)| (name, is_const, value.as_int().unwrap()));
+    ///
+    /// # #[cfg(not(feature = "no_optimize"))]
+    /// assert_eq!(iter.next(), Some(("A", true, 42)));
+    /// assert_eq!(iter.next(), Some(("b", false, 123)));
+    /// assert_eq!(iter.next(), Some(("C", true, 999)));
+    /// assert_eq!(iter.next(), None);
+    ///
+    /// let scope: Scope = ast.iter_literal_variables(true, false).collect();
+    ///
+    /// # #[cfg(not(feature = "no_optimize"))]
+    /// assert_eq!(scope.len(), 2);
+    ///
+    /// Ok(())
+    /// # }
+    /// ```
+    pub fn iter_literal_variables(
+        &self,
+        include_constants: bool,
+        include_variables: bool,
+    ) -> impl Iterator<Item = (&str, bool, Dynamic)> {
+        self.statements().iter().filter_map(move |stmt| match stmt {
+            Stmt::Var(expr, name, options, _)
+                if options.contains(AST_OPTION_FLAGS::AST_OPTION_CONSTANT) && include_constants
+                    || !options.contains(AST_OPTION_FLAGS::AST_OPTION_CONSTANT)
+                        && include_variables =>
+            {
+                if let Some(value) = expr.get_literal_value() {
+                    Some((
+                        name.as_str(),
+                        options.contains(AST_OPTION_FLAGS::AST_OPTION_CONSTANT),
+                        value,
+                    ))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
+    }
     /// Recursively walk the [`AST`], including function bodies (if any).
     /// Return `false` from the callback to terminate the walk.
     #[cfg(not(feature = "internals"))]
@@ -835,7 +916,7 @@ impl AsRef<Module> for AST {
 pub struct Ident {
     /// Identifier name.
     pub name: Identifier,
-    /// Declaration position.
+    /// Position.
     pub pos: Position,
 }
 
@@ -843,6 +924,20 @@ impl fmt::Debug for Ident {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.name)?;
         self.pos.debug_print(f)
+    }
+}
+
+impl AsRef<str> for Ident {
+    #[inline(always)]
+    fn as_ref(&self) -> &str {
+        self.name.as_ref()
+    }
+}
+
+impl Ident {
+    #[inline(always)]
+    pub fn as_str(&self) -> &str {
+        self.name.as_str()
     }
 }
 
@@ -1404,7 +1499,7 @@ impl Stmt {
     ///
     /// An internally pure statement only has side effects that disappear outside the block.
     ///
-    /// Currently only variable declarations (i.e. `let` and `const`) and `import`/`export`
+    /// Currently only variable definitions (i.e. `let` and `const`) and `import`/`export`
     /// statements are internally pure.
     #[inline]
     #[must_use]
@@ -1556,7 +1651,7 @@ impl Stmt {
             _ => (),
         }
 
-        path.pop().expect("`path` contains current node");
+        path.pop().expect("contains current node");
 
         true
     }
@@ -1632,7 +1727,7 @@ impl OpAssignment<'_> {
     pub fn new(op: Token) -> Self {
         let op_raw = op
             .map_op_assignment()
-            .expect("token is op-assignment operator")
+            .expect("op-assignment")
             .literal_syntax();
         let op_assignment = op.literal_syntax();
 
@@ -1676,6 +1771,7 @@ impl OpAssignment<'_> {
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct FnCallHashes {
     /// Pre-calculated hash for a script-defined function ([`None`] if native functions only).
+    #[cfg(not(feature = "no_function"))]
     pub script: Option<u64>,
     /// Pre-calculated hash for a native Rust function with no parameter types.
     pub native: u64,
@@ -1683,14 +1779,26 @@ pub struct FnCallHashes {
 
 impl fmt::Debug for FnCallHashes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        #[cfg(not(feature = "no_function"))]
         if let Some(script) = self.script {
-            if script == self.native {
+            return if script == self.native {
                 fmt::Debug::fmt(&self.native, f)
             } else {
                 write!(f, "({}, {})", script, self.native)
-            }
-        } else {
-            write!(f, "{} (native only)", self.native)
+            };
+        }
+
+        write!(f, "{} (native only)", self.native)
+    }
+}
+
+impl From<u64> for FnCallHashes {
+    #[inline(always)]
+    fn from(hash: u64) -> Self {
+        Self {
+            #[cfg(not(feature = "no_function"))]
+            script: Some(hash),
+            native: hash,
         }
     }
 }
@@ -1701,24 +1809,17 @@ impl FnCallHashes {
     #[must_use]
     pub const fn from_native(hash: u64) -> Self {
         Self {
+            #[cfg(not(feature = "no_function"))]
             script: None,
-            native: hash,
-        }
-    }
-    /// Create a [`FnCallHashes`] with both native Rust and script function hashes set to the same value.
-    #[inline(always)]
-    #[must_use]
-    pub const fn from_script(hash: u64) -> Self {
-        Self {
-            script: Some(hash),
             native: hash,
         }
     }
     /// Create a [`FnCallHashes`] with both native Rust and script function hashes.
     #[inline(always)]
     #[must_use]
-    pub const fn from_script_and_native(script: u64, native: u64) -> Self {
+    pub const fn from_all(#[cfg(not(feature = "no_function"))] script: u64, native: u64) -> Self {
         Self {
+            #[cfg(not(feature = "no_function"))]
             script: Some(script),
             native,
         }
@@ -1727,7 +1828,11 @@ impl FnCallHashes {
     #[inline(always)]
     #[must_use]
     pub const fn is_native_only(&self) -> bool {
-        self.script.is_none()
+        #[cfg(not(feature = "no_function"))]
+        return self.script.is_none();
+
+        #[cfg(feature = "no_function")]
+        return true;
     }
 }
 
@@ -1741,19 +1846,25 @@ impl FnCallHashes {
 pub struct FnCallExpr {
     /// Namespace of the function, if any.
     pub namespace: Option<NamespaceRef>,
+    /// Function name.
+    pub name: Identifier,
     /// Pre-calculated hashes.
     pub hashes: FnCallHashes,
     /// List of function call argument expressions.
     pub args: StaticVec<Expr>,
     /// List of function call arguments that are constants.
     ///
-    /// Any arguments in `args` that is [`Expr::Stack`][Expr::Stack] indexes into this
+    /// Any arguments in `args` that is [`Expr::Stack`] indexes into this
     /// array to find the constant for use as its argument value.
+    ///
+    /// # Notes
+    ///
+    /// Constant arguments are very common in function calls, and keeping each constant in
+    /// an [`Expr::DynamicConstant`] involves an additional allocation.  Keeping the constant
+    /// values in an inlined array avoids these extra allocations.
     pub constants: smallvec::SmallVec<[Dynamic; 2]>,
-    /// Function name.
-    pub name: Identifier,
     /// Does this function call capture the parent scope?
-    pub capture: bool,
+    pub capture_parent_scope: bool,
 }
 
 impl FnCallExpr {
@@ -1763,7 +1874,7 @@ impl FnCallExpr {
     pub const fn is_qualified(&self) -> bool {
         self.namespace.is_some()
     }
-    /// Convert this into a [`FnCall`][Expr::FnCall].
+    /// Convert this into an [`Expr::FnCall`].
     #[inline(always)]
     #[must_use]
     pub fn into_fn_call_expr(self, pos: Position) -> Expr {
@@ -1832,7 +1943,7 @@ impl<F: Float + fmt::Debug> fmt::Debug for FloatWrapper<F> {
 impl<F: Float + fmt::Display + fmt::LowerExp + From<f32>> fmt::Display for FloatWrapper<F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let abs = self.0.abs();
-        if abs.fract().is_zero() {
+        if abs.is_zero() {
             f.write_str("0.0")
         } else if abs > Self::MAX_NATURAL_FLOAT_FOR_DISPLAY.into()
             || abs < Self::MIN_NATURAL_FLOAT_FOR_DISPLAY.into()
@@ -1901,8 +2012,9 @@ impl FloatWrapper<FLOAT> {
 #[derive(Clone, Hash)]
 pub enum Expr {
     /// Dynamic constant.
-    /// Used to hold either an [`Array`] or [`Map`][crate::Map] literal for quick cloning.
-    /// All other primitive data types should use the appropriate variants for better speed.
+    ///
+    /// Used to hold complex constants such as [`Array`] or [`Map`][crate::Map] for quick cloning.
+    /// Primitive data types should use the appropriate variants to avoid an allocation.
     DynamicConstant(Box<Dynamic>, Position),
     /// Boolean constant.
     BoolConstant(bool, Position),
@@ -1950,13 +2062,11 @@ pub enum Expr {
             (ImmutableString, Position),
         )>,
     ),
-    /// Stack slot
+    /// Stack slot for function calls.  See [`FnCallExpr`] for more details.
     ///
-    /// # Notes
-    ///
-    /// This variant does not map to any language structure.  It is currently only used in function
-    /// calls with constant arguments where the `usize` number indexes into an array containing a
-    /// list of constant arguments for the function call.  See [`FnCallExpr`] for more details.
+    /// This variant does not map to any language structure.  It is used in function calls with
+    /// constant arguments where the `usize` number indexes into an array containing a list of
+    /// constant arguments for the function call.
     Stack(usize, Position),
     /// { [statement][Stmt] ... }
     Stmt(Box<StmtBlock>),
@@ -2035,8 +2145,8 @@ impl fmt::Debug for Expr {
                 if !x.constants.is_empty() {
                     ff.field("constants", &x.constants);
                 }
-                if x.capture {
-                    ff.field("capture", &x.capture);
+                if x.capture_parent_scope {
+                    ff.field("capture_parent_scope", &x.capture_parent_scope);
                 }
                 ff.finish()
             }
@@ -2091,23 +2201,20 @@ impl Expr {
             #[cfg(not(feature = "no_index"))]
             Self::Array(x, _) if self.is_constant() => {
                 let mut arr = Array::with_capacity(x.len());
-                arr.extend(x.iter().map(|v| {
-                    v.get_literal_value()
-                        .expect("constant array has constant value")
-                }));
+                arr.extend(
+                    x.iter()
+                        .map(|v| v.get_literal_value().expect("constant value")),
+                );
                 Dynamic::from_array(arr)
             }
 
             #[cfg(not(feature = "no_object"))]
             Self::Map(x, _) if self.is_constant() => {
-                let mut map = x.1.clone();
-                x.0.iter().for_each(|(k, v)| {
-                    *map.get_mut(k.name.as_str())
-                        .expect("template contains all keys") = v
-                        .get_literal_value()
-                        .expect("constant map has constant value")
-                });
-                Dynamic::from_map(map)
+                Dynamic::from_map(x.0.iter().fold(x.1.clone(), |mut map, (k, v)| {
+                    let value_ref = map.get_mut(k.name.as_str()).expect("contains all keys");
+                    *value_ref = v.get_literal_value().expect("constant value");
+                    map
+                }))
             }
 
             _ => return None,
@@ -2384,7 +2491,7 @@ impl Expr {
             _ => (),
         }
 
-        path.pop().expect("`path` contains current node");
+        path.pop().expect("contains current node");
 
         true
     }

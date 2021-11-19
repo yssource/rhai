@@ -2,16 +2,16 @@
 
 use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::custom_syntax::CustomSyntax;
-use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
-use crate::fn_hash::get_hasher;
-use crate::fn_native::{
-    CallableFunction, IteratorFn, OnDebugCallback, OnParseTokenCallback, OnPrintCallback,
-    OnVarCallback,
+use crate::func::{
+    get_hasher,
+    native::{OnDebugCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback},
+    CallableFunction, IteratorFn,
 };
 use crate::module::NamespaceRef;
 use crate::packages::{Package, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
-use crate::token::Token;
+use crate::tokenizer::Token;
+use crate::types::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::{
     Dynamic, EvalAltResult, Identifier, ImmutableString, Module, Position, RhaiResult, Scope,
     Shared, StaticVec, INT,
@@ -214,7 +214,7 @@ impl Imports {
         &'a mut self,
     ) -> Option<impl DerefMut<Target = BTreeMap<Identifier, Dynamic>> + 'a> {
         if let Some(ref global_constants) = self.global_constants {
-            Some(crate::fn_native::shared_write_lock(global_constants))
+            Some(crate::func::native::shared_write_lock(global_constants))
         } else {
             None
         }
@@ -228,12 +228,8 @@ impl Imports {
             self.global_constants = Some(dict.into());
         }
 
-        crate::fn_native::shared_write_lock(
-            self.global_constants
-                .as_mut()
-                .expect("`global_constants` is `Some`"),
-        )
-        .insert(name.into(), value);
+        crate::func::native::shared_write_lock(self.global_constants.as_mut().expect("`Some`"))
+            .insert(name.into(), value);
     }
     /// Get the pre-calculated index getter hash.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
@@ -474,7 +470,12 @@ pub enum Target<'a> {
     /// The target is a mutable reference to a Shared `Dynamic` value.
     /// It holds both the access guard and the original shared value.
     #[cfg(not(feature = "no_closure"))]
-    LockGuard((crate::dynamic::DynamicWriteLock<'a, Dynamic>, Dynamic)),
+    LockGuard(
+        (
+            crate::types::dynamic::DynamicWriteLock<'a, Dynamic>,
+            Dynamic,
+        ),
+    ),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
     TempValue(Dynamic),
     /// The target is a bit inside an [`INT`][crate::INT].
@@ -600,9 +601,7 @@ impl<'a> Target<'a> {
                     ))
                 })?;
 
-                let value = &mut *value
-                    .write_lock::<crate::INT>()
-                    .expect("`BitField` holds `INT`");
+                let value = &mut *value.write_lock::<crate::INT>().expect("`INT`");
 
                 let index = *index;
 
@@ -630,7 +629,7 @@ impl<'a> Target<'a> {
 
                 let s = &mut *s
                     .write_lock::<ImmutableString>()
-                    .expect("`StringChar` holds `ImmutableString`");
+                    .expect("`ImmutableString`");
 
                 let index = *index;
 
@@ -653,10 +652,7 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
         if value.is_shared() {
             // Cloning is cheap for a shared value
             let container = value.clone();
-            return Self::LockGuard((
-                value.write_lock::<Dynamic>().expect("cast to `Dynamic`"),
-                container,
-            ));
+            return Self::LockGuard((value.write_lock::<Dynamic>().expect("`Dynamic`"), container));
         }
 
         Self::RefMut(value)
@@ -786,9 +782,7 @@ impl EvalState {
             // Push a new function resolution cache if the stack is empty
             self.push_fn_resolution_cache();
         }
-        self.fn_resolution_caches
-            .last_mut()
-            .expect("at least one function resolution cache")
+        self.fn_resolution_caches.last_mut().expect("not empty")
     }
     /// Push an empty function resolution cache onto the stack and make it current.
     #[allow(dead_code)]
@@ -803,9 +797,7 @@ impl EvalState {
     /// Panics if there is no more function resolution cache in the stack.
     #[inline(always)]
     pub fn pop_fn_resolution_cache(&mut self) {
-        self.fn_resolution_caches
-            .pop()
-            .expect("at least one function resolution cache");
+        self.fn_resolution_caches.pop().expect("not empty");
     }
 }
 
@@ -1017,7 +1009,7 @@ pub struct Engine {
     pub(crate) debug: Option<OnDebugCallback>,
     /// Callback closure for progress reporting.
     #[cfg(not(feature = "unchecked"))]
-    pub(crate) progress: Option<crate::fn_native::OnProgressCallback>,
+    pub(crate) progress: Option<crate::func::native::OnProgressCallback>,
 
     /// Optimize the AST after compilation.
     #[cfg(not(feature = "no_optimize"))]
@@ -1188,10 +1180,10 @@ impl Engine {
 
         if let Some(index) = index {
             let offset = mods.len() - index.get();
-            Some(mods.get(offset).expect("offset within range"))
+            Some(mods.get(offset).expect("within range"))
         } else {
             mods.find(root)
-                .map(|n| mods.get(n).expect("index is valid"))
+                .map(|n| mods.get(n).expect("valid index"))
                 .or_else(|| self.global_sub_modules.get(root).cloned())
         }
     }
@@ -1327,7 +1319,7 @@ impl Engine {
                 level: 0,
             };
             match resolve_var(
-                expr.get_variable_name(true).expect("`expr` is `Variable`"),
+                expr.get_variable_name(true).expect("`Variable`"),
                 index,
                 &context,
             ) {
@@ -1344,7 +1336,7 @@ impl Engine {
             scope.len() - index
         } else {
             // Find the variable in the scope
-            let var_name = expr.get_variable_name(true).expect("`expr` is `Variable`");
+            let var_name = expr.get_variable_name(true).expect("`Variable`");
             scope
                 .get_index(var_name)
                 .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(var_name.to_string(), var_pos))?
@@ -1378,16 +1370,14 @@ impl Engine {
         let _terminate_chaining = terminate_chaining;
 
         // Pop the last index value
-        let idx_val = idx_values.pop().expect("index chain is never empty");
+        let idx_val = idx_values.pop().expect("not empty");
 
         match chain_type {
             #[cfg(not(feature = "no_index"))]
             ChainType::Indexing => {
                 let pos = rhs.position();
                 let root_pos = idx_val.position();
-                let idx_val = idx_val
-                    .into_index_value()
-                    .expect("`chain_type` is `ChainType::Index`");
+                let idx_val = idx_val.into_index_value().expect("`ChainType::Index`");
 
                 match rhs {
                     // xxx[idx].expr... | xxx[idx][expr]...
@@ -1440,8 +1430,7 @@ impl Engine {
                     }
                     // xxx[rhs] op= new_val
                     _ if new_val.is_some() => {
-                        let ((new_val, new_pos), (op_info, op_pos)) =
-                            new_val.expect("`new_val` is `Some`");
+                        let ((new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
                         let mut idx_val_for_setter = idx_val.clone();
 
                         let try_setter = match self.get_indexed_mut(
@@ -1495,7 +1484,7 @@ impl Engine {
                         let FnCallExpr { name, hashes, .. } = x.as_ref();
                         let call_args = &mut idx_val
                             .into_fn_call_args()
-                            .expect("`chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
+                            .expect("`ChainType::Dot` with `Expr::FnCallExpr`");
                         self.make_method_call(
                             mods, state, lib, name, *hashes, target, call_args, *pos, level,
                         )
@@ -1511,8 +1500,7 @@ impl Engine {
                     // {xxx:map}.id op= ???
                     Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
                         let (name, pos) = &x.2;
-                        let ((new_val, new_pos), (op_info, op_pos)) =
-                            new_val.expect("`new_val` is `Some`");
+                        let ((new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
                         let index = name.into();
                         {
                             let val_target = &mut self.get_indexed_mut(
@@ -1539,8 +1527,7 @@ impl Engine {
                     // xxx.id op= ???
                     Expr::Property(x) if new_val.is_some() => {
                         let ((getter, hash_get), (setter, hash_set), (name, pos)) = x.as_ref();
-                        let ((mut new_val, new_pos), (op_info, op_pos)) =
-                            new_val.expect("`new_val` is `Some`");
+                        let ((mut new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
 
                         if op_info.is_some() {
                             let hash = FnCallHashes::from_native(*hash_get);
@@ -1906,20 +1893,22 @@ impl Engine {
                 let crate::ast::FnCallExpr {
                     args, constants, ..
                 } = x.as_ref();
-                let mut arg_values = StaticVec::with_capacity(args.len());
-                let mut first_arg_pos = Position::NONE;
 
-                for index in 0..args.len() {
-                    let (value, pos) = self.get_arg_value(
-                        scope, mods, state, lib, this_ptr, level, args, constants, index,
-                    )?;
-                    arg_values.push(value.flatten());
-                    if index == 0 {
-                        first_arg_pos = pos
-                    }
-                }
+                let (values, pos) = args.iter().try_fold(
+                    (StaticVec::with_capacity(args.len()), Position::NONE),
+                    |(mut values, mut pos), expr| -> Result<_, Box<EvalAltResult>> {
+                        let (value, arg_pos) = self.get_arg_value(
+                            scope, mods, state, lib, this_ptr, level, expr, constants,
+                        )?;
+                        if values.is_empty() {
+                            pos = arg_pos;
+                        }
+                        values.push(value.flatten());
+                        Ok((values, pos))
+                    },
+                )?;
 
-                idx_values.push((arg_values, first_arg_pos).into());
+                idx_values.push((values, pos).into());
             }
             #[cfg(not(feature = "no_object"))]
             Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dotting => {
@@ -1950,20 +1939,22 @@ impl Engine {
                         let crate::ast::FnCallExpr {
                             args, constants, ..
                         } = x.as_ref();
-                        let mut arg_values = StaticVec::with_capacity(args.len());
-                        let mut first_arg_pos = Position::NONE;
 
-                        for index in 0..args.len() {
-                            let (value, pos) = self.get_arg_value(
-                                scope, mods, state, lib, this_ptr, level, args, constants, index,
-                            )?;
-                            arg_values.push(value.flatten());
-                            if index == 0 {
-                                first_arg_pos = pos;
-                            }
-                        }
-
-                        (arg_values, first_arg_pos).into()
+                        args.iter()
+                            .try_fold(
+                                (StaticVec::with_capacity(args.len()), Position::NONE),
+                                |(mut values, mut pos), expr| -> Result<_, Box<EvalAltResult>> {
+                                    let (value, arg_pos) = self.get_arg_value(
+                                        scope, mods, state, lib, this_ptr, level, expr, constants,
+                                    )?;
+                                    if values.is_empty() {
+                                        pos = arg_pos
+                                    }
+                                    values.push(value.flatten());
+                                    Ok((values, pos))
+                                },
+                            )?
+                            .into()
                     }
                     #[cfg(not(feature = "no_object"))]
                     Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dotting => {
@@ -2216,7 +2207,7 @@ impl Engine {
             // Statement block
             Expr::Stmt(x) if x.is_empty() => Ok(Dynamic::UNIT),
             Expr::Stmt(x) => {
-                self.eval_stmt_block(scope, mods, state, lib, this_ptr, x, true, level)
+                self.eval_stmt_block(scope, mods, state, lib, this_ptr, x, true, true, level)
             }
 
             // lhs[idx_expr]
@@ -2236,7 +2227,7 @@ impl Engine {
                 let mut pos = *pos;
                 let mut result: Dynamic = self.const_empty_string().into();
 
-                for expr in x.iter() {
+                x.iter().try_for_each(|expr| {
                     let item = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
 
                     self.eval_op_assignment(
@@ -2254,8 +2245,8 @@ impl Engine {
                     pos = expr.position();
 
                     self.check_data_size(&result)
-                        .map_err(|err| err.fill_position(pos))?;
-                }
+                        .map_err(|err| err.fill_position(pos))
+                })?;
 
                 assert!(
                     result.is::<ImmutableString>(),
@@ -2266,30 +2257,35 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Array(x, _) => {
-                let mut arr = Array::with_capacity(x.len());
-                for item in x.as_ref() {
-                    arr.push(
-                        self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?
-                            .flatten(),
-                    );
-                }
-                Ok(arr.into())
-            }
+            Expr::Array(x, _) => Ok(x
+                .iter()
+                .try_fold(
+                    Array::with_capacity(x.len()),
+                    |mut arr, item| -> Result<_, Box<EvalAltResult>> {
+                        arr.push(
+                            self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?
+                                .flatten(),
+                        );
+                        Ok(arr)
+                    },
+                )?
+                .into()),
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Map(x, _) => {
-                let mut map = x.1.clone();
-                for (Ident { name: key, .. }, expr) in &x.0 {
-                    let value_ref = map
-                        .get_mut(key.as_str())
-                        .expect("template contains all keys");
-                    *value_ref = self
-                        .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                        .flatten();
-                }
-                Ok(map.into())
-            }
+            Expr::Map(x, _) => Ok(x
+                .0
+                .iter()
+                .try_fold(
+                    x.1.clone(),
+                    |mut map, (Ident { name: key, .. }, expr)| -> Result<_, Box<EvalAltResult>> {
+                        let value_ref = map.get_mut(key.as_str()).expect("contains all keys");
+                        *value_ref = self
+                            .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                            .flatten();
+                        Ok(map)
+                    },
+                )?
+                .into()),
 
             // Namespace-qualified function call
             Expr::FnCall(x, pos) if x.is_qualified() => {
@@ -2313,7 +2309,7 @@ impl Engine {
             Expr::FnCall(x, pos) => {
                 let FnCallExpr {
                     name,
-                    capture,
+                    capture_parent_scope: capture,
                     hashes,
                     args,
                     constants,
@@ -2356,14 +2352,8 @@ impl Engine {
 
             Expr::Custom(custom, _) => {
                 let expressions: StaticVec<_> = custom.inputs.iter().map(Into::into).collect();
-                let key_token = custom
-                    .tokens
-                    .first()
-                    .expect("custom syntax stream contains at least one token");
-                let custom_def = self
-                    .custom_syntax
-                    .get(key_token)
-                    .expect("custom syntax leading token matches with definition");
+                let key_token = custom.tokens.first().expect("not empty");
+                let custom_def = self.custom_syntax.get(key_token).expect("must match");
                 let mut context = EvalContext {
                     engine: self,
                     scope,
@@ -2393,6 +2383,7 @@ impl Engine {
         this_ptr: &mut Option<&mut Dynamic>,
         statements: &[Stmt],
         restore_prev_state: bool,
+        rewind_scope: bool,
         level: usize,
     ) -> RhaiResult {
         if statements.is_empty() {
@@ -2404,7 +2395,7 @@ impl Engine {
         let prev_scope_len = scope.len();
         let prev_mods_len = mods.len();
 
-        if restore_prev_state {
+        if rewind_scope {
             state.scope_level += 1;
         }
 
@@ -2446,10 +2437,12 @@ impl Engine {
             state.pop_fn_resolution_cache();
         }
 
-        if restore_prev_state {
+        if rewind_scope {
             scope.rewind(prev_scope_len);
-            mods.truncate(prev_mods_len);
             state.scope_level -= 1;
+        }
+        if restore_prev_state {
+            mods.truncate(prev_mods_len);
 
             // The impact of new local variables goes away at the end of a block
             // because any new variables introduced will go out of scope
@@ -2497,7 +2490,7 @@ impl Engine {
                 let target_is_shared = false;
 
                 if target_is_shared {
-                    lock_guard = target.write_lock::<Dynamic>().expect("cast to `Dynamic`");
+                    lock_guard = target.write_lock::<Dynamic>().expect("`Dynamic`");
                     lhs_ptr_inner = &mut *lock_guard;
                 } else {
                     lhs_ptr_inner = &mut *target;
@@ -2567,9 +2560,7 @@ impl Engine {
                 let (mut lhs_ptr, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, lhs_expr)?;
 
-                let var_name = lhs_expr
-                    .get_variable_name(false)
-                    .expect("`lhs_ptr` is `Variable`");
+                let var_name = lhs_expr.get_variable_name(false).expect("`Variable`");
 
                 if !lhs_ptr.is_ref() {
                     return Err(EvalAltResult::ErrorAssignmentToConstant(
@@ -2638,9 +2629,9 @@ impl Engine {
 
             // Block scope
             Stmt::Block(statements, _) if statements.is_empty() => Ok(Dynamic::UNIT),
-            Stmt::Block(statements, _) => {
-                self.eval_stmt_block(scope, mods, state, lib, this_ptr, statements, true, level)
-            }
+            Stmt::Block(statements, _) => self.eval_stmt_block(
+                scope, mods, state, lib, this_ptr, statements, true, true, level,
+            ),
 
             // If statement
             Stmt::If(expr, x, _) => {
@@ -2651,13 +2642,17 @@ impl Engine {
 
                 if guard_val {
                     if !x.0.is_empty() {
-                        self.eval_stmt_block(scope, mods, state, lib, this_ptr, &x.0, true, level)
+                        self.eval_stmt_block(
+                            scope, mods, state, lib, this_ptr, &x.0, true, true, level,
+                        )
                     } else {
                         Ok(Dynamic::UNIT)
                     }
                 } else {
                     if !x.1.is_empty() {
-                        self.eval_stmt_block(scope, mods, state, lib, this_ptr, &x.1, true, level)
+                        self.eval_stmt_block(
+                            scope, mods, state, lib, this_ptr, &x.1, true, true, level,
+                        )
                     } else {
                         Ok(Dynamic::UNIT)
                     }
@@ -2697,7 +2692,7 @@ impl Engine {
 
                         Some(if !statements.is_empty() {
                             self.eval_stmt_block(
-                                scope, mods, state, lib, this_ptr, statements, true, level,
+                                scope, mods, state, lib, this_ptr, statements, true, true, level,
                             )
                         } else {
                             Ok(Dynamic::UNIT)
@@ -2711,7 +2706,7 @@ impl Engine {
                     // Default match clause
                     if !def_stmt.is_empty() {
                         self.eval_stmt_block(
-                            scope, mods, state, lib, this_ptr, def_stmt, true, level,
+                            scope, mods, state, lib, this_ptr, def_stmt, true, true, level,
                         )
                     } else {
                         Ok(Dynamic::UNIT)
@@ -2722,7 +2717,8 @@ impl Engine {
             // Loop
             Stmt::While(Expr::Unit(_), body, _) => loop {
                 if !body.is_empty() {
-                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    match self
+                        .eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, true, level)
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
@@ -2748,7 +2744,8 @@ impl Engine {
                     return Ok(Dynamic::UNIT);
                 }
                 if !body.is_empty() {
-                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    match self
+                        .eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, true, level)
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
@@ -2765,7 +2762,8 @@ impl Engine {
                 let is_while = !options.contains(AST_OPTION_NEGATED);
 
                 if !body.is_empty() {
-                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    match self
+                        .eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, true, level)
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
@@ -2829,7 +2827,7 @@ impl Engine {
                             if x > INT::MAX as usize {
                                 return Err(EvalAltResult::ErrorArithmetic(
                                     format!("for-loop counter overflow: {}", x),
-                                    counter.as_ref().expect("`counter` is `Some`").pos,
+                                    counter.as_ref().expect("`Some`").pos,
                                 )
                                 .into());
                             }
@@ -2837,7 +2835,7 @@ impl Engine {
                             let mut counter_var = scope
                                 .get_mut_by_index(c)
                                 .write_lock::<INT>()
-                                .expect("counter holds `INT`");
+                                .expect("`INT`");
                             *counter_var = x as INT;
                         }
 
@@ -2850,7 +2848,7 @@ impl Engine {
                         let loop_var_is_shared = false;
 
                         if loop_var_is_shared {
-                            let mut value_ref = loop_var.write_lock().expect("cast to `Dynamic`");
+                            let mut value_ref = loop_var.write_lock().expect("`Dynamic`");
                             *value_ref = value;
                         } else {
                             *loop_var = value;
@@ -2864,7 +2862,7 @@ impl Engine {
                         }
 
                         let result = self.eval_stmt_block(
-                            scope, mods, state, lib, this_ptr, statements, true, level,
+                            scope, mods, state, lib, this_ptr, statements, true, true, level,
                         );
 
                         match result {
@@ -2911,7 +2909,7 @@ impl Engine {
             Stmt::FnCall(x, pos) => {
                 let FnCallExpr {
                     name,
-                    capture,
+                    capture_parent_scope: capture,
                     hashes,
                     args,
                     constants,
@@ -2928,7 +2926,9 @@ impl Engine {
                 let (try_stmt, err_var, catch_stmt) = x.as_ref();
 
                 let result = self
-                    .eval_stmt_block(scope, mods, state, lib, this_ptr, try_stmt, true, level)
+                    .eval_stmt_block(
+                        scope, mods, state, lib, this_ptr, try_stmt, true, true, level,
+                    )
                     .map(|_| Dynamic::UNIT);
 
                 match result {
@@ -2958,16 +2958,11 @@ impl Engine {
                                 if err_pos.is_none() {
                                     // No position info
                                 } else {
-                                    let line = err_pos
-                                        .line()
-                                        .expect("non-NONE `Position` has line number")
-                                        as INT;
+                                    let line = err_pos.line().expect("line number") as INT;
                                     let position = if err_pos.is_beginning_of_line() {
                                         0
                                     } else {
-                                        err_pos
-                                            .position()
-                                            .expect("non-NONE `Position` has character position")
+                                        err_pos.position().expect("character position")
                                     } as INT;
                                     err_map.insert("line".into(), line.into());
                                     err_map.insert("position".into(), position.into());
@@ -2985,7 +2980,7 @@ impl Engine {
                         });
 
                         let result = self.eval_stmt_block(
-                            scope, mods, state, lib, this_ptr, catch_stmt, true, level,
+                            scope, mods, state, lib, this_ptr, catch_stmt, true, true, level,
                         );
 
                         scope.rewind(orig_scope_len);
@@ -3114,7 +3109,7 @@ impl Engine {
                     if let Some(name) = export.as_ref().map(|x| x.name.clone()) {
                         if !module.is_indexed() {
                             // Index the module (making a clone copy if necessary) if it is not indexed
-                            let mut module = crate::fn_native::shared_take_or_clone(module);
+                            let mut module = crate::func::native::shared_take_or_clone(module);
                             module.build_index();
                             mods.push(name, module);
                         } else {
@@ -3133,19 +3128,20 @@ impl Engine {
             // Export statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(list, _) => {
-                for (Ident { name, pos, .. }, Ident { name: rename, .. }) in list.as_ref() {
-                    // Mark scope variables as public
-                    if let Some((index, _)) = scope.get_index(name) {
-                        scope.add_entry_alias(
-                            index,
-                            if rename.is_empty() { name } else { rename }.clone(),
-                        );
-                    } else {
-                        return Err(
-                            EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos).into()
-                        );
-                    }
-                }
+                list.iter().try_for_each(
+                    |(Ident { name, pos, .. }, Ident { name: rename, .. })| {
+                        // Mark scope variables as public
+                        if let Some((index, _)) = scope.get_index(name) {
+                            scope.add_entry_alias(
+                                index,
+                                if rename.is_empty() { name } else { rename }.clone(),
+                            );
+                            Ok(()) as Result<_, Box<EvalAltResult>>
+                        } else {
+                            Err(EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos).into())
+                        }
+                    },
+                )?;
                 Ok(Dynamic::UNIT)
             }
 
@@ -3172,7 +3168,7 @@ impl Engine {
     fn check_return_value(&self, mut result: RhaiResult) -> RhaiResult {
         if let Ok(ref mut r) = result {
             // Concentrate all empty strings into one instance to save memory
-            if let Dynamic(crate::dynamic::Union::Str(s, _, _)) = r {
+            if let Dynamic(crate::types::dynamic::Union::Str(s, _, _)) = r {
                 if s.is_empty() {
                     if !s.ptr_eq(&self.empty_string) {
                         *s = self.const_empty_string();

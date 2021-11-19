@@ -1,10 +1,10 @@
 //! Module defining interfaces to native-Rust functions.
 
+use super::call::FnCallArgs;
 use crate::ast::{FnAccess, FnCallHashes};
 use crate::engine::{EvalState, Imports};
-use crate::fn_call::FnCallArgs;
 use crate::plugin::PluginFunction;
-use crate::token::{Token, TokenizeState};
+use crate::tokenizer::{Token, TokenizeState};
 use crate::{
     calc_fn_hash, Dynamic, Engine, EvalAltResult, EvalContext, Module, Position, RhaiResult,
 };
@@ -239,12 +239,13 @@ impl<'a> NativeCallContext<'a> {
         args: &mut [&mut Dynamic],
     ) -> Result<Dynamic, Box<EvalAltResult>> {
         let hash = if is_method_call {
-            FnCallHashes::from_script_and_native(
+            FnCallHashes::from_all(
+                #[cfg(not(feature = "no_function"))]
                 calc_fn_hash(fn_name, args.len() - 1),
                 calc_fn_hash(fn_name, args.len()),
             )
         } else {
-            FnCallHashes::from_script(calc_fn_hash(fn_name, args.len()))
+            calc_fn_hash(fn_name, args.len()).into()
         };
 
         self.engine()
@@ -298,9 +299,7 @@ pub fn shared_try_take<T>(value: Shared<T>) -> Result<T, Shared<T>> {
 #[must_use]
 #[allow(dead_code)]
 pub fn shared_take<T>(value: Shared<T>) -> T {
-    shared_try_take(value)
-        .ok()
-        .expect("no outstanding references")
+    shared_try_take(value).ok().expect("not shared")
 }
 
 /// Lock a [`Shared`] resource.

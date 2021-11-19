@@ -1,14 +1,12 @@
-//! Module that defines the extern API of [`Engine`].
+//! Module that defines the public API of [`Engine`].
 
-use crate::dynamic::Variant;
 use crate::engine::{EvalContext, EvalState, Imports};
-use crate::fn_call::FnCallArgs;
-use crate::fn_native::SendSync;
-use crate::fn_register::RegisterNativeFunction;
-use crate::parse::ParseState;
+use crate::func::{FnCallArgs, RegisterNativeFunction, SendSync};
+use crate::parser::ParseState;
+use crate::types::dynamic::Variant;
 use crate::{
-    scope::Scope, Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Identifier, Module,
-    NativeCallContext, ParseError, Position, RhaiResult, Shared, AST,
+    Dynamic, Engine, EvalAltResult, FnAccess, FnNamespace, Identifier, Module, NativeCallContext,
+    ParseError, Position, RhaiResult, Scope, Shared, AST,
 };
 use std::any::{type_name, TypeId};
 #[cfg(feature = "no_std")]
@@ -25,20 +23,13 @@ impl Engine {
     #[inline(always)]
     #[allow(dead_code)]
     pub(crate) fn global_namespace(&self) -> &Module {
-        self.global_modules
-            .first()
-            .expect("global_modules contains at least one module")
+        self.global_modules.first().expect("not empty")
     }
     /// Get a mutable reference to the global namespace module
     /// (which is the first module in `global_modules`).
     #[inline(always)]
     pub(crate) fn global_namespace_mut(&mut self) -> &mut Module {
-        Shared::get_mut(
-            self.global_modules
-                .first_mut()
-                .expect("global_modules contains at least one module"),
-        )
-        .expect("global namespace module is never shared")
+        Shared::get_mut(self.global_modules.first_mut().expect("not empty")).expect("not shared")
     }
     /// Register a custom function with the [`Engine`].
     ///
@@ -944,12 +935,12 @@ impl Engine {
             name: impl AsRef<str> + Into<Identifier>,
             module: Shared<Module>,
         ) {
-            let separator = crate::token::Token::DoubleColon.syntax();
+            let separator = crate::tokenizer::Token::DoubleColon.syntax();
 
             if !name.as_ref().contains(separator.as_ref()) {
                 if !module.is_indexed() {
                     // Index the module (making a clone copy if necessary) if it is not indexed
-                    let mut module = crate::fn_native::shared_take_or_clone(module);
+                    let mut module = crate::func::native::shared_take_or_clone(module);
                     module.build_index();
                     root.insert(name.into(), module.into());
                 } else {
@@ -957,8 +948,8 @@ impl Engine {
                 }
             } else {
                 let mut iter = name.as_ref().splitn(2, separator.as_ref());
-                let sub_module = iter.next().expect("name contains separator").trim();
-                let remainder = iter.next().expect("name contains separator").trim();
+                let sub_module = iter.next().expect("contains separator").trim();
+                let remainder = iter.next().expect("contains separator").trim();
 
                 if !root.contains_key(sub_module) {
                     let mut m = Module::new();
@@ -966,10 +957,8 @@ impl Engine {
                     m.build_index();
                     root.insert(sub_module.into(), m.into());
                 } else {
-                    let m = root
-                        .remove(sub_module)
-                        .expect("root contains the sub-module");
-                    let mut m = crate::fn_native::shared_take_or_clone(m);
+                    let m = root.remove(sub_module).expect("contains sub-module");
+                    let mut m = crate::func::native::shared_take_or_clone(m);
                     register_static_module_raw(m.sub_modules_mut(), remainder, module);
                     m.build_index();
                     root.insert(sub_module.into(), m.into());
@@ -1006,8 +995,11 @@ impl Engine {
     }
     /// Compile a string into an [`AST`] using own scope, which can be used later for evaluation.
     ///
-    /// The scope is useful for passing constants into the script for optimization
-    /// when using [`OptimizationLevel::Full`].
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
     ///
     /// # Example
     ///
@@ -1018,10 +1010,6 @@ impl Engine {
     /// use rhai::{Engine, Scope, OptimizationLevel};
     ///
     /// let mut engine = Engine::new();
-    ///
-    /// // Set optimization level to 'Full' so the Engine can fold constants
-    /// // into function calls and operators.
-    /// engine.set_optimization_level(OptimizationLevel::Full);
     ///
     /// // Create initialized scope
     /// let mut scope = Scope::new();
@@ -1063,7 +1051,7 @@ impl Engine {
     ) -> Result<AST, Box<EvalAltResult>> {
         use crate::{
             ast::{ASTNode, Expr, Stmt},
-            fn_native::shared_take_or_clone,
+            func::native::shared_take_or_clone,
             module::resolvers::StaticModuleResolver,
         };
         use std::collections::BTreeSet;
@@ -1074,7 +1062,7 @@ impl Engine {
             imports: &mut BTreeSet<Identifier>,
         ) {
             ast.walk(
-                &mut |path| match path.last().expect("`path` contains the current node") {
+                &mut |path| match path.last().expect("contains current node") {
                     // Collect all `import` statements with a string constant path
                     ASTNode::Stmt(Stmt::Import(Expr::StringConstant(s, _), _, _))
                         if !resolver.contains_path(s) && !imports.contains(s.as_str()) =>
@@ -1130,6 +1118,12 @@ impl Engine {
     /// All strings are simply parsed one after another with nothing inserted in between, not even
     /// a newline or space.
     ///
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
+    ///
     /// # Example
     ///
     /// ```
@@ -1139,10 +1133,6 @@ impl Engine {
     /// use rhai::{Engine, Scope, OptimizationLevel};
     ///
     /// let mut engine = Engine::new();
-    ///
-    /// // Set optimization level to 'Full' so the Engine can fold constants
-    /// // into function calls and operators.
-    /// engine.set_optimization_level(OptimizationLevel::Full);
     ///
     /// // Create initialized scope
     /// let mut scope = Scope::new();
@@ -1179,6 +1169,12 @@ impl Engine {
         )
     }
     /// Join a list of strings and compile into an [`AST`] using own scope at a specific optimization level.
+    ///
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
     #[inline]
     pub(crate) fn compile_with_scope_and_optimization_level(
         &self,
@@ -1262,8 +1258,11 @@ impl Engine {
     ///
     /// Not available under `no_std` or `WASM`.
     ///
-    /// The scope is useful for passing constants into the script for optimization
-    /// when using [`OptimizationLevel::Full`].
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
     ///
     /// # Example
     ///
@@ -1274,9 +1273,6 @@ impl Engine {
     /// use rhai::{Engine, Scope, OptimizationLevel};
     ///
     /// let mut engine = Engine::new();
-    ///
-    /// // Set optimization level to 'Full' so the Engine can fold constants.
-    /// engine.set_optimization_level(OptimizationLevel::Full);
     ///
     /// // Create initialized scope
     /// let mut scope = Scope::new();
@@ -1351,7 +1347,7 @@ impl Engine {
         json: impl AsRef<str>,
         has_null: bool,
     ) -> Result<Map, Box<EvalAltResult>> {
-        use crate::token::Token;
+        use crate::tokenizer::Token;
 
         fn parse_json_inner(
             engine: &Engine,
@@ -1378,7 +1374,7 @@ impl Engine {
                     Some(&|token, _, _| {
                         match token {
                             // If `null` is present, make sure `null` is treated as a variable
-                            Token::Reserved(s) if s == "null" => Token::Identifier(s),
+                            Token::Reserved(s) if &*s == "null" => Token::Identifier(s),
                             _ => token,
                         }
                     })
@@ -1429,9 +1425,6 @@ impl Engine {
     /// Compile a string containing an expression into an [`AST`] using own scope,
     /// which can be used later for evaluation.
     ///
-    /// The scope is useful for passing constants into the script for optimization
-    /// when using [`OptimizationLevel::Full`].
-    ///
     /// # Example
     ///
     /// ```
@@ -1441,10 +1434,6 @@ impl Engine {
     /// use rhai::{Engine, Scope, OptimizationLevel};
     ///
     /// let mut engine = Engine::new();
-    ///
-    /// // Set optimization level to 'Full' so the Engine can fold constants
-    /// // into function calls and operators.
-    /// engine.set_optimization_level(OptimizationLevel::Full);
     ///
     /// // Create initialized scope
     /// let mut scope = Scope::new();
@@ -1515,6 +1504,12 @@ impl Engine {
     ///
     /// Not available under `no_std` or `WASM`.
     ///
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
+    ///
     /// # Example
     ///
     /// ```no_run
@@ -1561,6 +1556,12 @@ impl Engine {
         self.eval_with_scope(&mut Scope::new(), script)
     }
     /// Evaluate a string with own scope.
+    ///
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
     ///
     /// # Example
     ///
@@ -1768,6 +1769,12 @@ impl Engine {
     /// Evaluate a file with own scope, returning any error (if any).
     ///
     /// Not available under `no_std` or `WASM`.
+    ///
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     #[inline]
@@ -1784,6 +1791,12 @@ impl Engine {
         self.run_with_scope(&mut Scope::new(), script)
     }
     /// Evaluate a script with own scope, returning any error (if any).
+    ///
+    /// ## Constants Propagation
+    ///
+    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
+    /// throughout the script _including_ functions. This allows functions to be optimized based on
+    /// dynamic global constants.
     #[inline]
     pub fn run_with_scope(
         &self,
@@ -1888,10 +1901,8 @@ impl Engine {
     ) -> Result<T, Box<EvalAltResult>> {
         let mut arg_values = crate::StaticVec::new();
         args.parse(&mut arg_values);
-        let mut args: crate::StaticVec<_> = arg_values.iter_mut().collect();
-        let name = name.as_ref();
 
-        let result = self.call_fn_dynamic_raw(scope, ast, true, name, &mut None, &mut args)?;
+        let result = self.call_fn_raw(scope, ast, true, true, name, None, arg_values)?;
 
         let typ = self.map_type_name(result.type_name());
 
@@ -1905,11 +1916,13 @@ impl Engine {
         })
     }
     /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments
-    /// and optionally a value for binding to the `this` pointer.
+    /// and the following options:
+    ///
+    /// * whether to evaluate the [`AST`] to load necessary modules before calling the function
+    /// * whether to rewind the [`Scope`] after the function call
+    /// * a value for binding to the `this` pointer (if any)
     ///
     /// Not available under `no_function`.
-    ///
-    /// There is an option to evaluate the [`AST`] to load necessary modules before calling the function.
     ///
     /// # WARNING
     ///
@@ -1933,76 +1946,66 @@ impl Engine {
     ///     fn add1(x)   { len(x) + 1 + foo }
     ///     fn bar()     { foo/2 }
     ///     fn action(x) { this += x; }         // function using 'this' pointer
+    ///     fn decl(x)   { let hello = x; }     // declaring variables
     /// ")?;
     ///
     /// let mut scope = Scope::new();
     /// scope.push("foo", 42_i64);
     ///
     /// // Call the script-defined function
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "add", None, [ "abc".into(), 123_i64.into() ])?;
-    /// //                                                                 ^^^^ no 'this' pointer
+    /// let result = engine.call_fn_raw(&mut scope, &ast, true, true, "add", None, [ "abc".into(), 123_i64.into() ])?;
+    /// //                                                                   ^^^^ no 'this' pointer
     /// assert_eq!(result.cast::<i64>(), 168);
     ///
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "add1", None, [ "abc".into() ])?;
+    /// let result = engine.call_fn_raw(&mut scope, &ast, true, true, "add1", None, [ "abc".into() ])?;
     /// assert_eq!(result.cast::<i64>(), 46);
     ///
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "bar", None, [])?;
+    /// let result = engine.call_fn_raw(&mut scope, &ast, true, true, "bar", None, [])?;
     /// assert_eq!(result.cast::<i64>(), 21);
     ///
     /// let mut value: Dynamic = 1_i64.into();
-    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "action", Some(&mut value), [ 41_i64.into() ])?;
-    /// //                                                                    ^^^^^^^^^^^^^^^^ binding the 'this' pointer
+    /// let result = engine.call_fn_raw(&mut scope, &ast, true, true, "action", Some(&mut value), [ 41_i64.into() ])?;
+    /// //                                                                      ^^^^^^^^^^^^^^^^ binding the 'this' pointer
     /// assert_eq!(value.as_int().expect("value should be INT"), 42);
+    ///
+    /// engine.call_fn_raw(&mut scope, &ast, true, false, "decl", None, [ 42_i64.into() ])?;
+    /// //                                         ^^^^^ do not rewind scope
+    /// assert_eq!(scope.get_value::<i64>("hello").unwrap(), 42);
     /// # }
     /// # Ok(())
     /// # }
     /// ```
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub fn call_fn_dynamic(
+    pub fn call_fn_raw(
         &self,
         scope: &mut Scope,
         ast: &AST,
         eval_ast: bool,
+        rewind_scope: bool,
         name: impl AsRef<str>,
-        mut this_ptr: Option<&mut Dynamic>,
-        mut arg_values: impl AsMut<[Dynamic]>,
-    ) -> RhaiResult {
-        let name = name.as_ref();
-        let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
-
-        self.call_fn_dynamic_raw(scope, ast, eval_ast, name, &mut this_ptr, &mut args)
-    }
-    /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments.
-    ///
-    /// # WARNING
-    ///
-    /// All the arguments are _consumed_, meaning that they're replaced by `()`.
-    /// This is to avoid unnecessarily cloning the arguments.
-    /// Do not use the arguments after this call. If they are needed afterwards,
-    /// clone them _before_ calling this function.
-    #[cfg(not(feature = "no_function"))]
-    #[inline]
-    pub(crate) fn call_fn_dynamic_raw(
-        &self,
-        scope: &mut Scope,
-        ast: &AST,
-        eval_ast: bool,
-        name: &str,
-        this_ptr: &mut Option<&mut Dynamic>,
-        args: &mut FnCallArgs,
+        this_ptr: Option<&mut Dynamic>,
+        arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
         let state = &mut EvalState::new();
         let mods = &mut Imports::new();
-        let lib = &[ast.lib()];
         let statements = ast.statements();
+
+        let orig_scope_len = scope.len();
 
         if eval_ast && !statements.is_empty() {
             // Make sure new variables introduced at global level do not _spill_ into the function call
-            let orig_scope_len = scope.len();
-            self.eval_global_statements(scope, mods, state, statements, lib, 0)?;
-            scope.rewind(orig_scope_len);
+            self.eval_global_statements(scope, mods, state, statements, &[ast.lib()], 0)?;
+
+            if rewind_scope {
+                scope.rewind(orig_scope_len);
+            }
         }
+
+        let name = name.as_ref();
+        let mut this_ptr = this_ptr;
+        let mut arg_values = arg_values;
+        let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
         let fn_def = ast
             .lib()
@@ -2011,19 +2014,22 @@ impl Engine {
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
-        crate::fn_call::ensure_no_data_race(name, args, false)?;
+        crate::func::call::ensure_no_data_race(name, &mut args, false)?;
 
-        self.call_script_fn(
+        let result = self.call_script_fn(
             scope,
             mods,
             state,
-            lib,
-            this_ptr,
+            &[ast.lib()],
+            &mut this_ptr,
             fn_def,
-            args,
+            &mut args,
             Position::NONE,
+            rewind_scope,
             0,
-        )
+        );
+
+        result
     }
     /// Optimize the [`AST`] with constants defined in an external Scope.
     /// An optimized copy of the [`AST`] is returned while the original [`AST`] is consumed.
@@ -2046,9 +2052,11 @@ impl Engine {
     pub fn optimize_ast(
         &self,
         scope: &Scope,
-        mut ast: AST,
+        ast: AST,
         optimization_level: crate::OptimizationLevel,
     ) -> AST {
+        let mut ast = ast;
+
         #[cfg(not(feature = "no_function"))]
         let lib = ast
             .lib()
@@ -2065,8 +2073,9 @@ impl Engine {
         #[cfg(feature = "no_function")]
         let lib = crate::StaticVec::new();
 
-        let stmt = std::mem::take(ast.statements_mut());
-        crate::optimize::optimize_into_ast(self, scope, stmt, lib, optimization_level)
+        let statements = std::mem::take(ast.statements_mut());
+
+        crate::optimizer::optimize_into_ast(self, scope, statements, lib, optimization_level)
     }
     /// _(metadata)_ Generate a list of all registered functions.
     /// Exported under the `metadata` feature only.
@@ -2091,7 +2100,7 @@ impl Engine {
             signatures.extend(
                 self.global_modules
                     .iter()
-                    .take(self.global_modules.len() - 1)
+                    .skip(1)
                     .flat_map(|m| m.gen_fn_signatures()),
             );
         }
@@ -2166,14 +2175,14 @@ impl Engine {
     /// > `Fn(token: Token, pos: Position, state: &TokenizeState) -> Token`
     ///
     /// where:
-    /// * [`token`][crate::token::Token]: current token parsed
+    /// * [`token`][crate::tokenizer::Token]: current token parsed
     /// * [`pos`][`Position`]: location of the token
-    /// * [`state`][crate::token::TokenizeState]: current state of the tokenizer
+    /// * [`state`][crate::tokenizer::TokenizeState]: current state of the tokenizer
     ///
     /// ## Raising errors
     ///
     /// It is possible to raise a parsing error by returning
-    /// [`Token::LexError`][crate::token::Token::LexError] as the mapped token.
+    /// [`Token::LexError`][crate::tokenizer::Token::LexError] as the mapped token.
     ///
     /// # Example
     ///
@@ -2187,10 +2196,10 @@ impl Engine {
     /// engine.on_parse_token(|token, _, _| {
     ///     match token {
     ///         // Convert all integer literals to strings
-    ///         Token::IntegerConstant(n) => Token::StringConstant(n.to_string()),
+    ///         Token::IntegerConstant(n) => Token::StringConstant(n.to_string().into()),
     ///         // Convert 'begin' .. 'end' to '{' .. '}'
-    ///         Token::Identifier(s) if &s == "begin" => Token::LeftBrace,
-    ///         Token::Identifier(s) if &s == "end" => Token::RightBrace,
+    ///         Token::Identifier(s) if &*s == "begin" => Token::LeftBrace,
+    ///         Token::Identifier(s) if &*s == "end" => Token::RightBrace,
     ///         // Pass through all other tokens unchanged
     ///         _ => token
     ///     }
@@ -2207,7 +2216,11 @@ impl Engine {
     #[inline(always)]
     pub fn on_parse_token(
         &mut self,
-        callback: impl Fn(crate::token::Token, Position, &crate::token::TokenizeState) -> crate::token::Token
+        callback: impl Fn(
+                crate::tokenizer::Token,
+                Position,
+                &crate::tokenizer::TokenizeState,
+            ) -> crate::tokenizer::Token
             + SendSync
             + 'static,
     ) -> &mut Self {

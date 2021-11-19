@@ -1,6 +1,6 @@
 //! The `FnPtr` type.
 
-use crate::token::is_valid_identifier;
+use crate::tokenizer::is_valid_identifier;
 use crate::{
     Dynamic, EvalAltResult, Identifier, NativeCallContext, Position, RhaiResult, StaticVec,
 };
@@ -169,6 +169,16 @@ impl TryFrom<String> for FnPtr {
 
     #[inline(always)]
     fn try_from(value: String) -> Result<Self, Self::Error> {
+        let s: Identifier = value.into();
+        Self::try_from(s)
+    }
+}
+
+impl TryFrom<Box<str>> for FnPtr {
+    type Error = Box<EvalAltResult>;
+
+    #[inline(always)]
+    fn try_from(value: Box<str>) -> Result<Self, Self::Error> {
         let s: Identifier = value.into();
         Self::try_from(s)
     }

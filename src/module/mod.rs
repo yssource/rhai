@@ -1,12 +1,13 @@
 //! Module defining external-loaded modules for Rhai.
 
 use crate::ast::{FnAccess, Ident};
-use crate::dynamic::Variant;
-use crate::fn_call::FnCallArgs;
-use crate::fn_native::{shared_take_or_clone, CallableFunction, IteratorFn, SendSync};
-use crate::fn_register::RegisterNativeFunction;
-use crate::parse::IdentifierBuilder;
-use crate::token::Token;
+use crate::func::{
+    shared_take_or_clone, CallableFunction, FnCallArgs, IteratorFn, RegisterNativeFunction,
+    SendSync,
+};
+use crate::parser::IdentifierBuilder;
+use crate::tokenizer::Token;
+use crate::types::dynamic::Variant;
 use crate::{
     calc_fn_params_hash, calc_qualified_fn_hash, combine_hashes, Dynamic, EvalAltResult,
     Identifier, ImmutableString, NativeCallContext, Shared, StaticVec,
@@ -66,11 +67,11 @@ impl FuncInfo {
         let mut sig = format!("{}(", self.name);
 
         if !self.param_names.is_empty() {
-            let mut params: StaticVec<String> =
+            let mut params: StaticVec<Box<str>> =
                 self.param_names.iter().map(|s| s.as_str().into()).collect();
             let return_type = params.pop().unwrap_or_else(|| "()".into());
             sig.push_str(&params.join(", "));
-            if return_type != "()" {
+            if &*return_type != "()" {
                 sig.push_str(") -> ");
                 sig.push_str(&return_type);
             } else {
@@ -1408,10 +1409,11 @@ impl Module {
     /// ```
     #[cfg(not(feature = "no_module"))]
     pub fn eval_ast_as_new(
-        mut scope: crate::Scope,
+        scope: crate::Scope,
         ast: &crate::AST,
         engine: &crate::Engine,
     ) -> Result<Self, Box<EvalAltResult>> {
+        let mut scope = scope;
         let mut mods = crate::engine::Imports::new();
         let orig_mods_len = mods.len();
 
@@ -1419,21 +1421,28 @@ impl Module {
         engine.eval_ast_with_scope_raw(&mut scope, &mut mods, &ast, 0)?;
 
         // Create new module
-        let mut module = Module::new();
-
-        scope.into_iter().for_each(|(_, value, mut aliases)| {
-            // Variables with an alias left in the scope become module variables
-            match aliases.len() {
-                0 => (),
-                1 => {
-                    let alias = aliases.pop().expect("list has one item");
-                    module.set_var(alias, value);
-                }
-                _ => aliases.into_iter().for_each(|alias| {
-                    module.set_var(alias, value.clone());
-                }),
-            }
-        });
+        let mut module =
+            scope
+                .into_iter()
+                .fold(Module::new(), |mut module, (_, value, mut aliases)| {
+                    // Variables with an alias left in the scope become module variables
+                    match aliases.len() {
+                        0 => (),
+                        1 => {
+                            let alias = aliases.pop().expect("not empty");
+                            module.set_var(alias, value);
+                        }
+                        _ => {
+                            let last_alias = aliases.pop().expect("not empty");
+                            aliases.into_iter().for_each(|alias| {
+                                module.set_var(alias, value.clone());
+                            });
+                            // Avoid cloning the last value
+                            module.set_var(last_alias, value);
+                        }
+                    }
+                    module
+                });
 
         // Extra modules left in the scope become sub-modules
         let mut func_mods = crate::engine::Imports::new();

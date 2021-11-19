@@ -1,7 +1,8 @@
 //! Module that defines the [`Scope`] type representing a function call-stack scope.
 
-use crate::dynamic::{AccessMode, Variant};
+use super::dynamic::{AccessMode, Variant};
 use crate::{Dynamic, Identifier, StaticVec};
+use std::iter::FromIterator;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{borrow::Cow, iter::Extend};
@@ -404,7 +405,7 @@ impl<'a> Scope<'a> {
                 self.push(name, value);
             }
             Some((index, AccessMode::ReadWrite)) => {
-                let value_ref = self.values.get_mut(index).expect("index is valid");
+                let value_ref = self.values.get_mut(index).expect("valid index");
                 *value_ref = Dynamic::from(value);
             }
         }
@@ -444,7 +445,7 @@ impl<'a> Scope<'a> {
             }
             Some((_, AccessMode::ReadOnly)) => panic!("variable {} is constant", name.as_ref()),
             Some((index, AccessMode::ReadWrite)) => {
-                let value_ref = self.values.get_mut(index).expect("index is valid");
+                let value_ref = self.values.get_mut(index).expect("valid index");
                 *value_ref = Dynamic::from(value);
             }
         }
@@ -490,7 +491,7 @@ impl<'a> Scope<'a> {
     #[inline]
     #[must_use]
     pub(crate) fn get_mut_by_index(&mut self, index: usize) -> &mut Dynamic {
-        self.values.get_mut(index).expect("index is out of bounds")
+        self.values.get_mut(index).expect("valid index")
     }
     /// Update the access type of an entry in the [`Scope`].
     ///
@@ -500,7 +501,7 @@ impl<'a> Scope<'a> {
     #[cfg(not(feature = "no_module"))]
     #[inline]
     pub(crate) fn add_entry_alias(&mut self, index: usize, alias: Identifier) -> &mut Self {
-        let (_, aliases) = self.names.get_mut(index).expect("index is out of bounds");
+        let (_, aliases) = self.names.get_mut(index).expect("valid index");
         match aliases {
             None => {
                 let mut list = StaticVec::new();
@@ -516,23 +517,19 @@ impl<'a> Scope<'a> {
     /// Shadowed variables are omitted in the copy.
     #[inline]
     #[must_use]
-    pub(crate) fn clone_visible(&self) -> Self {
-        let mut entries = Self::new();
-
-        self.names
-            .iter()
-            .rev()
-            .enumerate()
-            .for_each(|(index, (name, alias))| {
+    pub fn clone_visible(&self) -> Self {
+        self.names.iter().rev().enumerate().fold(
+            Self::new(),
+            |mut entries, (index, (name, alias))| {
                 if !entries.names.iter().any(|(key, _)| key == name) {
                     entries.names.push((name.clone(), alias.clone()));
                     entries
                         .values
                         .push(self.values[self.len() - 1 - index].clone());
                 }
-            });
-
-        entries
+                entries
+            },
+        )
     }
     /// Get an iterator to entries in the [`Scope`].
     #[inline]
@@ -586,14 +583,59 @@ impl<'a> Scope<'a> {
             .zip(self.values.iter())
             .map(|((name, _), value)| (name.as_ref(), value.is_read_only(), value))
     }
+    /// Remove a range of entries within the [`Scope`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the range is out of bounds.
+    #[inline]
+    #[allow(dead_code)]
+    pub(crate) fn remove_range(&mut self, start: usize, len: usize) {
+        self.values.drain(start..start + len).for_each(|_| {});
+        self.names.drain(start..start + len).for_each(|_| {});
+    }
 }
 
 impl<'a, K: Into<Cow<'a, str>>> Extend<(K, Dynamic)> for Scope<'a> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, Dynamic)>>(&mut self, iter: T) {
         iter.into_iter().for_each(|(name, value)| {
-            self.names.push((name.into(), None));
-            self.values.push(value);
+            self.push_dynamic_value(name, AccessMode::ReadWrite, value);
         });
+    }
+}
+
+impl<'a, K: Into<Cow<'a, str>>> FromIterator<(K, Dynamic)> for Scope<'a> {
+    #[inline]
+    fn from_iter<T: IntoIterator<Item = (K, Dynamic)>>(iter: T) -> Self {
+        let mut scope = Self::new();
+        scope.extend(iter);
+        scope
+    }
+}
+
+impl<'a, K: Into<Cow<'a, str>>> Extend<(K, bool, Dynamic)> for Scope<'a> {
+    #[inline]
+    fn extend<T: IntoIterator<Item = (K, bool, Dynamic)>>(&mut self, iter: T) {
+        iter.into_iter().for_each(|(name, is_constant, value)| {
+            self.push_dynamic_value(
+                name,
+                if is_constant {
+                    AccessMode::ReadOnly
+                } else {
+                    AccessMode::ReadWrite
+                },
+                value,
+            );
+        });
+    }
+}
+
+impl<'a, K: Into<Cow<'a, str>>> FromIterator<(K, bool, Dynamic)> for Scope<'a> {
+    #[inline]
+    fn from_iter<T: IntoIterator<Item = (K, bool, Dynamic)>>(iter: T) -> Self {
+        let mut scope = Self::new();
+        scope.extend(iter);
+        scope
     }
 }

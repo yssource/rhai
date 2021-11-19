@@ -1,21 +1,19 @@
 //! Implement function-calling mechanism for [`Engine`].
 
+use super::native::{CallableFunction, FnAny};
+use super::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 use crate::ast::FnCallHashes;
 use crate::engine::{
     EvalState, FnResolutionCacheEntry, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR,
     KEYWORD_FN_PTR_CALL, KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
     MAX_DYNAMIC_PARAMETERS,
 };
-use crate::fn_builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
-use crate::fn_native::FnAny;
 use crate::module::NamespaceRef;
-use crate::token::Token;
+use crate::tokenizer::Token;
 use crate::{
     ast::{Expr, Stmt},
-    calc_fn_hash, calc_fn_params_hash, combine_hashes,
-    fn_native::CallableFunction,
-    Dynamic, Engine, EvalAltResult, FnPtr, Identifier, ImmutableString, Module, ParseErrorType,
-    Position, RhaiResult, Scope, StaticVec,
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, EvalAltResult, FnPtr,
+    Identifier, ImmutableString, Module, ParseErrorType, Position, RhaiResult, Scope, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -113,7 +111,6 @@ pub fn ensure_no_data_race(
     args: &FnCallArgs,
     is_method_call: bool,
 ) -> Result<(), Box<EvalAltResult>> {
-    #[cfg(not(feature = "no_closure"))]
     if let Some((n, _)) = args
         .iter()
         .enumerate()
@@ -255,18 +252,16 @@ impl Engine {
                                         }
                                     })
                                 } else {
-                                    let (first, second) = args
-                                        .split_first()
-                                        .expect("op-assignment has two arguments");
+                                    let (first_arg, rest_args) =
+                                        args.split_first().expect("two arguments");
 
-                                    get_builtin_op_assignment_fn(fn_name, *first, second[0]).map(
-                                        |f| FnResolutionCacheEntry {
+                                    get_builtin_op_assignment_fn(fn_name, *first_arg, rest_args[0])
+                                        .map(|f| FnResolutionCacheEntry {
                                             func: CallableFunction::from_method(
                                                 Box::new(f) as Box<FnAny>
                                             ),
                                             source: None,
-                                        },
-                                    )
+                                        })
                                 }
                                 .map(Box::new)
                             });
@@ -276,7 +271,7 @@ impl Engine {
                         None => {
                             let hash_params = calc_fn_params_hash(
                                 args.as_ref()
-                                    .expect("no permutations if no arguments")
+                                    .expect("no permutations")
                                     .iter()
                                     .enumerate()
                                     .map(|(i, a)| {
@@ -336,7 +331,7 @@ impl Engine {
                 backup = Some(ArgBackup::new());
                 backup
                     .as_mut()
-                    .expect("`backup` is `Some`")
+                    .expect("`Some`")
                     .change_first_arg_to_copy(args);
             }
 
@@ -476,6 +471,8 @@ impl Engine {
 
     /// Call a script-defined function.
     ///
+    /// If `rewind_scope` is `false`, arguments are removed from the scope but new variables are not.
+    ///
     /// # WARNING
     ///
     /// Function call arguments may be _consumed_ when the function requires them to be passed by value.
@@ -492,6 +489,7 @@ impl Engine {
         fn_def: &crate::ast::ScriptFnDef,
         args: &mut FnCallArgs,
         pos: Position,
+        rewind_scope: bool,
         level: usize,
     ) -> RhaiResult {
         #[inline(never)]
@@ -515,6 +513,8 @@ impl Engine {
             )
             .into())
         }
+
+        assert!(fn_def.params.len() == args.len());
 
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut mods.num_operations, pos)?;
@@ -550,7 +550,7 @@ impl Engine {
         // Merge in encapsulated environment, if any
         let mut lib_merged = StaticVec::with_capacity(lib.len() + 1);
 
-        let (unified_lib, unified) = if let Some(ref env_lib) = fn_def.lib {
+        let (unified, is_unified) = if let Some(ref env_lib) = fn_def.lib {
             state.push_fn_resolution_cache();
             lib_merged.push(env_lib.as_ref());
             lib_merged.extend(lib.iter().cloned());
@@ -570,7 +570,17 @@ impl Engine {
         // Evaluate the function
         let body = &fn_def.body;
         let result = self
-            .eval_stmt_block(scope, mods, state, unified_lib, this_ptr, body, true, level)
+            .eval_stmt_block(
+                scope,
+                mods,
+                state,
+                unified,
+                this_ptr,
+                body,
+                true,
+                rewind_scope,
+                level,
+            )
             .or_else(|err| match *err {
                 // Convert return statement to return value
                 EvalAltResult::Return(x, _) => Ok(x),
@@ -594,10 +604,16 @@ impl Engine {
             });
 
         // Remove all local variables
-        scope.rewind(prev_scope_len);
+        if rewind_scope {
+            scope.rewind(prev_scope_len);
+        } else if !args.is_empty() {
+            // Remove arguments only, leaving new variables in the scope
+            scope.remove_range(prev_scope_len, args.len())
+        }
+
         mods.truncate(prev_mods_len);
 
-        if unified {
+        if is_unified {
             state.pop_fn_resolution_cache();
         }
 
@@ -654,8 +670,8 @@ impl Engine {
         is_ref_mut: bool,
         is_method_call: bool,
         pos: Position,
-        _capture_scope: Option<Scope>,
-        _level: usize,
+        scope: Option<&mut Scope>,
+        level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
         fn no_method_err(name: &str, pos: Position) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
             let msg = format!("'{0}' should not be called this way. Try {0}(...);", name);
@@ -666,6 +682,8 @@ impl Engine {
         #[cfg(not(feature = "no_closure"))]
         ensure_no_data_race(fn_name, args, is_ref_mut)?;
 
+        let _scope = scope;
+        let _level = level;
         let _is_method_call = is_method_call;
 
         // These may be redirected from method style calls.
@@ -683,10 +701,8 @@ impl Engine {
             crate::engine::KEYWORD_IS_DEF_FN
                 if args.len() == 2 && args[0].is::<FnPtr>() && args[1].is::<crate::INT>() =>
             {
-                let fn_name = args[0]
-                    .read_lock::<ImmutableString>()
-                    .expect("`args[0]` is `FnPtr`");
-                let num_params = args[1].as_int().expect("`args[1]` is `INT`");
+                let fn_name = args[0].read_lock::<ImmutableString>().expect("`FnPtr`");
+                let num_params = args[1].as_int().expect("`INT`");
 
                 return Ok((
                     if num_params < 0 {
@@ -735,27 +751,17 @@ impl Engine {
                 return Ok((Dynamic::UNIT, false));
             }
 
-            let scope = &mut Scope::new();
-
-            // Move captured variables into scope
-            #[cfg(not(feature = "no_closure"))]
-            if !func.externals.is_empty() {
-                if let Some(captured) = _capture_scope {
-                    captured
-                        .into_iter()
-                        .filter(|(name, _, _)| func.externals.contains(name.as_ref()))
-                        .for_each(|(name, value, _)| {
-                            // Consume the scope values.
-                            scope.push_dynamic(name, value);
-                        })
-                }
-            }
+            let mut empty_scope;
+            let scope = if let Some(scope) = _scope {
+                scope
+            } else {
+                empty_scope = Scope::new();
+                &mut empty_scope
+            };
 
             let result = if _is_method_call {
                 // Method call of script function - map first argument to `this`
-                let (first, rest) = args
-                    .split_first_mut()
-                    .expect("method call has first parameter");
+                let (first_arg, rest_args) = args.split_first_mut().expect("not empty");
 
                 let orig_source = mods.source.take();
                 mods.source = source;
@@ -767,10 +773,11 @@ impl Engine {
                     mods,
                     state,
                     lib,
-                    &mut Some(*first),
+                    &mut Some(*first_arg),
                     func,
-                    rest,
+                    rest_args,
                     pos,
+                    true,
                     level,
                 );
 
@@ -786,7 +793,7 @@ impl Engine {
                     backup = Some(ArgBackup::new());
                     backup
                         .as_mut()
-                        .expect("`backup` is `Some`")
+                        .expect("`Some`")
                         .change_first_arg_to_copy(args);
                 }
 
@@ -795,8 +802,9 @@ impl Engine {
 
                 let level = _level + 1;
 
-                let result =
-                    self.call_script_fn(scope, mods, state, lib, &mut None, func, args, pos, level);
+                let result = self.call_script_fn(
+                    scope, mods, state, lib, &mut None, func, args, pos, true, level,
+                );
 
                 // Restore the original source
                 mods.source = orig_source;
@@ -831,14 +839,16 @@ impl Engine {
         lib: &[&Module],
         level: usize,
     ) -> RhaiResult {
-        self.eval_stmt_block(scope, mods, state, lib, &mut None, statements, false, level)
-            .or_else(|err| match *err {
-                EvalAltResult::Return(out, _) => Ok(out),
-                EvalAltResult::LoopBreak(_, _) => {
-                    unreachable!("no outer loop scope to break out of")
-                }
-                _ => Err(err),
-            })
+        self.eval_stmt_block(
+            scope, mods, state, lib, &mut None, statements, false, false, level,
+        )
+        .or_else(|err| match *err {
+            EvalAltResult::Return(out, _) => Ok(out),
+            EvalAltResult::LoopBreak(_, _) => {
+                unreachable!("no outer loop scope to break out of")
+            }
+            _ => Err(err),
+        })
     }
 
     /// Evaluate a text script in place - used primarily for 'eval'.
@@ -901,12 +911,12 @@ impl Engine {
         let (result, updated) = match fn_name {
             KEYWORD_FN_PTR_CALL if target.is::<FnPtr>() => {
                 // FnPtr call
-                let fn_ptr = target.read_lock::<FnPtr>().expect("`obj` is `FnPtr`");
+                let fn_ptr = target.read_lock::<FnPtr>().expect("`FnPtr`");
                 // Redirect function name
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hashes
-                let new_hash = FnCallHashes::from_script(calc_fn_hash(fn_name, args_len));
+                let new_hash = calc_fn_hash(fn_name, args_len).into();
                 // Arguments are passed as-is, adding the curried arguments
                 let mut curry = StaticVec::with_capacity(fn_ptr.num_curried());
                 curry.extend(fn_ptr.curry().iter().cloned());
@@ -940,7 +950,8 @@ impl Engine {
                 let fn_name = fn_ptr.fn_name();
                 let args_len = call_args.len() + fn_ptr.curry().len();
                 // Recalculate hash
-                let new_hash = FnCallHashes::from_script_and_native(
+                let new_hash = FnCallHashes::from_all(
+                    #[cfg(not(feature = "no_function"))]
                     calc_fn_hash(fn_name, args_len),
                     calc_fn_hash(fn_name, args_len + 1),
                 );
@@ -966,7 +977,7 @@ impl Engine {
                     ));
                 }
 
-                let fn_ptr = target.read_lock::<FnPtr>().expect("`obj` is `FnPtr`");
+                let fn_ptr = target.read_lock::<FnPtr>().expect("`FnPtr`");
 
                 // Curry call
                 Ok((
@@ -1011,7 +1022,8 @@ impl Engine {
                                 call_args.insert_many(0, fn_ptr.curry().iter().cloned());
                             }
                             // Recalculate the hash based on the new function name and new arguments
-                            hash = FnCallHashes::from_script_and_native(
+                            hash = FnCallHashes::from_all(
+                                #[cfg(not(feature = "no_function"))]
                                 calc_fn_hash(fn_name, call_args.len()),
                                 calc_fn_hash(fn_name, call_args.len() + 1),
                             );
@@ -1050,12 +1062,11 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         level: usize,
-        args_expr: &[Expr],
+        arg_expr: &Expr,
         constants: &[Dynamic],
-        index: usize,
     ) -> Result<(Dynamic, Position), Box<EvalAltResult>> {
-        match args_expr[index] {
-            Expr::Stack(slot, pos) => Ok((constants[slot].clone(), pos)),
+        match arg_expr {
+            Expr::Stack(slot, pos) => Ok((constants[*slot].clone(), *pos)),
             ref arg => self
                 .eval_expr(scope, mods, state, lib, this_ptr, arg, level)
                 .map(|v| (v, arg.position())),
@@ -1073,23 +1084,23 @@ impl Engine {
         fn_name: &str,
         args_expr: &[Expr],
         constants: &[Dynamic],
-        mut hashes: FnCallHashes,
+        hashes: FnCallHashes,
         pos: Position,
         capture_scope: bool,
         level: usize,
     ) -> RhaiResult {
-        // Handle call() - Redirect function call
-        let redirected;
-        let mut args_expr = args_expr;
-        let mut total_args = args_expr.len();
+        let mut a_expr = args_expr;
+        let mut total_args = a_expr.len();
         let mut curry = StaticVec::new();
         let mut name = fn_name;
+        let mut hashes = hashes;
+        let redirected; // Handle call() - Redirect function call
 
         match name {
             // Handle call()
             KEYWORD_FN_PTR_CALL if total_args >= 1 => {
                 let (arg, arg_pos) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, args_expr, constants, 0,
+                    scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
 
                 if !arg.is::<FnPtr>() {
@@ -1107,13 +1118,13 @@ impl Engine {
                 name = &redirected;
 
                 // Skip the first argument
-                args_expr = &args_expr[1..];
+                a_expr = &a_expr[1..];
                 total_args -= 1;
 
                 // Recalculate hash
                 let args_len = total_args + curry.len();
                 hashes = if !hashes.is_native_only() {
-                    FnCallHashes::from_script(calc_fn_hash(name, args_len))
+                    calc_fn_hash(name, args_len).into()
                 } else {
                     FnCallHashes::from_native(calc_fn_hash(name, args_len))
                 };
@@ -1121,7 +1132,7 @@ impl Engine {
             // Handle Fn()
             KEYWORD_FN_PTR if total_args == 1 => {
                 let (arg, arg_pos) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, args_expr, constants, 0,
+                    scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
 
                 // Fn - only in function call style
@@ -1136,7 +1147,7 @@ impl Engine {
             // Handle curry()
             KEYWORD_FN_PTR_CURRY if total_args > 1 => {
                 let (arg, arg_pos) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, args_expr, constants, 0,
+                    scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
 
                 if !arg.is::<FnPtr>() {
@@ -1146,15 +1157,19 @@ impl Engine {
                     ));
                 }
 
-                let (name, mut fn_curry) = arg.cast::<FnPtr>().take_data();
+                let (name, fn_curry) = arg.cast::<FnPtr>().take_data();
 
                 // Append the new curried arguments to the existing list.
-                for index in 1..args_expr.len() {
-                    let (value, _) = self.get_arg_value(
-                        scope, mods, state, lib, this_ptr, level, args_expr, constants, index,
-                    )?;
-                    fn_curry.push(value);
-                }
+                let fn_curry = a_expr.iter().skip(1).try_fold(
+                    fn_curry,
+                    |mut curried, expr| -> Result<_, Box<EvalAltResult>> {
+                        let (value, _) = self.get_arg_value(
+                            scope, mods, state, lib, this_ptr, level, expr, constants,
+                        )?;
+                        curried.push(value);
+                        Ok(curried)
+                    },
+                )?;
 
                 return Ok(FnPtr::new_unchecked(name, fn_curry).into());
             }
@@ -1163,7 +1178,7 @@ impl Engine {
             #[cfg(not(feature = "no_closure"))]
             crate::engine::KEYWORD_IS_SHARED if total_args == 1 => {
                 let (arg, _) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, args_expr, constants, 0,
+                    scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
                 return Ok(arg.is_shared().into());
             }
@@ -1172,7 +1187,7 @@ impl Engine {
             #[cfg(not(feature = "no_function"))]
             crate::engine::KEYWORD_IS_DEF_FN if total_args == 2 => {
                 let (arg, arg_pos) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, args_expr, constants, 0,
+                    scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
 
                 let fn_name = arg
@@ -1180,7 +1195,7 @@ impl Engine {
                     .map_err(|typ| self.make_type_mismatch_err::<ImmutableString>(typ, arg_pos))?;
 
                 let (arg, arg_pos) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, args_expr, constants, 1,
+                    scope, mods, state, lib, this_ptr, level, &a_expr[1], constants,
                 )?;
 
                 let num_params = arg
@@ -1199,7 +1214,7 @@ impl Engine {
             // Handle is_def_var()
             KEYWORD_IS_DEF_VAR if total_args == 1 => {
                 let (arg, arg_pos) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, args_expr, constants, 0,
+                    scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
                 let var_name = arg
                     .into_immutable_string()
@@ -1212,7 +1227,7 @@ impl Engine {
                 // eval - only in function call style
                 let prev_len = scope.len();
                 let (value, pos) = self.get_arg_value(
-                    scope, mods, state, lib, this_ptr, level, args_expr, constants, 0,
+                    scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
                 let script = &value
                     .into_immutable_string()
@@ -1244,32 +1259,50 @@ impl Engine {
         }
 
         // Normal function call - except for Fn, curry, call and eval (handled above)
-        let mut arg_values = StaticVec::with_capacity(args_expr.len());
-        let mut args = StaticVec::with_capacity(args_expr.len() + curry.len());
+        let mut arg_values = StaticVec::with_capacity(a_expr.len());
+        let mut args = StaticVec::with_capacity(a_expr.len() + curry.len());
         let mut is_ref_mut = false;
-        let capture = if capture_scope && !scope.is_empty() {
-            Some(scope.clone_visible())
-        } else {
-            None
-        };
 
-        if args_expr.is_empty() && curry.is_empty() {
+        // Capture parent scope?
+        //
+        // If so, do it separately because we cannot convert the first argument (if it is a simple
+        // variable access) to &mut because `scope` is needed.
+        if capture_scope && !scope.is_empty() {
+            a_expr.iter().try_for_each(|expr| {
+                self.get_arg_value(scope, mods, state, lib, this_ptr, level, expr, constants)
+                    .map(|(value, _)| arg_values.push(value.flatten()))
+            })?;
+            args.extend(curry.iter_mut());
+            args.extend(arg_values.iter_mut());
+
+            // Use parent scope
+            let scope = Some(scope);
+
+            return self
+                .exec_fn_call(
+                    mods, state, lib, name, hashes, &mut args, is_ref_mut, false, pos, scope, level,
+                )
+                .map(|(v, _)| v);
+        }
+
+        // Call with blank scope
+        if a_expr.is_empty() && curry.is_empty() {
             // No arguments
         } else {
             // If the first argument is a variable, and there is no curried arguments,
             // convert to method-call style in order to leverage potential &mut first argument and
             // avoid cloning the value
-            if curry.is_empty() && !args_expr.is_empty() && args_expr[0].is_variable_access(false) {
+            if curry.is_empty() && !a_expr.is_empty() && a_expr[0].is_variable_access(false) {
                 // func(x, ...) -> x.func(...)
-                for index in 1..args_expr.len() {
-                    let (value, _) = self.get_arg_value(
-                        scope, mods, state, lib, this_ptr, level, args_expr, constants, index,
-                    )?;
-                    arg_values.push(value.flatten());
-                }
+                let (first_expr, rest_expr) = a_expr.split_first().expect("not empty");
+
+                rest_expr.iter().try_for_each(|expr| {
+                    self.get_arg_value(scope, mods, state, lib, this_ptr, level, expr, constants)
+                        .map(|(value, _)| arg_values.push(value.flatten()))
+                })?;
 
                 let (mut target, _pos) =
-                    self.search_namespace(scope, mods, state, lib, this_ptr, &args_expr[0])?;
+                    self.search_namespace(scope, mods, state, lib, this_ptr, first_expr)?;
 
                 if target.as_ref().is_read_only() {
                     target = target.into_owned();
@@ -1289,25 +1322,23 @@ impl Engine {
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
                     is_ref_mut = true;
-                    let obj_ref = target.take_ref().expect("`target` is reference");
+                    let obj_ref = target.take_ref().expect("reference");
                     args.push(obj_ref);
                     args.extend(arg_values.iter_mut());
                 }
             } else {
                 // func(..., ...)
-                for index in 0..args_expr.len() {
-                    let (value, _) = self.get_arg_value(
-                        scope, mods, state, lib, this_ptr, level, args_expr, constants, index,
-                    )?;
-                    arg_values.push(value.flatten());
-                }
+                a_expr.iter().try_for_each(|expr| {
+                    self.get_arg_value(scope, mods, state, lib, this_ptr, level, expr, constants)
+                        .map(|(value, _)| arg_values.push(value.flatten()))
+                })?;
                 args.extend(curry.iter_mut());
                 args.extend(arg_values.iter_mut());
             }
         }
 
         self.exec_fn_call(
-            mods, state, lib, name, hashes, &mut args, is_ref_mut, false, pos, capture, level,
+            mods, state, lib, name, hashes, &mut args, is_ref_mut, false, pos, None, level,
         )
         .map(|(v, _)| v)
     }
@@ -1340,16 +1371,12 @@ impl Engine {
             // &mut first argument and avoid cloning the value
             if !args_expr.is_empty() && args_expr[0].is_variable_access(true) {
                 // func(x, ...) -> x.func(...)
-                for index in 0..args_expr.len() {
-                    if index == 0 {
-                        arg_values.push(Dynamic::UNIT);
-                    } else {
-                        let (value, _) = self.get_arg_value(
-                            scope, mods, state, lib, this_ptr, level, args_expr, constants, index,
-                        )?;
-                        arg_values.push(value.flatten());
-                    }
-                }
+                arg_values.push(Dynamic::UNIT);
+
+                args_expr.iter().skip(1).try_for_each(|expr| {
+                    self.get_arg_value(scope, mods, state, lib, this_ptr, level, expr, constants)
+                        .map(|(value, _)| arg_values.push(value.flatten()))
+                })?;
 
                 // Get target reference to first argument
                 let (target, _pos) =
@@ -1368,22 +1395,18 @@ impl Engine {
                     args.extend(arg_values.iter_mut());
                 } else {
                     // Turn it into a method call only if the object is not shared and not a simple value
-                    let (first, rest) = arg_values
-                        .split_first_mut()
-                        .expect("arguments list is not empty");
+                    let (first, rest) = arg_values.split_first_mut().expect("not empty");
                     first_arg_value = Some(first);
-                    let obj_ref = target.take_ref().expect("`target` is reference");
+                    let obj_ref = target.take_ref().expect("reference");
                     args.push(obj_ref);
                     args.extend(rest.iter_mut());
                 }
             } else {
                 // func(..., ...) or func(mod::x, ...)
-                for index in 0..args_expr.len() {
-                    let (value, _) = self.get_arg_value(
-                        scope, mods, state, lib, this_ptr, level, args_expr, constants, index,
-                    )?;
-                    arg_values.push(value.flatten());
-                }
+                args_expr.iter().try_for_each(|expr| {
+                    self.get_arg_value(scope, mods, state, lib, this_ptr, level, expr, constants)
+                        .map(|(value, _)| arg_values.push(value.flatten()))
+                })?;
                 args.extend(arg_values.iter_mut());
             }
         }
@@ -1431,7 +1454,7 @@ impl Engine {
                     let level = level + 1;
 
                     let result = self.call_script_fn(
-                        new_scope, mods, state, lib, &mut None, fn_def, &mut args, pos, level,
+                        new_scope, mods, state, lib, &mut None, fn_def, &mut args, pos, true, level,
                     );
 
                     mods.source = source;

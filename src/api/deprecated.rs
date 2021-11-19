@@ -111,6 +111,79 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         self.run_ast_with_scope(scope, ast)
     }
+    /// Call a script function defined in an [`AST`] with multiple [`Dynamic`] arguments
+    /// and optionally a value for binding to the `this` pointer.
+    ///
+    /// Not available under `no_function`.
+    ///
+    /// There is an option to evaluate the [`AST`] to load necessary modules before calling the function.
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`run_ast_with_scope`][Engine::run_ast_with_scope] instead.
+    ///
+    /// This method will be removed in the next major version.
+    ///
+    /// # WARNING
+    ///
+    /// All the arguments are _consumed_, meaning that they're replaced by `()`.
+    /// This is to avoid unnecessarily cloning the arguments.
+    /// Do not use the arguments after this call. If they are needed afterwards,
+    /// clone them _before_ calling this function.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
+    /// use rhai::{Engine, Scope, Dynamic};
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let ast = engine.compile("
+    ///     fn add(x, y) { len(x) + y + foo }
+    ///     fn add1(x)   { len(x) + 1 + foo }
+    ///     fn bar()     { foo/2 }
+    ///     fn action(x) { this += x; }         // function using 'this' pointer
+    /// ")?;
+    ///
+    /// let mut scope = Scope::new();
+    /// scope.push("foo", 42_i64);
+    ///
+    /// // Call the script-defined function
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "add", None, [ "abc".into(), 123_i64.into() ])?;
+    /// //                                                                 ^^^^ no 'this' pointer
+    /// assert_eq!(result.cast::<i64>(), 168);
+    ///
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "add1", None, [ "abc".into() ])?;
+    /// assert_eq!(result.cast::<i64>(), 46);
+    ///
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "bar", None, [])?;
+    /// assert_eq!(result.cast::<i64>(), 21);
+    ///
+    /// let mut value: Dynamic = 1_i64.into();
+    /// let result = engine.call_fn_dynamic(&mut scope, &ast, true, "action", Some(&mut value), [ 41_i64.into() ])?;
+    /// //                                                                    ^^^^^^^^^^^^^^^^ binding the 'this' pointer
+    /// assert_eq!(value.as_int().expect("value should be INT"), 42);
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[deprecated(since = "1.1.0", note = "use `call_fn_raw` instead")]
+    #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
+    pub fn call_fn_dynamic(
+        &self,
+        scope: &mut Scope,
+        ast: &AST,
+        eval_ast: bool,
+        name: impl AsRef<str>,
+        this_ptr: Option<&mut Dynamic>,
+        arg_values: impl AsMut<[Dynamic]>,
+    ) -> RhaiResult {
+        self.call_fn_raw(scope, ast, eval_ast, true, name, this_ptr, arg_values)
+    }
 }
 
 impl Dynamic {

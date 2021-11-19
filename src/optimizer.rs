@@ -1,13 +1,13 @@
 //! Module implementing the [`AST`] optimizer.
 
 use crate::ast::{Expr, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
-use crate::dynamic::AccessMode;
 use crate::engine::{
     EvalState, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
-use crate::fn_builtin::get_builtin_binary_op_fn;
-use crate::fn_hash::get_hasher;
-use crate::token::Token;
+use crate::func::builtin::get_builtin_binary_op_fn;
+use crate::func::hashing::get_hasher;
+use crate::tokenizer::Token;
+use crate::types::dynamic::AccessMode;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, ImmutableString,
     Module, Position, Scope, StaticVec, AST,
@@ -113,16 +113,16 @@ impl<'a> OptimizerState<'a> {
             return None;
         }
 
-        self.variables.iter().rev().find_map(|(n, access, value)| {
+        for (n, access, value) in self.variables.iter().rev() {
             if n == name {
-                match access {
+                return match access {
                     AccessMode::ReadWrite => None,
                     AccessMode::ReadOnly => value.as_ref(),
-                }
-            } else {
-                None
+                };
             }
-        })
+        }
+
+        None
     }
     /// Call a registered function
     #[inline]
@@ -288,23 +288,18 @@ fn optimize_stmt_block(
                             && !last_stmt.returns_value() =>
                     {
                         state.set_dirty();
-                        statements
-                            .pop()
-                            .expect("`statements` contains at least two elements");
+                        statements.pop().expect(">= 2 elements");
                     }
                     // { ...; return val; } -> { ...; val }
                     [.., Stmt::Return(options, ref mut expr, pos)]
                         if reduce_return && !options.contains(AST_OPTION_BREAK_OUT) =>
                     {
                         state.set_dirty();
-                        *statements
-                            .last_mut()
-                            .expect("`statements` contains at least two elements") =
-                            if let Some(expr) = expr {
-                                Stmt::Expr(mem::take(expr))
-                            } else {
-                                Stmt::Noop(pos)
-                            };
+                        *statements.last_mut().expect(">= 2 elements") = if let Some(expr) = expr {
+                            Stmt::Expr(mem::take(expr))
+                        } else {
+                            Stmt::Noop(pos)
+                        };
                     }
                     // { ...; stmt; noop } -> done
                     [.., ref second_last_stmt, Stmt::Noop(_)]
@@ -319,14 +314,10 @@ fn optimize_stmt_block(
                     {
                         state.set_dirty();
                         if second_last_stmt.returns_value() {
-                            *statements
-                                .last_mut()
-                                .expect("`statements` contains at least two elements") =
+                            *statements.last_mut().expect(">= 2 elements") =
                                 Stmt::Noop(last_stmt.position());
                         } else {
-                            statements
-                                .pop()
-                                .expect("`statements` contains at least two elements");
+                            statements.pop().expect(">= 2 elements");
                         }
                     }
                     _ => break,
@@ -344,9 +335,7 @@ fn optimize_stmt_block(
                         if reduce_return && !options.contains(AST_OPTION_BREAK_OUT) =>
                     {
                         state.set_dirty();
-                        statements
-                            .pop()
-                            .expect("`statements` contains at least two elements");
+                        statements.pop().expect(">= 2 elements");
                     }
                     // { ...; return pure_val; } -> { ... }
                     [.., Stmt::Return(options, Some(ref expr), _)]
@@ -355,15 +344,11 @@ fn optimize_stmt_block(
                             && expr.is_pure() =>
                     {
                         state.set_dirty();
-                        statements
-                            .pop()
-                            .expect("`statements` contains at least two elements");
+                        statements.pop().expect(">= 2 elements");
                     }
                     [.., ref last_stmt] if is_pure(last_stmt) => {
                         state.set_dirty();
-                        statements
-                            .pop()
-                            .expect("`statements` contains at least one element");
+                        statements.pop().expect("not empty");
                     }
                     _ => break,
                 }
@@ -405,18 +390,14 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             match x.2 {
                 Expr::FnCall(ref mut x2, _) => {
                     state.set_dirty();
-                    let op = Token::lookup_from_syntax(&x2.name).expect("`x2` is operator");
-                    let op_assignment = op.make_op_assignment().expect("`op` is operator");
+                    let op = Token::lookup_from_syntax(&x2.name).expect("operator");
+                    let op_assignment = op.make_op_assignment().expect("operator");
                     x.1 = Some(OpAssignment::new(op_assignment));
 
                     let value = mem::take(&mut x2.args[1]);
 
                     if let Expr::Stack(slot, pos) = value {
-                        let value = mem::take(
-                            x2.constants
-                                .get_mut(slot)
-                                .expect("`constants[slot]` is valid"),
-                        );
+                        let value = mem::take(x2.constants.get_mut(slot).expect("valid slot"));
                         x.2 = Expr::from_dynamic(value, pos);
                     } else {
                         x.2 = value;
@@ -804,13 +785,13 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _)) if *i >= 0 && (*i as usize) < s.chars().count() => {
                 // String literal indexing - get the character
                 state.set_dirty();
-                *expr = Expr::CharConstant(s.chars().nth(*i as usize).expect("character position is valid"), *pos);
+                *expr = Expr::CharConstant(s.chars().nth(*i as usize).expect("valid index"), *pos);
             }
             // string[-int]
             (Expr::StringConstant(s, pos), Expr::IntegerConstant(i, _)) if *i < 0 && i.checked_abs().map(|n| n as usize <= s.chars().count()).unwrap_or(false) => {
                 // String literal indexing - get the character
                 state.set_dirty();
-                *expr = Expr::CharConstant(s.chars().rev().nth(i.abs() as usize - 1).expect("character position is valid"), *pos);
+                *expr = Expr::CharConstant(s.chars().rev().nth(i.abs() as usize - 1).expect("valid index"), *pos);
             }
             // var[rhs]
             (Expr::Variable(_, _, _), rhs) => optimize_expr(rhs, state, true),
@@ -960,7 +941,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 if fn_name.is::<ImmutableString>() {
                     state.set_dirty();
                     let fn_ptr = FnPtr::new_unchecked(
-                                    fn_name.as_str_ref().expect("`fn_name` is `ImmutableString`").into(),
+                                    fn_name.as_str_ref().expect("`ImmutableString`").into(),
                                     StaticVec::new()
                                  );
                     *expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), *pos);
@@ -1004,7 +985,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                     if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
                         .and_then(|f| {
                             let context = (state.engine, x.name.as_ref(), state.lib).into();
-                            let (first, second) = arg_values.split_first_mut().expect("`arg_values` is not empty");
+                            let (first, second) = arg_values.split_first_mut().expect("not empty");
                             (f)(context, &mut [ first, &mut second[0] ]).ok()
                         }) {
                             state.set_dirty();
@@ -1018,13 +999,14 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             x.args.iter_mut().for_each(|a| optimize_expr(a, state, false));
 
             // Move constant arguments
-            for arg in x.args.iter_mut() {
+            let constants = &mut x.constants;
+            x.args.iter_mut().for_each(|arg| {
                 if let Some(value) = arg.get_literal_value() {
                     state.set_dirty();
-                    x.constants.push(value);
-                    *arg = Expr::Stack(x.constants.len()-1, arg.position());
+                    constants.push(value);
+                    *arg = Expr::Stack(constants.len()-1, arg.position());
                 }
-            }
+            });
         }
 
         // Eagerly call functions
@@ -1077,7 +1059,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
         // constant-name
         Expr::Variable(_, pos, x) if x.1.is_none() && state.find_constant(&x.2).is_some() => {
             // Replace constant with value
-            *expr = Expr::from_dynamic(state.find_constant(&x.2).expect("constant exists").clone(), *pos);
+            *expr = Expr::from_dynamic(state.find_constant(&x.2).expect("exists").clone(), *pos);
             state.set_dirty();
         }
 
@@ -1095,6 +1077,8 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
 }
 
 /// Optimize a block of [statements][Stmt] at top level.
+///
+/// Constants and variables from the scope are added.
 fn optimize_top_level(
     statements: StaticVec<Stmt>,
     engine: &Engine,
@@ -1158,14 +1142,12 @@ pub fn optimize_into_ast(
                     access: fn_def.access,
                     body: crate::ast::StmtBlock::empty(),
                     params: fn_def.params.clone(),
-                    #[cfg(not(feature = "no_closure"))]
-                    externals: fn_def.externals.clone(),
                     lib: None,
                     #[cfg(not(feature = "no_module"))]
                     mods: crate::engine::Imports::new(),
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
-                    comments: StaticVec::new(),
+                    comments: None,
                 })
                 .for_each(|fn_def| {
                     lib2.set_script_fn(fn_def);
@@ -1176,14 +1158,12 @@ pub fn optimize_into_ast(
             _functions
                 .into_iter()
                 .map(|fn_def| {
-                    let mut fn_def = crate::fn_native::shared_take_or_clone(fn_def);
+                    let mut fn_def = crate::func::native::shared_take_or_clone(fn_def);
 
                     // Optimize the function body
-                    let state = &mut OptimizerState::new(engine, lib2, level);
-
                     let body = mem::take(fn_def.body.deref_mut());
 
-                    *fn_def.body = optimize_stmt_block(body, state, true, true, true);
+                    *fn_def.body = optimize_top_level(body, engine, scope, lib2, level);
 
                     fn_def
                 })
