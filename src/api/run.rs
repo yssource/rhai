@@ -7,6 +7,11 @@ use crate::{Engine, EvalAltResult, Scope, AST};
 use std::prelude::v1::*;
 
 impl Engine {
+    /// Evaluate a script, returning any error (if any).
+    #[inline(always)]
+    pub fn run(&self, script: &str) -> Result<(), Box<EvalAltResult>> {
+        self.run_with_scope(&mut Scope::new(), script)
+    }
     /// Evaluate a script with own scope, returning any error (if any).
     ///
     /// ## Constants Propagation

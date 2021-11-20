@@ -193,9 +193,4 @@ impl Engine {
     ) -> Result<(), Box<EvalAltResult>> {
         Self::read_file(path).and_then(|contents| self.run_with_scope(scope, &contents))
     }
-    /// Evaluate a script, returning any error (if any).
-    #[inline(always)]
-    pub fn run(&self, script: &str) -> Result<(), Box<EvalAltResult>> {
-        self.run_with_scope(&mut Scope::new(), script)
-    }
 }
