@@ -36,9 +36,9 @@ impl Engine {
     ///
     /// ## Constants Propagation
     ///
-    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
-    /// throughout the script _including_ functions. This allows functions to be optimized based on
-    /// dynamic global constants.
+    /// If not [`OptimizationLevel::None`][crate::OptimizationLevel::None], constants defined within
+    /// the scope are propagated throughout the script _including_ functions. This allows functions
+    /// to be optimized based on dynamic global constants.
     ///
     /// # Example
     ///
@@ -81,7 +81,7 @@ impl Engine {
     /// Modules referred by `import` statements containing literal string paths are eagerly resolved
     /// via the current [module resolver][crate::ModuleResolver] and embedded into the resultant
     /// [`AST`]. When it is evaluated later, `import` statement directly recall pre-resolved
-    /// [modules][Module] and the resolution process is not performed again.
+    /// [modules][crate::Module] and the resolution process is not performed again.
     #[cfg(not(feature = "no_module"))]
     pub fn compile_into_self_contained(
         &self,
@@ -146,22 +146,22 @@ impl Engine {
 
         Ok(ast)
     }
-    /// When passed a list of strings, first join the strings into one large script,
-    /// and then compile them into an [`AST`] using own scope, which can be used later for evaluation.
+    /// When passed a list of strings, first join the strings into one large script, and then
+    /// compile them into an [`AST`] using own scope, which can be used later for evaluation.
     ///
-    /// The scope is useful for passing constants into the script for optimization
-    /// when using [`OptimizationLevel::Full`].
+    /// The scope is useful for passing constants into the script for optimization when using
+    /// [`OptimizationLevel::Full`][crate::OptimizationLevel::Full].
     ///
     /// ## Note
     ///
-    /// All strings are simply parsed one after another with nothing inserted in between, not even
-    /// a newline or space.
+    /// All strings are simply parsed one after another with nothing inserted in between, not even a
+    /// newline or space.
     ///
     /// ## Constants Propagation
     ///
-    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
-    /// throughout the script _including_ functions. This allows functions to be optimized based on
-    /// dynamic global constants.
+    /// If not [`OptimizationLevel::None`][crate::OptimizationLevel::None], constants defined within
+    /// the scope are propagated throughout the script _including_ functions. This allows functions
+    /// to be optimized based on dynamic global constants.
     ///
     /// # Example
     ///

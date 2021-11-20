@@ -1011,7 +1011,7 @@ pub struct Engine {
     #[cfg(not(feature = "unchecked"))]
     pub(crate) progress: Option<crate::func::native::OnProgressCallback>,
 
-    /// Optimize the AST after compilation.
+    /// Optimize the [`AST`][crate::AST] after compilation.
     #[cfg(not(feature = "no_optimize"))]
     pub(crate) optimization_level: crate::OptimizationLevel,
 

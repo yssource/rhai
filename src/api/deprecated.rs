@@ -80,7 +80,7 @@ impl Engine {
         self.run_with_scope(scope, script)
     }
 
-    /// Evaluate an AST, but throw away the result and only return error (if any).
+    /// Evaluate an [`AST`], but throw away the result and only return error (if any).
     /// Useful for when you don't need the result, but still need to keep track of possible errors.
     ///
     /// # Deprecated

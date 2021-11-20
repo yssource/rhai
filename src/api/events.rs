@@ -17,11 +17,11 @@ impl Engine {
     /// > `   -> Result<Option<Dynamic>, Box<EvalAltResult>> + 'static`
     ///
     /// where:
-    /// * `index`: an offset from the bottom of the current [`Scope`] that the variable is supposed
-    ///   to reside. Offsets start from 1, with 1 meaning the last variable in the current
-    ///   [`Scope`].  Essentially the correct variable is at position `scope.len() - index`.
-    ///   If `index` is zero, then there is no pre-calculated offset position and a search through the
-    ///   current [`Scope`] must be performed.
+    /// * `index`: an offset from the bottom of the current [`Scope`][crate::Scope] that the
+    ///   variable is supposed to reside. Offsets start from 1, with 1 meaning the last variable in
+    ///   the current [`Scope`][crate::Scope].  Essentially the correct variable is at position
+    ///   `scope.len() - index`. If `index` is zero, then there is no pre-calculated offset position
+    ///   and a search through the current [`Scope`][crate::Scope] must be performed.
     ///
     /// * `context`: the current [evaluation context][`EvalContext`].
     ///

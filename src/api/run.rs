@@ -16,9 +16,9 @@ impl Engine {
     ///
     /// ## Constants Propagation
     ///
-    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
-    /// throughout the script _including_ functions. This allows functions to be optimized based on
-    /// dynamic global constants.
+    /// If not [`OptimizationLevel::None`][crate::OptimizationLevel::None], constants defined within
+    /// the scope are propagated throughout the script _including_ functions. This allows functions
+    /// to be optimized based on dynamic global constants.
     #[inline]
     pub fn run_with_scope(
         &self,
@@ -40,7 +40,7 @@ impl Engine {
 
         self.run_ast_with_scope(scope, &ast)
     }
-    /// Evaluate an AST, returning any error (if any).
+    /// Evaluate an [`AST`], returning any error (if any).
     #[inline(always)]
     pub fn run_ast(&self, ast: &AST) -> Result<(), Box<EvalAltResult>> {
         self.run_ast_with_scope(&mut Scope::new(), ast)

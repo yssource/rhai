@@ -31,9 +31,9 @@ impl Engine {
     ///
     /// ## Constants Propagation
     ///
-    /// If not [`OptimizationLevel::None`], constants defined within the scope are propagated
-    /// throughout the script _including_ functions. This allows functions to be optimized based on
-    /// dynamic global constants.
+    /// If not [`OptimizationLevel::None`][crate::OptimizationLevel::None], constants defined within
+    /// the scope are propagated throughout the script _including_ functions. This allows functions
+    /// to be optimized based on dynamic global constants.
     ///
     /// # Example
     ///
