@@ -153,6 +153,8 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 
             #[cfg(not(feature = "no_index"))]
             Union::Array(_, _, _) => self.deserialize_seq(visitor),
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(_, _, _) => self.deserialize_seq(visitor),
             #[cfg(not(feature = "no_object"))]
             Union::Map(_, _, _) => self.deserialize_map(visitor),
             Union::FnPtr(_, _, _) => self.type_error(),

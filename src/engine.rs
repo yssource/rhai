@@ -30,7 +30,7 @@ use std::{
 };
 
 #[cfg(not(feature = "no_index"))]
-use crate::Array;
+use crate::{Array, Blob};
 
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
@@ -482,6 +482,10 @@ pub enum Target<'a> {
     /// This is necessary because directly pointing to a bit inside an [`INT`][crate::INT] is impossible.
     #[cfg(not(feature = "no_index"))]
     BitField(&'a mut Dynamic, usize, Dynamic),
+    /// The target is a byte inside a Blob.
+    /// This is necessary because directly pointing to a byte (in [`Dynamic`] form) inside a blob is impossible.
+    #[cfg(not(feature = "no_index"))]
+    BlobByte(&'a mut Dynamic, usize, Dynamic),
     /// The target is a character inside a String.
     /// This is necessary because directly pointing to a char inside a String is impossible.
     #[cfg(not(feature = "no_index"))]
@@ -500,9 +504,7 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => true,
             Self::TempValue(_) => false,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, _) => false,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, _) => false,
+            Self::BitField(_, _, _) | Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a temp value?
@@ -515,9 +517,7 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => false,
             Self::TempValue(_) => true,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, _) => false,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, _) => false,
+            Self::BitField(_, _, _) | Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a shared value?
@@ -531,9 +531,7 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => true,
             Self::TempValue(r) => r.is_shared(),
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, _) => false,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, _) => false,
+            Self::BitField(_, _, _) | Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a specific type?
@@ -549,6 +547,8 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, _) => TypeId::of::<T>() == TypeId::of::<bool>(),
             #[cfg(not(feature = "no_index"))]
+            Self::BlobByte(_, _, _) => TypeId::of::<T>() == TypeId::of::<Blob>(),
+            #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => TypeId::of::<T>() == TypeId::of::<char>(),
         }
     }
@@ -563,6 +563,8 @@ impl<'a> Target<'a> {
             Self::TempValue(v) => v,      // Owned value is simply taken
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, value) => value, // Boolean is taken
+            #[cfg(not(feature = "no_index"))]
+            Self::BlobByte(_, _, value) => value, // Byte is taken
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => ch, // Character is taken
         }
@@ -614,6 +616,27 @@ impl<'a> Target<'a> {
                     }
                 } else {
                     unreachable!("bit-field index out of bounds: {}", index);
+                }
+            }
+            #[cfg(not(feature = "no_index"))]
+            Self::BlobByte(value, index, new_val) => {
+                // Replace the byte at the specified index position
+                let new_byte = new_val.as_int().map_err(|err| {
+                    Box::new(EvalAltResult::ErrorMismatchDataType(
+                        "INT".to_string(),
+                        err.to_string(),
+                        Position::NONE,
+                    ))
+                })?;
+
+                let value = &mut *value.write_lock::<Blob>().expect("`Blob`");
+
+                let index = *index;
+
+                if index < value.len() {
+                    value[index] = (new_byte & 0x000f) as u8;
+                } else {
+                    unreachable!("blob index out of bounds: {}", index);
                 }
             }
             #[cfg(not(feature = "no_index"))]
@@ -670,9 +693,9 @@ impl Deref for Target<'_> {
             Self::LockGuard((r, _)) => &**r,
             Self::TempValue(ref r) => r,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, ref r) => r,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, ref r) => r,
+            Self::BitField(_, _, ref r)
+            | Self::BlobByte(_, _, ref r)
+            | Self::StringChar(_, _, ref r) => r,
         }
     }
 }
@@ -693,9 +716,9 @@ impl DerefMut for Target<'_> {
             Self::LockGuard((r, _)) => r.deref_mut(),
             Self::TempValue(ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, ref mut r) => r,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, ref mut r) => r,
+            Self::BitField(_, _, ref mut r)
+            | Self::BlobByte(_, _, ref mut r)
+            | Self::StringChar(_, _, ref mut r) => r,
         }
     }
 }
@@ -2059,6 +2082,45 @@ impl Engine {
                     .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into())
             }
 
+            #[cfg(not(feature = "no_index"))]
+            Dynamic(Union::Blob(arr, _, _)) => {
+                // val_blob[idx]
+                let index = idx
+                    .as_int()
+                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, idx_pos))?;
+
+                let arr_len = arr.len();
+
+                #[cfg(not(feature = "unchecked"))]
+                let arr_idx = if index < 0 {
+                    // Count from end if negative
+                    arr_len
+                        - index
+                            .checked_abs()
+                            .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos))
+                            .and_then(|n| {
+                                if n as usize > arr_len {
+                                    Err(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos)
+                                        .into())
+                                } else {
+                                    Ok(n as usize)
+                                }
+                            })?
+                } else {
+                    index as usize
+                };
+                #[cfg(feature = "unchecked")]
+                let arr_idx = if index < 0 {
+                    // Count from end if negative
+                    arr_len - index.abs() as usize
+                } else {
+                    index as usize
+                };
+
+                let value = (arr[arr_idx] as INT).into();
+                Ok(Target::BlobByte(target, arr_idx, value))
+            }
+
             #[cfg(not(feature = "no_object"))]
             Dynamic(Union::Map(map, _, _)) => {
                 // val_map[idx]
@@ -3203,6 +3265,7 @@ impl Engine {
                                 let (a, m, s) = calc_size(value);
                                 (arrays + a + 1, maps + m, strings + s)
                             }
+                            Union::Blob(ref a, _, _) => (arrays + 1 + a.len(), maps, strings),
                             #[cfg(not(feature = "no_object"))]
                             Union::Map(_, _, _) => {
                                 let (a, m, s) = calc_size(value);
@@ -3212,6 +3275,8 @@ impl Engine {
                             _ => (arrays + 1, maps, strings),
                         })
                 }
+                #[cfg(not(feature = "no_index"))]
+                Union::Blob(ref arr, _, _) => (arr.len(), 0, 0),
                 #[cfg(not(feature = "no_object"))]
                 Union::Map(ref map, _, _) => {
                     map.values()
@@ -3221,6 +3286,8 @@ impl Engine {
                                 let (a, m, s) = calc_size(value);
                                 (arrays + a, maps + m + 1, strings + s)
                             }
+                            #[cfg(not(feature = "no_index"))]
+                            Union::Blob(ref a, _, _) => (arrays + a.len(), maps, strings),
                             Union::Map(_, _, _) => {
                                 let (a, m, s) = calc_size(value);
                                 (arrays + a, maps + m + 1, strings + s)

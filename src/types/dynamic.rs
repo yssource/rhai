@@ -20,7 +20,7 @@ use crate::{ast::FloatWrapper, FLOAT};
 use rust_decimal::Decimal;
 
 #[cfg(not(feature = "no_index"))]
-use crate::Array;
+use crate::{Array, Blob};
 
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
@@ -200,6 +200,11 @@ pub enum Union {
     /// Not available under `no_index`.
     #[cfg(not(feature = "no_index"))]
     Array(Box<Array>, Tag, AccessMode),
+    /// An blob (byte array).
+    ///
+    /// Not available under `no_index`.
+    #[cfg(not(feature = "no_index"))]
+    Blob(Box<Blob>, Tag, AccessMode),
     /// An object map value.
     ///
     /// Not available under `no_object`.
@@ -332,7 +337,7 @@ impl Dynamic {
             #[cfg(feature = "decimal")]
             Union::Decimal(_, tag, _) => tag,
             #[cfg(not(feature = "no_index"))]
-            Union::Array(_, tag, _) => tag,
+            Union::Array(_, tag, _) | Union::Blob(_, tag, _) => tag,
             #[cfg(not(feature = "no_object"))]
             Union::Map(_, tag, _) => tag,
             #[cfg(not(feature = "no_std"))]
@@ -357,7 +362,7 @@ impl Dynamic {
             #[cfg(feature = "decimal")]
             Union::Decimal(_, ref mut tag, _) => *tag = value,
             #[cfg(not(feature = "no_index"))]
-            Union::Array(_, ref mut tag, _) => *tag = value,
+            Union::Array(_, ref mut tag, _) | Union::Blob(_, ref mut tag, _) => *tag = value,
             #[cfg(not(feature = "no_object"))]
             Union::Map(_, ref mut tag, _) => *tag = value,
             #[cfg(not(feature = "no_std"))]
@@ -419,6 +424,8 @@ impl Dynamic {
             Union::Decimal(_, _, _) => TypeId::of::<Decimal>(),
             #[cfg(not(feature = "no_index"))]
             Union::Array(_, _, _) => TypeId::of::<Array>(),
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(_, _, _) => TypeId::of::<Blob>(),
             #[cfg(not(feature = "no_object"))]
             Union::Map(_, _, _) => TypeId::of::<Map>(),
             Union::FnPtr(_, _, _) => TypeId::of::<FnPtr>(),
@@ -456,6 +463,8 @@ impl Dynamic {
             Union::Decimal(_, _, _) => "decimal",
             #[cfg(not(feature = "no_index"))]
             Union::Array(_, _, _) => "array",
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(_, _, _) => "blob",
             #[cfg(not(feature = "no_object"))]
             Union::Map(_, _, _) => "map",
             Union::FnPtr(_, _, _) => "Fn",
@@ -498,6 +507,8 @@ impl Hash for Dynamic {
             Union::Decimal(ref d, _, _) => d.hash(state),
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref a, _, _) => a.as_ref().hash(state),
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(ref a, _, _) => a.as_ref().hash(state),
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref m, _, _) => m.as_ref().hash(state),
             Union::FnPtr(ref f, _, _) => f.hash(state),
@@ -586,6 +597,10 @@ pub(crate) fn map_std_type_name(name: &str) -> &str {
     if name == type_name::<Array>() {
         return "array";
     }
+    #[cfg(not(feature = "no_index"))]
+    if name == type_name::<Blob>() {
+        return "blob";
+    }
     #[cfg(not(feature = "no_object"))]
     if name == type_name::<Map>() {
         return "map";
@@ -612,6 +627,8 @@ impl fmt::Display for Dynamic {
             Union::Decimal(ref value, _, _) => fmt::Display::fmt(value, f),
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref value, _, _) => fmt::Debug::fmt(value, f),
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(ref value, _, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref value, _, _) => {
                 f.write_str("#")?;
@@ -692,6 +709,8 @@ impl fmt::Debug for Dynamic {
             Union::Decimal(ref value, _, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref value, _, _) => fmt::Debug::fmt(value, f),
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(ref value, _, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref value, _, _) => {
                 f.write_str("#")?;
@@ -781,6 +800,8 @@ impl Clone for Dynamic {
             }
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref value, tag, _) => Self(Union::Array(value.clone(), tag, ReadWrite)),
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(ref value, tag, _) => Self(Union::Blob(value.clone(), tag, ReadWrite)),
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref value, tag, _) => Self(Union::Map(value.clone(), tag, ReadWrite)),
             Union::FnPtr(ref value, tag, _) => Self(Union::FnPtr(value.clone(), tag, ReadWrite)),
@@ -972,7 +993,7 @@ impl Dynamic {
             #[cfg(feature = "decimal")]
             Union::Decimal(_, _, access) => access,
             #[cfg(not(feature = "no_index"))]
-            Union::Array(_, _, access) => access,
+            Union::Array(_, _, access) | Union::Blob(_, _, access) => access,
             #[cfg(not(feature = "no_object"))]
             Union::Map(_, _, access) => access,
             #[cfg(not(feature = "no_std"))]
@@ -1003,6 +1024,8 @@ impl Dynamic {
                     v.set_access_mode(typ);
                 });
             }
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(_, _, ref mut access) => *access = typ,
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref mut m, _, ref mut access) => {
                 *access = typ;
@@ -1166,6 +1189,13 @@ impl Dynamic {
                 Err(value) => value,
             };
         }
+        #[cfg(not(feature = "no_index"))]
+        {
+            value = match unsafe_try_cast::<_, Blob>(value) {
+                Ok(blob) => return Self(Union::Blob(Box::new(blob), DEFAULT_TAG_VALUE, ReadWrite)),
+                Err(value) => value,
+            };
+        }
 
         #[cfg(not(feature = "no_object"))]
         {
@@ -1323,6 +1353,14 @@ impl Dynamic {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             return match self.0 {
                 Union::Array(value, _, _) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
+                _ => None,
+            };
+        }
+
+        #[cfg(not(feature = "no_index"))]
+        if TypeId::of::<T>() == TypeId::of::<Blob>() {
+            return match self.0 {
+                Union::Blob(value, _, _) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
                 _ => None,
             };
         }
@@ -1660,6 +1698,13 @@ impl Dynamic {
                 _ => None,
             };
         }
+        #[cfg(not(feature = "no_index"))]
+        if TypeId::of::<T>() == TypeId::of::<Blob>() {
+            return match self.0 {
+                Union::Blob(ref value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
+                _ => None,
+            };
+        }
         #[cfg(not(feature = "no_object"))]
         if TypeId::of::<T>() == TypeId::of::<Map>() {
             return match self.0 {
@@ -1754,6 +1799,13 @@ impl Dynamic {
                 Union::Array(ref mut value, _, _) => {
                     value.as_mut().as_mut_any().downcast_mut::<T>()
                 }
+                _ => None,
+            };
+        }
+        #[cfg(not(feature = "no_index"))]
+        if TypeId::of::<T>() == TypeId::of::<Blob>() {
+            return match self.0 {
+                Union::Blob(ref mut value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
@@ -2090,6 +2142,30 @@ impl Dynamic {
                             })
                             .collect()
                     }
+                    _ => Err((*value).type_name()),
+                }
+            }
+            _ => Err(self.type_name()),
+        }
+    }
+}
+#[cfg(not(feature = "no_index"))]
+impl Dynamic {
+    /// Convert the [`Dynamic`] into a [`Vec<u8>`].
+    /// Returns the name of the actual type if the cast fails.
+    #[inline(always)]
+    pub fn into_blob(self) -> Result<Blob, &'static str> {
+        match self.0 {
+            Union::Blob(a, _, _) => Ok(*a),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(cell, _, _) => {
+                #[cfg(not(feature = "sync"))]
+                let value = cell.borrow();
+                #[cfg(feature = "sync")]
+                let value = cell.read().unwrap();
+
+                match value.0 {
+                    Union::Blob(ref a, _, _) => Ok(a.as_ref().clone()),
                     _ => Err((*value).type_name()),
                 }
             }

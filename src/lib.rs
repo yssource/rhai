@@ -176,6 +176,11 @@ pub use ast::ScriptFnMetadata;
 #[cfg(not(feature = "no_index"))]
 pub type Array = Vec<Dynamic>;
 
+/// Variable-sized array of [`u8`] values (byte array).
+/// Not available under `no_index`.
+#[cfg(not(feature = "no_index"))]
+pub type Blob = Vec<u8>;
+
 /// Hash map of [`Dynamic`] values with [`SmartString`](https://crates.io/crates/smartstring) keys.
 /// Not available under `no_object`.
 #[cfg(not(feature = "no_object"))]
