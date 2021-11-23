@@ -30,11 +30,12 @@ mod blob_functions {
     }
     #[rhai_fn(name = "blob", return_raw)]
     pub fn blob_with_capacity_and_value(
-        _ctx: NativeCallContext,
+        ctx: NativeCallContext,
         len: INT,
         value: INT,
     ) -> Result<Blob, Box<EvalAltResult>> {
         let len = if len < 0 { 0 } else { len as usize };
+        let _ctx = ctx;
 
         // Check if blob will be over max size limit
         #[cfg(not(feature = "unchecked"))]
@@ -46,11 +47,8 @@ mod blob_functions {
             .into());
         }
 
-        let value = (value & 0x000f) as u8;
-        let mut blob = Blob::with_capacity(len);
-        for _ in 0..len {
-            blob.push(value);
-        }
+        let mut blob = Blob::new();
+        blob.resize(len, (value & 0x000f) as u8);
         Ok(blob)
     }
     #[rhai_fn(name = "len", get = "len", pure)]
@@ -106,7 +104,7 @@ mod blob_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn pad(
-        _ctx: NativeCallContext,
+        ctx: NativeCallContext,
         blob: &mut Blob,
         len: INT,
         item: INT,
@@ -116,6 +114,7 @@ mod blob_functions {
         }
 
         let item = (item & 0x000f) as u8;
+        let _ctx = ctx;
 
         // Check if blob will be over max size limit
         #[cfg(not(feature = "unchecked"))]

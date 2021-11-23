@@ -469,7 +469,6 @@ mod string_functions {
         if len <= 0 {
             return Ok(());
         }
-
         let _ctx = ctx;
 
         // Check if string will be over max size limit
@@ -514,7 +513,6 @@ mod string_functions {
         if len <= 0 {
             return Ok(());
         }
-
         let _ctx = ctx;
 
         // Check if string will be over max size limit

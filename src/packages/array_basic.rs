@@ -69,7 +69,7 @@ mod array_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn pad(
-        _ctx: NativeCallContext,
+        ctx: NativeCallContext,
         array: &mut Array,
         len: INT,
         item: Dynamic,
@@ -77,6 +77,8 @@ mod array_functions {
         if len <= 0 {
             return Ok(());
         }
+
+        let _ctx = ctx;
 
         // Check if array will be over max size limit
         #[cfg(not(feature = "unchecked"))]
