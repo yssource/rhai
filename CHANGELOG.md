@@ -1,6 +1,15 @@
 Rhai Release Notes
 ==================
 
+Version 1.3.0
+=============
+
+Enhancements
+------------
+
+* Added `into_array` and `into_typed_array` for `Dynamic`.
+
+
 Version 1.2.0
 =============
 

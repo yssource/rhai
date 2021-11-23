@@ -1798,7 +1798,7 @@ impl Dynamic {
             _ => None,
         }
     }
-    /// Cast the [`Dynamic`] as a unit `()` and return it.
+    /// Cast the [`Dynamic`] as a unit `()`.
     /// Returns the name of the actual type if the cast fails.
     #[inline]
     pub fn as_unit(&self) -> Result<(), &'static str> {
@@ -1809,7 +1809,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Cast the [`Dynamic`] as the system integer type [`INT`] and return it.
+    /// Cast the [`Dynamic`] as the system integer type [`INT`].
     /// Returns the name of the actual type if the cast fails.
     #[inline]
     pub fn as_int(&self) -> Result<INT, &'static str> {
@@ -1820,7 +1820,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Cast the [`Dynamic`] as the system floating-point type [`FLOAT`] and return it.
+    /// Cast the [`Dynamic`] as the system floating-point type [`FLOAT`].
     /// Returns the name of the actual type if the cast fails.
     ///
     /// Not available under `no_float`.
@@ -1834,7 +1834,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// _(decimal)_ Cast the [`Dynamic`] as a [`Decimal`](https://docs.rs/rust_decimal) and return it.
+    /// _(decimal)_ Cast the [`Dynamic`] as a [`Decimal`](https://docs.rs/rust_decimal).
     /// Returns the name of the actual type if the cast fails.
     ///
     /// Exported under the `decimal` feature only.
@@ -1848,7 +1848,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Cast the [`Dynamic`] as a [`bool`] and return it.
+    /// Cast the [`Dynamic`] as a [`bool`].
     /// Returns the name of the actual type if the cast fails.
     #[inline]
     pub fn as_bool(&self) -> Result<bool, &'static str> {
@@ -1859,7 +1859,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Cast the [`Dynamic`] as a [`char`] and return it.
+    /// Cast the [`Dynamic`] as a [`char`].
     /// Returns the name of the actual type if the cast fails.
     #[inline]
     pub fn as_char(&self) -> Result<char, &'static str> {
@@ -1870,7 +1870,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Cast the [`Dynamic`] as an [`ImmutableString`] and return it as a string slice.
+    /// Cast the [`Dynamic`] as a string slice.
     /// Returns the name of the actual type if the cast fails.
     ///
     /// # Panics
@@ -1885,7 +1885,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Convert the [`Dynamic`] into a [`String`] and return it.
+    /// Convert the [`Dynamic`] into a [`String`].
     /// If there are other references to the same string, a cloned copy is returned.
     /// Returns the name of the actual type if the cast fails.
     #[inline]
@@ -1893,7 +1893,7 @@ impl Dynamic {
         self.into_immutable_string()
             .map(ImmutableString::into_owned)
     }
-    /// Convert the [`Dynamic`] into an [`ImmutableString`] and return it.
+    /// Convert the [`Dynamic`] into an [`ImmutableString`].
     /// Returns the name of the actual type if the cast fails.
     #[inline]
     pub fn into_immutable_string(self) -> Result<ImmutableString, &'static str> {
@@ -2019,6 +2019,82 @@ impl<T: Variant + Clone> std::iter::FromIterator<T> for Dynamic {
             DEFAULT_TAG_VALUE,
             ReadWrite,
         ))
+    }
+}
+#[cfg(not(feature = "no_index"))]
+impl Dynamic {
+    /// Convert the [`Dynamic`] into an [`Array`].
+    /// Returns the name of the actual type if the cast fails.
+    #[inline(always)]
+    pub fn into_array(self) -> Result<Array, &'static str> {
+        match self.0 {
+            Union::Array(a, _, _) => Ok(*a),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(cell, _, _) => {
+                #[cfg(not(feature = "sync"))]
+                let value = cell.borrow();
+                #[cfg(feature = "sync")]
+                let value = cell.read().unwrap();
+
+                match value.0 {
+                    Union::Array(ref a, _, _) => Ok(a.as_ref().clone()),
+                    _ => Err((*value).type_name()),
+                }
+            }
+            _ => Err(self.type_name()),
+        }
+    }
+    /// Convert the [`Dynamic`] into a [`Vec`].
+    /// Returns the name of the actual type if any cast fails.
+    #[inline(always)]
+    pub fn into_typed_array<T: Variant + Clone>(self) -> Result<Vec<T>, &'static str> {
+        match self.0 {
+            Union::Array(a, _, _) => a
+                .into_iter()
+                .map(|v| {
+                    #[cfg(not(feature = "no_closure"))]
+                    let typ = if v.is_shared() {
+                        // Avoid panics/deadlocks with shared values
+                        "<shared>"
+                    } else {
+                        v.type_name()
+                    };
+                    #[cfg(feature = "no_closure")]
+                    let typ = v.type_name();
+
+                    v.try_cast::<T>().ok_or_else(|| typ)
+                })
+                .collect(),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(cell, _, _) => {
+                #[cfg(not(feature = "sync"))]
+                let value = cell.borrow();
+                #[cfg(feature = "sync")]
+                let value = cell.read().unwrap();
+
+                match value.0 {
+                    Union::Array(ref a, _, _) => {
+                        a.iter()
+                            .map(|v| {
+                                #[cfg(not(feature = "no_closure"))]
+                                let typ = if v.is_shared() {
+                                    // Avoid panics/deadlocks with shared values
+                                    "<shared>"
+                                } else {
+                                    v.type_name()
+                                };
+                                #[cfg(feature = "no_closure")]
+                                let typ = v.type_name();
+
+                                v.read_lock::<T>().ok_or_else(|| typ).map(|v| v.clone())
+                            })
+                            .collect()
+                    }
+                    _ => Err((*value).type_name()),
+                }
+            }
+            _ => Err(self.type_name()),
+        }
     }
 }
 #[cfg(not(feature = "no_object"))]

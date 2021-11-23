@@ -1862,7 +1862,7 @@ pub struct FnCallExpr {
     /// Constant arguments are very common in function calls, and keeping each constant in
     /// an [`Expr::DynamicConstant`] involves an additional allocation.  Keeping the constant
     /// values in an inlined array avoids these extra allocations.
-    pub constants: smallvec::SmallVec<[Dynamic; 2]>,
+    pub constants: StaticVec<Dynamic>,
     /// Does this function call capture the parent scope?
     pub capture_parent_scope: bool,
 }

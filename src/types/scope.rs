@@ -10,13 +10,13 @@ use std::{borrow::Cow, iter::Extend};
 /// Keep a number of entries inline (since [`Dynamic`] is usually small enough).
 const SCOPE_ENTRIES_INLINED: usize = 8;
 
-/// Type containing information about the current scope.
-/// Useful for keeping state between [`Engine`][crate::Engine] evaluation runs.
+/// Type containing information about the current scope. Useful for keeping state between
+/// [`Engine`][crate::Engine] evaluation runs.
 ///
 /// # Thread Safety
 ///
-/// Currently, [`Scope`] is neither [`Send`] nor [`Sync`].
-/// Turn on the `sync` feature to make it [`Send`] `+` [`Sync`].
+/// Currently, [`Scope`] is neither [`Send`] nor [`Sync`]. Turn on the `sync` feature to make it
+/// [`Send`] `+` [`Sync`].
 ///
 /// # Example
 ///
@@ -39,17 +39,19 @@ const SCOPE_ENTRIES_INLINED: usize = 8;
 /// # }
 /// ```
 ///
-/// When searching for entries, newly-added entries are found before similarly-named but older entries,
-/// allowing for automatic _shadowing_.
+/// When searching for entries, newly-added entries are found before similarly-named but older
+/// entries, allowing for automatic _shadowing_.
 //
 // # Implementation Notes
 //
-// [`Scope`] is implemented as two [`Vec`]'s of exactly the same length.  Variables data (name, type, etc.)
-// is manually split into two equal-length arrays.  That's because variable names take up the most space,
-// with [`Cow<str>`][Cow] being four words long, but in the vast majority of cases the name is NOT used to
-// look up a variable.  Variable lookup is usually via direct indexing, by-passing the name altogether.
+// [`Scope`] is implemented as two [`Vec`]'s of exactly the same length.  Variables data (name,
+// type, etc.) is manually split into two equal-length arrays.  That's because variable names take
+// up the most space, with [`Cow<str>`][Cow] being four words long, but in the vast majority of
+// cases the name is NOT used to look up a variable.  Variable lookup is usually via direct
+// indexing, by-passing the name altogether.
 //
-// Since [`Dynamic`] is reasonably small, packing it tightly improves cache locality when variables are accessed.
+// Since [`Dynamic`] is reasonably small, packing it tightly improves cache locality when variables
+// are accessed.
 #[derive(Debug, Clone, Hash, Default)]
 pub struct Scope<'a> {
     /// Current value of the entry.
@@ -493,7 +495,7 @@ impl<'a> Scope<'a> {
     pub(crate) fn get_mut_by_index(&mut self, index: usize) -> &mut Dynamic {
         self.values.get_mut(index).expect("valid index")
     }
-    /// Update the access type of an entry in the [`Scope`].
+    /// Add an alias to an entry in the [`Scope`].
     ///
     /// # Panics
     ///
