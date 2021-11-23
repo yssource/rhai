@@ -10,6 +10,15 @@ Enhancements
 * Added `into_array` and `into_typed_array` for `Dynamic`.
 
 
+Version 1.2.1
+=============
+
+Bug fixes
+---------
+
+* Array methods (such as `map`) taking a closure with captures as argument now works properly.
+
+
 Version 1.2.0
 =============
 
