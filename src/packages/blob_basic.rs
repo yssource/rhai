@@ -2,7 +2,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, Blob, Dynamic, EvalAltResult, FnPtr, NativeCallContext, Position, INT};
+use crate::{def_package, Blob, Dynamic, EvalAltResult, NativeCallContext, Position, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, mem};
@@ -282,65 +282,7 @@ mod blob_functions {
             result
         }
     }
-    #[rhai_fn(return_raw)]
-    pub fn drain(
-        ctx: NativeCallContext,
-        blob: &mut Blob,
-        filter: FnPtr,
-    ) -> Result<Blob, Box<EvalAltResult>> {
-        if blob.is_empty() {
-            return Ok(Blob::new());
-        }
-
-        let mut drained = Blob::with_capacity(blob.len());
-
-        let mut i = 0;
-        let mut x = 0;
-
-        while x < blob.len() {
-            let value: Dynamic = (blob[x] as INT).into();
-
-            if filter
-                .call_dynamic(&ctx, None, [value.clone()])
-                .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(filter.fn_name()) =>
-                    {
-                        filter.call_dynamic(&ctx, None, [value.into(), (i as INT).into()])
-                    }
-                    _ => Err(err),
-                })
-                .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
-                        "drain".to_string(),
-                        ctx.source().unwrap_or("").to_string(),
-                        err,
-                        Position::NONE,
-                    ))
-                })?
-                .as_bool()
-                .unwrap_or(false)
-            {
-                drained.push(blob.remove(x));
-            } else {
-                x += 1;
-            }
-
-            i += 1;
-        }
-
-        Ok(drained)
-    }
-    #[rhai_fn(name = "drain", return_raw)]
-    pub fn drain_with_fn_name(
-        ctx: NativeCallContext,
-        blob: &mut Blob,
-        filter: &str,
-    ) -> Result<Blob, Box<EvalAltResult>> {
-        drain(ctx, blob, FnPtr::new(filter)?)
-    }
-    #[rhai_fn(name = "drain")]
-    pub fn drain_range(blob: &mut Blob, start: INT, len: INT) -> Blob {
+    pub fn drain(blob: &mut Blob, start: INT, len: INT) -> Blob {
         if blob.is_empty() || len <= 0 {
             return Blob::new();
         }
@@ -366,65 +308,7 @@ mod blob_functions {
 
         blob.drain(start..start + len).collect()
     }
-    #[rhai_fn(return_raw)]
-    pub fn retain(
-        ctx: NativeCallContext,
-        blob: &mut Blob,
-        filter: FnPtr,
-    ) -> Result<Blob, Box<EvalAltResult>> {
-        if blob.is_empty() {
-            return Ok(Blob::new());
-        }
-
-        let mut drained = Blob::new();
-
-        let mut i = 0;
-        let mut x = 0;
-
-        while x < blob.len() {
-            let value: Dynamic = (blob[x] as INT).into();
-
-            if !filter
-                .call_dynamic(&ctx, None, [value.clone()])
-                .or_else(|err| match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(filter.fn_name()) =>
-                    {
-                        filter.call_dynamic(&ctx, None, [value, (i as INT).into()])
-                    }
-                    _ => Err(err),
-                })
-                .map_err(|err| {
-                    Box::new(EvalAltResult::ErrorInFunctionCall(
-                        "retain".to_string(),
-                        ctx.source().unwrap_or("").to_string(),
-                        err,
-                        Position::NONE,
-                    ))
-                })?
-                .as_bool()
-                .unwrap_or(false)
-            {
-                drained.push(blob.remove(x));
-            } else {
-                x += 1;
-            }
-
-            i += 1;
-        }
-
-        Ok(drained)
-    }
-    #[rhai_fn(name = "retain", return_raw)]
-    pub fn retain_with_fn_name(
-        ctx: NativeCallContext,
-        blob: &mut Blob,
-        filter: &str,
-    ) -> Result<Blob, Box<EvalAltResult>> {
-        retain(ctx, blob, FnPtr::new(filter)?)
-    }
-    #[rhai_fn(name = "retain")]
-    pub fn retain_range(blob: &mut Blob, start: INT, len: INT) -> Blob {
+    pub fn retain(blob: &mut Blob, start: INT, len: INT) -> Blob {
         if blob.is_empty() || len <= 0 {
             return Blob::new();
         }
