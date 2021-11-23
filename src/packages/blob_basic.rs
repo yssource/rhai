@@ -282,13 +282,54 @@ mod blob_functions {
             result
         }
     }
-    #[rhai_fn(return_raw, pure)]
+    #[rhai_fn(return_raw)]
     pub fn drain(
         ctx: NativeCallContext,
         blob: &mut Blob,
         filter: FnPtr,
     ) -> Result<Blob, Box<EvalAltResult>> {
-        drain_with_fn_name(ctx, blob, filter.fn_name())
+        if blob.is_empty() {
+            return Ok(Blob::new());
+        }
+
+        let mut drained = Blob::with_capacity(blob.len());
+
+        let mut i = 0;
+        let mut x = 0;
+
+        while x < blob.len() {
+            let value: Dynamic = (blob[x] as INT).into();
+
+            if filter
+                .call_dynamic(&ctx, None, [value.clone()])
+                .or_else(|err| match *err {
+                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                        if fn_sig.starts_with(filter.fn_name()) =>
+                    {
+                        filter.call_dynamic(&ctx, None, [value.into(), (i as INT).into()])
+                    }
+                    _ => Err(err),
+                })
+                .map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                        "drain".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
+                        err,
+                        Position::NONE,
+                    ))
+                })?
+                .as_bool()
+                .unwrap_or(false)
+            {
+                drained.push(blob.remove(x));
+            } else {
+                x += 1;
+            }
+
+            i += 1;
+        }
+
+        Ok(drained)
     }
     #[rhai_fn(name = "drain", return_raw)]
     pub fn drain_with_fn_name(
@@ -296,66 +337,7 @@ mod blob_functions {
         blob: &mut Blob,
         filter: &str,
     ) -> Result<Blob, Box<EvalAltResult>> {
-        if blob.is_empty() {
-            return Ok(Blob::new());
-        }
-
-        let mut index_val = Dynamic::ZERO;
-        let mut removed = Vec::with_capacity(blob.len());
-        let mut count = 0;
-
-        for (i, &item) in blob.iter().enumerate() {
-            let mut item = (item as INT).into();
-            let mut args = [&mut item, &mut index_val];
-
-            let remove = match ctx.call_fn_raw(filter, true, false, &mut args[..1]) {
-                Ok(r) => r,
-                Err(err) => match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(filter) =>
-                    {
-                        *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(filter, true, false, &mut args)?
-                    }
-                    _ => {
-                        return Err(EvalAltResult::ErrorInFunctionCall(
-                            "drain".to_string(),
-                            ctx.source().unwrap_or("").to_string(),
-                            err,
-                            Position::NONE,
-                        )
-                        .into())
-                    }
-                },
-            }
-            .as_bool()
-            .unwrap_or(false);
-
-            removed.push(remove);
-
-            if remove {
-                count += 1;
-            }
-        }
-
-        if count == 0 {
-            return Ok(Blob::new());
-        }
-
-        let mut result = Vec::with_capacity(count);
-        let mut x = 0;
-        let mut i = 0;
-
-        while i < blob.len() {
-            if removed[x] {
-                result.push(blob.remove(i));
-            } else {
-                i += 1;
-            }
-            x += 1;
-        }
-
-        Ok(result.into())
+        drain(ctx, blob, FnPtr::new(filter)?)
     }
     #[rhai_fn(name = "drain")]
     pub fn drain_range(blob: &mut Blob, start: INT, len: INT) -> Blob {
@@ -384,13 +366,54 @@ mod blob_functions {
 
         blob.drain(start..start + len).collect()
     }
-    #[rhai_fn(return_raw, pure)]
+    #[rhai_fn(return_raw)]
     pub fn retain(
         ctx: NativeCallContext,
         blob: &mut Blob,
         filter: FnPtr,
     ) -> Result<Blob, Box<EvalAltResult>> {
-        retain_with_fn_name(ctx, blob, filter.fn_name())
+        if blob.is_empty() {
+            return Ok(Blob::new());
+        }
+
+        let mut drained = Blob::new();
+
+        let mut i = 0;
+        let mut x = 0;
+
+        while x < blob.len() {
+            let value: Dynamic = (blob[x] as INT).into();
+
+            if !filter
+                .call_dynamic(&ctx, None, [value.clone()])
+                .or_else(|err| match *err {
+                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                        if fn_sig.starts_with(filter.fn_name()) =>
+                    {
+                        filter.call_dynamic(&ctx, None, [value, (i as INT).into()])
+                    }
+                    _ => Err(err),
+                })
+                .map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                        "retain".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
+                        err,
+                        Position::NONE,
+                    ))
+                })?
+                .as_bool()
+                .unwrap_or(false)
+            {
+                drained.push(blob.remove(x));
+            } else {
+                x += 1;
+            }
+
+            i += 1;
+        }
+
+        Ok(drained)
     }
     #[rhai_fn(name = "retain", return_raw)]
     pub fn retain_with_fn_name(
@@ -398,66 +421,7 @@ mod blob_functions {
         blob: &mut Blob,
         filter: &str,
     ) -> Result<Blob, Box<EvalAltResult>> {
-        if blob.is_empty() {
-            return Ok(Blob::new());
-        }
-
-        let mut index_val = Dynamic::ZERO;
-        let mut removed = Vec::with_capacity(blob.len());
-        let mut count = 0;
-
-        for (i, &item) in blob.iter().enumerate() {
-            let mut item = (item as INT).into();
-            let mut args = [&mut item, &mut index_val];
-
-            let keep = match ctx.call_fn_raw(filter, true, false, &mut args[..1]) {
-                Ok(r) => r,
-                Err(err) => match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(filter) =>
-                    {
-                        *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(filter, true, false, &mut args)?
-                    }
-                    _ => {
-                        return Err(EvalAltResult::ErrorInFunctionCall(
-                            "retain".to_string(),
-                            ctx.source().unwrap_or("").to_string(),
-                            err,
-                            Position::NONE,
-                        )
-                        .into())
-                    }
-                },
-            }
-            .as_bool()
-            .unwrap_or(false);
-
-            removed.push(!keep);
-
-            if !keep {
-                count += 1;
-            }
-        }
-
-        if count == 0 {
-            return Ok(Blob::new());
-        }
-
-        let mut result = Vec::with_capacity(count);
-        let mut x = 0;
-        let mut i = 0;
-
-        while i < blob.len() {
-            if removed[x] {
-                result.push(blob.remove(i));
-            } else {
-                i += 1;
-            }
-            x += 1;
-        }
-
-        Ok(result.into())
+        retain(ctx, blob, FnPtr::new(filter)?)
     }
     #[rhai_fn(name = "retain")]
     pub fn retain_range(blob: &mut Blob, start: INT, len: INT) -> Blob {
