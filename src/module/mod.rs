@@ -480,7 +480,7 @@ impl Module {
                 namespace: FnNamespace::Internal,
                 access: fn_def.access,
                 params: num_params,
-                param_types: StaticVec::new(),
+                param_types: StaticVec::new_const(),
                 #[cfg(feature = "metadata")]
                 param_names,
                 func: Into::<CallableFunction>::into(fn_def).into(),
@@ -1729,10 +1729,10 @@ impl NamespaceRef {
     /// Create a new [`NamespaceRef`].
     #[inline(always)]
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             index: None,
-            path: StaticVec::new(),
+            path: StaticVec::new_const(),
         }
     }
     /// Get the [`Scope`][crate::Scope] index offset.

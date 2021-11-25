@@ -90,7 +90,7 @@ impl Engine {
             .collect();
 
         #[cfg(feature = "no_function")]
-        let lib = crate::StaticVec::new();
+        let lib = crate::StaticVec::new_const();
 
         let statements = std::mem::take(ast.statements_mut());
 

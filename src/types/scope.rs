@@ -2,6 +2,7 @@
 
 use super::dynamic::{AccessMode, Variant};
 use crate::{Dynamic, Identifier, StaticVec};
+use smallvec::SmallVec;
 use std::iter::FromIterator;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -55,11 +56,9 @@ const SCOPE_ENTRIES_INLINED: usize = 8;
 #[derive(Debug, Clone, Hash, Default)]
 pub struct Scope<'a> {
     /// Current value of the entry.
-    values: smallvec::SmallVec<[Dynamic; SCOPE_ENTRIES_INLINED]>,
+    values: SmallVec<[Dynamic; SCOPE_ENTRIES_INLINED]>,
     /// (Name, aliases) of the entry.
-    names: smallvec::SmallVec<
-        [(Cow<'a, str>, Option<Box<StaticVec<Identifier>>>); SCOPE_ENTRIES_INLINED],
-    >,
+    names: SmallVec<[(Cow<'a, str>, Option<Box<StaticVec<Identifier>>>); SCOPE_ENTRIES_INLINED]>,
 }
 
 impl<'a> IntoIterator for Scope<'a> {
@@ -92,8 +91,11 @@ impl<'a> Scope<'a> {
     /// ```
     #[inline(always)]
     #[must_use]
-    pub fn new() -> Self {
-        Default::default()
+    pub const fn new() -> Self {
+        Self {
+            values: SmallVec::new_const(),
+            names: SmallVec::new_const(),
+        }
     }
     /// Empty the [`Scope`].
     ///
@@ -506,7 +508,7 @@ impl<'a> Scope<'a> {
         let (_, aliases) = self.names.get_mut(index).expect("valid index");
         match aliases {
             None => {
-                let mut list = StaticVec::new();
+                let mut list = StaticVec::new_const();
                 list.push(alias);
                 *aliases = Some(list.into());
             }

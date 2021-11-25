@@ -134,10 +134,10 @@ impl<'e> ParseState<'e> {
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
             interned_strings: IdentifierBuilder::new(),
-            stack: StaticVec::new(),
+            stack: StaticVec::new_const(),
             entry_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
-            modules: StaticVec::new(),
+            modules: StaticVec::new_const(),
         }
     }
 
@@ -465,7 +465,7 @@ fn parse_fn_call(
     let (token, token_pos) = input.peek().expect(NEVER_ENDS);
 
     let mut namespace = namespace;
-    let mut args = StaticVec::new();
+    let mut args = StaticVec::new_const();
 
     match token {
         // id( <EOF>
@@ -766,7 +766,7 @@ fn parse_array_literal(
     let mut settings = settings;
     settings.pos = eat_token(input, Token::LeftBracket);
 
-    let mut arr = StaticVec::new();
+    let mut arr = StaticVec::new_const();
 
     loop {
         const MISSING_RBRACKET: &str = "to end this array literal";
@@ -1510,7 +1510,7 @@ fn parse_unary(
 
                 // Call negative function
                 expr => {
-                    let mut args = StaticVec::new();
+                    let mut args = StaticVec::new_const();
                     args.push(expr);
                     args.shrink_to_fit();
 
@@ -1536,7 +1536,7 @@ fn parse_unary(
 
                 // Call plus function
                 expr => {
-                    let mut args = StaticVec::new();
+                    let mut args = StaticVec::new_const();
                     args.push(expr);
                     args.shrink_to_fit();
 
@@ -1553,7 +1553,7 @@ fn parse_unary(
         // !expr
         Token::Bang => {
             let pos = eat_token(input, Token::Bang);
-            let mut args = StaticVec::new();
+            let mut args = StaticVec::new_const();
             args.push(parse_unary(input, state, lib, settings.level_up())?);
             args.shrink_to_fit();
 
@@ -1900,7 +1900,7 @@ fn parse_binary_op(
             ..Default::default()
         };
 
-        let mut args = StaticVec::new();
+        let mut args = StaticVec::new_const();
         args.push(root);
         args.push(rhs);
         args.shrink_to_fit();
@@ -2006,8 +2006,8 @@ fn parse_custom_syntax(
 ) -> Result<Expr, ParseError> {
     let mut settings = settings;
     let mut inputs = StaticVec::<Expr>::new();
-    let mut segments = StaticVec::new();
-    let mut tokens = StaticVec::new();
+    let mut segments = StaticVec::new_const();
+    let mut tokens = StaticVec::new_const();
 
     // Adjust the variables stack
     if syntax.scope_may_be_changed {
@@ -2992,7 +2992,7 @@ fn parse_fn(
         (_, pos) => return Err(PERR::FnMissingParams(name.to_string()).into_err(*pos)),
     };
 
-    let mut params = StaticVec::new();
+    let mut params = StaticVec::new_const();
 
     if !match_token(input, Token::RightParen).0 {
         let sep_err = format!("to separate the parameters of function '{}'", name);
@@ -3119,7 +3119,7 @@ fn parse_anon_fn(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut settings = settings;
-    let mut params_list = StaticVec::new();
+    let mut params_list = StaticVec::new_const();
 
     if input.next().expect(NEVER_ENDS).0 != Token::Or && !match_token(input, Token::Pipe).0 {
         loop {
@@ -3205,7 +3205,7 @@ fn parse_anon_fn(
         comments: None,
     };
 
-    let fn_ptr = crate::FnPtr::new_unchecked(fn_name, StaticVec::new());
+    let fn_ptr = crate::FnPtr::new_unchecked(fn_name, StaticVec::new_const());
     let expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), settings.pos);
 
     #[cfg(not(feature = "no_closure"))]
@@ -3249,7 +3249,7 @@ impl Engine {
             }
         }
 
-        let mut statements = StaticVec::new();
+        let mut statements = StaticVec::new_const();
         statements.push(Stmt::Expr(expr));
 
         #[cfg(not(feature = "no_optimize"))]
@@ -3257,7 +3257,7 @@ impl Engine {
             self,
             _scope,
             statements,
-            StaticVec::new(),
+            StaticVec::new_const(),
             optimization_level,
         ));
 
@@ -3271,7 +3271,7 @@ impl Engine {
         input: &mut TokenStream,
         state: &mut ParseState,
     ) -> Result<(StaticVec<Stmt>, StaticVec<Shared<ScriptFnDef>>), ParseError> {
-        let mut statements = StaticVec::new();
+        let mut statements = StaticVec::new_const();
         let mut functions = BTreeMap::new();
 
         while !input.peek().expect(NEVER_ENDS).0.is_eof() {

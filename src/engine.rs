@@ -87,10 +87,10 @@ impl Imports {
     /// Create a new stack of imported [modules][Module].
     #[inline(always)]
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
-            keys: StaticVec::new(),
-            modules: StaticVec::new(),
+            keys: StaticVec::new_const(),
+            modules: StaticVec::new_const(),
             source: None,
             num_operations: 0,
             num_modules: 0,
@@ -784,11 +784,11 @@ impl EvalState {
     /// Create a new [`EvalState`].
     #[inline(always)]
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             always_search_scope: false,
             scope_level: 0,
-            fn_resolution_caches: StaticVec::new(),
+            fn_resolution_caches: StaticVec::new_const(),
         }
     }
     /// Is the state currently at global (root) level?
@@ -1137,7 +1137,7 @@ impl Engine {
     #[must_use]
     pub fn new_raw() -> Self {
         let mut engine = Self {
-            global_modules: StaticVec::new(),
+            global_modules: StaticVec::new_const(),
             global_sub_modules: BTreeMap::new(),
 
             #[cfg(not(feature = "no_module"))]
@@ -1845,7 +1845,7 @@ impl Engine {
             _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
         };
 
-        let idx_values = &mut StaticVec::new();
+        let idx_values = &mut StaticVec::new_const();
 
         self.eval_dot_index_chain_arguments(
             scope, mods, state, lib, this_ptr, rhs, term, chain_type, idx_values, 0, level,

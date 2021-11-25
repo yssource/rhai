@@ -60,7 +60,7 @@ impl Engine {
         name: impl AsRef<str>,
         args: impl crate::FuncArgs,
     ) -> Result<T, Box<EvalAltResult>> {
-        let mut arg_values = crate::StaticVec::new();
+        let mut arg_values = crate::StaticVec::new_const();
         args.parse(&mut arg_values);
 
         let result = self.call_fn_raw(scope, ast, true, true, name, None, arg_values)?;

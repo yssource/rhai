@@ -228,7 +228,7 @@ impl AST {
     pub fn empty() -> Self {
         Self {
             source: None,
-            body: StmtBlock::empty(),
+            body: StmtBlock::empty(Position::NONE),
             functions: Module::new().into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -401,7 +401,7 @@ impl AST {
         functions.merge_filtered(&self.functions, &filter);
         Self {
             source: self.source.clone(),
-            body: StmtBlock::empty(),
+            body: StmtBlock::empty(Position::NONE),
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: self.resolver.clone(),
@@ -597,7 +597,7 @@ impl AST {
             }
             (false, true) => body.clone(),
             (true, false) => other.body.clone(),
-            (true, true) => StmtBlock::empty(),
+            (true, true) => StmtBlock::empty(Position::NONE),
         };
 
         let source = other.source.clone().or_else(|| self.source.clone());
@@ -744,7 +744,7 @@ impl AST {
     /// Clear all statements in the [`AST`], leaving only function definitions.
     #[inline(always)]
     pub fn clear_statements(&mut self) -> &mut Self {
-        self.body = StmtBlock::empty();
+        self.body = StmtBlock::empty(Position::NONE);
         self
     }
     /// Extract all top-level literal constant and/or variable definitions.
@@ -997,8 +997,8 @@ impl StmtBlock {
     /// Create an empty [`StmtBlock`].
     #[inline(always)]
     #[must_use]
-    pub fn empty() -> Self {
-        Default::default()
+    pub const fn empty(pos: Position) -> Self {
+        Self(StaticVec::new_const(), pos)
     }
     /// Is this statements block empty?
     #[inline(always)]
@@ -1306,7 +1306,7 @@ impl From<Stmt> for StmtBlock {
     fn from(stmt: Stmt) -> Self {
         match stmt {
             Stmt::Block(mut block, pos) => Self(block.iter_mut().map(mem::take).collect(), pos),
-            Stmt::Noop(pos) => Self(StaticVec::new(), pos),
+            Stmt::Noop(pos) => Self(StaticVec::new_const(), pos),
             _ => {
                 let pos = stmt.position();
                 Self(vec![stmt].into(), pos)

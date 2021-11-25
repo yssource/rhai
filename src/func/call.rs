@@ -1091,7 +1091,7 @@ impl Engine {
     ) -> RhaiResult {
         let mut a_expr = args_expr;
         let mut total_args = a_expr.len();
-        let mut curry = StaticVec::new();
+        let mut curry = StaticVec::new_const();
         let mut name = fn_name;
         let mut hashes = hashes;
         let redirected; // Handle call() - Redirect function call

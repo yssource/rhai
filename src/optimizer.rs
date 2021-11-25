@@ -67,14 +67,14 @@ struct OptimizerState<'a> {
 impl<'a> OptimizerState<'a> {
     /// Create a new State.
     #[inline(always)]
-    pub fn new(
+    pub const fn new(
         engine: &'a Engine,
         lib: &'a [&'a Module],
         optimization_level: OptimizationLevel,
     ) -> Self {
         Self {
             changed: false,
-            variables: StaticVec::new(),
+            variables: StaticVec::new_const(),
             propagate_constants: true,
             engine,
             lib,
@@ -942,7 +942,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                     state.set_dirty();
                     let fn_ptr = FnPtr::new_unchecked(
                                     fn_name.as_str_ref().expect("`ImmutableString`").into(),
-                                    StaticVec::new()
+                                    StaticVec::new_const()
                                  );
                     *expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), *pos);
                 }
@@ -1140,7 +1140,7 @@ pub fn optimize_into_ast(
                 .map(|fn_def| crate::ast::ScriptFnDef {
                     name: fn_def.name.clone(),
                     access: fn_def.access,
-                    body: crate::ast::StmtBlock::empty(),
+                    body: crate::ast::StmtBlock::empty(Position::NONE),
                     params: fn_def.params.clone(),
                     lib: None,
                     #[cfg(not(feature = "no_module"))]

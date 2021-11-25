@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 1.3.0
 =============
 
+Compiler requirement
+--------------------
+
+* Minimum compiler version is 1.51.
+
 Enhancements
 ------------
 
