@@ -103,15 +103,22 @@ impl<'a> OptimizerState<'a> {
     }
     /// Add a new constant to the list.
     #[inline(always)]
-    pub fn push_var(&mut self, name: &str, access: AccessMode, value: Option<Dynamic>) {
+    pub fn push_var(
+        &mut self,
+        name: impl Into<String>,
+        access: AccessMode,
+        value: Option<Dynamic>,
+    ) {
         self.variables.push((name.into(), access, value))
     }
     /// Look up a constant from the list.
     #[inline]
-    pub fn find_constant(&self, name: &str) -> Option<&Dynamic> {
+    pub fn find_constant(&self, name: impl AsRef<str>) -> Option<&Dynamic> {
         if !self.propagate_constants {
             return None;
         }
+
+        let name = name.as_ref();
 
         for (n, access, value) in self.variables.iter().rev() {
             if n == name {
@@ -128,7 +135,7 @@ impl<'a> OptimizerState<'a> {
     #[inline]
     pub fn call_fn_with_constant_arguments(
         &self,
-        fn_name: &str,
+        fn_name: impl AsRef<str>,
         arg_values: &mut [Dynamic],
     ) -> Option<Dynamic> {
         self.engine
@@ -136,8 +143,8 @@ impl<'a> OptimizerState<'a> {
                 &mut Imports::new(),
                 &mut EvalState::new(),
                 self.lib,
-                fn_name,
-                calc_fn_hash(fn_name, arg_values.len()),
+                &fn_name,
+                calc_fn_hash(&fn_name, arg_values.len()),
                 &mut arg_values.iter_mut().collect::<StaticVec<_>>(),
                 false,
                 false,
@@ -210,7 +217,7 @@ fn optimize_stmt_block(
 
                         if value_expr.is_constant() {
                             state.push_var(
-                                &x.name,
+                                x.name.as_str(),
                                 AccessMode::ReadOnly,
                                 value_expr.get_literal_value(),
                             );
@@ -218,7 +225,7 @@ fn optimize_stmt_block(
                     } else {
                         // Add variables into the state
                         optimize_expr(value_expr, state, false);
-                        state.push_var(&x.name, AccessMode::ReadWrite, None);
+                        state.push_var(x.name.as_str(), AccessMode::ReadWrite, None);
                     }
                 }
                 // Optimize the statement
@@ -984,7 +991,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 _ if x.args.len() == 2 && !state.has_native_fn_override(x.hashes.native, arg_types.as_ref()) => {
                     if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
                         .and_then(|f| {
-                            let context = (state.engine, x.name.as_ref(), state.lib).into();
+                            let context = (state.engine, x.name.as_str(), state.lib).into();
                             let (first, second) = arg_values.split_first_mut().expect("not empty");
                             (f)(context, &mut [ first, &mut second[0] ]).ok()
                         }) {
@@ -1017,7 +1024,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
         => {
             // First search for script-defined functions (can override built-in)
             #[cfg(not(feature = "no_function"))]
-            let has_script_fn = state.lib.iter().any(|&m| m.get_script_fn(x.name.as_ref(), x.args.len()).is_some());
+            let has_script_fn = state.lib.iter().any(|&m| m.get_script_fn(&x.name, x.args.len()).is_some());
             #[cfg(feature = "no_function")]
             let has_script_fn = false;
 
@@ -1031,7 +1038,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                     KEYWORD_TYPE_OF if arg_values.len() == 1 => Some(state.engine.map_type_name(arg_values[0].type_name()).into()),
                     #[cfg(not(feature = "no_closure"))]
                     KEYWORD_IS_SHARED if arg_values.len() == 1 => Some(Dynamic::FALSE),
-                    _ => state.call_fn_with_constant_arguments(x.name.as_ref(), arg_values)
+                    _ => state.call_fn_with_constant_arguments(&x.name, arg_values)
                 };
 
                 if let Some(result) = result {

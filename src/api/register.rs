@@ -324,7 +324,7 @@ impl Engine {
     #[inline(always)]
     pub fn register_get<T: Variant + Clone, V: Variant + Clone>(
         &mut self,
-        name: &str,
+        name: impl AsRef<str>,
         get_fn: impl Fn(&mut T) -> V + SendSync + 'static,
     ) -> &mut Self {
         self.register_fn(&crate::engine::make_getter(name), get_fn)
@@ -371,7 +371,7 @@ impl Engine {
     #[inline(always)]
     pub fn register_get_result<T: Variant + Clone, V: Variant + Clone>(
         &mut self,
-        name: &str,
+        name: impl AsRef<str>,
         get_fn: impl Fn(&mut T) -> Result<V, Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
         self.register_result_fn(&crate::engine::make_getter(name), get_fn)
@@ -417,7 +417,7 @@ impl Engine {
     #[inline(always)]
     pub fn register_set<T: Variant + Clone, V: Variant + Clone>(
         &mut self,
-        name: &str,
+        name: impl AsRef<str>,
         set_fn: impl Fn(&mut T, V) + SendSync + 'static,
     ) -> &mut Self {
         self.register_fn(&crate::engine::make_setter(name), set_fn)
@@ -466,7 +466,7 @@ impl Engine {
     #[inline(always)]
     pub fn register_set_result<T: Variant + Clone, V: Variant + Clone>(
         &mut self,
-        name: &str,
+        name: impl AsRef<str>,
         set_fn: impl Fn(&mut T, V) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
         self.register_result_fn(&crate::engine::make_setter(name), set_fn)
@@ -514,11 +514,11 @@ impl Engine {
     #[inline(always)]
     pub fn register_get_set<T: Variant + Clone, V: Variant + Clone>(
         &mut self,
-        name: &str,
+        name: impl AsRef<str>,
         get_fn: impl Fn(&mut T) -> V + SendSync + 'static,
         set_fn: impl Fn(&mut T, V) + SendSync + 'static,
     ) -> &mut Self {
-        self.register_get(name, get_fn).register_set(name, set_fn)
+        self.register_get(&name, get_fn).register_set(&name, set_fn)
     }
     /// Register an index getter for a custom type with the [`Engine`].
     ///

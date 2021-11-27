@@ -29,7 +29,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn compile(&self, script: &str) -> Result<AST, ParseError> {
+    pub fn compile(&self, script: impl AsRef<str>) -> Result<AST, ParseError> {
         self.compile_with_scope(&Scope::new(), script)
     }
     /// Compile a string into an [`AST`] using own scope, which can be used later for evaluation.
@@ -70,7 +70,11 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn compile_with_scope(&self, scope: &Scope, script: &str) -> Result<AST, ParseError> {
+    pub fn compile_with_scope(
+        &self,
+        scope: &Scope,
+        script: impl AsRef<str>,
+    ) -> Result<AST, ParseError> {
         self.compile_scripts_with_scope(scope, &[script])
     }
     /// Compile a string into an [`AST`] using own scope, which can be used later for evaluation,
@@ -86,7 +90,7 @@ impl Engine {
     pub fn compile_into_self_contained(
         &self,
         scope: &Scope,
-        script: &str,
+        script: impl AsRef<str>,
     ) -> Result<AST, Box<EvalAltResult>> {
         use crate::{
             ast::{ASTNode, Expr, Stmt},
@@ -198,7 +202,7 @@ impl Engine {
     pub fn compile_scripts_with_scope(
         &self,
         scope: &Scope,
-        scripts: &[&str],
+        scripts: &[impl AsRef<str>],
     ) -> Result<AST, ParseError> {
         self.compile_with_scope_and_optimization_level(
             scope,
@@ -218,7 +222,7 @@ impl Engine {
     pub(crate) fn compile_with_scope_and_optimization_level(
         &self,
         scope: &Scope,
-        scripts: &[&str],
+        scripts: &[impl AsRef<str>],
         #[cfg(not(feature = "no_optimize"))] optimization_level: crate::OptimizationLevel,
     ) -> Result<AST, ParseError> {
         let (stream, tokenizer_control) =
@@ -253,7 +257,7 @@ impl Engine {
     /// # }
     /// ```
     #[inline(always)]
-    pub fn compile_expression(&self, script: &str) -> Result<AST, ParseError> {
+    pub fn compile_expression(&self, script: impl AsRef<str>) -> Result<AST, ParseError> {
         self.compile_expression_with_scope(&Scope::new(), script)
     }
     /// Compile a string containing an expression into an [`AST`] using own scope,
@@ -292,7 +296,7 @@ impl Engine {
     pub fn compile_expression_with_scope(
         &self,
         scope: &Scope,
-        script: &str,
+        script: impl AsRef<str>,
     ) -> Result<AST, ParseError> {
         let scripts = [script];
         let (stream, tokenizer_control) =

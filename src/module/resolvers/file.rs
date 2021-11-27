@@ -197,12 +197,12 @@ impl FileModuleResolver {
     /// Is a particular path cached?
     #[inline]
     #[must_use]
-    pub fn is_cached(&self, path: &str, source_path: Option<&str>) -> bool {
+    pub fn is_cached(&self, path: impl AsRef<str>, source_path: Option<&str>) -> bool {
         if !self.cache_enabled {
             return false;
         }
 
-        let file_path = self.get_file_path(path, source_path);
+        let file_path = self.get_file_path(path.as_ref(), source_path);
 
         shared_write_lock(&self.cache).contains_key(&file_path)
     }
@@ -219,10 +219,10 @@ impl FileModuleResolver {
     #[must_use]
     pub fn clear_cache_for_path(
         &mut self,
-        path: &str,
-        source_path: Option<&str>,
+        path: impl AsRef<str>,
+        source_path: Option<impl AsRef<str>>,
     ) -> Option<Shared<Module>> {
-        let file_path = self.get_file_path(path, source_path);
+        let file_path = self.get_file_path(path.as_ref(), source_path.as_ref().map(|v| v.as_ref()));
 
         shared_write_lock(&self.cache)
             .remove_entry(&file_path)

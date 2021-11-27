@@ -146,7 +146,8 @@ impl<'e> ParseState<'e> {
     ///
     /// Return `None` when the variable name is not found in the `stack`.
     #[inline]
-    pub fn access_var(&mut self, name: &str, pos: Position) -> Option<NonZeroUsize> {
+    pub fn access_var(&mut self, name: impl AsRef<str>, pos: Position) -> Option<NonZeroUsize> {
+        let name = name.as_ref();
         let mut barrier = false;
         let _pos = pos;
 
@@ -195,7 +196,9 @@ impl<'e> ParseState<'e> {
     #[cfg(not(feature = "no_module"))]
     #[inline]
     #[must_use]
-    pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
+    pub fn find_module(&self, name: impl AsRef<str>) -> Option<NonZeroUsize> {
+        let name = name.as_ref();
+
         self.modules
             .iter()
             .rev()
@@ -330,7 +333,10 @@ impl Expr {
 
 /// Make sure that the next expression is not a statement expression (i.e. wrapped in `{}`).
 #[inline]
-fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result<(), ParseError> {
+fn ensure_not_statement_expr(
+    input: &mut TokenStream,
+    type_name: impl ToString,
+) -> Result<(), ParseError> {
     match input.peek().expect(NEVER_ENDS) {
         (Token::LeftBrace, pos) => Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos)),
         _ => Ok(()),
@@ -1996,7 +2002,7 @@ fn parse_custom_syntax(
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     settings: ParseSettings,
-    key: &str,
+    key: impl Into<ImmutableString>,
     syntax: &CustomSyntax,
     pos: Position,
 ) -> Result<Expr, ParseError> {

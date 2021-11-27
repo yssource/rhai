@@ -109,10 +109,10 @@ impl FuncInfo {
 #[inline]
 fn calc_native_fn_hash<'a>(
     modules: impl Iterator<Item = &'a str>,
-    fn_name: &str,
+    fn_name: impl AsRef<str>,
     params: &[TypeId],
 ) -> u64 {
-    let hash_script = calc_qualified_fn_hash(modules, fn_name, params.len());
+    let hash_script = calc_qualified_fn_hash(modules, fn_name.as_ref(), params.len());
     let hash_params = calc_fn_params_hash(params.iter().cloned());
     combine_hashes(hash_script, hash_params)
 }
@@ -501,12 +501,14 @@ impl Module {
     #[must_use]
     pub fn get_script_fn(
         &self,
-        name: &str,
+        name: impl AsRef<str>,
         num_params: usize,
     ) -> Option<&Shared<crate::ast::ScriptFnDef>> {
         if self.functions.is_empty() {
             None
         } else {
+            let name = name.as_ref();
+
             self.functions
                 .values()
                 .find(|f| f.params == num_params && f.name == name)
@@ -627,10 +629,10 @@ impl Module {
     /// In other words, the number of entries should be one larger than the number of parameters.
     #[cfg(feature = "metadata")]
     #[inline]
-    pub fn update_fn_metadata(&mut self, hash_fn: u64, arg_names: &[&str]) -> &mut Self {
+    pub fn update_fn_metadata(&mut self, hash_fn: u64, arg_names: &[impl AsRef<str>]) -> &mut Self {
         let param_names = arg_names
             .iter()
-            .map(|&name| self.identifiers.get(name))
+            .map(|name| self.identifiers.get(name.as_ref()))
             .collect();
 
         if let Some(f) = self.functions.get_mut(&hash_fn) {
@@ -685,10 +687,11 @@ impl Module {
         name: impl AsRef<str> + Into<Identifier>,
         namespace: FnNamespace,
         access: FnAccess,
-        _arg_names: Option<&[&str]>,
+        arg_names: Option<&[&str]>,
         arg_types: &[TypeId],
         func: CallableFunction,
     ) -> u64 {
+        let _arg_names = arg_names;
         let is_method = func.is_method();
 
         let mut param_types: StaticVec<_> = arg_types
@@ -702,7 +705,7 @@ impl Module {
         #[cfg(feature = "metadata")]
         let mut param_names: StaticVec<_> = _arg_names
             .iter()
-            .flat_map(|p| p.iter())
+            .flat_map(|&p| p.iter())
             .map(|&arg| self.identifiers.get(arg))
             .collect();
         #[cfg(feature = "metadata")]
@@ -884,7 +887,7 @@ impl Module {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn set_getter_fn<ARGS, A, T, F>(&mut self, name: &str, func: F) -> u64
+    pub fn set_getter_fn<ARGS, A, T, F>(&mut self, name: impl AsRef<str>, func: F) -> u64
     where
         A: Variant + Clone,
         T: Variant + Clone,
@@ -925,7 +928,7 @@ impl Module {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn set_setter_fn<ARGS, A, B, F>(&mut self, name: &str, func: F) -> u64
+    pub fn set_setter_fn<ARGS, A, B, F>(&mut self, name: impl AsRef<str>, func: F) -> u64
     where
         A: Variant + Clone,
         B: Variant + Clone,

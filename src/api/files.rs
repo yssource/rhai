@@ -163,7 +163,7 @@ impl Engine {
         scope: &mut Scope,
         path: std::path::PathBuf,
     ) -> Result<T, Box<EvalAltResult>> {
-        Self::read_file(path).and_then(|contents| self.eval_with_scope::<T>(scope, &contents))
+        Self::read_file(path).and_then(|contents| self.eval_with_scope(scope, &contents))
     }
     /// Evaluate a file, returning any error (if any).
     ///

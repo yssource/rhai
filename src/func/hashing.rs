@@ -89,7 +89,7 @@ pub fn calc_qualified_var_hash<'a>(modules: impl Iterator<Item = &'a str>, var_n
 #[must_use]
 pub fn calc_qualified_fn_hash<'a>(
     modules: impl Iterator<Item = &'a str>,
-    fn_name: &str,
+    fn_name: impl AsRef<str>,
     num: usize,
 ) -> u64 {
     let s = &mut get_hasher();
@@ -101,7 +101,7 @@ pub fn calc_qualified_fn_hash<'a>(
         .skip(1)
         .for_each(|m| m.hash(s));
     len.hash(s);
-    fn_name.hash(s);
+    fn_name.as_ref().hash(s);
     num.hash(s);
     s.finish()
 }
@@ -112,7 +112,7 @@ pub fn calc_qualified_fn_hash<'a>(
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
 #[inline(always)]
 #[must_use]
-pub fn calc_fn_hash(fn_name: &str, num: usize) -> u64 {
+pub fn calc_fn_hash(fn_name: impl AsRef<str>, num: usize) -> u64 {
     calc_qualified_fn_hash(empty(), fn_name, num)
 }
 

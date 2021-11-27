@@ -131,7 +131,9 @@ impl Imports {
     /// Get the index of an imported [module][Module] by name.
     #[inline]
     #[must_use]
-    pub fn find(&self, name: &str) -> Option<usize> {
+    pub fn find(&self, name: impl AsRef<str>) -> Option<usize> {
+        let name = name.as_ref();
+
         self.keys
             .iter()
             .enumerate()
@@ -222,7 +224,7 @@ impl Imports {
     /// Set a constant into the cache of globally-defined constants.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
-    pub(crate) fn set_global_constant(&mut self, name: &str, value: Dynamic) {
+    pub(crate) fn set_global_constant(&mut self, name: impl Into<Identifier>, value: Dynamic) {
         if self.global_constants.is_none() {
             let dict: crate::Locked<_> = BTreeMap::new().into();
             self.global_constants = Some(dict.into());
@@ -1063,24 +1065,24 @@ impl Default for Engine {
 #[cfg(not(feature = "no_object"))]
 #[inline]
 #[must_use]
-pub fn make_getter(id: &str) -> String {
-    format!("{}{}", FN_GET, id)
+pub fn make_getter(id: impl AsRef<str>) -> String {
+    format!("{}{}", FN_GET, id.as_ref())
 }
 
 /// Make setter function
 #[cfg(not(feature = "no_object"))]
 #[inline]
 #[must_use]
-pub fn make_setter(id: &str) -> String {
-    format!("{}{}", FN_SET, id)
+pub fn make_setter(id: impl AsRef<str>) -> String {
+    format!("{}{}", FN_SET, id.as_ref())
 }
 
 /// Is this function an anonymous function?
 #[cfg(not(feature = "no_function"))]
 #[inline(always)]
 #[must_use]
-pub fn is_anonymous_fn(fn_name: &str) -> bool {
-    fn_name.starts_with(FN_ANONYMOUS)
+pub fn is_anonymous_fn(fn_name: impl AsRef<str>) -> bool {
+    fn_name.as_ref().starts_with(FN_ANONYMOUS)
 }
 
 /// Print to `stdout`
@@ -3105,7 +3107,7 @@ impl Engine {
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(not(feature = "no_module"))]
                     if entry_type == AccessMode::ReadOnly && lib.iter().any(|&m| !m.is_empty()) {
-                        mods.set_global_constant(name, value.clone());
+                        mods.set_global_constant(name.clone(), value.clone());
                     }
 
                     (

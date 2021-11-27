@@ -233,11 +233,13 @@ impl<'a> NativeCallContext<'a> {
     /// by reference and is not consumed.
     pub fn call_fn_raw(
         &self,
-        fn_name: &str,
+        fn_name: impl AsRef<str>,
         is_ref_mut: bool,
         is_method_call: bool,
         args: &mut [&mut Dynamic],
     ) -> Result<Dynamic, Box<EvalAltResult>> {
+        let fn_name = fn_name.as_ref();
+
         let hash = if is_method_call {
             FnCallHashes::from_all(
                 #[cfg(not(feature = "no_function"))]

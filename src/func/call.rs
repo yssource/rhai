@@ -107,7 +107,7 @@ impl Drop for ArgBackup<'_> {
 #[cfg(not(feature = "no_closure"))]
 #[inline]
 pub fn ensure_no_data_race(
-    fn_name: &str,
+    fn_name: impl AsRef<str>,
     args: &FnCallArgs,
     is_method_call: bool,
 ) -> Result<(), Box<EvalAltResult>> {
@@ -118,7 +118,7 @@ pub fn ensure_no_data_race(
         .find(|(_, a)| a.is_locked())
     {
         return Err(EvalAltResult::ErrorDataRace(
-            format!("argument #{} of function '{}'", n + 1, fn_name),
+            format!("argument #{} of function '{}'", n + 1, fn_name.as_ref()),
             Position::NONE,
         )
         .into());
@@ -134,7 +134,7 @@ impl Engine {
     fn gen_call_signature(
         &self,
         namespace: Option<&NamespaceRef>,
-        fn_name: &str,
+        fn_name: impl AsRef<str>,
         args: &[&mut Dynamic],
     ) -> String {
         format!(
@@ -145,7 +145,7 @@ impl Engine {
             } else {
                 ""
             },
-            fn_name,
+            fn_name.as_ref(),
             args.iter()
                 .map(|a| if a.is::<ImmutableString>() {
                     "&str | ImmutableString | String"
@@ -171,12 +171,14 @@ impl Engine {
         mods: &Imports,
         state: &'s mut EvalState,
         lib: &[&Module],
-        fn_name: &str,
+        fn_name: impl AsRef<str>,
         hash_script: u64,
         args: Option<&mut FnCallArgs>,
         allow_dynamic: bool,
         is_op_assignment: bool,
     ) -> Option<&'s FnResolutionCacheEntry> {
+        let fn_name = fn_name.as_ref();
+
         let mut hash = args.as_ref().map_or(hash_script, |args| {
             combine_hashes(
                 hash_script,
@@ -307,7 +309,7 @@ impl Engine {
         mods: &mut Imports,
         state: &mut EvalState,
         lib: &[&Module],
-        name: &str,
+        name: impl AsRef<str>,
         hash: u64,
         args: &mut FnCallArgs,
         is_method_call: bool,
@@ -317,6 +319,7 @@ impl Engine {
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut mods.num_operations, pos)?;
 
+        let name = name.as_ref();
         let parent_source = mods.source.clone();
 
         // Check if function access already in the cache
@@ -666,7 +669,7 @@ impl Engine {
         mods: &mut Imports,
         state: &mut EvalState,
         lib: &[&Module],
-        fn_name: &str,
+        fn_name: impl AsRef<str>,
         hashes: FnCallHashes,
         args: &mut FnCallArgs,
         is_ref_mut: bool,
@@ -679,6 +682,8 @@ impl Engine {
             let msg = format!("'{0}' should not be called this way. Try {0}(...);", name);
             Err(EvalAltResult::ErrorRuntime(msg.into(), pos).into())
         }
+
+        let fn_name = fn_name.as_ref();
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
@@ -859,14 +864,14 @@ impl Engine {
         scope: &mut Scope,
         mods: &mut Imports,
         lib: &[&Module],
-        script: &str,
+        script: impl AsRef<str>,
         _pos: Position,
         level: usize,
     ) -> RhaiResult {
         #[cfg(not(feature = "unchecked"))]
         self.inc_operations(&mut mods.num_operations, _pos)?;
 
-        let script = script.trim();
+        let script = script.as_ref().trim();
         if script.is_empty() {
             return Ok(Dynamic::UNIT);
         }
@@ -901,13 +906,14 @@ impl Engine {
         mods: &mut Imports,
         state: &mut EvalState,
         lib: &[&Module],
-        fn_name: &str,
+        fn_name: impl AsRef<str>,
         mut hash: FnCallHashes,
         target: &mut crate::engine::Target,
         (call_args, call_arg_pos): &mut (StaticVec<Dynamic>, Position),
         pos: Position,
         level: usize,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
+        let fn_name = fn_name.as_ref();
         let is_ref_mut = target.is_ref();
 
         let (result, updated) = match fn_name {
@@ -1083,7 +1089,7 @@ impl Engine {
         state: &mut EvalState,
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
-        fn_name: &str,
+        fn_name: impl AsRef<str>,
         args_expr: &[Expr],
         constants: &[Dynamic],
         hashes: FnCallHashes,
@@ -1091,6 +1097,7 @@ impl Engine {
         capture_scope: bool,
         level: usize,
     ) -> RhaiResult {
+        let fn_name = fn_name.as_ref();
         let mut a_expr = args_expr;
         let mut total_args = a_expr.len();
         let mut curry = StaticVec::new_const();
@@ -1354,13 +1361,14 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         namespace: &NamespaceRef,
-        fn_name: &str,
+        fn_name: impl AsRef<str>,
         args_expr: &[Expr],
         constants: &[Dynamic],
         hash: u64,
         pos: Position,
         level: usize,
     ) -> RhaiResult {
+        let fn_name = fn_name.as_ref();
         let mut arg_values = StaticVec::with_capacity(args_expr.len());
         let mut args = StaticVec::with_capacity(args_expr.len());
         let mut first_arg_value = None;
