@@ -1,17 +1,14 @@
 //! Module defining mechanisms to handle function calls in Rhai.
 
-#[cfg(not(feature = "no_function"))]
 pub mod args;
 pub mod builtin;
 pub mod call;
-#[cfg(not(feature = "no_function"))]
 pub mod func;
 pub mod hashing;
 pub mod native;
 pub mod plugin;
 pub mod register;
 
-#[cfg(not(feature = "no_function"))]
 pub use args::FuncArgs;
 pub use builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};
 pub use call::FnCallArgs;

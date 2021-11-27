@@ -3,22 +3,18 @@
 use crate::{Module, Shared};
 
 pub(crate) mod arithmetic;
-#[cfg(not(feature = "no_index"))]
 mod array_basic;
-#[cfg(not(feature = "no_index"))]
 mod blob_basic;
 mod fn_basic;
 mod iter_basic;
 mod lang_core;
 mod logic;
-#[cfg(not(feature = "no_object"))]
 mod map_basic;
 mod math_basic;
 mod pkg_core;
 mod pkg_std;
 mod string_basic;
 mod string_more;
-#[cfg(not(feature = "no_std"))]
 mod time_basic;
 
 pub use arithmetic::ArithmeticPackage;

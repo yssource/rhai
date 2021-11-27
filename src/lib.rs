@@ -75,7 +75,6 @@ mod custom_syntax;
 mod engine;
 mod func;
 mod module;
-#[cfg(not(feature = "no_optimize"))]
 mod optimizer;
 pub mod packages;
 mod parser;
@@ -150,10 +149,10 @@ pub(crate) use func::{
 
 pub use rhai_codegen::*;
 
-pub use func::plugin;
+pub use func::{plugin, FuncArgs};
 
 #[cfg(not(feature = "no_function"))]
-pub use func::{Func, FuncArgs};
+pub use func::Func;
 
 #[cfg(not(feature = "no_function"))]
 pub use ast::ScriptFnMetadata;

@@ -6,15 +6,12 @@ pub mod run;
 
 pub mod compile;
 
-#[cfg(not(feature = "no_std"))]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 pub mod files;
 
 pub mod register;
 
 pub mod call_fn;
 
-#[cfg(not(feature = "unchecked"))]
 pub mod limits;
 
 pub mod events;

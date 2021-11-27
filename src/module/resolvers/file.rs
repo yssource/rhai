@@ -1,8 +1,9 @@
+#![cfg(not(feature = "no_std"))]
+#![cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+
 use crate::func::native::shared_write_lock;
 use crate::{Engine, EvalAltResult, Identifier, Module, ModuleResolver, Position, Scope, Shared};
 
-#[cfg(feature = "no_std")]
-use std::prelude::v1::*;
 use std::{
     collections::BTreeMap,
     io::Error as IoError,

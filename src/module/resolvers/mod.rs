@@ -9,8 +9,6 @@ pub use dummy::DummyModuleResolver;
 mod collection;
 pub use collection::ModuleResolversCollection;
 
-#[cfg(not(feature = "no_std"))]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 mod file;
 
 #[cfg(not(feature = "no_std"))]

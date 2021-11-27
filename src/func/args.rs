@@ -1,6 +1,5 @@
 //! Helper module which defines [`FuncArgs`] to make function calling easier.
 
-#![cfg(not(feature = "no_function"))]
 #![allow(non_snake_case)]
 
 use crate::types::dynamic::Variant;

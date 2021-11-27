@@ -1,16 +1,18 @@
 //! Module implementing the [`AST`] optimizer.
+#![cfg(not(feature = "no_optimize"))]
 
-use crate::ast::{Expr, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
+use crate::ast::{Expr, OpAssignment, ScriptFnDef, Stmt, StmtBlock, AST_OPTION_FLAGS::*};
 use crate::engine::{
     EvalState, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::func::builtin::get_builtin_binary_op_fn;
 use crate::func::hashing::get_hasher;
+use crate::func::native::shared_take_or_clone;
 use crate::tokenizer::Token;
 use crate::types::dynamic::AccessMode;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, ImmutableString,
-    Module, Position, Scope, StaticVec, AST,
+    Module, Position, Scope, Shared, StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -1122,7 +1124,7 @@ pub fn optimize_into_ast(
     engine: &Engine,
     scope: &Scope,
     statements: StaticVec<Stmt>,
-    functions: StaticVec<crate::Shared<crate::ast::ScriptFnDef>>,
+    functions: StaticVec<Shared<ScriptFnDef>>,
     optimization_level: OptimizationLevel,
 ) -> AST {
     let level = if cfg!(feature = "no_optimize") {
@@ -1144,14 +1146,14 @@ pub fn optimize_into_ast(
 
             _functions
                 .iter()
-                .map(|fn_def| crate::ast::ScriptFnDef {
+                .map(|fn_def| ScriptFnDef {
                     name: fn_def.name.clone(),
                     access: fn_def.access,
-                    body: crate::ast::StmtBlock::NONE,
+                    body: StmtBlock::NONE,
                     params: fn_def.params.clone(),
                     lib: None,
                     #[cfg(not(feature = "no_module"))]
-                    mods: crate::engine::Imports::new(),
+                    mods: Imports::new(),
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(feature = "metadata")]
                     comments: None,
@@ -1165,7 +1167,7 @@ pub fn optimize_into_ast(
             _functions
                 .into_iter()
                 .map(|fn_def| {
-                    let mut fn_def = crate::func::native::shared_take_or_clone(fn_def);
+                    let mut fn_def = shared_take_or_clone(fn_def);
 
                     // Optimize the function body
                     let body = mem::take(fn_def.body.deref_mut());

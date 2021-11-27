@@ -1,8 +1,12 @@
 //! Module that defines the `call_fn` API of [`Engine`].
+#![cfg(not(feature = "no_function"))]
 
 use crate::engine::{EvalState, Imports};
+use crate::func::call::ensure_no_data_race;
 use crate::types::dynamic::Variant;
-use crate::{Dynamic, Engine, EvalAltResult, Position, RhaiResult, Scope, AST};
+use crate::{
+    Dynamic, Engine, EvalAltResult, FuncArgs, Position, RhaiResult, Scope, StaticVec, AST,
+};
 use std::any::type_name;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -50,16 +54,15 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_function"))]
     #[inline]
     pub fn call_fn<T: Variant + Clone>(
         &self,
         scope: &mut Scope,
         ast: &AST,
         name: impl AsRef<str>,
-        args: impl crate::FuncArgs,
+        args: impl FuncArgs,
     ) -> Result<T, Box<EvalAltResult>> {
-        let mut arg_values = crate::StaticVec::new_const();
+        let mut arg_values = StaticVec::new_const();
         args.parse(&mut arg_values);
 
         let result = self.call_fn_raw(scope, ast, true, true, name, None, arg_values)?;
@@ -135,7 +138,6 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(not(feature = "no_function"))]
     #[inline]
     pub fn call_fn_raw(
         &self,
@@ -165,7 +167,7 @@ impl Engine {
         let name = name.as_ref();
         let mut this_ptr = this_ptr;
         let mut arg_values = arg_values;
-        let mut args: crate::StaticVec<_> = arg_values.as_mut().iter_mut().collect();
+        let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
         let fn_def = ast
             .lib()
@@ -174,7 +176,7 @@ impl Engine {
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
-        crate::func::call::ensure_no_data_race(name, &mut args, false)?;
+        ensure_no_data_race(name, &mut args, false)?;
 
         let result = self.call_script_fn(
             scope,
