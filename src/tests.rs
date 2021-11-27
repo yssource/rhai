@@ -21,14 +21,7 @@ fn check_struct_sizes() {
     assert_eq!(size_of::<Option<ast::Expr>>(), 16);
     assert_eq!(size_of::<ast::Stmt>(), 32);
     assert_eq!(size_of::<Option<ast::Stmt>>(), 32);
-    assert_eq!(
-        size_of::<FnPtr>(),
-        if cfg!(feature = "no_smartstring") {
-            64
-        } else {
-            80
-        }
-    );
+    assert_eq!(size_of::<FnPtr>(), 80);
     assert_eq!(size_of::<Scope>(), 464);
     assert_eq!(size_of::<LexError>(), 56);
     assert_eq!(

@@ -797,6 +797,12 @@ impl EvalState {
     pub const fn is_global(&self) -> bool {
         self.scope_level == 0
     }
+    /// Get the number of function resolution cache(s) in the stack.
+    #[inline(always)]
+    #[must_use]
+    pub fn fn_resolution_caches_len(&self) -> usize {
+        self.fn_resolution_caches.len()
+    }
     /// Get a mutable reference to the current function resolution cache.
     #[inline]
     #[must_use]
@@ -813,14 +819,10 @@ impl EvalState {
     pub fn push_fn_resolution_cache(&mut self) {
         self.fn_resolution_caches.push(BTreeMap::new());
     }
-    /// Remove the current function resolution cache from the stack and make the last one current.
-    ///
-    /// # Panics
-    ///
-    /// Panics if there is no more function resolution cache in the stack.
+    /// Rewind the function resolution caches stack to a particular size.
     #[inline(always)]
-    pub fn pop_fn_resolution_cache(&mut self) {
-        self.fn_resolution_caches.pop().expect("not empty");
+    pub fn rewind_fn_resolution_caches(&mut self, len: usize) {
+        self.fn_resolution_caches.truncate(len);
     }
 }
 
@@ -2444,7 +2446,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         statements: &[Stmt],
-        restore_prev_state: bool,
+        restore_orig_state: bool,
         rewind_scope: bool,
         level: usize,
     ) -> RhaiResult {
@@ -2452,10 +2454,10 @@ impl Engine {
             return Ok(Dynamic::UNIT);
         }
 
-        let mut _extra_fn_resolution_cache = false;
-        let prev_always_search_scope = state.always_search_scope;
-        let prev_scope_len = scope.len();
-        let prev_mods_len = mods.len();
+        let orig_always_search_scope = state.always_search_scope;
+        let orig_scope_len = scope.len();
+        let orig_mods_len = mods.len();
+        let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
 
         if rewind_scope {
             state.scope_level += 1;
@@ -2475,15 +2477,14 @@ impl Engine {
                     .skip(_mods_len)
                     .any(|(_, m)| m.contains_indexed_global_functions())
                 {
-                    if _extra_fn_resolution_cache {
+                    if state.fn_resolution_caches_len() > orig_fn_resolution_caches_len {
                         // When new module is imported with global functions and there is already
                         // a new cache, clear it - notice that this is expensive as all function
                         // resolutions must start again
                         state.fn_resolution_cache_mut().clear();
-                    } else if restore_prev_state {
+                    } else if restore_orig_state {
                         // When new module is imported with global functions, push a new cache
                         state.push_fn_resolution_cache();
-                        _extra_fn_resolution_cache = true;
                     } else {
                         // When the block is to be evaluated in-place, just clear the current cache
                         state.fn_resolution_cache_mut().clear();
@@ -2494,21 +2495,19 @@ impl Engine {
             Ok(r)
         });
 
-        if _extra_fn_resolution_cache {
-            // If imports list is modified, pop the functions lookup cache
-            state.pop_fn_resolution_cache();
-        }
+        // If imports list is modified, pop the functions lookup cache
+        state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
 
         if rewind_scope {
-            scope.rewind(prev_scope_len);
+            scope.rewind(orig_scope_len);
             state.scope_level -= 1;
         }
-        if restore_prev_state {
-            mods.truncate(prev_mods_len);
+        if restore_orig_state {
+            mods.truncate(orig_mods_len);
 
             // The impact of new local variables goes away at the end of a block
             // because any new variables introduced will go out of scope
-            state.always_search_scope = prev_always_search_scope;
+            state.always_search_scope = orig_always_search_scope;
         }
 
         result

@@ -153,7 +153,6 @@ impl TryFrom<Identifier> for FnPtr {
     }
 }
 
-#[cfg(not(feature = "no_smartstring"))]
 impl TryFrom<crate::ImmutableString> for FnPtr {
     type Error = Box<EvalAltResult>;
 

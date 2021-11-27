@@ -324,7 +324,9 @@ impl Module {
     #[inline]
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.functions.is_empty()
+        self.indexed
+            && !self.contains_indexed_global_functions
+            && self.functions.is_empty()
             && self.all_functions.is_empty()
             && self.variables.is_empty()
             && self.all_variables.is_empty()
@@ -502,10 +504,14 @@ impl Module {
         name: &str,
         num_params: usize,
     ) -> Option<&Shared<crate::ast::ScriptFnDef>> {
-        self.functions
-            .values()
-            .find(|f| f.params == num_params && f.name == name)
-            .and_then(|f| f.func.get_script_fn_def())
+        if self.functions.is_empty() {
+            None
+        } else {
+            self.functions
+                .values()
+                .find(|f| f.params == num_params && f.name == name)
+                .and_then(|f| f.func.get_script_fn_def())
+        }
     }
 
     /// Get a mutable reference to the underlying [`BTreeMap`] of sub-modules.
@@ -1150,6 +1156,7 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
+        self.identifiers += other.identifiers;
         self
     }
 
@@ -1169,6 +1176,7 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
+        self.identifiers += other.identifiers;
         self
     }
 
@@ -1197,6 +1205,7 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
+        self.identifiers.merge(&other.identifiers);
         self
     }
 
@@ -1246,6 +1255,7 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
+        self.identifiers.merge(&other.identifiers);
         self
     }
 
@@ -1454,26 +1464,28 @@ impl Module {
 
         // Non-private functions defined become module functions
         #[cfg(not(feature = "no_function"))]
-        ast.lib()
-            .functions
-            .values()
-            .filter(|f| match f.access {
-                FnAccess::Public => true,
-                FnAccess::Private => false,
-            })
-            .filter(|f| f.func.is_script())
-            .for_each(|f| {
-                // Encapsulate AST environment
-                let mut func = f
-                    .func
-                    .get_script_fn_def()
-                    .expect("scripted function")
-                    .as_ref()
-                    .clone();
-                func.lib = Some(ast.shared_lib());
-                func.mods = func_mods.clone();
-                module.set_script_fn(func);
-            });
+        if !ast.lib().functions.is_empty() {
+            ast.lib()
+                .functions
+                .values()
+                .filter(|f| match f.access {
+                    FnAccess::Public => true,
+                    FnAccess::Private => false,
+                })
+                .filter(|f| f.func.is_script())
+                .for_each(|f| {
+                    // Encapsulate AST environment
+                    let mut func = f
+                        .func
+                        .get_script_fn_def()
+                        .expect("scripted function")
+                        .as_ref()
+                        .clone();
+                    func.lib = Some(ast.shared_lib());
+                    func.mods = func_mods.clone();
+                    module.set_script_fn(func);
+                });
+        }
 
         if let Some(s) = ast.source_raw() {
             module.set_id(s.clone());

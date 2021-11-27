@@ -14,6 +14,11 @@ Enhancements
 
 * Added `into_array` and `into_typed_array` for `Dynamic`.
 
+Deprecated API's
+----------------
+
+* The internal `no_smartstring` feature is removed since `SmartString` now supports `no-std`.
+
 
 Version 1.2.1
 =============

@@ -23,6 +23,7 @@ use std::{
     collections::BTreeMap,
     hash::{Hash, Hasher},
     num::{NonZeroU8, NonZeroUsize},
+    ops::AddAssign,
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -51,39 +52,29 @@ const NEVER_ENDS: &str = "`TokenStream` never ends";
 /// collection of strings and returns shared instances, only creating a new string when it is not
 /// yet interned.
 #[derive(Debug, Clone, Hash)]
-pub struct IdentifierBuilder(
-    #[cfg(feature = "no_smartstring")] std::collections::BTreeSet<Identifier>,
-);
+pub struct IdentifierBuilder();
 
 impl IdentifierBuilder {
-    /// Create a new IdentifierBuilder.
-    #[cfg(not(feature = "no_smartstring"))]
+    /// Create a new [`IdentifierBuilder`].
     #[inline]
     #[must_use]
     pub const fn new() -> Self {
         Self()
     }
-    /// Create a new IdentifierBuilder.
-    #[cfg(feature = "no_smartstring")]
-    #[inline]
-    #[must_use]
-    pub fn new() -> Self {
-        Self(std::collections::BTreeSet::new())
-    }
     /// Get an identifier from a text string.
     #[inline]
     #[must_use]
     pub fn get(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
-        #[cfg(not(feature = "no_smartstring"))]
-        return text.into();
-
-        #[cfg(feature = "no_smartstring")]
-        return self.0.get(text.as_ref()).cloned().unwrap_or_else(|| {
-            let s: Identifier = text.into();
-            self.0.insert(s.clone());
-            s
-        });
+        text.into()
     }
+    /// Merge another [`IdentifierBuilder`] into this.
+    #[inline(always)]
+    pub fn merge(&mut self, _other: &Self) {}
+}
+
+impl AddAssign for IdentifierBuilder {
+    #[inline(always)]
+    fn add_assign(&mut self, _rhs: Self) {}
 }
 
 /// _(internals)_ A type that encapsulates the current state of the parser.

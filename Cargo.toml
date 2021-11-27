@@ -48,9 +48,6 @@ no_std = ["no-std-compat", "num-traits/libm", "core-error", "libm", "ahash/compi
 wasm-bindgen = ["instant/wasm-bindgen"]
 stdweb = ["instant/stdweb"]
 
-# internal feature flags - volatile
-no_smartstring = []             # do not use SmartString
-
 [profile.release]
 lto = "fat"
 codegen-units = 1

@@ -530,8 +530,8 @@ impl Engine {
             return Err(EvalAltResult::ErrorStackOverflow(pos).into());
         }
 
-        let prev_scope_len = scope.len();
-        let prev_mods_len = mods.len();
+        let orig_scope_len = scope.len();
+        let orig_mods_len = mods.len();
 
         // Put arguments into scope as variables
         // Actually consume the arguments instead of cloning them
@@ -549,14 +549,19 @@ impl Engine {
 
         // Merge in encapsulated environment, if any
         let mut lib_merged = StaticVec::with_capacity(lib.len() + 1);
+        let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
 
-        let (unified, is_unified) = if let Some(ref env_lib) = fn_def.lib {
-            state.push_fn_resolution_cache();
-            lib_merged.push(env_lib.as_ref());
-            lib_merged.extend(lib.iter().cloned());
-            (lib_merged.as_ref(), true)
+        let lib = if let Some(ref env_lib) = fn_def.lib {
+            if env_lib.is_empty() {
+                lib
+            } else {
+                state.push_fn_resolution_cache();
+                lib_merged.push(env_lib.as_ref());
+                lib_merged.extend(lib.iter().cloned());
+                lib_merged.as_ref()
+            }
         } else {
-            (lib, false)
+            lib
         };
 
         #[cfg(not(feature = "no_module"))]
@@ -574,7 +579,7 @@ impl Engine {
                 scope,
                 mods,
                 state,
-                unified,
+                lib,
                 this_ptr,
                 body,
                 true,
@@ -605,17 +610,14 @@ impl Engine {
 
         // Remove all local variables
         if rewind_scope {
-            scope.rewind(prev_scope_len);
+            scope.rewind(orig_scope_len);
         } else if !args.is_empty() {
             // Remove arguments only, leaving new variables in the scope
-            scope.remove_range(prev_scope_len, args.len())
+            scope.remove_range(orig_scope_len, args.len())
         }
 
-        mods.truncate(prev_mods_len);
-
-        if is_unified {
-            state.pop_fn_resolution_cache();
-        }
+        mods.truncate(orig_mods_len);
+        state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
 
         result
     }
@@ -879,7 +881,7 @@ impl Engine {
         )?;
 
         // If new functions are defined within the eval string, it is an error
-        if ast.lib().count().0 != 0 {
+        if !ast.lib().is_empty() {
             return Err(ParseErrorType::WrongFnDefinition.into());
         }
 
@@ -1225,7 +1227,7 @@ impl Engine {
             // Handle eval()
             KEYWORD_EVAL if total_args == 1 => {
                 // eval - only in function call style
-                let prev_len = scope.len();
+                let orig_scope_len = scope.len();
                 let (value, pos) = self.get_arg_value(
                     scope, mods, state, lib, this_ptr, level, &a_expr[0], constants,
                 )?;
@@ -1237,7 +1239,7 @@ impl Engine {
 
                 // IMPORTANT! If the eval defines new variables in the current scope,
                 //            all variable offsets from this point on will be mis-aligned.
-                if scope.len() != prev_len {
+                if scope.len() != orig_scope_len {
                     state.always_search_scope = true;
                 }
 

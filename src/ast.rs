@@ -228,7 +228,7 @@ impl AST {
     pub fn empty() -> Self {
         Self {
             source: None,
-            body: StmtBlock::empty(Position::NONE),
+            body: StmtBlock::NONE,
             functions: Module::new().into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
@@ -401,7 +401,7 @@ impl AST {
         functions.merge_filtered(&self.functions, &filter);
         Self {
             source: self.source.clone(),
-            body: StmtBlock::empty(Position::NONE),
+            body: StmtBlock::NONE,
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: self.resolver.clone(),
@@ -597,7 +597,7 @@ impl AST {
             }
             (false, true) => body.clone(),
             (true, false) => other.body.clone(),
-            (true, true) => StmtBlock::empty(Position::NONE),
+            (true, true) => StmtBlock::NONE,
         };
 
         let source = other.source.clone().or_else(|| self.source.clone());
@@ -744,7 +744,7 @@ impl AST {
     /// Clear all statements in the [`AST`], leaving only function definitions.
     #[inline(always)]
     pub fn clear_statements(&mut self) -> &mut Self {
-        self.body = StmtBlock::empty(Position::NONE);
+        self.body = StmtBlock::NONE;
         self
     }
     /// Extract all top-level literal constant and/or variable definitions.
@@ -987,6 +987,9 @@ impl ASTNode<'_> {
 pub struct StmtBlock(StaticVec<Stmt>, Position);
 
 impl StmtBlock {
+    /// A [`StmtBlock`] that does not exist.
+    pub const NONE: Self = Self::empty(Position::NONE);
+
     /// Create a new [`StmtBlock`].
     #[must_use]
     pub fn new(statements: impl IntoIterator<Item = Stmt>, pos: Position) -> Self {
