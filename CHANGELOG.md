@@ -13,6 +13,7 @@ Enhancements
 ------------
 
 * Added `into_array` and `into_typed_array` for `Dynamic`.
+* New `FnPtr::call` to simplify calling a function pointer.
 
 Deprecated API's
 ----------------

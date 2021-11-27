@@ -1,12 +1,15 @@
 //! The `FnPtr` type.
 
 use crate::tokenizer::is_valid_identifier;
+use crate::types::dynamic::Variant;
 use crate::{
-    Dynamic, EvalAltResult, Identifier, NativeCallContext, Position, RhaiResult, StaticVec,
+    Dynamic, Engine, EvalAltResult, FuncArgs, Identifier, NativeCallContext, Position, RhaiResult,
+    StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
+    any::type_name,
     convert::{TryFrom, TryInto},
     fmt, mem,
 };
@@ -96,8 +99,69 @@ impl FnPtr {
         self.0.starts_with(crate::engine::FN_ANONYMOUS)
     }
     /// Call the function pointer with curried arguments (if any).
+    /// The function may be script-defined (not available under `no_function`) or native Rust.
     ///
-    /// If this function is a script-defined function, it must not be marked private.
+    /// This method is intended for calling a function pointer that is passed into a native Rust
+    /// function as an argument.  Therefore, the [`AST`] is _NOT_ evaluated before calling the
+    /// function.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
+    /// use rhai::{Engine, FnPtr};
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let ast = engine.compile("fn foo(x, y) { len(x) + y }")?;
+    ///
+    /// let mut fn_ptr = FnPtr::new("foo")?;
+    ///
+    /// // Curry values into the function pointer
+    /// fn_ptr.set_curry(vec!["abc".into()]);
+    ///
+    /// // Values are only needed for non-curried parameters
+    /// let result: i64 = fn_ptr.call(&engine, &ast, ( 39_i64, ) )?;
+    ///
+    /// assert_eq!(result, 42);
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[inline]
+    pub fn call<T: Variant + Clone>(
+        &self,
+        engine: &Engine,
+        ast: &AST,
+        args: impl FuncArgs,
+    ) -> Result<T, Box<EvalAltResult>> {
+        let mut arg_values = crate::StaticVec::new_const();
+        args.parse(&mut arg_values);
+
+        let lib = [ast.as_ref()];
+        let ctx = NativeCallContext::new(engine, self.fn_name(), &lib);
+
+        let result = self.call_dynamic(&ctx, None, arg_values)?;
+
+        let typ = engine.map_type_name(result.type_name());
+
+        result.try_cast().ok_or_else(|| {
+            EvalAltResult::ErrorMismatchOutputType(
+                engine.map_type_name(type_name::<T>()).into(),
+                typ.into(),
+                Position::NONE,
+            )
+            .into()
+        })
+    }
+    /// Call the function pointer with curried arguments (if any).
+    /// The function may be script-defined (not available under `no_function`) or native Rust.
+    ///
+    /// This method is intended for calling a function pointer that is passed into a native Rust
+    /// function as an argument.  Therefore, the [`AST`] is _NOT_ evaluated before calling the
+    /// function.
     ///
     /// # WARNING
     ///
@@ -110,8 +174,9 @@ impl FnPtr {
         &self,
         ctx: &NativeCallContext,
         this_ptr: Option<&mut Dynamic>,
-        mut arg_values: impl AsMut<[Dynamic]>,
+        arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
+        let mut arg_values = arg_values;
         let mut arg_values = arg_values.as_mut();
         let mut args_data;
 

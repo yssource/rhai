@@ -9,7 +9,6 @@ use std::prelude::v1::*;
 
 impl Engine {
     /// Call a script function defined in an [`AST`] with multiple arguments.
-    /// Arguments are passed as a tuple.
     ///
     /// Not available under `no_function`.
     ///
