@@ -2,7 +2,6 @@
 #![cfg(not(feature = "no_function"))]
 
 use crate::engine::{EvalState, Imports};
-use crate::func::call::ensure_no_data_race;
 use crate::types::dynamic::Variant;
 use crate::{
     Dynamic, Engine, EvalAltResult, FuncArgs, Position, RhaiResult, Scope, StaticVec, AST,
@@ -176,7 +175,7 @@ impl Engine {
 
         // Check for data race.
         #[cfg(not(feature = "no_closure"))]
-        ensure_no_data_race(name, &mut args, false)?;
+        crate::func::call::ensure_no_data_race(name, &mut args, false)?;
 
         let result = self.call_script_fn(
             scope,

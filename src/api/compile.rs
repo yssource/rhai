@@ -1,7 +1,7 @@
 //! Module that defines the public compilation API of [`Engine`].
 
 use crate::parser::ParseState;
-use crate::{Engine, EvalAltResult, Identifier, ParseError, Position, Scope, AST};
+use crate::{Engine, ParseError, Scope, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -91,7 +91,7 @@ impl Engine {
         &self,
         scope: &Scope,
         script: impl AsRef<str>,
-    ) -> Result<AST, Box<EvalAltResult>> {
+    ) -> Result<AST, Box<crate::EvalAltResult>> {
         use crate::{
             ast::{ASTNode, Expr, Stmt},
             func::native::shared_take_or_clone,
@@ -102,7 +102,7 @@ impl Engine {
         fn collect_imports(
             ast: &AST,
             resolver: &StaticModuleResolver,
-            imports: &mut BTreeSet<Identifier>,
+            imports: &mut BTreeSet<crate::Identifier>,
         ) {
             ast.walk(
                 &mut |path| match path.last().expect("contains current node") {
@@ -130,7 +130,7 @@ impl Engine {
                 while let Some(path) = imports.iter().next() {
                     let path = path.clone();
 
-                    match module_resolver.resolve_ast(self, None, &path, Position::NONE) {
+                    match module_resolver.resolve_ast(self, None, &path, crate::Position::NONE) {
                         Some(Ok(module_ast)) => {
                             collect_imports(&module_ast, &resolver, &mut imports)
                         }
@@ -138,7 +138,8 @@ impl Engine {
                         None => (),
                     }
 
-                    let module = module_resolver.resolve(self, None, &path, Position::NONE)?;
+                    let module =
+                        module_resolver.resolve(self, None, &path, crate::Position::NONE)?;
                     let module = shared_take_or_clone(module);
 
                     imports.remove(&path);
@@ -361,14 +362,14 @@ impl Engine {
         &self,
         json: impl AsRef<str>,
         has_null: bool,
-    ) -> Result<Map, Box<EvalAltResult>> {
+    ) -> Result<Map, Box<crate::EvalAltResult>> {
         use crate::tokenizer::Token;
 
         fn parse_json_inner(
             engine: &Engine,
             json: &str,
             has_null: bool,
-        ) -> Result<Map, Box<EvalAltResult>> {
+        ) -> Result<Map, Box<crate::EvalAltResult>> {
             let mut scope = Scope::new();
             let json_text = json.trim_start();
             let scripts = if json_text.starts_with(Token::MapStart.literal_syntax()) {
@@ -380,7 +381,10 @@ impl Engine {
                     Token::LeftBrace.syntax().into(),
                     "to start a JSON object hash".into(),
                 )
-                .into_err(Position::new(1, (json.len() - json_text.len() + 1) as u16))
+                .into_err(crate::Position::new(
+                    1,
+                    (json.len() - json_text.len() + 1) as u16,
+                ))
                 .into());
             };
             let (stream, tokenizer_control) = engine.lex_raw(
