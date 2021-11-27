@@ -49,7 +49,7 @@ impl BuildHasher for StraightHasherBuilder {
 #[inline(always)]
 #[must_use]
 pub fn get_hasher() -> ahash::AHasher {
-    Default::default()
+    ahash::AHasher::default()
 }
 
 /// Calculate a [`u64`] hash key from a namespace-qualified variable name.

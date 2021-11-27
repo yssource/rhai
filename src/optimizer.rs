@@ -1119,7 +1119,7 @@ pub fn optimize_into_ast(
     optimization_level: OptimizationLevel,
 ) -> AST {
     let level = if cfg!(feature = "no_optimize") {
-        Default::default()
+        OptimizationLevel::default()
     } else {
         optimization_level
     };
@@ -1140,7 +1140,7 @@ pub fn optimize_into_ast(
                 .map(|fn_def| crate::ast::ScriptFnDef {
                     name: fn_def.name.clone(),
                     access: fn_def.access,
-                    body: crate::ast::StmtBlock::empty(Position::NONE),
+                    body: crate::ast::StmtBlock::NONE,
                     params: fn_def.params.clone(),
                     lib: None,
                     #[cfg(not(feature = "no_module"))]

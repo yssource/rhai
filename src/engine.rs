@@ -1159,7 +1159,7 @@ impl Engine {
             progress: None,
 
             #[cfg(not(feature = "no_optimize"))]
-            optimization_level: Default::default(),
+            optimization_level: crate::OptimizationLevel::default(),
 
             #[cfg(not(feature = "unchecked"))]
             limits: Limits::new(),

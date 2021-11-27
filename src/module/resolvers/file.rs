@@ -121,7 +121,7 @@ impl FileModuleResolver {
             base_path: None,
             extension: extension.into(),
             cache_enabled: true,
-            cache: Default::default(),
+            cache: BTreeMap::new().into(),
         }
     }
 
@@ -150,7 +150,7 @@ impl FileModuleResolver {
             base_path: Some(path.into()),
             extension: extension.into(),
             cache_enabled: true,
-            cache: Default::default(),
+            cache: BTreeMap::new().into(),
         }
     }
 

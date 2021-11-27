@@ -57,13 +57,18 @@ pub struct IdentifierBuilder(
 
 impl IdentifierBuilder {
     /// Create a new IdentifierBuilder.
+    #[cfg(not(feature = "no_smartstring"))]
+    #[inline]
+    #[must_use]
+    pub const fn new() -> Self {
+        Self()
+    }
+    /// Create a new IdentifierBuilder.
+    #[cfg(feature = "no_smartstring")]
     #[inline]
     #[must_use]
     pub fn new() -> Self {
-        Self(
-            #[cfg(feature = "no_smartstring")]
-            std::collections::BTreeSet::new(),
-        )
+        Self(std::collections::BTreeSet::new())
     }
     /// Get an identifier from a text string.
     #[inline]
@@ -2013,8 +2018,8 @@ fn parse_custom_syntax(
     if syntax.scope_may_be_changed {
         // Add a barrier variable to the stack so earlier variables will not be matched.
         // Variable searches stop at the first barrier.
-        let empty = state.get_identifier(SCOPE_SEARCH_BARRIER_MARKER);
-        state.stack.push((empty, AccessMode::ReadWrite));
+        let marker = state.get_identifier(SCOPE_SEARCH_BARRIER_MARKER);
+        state.stack.push((marker, AccessMode::ReadWrite));
     }
 
     let parse_func = syntax.parse.as_ref();
