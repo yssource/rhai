@@ -107,8 +107,8 @@ impl FuncInfo {
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline]
-fn calc_native_fn_hash<'a>(
-    modules: impl Iterator<Item = &'a str>,
+fn calc_native_fn_hash(
+    modules: impl Iterator<Item = impl AsRef<str>>,
     fn_name: impl AsRef<str>,
     params: &[TypeId],
 ) -> u64 {
@@ -711,7 +711,7 @@ impl Module {
         #[cfg(feature = "metadata")]
         param_names.shrink_to_fit();
 
-        let hash_fn = calc_native_fn_hash(empty(), name.as_ref(), &param_types);
+        let hash_fn = calc_native_fn_hash(empty::<&str>(), name.as_ref(), &param_types);
 
         self.functions.insert(
             hash_fn,
