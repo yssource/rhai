@@ -129,7 +129,7 @@ fn test_fn_ptr_call() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
-#[cfg(not(feature = "no_function"))]
+#[cfg(not(feature = "no_closure"))]
 fn test_fn_ptr_make_closure() -> Result<(), Box<EvalAltResult>> {
     let f = {
         let engine = Engine::new();

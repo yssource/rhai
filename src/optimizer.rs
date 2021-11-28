@@ -1,13 +1,12 @@
 //! Module implementing the [`AST`] optimizer.
 #![cfg(not(feature = "no_optimize"))]
 
-use crate::ast::{Expr, OpAssignment, ScriptFnDef, Stmt, StmtBlock, AST_OPTION_FLAGS::*};
+use crate::ast::{Expr, OpAssignment, ScriptFnDef, Stmt, AST_OPTION_FLAGS::*};
 use crate::engine::{
     EvalState, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
 use crate::func::builtin::get_builtin_binary_op_fn;
 use crate::func::hashing::get_hasher;
-use crate::func::native::shared_take_or_clone;
 use crate::tokenizer::Token;
 use crate::types::dynamic::AccessMode;
 use crate::{
@@ -1149,7 +1148,7 @@ pub fn optimize_into_ast(
                 .map(|fn_def| ScriptFnDef {
                     name: fn_def.name.clone(),
                     access: fn_def.access,
-                    body: StmtBlock::NONE,
+                    body: crate::ast::StmtBlock::NONE,
                     params: fn_def.params.clone(),
                     lib: None,
                     #[cfg(not(feature = "no_module"))]
@@ -1167,7 +1166,7 @@ pub fn optimize_into_ast(
             _functions
                 .into_iter()
                 .map(|fn_def| {
-                    let mut fn_def = shared_take_or_clone(fn_def);
+                    let mut fn_def = crate::func::native::shared_take_or_clone(fn_def);
 
                     // Optimize the function body
                     let body = mem::take(fn_def.body.deref_mut());

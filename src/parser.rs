@@ -223,10 +223,12 @@ struct ParseSettings {
     /// Is the construct being parsed located at global level?
     is_global: bool,
     /// Is the construct being parsed located at function definition level?
+    #[cfg(not(feature = "no_function"))]
     is_function_scope: bool,
     /// Is the current position inside a loop?
     is_breakable: bool,
     /// Is anonymous function allowed?
+    #[cfg(not(feature = "no_function"))]
     allow_anonymous_fn: bool,
     /// Is if-expression allowed?
     allow_if_expr: bool,
@@ -1315,6 +1317,7 @@ fn parse_primary(
                     (None, None, state.get_identifier(s)).into(),
                 ),
                 // Access to `this` as a variable is OK within a function scope
+                #[cfg(not(feature = "no_function"))]
                 _ if &*s == KEYWORD_THIS && settings.is_function_scope => Expr::Variable(
                     None,
                     settings.pos,
@@ -3232,8 +3235,10 @@ impl Engine {
             allow_if_expr: false,
             allow_switch_expr: false,
             allow_stmt_expr: false,
+            #[cfg(not(feature = "no_function"))]
             allow_anonymous_fn: false,
             is_global: true,
+            #[cfg(not(feature = "no_function"))]
             is_function_scope: false,
             is_breakable: false,
             level: 0,
@@ -3281,8 +3286,10 @@ impl Engine {
                 allow_if_expr: true,
                 allow_switch_expr: true,
                 allow_stmt_expr: true,
+                #[cfg(not(feature = "no_function"))]
                 allow_anonymous_fn: true,
                 is_global: true,
+                #[cfg(not(feature = "no_function"))]
                 is_function_scope: false,
                 is_breakable: false,
                 level: 0,
