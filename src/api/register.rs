@@ -163,7 +163,6 @@ impl Engine {
     /// Notice that this will _consume_ the argument, replacing it with `()`.
     ///
     /// To access the first mutable parameter, use `args.get_mut(0).unwrap()`
-    #[deprecated = "this function is volatile and may change"]
     #[inline(always)]
     pub fn register_raw_fn<N, T>(
         &mut self,

@@ -141,6 +141,7 @@ impl FnPtr {
         args.parse(&mut arg_values);
 
         let lib = [ast.as_ref()];
+        #[allow(deprecated)]
         let ctx = NativeCallContext::new(engine, self.fn_name(), &lib);
 
         let result = self.call_dynamic(&ctx, None, arg_values)?;

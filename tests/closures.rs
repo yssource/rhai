@@ -12,7 +12,6 @@ use rhai::Map;
 fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
 
-    #[allow(deprecated)]
     engine.register_raw_fn(
         "call_with_arg",
         &[TypeId::of::<FnPtr>(), TypeId::of::<INT>()],
@@ -150,7 +149,6 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
         42
     );
 
-    #[allow(deprecated)]
     engine.register_raw_fn(
         "custom_call",
         &[TypeId::of::<INT>(), TypeId::of::<FnPtr>()],

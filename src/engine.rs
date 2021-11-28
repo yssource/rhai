@@ -42,10 +42,6 @@ pub type Precedence = NonZeroU8;
 
 /// _(internals)_ A stack of imported [modules][Module] plus mutable runtime global states.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 //
 // # Implementation Notes
 //
@@ -742,10 +738,6 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 
 /// _(internals)_ An entry in a function resolution cache.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone)]
 pub struct FnResolutionCacheEntry {
     /// Function.
@@ -756,18 +748,10 @@ pub struct FnResolutionCacheEntry {
 
 /// _(internals)_ A function resolution cache.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
 
 /// _(internals)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone)]
 pub struct EvalState {
     /// Normally, access to variables are parsed with a relative offset into the [`Scope`] to avoid a lookup.
@@ -830,10 +814,6 @@ impl EvalState {
 
 /// _(internals)_ A type containing all the limits imposed by the [`Engine`].
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[cfg(not(feature = "unchecked"))]
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Limits {

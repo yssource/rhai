@@ -234,10 +234,6 @@ pub enum Union {
 ///
 /// This type provides transparent interoperability between normal [`Dynamic`] and shared
 /// [`Dynamic`] values.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug)]
 pub struct DynamicReadLock<'d, T: Clone>(DynamicReadLockInner<'d, T>);
 
@@ -275,10 +271,6 @@ impl<'d, T: Any + Clone> Deref for DynamicReadLock<'d, T> {
 ///
 /// This type provides transparent interoperability between normal [`Dynamic`] and shared
 /// [`Dynamic`] values.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug)]
 pub struct DynamicWriteLock<'d, T: Clone>(DynamicWriteLockInner<'d, T>);
 

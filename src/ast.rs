@@ -45,10 +45,6 @@ pub enum FnAccess {
 
 /// _(internals)_ A type containing information on a scripted function.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone)]
 pub struct ScriptFnDef {
     /// Function body.
@@ -288,7 +284,6 @@ impl AST {
     /// _(internals)_ Get the statements.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
-    #[deprecated = "this method is volatile and may change"]
     #[inline(always)]
     #[must_use]
     pub fn statements(&self) -> &[Stmt] {
@@ -315,7 +310,6 @@ impl AST {
     ///
     /// Not available under `no_function` or `no_module`.
     #[cfg(feature = "internals")]
-    #[deprecated = "this method is volatile and may change"]
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
@@ -335,7 +329,6 @@ impl AST {
     ///
     /// Not available under `no_function`.
     #[cfg(feature = "internals")]
-    #[deprecated = "this method is volatile and may change"]
     #[inline(always)]
     #[must_use]
     pub fn lib(&self) -> &Module {
@@ -908,10 +901,6 @@ impl AsRef<Module> for AST {
 
 /// _(internals)_ An identifier containing a name and a [position][Position].
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Ident {
     /// Identifier name.
@@ -943,10 +932,6 @@ impl Ident {
 
 /// _(internals)_ An [`AST`] node, consisting of either an [`Expr`] or a [`Stmt`].
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
 pub enum ASTNode<'a> {
     /// A statement ([`Stmt`]).
@@ -979,10 +964,6 @@ impl ASTNode<'_> {
 
 /// _(internals)_ A scoped block of statements.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Clone, Hash, Default)]
 pub struct StmtBlock(StaticVec<Stmt>, Position);
 
@@ -1212,10 +1193,6 @@ pub mod AST_OPTION_FLAGS {
 
 /// _(internals)_ A statement.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
 pub enum Stmt {
     /// No-op.
@@ -1662,10 +1639,6 @@ impl Stmt {
 
 /// _(internals)_ A custom syntax expression.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
 pub struct CustomExpr {
     /// List of keywords.
@@ -1692,10 +1665,6 @@ impl CustomExpr {
 
 /// _(internals)_ A binary expression.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
 pub struct BinaryExpr {
     /// LHS expression.
@@ -1706,10 +1675,6 @@ pub struct BinaryExpr {
 
 /// _(internals)_ An op-assignment operator.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct OpAssignment<'a> {
     /// Hash of the op-assignment call.
@@ -1767,10 +1732,6 @@ impl OpAssignment<'_> {
 ///   then used to search for a native function. In other words, a complete native function call
 ///   hash always contains the called function's name plus the types of the arguments.  This is due
 ///   to possible function overloading for different parameter types.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct FnCallHashes {
     /// Pre-calculated hash for a script-defined function ([`None`] if native functions only).
@@ -1841,10 +1802,6 @@ impl FnCallHashes {
 
 /// _(internals)_ A function call.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Default, Hash)]
 pub struct FnCallExpr {
     /// Namespace of the function, if any.
@@ -2008,10 +1965,6 @@ impl FloatWrapper<FLOAT> {
 
 /// _(internals)_ An expression sub-tree.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Clone, Hash)]
 pub enum Expr {
     /// Dynamic constant.

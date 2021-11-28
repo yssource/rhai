@@ -133,7 +133,6 @@ pub(crate) type Identifier = SmartString;
 /// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
 /// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
 #[cfg(feature = "internals")]
-#[deprecated = "this type is volatile and may change"]
 pub type Identifier = SmartString;
 
 /// Alias to [`Rc`][std::rc::Rc] or [`Arc`][std::sync::Arc] depending on the `sync` feature flag.
@@ -188,26 +187,21 @@ pub use optimizer::OptimizationLevel;
 // Expose internal data structures.
 
 #[cfg(feature = "internals")]
-#[deprecated = "this type is volatile and may change"]
 pub use types::dynamic::{AccessMode, DynamicReadLock, DynamicWriteLock, Variant};
 
 #[cfg(feature = "internals")]
-#[deprecated = "this function is volatile and may change"]
 pub use tokenizer::{get_next_token, parse_string_literal};
 
 #[cfg(feature = "internals")]
-#[deprecated = "this type is volatile and may change"]
 pub use tokenizer::{
     InputStream, MultiInputsStream, Token, TokenIterator, TokenizeState, TokenizerControl,
     TokenizerControlBlock,
 };
 
 #[cfg(feature = "internals")]
-#[deprecated = "this type is volatile and may change"]
 pub use parser::{IdentifierBuilder, ParseState};
 
 #[cfg(feature = "internals")]
-#[deprecated = "this type is volatile and may change"]
 pub use ast::{
     ASTNode, BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment,
     OptionFlags, ScriptFnDef, Stmt, StmtBlock, AST_OPTION_FLAGS::*,
@@ -215,20 +209,16 @@ pub use ast::{
 
 #[cfg(feature = "internals")]
 #[cfg(not(feature = "no_float"))]
-#[deprecated = "this type is volatile and may change"]
 pub use ast::FloatWrapper;
 
 #[cfg(feature = "internals")]
-#[deprecated = "this type is volatile and may change"]
 pub use engine::{EvalState, FnResolutionCache, FnResolutionCacheEntry, Imports};
 
 #[cfg(feature = "internals")]
 #[cfg(not(feature = "unchecked"))]
-#[deprecated = "this type is volatile and may change"]
 pub use engine::Limits;
 
 #[cfg(feature = "internals")]
-#[deprecated = "this type is volatile and may change"]
 pub use module::NamespaceRef;
 
 /// Alias to [`smallvec::SmallVec<[T; 3]>`](https://crates.io/crates/smallvec), which is a

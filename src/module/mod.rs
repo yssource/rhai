@@ -1676,10 +1676,6 @@ impl Module {
 ///
 /// A [`StaticVec`] is used because most namespace-qualified access contains only one level,
 /// and it is wasteful to always allocate a [`Vec`] with one element.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
 pub struct NamespaceRef {
     index: Option<NonZeroUsize>,

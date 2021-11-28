@@ -11,10 +11,6 @@ use std::prelude::v1::*;
 
 /// _(internals)_ Error encountered when tokenizing the script text.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 #[non_exhaustive]
 pub enum LexError {

@@ -29,10 +29,6 @@ use rust_decimal::Decimal;
 use crate::engine::KEYWORD_IS_DEF_FN;
 
 /// _(internals)_ A type containing commands to control the tokenizer.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Copy)]
 pub struct TokenizerControlBlock {
     /// Is the current tokenizer position within an interpolated text string?
@@ -301,10 +297,6 @@ impl AddAssign for Position {
 
 /// _(internals)_ A Rhai language token.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, PartialEq, Clone, Hash)]
 pub enum Token {
     /// An `INT` constant.
@@ -1002,10 +994,6 @@ impl From<Token> for String {
 
 /// _(internals)_ State of the tokenizer.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct TokenizeState {
     /// Maximum length of a string.
@@ -1022,10 +1010,6 @@ pub struct TokenizeState {
 
 /// _(internals)_ Trait that encapsulates a peekable character input stream.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This trait is volatile and may change.
 pub trait InputStream {
     /// Un-get a character back into the `InputStream`.
     /// The next [`get_next`][InputStream::get_next] or [`peek_next`][InputStream::peek_next]
@@ -1068,10 +1052,6 @@ pub trait InputStream {
 ///
 /// Any time a [`StringConstant`][`Token::StringConstant`] is returned with
 /// `state.is_within_text_terminated_by` set to `Some(_)` is one of the above conditions.
-///
-/// # Volatile API
-///
-/// This function is volatile and may change.
 pub fn parse_string_literal(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
@@ -1328,10 +1308,6 @@ fn scan_block_comment(
 
 /// _(internals)_ Get the next token from the `stream`.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile API
-///
-/// This function is volatile and may change.
 #[inline]
 #[must_use]
 pub fn get_next_token(
@@ -2139,10 +2115,6 @@ impl InputStream for MultiInputsStream<'_> {
 
 /// _(internals)_ An iterator on a [`Token`] stream.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 pub struct TokenIterator<'a> {
     /// Reference to the scripting `Engine`.
     pub engine: &'a Engine,
