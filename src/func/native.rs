@@ -64,11 +64,11 @@ pub struct NativeCallContext<'a> {
     pos: Position,
 }
 
-impl<'a, M: AsRef<[&'a Module]> + ?Sized>
+impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
     From<(
         &'a Engine,
-        &'a str,
-        Option<&'a str>,
+        &'a S,
+        Option<&'a S>,
         &'a Imports,
         &'a M,
         Position,
@@ -78,8 +78,8 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized>
     fn from(
         value: (
             &'a Engine,
-            &'a str,
-            Option<&'a str>,
+            &'a S,
+            Option<&'a S>,
             &'a Imports,
             &'a M,
             Position,
@@ -87,8 +87,8 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized>
     ) -> Self {
         Self {
             engine: value.0,
-            fn_name: value.1,
-            source: value.2,
+            fn_name: value.1.as_ref(),
+            source: value.2.map(|v| v.as_ref()),
             mods: Some(value.3),
             lib: value.4.as_ref(),
             pos: value.5,
@@ -96,14 +96,14 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized>
     }
 }
 
-impl<'a, M: AsRef<[&'a Module]> + ?Sized> From<(&'a Engine, &'a str, &'a M)>
-    for NativeCallContext<'a>
+impl<'a, M: AsRef<[&'a Module]> + ?Sized, S: AsRef<str> + 'a + ?Sized>
+    From<(&'a Engine, &'a S, &'a M)> for NativeCallContext<'a>
 {
     #[inline(always)]
-    fn from(value: (&'a Engine, &'a str, &'a M)) -> Self {
+    fn from(value: (&'a Engine, &'a S, &'a M)) -> Self {
         Self {
             engine: value.0,
-            fn_name: value.1,
+            fn_name: value.1.as_ref(),
             source: None,
             mods: None,
             lib: value.2.as_ref(),
@@ -113,13 +113,22 @@ impl<'a, M: AsRef<[&'a Module]> + ?Sized> From<(&'a Engine, &'a str, &'a M)>
 }
 
 impl<'a> NativeCallContext<'a> {
-    /// Create a new [`NativeCallContext`].
+    /// _(internals)_ Create a new [`NativeCallContext`].
+    /// Exported under the `metadata` feature only.
+    #[deprecated(
+        since = "1.3.0",
+        note = "`NativeCallContext::new` will be moved under `internals`. Use `FnPtr::call` to call a function pointer directly."
+    )]
     #[inline(always)]
     #[must_use]
-    pub const fn new(engine: &'a Engine, fn_name: &'a str, lib: &'a [&Module]) -> Self {
+    pub fn new(
+        engine: &'a Engine,
+        fn_name: &'a (impl AsRef<str> + 'a + ?Sized),
+        lib: &'a [&Module],
+    ) -> Self {
         Self {
             engine,
-            fn_name,
+            fn_name: fn_name.as_ref(),
             source: None,
             mods: None,
             lib,
@@ -134,18 +143,18 @@ impl<'a> NativeCallContext<'a> {
     #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[must_use]
-    pub const fn new_with_all_fields(
+    pub fn new_with_all_fields(
         engine: &'a Engine,
-        fn_name: &'a str,
-        source: Option<&'a str>,
+        fn_name: &'a (impl AsRef<str> + 'a + ?Sized),
+        source: Option<&'a (impl AsRef<str> + 'a + ?Sized)>,
         imports: &'a Imports,
         lib: &'a [&Module],
         pos: Position,
     ) -> Self {
         Self {
             engine,
-            fn_name,
-            source,
+            fn_name: fn_name.as_ref(),
+            source: source.map(|v| v.as_ref()),
             mods: Some(imports),
             lib,
             pos,

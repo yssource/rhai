@@ -13,12 +13,13 @@ Enhancements
 ------------
 
 * Added `into_array` and `into_typed_array` for `Dynamic`.
-* New `FnPtr::call` to simplify calling a function pointer.
+* Added `FnPtr::call` to simplify calling a function pointer.
 
 Deprecated API's
 ----------------
 
 * The internal `no_smartstring` feature is removed since `SmartString` now supports `no-std`.
+* `NativeCallContext::new` is deprecated because it is simpler to call a function pointer via `FnPtr::call`.
 
 
 Version 1.2.1
