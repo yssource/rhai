@@ -256,23 +256,3 @@ impl<T> From<EvalAltResult> for Result<T, Box<EvalAltResult>> {
         Err(err.into())
     }
 }
-
-impl AST {
-    /// _(internals)_ Get the internal [`Module`] containing all script-defined functions.
-    /// Exported under the `internals` feature only.
-    ///
-    /// Not available under `no_function`.
-    ///
-    /// # Deprecated
-    ///
-    /// This method is deprecated. Use [`shared_lib`][AST::shared_lib] instead.
-    ///
-    /// This method will be removed in the next major version.
-    #[deprecated(since = "1.3.0", note = "use `shared_lib` instead")]
-    #[cfg(feature = "internals")]
-    #[inline(always)]
-    #[must_use]
-    pub fn lib(&self) -> &Module {
-        &self.functions
-    }
-}

@@ -216,7 +216,7 @@ pub use engine::{EvalState, FnResolutionCache, FnResolutionCacheEntry, Imports};
 
 #[cfg(feature = "internals")]
 #[cfg(not(feature = "unchecked"))]
-pub use engine::Limits;
+pub use api::limits::Limits;
 
 #[cfg(feature = "internals")]
 pub use module::NamespaceRef;

@@ -29,21 +29,21 @@ pub struct Limits {
     pub max_function_expr_depth: Option<NonZeroUsize>,
     /// Maximum number of operations allowed to run.
     pub max_operations: Option<std::num::NonZeroU64>,
-    /// Maximum number of [modules][Module] allowed to load.
+    /// Maximum number of [modules][crate::Module] allowed to load.
     ///
-    /// Set to zero to effectively disable loading any [module][Module].
+    /// Set to zero to effectively disable loading any [module][crate::Module].
     ///
     /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     pub max_modules: usize,
-    /// Maximum length of a [string][ImmutableString].
+    /// Maximum length of a [string][crate::ImmutableString].
     pub max_string_size: Option<NonZeroUsize>,
-    /// Maximum length of an [array][Array].
+    /// Maximum length of an [array][crate::Array].
     ///
     /// Not available under `no_index`.
     #[cfg(not(feature = "no_index"))]
     pub max_array_size: Option<NonZeroUsize>,
-    /// Maximum number of properties in an [object map][Map].
+    /// Maximum number of properties in an [object map][crate::Map].
     ///
     /// Not available under `no_object`.
     #[cfg(not(feature = "no_object"))]

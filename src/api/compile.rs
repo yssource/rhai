@@ -322,7 +322,7 @@ impl Engine {
     /// The JSON string must be an object hash.  It cannot be a simple scalar value.
     ///
     /// Set `has_null` to `true` in order to map `null` values to `()`.
-    /// Setting it to `false` will cause an [`ErrorVariableNotFound`][EvalAltResult::ErrorVariableNotFound] error during parsing.
+    /// Setting it to `false` will cause an [`ErrorVariableNotFound`][crate::EvalAltResult::ErrorVariableNotFound] error during parsing.
     ///
     /// # JSON With Sub-Objects
     ///

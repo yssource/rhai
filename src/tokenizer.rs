@@ -2241,7 +2241,7 @@ impl Engine {
     #[must_use]
     pub fn lex<'a>(
         &'a self,
-        input: impl IntoIterator<Item = &'a (AsRef<str> + 'a)>,
+        input: impl IntoIterator<Item = &'a (impl AsRef<str> + 'a)>,
     ) -> (TokenIterator<'a>, TokenizerControl) {
         self.lex_raw(input, None)
     }
@@ -2252,7 +2252,7 @@ impl Engine {
     #[must_use]
     pub fn lex_with_map<'a>(
         &'a self,
-        input: impl IntoIterator<Item = &'a (AsRef<str> + 'a)>,
+        input: impl IntoIterator<Item = &'a (impl AsRef<str> + 'a)>,
         token_mapper: &'a OnParseTokenCallback,
     ) -> (TokenIterator<'a>, TokenizerControl) {
         self.lex_raw(input, Some(token_mapper))
