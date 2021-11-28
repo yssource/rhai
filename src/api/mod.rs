@@ -75,7 +75,7 @@ impl Engine {
 
         #[cfg(not(feature = "no_function"))]
         let lib = ast
-            .lib()
+            .shared_lib()
             .iter_fn()
             .filter(|f| f.func.is_script())
             .map(|f| {

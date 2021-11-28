@@ -64,7 +64,7 @@ impl Engine {
 
         let statements = ast.statements();
         if !statements.is_empty() {
-            let lib = &[ast.lib()];
+            let lib = &[ast.as_ref()];
             self.eval_global_statements(scope, mods, &mut state, statements, lib, 0)?;
         }
         Ok(())

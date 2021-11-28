@@ -728,8 +728,9 @@ mod array_functions {
         }
 
         let mut result = initial;
+        let len = array.len();
 
-        for (i, item) in array.iter().enumerate().rev() {
+        for (i, item) in array.iter().rev().enumerate() {
             let item = item.clone();
 
             result = reducer
@@ -738,7 +739,11 @@ mod array_functions {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(reducer.fn_name()) =>
                     {
-                        reducer.call_dynamic(&ctx, None, [result, item, (i as INT).into()])
+                        reducer.call_dynamic(
+                            &ctx,
+                            None,
+                            [result, item, ((len - 1 - i) as INT).into()],
+                        )
                     }
                     _ => Err(err),
                 })

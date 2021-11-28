@@ -886,7 +886,7 @@ impl Engine {
         )?;
 
         // If new functions are defined within the eval string, it is an error
-        if !ast.lib().is_empty() {
+        if !ast.shared_lib().is_empty() {
             return Err(ParseErrorType::WrongFnDefinition.into());
         }
 

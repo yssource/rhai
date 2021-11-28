@@ -7,6 +7,80 @@ use std::prelude::v1::*;
 
 use std::num::{NonZeroU64, NonZeroUsize};
 
+/// _(internals)_ A type containing all the limits imposed by the [`Engine`].
+/// Exported under the `internals` feature only.
+///
+/// Not available under `unchecked`.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct Limits {
+    /// Maximum levels of call-stack to prevent infinite recursion.
+    ///
+    /// Set to zero to effectively disable function calls.
+    ///
+    /// Not available under `no_function`.
+    #[cfg(not(feature = "no_function"))]
+    pub max_call_stack_depth: usize,
+    /// Maximum depth of statements/expressions at global level.
+    pub max_expr_depth: Option<NonZeroUsize>,
+    /// Maximum depth of statements/expressions in functions.
+    ///
+    /// Not available under `no_function`.
+    #[cfg(not(feature = "no_function"))]
+    pub max_function_expr_depth: Option<NonZeroUsize>,
+    /// Maximum number of operations allowed to run.
+    pub max_operations: Option<std::num::NonZeroU64>,
+    /// Maximum number of [modules][Module] allowed to load.
+    ///
+    /// Set to zero to effectively disable loading any [module][Module].
+    ///
+    /// Not available under `no_module`.
+    #[cfg(not(feature = "no_module"))]
+    pub max_modules: usize,
+    /// Maximum length of a [string][ImmutableString].
+    pub max_string_size: Option<NonZeroUsize>,
+    /// Maximum length of an [array][Array].
+    ///
+    /// Not available under `no_index`.
+    #[cfg(not(feature = "no_index"))]
+    pub max_array_size: Option<NonZeroUsize>,
+    /// Maximum number of properties in an [object map][Map].
+    ///
+    /// Not available under `no_object`.
+    #[cfg(not(feature = "no_object"))]
+    pub max_map_size: Option<NonZeroUsize>,
+}
+
+impl Limits {
+    /// Create a new [`Limits`] with default values.
+    ///
+    /// Not available under `unchecked`.
+    #[inline]
+    pub const fn new() -> Self {
+        Self {
+            #[cfg(not(feature = "no_function"))]
+            max_call_stack_depth: crate::engine::MAX_CALL_STACK_DEPTH,
+            max_expr_depth: NonZeroUsize::new(crate::engine::MAX_EXPR_DEPTH),
+            #[cfg(not(feature = "no_function"))]
+            max_function_expr_depth: NonZeroUsize::new(crate::engine::MAX_FUNCTION_EXPR_DEPTH),
+            max_operations: None,
+            #[cfg(not(feature = "no_module"))]
+            max_modules: usize::MAX,
+            max_string_size: None,
+            #[cfg(not(feature = "no_index"))]
+            max_array_size: None,
+            #[cfg(not(feature = "no_object"))]
+            max_map_size: None,
+        }
+    }
+}
+
+impl Default for Limits {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Engine {
     /// Set the maximum levels of function calls allowed for a script in order to avoid
     /// infinite recursion and stack overflows.

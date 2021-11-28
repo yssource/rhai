@@ -230,6 +230,12 @@ impl NativeCallContext<'_> {
     ///
     /// If `is_method` is [`true`], the first argument is assumed to be passed
     /// by reference and is not consumed.
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`call_fn_raw`][NativeCallContext::call_fn_raw] instead.
+    ///
+    /// This method will be removed in the next major version.
     #[deprecated(since = "1.2.0", note = "use `call_fn_raw` instead")]
     #[inline(always)]
     pub fn call_fn_dynamic_raw(
@@ -248,5 +254,25 @@ impl<T> From<EvalAltResult> for Result<T, Box<EvalAltResult>> {
     #[inline(always)]
     fn from(err: EvalAltResult) -> Self {
         Err(err.into())
+    }
+}
+
+impl AST {
+    /// _(internals)_ Get the internal [`Module`] containing all script-defined functions.
+    /// Exported under the `internals` feature only.
+    ///
+    /// Not available under `no_function`.
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`shared_lib`][AST::shared_lib] instead.
+    ///
+    /// This method will be removed in the next major version.
+    #[deprecated(since = "1.3.0", note = "use `shared_lib` instead")]
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    #[must_use]
+    pub fn lib(&self) -> &Module {
+        &self.functions
     }
 }

@@ -302,8 +302,8 @@ impl AST {
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     #[must_use]
-    pub(crate) fn shared_lib(&self) -> Shared<Module> {
-        self.functions.clone()
+    pub(crate) fn shared_lib(&self) -> &Shared<Module> {
+        &self.functions
     }
     /// _(internals)_ Get the internal shared [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
@@ -314,24 +314,7 @@ impl AST {
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     #[must_use]
-    pub fn shared_lib(&self) -> Shared<Module> {
-        self.functions.clone()
-    }
-    /// Get the internal [`Module`] containing all script-defined functions.
-    #[cfg(not(feature = "internals"))]
-    #[inline(always)]
-    #[must_use]
-    pub(crate) fn lib(&self) -> &Module {
-        &self.functions
-    }
-    /// _(internals)_ Get the internal [`Module`] containing all script-defined functions.
-    /// Exported under the `internals` feature only.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(feature = "internals")]
-    #[inline(always)]
-    #[must_use]
-    pub fn lib(&self) -> &Module {
+    pub fn shared_lib(&self) -> &Shared<Module> {
         &self.functions
     }
     /// Get the embedded [module resolver][`ModuleResolver`].
@@ -895,7 +878,14 @@ impl AsRef<[Stmt]> for AST {
 impl AsRef<Module> for AST {
     #[inline(always)]
     fn as_ref(&self) -> &Module {
-        self.lib()
+        self.shared_lib().as_ref()
+    }
+}
+
+impl AsRef<Shared<Module>> for AST {
+    #[inline(always)]
+    fn as_ref(&self) -> &Shared<Module> {
+        self.shared_lib()
     }
 }
 

@@ -156,7 +156,7 @@ impl Engine {
 
         if eval_ast && !statements.is_empty() {
             // Make sure new variables introduced at global level do not _spill_ into the function call
-            self.eval_global_statements(scope, mods, state, statements, &[ast.lib()], 0)?;
+            self.eval_global_statements(scope, mods, state, statements, &[ast.as_ref()], 0)?;
 
             if rewind_scope {
                 scope.rewind(orig_scope_len);
@@ -169,7 +169,7 @@ impl Engine {
         let mut args: StaticVec<_> = arg_values.as_mut().iter_mut().collect();
 
         let fn_def = ast
-            .lib()
+            .shared_lib()
             .get_script_fn(name, args.len())
             .ok_or_else(|| EvalAltResult::ErrorFunctionNotFound(name.into(), Position::NONE))?;
 
@@ -181,7 +181,7 @@ impl Engine {
             scope,
             mods,
             state,
-            &[ast.lib()],
+            &[ast.as_ref()],
             &mut this_ptr,
             fn_def,
             &mut args,

@@ -7,7 +7,7 @@ Version 1.3.0
 Compiler requirement
 --------------------
 
-* Minimum compiler version is 1.51.
+* Minimum compiler version is bumped to 1.51.
 
 Enhancements
 ------------
@@ -20,6 +20,7 @@ Deprecated API's
 
 * The internal `no_smartstring` feature is removed since `SmartString` now supports `no-std`.
 * `NativeCallContext::new` is deprecated because it is simpler to call a function pointer via `FnPtr::call`.
+* `AST::shared_lib` is changed to return `&Shared<Module>` while `AST::lib` is deprecated.
 
 
 Version 1.2.1

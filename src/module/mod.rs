@@ -190,13 +190,6 @@ impl fmt::Debug for Module {
     }
 }
 
-impl AsRef<Module> for Module {
-    #[inline(always)]
-    fn as_ref(&self) -> &Module {
-        self
-    }
-}
-
 impl<M: AsRef<Module>> Add<M> for &Module {
     type Output = Module;
 
@@ -1467,8 +1460,8 @@ impl Module {
 
         // Non-private functions defined become module functions
         #[cfg(not(feature = "no_function"))]
-        if !ast.lib().functions.is_empty() {
-            ast.lib()
+        if !ast.shared_lib().functions.is_empty() {
+            ast.shared_lib()
                 .functions
                 .values()
                 .filter(|f| match f.access {
@@ -1484,7 +1477,7 @@ impl Module {
                         .expect("scripted function")
                         .as_ref()
                         .clone();
-                    func.lib = Some(ast.shared_lib());
+                    func.lib = Some(ast.shared_lib().clone());
                     func.mods = func_mods.clone();
                     module.set_script_fn(func);
                 });
@@ -1725,6 +1718,17 @@ impl DerefMut for NamespaceRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.path
+    }
+}
+
+impl From<Vec<Ident>> for NamespaceRef {
+    #[inline(always)]
+    fn from(mut path: Vec<Ident>) -> Self {
+        path.shrink_to_fit();
+        Self {
+            index: None,
+            path: path.into(),
+        }
     }
 }
 

@@ -65,7 +65,9 @@ pub struct Imports {
     pub num_operations: u64,
     /// Number of modules loaded.
     pub num_modules: usize,
-    /// Function call hashes to FN_IDX_GET and FN_IDX_SET.
+    /// Function call hashes to index getters and setters.
+    ///
+    /// Not available under `no_index` and `no_object`.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn_hash_indexing: (u64, u64),
     /// Embedded module resolver.
@@ -74,9 +76,18 @@ pub struct Imports {
     #[cfg(not(feature = "no_module"))]
     pub embedded_module_resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
     /// Cache of globally-defined constants.
+    ///
+    /// Not available under `no_module` and `no_function`.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     global_constants: Option<Shared<crate::Locked<BTreeMap<Identifier, Dynamic>>>>,
+}
+
+impl Default for Imports {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Imports {
@@ -129,12 +140,15 @@ impl Imports {
     #[must_use]
     pub fn find(&self, name: impl AsRef<str>) -> Option<usize> {
         let name = name.as_ref();
+        let len = self.keys.len();
 
-        self.keys
-            .iter()
-            .enumerate()
-            .rev()
-            .find_map(|(i, key)| if key == name { Some(i) } else { None })
+        self.keys.iter().rev().enumerate().find_map(|(i, key)| {
+            if key == name {
+                Some(len - 1 - i)
+            } else {
+                None
+            }
+        })
     }
     /// Push an imported [module][Module] onto the stack.
     #[inline(always)]
@@ -154,8 +168,8 @@ impl Imports {
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.keys
             .iter()
-            .zip(self.modules.iter())
             .rev()
+            .zip(self.modules.iter().rev())
             .map(|(name, module)| (name.as_str(), module.as_ref()))
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
@@ -812,69 +826,6 @@ impl EvalState {
     }
 }
 
-/// _(internals)_ A type containing all the limits imposed by the [`Engine`].
-/// Exported under the `internals` feature only.
-#[cfg(not(feature = "unchecked"))]
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Limits {
-    /// Maximum levels of call-stack to prevent infinite recursion.
-    ///
-    /// Set to zero to effectively disable function calls.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
-    pub max_call_stack_depth: usize,
-    /// Maximum depth of statements/expressions at global level.
-    pub max_expr_depth: Option<NonZeroUsize>,
-    /// Maximum depth of statements/expressions in functions.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
-    pub max_function_expr_depth: Option<NonZeroUsize>,
-    /// Maximum number of operations allowed to run.
-    pub max_operations: Option<std::num::NonZeroU64>,
-    /// Maximum number of [modules][Module] allowed to load.
-    ///
-    /// Set to zero to effectively disable loading any [module][Module].
-    ///
-    /// Not available under `no_module`.
-    #[cfg(not(feature = "no_module"))]
-    pub max_modules: usize,
-    /// Maximum length of a [string][ImmutableString].
-    pub max_string_size: Option<NonZeroUsize>,
-    /// Maximum length of an [array][Array].
-    ///
-    /// Not available under `no_index`.
-    #[cfg(not(feature = "no_index"))]
-    pub max_array_size: Option<NonZeroUsize>,
-    /// Maximum number of properties in an [object map][Map].
-    ///
-    /// Not available under `no_object`.
-    #[cfg(not(feature = "no_object"))]
-    pub max_map_size: Option<NonZeroUsize>,
-}
-
-#[cfg(not(feature = "unchecked"))]
-impl Limits {
-    pub const fn new() -> Self {
-        Self {
-            #[cfg(not(feature = "no_function"))]
-            max_call_stack_depth: MAX_CALL_STACK_DEPTH,
-            max_expr_depth: NonZeroUsize::new(MAX_EXPR_DEPTH),
-            #[cfg(not(feature = "no_function"))]
-            max_function_expr_depth: NonZeroUsize::new(MAX_FUNCTION_EXPR_DEPTH),
-            max_operations: None,
-            #[cfg(not(feature = "no_module"))]
-            max_modules: usize::MAX,
-            max_string_size: None,
-            #[cfg(not(feature = "no_index"))]
-            max_array_size: None,
-            #[cfg(not(feature = "no_object"))]
-            max_map_size: None,
-        }
-    }
-}
-
 /// Context of a script evaluation process.
 #[derive(Debug)]
 pub struct EvalContext<'a, 'x, 'px, 'm, 's, 'b, 't, 'pt> {
@@ -1024,7 +975,7 @@ pub struct Engine {
 
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
-    pub(crate) limits: Limits,
+    pub(crate) limits: crate::api::limits::Limits,
 }
 
 impl fmt::Debug for Engine {
@@ -1146,7 +1097,7 @@ impl Engine {
             optimization_level: crate::OptimizationLevel::default(),
 
             #[cfg(not(feature = "unchecked"))]
-            limits: Limits::new(),
+            limits: crate::api::limits::Limits::new(),
         };
 
         // Add the global namespace module
