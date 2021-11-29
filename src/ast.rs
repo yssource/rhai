@@ -196,7 +196,26 @@ impl Default for AST {
 
 impl AST {
     /// Create a new [`AST`].
-    #[inline]
+    #[cfg(not(feature = "internals"))]
+    #[inline(always)]
+    #[must_use]
+    pub(crate) fn new(
+        statements: impl IntoIterator<Item = Stmt>,
+        #[cfg(not(feature = "no_function"))] functions: impl Into<Shared<Module>>,
+    ) -> Self {
+        Self {
+            source: None,
+            body: StmtBlock::new(statements, Position::NONE),
+            #[cfg(not(feature = "no_function"))]
+            functions: functions.into(),
+            #[cfg(not(feature = "no_module"))]
+            resolver: None,
+        }
+    }
+    /// _(internals)_ Create a new [`AST`].
+    /// Exported under the `internals` feature only.
+    #[cfg(feature = "internals")]
+    #[inline(always)]
     #[must_use]
     pub fn new(
         statements: impl IntoIterator<Item = Stmt>,
@@ -211,6 +230,41 @@ impl AST {
             resolver: None,
         }
     }
+    /// Create a new [`AST`] with a source name.
+    #[cfg(not(feature = "internals"))]
+    #[inline(always)]
+    #[must_use]
+    pub(crate) fn new_with_source(
+        statements: impl IntoIterator<Item = Stmt>,
+        #[cfg(not(feature = "no_function"))] functions: impl Into<Shared<Module>>,
+        source: impl Into<Identifier>,
+    ) -> Self {
+        let mut ast = Self::new(
+            statements,
+            #[cfg(not(feature = "no_function"))]
+            functions,
+        );
+        ast.set_source(source);
+        ast
+    }
+    /// _(internals)_ Create a new [`AST`] with a source name.
+    /// Exported under the `internals` feature only.
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    #[must_use]
+    pub fn new_with_source(
+        statements: impl IntoIterator<Item = Stmt>,
+        #[cfg(not(feature = "no_function"))] functions: impl Into<Shared<Module>>,
+        source: impl Into<Identifier>,
+    ) -> Self {
+        let mut ast = Self::new(
+            statements,
+            #[cfg(not(feature = "no_function"))]
+            functions,
+        );
+        ast.set_source(source);
+        ast
+    }
     /// Create an empty [`AST`].
     #[inline]
     #[must_use]
@@ -220,23 +274,6 @@ impl AST {
             body: StmtBlock::NONE,
             #[cfg(not(feature = "no_function"))]
             functions: Module::new().into(),
-            #[cfg(not(feature = "no_module"))]
-            resolver: None,
-        }
-    }
-    /// Create a new [`AST`] with a source name.
-    #[inline(always)]
-    #[must_use]
-    pub fn new_with_source(
-        statements: impl IntoIterator<Item = Stmt>,
-        #[cfg(not(feature = "no_function"))] functions: impl Into<Shared<Module>>,
-        source: impl Into<Identifier>,
-    ) -> Self {
-        Self {
-            source: Some(source.into()),
-            body: StmtBlock::new(statements, Position::NONE),
-            #[cfg(not(feature = "no_function"))]
-            functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
         }
@@ -286,7 +323,7 @@ impl AST {
         &self.body.0
     }
     /// Get a mutable reference to the statements.
-    #[cfg(not(feature = "no_optimize"))]
+    #[allow(dead_code)]
     #[inline(always)]
     #[must_use]
     pub(crate) fn statements_mut(&mut self) -> &mut StaticVec<Stmt> {
