@@ -125,7 +125,11 @@ impl Engine {
     ///
     /// This method will be removed in the next major version.
     ///
-    /// # WARNING
+    /// # WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    ///
+    /// ## Arguments
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
@@ -221,7 +225,11 @@ impl Dynamic {
 impl NativeCallContext<'_> {
     /// Call a function inside the call context.
     ///
-    /// # WARNING
+    /// # WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    ///
+    /// ## Arguments
     ///
     /// All arguments may be _consumed_, meaning that they may be replaced by `()`. This is to avoid
     /// unnecessarily cloning the arguments.
@@ -273,7 +281,11 @@ impl FnPtr {
     ///
     /// This method will be removed in the next major version.
     ///
-    /// # WARNING
+    /// # WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    ///
+    /// ## Arguments
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.

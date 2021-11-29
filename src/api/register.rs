@@ -154,7 +154,7 @@ impl Engine {
     ///
     /// This function is very low level.  It takes a list of [`TypeId`][std::any::TypeId]'s indicating the actual types of the parameters.
     ///
-    /// # Arguments
+    /// ## Arguments
     ///
     /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`][crate::Dynamic],
     /// The arguments are guaranteed to be of the correct types matching the [`TypeId`][std::any::TypeId]'s.

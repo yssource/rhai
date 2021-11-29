@@ -741,7 +741,7 @@ impl Module {
     ///
     /// This function is very low level.
     ///
-    /// # Arguments
+    /// ## Arguments
     ///
     /// A list of [`TypeId`]'s is taken as the argument types.
     ///

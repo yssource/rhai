@@ -86,7 +86,11 @@ impl Engine {
     ///
     /// Not available under `no_function`.
     ///
-    /// # WARNING
+    /// # WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    ///
+    /// ## Arguments
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.

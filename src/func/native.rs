@@ -230,7 +230,11 @@ impl<'a> NativeCallContext<'a> {
     /// If `is_method_call` is [`true`], the first argument is assumed to be the `this` pointer for
     /// a script-defined function (or the object of a method call).
     ///
-    /// # WARNING
+    /// # WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    ///
+    /// # Arguments
     ///
     /// All arguments may be _consumed_, meaning that they may be replaced by `()`. This is to avoid
     /// unnecessarily cloning the arguments.

@@ -204,7 +204,7 @@ impl FnPtr {
     ///
     /// This function is very low level.
     ///
-    /// # Arguments
+    /// ## Arguments
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
