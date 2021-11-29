@@ -261,12 +261,12 @@ mod array_functions {
         for (i, item) in array.iter().enumerate() {
             ar.push(
                 mapper
-                    .call_dynamic(&ctx, None, [item.clone()])
+                    .call_raw(&ctx, None, [item.clone()])
                     .or_else(|err| match *err {
                         EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                             if fn_sig.starts_with(mapper.fn_name()) =>
                         {
-                            mapper.call_dynamic(&ctx, None, [item.clone(), (i as INT).into()])
+                            mapper.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
                         }
                         _ => Err(err),
                     })
@@ -306,12 +306,12 @@ mod array_functions {
 
         for (i, item) in array.iter().enumerate() {
             if filter
-                .call_dynamic(&ctx, None, [item.clone()])
+                .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(&ctx, None, [item.clone(), (i as INT).into()])
+                        filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -478,12 +478,12 @@ mod array_functions {
 
         for (i, item) in array.iter().enumerate().skip(start) {
             if filter
-                .call_dynamic(&ctx, None, [item.clone()])
+                .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(&ctx, None, [item.clone(), (i as INT).into()])
+                        filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -525,12 +525,12 @@ mod array_functions {
 
         for (i, item) in array.iter().enumerate() {
             if filter
-                .call_dynamic(&ctx, None, [item.clone()])
+                .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(&ctx, None, [item.clone(), (i as INT).into()])
+                        filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -571,12 +571,12 @@ mod array_functions {
 
         for (i, item) in array.iter().enumerate() {
             if !filter
-                .call_dynamic(&ctx, None, [item.clone()])
+                .call_raw(&ctx, None, [item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(&ctx, None, [item.clone(), (i as INT).into()])
+                        filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -621,7 +621,7 @@ mod array_functions {
 
         array.dedup_by(|x, y| {
             comparer
-                .call_dynamic(&ctx, None, [x.clone(), y.clone()])
+                .call_raw(&ctx, None, [x.clone(), y.clone()])
                 .unwrap_or_else(|_| Dynamic::FALSE)
                 .as_bool()
                 .unwrap_or(false)
@@ -670,12 +670,12 @@ mod array_functions {
             let item = item.clone();
 
             result = reducer
-                .call_dynamic(&ctx, None, [result.clone(), item.clone()])
+                .call_raw(&ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(reducer.fn_name()) =>
                     {
-                        reducer.call_dynamic(&ctx, None, [result, item, (i as INT).into()])
+                        reducer.call_raw(&ctx, None, [result, item, (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -734,16 +734,12 @@ mod array_functions {
             let item = item.clone();
 
             result = reducer
-                .call_dynamic(&ctx, None, [result.clone(), item.clone()])
+                .call_raw(&ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(reducer.fn_name()) =>
                     {
-                        reducer.call_dynamic(
-                            &ctx,
-                            None,
-                            [result, item, ((len - 1 - i) as INT).into()],
-                        )
+                        reducer.call_raw(&ctx, None, [result, item, ((len - 1 - i) as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -788,7 +784,7 @@ mod array_functions {
 
         array.sort_by(|x, y| {
             comparer
-                .call_dynamic(&ctx, None, [x.clone(), y.clone()])
+                .call_raw(&ctx, None, [x.clone(), y.clone()])
                 .ok()
                 .and_then(|v| v.as_int().ok())
                 .map(|v| match v {
@@ -891,12 +887,12 @@ mod array_functions {
 
         while x < array.len() {
             if filter
-                .call_dynamic(&ctx, None, [array[x].clone()])
+                .call_raw(&ctx, None, [array[x].clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(&ctx, None, [array[x].clone(), (i as INT).into()])
+                        filter.call_raw(&ctx, None, [array[x].clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -973,12 +969,12 @@ mod array_functions {
 
         while x < array.len() {
             if !filter
-                .call_dynamic(&ctx, None, [array[x].clone()])
+                .call_raw(&ctx, None, [array[x].clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
                         if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        filter.call_dynamic(&ctx, None, [array[x].clone(), (i as INT).into()])
+                        filter.call_raw(&ctx, None, [array[x].clone(), (i as INT).into()])
                     }
                     _ => Err(err),
                 })

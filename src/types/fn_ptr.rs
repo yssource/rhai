@@ -101,9 +101,8 @@ impl FnPtr {
     /// Call the function pointer with curried arguments (if any).
     /// The function may be script-defined (not available under `no_function`) or native Rust.
     ///
-    /// This method is intended for calling a function pointer that is passed into a native Rust
-    /// function as an argument.  Therefore, the [`AST`] is _NOT_ evaluated before calling the
-    /// function.
+    /// This method is intended for calling a function pointer directly, possibly on another [`Engine`].
+    /// Therefore, the [`AST`] is _NOT_ evaluated before calling the function.
     ///
     /// # Example
     ///
@@ -153,7 +152,7 @@ impl FnPtr {
         #[allow(deprecated)]
         let ctx = NativeCallContext::new(engine, self.fn_name(), lib);
 
-        let result = self.call_dynamic(&ctx, None, arg_values)?;
+        let result = self.call_raw(&ctx, None, arg_values)?;
 
         let typ = engine.map_type_name(result.type_name());
 
@@ -172,17 +171,49 @@ impl FnPtr {
     /// This method is intended for calling a function pointer that is passed into a native Rust
     /// function as an argument.  Therefore, the [`AST`] is _NOT_ evaluated before calling the
     /// function.
+    #[inline]
+    pub fn call_within_context<T: Variant + Clone>(
+        &self,
+        context: &NativeCallContext,
+        args: impl FuncArgs,
+    ) -> Result<T, Box<EvalAltResult>> {
+        let mut arg_values = crate::StaticVec::new_const();
+        args.parse(&mut arg_values);
+
+        let result = self.call_raw(&context, None, arg_values)?;
+
+        let typ = context.engine().map_type_name(result.type_name());
+
+        result.try_cast().ok_or_else(|| {
+            EvalAltResult::ErrorMismatchOutputType(
+                context.engine().map_type_name(type_name::<T>()).into(),
+                typ.into(),
+                Position::NONE,
+            )
+            .into()
+        })
+    }
+    /// Call the function pointer with curried arguments (if any).
+    /// The function may be script-defined (not available under `no_function`) or native Rust.
     ///
-    /// # WARNING
+    /// This method is intended for calling a function pointer that is passed into a native Rust
+    /// function as an argument.  Therefore, the [`AST`] is _NOT_ evaluated before calling the
+    /// function.
+    ///
+    /// # WARNING - Low Level API
+    ///
+    /// This function is very low level.
+    ///
+    /// # Arguments
     ///
     /// All the arguments are _consumed_, meaning that they're replaced by `()`.
     /// This is to avoid unnecessarily cloning the arguments.
     /// Do not use the arguments after this call. If they are needed afterwards,
     /// clone them _before_ calling this function.
     #[inline]
-    pub fn call_dynamic(
+    pub fn call_raw(
         &self,
-        ctx: &NativeCallContext,
+        context: &NativeCallContext,
         this_ptr: Option<&mut Dynamic>,
         arg_values: impl AsMut<[Dynamic]>,
     ) -> RhaiResult {
@@ -205,7 +236,7 @@ impl FnPtr {
         }
         args.extend(arg_values.iter_mut());
 
-        ctx.call_fn_raw(self.fn_name(), is_method, is_method, &mut args)
+        context.call_fn_raw(self.fn_name(), is_method, is_method, &mut args)
     }
 }
 

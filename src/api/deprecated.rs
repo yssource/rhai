@@ -1,7 +1,8 @@
 //! Module containing all deprecated API that will be removed in the next major version.
 
 use crate::{
-    Dynamic, Engine, EvalAltResult, ImmutableString, NativeCallContext, RhaiResult, Scope, AST,
+    Dynamic, Engine, EvalAltResult, FnPtr, ImmutableString, NativeCallContext, RhaiResult, Scope,
+    AST,
 };
 
 #[cfg(feature = "no_std")]
@@ -254,5 +255,41 @@ impl<T> From<EvalAltResult> for Result<T, Box<EvalAltResult>> {
     #[inline(always)]
     fn from(err: EvalAltResult) -> Self {
         Err(err.into())
+    }
+}
+
+impl FnPtr {
+    /// Call the function pointer with curried arguments (if any).
+    /// The function may be script-defined (not available under `no_function`) or native Rust.
+    ///
+    /// This method is intended for calling a function pointer that is passed into a native Rust
+    /// function as an argument.  Therefore, the [`AST`] is _NOT_ evaluated before calling the
+    /// function.
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`call_within_context`][FnPtr::call_within_context] or
+    /// [`call_raw`][FnPtr::call_raw] instead.
+    ///
+    /// This method will be removed in the next major version.
+    ///
+    /// # WARNING
+    ///
+    /// All the arguments are _consumed_, meaning that they're replaced by `()`.
+    /// This is to avoid unnecessarily cloning the arguments.
+    /// Do not use the arguments after this call. If they are needed afterwards,
+    /// clone them _before_ calling this function.
+    #[deprecated(
+        since = "1.3.0",
+        note = "use `call_within_context` or `call_raw` instead"
+    )]
+    #[inline(always)]
+    pub fn call_dynamic(
+        &self,
+        context: &NativeCallContext,
+        this_ptr: Option<&mut Dynamic>,
+        arg_values: impl AsMut<[Dynamic]>,
+    ) -> RhaiResult {
+        self.call_raw(context, this_ptr, arg_values)
     }
 }

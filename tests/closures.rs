@@ -17,7 +17,7 @@ fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {
         &[TypeId::of::<FnPtr>(), TypeId::of::<INT>()],
         |context, args| {
             let fn_ptr = std::mem::take(args[0]).cast::<FnPtr>();
-            fn_ptr.call_dynamic(&context, None, [std::mem::take(args[1])])
+            fn_ptr.call_raw(&context, None, [std::mem::take(args[1])])
         },
     );
 
@@ -155,7 +155,7 @@ fn test_closures() -> Result<(), Box<EvalAltResult>> {
         |context, args| {
             let func = take(args[1]).cast::<FnPtr>();
 
-            func.call_dynamic(&context, None, [])
+            func.call_raw(&context, None, [])
         },
     );
 

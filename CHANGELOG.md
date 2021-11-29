@@ -13,7 +13,7 @@ Enhancements
 ------------
 
 * Added `into_array` and `into_typed_array` for `Dynamic`.
-* Added `FnPtr::call` to simplify calling a function pointer.
+* Added `FnPtr::call` and `FnPtr::call_within_context` to simplify calling a function pointer.
 
 Deprecated and Gated API's
 --------------------------
@@ -21,6 +21,7 @@ Deprecated and Gated API's
 * `NativeCallContext::new` is deprecated because it is simpler to call a function pointer via `FnPtr::call`.
 * `AST::merge_filtered` and `AST::combine_filtered` are no longer exported under `no_function`.
 * `AST::new` and `AST::new_with_source` are moved under `internals`.
+* `FnPtr::call_dynamic` is deprecated in favor of `FnPtr::call_raw`.
 
 
 Version 1.2.1
