@@ -90,7 +90,7 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
     .map(|&s| s.into())
     .collect();
 
-    let mut list = ctx.iter_namespaces().flat_map(Module::iter_script_fn).fold(
+    let mut _list = ctx.iter_namespaces().flat_map(Module::iter_script_fn).fold(
         Array::new(),
         |mut list, (_, _, _, _, f)| {
             list.push(make_metadata(&dict, None, f).into());
@@ -122,8 +122,8 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
         }
 
         ctx.iter_imports_raw()
-            .for_each(|(ns, m)| scan_module(&mut list, &dict, ns.clone(), m.as_ref()));
+            .for_each(|(ns, m)| scan_module(&mut _list, &dict, ns.clone(), m.as_ref()));
     }
 
-    list
+    _list
 }

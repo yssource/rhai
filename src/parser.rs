@@ -3264,6 +3264,7 @@ impl Engine {
             self,
             _scope,
             statements,
+            #[cfg(not(feature = "no_function"))]
             StaticVec::new_const(),
             optimization_level,
         ));
@@ -3351,6 +3352,7 @@ impl Engine {
             self,
             _scope,
             statements,
+            #[cfg(not(feature = "no_function"))]
             _lib,
             optimization_level,
         ));

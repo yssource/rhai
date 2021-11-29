@@ -1460,7 +1460,7 @@ impl Module {
 
         // Non-private functions defined become module functions
         #[cfg(not(feature = "no_function"))]
-        if !ast.shared_lib().functions.is_empty() {
+        if ast.has_functions() {
             ast.shared_lib()
                 .functions
                 .values()

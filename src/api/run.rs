@@ -2,7 +2,7 @@
 
 use crate::engine::{EvalState, Imports};
 use crate::parser::ParseState;
-use crate::{Engine, EvalAltResult, Scope, AST};
+use crate::{Engine, EvalAltResult, Module, Scope, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -59,12 +59,20 @@ impl Engine {
         }
         #[cfg(not(feature = "no_module"))]
         {
-            mods.embedded_module_resolver = ast.resolver();
+            mods.embedded_module_resolver = ast.resolver().cloned();
         }
 
         let statements = ast.statements();
         if !statements.is_empty() {
-            let lib = &[ast.as_ref()];
+            let lib = [
+                #[cfg(not(feature = "no_function"))]
+                ast.as_ref(),
+            ];
+            let lib = if lib.first().map(|m: &&Module| m.is_empty()).unwrap_or(true) {
+                &lib[0..0]
+            } else {
+                &lib
+            };
             self.eval_global_statements(scope, mods, &mut state, statements, lib, 0)?;
         }
         Ok(())

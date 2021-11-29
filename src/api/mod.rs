@@ -86,12 +86,16 @@ impl Engine {
             })
             .collect();
 
-        #[cfg(feature = "no_function")]
-        let lib = crate::StaticVec::new_const();
-
         let statements = std::mem::take(ast.statements_mut());
 
-        crate::optimizer::optimize_into_ast(self, scope, statements, lib, optimization_level)
+        crate::optimizer::optimize_into_ast(
+            self,
+            scope,
+            statements,
+            #[cfg(not(feature = "no_function"))]
+            lib,
+            optimization_level,
+        )
     }
 }
 

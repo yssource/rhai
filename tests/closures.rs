@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, FnPtr, NativeCallContext, ParseErrorType, Scope, INT};
+use rhai::{Engine, EvalAltResult, FnPtr, ParseErrorType, Scope, INT};
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::mem::take;
@@ -318,30 +318,18 @@ fn test_closures_shared_obj() -> Result<(), Box<EvalAltResult>> {
 fn test_closures_external() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
-    let mut ast = engine.compile(
+    let ast = engine.compile(
         r#"
             let test = "hello";
             |x| test + x
         "#,
     )?;
 
-    // Save the function pointer together with captured variables
     let fn_ptr = engine.eval_ast::<FnPtr>(&ast)?;
 
-    // Get rid of the script, retaining only functions
-    ast.retain_functions(|_, _, _, _| true);
+    let f = move |x: INT| -> String { fn_ptr.call(&engine, &ast, (x,)).unwrap() };
 
-    // Create function namespace from the 'AST'
-    let lib = [ast.as_ref()];
-
-    // Create native call context
-    let fn_name = fn_ptr.fn_name().to_string();
-    let context = NativeCallContext::new(&engine, &fn_name, &lib);
-
-    // Closure 'f' captures: the engine, the AST, and the curried function pointer
-    let f = move |x: INT| fn_ptr.call_dynamic(&context, None, [x.into()]);
-
-    assert_eq!(f(42)?.into_string(), Ok("hello42".to_string()));
+    assert_eq!(f(42), "hello42");
 
     Ok(())
 }

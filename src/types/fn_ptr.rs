@@ -3,8 +3,8 @@
 use crate::tokenizer::is_valid_identifier;
 use crate::types::dynamic::Variant;
 use crate::{
-    Dynamic, Engine, EvalAltResult, FuncArgs, Identifier, NativeCallContext, Position, RhaiResult,
-    StaticVec, AST,
+    Dynamic, Engine, EvalAltResult, FuncArgs, Identifier, Module, NativeCallContext, Position,
+    RhaiResult, StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -137,12 +137,21 @@ impl FnPtr {
         ast: &AST,
         args: impl FuncArgs,
     ) -> Result<T, Box<EvalAltResult>> {
+        let _ast = ast;
         let mut arg_values = crate::StaticVec::new_const();
         args.parse(&mut arg_values);
 
-        let lib = [ast.as_ref()];
+        let lib = [
+            #[cfg(not(feature = "no_function"))]
+            _ast.as_ref(),
+        ];
+        let lib = if lib.first().map(|m: &&Module| m.is_empty()).unwrap_or(true) {
+            &lib[0..0]
+        } else {
+            &lib
+        };
         #[allow(deprecated)]
-        let ctx = NativeCallContext::new(engine, self.fn_name(), &lib);
+        let ctx = NativeCallContext::new(engine, self.fn_name(), lib);
 
         let result = self.call_dynamic(&ctx, None, arg_values)?;
 

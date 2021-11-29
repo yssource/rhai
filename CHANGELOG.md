@@ -18,9 +18,8 @@ Enhancements
 Deprecated API's
 ----------------
 
-* The internal `no_smartstring` feature is removed since `SmartString` now supports `no-std`.
 * `NativeCallContext::new` is deprecated because it is simpler to call a function pointer via `FnPtr::call`.
-* `AST::shared_lib` is changed to return `&Shared<Module>` while `AST::lib` is deprecated.
+* `AST::merge_filtered` and `AST::combine_filtered` are no longer exported under `no_function`.
 
 
 Version 1.2.1

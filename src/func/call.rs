@@ -13,7 +13,7 @@ use crate::tokenizer::Token;
 use crate::{
     ast::{Expr, Stmt},
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, EvalAltResult, FnPtr,
-    Identifier, ImmutableString, Module, ParseErrorType, Position, RhaiResult, Scope, StaticVec,
+    Identifier, ImmutableString, Module, Position, RhaiResult, Scope, StaticVec,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -554,14 +554,14 @@ impl Engine {
         let mut lib_merged = StaticVec::with_capacity(lib.len() + 1);
         let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
 
-        let lib = if let Some(ref env_lib) = fn_def.lib {
-            if env_lib.is_empty() {
+        let lib = if let Some(ref fn_lib) = fn_def.lib {
+            if fn_lib.is_empty() {
                 lib
             } else {
                 state.push_fn_resolution_cache();
-                lib_merged.push(env_lib.as_ref());
+                lib_merged.push(fn_lib.as_ref());
                 lib_merged.extend(lib.iter().cloned());
-                lib_merged.as_ref()
+                &lib_merged
             }
         } else {
             lib
@@ -886,8 +886,9 @@ impl Engine {
         )?;
 
         // If new functions are defined within the eval string, it is an error
+        #[cfg(not(feature = "no_function"))]
         if !ast.shared_lib().is_empty() {
-            return Err(ParseErrorType::WrongFnDefinition.into());
+            return Err(crate::ParseErrorType::WrongFnDefinition.into());
         }
 
         let statements = ast.statements();

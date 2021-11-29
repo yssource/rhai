@@ -3,7 +3,7 @@
 use crate::engine::{EvalState, Imports};
 use crate::parser::ParseState;
 use crate::types::dynamic::Variant;
-use crate::{Dynamic, Engine, EvalAltResult, Position, RhaiResult, Scope, AST};
+use crate::{Dynamic, Engine, EvalAltResult, Module, Position, RhaiResult, Scope, AST};
 use std::any::type_name;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -217,7 +217,7 @@ impl Engine {
         }
         #[cfg(not(feature = "no_module"))]
         {
-            mods.embedded_module_resolver = ast.resolver();
+            mods.embedded_module_resolver = ast.resolver().cloned();
         }
 
         let statements = ast.statements();
@@ -226,7 +226,15 @@ impl Engine {
             return Ok(Dynamic::UNIT);
         }
 
-        let lib = &[ast.as_ref()];
+        let lib = [
+            #[cfg(not(feature = "no_function"))]
+            ast.as_ref(),
+        ];
+        let lib = if lib.first().map(|m: &&Module| m.is_empty()).unwrap_or(true) {
+            &lib[0..0]
+        } else {
+            &lib
+        };
         self.eval_global_statements(scope, mods, &mut state, statements, lib, level)
     }
 }

@@ -1,7 +1,7 @@
 //! Module implementing the [`AST`] optimizer.
 #![cfg(not(feature = "no_optimize"))]
 
-use crate::ast::{Expr, OpAssignment, ScriptFnDef, Stmt, AST_OPTION_FLAGS::*};
+use crate::ast::{Expr, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::engine::{
     EvalState, Imports, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_PRINT, KEYWORD_TYPE_OF,
 };
@@ -11,7 +11,7 @@ use crate::tokenizer::Token;
 use crate::types::dynamic::AccessMode;
 use crate::{
     calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, ImmutableString,
-    Module, Position, Scope, Shared, StaticVec, AST,
+    Position, Scope, StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -59,8 +59,9 @@ struct OptimizerState<'a> {
     propagate_constants: bool,
     /// An [`Engine`] instance for eager function evaluation.
     engine: &'a Engine,
-    /// [Module] containing script-defined functions.
-    lib: &'a [&'a Module],
+    /// [Module][crate::Module] containing script-defined functions.
+    #[cfg(not(feature = "no_function"))]
+    lib: &'a [&'a crate::Module],
     /// Optimization level.
     optimization_level: OptimizationLevel,
 }
@@ -70,7 +71,7 @@ impl<'a> OptimizerState<'a> {
     #[inline(always)]
     pub const fn new(
         engine: &'a Engine,
-        lib: &'a [&'a Module],
+        #[cfg(not(feature = "no_function"))] lib: &'a [&'a crate::Module],
         optimization_level: OptimizationLevel,
     ) -> Self {
         Self {
@@ -78,6 +79,7 @@ impl<'a> OptimizerState<'a> {
             variables: StaticVec::new_const(),
             propagate_constants: true,
             engine,
+            #[cfg(not(feature = "no_function"))]
             lib,
             optimization_level,
         }
@@ -139,11 +141,16 @@ impl<'a> OptimizerState<'a> {
         fn_name: impl AsRef<str>,
         arg_values: &mut [Dynamic],
     ) -> Option<Dynamic> {
+        #[cfg(not(feature = "no_function"))]
+        let lib = self.lib;
+        #[cfg(feature = "no_function")]
+        let lib = &[];
+
         self.engine
             .call_native_fn(
                 &mut Imports::new(),
                 &mut EvalState::new(),
-                self.lib,
+                lib,
                 &fn_name,
                 calc_fn_hash(&fn_name, arg_values.len()),
                 &mut arg_values.iter_mut().collect::<StaticVec<_>>(),
@@ -992,7 +999,12 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 _ if x.args.len() == 2 && !state.has_native_fn_override(x.hashes.native, arg_types.as_ref()) => {
                     if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
                         .and_then(|f| {
-                            let context = (state.engine, x.name.as_str(), state.lib).into();
+                            #[cfg(not(feature = "no_function"))]
+                            let lib = state.lib;
+                            #[cfg(feature = "no_function")]
+                            let lib = &[];
+
+                            let context = (state.engine, x.name.as_str(), lib).into();
                             let (first, second) = arg_values.split_first_mut().expect("not empty");
                             (f)(context, &mut [ first, &mut second[0] ]).ok()
                         }) {
@@ -1091,7 +1103,7 @@ fn optimize_top_level(
     statements: StaticVec<Stmt>,
     engine: &Engine,
     scope: &Scope,
-    lib: &[&Module],
+    #[cfg(not(feature = "no_function"))] lib: &[&crate::Module],
     optimization_level: OptimizationLevel,
 ) -> StaticVec<Stmt> {
     let mut statements = statements;
@@ -1103,7 +1115,12 @@ fn optimize_top_level(
     }
 
     // Set up the state
-    let mut state = OptimizerState::new(engine, lib, optimization_level);
+    let mut state = OptimizerState::new(
+        engine,
+        #[cfg(not(feature = "no_function"))]
+        lib,
+        optimization_level,
+    );
 
     // Add constants and variables from the scope
     scope.iter().for_each(|(name, constant, value)| {
@@ -1123,7 +1140,9 @@ pub fn optimize_into_ast(
     engine: &Engine,
     scope: &Scope,
     statements: StaticVec<Stmt>,
-    functions: StaticVec<Shared<ScriptFnDef>>,
+    #[cfg(not(feature = "no_function"))] functions: StaticVec<
+        crate::Shared<crate::ast::ScriptFnDef>,
+    >,
     optimization_level: OptimizationLevel,
 ) -> AST {
     let level = if cfg!(feature = "no_optimize") {
@@ -1133,19 +1152,18 @@ pub fn optimize_into_ast(
     };
 
     let mut statements = statements;
-    let _functions = functions;
 
     #[cfg(not(feature = "no_function"))]
     let lib = {
-        let mut module = Module::new();
+        let mut module = crate::Module::new();
 
         if level != OptimizationLevel::None {
             // We only need the script library's signatures for optimization purposes
-            let mut lib2 = Module::new();
+            let mut lib2 = crate::Module::new();
 
-            _functions
+            functions
                 .iter()
-                .map(|fn_def| ScriptFnDef {
+                .map(|fn_def| crate::ast::ScriptFnDef {
                     name: fn_def.name.clone(),
                     access: fn_def.access,
                     body: crate::ast::StmtBlock::NONE,
@@ -1163,7 +1181,7 @@ pub fn optimize_into_ast(
 
             let lib2 = &[&lib2];
 
-            _functions
+            functions
                 .into_iter()
                 .map(|fn_def| {
                     let mut fn_def = crate::func::native::shared_take_or_clone(fn_def);
@@ -1179,7 +1197,7 @@ pub fn optimize_into_ast(
                     module.set_script_fn(fn_def);
                 });
         } else {
-            _functions.into_iter().for_each(|fn_def| {
+            functions.into_iter().for_each(|fn_def| {
                 module.set_script_fn(fn_def);
             });
         }
@@ -1187,18 +1205,21 @@ pub fn optimize_into_ast(
         module
     };
 
-    #[cfg(feature = "no_function")]
-    let lib = Module::new();
-
     statements.shrink_to_fit();
 
     AST::new(
         match level {
             OptimizationLevel::None => statements,
-            OptimizationLevel::Simple | OptimizationLevel::Full => {
-                optimize_top_level(statements, engine, &scope, &[&lib], level)
-            }
+            OptimizationLevel::Simple | OptimizationLevel::Full => optimize_top_level(
+                statements,
+                engine,
+                &scope,
+                #[cfg(not(feature = "no_function"))]
+                &[&lib],
+                level,
+            ),
         },
+        #[cfg(not(feature = "no_function"))]
         lib,
     )
 }

@@ -764,15 +764,15 @@ impl Token {
             #[cfg(not(feature = "no_function"))]
             "private" => Private,
 
+            #[cfg(feature = "no_function")]
+            "fn" | "private" => Reserved(syntax.into()),
+
             #[cfg(not(feature = "no_module"))]
             "import" => Import,
             #[cfg(not(feature = "no_module"))]
             "export" => Export,
             #[cfg(not(feature = "no_module"))]
             "as" => As,
-
-            #[cfg(feature = "no_function")]
-            "fn" | "private" => Reserved(syntax.into()),
 
             #[cfg(feature = "no_module")]
             "import" | "export" | "as" => Reserved(syntax.into()),
