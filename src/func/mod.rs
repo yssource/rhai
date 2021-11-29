@@ -8,6 +8,7 @@ pub mod hashing;
 pub mod native;
 pub mod plugin;
 pub mod register;
+pub mod script;
 
 pub use args::FuncArgs;
 pub use builtin::{get_builtin_binary_op_fn, get_builtin_op_assignment_fn};

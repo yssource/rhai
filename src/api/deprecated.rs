@@ -222,14 +222,14 @@ impl NativeCallContext<'_> {
     ///
     /// # WARNING
     ///
-    /// All arguments may be _consumed_, meaning that they may be replaced by `()`.
-    /// This is to avoid unnecessarily cloning the arguments.
+    /// All arguments may be _consumed_, meaning that they may be replaced by `()`. This is to avoid
+    /// unnecessarily cloning the arguments.
     ///
-    /// Do not use the arguments after this call. If they are needed afterwards,
-    /// clone them _before_ calling this function.
+    /// Do not use the arguments after this call. If they are needed afterwards, clone them _before_
+    /// calling this function.
     ///
-    /// If `is_method` is [`true`], the first argument is assumed to be passed
-    /// by reference and is not consumed.
+    /// If `is_method` is [`true`], the first argument is assumed to be passed by reference and is
+    /// not consumed.
     ///
     /// # Deprecated
     ///

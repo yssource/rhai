@@ -3270,7 +3270,11 @@ impl Engine {
         ));
 
         #[cfg(feature = "no_optimize")]
-        return Ok(AST::new(statements, crate::Module::new()));
+        return Ok(AST::new(
+            statements,
+            #[cfg(not(feature = "no_function"))]
+            crate::Module::new(),
+        ));
     }
 
     /// Parse the global level statements.
@@ -3371,6 +3375,10 @@ impl Engine {
 
         #[cfg(feature = "no_optimize")]
         #[cfg(feature = "no_function")]
-        return Ok(AST::new(statements, crate::Module::new()));
+        return Ok(AST::new(
+            statements,
+            #[cfg(not(feature = "no_function"))]
+            crate::Module::new(),
+        ));
     }
 }

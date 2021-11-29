@@ -40,11 +40,7 @@ pub enum OptimizationLevel {
 impl Default for OptimizationLevel {
     #[inline(always)]
     fn default() -> Self {
-        if cfg!(feature = "no_optimize") {
-            Self::None
-        } else {
-            Self::Simple
-        }
+        Self::Simple
     }
 }
 
@@ -1145,19 +1141,13 @@ pub fn optimize_into_ast(
     >,
     optimization_level: OptimizationLevel,
 ) -> AST {
-    let level = if cfg!(feature = "no_optimize") {
-        OptimizationLevel::default()
-    } else {
-        optimization_level
-    };
-
     let mut statements = statements;
 
     #[cfg(not(feature = "no_function"))]
     let lib = {
         let mut module = crate::Module::new();
 
-        if level != OptimizationLevel::None {
+        if optimization_level != OptimizationLevel::None {
             // We only need the script library's signatures for optimization purposes
             let mut lib2 = crate::Module::new();
 
@@ -1189,7 +1179,8 @@ pub fn optimize_into_ast(
                     // Optimize the function body
                     let body = mem::take(fn_def.body.deref_mut());
 
-                    *fn_def.body = optimize_top_level(body, engine, scope, lib2, level);
+                    *fn_def.body =
+                        optimize_top_level(body, engine, scope, lib2, optimization_level);
 
                     fn_def
                 })
@@ -1208,7 +1199,7 @@ pub fn optimize_into_ast(
     statements.shrink_to_fit();
 
     AST::new(
-        match level {
+        match optimization_level {
             OptimizationLevel::None => statements,
             OptimizationLevel::Simple | OptimizationLevel::Full => optimize_top_level(
                 statements,
@@ -1216,7 +1207,7 @@ pub fn optimize_into_ast(
                 &scope,
                 #[cfg(not(feature = "no_function"))]
                 &[&lib],
-                level,
+                optimization_level,
             ),
         },
         #[cfg(not(feature = "no_function"))]

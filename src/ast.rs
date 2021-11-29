@@ -63,9 +63,6 @@ pub struct ScriptFnDef {
     pub params: StaticVec<Identifier>,
     /// _(metadata)_ Function doc-comments (if any).
     /// Exported under the `metadata` feature only.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     pub comments: Option<Box<[Box<str>]>>,
 }
@@ -100,15 +97,12 @@ pub struct ScriptFnMetadata<'a> {
     /// _(metadata)_ Function doc-comments (if any).
     /// Exported under the `metadata` feature only.
     ///
-    /// Not available under `no_function`.
-    ///
     /// Block doc-comments are kept in a single string slice with line-breaks within.
     ///
     /// Line doc-comments are kept in one string slice per line without the termination line-break.
     ///
     /// Leading white-spaces are stripped, and each string slice always starts with the corresponding
     /// doc-comment leader: `///` or `/**`.
-    #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     pub comments: Vec<&'a str>,
     /// Function access mode.
