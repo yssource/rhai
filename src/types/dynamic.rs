@@ -2146,6 +2146,11 @@ impl Dynamic {
 }
 #[cfg(not(feature = "no_index"))]
 impl Dynamic {
+    /// Create a [`Dynamic`] from a [`Vec<u8>`].
+    #[inline(always)]
+    pub fn from_blob(blob: Blob) -> Self {
+        Self(Union::Blob(Box::new(blob), DEFAULT_TAG_VALUE, ReadWrite))
+    }
     /// Convert the [`Dynamic`] into a [`Vec<u8>`].
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]

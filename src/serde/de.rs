@@ -1,9 +1,8 @@
 //! Implement deserialization support of [`Dynamic`][crate::Dynamic] for [`serde`].
 
-use super::str::StringSliceDeserializer;
 use crate::types::dynamic::Union;
 use crate::{Dynamic, EvalAltResult, ImmutableString, LexError, Position};
-use serde::de::{DeserializeSeed, Error, IntoDeserializer, MapAccess, SeqAccess, Visitor};
+use serde::de::{DeserializeSeed, Error, IntoDeserializer, Visitor};
 use serde::{Deserialize, Deserializer};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -359,13 +358,14 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 
     fn deserialize_bytes<V: Visitor<'de>>(
         self,
-        visitor: V,
+        _visitor: V,
     ) -> Result<V::Value, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
         return self
             .value
             .downcast_ref::<Blob>()
-            .map_or_else(|| self.type_error(), |x| visitor.visit_bytes(x));
+            .map_or_else(|| self.type_error(), |x| _visitor.visit_bytes(x));
+
         #[cfg(feature = "no_index")]
         return self.type_error();
     }
@@ -509,11 +509,13 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 }
 
 /// `SeqAccess` implementation for arrays.
+#[cfg(not(feature = "no_index"))]
 struct IterateDynamicArray<'a, ITER: Iterator<Item = &'a Dynamic>> {
     /// Iterator for a stream of [`Dynamic`][crate::Dynamic] values.
     iter: ITER,
 }
 
+#[cfg(not(feature = "no_index"))]
 impl<'a, ITER: Iterator<Item = &'a Dynamic>> IterateDynamicArray<'a, ITER> {
     #[must_use]
     pub fn new(iter: ITER) -> Self {
@@ -521,7 +523,8 @@ impl<'a, ITER: Iterator<Item = &'a Dynamic>> IterateDynamicArray<'a, ITER> {
     }
 }
 
-impl<'a: 'de, 'de, ITER: Iterator<Item = &'a Dynamic>> SeqAccess<'de>
+#[cfg(not(feature = "no_index"))]
+impl<'a: 'de, 'de, ITER: Iterator<Item = &'a Dynamic>> serde::de::SeqAccess<'de>
     for IterateDynamicArray<'a, ITER>
 {
     type Error = Box<EvalAltResult>;
@@ -541,6 +544,7 @@ impl<'a: 'de, 'de, ITER: Iterator<Item = &'a Dynamic>> SeqAccess<'de>
 }
 
 /// `MapAccess` implementation for maps.
+#[cfg(not(feature = "no_object"))]
 struct IterateMap<'a, KEYS, VALUES>
 where
     KEYS: Iterator<Item = &'a str>,
@@ -564,7 +568,8 @@ where
     }
 }
 
-impl<'a: 'de, 'de, KEYS, VALUES> MapAccess<'de> for IterateMap<'a, KEYS, VALUES>
+#[cfg(not(feature = "no_object"))]
+impl<'a: 'de, 'de, KEYS, VALUES> serde::de::MapAccess<'de> for IterateMap<'a, KEYS, VALUES>
 where
     KEYS: Iterator<Item = &'a str>,
     VALUES: Iterator<Item = &'a Dynamic>,
@@ -579,7 +584,7 @@ where
         match self.keys.next() {
             None => Ok(None),
             Some(item) => seed
-                .deserialize(&mut StringSliceDeserializer::from_str(item))
+                .deserialize(&mut super::str::StringSliceDeserializer::from_str(item))
                 .map(Some),
         }
     }
