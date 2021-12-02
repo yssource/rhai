@@ -4,6 +4,11 @@ Rhai Release Notes
 Version 1.2.2
 =============
 
+Bug fixes
+---------
+
+* `from_dynamic` now supports deserializing `Option`.
+
 
 Version 1.2.1
 =============
