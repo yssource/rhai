@@ -10,13 +10,14 @@ use crate::func::hashing::get_hasher;
 use crate::tokenizer::Token;
 use crate::types::dynamic::AccessMode;
 use crate::{
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, ImmutableString,
-    Position, Scope, StaticVec, AST,
+    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, Position, Scope,
+    StaticVec, AST,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
     any::TypeId,
+    convert::TryFrom,
     hash::{Hash, Hasher},
     mem,
     ops::DerefMut,
@@ -902,7 +903,10 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 *expr = mem::take(lhs);
             }
             // lhs && rhs
-            (lhs, rhs) => { optimize_expr(lhs, state, false); optimize_expr(rhs, state, false); }
+            (lhs, rhs) => {
+                optimize_expr(lhs, state, false);
+                optimize_expr(rhs, state, false);
+            }
         },
         // lhs || rhs
         Expr::Or(ref mut x, _) => match (&mut x.lhs, &mut x.rhs) {
@@ -924,7 +928,10 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 *expr = mem::take(lhs);
             }
             // lhs || rhs
-            (lhs, rhs) => { optimize_expr(lhs, state, false); optimize_expr(rhs, state, false); }
+            (lhs, rhs) => {
+                optimize_expr(lhs, state, false);
+                optimize_expr(rhs, state, false);
+            }
         },
 
         // eval!
@@ -936,24 +943,20 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
             if !x.is_qualified() // Non-qualified
             && state.optimization_level == OptimizationLevel::Simple // simple optimizations
             && x.args.len() == 1
-            && x.args[0].is_constant()
             && x.name == KEYWORD_FN_PTR
+            && x.args[0].is_constant()
         => {
             let fn_name = match x.args[0] {
-                Expr::Stack(slot, _) => Some(x.constants[slot].clone()),
-                Expr::StringConstant(ref s, _) => Some(s.clone().into()),
-                _ => None
+                Expr::Stack(slot, _) => x.constants[slot].clone(),
+                Expr::StringConstant(ref s, _) => s.clone().into(),
+                _ => Dynamic::UNIT
             };
 
-            if let Some(fn_name) = fn_name {
-                if fn_name.is::<ImmutableString>() {
-                    state.set_dirty();
-                    let fn_ptr = FnPtr::new_unchecked(
-                                    fn_name.as_str_ref().expect("`ImmutableString`").into(),
-                                    StaticVec::new_const()
-                                 );
-                    *expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), *pos);
-                }
+            if let Ok(fn_ptr) = fn_name.into_immutable_string().map_err(|err| err.into()).and_then(FnPtr::try_from) {
+                state.set_dirty();
+                *expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), *pos);
+            } else {
+                optimize_expr(&mut x.args[0], state, false);
             }
         }
 
