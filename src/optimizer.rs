@@ -22,9 +22,6 @@ use std::{
     ops::DerefMut,
 };
 
-#[cfg(not(feature = "no_closure"))]
-use crate::engine::KEYWORD_IS_SHARED;
-
 /// Level of optimization performed.
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum OptimizationLevel {
@@ -986,7 +983,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                     return;
                 }
                 #[cfg(not(feature = "no_closure"))]
-                KEYWORD_IS_SHARED if arg_values.len() == 1 => {
+                crate::engine::KEYWORD_IS_SHARED if arg_values.len() == 1 => {
                     state.set_dirty();
                     *expr = Expr::from_dynamic(Dynamic::FALSE, *pos);
                     return;
@@ -1046,7 +1043,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                 let result = match x.name.as_str() {
                     KEYWORD_TYPE_OF if arg_values.len() == 1 => Some(state.engine.map_type_name(arg_values[0].type_name()).into()),
                     #[cfg(not(feature = "no_closure"))]
-                    KEYWORD_IS_SHARED if arg_values.len() == 1 => Some(Dynamic::FALSE),
+                    crate::engine::KEYWORD_IS_SHARED if arg_values.len() == 1 => Some(Dynamic::FALSE),
                     _ => state.call_fn_with_constant_arguments(&x.name, arg_values)
                 };
 

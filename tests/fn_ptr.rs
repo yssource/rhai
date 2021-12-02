@@ -143,7 +143,7 @@ fn test_fn_ptr_make_closure() -> Result<(), Box<EvalAltResult>> {
 
         let fn_ptr = engine.eval_ast::<FnPtr>(&ast)?;
 
-        move |x: INT| -> Result<String, Box<EvalAltResult>> { fn_ptr.call(&engine, &ast, (x,)) }
+        move |x: INT| -> Result<String, _> { fn_ptr.call(&engine, &ast, (x,)) }
     };
 
     // 'f' captures: the Engine, the AST, and the closure

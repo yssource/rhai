@@ -313,7 +313,7 @@ impl Engine {
         name: impl AsRef<str>,
         hash: u64,
         args: &mut FnCallArgs,
-        is_method_call: bool,
+        is_ref_mut: bool,
         is_op_assign: bool,
         pos: Position,
     ) -> Result<(Dynamic, bool), Box<EvalAltResult>> {
@@ -331,7 +331,8 @@ impl Engine {
 
             // Calling pure function but the first argument is a reference?
             let mut backup: Option<ArgBackup> = None;
-            if is_method_call && func.is_pure() && !args.is_empty() {
+            if is_ref_mut && func.is_pure() && !args.is_empty() {
+                // Clone the first argument
                 backup = Some(ArgBackup::new());
                 backup
                     .as_mut()
@@ -396,6 +397,8 @@ impl Engine {
                 _ => (result, func.is_method()),
             });
         }
+
+        // Error handling
 
         match name {
             // index getter function not found?
