@@ -361,9 +361,13 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         self,
         visitor: V,
     ) -> Result<V::Value, Box<EvalAltResult>> {
-        self.value
+        #[cfg(not(feature = "no_index"))]
+        return self
+            .value
             .downcast_ref::<Blob>()
-            .map_or_else(|| self.type_error(), |x| visitor.visit_bytes(x))
+            .map_or_else(|| self.type_error(), |x| visitor.visit_bytes(x));
+        #[cfg(feature = "no_index")]
+        return self.type_error();
     }
 
     fn deserialize_byte_buf<V: Visitor<'de>>(
