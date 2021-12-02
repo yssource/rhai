@@ -257,11 +257,11 @@ impl Serializer for &mut DynamicSerializer {
     }
 
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Box<EvalAltResult>> {
-        Ok(v.to_string().into())
+        Ok(v.into())
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Box<EvalAltResult>> {
-        Ok(Dynamic::from(v.to_vec()))
+        Ok(v.into())
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Box<EvalAltResult>> {

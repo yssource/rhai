@@ -775,3 +775,23 @@ fn test_serde_optional() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+#[cfg(not(feature = "no_index"))]
+fn test_serde_blob() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    let r = engine.eval::<Dynamic>(
+        "
+            let x = blob(10);
+            for i in range(0, 10) { x[i] = i; }
+            x
+        ",
+    )?;
+
+    let r = from_dynamic::<serde_bytes::ByteBuf>(&r)?;
+
+    assert_eq!(r.to_vec(), vec![0_u8, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+    Ok(())
+}

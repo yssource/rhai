@@ -20,6 +20,7 @@ Enhancements
 
 * Added `into_array` and `into_typed_array` for `Dynamic`.
 * Added `FnPtr::call` and `FnPtr::call_within_context` to simplify calling a function pointer.
+* BLob's can now be deserialized (using `from_dynamic`) into `Vec<u8>` via [`serde_bytes`](https://crates.io/crates/serde_bytes).
 
 Deprecated and Gated API's
 --------------------------

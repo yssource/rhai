@@ -2109,6 +2109,9 @@ impl Dynamic {
                     v.try_cast::<T>().ok_or_else(|| typ)
                 })
                 .collect(),
+            Union::Blob(_, _, _) if TypeId::of::<T>() == TypeId::of::<u8>() => {
+                Ok(self.cast::<Vec<T>>())
+            }
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(cell, _, _) => {
                 #[cfg(not(feature = "sync"))]

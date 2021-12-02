@@ -10,7 +10,7 @@ use std::prelude::v1::*;
 use std::{any::type_name, fmt};
 
 #[cfg(not(feature = "no_index"))]
-use crate::Array;
+use crate::{Array, Blob};
 
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
@@ -154,7 +154,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             #[cfg(not(feature = "no_index"))]
             Union::Array(_, _, _) => self.deserialize_seq(visitor),
             #[cfg(not(feature = "no_index"))]
-            Union::Blob(_, _, _) => self.deserialize_seq(visitor),
+            Union::Blob(_, _, _) => self.deserialize_bytes(visitor),
             #[cfg(not(feature = "no_object"))]
             Union::Map(_, _, _) => self.deserialize_map(visitor),
             Union::FnPtr(_, _, _) => self.type_error(),
@@ -357,12 +357,20 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         self.deserialize_str(visitor)
     }
 
-    fn deserialize_bytes<V: Visitor<'de>>(self, _: V) -> Result<V::Value, Box<EvalAltResult>> {
-        self.type_error()
+    fn deserialize_bytes<V: Visitor<'de>>(
+        self,
+        visitor: V,
+    ) -> Result<V::Value, Box<EvalAltResult>> {
+        self.value
+            .downcast_ref::<Blob>()
+            .map_or_else(|| self.type_error(), |x| visitor.visit_bytes(x))
     }
 
-    fn deserialize_byte_buf<V: Visitor<'de>>(self, _: V) -> Result<V::Value, Box<EvalAltResult>> {
-        self.type_error()
+    fn deserialize_byte_buf<V: Visitor<'de>>(
+        self,
+        visitor: V,
+    ) -> Result<V::Value, Box<EvalAltResult>> {
+        self.deserialize_bytes(visitor)
     }
 
     fn deserialize_option<V: Visitor<'de>>(
@@ -402,7 +410,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         #[cfg(not(feature = "no_index"))]
         return self.value.downcast_ref::<Array>().map_or_else(
             || self.type_error(),
-            |arr| _visitor.visit_seq(IterateArray::new(arr.iter())),
+            |arr| _visitor.visit_seq(IterateDynamicArray::new(arr.iter())),
         );
 
         #[cfg(feature = "no_index")]
@@ -497,20 +505,21 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 }
 
 /// `SeqAccess` implementation for arrays.
-struct IterateArray<'a, ITER: Iterator<Item = &'a Dynamic>> {
+struct IterateDynamicArray<'a, ITER: Iterator<Item = &'a Dynamic>> {
     /// Iterator for a stream of [`Dynamic`][crate::Dynamic] values.
     iter: ITER,
 }
 
-#[cfg(not(feature = "no_index"))]
-impl<'a, ITER: Iterator<Item = &'a Dynamic>> IterateArray<'a, ITER> {
+impl<'a, ITER: Iterator<Item = &'a Dynamic>> IterateDynamicArray<'a, ITER> {
     #[must_use]
     pub fn new(iter: ITER) -> Self {
         Self { iter }
     }
 }
 
-impl<'a: 'de, 'de, ITER: Iterator<Item = &'a Dynamic>> SeqAccess<'de> for IterateArray<'a, ITER> {
+impl<'a: 'de, 'de, ITER: Iterator<Item = &'a Dynamic>> SeqAccess<'de>
+    for IterateDynamicArray<'a, ITER>
+{
     type Error = Box<EvalAltResult>;
 
     fn next_element_seed<T: DeserializeSeed<'de>>(
