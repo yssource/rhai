@@ -13,6 +13,7 @@ Bug fixes
 ---------
 
 * `from_dynamic` now supports deserializing `Option`.
+* BLOB's no longer panic when accessed with an out-of-bounds index.
 
 Enhancements
 ------------

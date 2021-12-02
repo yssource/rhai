@@ -2052,7 +2052,12 @@ impl Engine {
                     index as usize
                 };
 
-                let value = (arr[arr_idx] as INT).into();
+                let value = arr
+                    .get(arr_idx)
+                    .map(|&v| (v as INT).into())
+                    .ok_or_else(|| {
+                        Box::new(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos))
+                    })?;
                 Ok(Target::BlobByte(target, arr_idx, value))
             }
 
