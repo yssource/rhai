@@ -365,8 +365,15 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         self.type_error()
     }
 
-    fn deserialize_option<V: Visitor<'de>>(self, _: V) -> Result<V::Value, Box<EvalAltResult>> {
-        self.type_error()
+    fn deserialize_option<V: Visitor<'de>>(
+        self,
+        visitor: V,
+    ) -> Result<V::Value, Box<EvalAltResult>> {
+        if self.value.is::<()>() {
+            visitor.visit_none()
+        } else {
+            visitor.visit_some(self)
+        }
     }
 
     fn deserialize_unit<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Box<EvalAltResult>> {

@@ -746,3 +746,32 @@ fn test_serde_json() -> serde_json::Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg(not(feature = "no_object"))]
+fn test_serde_optional() -> Result<(), Box<EvalAltResult>> {
+    #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+    struct TestStruct {
+        foo: Option<char>,
+    }
+
+    let mut engine = Engine::new();
+    engine.register_type_with_name::<TestStruct>("TestStruct");
+
+    let r = engine.eval::<Dynamic>("#{ foo: 'a' }")?;
+
+    assert_eq!(
+        from_dynamic::<TestStruct>(&r)?,
+        TestStruct { foo: Some('a') }
+    );
+
+    let r = engine.eval::<Dynamic>("#{ foo: () }")?;
+
+    assert_eq!(from_dynamic::<TestStruct>(&r)?, TestStruct { foo: None });
+
+    let r = engine.eval::<Dynamic>("#{ }")?;
+
+    assert_eq!(from_dynamic::<TestStruct>(&r)?, TestStruct { foo: None });
+
+    Ok(())
+}

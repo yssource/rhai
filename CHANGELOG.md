@@ -9,6 +9,11 @@ Compiler requirement
 
 * Minimum compiler version is bumped to 1.51.
 
+Bug fixes
+---------
+
+* `from_dynamic` now supports deserializing `Option`.
+
 Enhancements
 ------------
 
