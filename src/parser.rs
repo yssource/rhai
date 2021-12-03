@@ -239,6 +239,8 @@ struct ParseSettings {
     allow_switch_expr: bool,
     /// Is statement-expression allowed?
     allow_stmt_expr: bool,
+    /// Is looping allowed?
+    allow_loop: bool,
     /// Current expression nesting level.
     level: usize,
 }
@@ -1174,6 +1176,7 @@ fn parse_primary(
                 allow_switch_expr: settings.default_options.allow_switch_expr,
                 allow_stmt_expr: settings.default_options.allow_stmt_expr,
                 allow_anonymous_fn: settings.default_options.allow_anonymous_fn,
+                allow_loop: settings.default_options.allow_loop,
                 is_global: false,
                 is_function_scope: true,
                 is_breakable: false,
@@ -2802,6 +2805,7 @@ fn parse_stmt(
                         allow_switch_expr: settings.default_options.allow_switch_expr,
                         allow_stmt_expr: settings.default_options.allow_stmt_expr,
                         allow_anonymous_fn: settings.default_options.allow_anonymous_fn,
+                        allow_loop: settings.default_options.allow_loop,
                         is_global: false,
                         is_function_scope: true,
                         is_breakable: false,
@@ -2846,19 +2850,23 @@ fn parse_stmt(
 
         Token::If => parse_if(input, state, lib, settings.level_up()),
         Token::Switch => parse_switch(input, state, lib, settings.level_up()),
-        Token::While | Token::Loop => parse_while_loop(input, state, lib, settings.level_up()),
-        Token::Do => parse_do(input, state, lib, settings.level_up()),
-        Token::For => parse_for(input, state, lib, settings.level_up()),
+        Token::While | Token::Loop if settings.allow_loop => {
+            parse_while_loop(input, state, lib, settings.level_up())
+        }
+        Token::Do if settings.allow_loop => parse_do(input, state, lib, settings.level_up()),
+        Token::For if settings.allow_loop => parse_for(input, state, lib, settings.level_up()),
 
-        Token::Continue if settings.is_breakable => {
+        Token::Continue if settings.allow_loop && settings.is_breakable => {
             let pos = eat_token(input, Token::Continue);
             Ok(Stmt::BreakLoop(AST_OPTION_NONE, pos))
         }
-        Token::Break if settings.is_breakable => {
+        Token::Break if settings.allow_loop && settings.is_breakable => {
             let pos = eat_token(input, Token::Break);
             Ok(Stmt::BreakLoop(AST_OPTION_BREAK_OUT, pos))
         }
-        Token::Continue | Token::Break => Err(PERR::LoopBreak.into_err(token_pos)),
+        Token::Continue | Token::Break if settings.allow_loop => {
+            Err(PERR::LoopBreak.into_err(token_pos))
+        }
 
         Token::Return | Token::Throw => {
             let (return_type, token_pos) = input
@@ -3242,6 +3250,7 @@ impl Engine {
             allow_stmt_expr: false,
             #[cfg(not(feature = "no_function"))]
             allow_anonymous_fn: false,
+            allow_loop: false,
             is_global: true,
             #[cfg(not(feature = "no_function"))]
             is_function_scope: false,
@@ -3299,6 +3308,7 @@ impl Engine {
                 allow_stmt_expr: self.options.allow_stmt_expr,
                 #[cfg(not(feature = "no_function"))]
                 allow_anonymous_fn: self.options.allow_anonymous_fn,
+                allow_loop: self.options.allow_loop,
                 is_global: true,
                 #[cfg(not(feature = "no_function"))]
                 is_function_scope: false,

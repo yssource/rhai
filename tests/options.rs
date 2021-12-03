@@ -22,5 +22,11 @@ fn test_options() -> Result<(), Box<EvalAltResult>> {
 
     assert!(engine.compile("let x = || 42;").is_err());
 
+    engine.compile("while x > y { foo(z); }")?;
+
+    engine.set_allow_looping(false);
+
+    assert!(engine.compile("while x > y { foo(z); }").is_err());
+
     Ok(())
 }

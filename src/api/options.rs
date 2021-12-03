@@ -16,6 +16,8 @@ pub struct LanguageOptions {
     /// Is anonymous function allowed?
     #[cfg(not(feature = "no_function"))]
     pub allow_anonymous_fn: bool,
+    /// Is looping allowed?
+    pub allow_loop: bool,
 }
 
 impl LanguageOptions {
@@ -26,7 +28,9 @@ impl LanguageOptions {
             allow_if_expr: true,
             allow_switch_expr: true,
             allow_stmt_expr: true,
+            #[cfg(not(feature = "no_function"))]
             allow_anonymous_fn: true,
+            allow_loop: true,
         }
     }
 }
@@ -83,5 +87,15 @@ impl Engine {
     #[inline(always)]
     pub fn set_allow_anonymous_fn(&mut self, enable: bool) {
         self.options.allow_anonymous_fn = enable;
+    }
+    /// Is looping allowed?
+    #[inline(always)]
+    pub fn allow_looping(&self) -> bool {
+        self.options.allow_loop
+    }
+    /// Set whether looping is allowed.
+    #[inline(always)]
+    pub fn set_allow_looping(&mut self, enable: bool) {
+        self.options.allow_loop = enable;
     }
 }

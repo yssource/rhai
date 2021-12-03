@@ -17,7 +17,7 @@ Bug fixes
 New features
 ------------
 
-* New options for `Engine` which allows disabling `if`-expressions, `switch`-expressions, statement expressions and/or anonymous functions.
+* New options for `Engine` which allows disabling `if`-expressions, `switch`-expressions, statement expressions, anonymous functions and/or looping (i.e. `while`, `loop`, `do` and `for` statements).
 
 Enhancements
 ------------
