@@ -16,11 +16,14 @@ fn test_options() -> Result<(), Box<EvalAltResult>> {
 
     assert!(engine.compile("let x = { let z = 0; z + 1 };").is_err());
 
-    engine.compile("let x = || 42;")?;
+    #[cfg(not(feature = "no_function"))]
+    {
+        engine.compile("let x = || 42;")?;
 
-    engine.set_allow_anonymous_fn(false);
+        engine.set_allow_anonymous_fn(false);
 
-    assert!(engine.compile("let x = || 42;").is_err());
+        assert!(engine.compile("let x = || 42;").is_err());
+    }
 
     engine.compile("while x > y { foo(z); }")?;
 
