@@ -973,6 +973,9 @@ pub struct Engine {
     #[cfg(not(feature = "no_optimize"))]
     pub(crate) optimization_level: crate::OptimizationLevel,
 
+    /// Language options.
+    pub(crate) options: crate::api::options::LanguageOptions,
+
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
     pub(crate) limits: crate::api::limits::Limits,
@@ -1095,6 +1098,8 @@ impl Engine {
 
             #[cfg(not(feature = "no_optimize"))]
             optimization_level: crate::OptimizationLevel::default(),
+
+            options: crate::api::options::LanguageOptions::new(),
 
             #[cfg(not(feature = "unchecked"))]
             limits: crate::api::limits::Limits::new(),

@@ -7,8 +7,7 @@ use std::prelude::v1::*;
 
 use std::num::{NonZeroU64, NonZeroUsize};
 
-/// _(internals)_ A type containing all the limits imposed by the [`Engine`].
-/// Exported under the `internals` feature only.
+/// A type containing all the limits imposed by the [`Engine`].
 ///
 /// Not available under `unchecked`.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]

@@ -215,10 +215,6 @@ pub use ast::FloatWrapper;
 pub use engine::{EvalState, FnResolutionCache, FnResolutionCacheEntry, Imports};
 
 #[cfg(feature = "internals")]
-#[cfg(not(feature = "unchecked"))]
-pub use api::limits::Limits;
-
-#[cfg(feature = "internals")]
 pub use module::NamespaceRef;
 
 /// Alias to [`smallvec::SmallVec<[T; 3]>`](https://crates.io/crates/smallvec), which is a

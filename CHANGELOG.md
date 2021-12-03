@@ -14,6 +14,11 @@ Bug fixes
 
 * BLOB's no longer panic when accessed with an out-of-bounds index.
 
+New features
+------------
+
+* New options for `Engine` which allows disabling `if`-expressions, `switch`-expressions, statement expressions and/or anonymous functions.
+
 Enhancements
 ------------
 

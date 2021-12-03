@@ -1,5 +1,6 @@
 //! Main module defining the lexer and parser.
 
+use crate::api::options::LanguageOptions;
 use crate::ast::{
     BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ScriptFnDef, Stmt,
     StmtBlock, AST_OPTION_FLAGS::*,
@@ -227,12 +228,14 @@ struct ParseSettings {
     is_function_scope: bool,
     /// Is the current position inside a loop?
     is_breakable: bool,
+    /// Default language options.
+    default_options: LanguageOptions,
     /// Is anonymous function allowed?
     #[cfg(not(feature = "no_function"))]
     allow_anonymous_fn: bool,
-    /// Is if-expression allowed?
+    /// Is `if`-expression allowed?
     allow_if_expr: bool,
-    /// Is switch expression allowed?
+    /// Is `switch` expression allowed?
     allow_switch_expr: bool,
     /// Is statement-expression allowed?
     allow_stmt_expr: bool,
@@ -1167,15 +1170,15 @@ fn parse_primary(
             }
 
             let settings = ParseSettings {
-                allow_if_expr: true,
-                allow_switch_expr: true,
-                allow_stmt_expr: true,
-                allow_anonymous_fn: true,
+                allow_if_expr: settings.default_options.allow_if_expr,
+                allow_switch_expr: settings.default_options.allow_switch_expr,
+                allow_stmt_expr: settings.default_options.allow_stmt_expr,
+                allow_anonymous_fn: settings.default_options.allow_anonymous_fn,
                 is_global: false,
                 is_function_scope: true,
                 is_breakable: false,
                 level: 0,
-                pos: settings.pos,
+                ..settings
             };
 
             let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
@@ -2795,15 +2798,16 @@ fn parse_stmt(
                     }
 
                     let settings = ParseSettings {
-                        allow_if_expr: true,
-                        allow_switch_expr: true,
-                        allow_stmt_expr: true,
-                        allow_anonymous_fn: true,
+                        allow_if_expr: settings.default_options.allow_if_expr,
+                        allow_switch_expr: settings.default_options.allow_switch_expr,
+                        allow_stmt_expr: settings.default_options.allow_stmt_expr,
+                        allow_anonymous_fn: settings.default_options.allow_anonymous_fn,
                         is_global: false,
                         is_function_scope: true,
                         is_breakable: false,
                         level: 0,
                         pos,
+                        ..settings
                     };
 
                     let func = parse_fn(
@@ -3232,6 +3236,7 @@ impl Engine {
         let mut functions = BTreeMap::new();
 
         let settings = ParseSettings {
+            default_options: self.options,
             allow_if_expr: false,
             allow_switch_expr: false,
             allow_stmt_expr: false,
@@ -3288,11 +3293,12 @@ impl Engine {
 
         while !input.peek().expect(NEVER_ENDS).0.is_eof() {
             let settings = ParseSettings {
-                allow_if_expr: true,
-                allow_switch_expr: true,
-                allow_stmt_expr: true,
+                default_options: self.options,
+                allow_if_expr: self.options.allow_if_expr,
+                allow_switch_expr: self.options.allow_switch_expr,
+                allow_stmt_expr: self.options.allow_stmt_expr,
                 #[cfg(not(feature = "no_function"))]
-                allow_anonymous_fn: true,
+                allow_anonymous_fn: self.options.allow_anonymous_fn,
                 is_global: true,
                 #[cfg(not(feature = "no_function"))]
                 is_function_scope: false,

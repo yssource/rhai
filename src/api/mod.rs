@@ -12,6 +12,8 @@ pub mod register;
 
 pub mod call_fn;
 
+pub mod options;
+
 pub mod limits;
 
 pub mod events;
