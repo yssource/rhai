@@ -17,7 +17,13 @@ Bug fixes
 New features
 ------------
 
-* New options for `Engine` which allows disabling `if`-expressions, `switch`-expressions, statement expressions, anonymous functions and/or looping (i.e. `while`, `loop`, `do` and `for` statements).
+* New options for `Engine` which allows disabling `if`-expressions, `switch`-expressions, statement expressions, anonymous functions and/or looping (i.e. `while`, `loop`, `do` and `for` statements):
+  * `Engine::set_allow_if_expression`
+  * `Engine::set_allow_switch_expression`
+  * `Engine::set_allow_statement_expression`
+  * `Engine::set_allow_anonymous_fn`
+  * `Engine::set_allow_looping`
+* New _strict variables_ mode for `Engine` (enabled via `Engine::set_strict_variables`) to throw parse errors on undefined variable usage. Two new parse error variants, `ParseErrorType::VariableNotFound` and `ParseErrorType::ModuleNotFound`, are added.
 
 Enhancements
 ------------

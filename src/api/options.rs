@@ -18,6 +18,8 @@ pub struct LanguageOptions {
     pub allow_anonymous_fn: bool,
     /// Is looping allowed?
     pub allow_loop: bool,
+    /// Strict variables mode?
+    pub strict_var: bool,
 }
 
 impl LanguageOptions {
@@ -31,6 +33,7 @@ impl LanguageOptions {
             #[cfg(not(feature = "no_function"))]
             allow_anonymous_fn: true,
             allow_loop: true,
+            strict_var: false,
         }
     }
 }
@@ -97,5 +100,15 @@ impl Engine {
     #[inline(always)]
     pub fn set_allow_looping(&mut self, enable: bool) {
         self.options.allow_loop = enable;
+    }
+    /// Is strict variables mode enabled?
+    #[inline(always)]
+    pub fn strict_variables(&self) -> bool {
+        self.options.strict_var
+    }
+    /// Set whether strict variables mode is enabled.
+    #[inline(always)]
+    pub fn set_strict_variables(&mut self, enable: bool) {
+        self.options.strict_var = enable;
     }
 }
