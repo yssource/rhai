@@ -501,7 +501,12 @@ fn parse_fn_call(
                 {
                     let index = state.find_module(&modules[0].name);
 
-                    if !settings.is_function_scope && settings.strict_var && index.is_none() {
+                    #[cfg(not(feature = "no_function"))]
+                    let relax = settings.is_function_scope;
+                    #[cfg(feature = "no_function")]
+                    let relax = false;
+
+                    if !relax && settings.strict_var && index.is_none() {
                         return Err(ParseErrorType::ModuleUndefined(modules[0].name.to_string())
                             .into_err(modules[0].pos));
                     }
@@ -555,7 +560,12 @@ fn parse_fn_call(
                     {
                         let index = state.find_module(&modules[0].name);
 
-                        if !settings.is_function_scope && settings.strict_var && index.is_none() {
+                        #[cfg(not(feature = "no_function"))]
+                        let relax = settings.is_function_scope;
+                        #[cfg(feature = "no_function")]
+                        let relax = false;
+
+                        if !relax && settings.strict_var && index.is_none() {
                             return Err(ParseErrorType::ModuleUndefined(
                                 modules[0].name.to_string(),
                             )
@@ -1515,7 +1525,12 @@ fn parse_primary(
         {
             let index = state.find_module(&namespace[0].name);
 
-            if !settings.is_function_scope && settings.strict_var && index.is_none() {
+            #[cfg(not(feature = "no_function"))]
+            let relax = settings.is_function_scope;
+            #[cfg(feature = "no_function")]
+            let relax = false;
+
+            if !relax && settings.strict_var && index.is_none() {
                 return Err(
                     ParseErrorType::ModuleUndefined(namespace[0].name.to_string())
                         .into_err(namespace[0].pos),
@@ -2857,6 +2872,7 @@ fn parse_stmt(
                         strict_var: settings.strict_var,
                         is_global: false,
                         is_function_scope: true,
+                        #[cfg(not(feature = "no_closure"))]
                         is_closure: false,
                         is_breakable: false,
                         level: 0,
