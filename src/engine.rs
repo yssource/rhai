@@ -30,7 +30,7 @@ use std::{
 };
 
 #[cfg(not(feature = "no_index"))]
-use crate::Array;
+use crate::{Array, Blob};
 
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
@@ -42,10 +42,6 @@ pub type Precedence = NonZeroU8;
 
 /// _(internals)_ A stack of imported [modules][Module] plus mutable runtime global states.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 //
 // # Implementation Notes
 //
@@ -69,7 +65,9 @@ pub struct Imports {
     pub num_operations: u64,
     /// Number of modules loaded.
     pub num_modules: usize,
-    /// Function call hashes to FN_IDX_GET and FN_IDX_SET.
+    /// Function call hashes to index getters and setters.
+    ///
+    /// Not available under `no_index` and `no_object`.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn_hash_indexing: (u64, u64),
     /// Embedded module resolver.
@@ -78,19 +76,28 @@ pub struct Imports {
     #[cfg(not(feature = "no_module"))]
     pub embedded_module_resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
     /// Cache of globally-defined constants.
+    ///
+    /// Not available under `no_module` and `no_function`.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     global_constants: Option<Shared<crate::Locked<BTreeMap<Identifier, Dynamic>>>>,
+}
+
+impl Default for Imports {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Imports {
     /// Create a new stack of imported [modules][Module].
     #[inline(always)]
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
-            keys: StaticVec::new(),
-            modules: StaticVec::new(),
+            keys: StaticVec::new_const(),
+            modules: StaticVec::new_const(),
             source: None,
             num_operations: 0,
             num_modules: 0,
@@ -131,12 +138,17 @@ impl Imports {
     /// Get the index of an imported [module][Module] by name.
     #[inline]
     #[must_use]
-    pub fn find(&self, name: &str) -> Option<usize> {
-        self.keys
-            .iter()
-            .enumerate()
-            .rev()
-            .find_map(|(i, key)| if key == name { Some(i) } else { None })
+    pub fn find(&self, name: impl AsRef<str>) -> Option<usize> {
+        let name = name.as_ref();
+        let len = self.keys.len();
+
+        self.keys.iter().rev().enumerate().find_map(|(i, key)| {
+            if key == name {
+                Some(len - 1 - i)
+            } else {
+                None
+            }
+        })
     }
     /// Push an imported [module][Module] onto the stack.
     #[inline(always)]
@@ -156,8 +168,8 @@ impl Imports {
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.keys
             .iter()
-            .zip(self.modules.iter())
             .rev()
+            .zip(self.modules.iter().rev())
             .map(|(name, module)| (name.as_str(), module.as_ref()))
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
@@ -222,7 +234,7 @@ impl Imports {
     /// Set a constant into the cache of globally-defined constants.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
-    pub(crate) fn set_global_constant(&mut self, name: &str, value: Dynamic) {
+    pub(crate) fn set_global_constant(&mut self, name: impl Into<Identifier>, value: Dynamic) {
         if self.global_constants.is_none() {
             let dict: crate::Locked<_> = BTreeMap::new().into();
             self.global_constants = Some(dict.into());
@@ -482,6 +494,10 @@ pub enum Target<'a> {
     /// This is necessary because directly pointing to a bit inside an [`INT`][crate::INT] is impossible.
     #[cfg(not(feature = "no_index"))]
     BitField(&'a mut Dynamic, usize, Dynamic),
+    /// The target is a byte inside a Blob.
+    /// This is necessary because directly pointing to a byte (in [`Dynamic`] form) inside a blob is impossible.
+    #[cfg(not(feature = "no_index"))]
+    BlobByte(&'a mut Dynamic, usize, Dynamic),
     /// The target is a character inside a String.
     /// This is necessary because directly pointing to a char inside a String is impossible.
     #[cfg(not(feature = "no_index"))]
@@ -500,9 +516,7 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => true,
             Self::TempValue(_) => false,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, _) => false,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, _) => false,
+            Self::BitField(_, _, _) | Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a temp value?
@@ -515,9 +529,7 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => false,
             Self::TempValue(_) => true,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, _) => false,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, _) => false,
+            Self::BitField(_, _, _) | Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a shared value?
@@ -531,9 +543,7 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => true,
             Self::TempValue(r) => r.is_shared(),
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, _) => false,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, _) => false,
+            Self::BitField(_, _, _) | Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a specific type?
@@ -549,6 +559,8 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, _) => TypeId::of::<T>() == TypeId::of::<bool>(),
             #[cfg(not(feature = "no_index"))]
+            Self::BlobByte(_, _, _) => TypeId::of::<T>() == TypeId::of::<Blob>(),
+            #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => TypeId::of::<T>() == TypeId::of::<char>(),
         }
     }
@@ -563,6 +575,8 @@ impl<'a> Target<'a> {
             Self::TempValue(v) => v,      // Owned value is simply taken
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, value) => value, // Boolean is taken
+            #[cfg(not(feature = "no_index"))]
+            Self::BlobByte(_, _, value) => value, // Byte is taken
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => ch, // Character is taken
         }
@@ -614,6 +628,27 @@ impl<'a> Target<'a> {
                     }
                 } else {
                     unreachable!("bit-field index out of bounds: {}", index);
+                }
+            }
+            #[cfg(not(feature = "no_index"))]
+            Self::BlobByte(value, index, new_val) => {
+                // Replace the byte at the specified index position
+                let new_byte = new_val.as_int().map_err(|err| {
+                    Box::new(EvalAltResult::ErrorMismatchDataType(
+                        "INT".to_string(),
+                        err.to_string(),
+                        Position::NONE,
+                    ))
+                })?;
+
+                let value = &mut *value.write_lock::<Blob>().expect("`Blob`");
+
+                let index = *index;
+
+                if index < value.len() {
+                    value[index] = (new_byte & 0x000f) as u8;
+                } else {
+                    unreachable!("blob index out of bounds: {}", index);
                 }
             }
             #[cfg(not(feature = "no_index"))]
@@ -670,9 +705,9 @@ impl Deref for Target<'_> {
             Self::LockGuard((r, _)) => &**r,
             Self::TempValue(ref r) => r,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, ref r) => r,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, ref r) => r,
+            Self::BitField(_, _, ref r)
+            | Self::BlobByte(_, _, ref r)
+            | Self::StringChar(_, _, ref r) => r,
         }
     }
 }
@@ -693,9 +728,9 @@ impl DerefMut for Target<'_> {
             Self::LockGuard((r, _)) => r.deref_mut(),
             Self::TempValue(ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, ref mut r) => r,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, ref mut r) => r,
+            Self::BitField(_, _, ref mut r)
+            | Self::BlobByte(_, _, ref mut r)
+            | Self::StringChar(_, _, ref mut r) => r,
         }
     }
 }
@@ -717,10 +752,6 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 
 /// _(internals)_ An entry in a function resolution cache.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone)]
 pub struct FnResolutionCacheEntry {
     /// Function.
@@ -731,18 +762,10 @@ pub struct FnResolutionCacheEntry {
 
 /// _(internals)_ A function resolution cache.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
 
 /// _(internals)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone)]
 pub struct EvalState {
     /// Normally, access to variables are parsed with a relative offset into the [`Scope`] to avoid a lookup.
@@ -761,11 +784,11 @@ impl EvalState {
     /// Create a new [`EvalState`].
     #[inline(always)]
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             always_search_scope: false,
             scope_level: 0,
-            fn_resolution_caches: StaticVec::new(),
+            fn_resolution_caches: StaticVec::new_const(),
         }
     }
     /// Is the state currently at global (root) level?
@@ -773,6 +796,12 @@ impl EvalState {
     #[must_use]
     pub const fn is_global(&self) -> bool {
         self.scope_level == 0
+    }
+    /// Get the number of function resolution cache(s) in the stack.
+    #[inline(always)]
+    #[must_use]
+    pub fn fn_resolution_caches_len(&self) -> usize {
+        self.fn_resolution_caches.len()
     }
     /// Get a mutable reference to the current function resolution cache.
     #[inline]
@@ -790,81 +819,10 @@ impl EvalState {
     pub fn push_fn_resolution_cache(&mut self) {
         self.fn_resolution_caches.push(BTreeMap::new());
     }
-    /// Remove the current function resolution cache from the stack and make the last one current.
-    ///
-    /// # Panics
-    ///
-    /// Panics if there is no more function resolution cache in the stack.
+    /// Rewind the function resolution caches stack to a particular size.
     #[inline(always)]
-    pub fn pop_fn_resolution_cache(&mut self) {
-        self.fn_resolution_caches.pop().expect("not empty");
-    }
-}
-
-/// _(internals)_ A type containing all the limits imposed by the [`Engine`].
-/// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
-#[cfg(not(feature = "unchecked"))]
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Limits {
-    /// Maximum levels of call-stack to prevent infinite recursion.
-    ///
-    /// Set to zero to effectively disable function calls.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
-    pub max_call_stack_depth: usize,
-    /// Maximum depth of statements/expressions at global level.
-    pub max_expr_depth: Option<NonZeroUsize>,
-    /// Maximum depth of statements/expressions in functions.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
-    pub max_function_expr_depth: Option<NonZeroUsize>,
-    /// Maximum number of operations allowed to run.
-    pub max_operations: Option<std::num::NonZeroU64>,
-    /// Maximum number of [modules][Module] allowed to load.
-    ///
-    /// Set to zero to effectively disable loading any [module][Module].
-    ///
-    /// Not available under `no_module`.
-    #[cfg(not(feature = "no_module"))]
-    pub max_modules: usize,
-    /// Maximum length of a [string][ImmutableString].
-    pub max_string_size: Option<NonZeroUsize>,
-    /// Maximum length of an [array][Array].
-    ///
-    /// Not available under `no_index`.
-    #[cfg(not(feature = "no_index"))]
-    pub max_array_size: Option<NonZeroUsize>,
-    /// Maximum number of properties in an [object map][Map].
-    ///
-    /// Not available under `no_object`.
-    #[cfg(not(feature = "no_object"))]
-    pub max_map_size: Option<NonZeroUsize>,
-}
-
-#[cfg(not(feature = "unchecked"))]
-impl Limits {
-    pub const fn new() -> Self {
-        Self {
-            #[cfg(not(feature = "no_function"))]
-            max_call_stack_depth: MAX_CALL_STACK_DEPTH,
-            max_expr_depth: NonZeroUsize::new(MAX_EXPR_DEPTH),
-            #[cfg(not(feature = "no_function"))]
-            max_function_expr_depth: NonZeroUsize::new(MAX_FUNCTION_EXPR_DEPTH),
-            max_operations: None,
-            #[cfg(not(feature = "no_module"))]
-            max_modules: usize::MAX,
-            max_string_size: None,
-            #[cfg(not(feature = "no_index"))]
-            max_array_size: None,
-            #[cfg(not(feature = "no_object"))]
-            max_map_size: None,
-        }
+    pub fn rewind_fn_resolution_caches(&mut self, len: usize) {
+        self.fn_resolution_caches.truncate(len);
     }
 }
 
@@ -1011,13 +969,16 @@ pub struct Engine {
     #[cfg(not(feature = "unchecked"))]
     pub(crate) progress: Option<crate::func::native::OnProgressCallback>,
 
-    /// Optimize the AST after compilation.
+    /// Optimize the [`AST`][crate::AST] after compilation.
     #[cfg(not(feature = "no_optimize"))]
     pub(crate) optimization_level: crate::OptimizationLevel,
 
+    /// Language options.
+    pub(crate) options: crate::api::options::LanguageOptions,
+
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
-    pub(crate) limits: Limits,
+    pub(crate) limits: crate::api::limits::Limits,
 }
 
 impl fmt::Debug for Engine {
@@ -1038,24 +999,24 @@ impl Default for Engine {
 #[cfg(not(feature = "no_object"))]
 #[inline]
 #[must_use]
-pub fn make_getter(id: &str) -> String {
-    format!("{}{}", FN_GET, id)
+pub fn make_getter(id: impl AsRef<str>) -> String {
+    format!("{}{}", FN_GET, id.as_ref())
 }
 
 /// Make setter function
 #[cfg(not(feature = "no_object"))]
 #[inline]
 #[must_use]
-pub fn make_setter(id: &str) -> String {
-    format!("{}{}", FN_SET, id)
+pub fn make_setter(id: impl AsRef<str>) -> String {
+    format!("{}{}", FN_SET, id.as_ref())
 }
 
 /// Is this function an anonymous function?
 #[cfg(not(feature = "no_function"))]
 #[inline(always)]
 #[must_use]
-pub fn is_anonymous_fn(fn_name: &str) -> bool {
-    fn_name.starts_with(FN_ANONYMOUS)
+pub fn is_anonymous_fn(fn_name: impl AsRef<str>) -> bool {
+    fn_name.as_ref().starts_with(FN_ANONYMOUS)
 }
 
 /// Print to `stdout`
@@ -1114,7 +1075,7 @@ impl Engine {
     #[must_use]
     pub fn new_raw() -> Self {
         let mut engine = Self {
-            global_modules: StaticVec::new(),
+            global_modules: StaticVec::new_const(),
             global_sub_modules: BTreeMap::new(),
 
             #[cfg(not(feature = "no_module"))]
@@ -1136,10 +1097,12 @@ impl Engine {
             progress: None,
 
             #[cfg(not(feature = "no_optimize"))]
-            optimization_level: Default::default(),
+            optimization_level: crate::OptimizationLevel::default(),
+
+            options: crate::api::options::LanguageOptions::new(),
 
             #[cfg(not(feature = "unchecked"))]
-            limits: Limits::new(),
+            limits: crate::api::limits::Limits::new(),
         };
 
         // Add the global namespace module
@@ -1822,7 +1785,7 @@ impl Engine {
             _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
         };
 
-        let idx_values = &mut StaticVec::new();
+        let idx_values = &mut StaticVec::new_const();
 
         self.eval_dot_index_chain_arguments(
             scope, mods, state, lib, this_ptr, rhs, term, chain_type, idx_values, 0, level,
@@ -2057,6 +2020,50 @@ impl Engine {
                 arr.get_mut(arr_idx)
                     .map(Target::from)
                     .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into())
+            }
+
+            #[cfg(not(feature = "no_index"))]
+            Dynamic(Union::Blob(arr, _, _)) => {
+                // val_blob[idx]
+                let index = idx
+                    .as_int()
+                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, idx_pos))?;
+
+                let arr_len = arr.len();
+
+                #[cfg(not(feature = "unchecked"))]
+                let arr_idx = if index < 0 {
+                    // Count from end if negative
+                    arr_len
+                        - index
+                            .checked_abs()
+                            .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos))
+                            .and_then(|n| {
+                                if n as usize > arr_len {
+                                    Err(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos)
+                                        .into())
+                                } else {
+                                    Ok(n as usize)
+                                }
+                            })?
+                } else {
+                    index as usize
+                };
+                #[cfg(feature = "unchecked")]
+                let arr_idx = if index < 0 {
+                    // Count from end if negative
+                    arr_len - index.abs() as usize
+                } else {
+                    index as usize
+                };
+
+                let value = arr
+                    .get(arr_idx)
+                    .map(|&v| (v as INT).into())
+                    .ok_or_else(|| {
+                        Box::new(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos))
+                    })?;
+                Ok(Target::BlobByte(target, arr_idx, value))
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -2382,7 +2389,7 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         statements: &[Stmt],
-        restore_prev_state: bool,
+        restore_orig_state: bool,
         rewind_scope: bool,
         level: usize,
     ) -> RhaiResult {
@@ -2390,10 +2397,10 @@ impl Engine {
             return Ok(Dynamic::UNIT);
         }
 
-        let mut _extra_fn_resolution_cache = false;
-        let prev_always_search_scope = state.always_search_scope;
-        let prev_scope_len = scope.len();
-        let prev_mods_len = mods.len();
+        let orig_always_search_scope = state.always_search_scope;
+        let orig_scope_len = scope.len();
+        let orig_mods_len = mods.len();
+        let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
 
         if rewind_scope {
             state.scope_level += 1;
@@ -2413,15 +2420,14 @@ impl Engine {
                     .skip(_mods_len)
                     .any(|(_, m)| m.contains_indexed_global_functions())
                 {
-                    if _extra_fn_resolution_cache {
+                    if state.fn_resolution_caches_len() > orig_fn_resolution_caches_len {
                         // When new module is imported with global functions and there is already
                         // a new cache, clear it - notice that this is expensive as all function
                         // resolutions must start again
                         state.fn_resolution_cache_mut().clear();
-                    } else if restore_prev_state {
+                    } else if restore_orig_state {
                         // When new module is imported with global functions, push a new cache
                         state.push_fn_resolution_cache();
-                        _extra_fn_resolution_cache = true;
                     } else {
                         // When the block is to be evaluated in-place, just clear the current cache
                         state.fn_resolution_cache_mut().clear();
@@ -2432,21 +2438,19 @@ impl Engine {
             Ok(r)
         });
 
-        if _extra_fn_resolution_cache {
-            // If imports list is modified, pop the functions lookup cache
-            state.pop_fn_resolution_cache();
-        }
+        // If imports list is modified, pop the functions lookup cache
+        state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
 
         if rewind_scope {
-            scope.rewind(prev_scope_len);
+            scope.rewind(orig_scope_len);
             state.scope_level -= 1;
         }
-        if restore_prev_state {
-            mods.truncate(prev_mods_len);
+        if restore_orig_state {
+            mods.truncate(orig_mods_len);
 
             // The impact of new local variables goes away at the end of a block
             // because any new variables introduced will go out of scope
-            state.always_search_scope = prev_always_search_scope;
+            state.always_search_scope = orig_always_search_scope;
         }
 
         result
@@ -3044,7 +3048,7 @@ impl Engine {
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(not(feature = "no_module"))]
                     if entry_type == AccessMode::ReadOnly && lib.iter().any(|&m| !m.is_empty()) {
-                        mods.set_global_constant(name, value.clone());
+                        mods.set_global_constant(name.clone(), value.clone());
                     }
 
                     (
@@ -3203,6 +3207,7 @@ impl Engine {
                                 let (a, m, s) = calc_size(value);
                                 (arrays + a + 1, maps + m, strings + s)
                             }
+                            Union::Blob(ref a, _, _) => (arrays + 1 + a.len(), maps, strings),
                             #[cfg(not(feature = "no_object"))]
                             Union::Map(_, _, _) => {
                                 let (a, m, s) = calc_size(value);
@@ -3212,6 +3217,8 @@ impl Engine {
                             _ => (arrays + 1, maps, strings),
                         })
                 }
+                #[cfg(not(feature = "no_index"))]
+                Union::Blob(ref arr, _, _) => (arr.len(), 0, 0),
                 #[cfg(not(feature = "no_object"))]
                 Union::Map(ref map, _, _) => {
                     map.values()
@@ -3221,6 +3228,8 @@ impl Engine {
                                 let (a, m, s) = calc_size(value);
                                 (arrays + a, maps + m + 1, strings + s)
                             }
+                            #[cfg(not(feature = "no_index"))]
+                            Union::Blob(ref a, _, _) => (arrays + a.len(), maps, strings),
                             Union::Map(_, _, _) => {
                                 let (a, m, s) = calc_size(value);
                                 (arrays + a, maps + m + 1, strings + s)

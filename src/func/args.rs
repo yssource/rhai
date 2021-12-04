@@ -1,6 +1,5 @@
 //! Helper module which defines [`FuncArgs`] to make function calling easier.
 
-#![cfg(not(feature = "no_function"))]
 #![allow(non_snake_case)]
 
 use crate::types::dynamic::Variant;
@@ -35,6 +34,8 @@ pub trait FuncArgs {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// # #[cfg(not(feature = "no_function"))]
+    /// # {
     /// let options = Options { foo: false, bar: "world".to_string(), baz: 42 };
     ///
     /// let engine = Engine::new();
@@ -50,6 +51,7 @@ pub trait FuncArgs {
     /// let result: String = engine.call_fn(&mut scope, &ast, "hello", options)?;
     ///
     /// assert_eq!(result, "world42");
+    /// # }
     /// # Ok(())
     /// # }
     /// ```

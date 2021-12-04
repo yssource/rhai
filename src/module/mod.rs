@@ -107,12 +107,12 @@ impl FuncInfo {
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline]
-fn calc_native_fn_hash<'a>(
-    modules: impl Iterator<Item = &'a str>,
-    fn_name: &str,
+fn calc_native_fn_hash(
+    modules: impl Iterator<Item = impl AsRef<str>>,
+    fn_name: impl AsRef<str>,
     params: &[TypeId],
 ) -> u64 {
-    let hash_script = calc_qualified_fn_hash(modules, fn_name, params.len());
+    let hash_script = calc_qualified_fn_hash(modules, fn_name.as_ref(), params.len());
     let hash_params = calc_fn_params_hash(params.iter().cloned());
     combine_hashes(hash_script, hash_params)
 }
@@ -187,13 +187,6 @@ impl fmt::Debug for Module {
             );
         }
         d.finish()
-    }
-}
-
-impl AsRef<Module> for Module {
-    #[inline(always)]
-    fn as_ref(&self) -> &Module {
-        self
     }
 }
 
@@ -324,7 +317,9 @@ impl Module {
     #[inline]
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.functions.is_empty()
+        self.indexed
+            && !self.contains_indexed_global_functions
+            && self.functions.is_empty()
             && self.all_functions.is_empty()
             && self.variables.is_empty()
             && self.all_variables.is_empty()
@@ -480,7 +475,7 @@ impl Module {
                 namespace: FnNamespace::Internal,
                 access: fn_def.access,
                 params: num_params,
-                param_types: StaticVec::new(),
+                param_types: StaticVec::new_const(),
                 #[cfg(feature = "metadata")]
                 param_names,
                 func: Into::<CallableFunction>::into(fn_def).into(),
@@ -499,13 +494,19 @@ impl Module {
     #[must_use]
     pub fn get_script_fn(
         &self,
-        name: &str,
+        name: impl AsRef<str>,
         num_params: usize,
     ) -> Option<&Shared<crate::ast::ScriptFnDef>> {
-        self.functions
-            .values()
-            .find(|f| f.params == num_params && f.name == name)
-            .and_then(|f| f.func.get_script_fn_def())
+        if self.functions.is_empty() {
+            None
+        } else {
+            let name = name.as_ref();
+
+            self.functions
+                .values()
+                .find(|f| f.params == num_params && f.name == name)
+                .and_then(|f| f.func.get_script_fn_def())
+        }
     }
 
     /// Get a mutable reference to the underlying [`BTreeMap`] of sub-modules.
@@ -621,10 +622,10 @@ impl Module {
     /// In other words, the number of entries should be one larger than the number of parameters.
     #[cfg(feature = "metadata")]
     #[inline]
-    pub fn update_fn_metadata(&mut self, hash_fn: u64, arg_names: &[&str]) -> &mut Self {
+    pub fn update_fn_metadata(&mut self, hash_fn: u64, arg_names: &[impl AsRef<str>]) -> &mut Self {
         let param_names = arg_names
             .iter()
-            .map(|&name| self.identifiers.get(name))
+            .map(|name| self.identifiers.get(name.as_ref()))
             .collect();
 
         if let Some(f) = self.functions.get_mut(&hash_fn) {
@@ -679,10 +680,11 @@ impl Module {
         name: impl AsRef<str> + Into<Identifier>,
         namespace: FnNamespace,
         access: FnAccess,
-        _arg_names: Option<&[&str]>,
+        arg_names: Option<&[&str]>,
         arg_types: &[TypeId],
         func: CallableFunction,
     ) -> u64 {
+        let _arg_names = arg_names;
         let is_method = func.is_method();
 
         let mut param_types: StaticVec<_> = arg_types
@@ -696,13 +698,13 @@ impl Module {
         #[cfg(feature = "metadata")]
         let mut param_names: StaticVec<_> = _arg_names
             .iter()
-            .flat_map(|p| p.iter())
+            .flat_map(|&p| p.iter())
             .map(|&arg| self.identifiers.get(arg))
             .collect();
         #[cfg(feature = "metadata")]
         param_names.shrink_to_fit();
 
-        let hash_fn = calc_native_fn_hash(empty(), name.as_ref(), &param_types);
+        let hash_fn = calc_native_fn_hash(empty::<&str>(), name.as_ref(), &param_types);
 
         self.functions.insert(
             hash_fn,
@@ -739,7 +741,7 @@ impl Module {
     ///
     /// This function is very low level.
     ///
-    /// # Arguments
+    /// ## Arguments
     ///
     /// A list of [`TypeId`]'s is taken as the argument types.
     ///
@@ -878,7 +880,7 @@ impl Module {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn set_getter_fn<ARGS, A, T, F>(&mut self, name: &str, func: F) -> u64
+    pub fn set_getter_fn<ARGS, A, T, F>(&mut self, name: impl AsRef<str>, func: F) -> u64
     where
         A: Variant + Clone,
         T: Variant + Clone,
@@ -919,7 +921,7 @@ impl Module {
     /// ```
     #[cfg(not(feature = "no_object"))]
     #[inline(always)]
-    pub fn set_setter_fn<ARGS, A, B, F>(&mut self, name: &str, func: F) -> u64
+    pub fn set_setter_fn<ARGS, A, B, F>(&mut self, name: impl AsRef<str>, func: F) -> u64
     where
         A: Variant + Clone,
         B: Variant + Clone,
@@ -1150,6 +1152,7 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
+        self.identifiers += other.identifiers;
         self
     }
 
@@ -1169,6 +1172,7 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
+        self.identifiers += other.identifiers;
         self
     }
 
@@ -1197,6 +1201,7 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
+        self.identifiers.merge(&other.identifiers);
         self
     }
 
@@ -1246,6 +1251,7 @@ impl Module {
         self.all_type_iterators.clear();
         self.indexed = false;
         self.contains_indexed_global_functions = false;
+        self.identifiers.merge(&other.identifiers);
         self
     }
 
@@ -1454,26 +1460,28 @@ impl Module {
 
         // Non-private functions defined become module functions
         #[cfg(not(feature = "no_function"))]
-        ast.lib()
-            .functions
-            .values()
-            .filter(|f| match f.access {
-                FnAccess::Public => true,
-                FnAccess::Private => false,
-            })
-            .filter(|f| f.func.is_script())
-            .for_each(|f| {
-                // Encapsulate AST environment
-                let mut func = f
-                    .func
-                    .get_script_fn_def()
-                    .expect("scripted function")
-                    .as_ref()
-                    .clone();
-                func.lib = Some(ast.shared_lib());
-                func.mods = func_mods.clone();
-                module.set_script_fn(func);
-            });
+        if ast.has_functions() {
+            ast.shared_lib()
+                .functions
+                .values()
+                .filter(|f| match f.access {
+                    FnAccess::Public => true,
+                    FnAccess::Private => false,
+                })
+                .filter(|f| f.func.is_script())
+                .for_each(|f| {
+                    // Encapsulate AST environment
+                    let mut func = f
+                        .func
+                        .get_script_fn_def()
+                        .expect("scripted function")
+                        .as_ref()
+                        .clone();
+                    func.lib = Some(ast.shared_lib().clone());
+                    func.mods = func_mods.clone();
+                    module.set_script_fn(func);
+                });
+        }
 
         if let Some(s) = ast.source_raw() {
             module.set_id(s.clone());
@@ -1661,10 +1669,6 @@ impl Module {
 ///
 /// A [`StaticVec`] is used because most namespace-qualified access contains only one level,
 /// and it is wasteful to always allocate a [`Vec`] with one element.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Default, Hash)]
 pub struct NamespaceRef {
     index: Option<NonZeroUsize>,
@@ -1717,6 +1721,17 @@ impl DerefMut for NamespaceRef {
     }
 }
 
+impl From<Vec<Ident>> for NamespaceRef {
+    #[inline(always)]
+    fn from(mut path: Vec<Ident>) -> Self {
+        path.shrink_to_fit();
+        Self {
+            index: None,
+            path: path.into(),
+        }
+    }
+}
+
 impl From<StaticVec<Ident>> for NamespaceRef {
     #[inline(always)]
     fn from(mut path: StaticVec<Ident>) -> Self {
@@ -1729,10 +1744,10 @@ impl NamespaceRef {
     /// Create a new [`NamespaceRef`].
     #[inline(always)]
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             index: None,
-            path: StaticVec::new(),
+            path: StaticVec::new_const(),
         }
     }
     /// Get the [`Scope`][crate::Scope] index offset.

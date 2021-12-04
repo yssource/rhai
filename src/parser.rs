@@ -1,5 +1,6 @@
 //! Main module defining the lexer and parser.
 
+use crate::api::options::LanguageOptions;
 use crate::ast::{
     BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment, ScriptFnDef, Stmt,
     StmtBlock, AST_OPTION_FLAGS::*,
@@ -23,6 +24,7 @@ use std::{
     collections::BTreeMap,
     hash::{Hash, Hasher},
     num::{NonZeroU8, NonZeroUsize},
+    ops::AddAssign,
 };
 
 #[cfg(not(feature = "no_float"))]
@@ -51,34 +53,29 @@ const NEVER_ENDS: &str = "`TokenStream` never ends";
 /// collection of strings and returns shared instances, only creating a new string when it is not
 /// yet interned.
 #[derive(Debug, Clone, Hash)]
-pub struct IdentifierBuilder(
-    #[cfg(feature = "no_smartstring")] std::collections::BTreeSet<Identifier>,
-);
+pub struct IdentifierBuilder();
 
 impl IdentifierBuilder {
-    /// Create a new IdentifierBuilder.
+    /// Create a new [`IdentifierBuilder`].
     #[inline]
     #[must_use]
-    pub fn new() -> Self {
-        Self(
-            #[cfg(feature = "no_smartstring")]
-            std::collections::BTreeSet::new(),
-        )
+    pub const fn new() -> Self {
+        Self()
     }
     /// Get an identifier from a text string.
     #[inline]
     #[must_use]
     pub fn get(&mut self, text: impl AsRef<str> + Into<Identifier>) -> Identifier {
-        #[cfg(not(feature = "no_smartstring"))]
-        return text.into();
-
-        #[cfg(feature = "no_smartstring")]
-        return self.0.get(text.as_ref()).cloned().unwrap_or_else(|| {
-            let s: Identifier = text.into();
-            self.0.insert(s.clone());
-            s
-        });
+        text.into()
     }
+    /// Merge another [`IdentifierBuilder`] into this.
+    #[inline(always)]
+    pub fn merge(&mut self, _other: &Self) {}
+}
+
+impl AddAssign for IdentifierBuilder {
+    #[inline(always)]
+    fn add_assign(&mut self, _rhs: Self) {}
 }
 
 /// _(internals)_ A type that encapsulates the current state of the parser.
@@ -134,10 +131,10 @@ impl<'e> ParseState<'e> {
             #[cfg(not(feature = "no_closure"))]
             allow_capture: true,
             interned_strings: IdentifierBuilder::new(),
-            stack: StaticVec::new(),
+            stack: StaticVec::new_const(),
             entry_stack_len: 0,
             #[cfg(not(feature = "no_module"))]
-            modules: StaticVec::new(),
+            modules: StaticVec::new_const(),
         }
     }
 
@@ -150,7 +147,9 @@ impl<'e> ParseState<'e> {
     ///
     /// Return `None` when the variable name is not found in the `stack`.
     #[inline]
-    pub fn access_var(&mut self, name: &str, pos: Position) -> Option<NonZeroUsize> {
+    #[must_use]
+    pub fn access_var(&mut self, name: impl AsRef<str>, pos: Position) -> Option<NonZeroUsize> {
+        let name = name.as_ref();
         let mut barrier = false;
         let _pos = pos;
 
@@ -199,7 +198,9 @@ impl<'e> ParseState<'e> {
     #[cfg(not(feature = "no_module"))]
     #[inline]
     #[must_use]
-    pub fn find_module(&self, name: &str) -> Option<NonZeroUsize> {
+    pub fn find_module(&self, name: impl AsRef<str>) -> Option<NonZeroUsize> {
+        let name = name.as_ref();
+
         self.modules
             .iter()
             .rev()
@@ -224,14 +225,24 @@ struct ParseSettings {
     /// Is the construct being parsed located at global level?
     is_global: bool,
     /// Is the construct being parsed located at function definition level?
+    #[cfg(not(feature = "no_function"))]
     is_function_scope: bool,
+    /// Is the construct being parsed located inside a closure?
+    #[cfg(not(feature = "no_function"))]
+    #[cfg(not(feature = "no_closure"))]
+    is_closure: bool,
     /// Is the current position inside a loop?
     is_breakable: bool,
+    /// Default language options.
+    default_options: LanguageOptions,
+    /// Is strict variables mode enabled?
+    strict_var: bool,
     /// Is anonymous function allowed?
+    #[cfg(not(feature = "no_function"))]
     allow_anonymous_fn: bool,
-    /// Is if-expression allowed?
+    /// Is `if`-expression allowed?
     allow_if_expr: bool,
-    /// Is switch expression allowed?
+    /// Is `switch` expression allowed?
     allow_switch_expr: bool,
     /// Is statement-expression allowed?
     allow_stmt_expr: bool,
@@ -334,7 +345,10 @@ impl Expr {
 
 /// Make sure that the next expression is not a statement expression (i.e. wrapped in `{}`).
 #[inline]
-fn ensure_not_statement_expr(input: &mut TokenStream, type_name: &str) -> Result<(), ParseError> {
+fn ensure_not_statement_expr(
+    input: &mut TokenStream,
+    type_name: impl ToString,
+) -> Result<(), ParseError> {
     match input.peek().expect(NEVER_ENDS) {
         (Token::LeftBrace, pos) => Err(PERR::ExprExpected(type_name.to_string()).into_err(*pos)),
         _ => Ok(()),
@@ -465,7 +479,7 @@ fn parse_fn_call(
     let (token, token_pos) = input.peek().expect(NEVER_ENDS);
 
     let mut namespace = namespace;
-    let mut args = StaticVec::new();
+    let mut args = StaticVec::new_const();
 
     match token {
         // id( <EOF>
@@ -482,15 +496,28 @@ fn parse_fn_call(
         Token::RightParen => {
             eat_token(input, Token::RightParen);
 
-            let hash = namespace.as_mut().map_or_else(
-                || calc_fn_hash(&id, 0),
-                |modules| {
-                    #[cfg(not(feature = "no_module"))]
-                    modules.set_index(state.find_module(&modules[0].name));
+            let hash = if let Some(modules) = namespace.as_mut() {
+                #[cfg(not(feature = "no_module"))]
+                {
+                    let index = state.find_module(&modules[0].name);
 
-                    calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, 0)
-                },
-            );
+                    #[cfg(not(feature = "no_function"))]
+                    let relax = settings.is_function_scope;
+                    #[cfg(feature = "no_function")]
+                    let relax = false;
+
+                    if !relax && settings.strict_var && index.is_none() {
+                        return Err(ParseErrorType::ModuleUndefined(modules[0].name.to_string())
+                            .into_err(modules[0].pos));
+                    }
+
+                    modules.set_index(index);
+                }
+
+                calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, 0)
+            } else {
+                calc_fn_hash(&id, 0)
+            };
 
             let hashes = if is_valid_function_name(&id) {
                 hash.into()
@@ -528,19 +555,30 @@ fn parse_fn_call(
             (Token::RightParen, _) => {
                 eat_token(input, Token::RightParen);
 
-                let hash = namespace.as_mut().map_or_else(
-                    || calc_fn_hash(&id, args.len()),
-                    |modules| {
-                        #[cfg(not(feature = "no_module"))]
-                        modules.set_index(state.find_module(&modules[0].name));
+                let hash = if let Some(modules) = namespace.as_mut() {
+                    #[cfg(not(feature = "no_module"))]
+                    {
+                        let index = state.find_module(&modules[0].name);
 
-                        calc_qualified_fn_hash(
-                            modules.iter().map(|m| m.name.as_str()),
-                            &id,
-                            args.len(),
-                        )
-                    },
-                );
+                        #[cfg(not(feature = "no_function"))]
+                        let relax = settings.is_function_scope;
+                        #[cfg(feature = "no_function")]
+                        let relax = false;
+
+                        if !relax && settings.strict_var && index.is_none() {
+                            return Err(ParseErrorType::ModuleUndefined(
+                                modules[0].name.to_string(),
+                            )
+                            .into_err(modules[0].pos));
+                        }
+
+                        modules.set_index(index);
+                    }
+
+                    calc_qualified_fn_hash(modules.iter().map(|m| m.name.as_str()), &id, args.len())
+                } else {
+                    calc_fn_hash(&id, args.len())
+                };
 
                 let hashes = if is_valid_function_name(&id) {
                     hash.into()
@@ -766,7 +804,7 @@ fn parse_array_literal(
     let mut settings = settings;
     settings.pos = eat_token(input, Token::LeftBracket);
 
-    let mut arr = StaticVec::new();
+    let mut arr = StaticVec::new_const();
 
     loop {
         const MISSING_RBRACKET: &str = "to end this array literal";
@@ -1162,24 +1200,42 @@ fn parse_primary(
                 new_state.max_expr_depth = new_state.max_function_expr_depth;
             }
 
-            let settings = ParseSettings {
-                allow_if_expr: true,
-                allow_switch_expr: true,
-                allow_stmt_expr: true,
-                allow_anonymous_fn: true,
+            let new_settings = ParseSettings {
+                allow_if_expr: settings.default_options.allow_if_expr,
+                allow_switch_expr: settings.default_options.allow_switch_expr,
+                allow_stmt_expr: settings.default_options.allow_stmt_expr,
+                allow_anonymous_fn: settings.default_options.allow_anonymous_fn,
+                strict_var: if cfg!(feature = "no_closure") {
+                    settings.strict_var
+                } else {
+                    // A capturing closure can access variables not defined locally
+                    false
+                },
                 is_global: false,
                 is_function_scope: true,
+                #[cfg(not(feature = "no_closure"))]
+                is_closure: true,
                 is_breakable: false,
                 level: 0,
-                pos: settings.pos,
+                ..settings
             };
 
-            let (expr, func) = parse_anon_fn(input, &mut new_state, lib, settings)?;
+            let (expr, func) = parse_anon_fn(input, &mut new_state, lib, new_settings)?;
 
             #[cfg(not(feature = "no_closure"))]
-            new_state.external_vars.iter().for_each(|(closure, &pos)| {
-                state.access_var(closure, pos);
-            });
+            new_state.external_vars.iter().try_for_each(
+                |(captured_var, &pos)| -> Result<_, ParseError> {
+                    let index = state.access_var(captured_var, pos);
+
+                    if !settings.is_closure && settings.strict_var && index.is_none() {
+                        // If the parent scope is not inside another capturing closure
+                        Err(ParseErrorType::VariableUndefined(captured_var.to_string())
+                            .into_err(pos))
+                    } else {
+                        Ok(())
+                    }
+                },
+            )?;
 
             let hash_script = calc_fn_hash(&func.name, func.params.len());
             lib.insert(hash_script, func.into());
@@ -1282,6 +1338,13 @@ fn parse_primary(
                 // Normal variable access
                 _ => {
                     let index = state.access_var(&s, settings.pos);
+
+                    if settings.strict_var && index.is_none() {
+                        return Err(
+                            ParseErrorType::VariableUndefined(s.to_string()).into_err(settings.pos)
+                        );
+                    }
+
                     let short_index = index.and_then(|x| {
                         if x.get() <= u8::MAX as usize {
                             NonZeroU8::new(x.get() as u8)
@@ -1313,6 +1376,7 @@ fn parse_primary(
                     (None, None, state.get_identifier(s)).into(),
                 ),
                 // Access to `this` as a variable is OK within a function scope
+                #[cfg(not(feature = "no_function"))]
                 _ if &*s == KEYWORD_THIS && settings.is_function_scope => Expr::Variable(
                     None,
                     settings.pos,
@@ -1454,15 +1518,26 @@ fn parse_primary(
         _ => None,
     };
 
-    if let Some(x) = namespaced_variable {
-        match x {
-            (_, Some((namespace, hash)), name) => {
-                *hash = calc_qualified_var_hash(namespace.iter().map(|v| v.name.as_str()), name);
+    if let Some((_, Some((namespace, hash)), name)) = namespaced_variable {
+        *hash = calc_qualified_var_hash(namespace.iter().map(|v| v.name.as_str()), name);
 
-                #[cfg(not(feature = "no_module"))]
-                namespace.set_index(state.find_module(&namespace[0].name));
+        #[cfg(not(feature = "no_module"))]
+        {
+            let index = state.find_module(&namespace[0].name);
+
+            #[cfg(not(feature = "no_function"))]
+            let relax = settings.is_function_scope;
+            #[cfg(feature = "no_function")]
+            let relax = false;
+
+            if !relax && settings.strict_var && index.is_none() {
+                return Err(
+                    ParseErrorType::ModuleUndefined(namespace[0].name.to_string())
+                        .into_err(namespace[0].pos),
+                );
             }
-            _ => unreachable!("expecting namespace-qualified variable access"),
+
+            namespace.set_index(index);
         }
     }
 
@@ -1510,7 +1585,7 @@ fn parse_unary(
 
                 // Call negative function
                 expr => {
-                    let mut args = StaticVec::new();
+                    let mut args = StaticVec::new_const();
                     args.push(expr);
                     args.shrink_to_fit();
 
@@ -1536,7 +1611,7 @@ fn parse_unary(
 
                 // Call plus function
                 expr => {
-                    let mut args = StaticVec::new();
+                    let mut args = StaticVec::new_const();
                     args.push(expr);
                     args.shrink_to_fit();
 
@@ -1553,7 +1628,7 @@ fn parse_unary(
         // !expr
         Token::Bang => {
             let pos = eat_token(input, Token::Bang);
-            let mut args = StaticVec::new();
+            let mut args = StaticVec::new_const();
             args.push(parse_unary(input, state, lib, settings.level_up())?);
             args.shrink_to_fit();
 
@@ -1900,7 +1975,7 @@ fn parse_binary_op(
             ..Default::default()
         };
 
-        let mut args = StaticVec::new();
+        let mut args = StaticVec::new_const();
         args.push(root);
         args.push(rhs);
         args.shrink_to_fit();
@@ -2000,21 +2075,21 @@ fn parse_custom_syntax(
     state: &mut ParseState,
     lib: &mut FunctionsLib,
     settings: ParseSettings,
-    key: &str,
+    key: impl Into<ImmutableString>,
     syntax: &CustomSyntax,
     pos: Position,
 ) -> Result<Expr, ParseError> {
     let mut settings = settings;
     let mut inputs = StaticVec::<Expr>::new();
-    let mut segments = StaticVec::new();
-    let mut tokens = StaticVec::new();
+    let mut segments = StaticVec::new_const();
+    let mut tokens = StaticVec::new_const();
 
     // Adjust the variables stack
     if syntax.scope_may_be_changed {
         // Add a barrier variable to the stack so earlier variables will not be matched.
         // Variable searches stop at the first barrier.
-        let empty = state.get_identifier(SCOPE_SEARCH_BARRIER_MARKER);
-        state.stack.push((empty, AccessMode::ReadWrite));
+        let marker = state.get_identifier(SCOPE_SEARCH_BARRIER_MARKER);
+        state.stack.push((marker, AccessMode::ReadWrite));
     }
 
     let parse_func = syntax.parse.as_ref();
@@ -2789,16 +2864,20 @@ fn parse_stmt(
                         new_state.max_expr_depth = new_state.max_function_expr_depth;
                     }
 
-                    let settings = ParseSettings {
-                        allow_if_expr: true,
-                        allow_switch_expr: true,
-                        allow_stmt_expr: true,
-                        allow_anonymous_fn: true,
+                    let new_settings = ParseSettings {
+                        allow_if_expr: settings.default_options.allow_if_expr,
+                        allow_switch_expr: settings.default_options.allow_switch_expr,
+                        allow_stmt_expr: settings.default_options.allow_stmt_expr,
+                        allow_anonymous_fn: settings.default_options.allow_anonymous_fn,
+                        strict_var: settings.strict_var,
                         is_global: false,
                         is_function_scope: true,
+                        #[cfg(not(feature = "no_closure"))]
+                        is_closure: false,
                         is_breakable: false,
                         level: 0,
                         pos,
+                        ..settings
                     };
 
                     let func = parse_fn(
@@ -2806,7 +2885,7 @@ fn parse_stmt(
                         &mut new_state,
                         lib,
                         access,
-                        settings,
+                        new_settings,
                         #[cfg(not(feature = "no_function"))]
                         #[cfg(feature = "metadata")]
                         comments,
@@ -2837,19 +2916,27 @@ fn parse_stmt(
 
         Token::If => parse_if(input, state, lib, settings.level_up()),
         Token::Switch => parse_switch(input, state, lib, settings.level_up()),
-        Token::While | Token::Loop => parse_while_loop(input, state, lib, settings.level_up()),
-        Token::Do => parse_do(input, state, lib, settings.level_up()),
-        Token::For => parse_for(input, state, lib, settings.level_up()),
+        Token::While | Token::Loop if settings.default_options.allow_loop => {
+            parse_while_loop(input, state, lib, settings.level_up())
+        }
+        Token::Do if settings.default_options.allow_loop => {
+            parse_do(input, state, lib, settings.level_up())
+        }
+        Token::For if settings.default_options.allow_loop => {
+            parse_for(input, state, lib, settings.level_up())
+        }
 
-        Token::Continue if settings.is_breakable => {
+        Token::Continue if settings.default_options.allow_loop && settings.is_breakable => {
             let pos = eat_token(input, Token::Continue);
             Ok(Stmt::BreakLoop(AST_OPTION_NONE, pos))
         }
-        Token::Break if settings.is_breakable => {
+        Token::Break if settings.default_options.allow_loop && settings.is_breakable => {
             let pos = eat_token(input, Token::Break);
             Ok(Stmt::BreakLoop(AST_OPTION_BREAK_OUT, pos))
         }
-        Token::Continue | Token::Break => Err(PERR::LoopBreak.into_err(token_pos)),
+        Token::Continue | Token::Break if settings.default_options.allow_loop => {
+            Err(PERR::LoopBreak.into_err(token_pos))
+        }
 
         Token::Return | Token::Throw => {
             let (return_type, token_pos) = input
@@ -2992,7 +3079,7 @@ fn parse_fn(
         (_, pos) => return Err(PERR::FnMissingParams(name.to_string()).into_err(*pos)),
     };
 
-    let mut params = StaticVec::new();
+    let mut params = StaticVec::new_const();
 
     if !match_token(input, Token::RightParen).0 {
         let sep_err = format!("to separate the parameters of function '{}'", name);
@@ -3119,7 +3206,7 @@ fn parse_anon_fn(
     settings.ensure_level_within_max_limit(state.max_expr_depth)?;
 
     let mut settings = settings;
-    let mut params_list = StaticVec::new();
+    let mut params_list = StaticVec::new_const();
 
     if input.next().expect(NEVER_ENDS).0 != Token::Or && !match_token(input, Token::Pipe).0 {
         loop {
@@ -3205,7 +3292,7 @@ fn parse_anon_fn(
         comments: None,
     };
 
-    let fn_ptr = crate::FnPtr::new_unchecked(fn_name, StaticVec::new());
+    let fn_ptr = crate::FnPtr::new_unchecked(fn_name, StaticVec::new_const());
     let expr = Expr::DynamicConstant(Box::new(fn_ptr.into()), settings.pos);
 
     #[cfg(not(feature = "no_closure"))]
@@ -3227,12 +3314,19 @@ impl Engine {
         let mut functions = BTreeMap::new();
 
         let settings = ParseSettings {
+            default_options: self.options,
             allow_if_expr: false,
             allow_switch_expr: false,
             allow_stmt_expr: false,
+            #[cfg(not(feature = "no_function"))]
             allow_anonymous_fn: false,
+            strict_var: self.options.strict_var,
             is_global: true,
+            #[cfg(not(feature = "no_function"))]
             is_function_scope: false,
+            #[cfg(not(feature = "no_function"))]
+            #[cfg(not(feature = "no_closure"))]
+            is_closure: false,
             is_breakable: false,
             level: 0,
             pos: Position::NONE,
@@ -3249,7 +3343,7 @@ impl Engine {
             }
         }
 
-        let mut statements = StaticVec::new();
+        let mut statements = StaticVec::new_const();
         statements.push(Stmt::Expr(expr));
 
         #[cfg(not(feature = "no_optimize"))]
@@ -3257,12 +3351,17 @@ impl Engine {
             self,
             _scope,
             statements,
-            StaticVec::new(),
+            #[cfg(not(feature = "no_function"))]
+            StaticVec::new_const(),
             optimization_level,
         ));
 
         #[cfg(feature = "no_optimize")]
-        return Ok(AST::new(statements, crate::Module::new()));
+        return Ok(AST::new(
+            statements,
+            #[cfg(not(feature = "no_function"))]
+            crate::Module::new(),
+        ));
     }
 
     /// Parse the global level statements.
@@ -3271,17 +3370,24 @@ impl Engine {
         input: &mut TokenStream,
         state: &mut ParseState,
     ) -> Result<(StaticVec<Stmt>, StaticVec<Shared<ScriptFnDef>>), ParseError> {
-        let mut statements = StaticVec::new();
+        let mut statements = StaticVec::new_const();
         let mut functions = BTreeMap::new();
 
         while !input.peek().expect(NEVER_ENDS).0.is_eof() {
             let settings = ParseSettings {
-                allow_if_expr: true,
-                allow_switch_expr: true,
-                allow_stmt_expr: true,
-                allow_anonymous_fn: true,
+                default_options: self.options,
+                allow_if_expr: self.options.allow_if_expr,
+                allow_switch_expr: self.options.allow_switch_expr,
+                allow_stmt_expr: self.options.allow_stmt_expr,
+                #[cfg(not(feature = "no_function"))]
+                allow_anonymous_fn: self.options.allow_anonymous_fn,
+                strict_var: self.options.strict_var,
                 is_global: true,
+                #[cfg(not(feature = "no_function"))]
                 is_function_scope: false,
+                #[cfg(not(feature = "no_function"))]
+                #[cfg(not(feature = "no_closure"))]
+                is_closure: false,
                 is_breakable: false,
                 level: 0,
                 pos: Position::NONE,
@@ -3342,6 +3448,7 @@ impl Engine {
             self,
             _scope,
             statements,
+            #[cfg(not(feature = "no_function"))]
             _lib,
             optimization_level,
         ));
@@ -3360,6 +3467,10 @@ impl Engine {
 
         #[cfg(feature = "no_optimize")]
         #[cfg(feature = "no_function")]
-        return Ok(AST::new(statements, crate::Module::new()));
+        return Ok(AST::new(
+            statements,
+            #[cfg(not(feature = "no_function"))]
+            crate::Module::new(),
+        ));
     }
 }

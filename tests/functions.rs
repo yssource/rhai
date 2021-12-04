@@ -98,8 +98,8 @@ fn test_functions_global_module() -> Result<(), Box<EvalAltResult>> {
 
     engine.register_result_fn(
         "do_stuff",
-        |context: NativeCallContext, callback: rhai::FnPtr| {
-            callback.call_dynamic(&context, None, [])
+        |context: NativeCallContext, callback: rhai::FnPtr| -> Result<INT, _> {
+            callback.call_within_context(&context, ())
         },
     );
 

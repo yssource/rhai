@@ -3,8 +3,6 @@
 use super::{arithmetic::make_err as make_arithmetic_err, math_basic::MAX_INT};
 use crate::plugin::*;
 use crate::{def_package, Dynamic, EvalAltResult, INT};
-#[cfg(feature = "no_std")]
-use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;

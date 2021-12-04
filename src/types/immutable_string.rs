@@ -115,14 +115,12 @@ impl From<String> for ImmutableString {
         Self(value.into())
     }
 }
-#[cfg(not(feature = "no_smartstring"))]
 impl From<&SmartString> for ImmutableString {
     #[inline(always)]
     fn from(value: &SmartString) -> Self {
         Self(value.clone().into())
     }
 }
-#[cfg(not(feature = "no_smartstring"))]
 impl From<SmartString> for ImmutableString {
     #[inline(always)]
     fn from(value: SmartString) -> Self {
@@ -180,7 +178,6 @@ impl<'a> FromIterator<String> for ImmutableString {
     }
 }
 
-#[cfg(not(feature = "no_smartstring"))]
 impl<'a> FromIterator<SmartString> for ImmutableString {
     #[inline]
     fn from_iter<T: IntoIterator<Item = SmartString>>(iter: T) -> Self {
@@ -539,7 +536,7 @@ impl ImmutableString {
     /// Create a new [`ImmutableString`].
     #[inline(always)]
     pub fn new() -> Self {
-        Self(SmartString::new().into())
+        Self(SmartString::new_const().into())
     }
     /// Consume the [`ImmutableString`] and convert it into a [`String`].
     /// If there are other references to the same string, a cloned copy is returned.

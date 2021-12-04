@@ -1,6 +1,64 @@
 Rhai Release Notes
 ==================
 
+Version 1.3.0
+=============
+
+Compiler requirement
+--------------------
+
+* Minimum compiler version is bumped to 1.51.
+
+Bug fixes
+---------
+
+* BLOB's no longer panic when accessed with an out-of-bounds index.
+
+New features
+------------
+
+* New options for `Engine` which allows disabling `if`-expressions, `switch`-expressions, statement expressions, anonymous functions and/or looping (i.e. `while`, `loop`, `do` and `for` statements):
+  * `Engine::set_allow_if_expression`
+  * `Engine::set_allow_switch_expression`
+  * `Engine::set_allow_statement_expression`
+  * `Engine::set_allow_anonymous_fn`
+  * `Engine::set_allow_looping`
+* New _strict variables_ mode for `Engine` (enabled via `Engine::set_strict_variables`) to throw parse errors on undefined variable usage. Two new parse error variants, `ParseErrorType::VariableNotFound` and `ParseErrorType::ModuleNotFound`, are added.
+
+Enhancements
+------------
+
+* Added `into_array` and `into_typed_array` for `Dynamic`.
+* Added `FnPtr::call` and `FnPtr::call_within_context` to simplify calling a function pointer.
+* BLob's can now be deserialized (using `from_dynamic`) into `Vec<u8>` via [`serde_bytes`](https://crates.io/crates/serde_bytes).
+
+Deprecated and Gated API's
+--------------------------
+
+* `NativeCallContext::new` is deprecated because it is simpler to call a function pointer via `FnPtr::call`.
+* `AST::merge_filtered` and `AST::combine_filtered` are no longer exported under `no_function`.
+* `AST::new` and `AST::new_with_source` are moved under `internals`.
+* `FnPtr::call_dynamic` is deprecated in favor of `FnPtr::call_raw`.
+
+
+Version 1.2.2
+=============
+
+Bug fixes
+---------
+
+* `from_dynamic` now supports deserializing `Option`.
+
+
+Version 1.2.1
+=============
+
+Bug fixes
+---------
+
+* Array methods (such as `map`) taking a closure with captures as argument now works properly.
+
+
 Version 1.2.0
 =============
 
@@ -9,6 +67,9 @@ Bug fixes with breaking script changes
 
 * As originally intended, function calls with a bang (`!`) now operates directly on the caller's scope, allowing variables inside the scope to be mutated.
 * As originally intended, `Engine::XXX_with_scope` API's now properly propagate constants within the provided scope also to _functions_ in the script.
+* Printing of integral floating-point numbers is fixed (used to only prints `0.0`).
+* `func!()` calls now work properly under `no_closure`.
+* Fixed parsing of unary negation such that expressions like `if foo { ... } -x` parses correctly.
 
 New features
 ------------
@@ -35,17 +96,6 @@ Deprecated API's
 
 * `NativeCallContext::call_fn_dynamic_raw` is deprecated and `NativeCallContext::call_fn_raw` is added.
 * `From<EvalAltResult>` for `Result<T, Box<EvalAltResult>>` is deprecated so it will no longer be possible to do `EvalAltResult::ErrorXXXXX.into()` to convert to a `Result`; instead, `Err(EvalAltResult:ErrorXXXXX.into())` must be used. Code is clearer if errors are explicitly wrapped in `Err`.
-
-
-Version 1.1.3
-=============
-
-Bug fixes
----------
-
-* Printing of integral floating-point numbers is fixed (used to only prints `0.0`).
-* `func!()` calls now work properly under `no_closure`.
-* Fixed parsing of unary negation such that expressions like `if foo { ... } -x` parses correctly.
 
 
 Version 1.1.2

@@ -10,6 +10,10 @@ use std::prelude::v1::*;
 #[cfg(not(feature = "no_float"))]
 use crate::FLOAT;
 
+#[cfg(not(feature = "no_float"))]
+#[cfg(feature = "no_std")]
+use num_traits::Float;
+
 #[cfg(feature = "decimal")]
 use rust_decimal::Decimal;
 
@@ -48,10 +52,6 @@ pub fn get_builtin_binary_op_fn(
     x: &Dynamic,
     y: &Dynamic,
 ) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult> {
-    #[cfg(feature = "no_std")]
-    #[cfg(not(feature = "no_float"))]
-    use num_traits::Float;
-
     let type1 = x.type_id();
     let type2 = y.type_id();
 
@@ -127,9 +127,9 @@ pub fn get_builtin_binary_op_fn(
         } };
     }
 
+    #[cfg(not(feature = "no_float"))]
     macro_rules! impl_float {
         ($x:ty, $xx:ident, $y:ty, $yy:ident) => {
-            #[cfg(not(feature = "no_float"))]
             if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
                 return match op {
                     "+" => Some(impl_op!(FLOAT => $xx + $yy)),
@@ -150,13 +150,16 @@ pub fn get_builtin_binary_op_fn(
         };
     }
 
-    impl_float!(FLOAT, as_float, FLOAT, as_float);
-    impl_float!(FLOAT, as_float, INT, as_int);
-    impl_float!(INT, as_int, FLOAT, as_float);
+    #[cfg(not(feature = "no_float"))]
+    {
+        impl_float!(FLOAT, as_float, FLOAT, as_float);
+        impl_float!(FLOAT, as_float, INT, as_int);
+        impl_float!(INT, as_int, FLOAT, as_float);
+    }
 
+    #[cfg(feature = "decimal")]
     macro_rules! impl_decimal {
         ($x:ty, $xx:ident, $y:ty, $yy:ident) => {
-            #[cfg(feature = "decimal")]
             if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
                 #[cfg(not(feature = "unchecked"))]
                 use crate::packages::arithmetic::decimal_functions::*;
@@ -199,9 +202,12 @@ pub fn get_builtin_binary_op_fn(
         };
     }
 
-    impl_decimal!(Decimal, as_decimal, Decimal, as_decimal);
-    impl_decimal!(Decimal, as_decimal, INT, as_int);
-    impl_decimal!(INT, as_int, Decimal, as_decimal);
+    #[cfg(feature = "decimal")]
+    {
+        impl_decimal!(Decimal, as_decimal, Decimal, as_decimal);
+        impl_decimal!(Decimal, as_decimal, INT, as_int);
+        impl_decimal!(INT, as_int, Decimal, as_decimal);
+    }
 
     // char op string
     if types_pair == (TypeId::of::<char>(), TypeId::of::<ImmutableString>()) {
@@ -419,10 +425,6 @@ pub fn get_builtin_op_assignment_fn(
     x: &Dynamic,
     y: &Dynamic,
 ) -> Option<fn(NativeCallContext, &mut FnCallArgs) -> RhaiResult> {
-    #[cfg(feature = "no_std")]
-    #[cfg(not(feature = "no_float"))]
-    use num_traits::Float;
-
     let type1 = x.type_id();
     let type2 = y.type_id();
 
@@ -468,9 +470,9 @@ pub fn get_builtin_op_assignment_fn(
         } };
     }
 
+    #[cfg(not(feature = "no_float"))]
     macro_rules! impl_float {
         ($x:ident, $xx:ident, $y:ty, $yy:ident) => {
-            #[cfg(not(feature = "no_float"))]
             if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
                 return match op {
                     "+=" => Some(impl_op!($x += $yy)),
@@ -485,12 +487,15 @@ pub fn get_builtin_op_assignment_fn(
         }
     }
 
-    impl_float!(FLOAT, as_float, FLOAT, as_float);
-    impl_float!(FLOAT, as_float, INT, as_int);
+    #[cfg(not(feature = "no_float"))]
+    {
+        impl_float!(FLOAT, as_float, FLOAT, as_float);
+        impl_float!(FLOAT, as_float, INT, as_int);
+    }
 
+    #[cfg(feature = "decimal")]
     macro_rules! impl_decimal {
         ($x:ident, $xx:ident, $y:ty, $yy:ident) => {
-            #[cfg(feature = "decimal")]
             if types_pair == (TypeId::of::<$x>(), TypeId::of::<$y>()) {
                 #[cfg(not(feature = "unchecked"))]
                 use crate::packages::arithmetic::decimal_functions::*;
@@ -523,8 +528,11 @@ pub fn get_builtin_op_assignment_fn(
         };
     }
 
-    impl_decimal!(Decimal, as_decimal, Decimal, as_decimal);
-    impl_decimal!(Decimal, as_decimal, INT, as_int);
+    #[cfg(feature = "decimal")]
+    {
+        impl_decimal!(Decimal, as_decimal, Decimal, as_decimal);
+        impl_decimal!(Decimal, as_decimal, INT, as_int);
+    }
 
     // string op= char
     if types_pair == (TypeId::of::<ImmutableString>(), TypeId::of::<char>()) {

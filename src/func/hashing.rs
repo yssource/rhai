@@ -49,7 +49,7 @@ impl BuildHasher for StraightHasherBuilder {
 #[inline(always)]
 #[must_use]
 pub fn get_hasher() -> ahash::AHasher {
-    Default::default()
+    ahash::AHasher::default()
 }
 
 /// Calculate a [`u64`] hash key from a namespace-qualified variable name.
@@ -62,7 +62,10 @@ pub fn get_hasher() -> ahash::AHasher {
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline]
 #[must_use]
-pub fn calc_qualified_var_hash<'a>(modules: impl Iterator<Item = &'a str>, var_name: &str) -> u64 {
+pub fn calc_qualified_var_hash<'a>(
+    modules: impl Iterator<Item = impl AsRef<str> + 'a>,
+    var_name: impl AsRef<str>,
+) -> u64 {
     let s = &mut get_hasher();
 
     // We always skip the first module
@@ -70,9 +73,9 @@ pub fn calc_qualified_var_hash<'a>(modules: impl Iterator<Item = &'a str>, var_n
     modules
         .inspect(|_| len += 1)
         .skip(1)
-        .for_each(|m| m.hash(s));
+        .for_each(|m| m.as_ref().hash(s));
     len.hash(s);
-    var_name.hash(s);
+    var_name.as_ref().hash(s);
     s.finish()
 }
 
@@ -87,9 +90,9 @@ pub fn calc_qualified_var_hash<'a>(modules: impl Iterator<Item = &'a str>, var_n
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline]
 #[must_use]
-pub fn calc_qualified_fn_hash<'a>(
-    modules: impl Iterator<Item = &'a str>,
-    fn_name: &str,
+pub fn calc_qualified_fn_hash(
+    modules: impl Iterator<Item = impl AsRef<str>>,
+    fn_name: impl AsRef<str>,
     num: usize,
 ) -> u64 {
     let s = &mut get_hasher();
@@ -99,9 +102,9 @@ pub fn calc_qualified_fn_hash<'a>(
     modules
         .inspect(|_| len += 1)
         .skip(1)
-        .for_each(|m| m.hash(s));
+        .for_each(|m| m.as_ref().hash(s));
     len.hash(s);
-    fn_name.hash(s);
+    fn_name.as_ref().hash(s);
     num.hash(s);
     s.finish()
 }
@@ -112,8 +115,8 @@ pub fn calc_qualified_fn_hash<'a>(
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
 #[inline(always)]
 #[must_use]
-pub fn calc_fn_hash(fn_name: &str, num: usize) -> u64 {
-    calc_qualified_fn_hash(empty(), fn_name, num)
+pub fn calc_fn_hash(fn_name: impl AsRef<str>, num: usize) -> u64 {
+    calc_qualified_fn_hash(empty::<&str>(), fn_name, num)
 }
 
 /// Calculate a [`u64`] hash key from a list of parameter types.

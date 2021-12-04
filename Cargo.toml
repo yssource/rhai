@@ -3,7 +3,7 @@ members = [".", "codegen"]
 
 [package]
 name = "rhai"
-version = "1.2.0"
+version = "1.3.0"
 edition = "2018"
 authors = ["Jonathan Turner", "Lukáš Hozda", "Stephen Chung", "jhwgh1968"]
 description = "Embedded scripting for Rust"
@@ -16,11 +16,14 @@ keywords = ["scripting", "scripting-engine", "scripting-language", "embedded"]
 categories = ["no-std", "embedded", "wasm", "parser-implementations"]
 
 [dependencies]
-smallvec = { version = "1.6", default-features = false, features = ["union"] }
+smallvec = { version = "1.7", default-features = false, features = ["union", "const_new" ] }
 ahash = { version = "0.7", default-features = false }
 num-traits = { version = "0.2", default-features = false }
-smartstring = { version = "0.2.7", default-features = false }
+smartstring = { version = "0.2.8", default-features = false }
 rhai_codegen = { version = "1.2", path = "codegen", default-features = false }
+
+[dev-dependencies]
+serde_bytes = "0.11"
 
 [features]
 default = ["ahash/std", "num-traits/std"]
@@ -47,9 +50,6 @@ no_std = ["no-std-compat", "num-traits/libm", "core-error", "libm", "ahash/compi
 # compiling for WASM
 wasm-bindgen = ["instant/wasm-bindgen"]
 stdweb = ["instant/stdweb"]
-
-# internal feature flags - volatile
-no_smartstring = []             # do not use SmartString
 
 [profile.release]
 lto = "fat"

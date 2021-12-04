@@ -75,7 +75,6 @@ mod custom_syntax;
 mod engine;
 mod func;
 mod module;
-#[cfg(not(feature = "no_optimize"))]
 mod optimizer;
 pub mod packages;
 mod parser;
@@ -129,26 +128,12 @@ pub use types::{
 /// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
 /// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
 #[cfg(not(feature = "internals"))]
-#[cfg(not(feature = "no_smartstring"))]
 pub(crate) type Identifier = SmartString;
-
-/// An identifier in Rhai.
-#[cfg(not(feature = "internals"))]
-#[cfg(feature = "no_smartstring")]
-pub(crate) type Identifier = ImmutableString;
 
 /// An identifier in Rhai. [`SmartString`](https://crates.io/crates/smartstring) is used because most
 /// identifiers are ASCII and short, fewer than 23 characters, so they can be stored inline.
 #[cfg(feature = "internals")]
-#[cfg(not(feature = "no_smartstring"))]
-#[deprecated = "this type is volatile and may change"]
 pub type Identifier = SmartString;
-
-/// An identifier in Rhai.
-#[cfg(feature = "internals")]
-#[cfg(feature = "no_smartstring")]
-#[deprecated = "this type is volatile and may change"]
-pub type Identifier = ImmutableString;
 
 /// Alias to [`Rc`][std::rc::Rc] or [`Arc`][std::sync::Arc] depending on the `sync` feature flag.
 pub use func::Shared;
@@ -163,10 +148,10 @@ pub(crate) use func::{
 
 pub use rhai_codegen::*;
 
-pub use func::plugin;
+pub use func::{plugin, FuncArgs};
 
 #[cfg(not(feature = "no_function"))]
-pub use func::{Func, FuncArgs};
+pub use func::Func;
 
 #[cfg(not(feature = "no_function"))]
 pub use ast::ScriptFnMetadata;
@@ -175,6 +160,11 @@ pub use ast::ScriptFnMetadata;
 /// Not available under `no_index`.
 #[cfg(not(feature = "no_index"))]
 pub type Array = Vec<Dynamic>;
+
+/// Variable-sized array of [`u8`] values (byte array).
+/// Not available under `no_index`.
+#[cfg(not(feature = "no_index"))]
+pub type Blob = Vec<u8>;
 
 /// Hash map of [`Dynamic`] values with [`SmartString`](https://crates.io/crates/smartstring) keys.
 /// Not available under `no_object`.
@@ -197,26 +187,21 @@ pub use optimizer::OptimizationLevel;
 // Expose internal data structures.
 
 #[cfg(feature = "internals")]
-#[deprecated = "this type is volatile and may change"]
 pub use types::dynamic::{AccessMode, DynamicReadLock, DynamicWriteLock, Variant};
 
 #[cfg(feature = "internals")]
-#[deprecated = "this function is volatile and may change"]
 pub use tokenizer::{get_next_token, parse_string_literal};
 
 #[cfg(feature = "internals")]
-#[deprecated = "this type is volatile and may change"]
 pub use tokenizer::{
     InputStream, MultiInputsStream, Token, TokenIterator, TokenizeState, TokenizerControl,
     TokenizerControlBlock,
 };
 
 #[cfg(feature = "internals")]
-#[deprecated = "this type is volatile and may change"]
 pub use parser::{IdentifierBuilder, ParseState};
 
 #[cfg(feature = "internals")]
-#[deprecated = "this type is volatile and may change"]
 pub use ast::{
     ASTNode, BinaryExpr, CustomExpr, Expr, FnCallExpr, FnCallHashes, Ident, OpAssignment,
     OptionFlags, ScriptFnDef, Stmt, StmtBlock, AST_OPTION_FLAGS::*,
@@ -224,20 +209,12 @@ pub use ast::{
 
 #[cfg(feature = "internals")]
 #[cfg(not(feature = "no_float"))]
-#[deprecated = "this type is volatile and may change"]
 pub use ast::FloatWrapper;
 
 #[cfg(feature = "internals")]
-#[deprecated = "this type is volatile and may change"]
 pub use engine::{EvalState, FnResolutionCache, FnResolutionCacheEntry, Imports};
 
 #[cfg(feature = "internals")]
-#[cfg(not(feature = "unchecked"))]
-#[deprecated = "this type is volatile and may change"]
-pub use engine::Limits;
-
-#[cfg(feature = "internals")]
-#[deprecated = "this type is volatile and may change"]
 pub use module::NamespaceRef;
 
 /// Alias to [`smallvec::SmallVec<[T; 3]>`](https://crates.io/crates/smallvec), which is a
@@ -309,11 +286,7 @@ type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 #[cfg(feature = "internals")]
 pub type StaticVec<T> = smallvec::SmallVec<[T; 3]>;
 
-#[cfg(not(feature = "no_smartstring"))]
 pub(crate) type SmartString = smartstring::SmartString<smartstring::LazyCompact>;
-
-#[cfg(feature = "no_smartstring")]
-pub(crate) type SmartString = String;
 
 // Compiler guards against mutually-exclusive feature flags
 

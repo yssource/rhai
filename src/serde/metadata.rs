@@ -272,12 +272,13 @@ impl Engine {
     }
 
     /// Generate a list of all functions in JSON format.
-    /// Available only under the `metadata` feature.
+    /// Exported under the `metadata` feature only.
     ///
     /// Functions from the following sources are included:
     /// 1) Functions registered into the global namespace
     /// 2) Functions in static modules
     /// 3) Functions in global modules (optional)
+    #[inline(always)]
     pub fn gen_fn_metadata_to_json(&self, include_global: bool) -> serde_json::Result<String> {
         self.gen_fn_metadata_with_ast_to_json(&AST::empty(), include_global)
     }
