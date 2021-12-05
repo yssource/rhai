@@ -8,7 +8,13 @@ use std::{
     iter::empty,
 };
 
-/// A hasher that only takes one single [`u64`] and returns it as a hash key.
+pub const DEFAULT_HASH: u64 = 42;
+
+/// A hasher that only takes one single [`u64`] and returns it as a non-zero hash key.
+///
+/// # Zeros
+///
+/// If the value is zero, then it is mapped to `DEFAULT_HASH`.
 ///
 /// # Panics
 ///
@@ -29,6 +35,10 @@ impl Hasher for StraightHasher {
         key.copy_from_slice(bytes);
 
         self.0 = u64::from_ne_bytes(key);
+
+        if self.0 == 0 {
+            self.0 = DEFAULT_HASH
+        }
     }
 }
 
@@ -41,7 +51,7 @@ impl BuildHasher for StraightHasherBuilder {
 
     #[inline(always)]
     fn build_hasher(&self) -> Self::Hasher {
-        StraightHasher(42)
+        StraightHasher(DEFAULT_HASH)
     }
 }
 
@@ -52,10 +62,14 @@ pub fn get_hasher() -> ahash::AHasher {
     ahash::AHasher::default()
 }
 
-/// Calculate a [`u64`] hash key from a namespace-qualified variable name.
+/// Calculate a non-zero [`u64`] hash key from a namespace-qualified variable name.
 ///
 /// Module names are passed in via `&str` references from an iterator.
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
+///
+/// # Zeros
+///
+/// If the hash happens to be zero, it is mapped to `DEFAULT_HASH`.
 ///
 /// # Note
 ///
@@ -76,14 +90,22 @@ pub fn calc_qualified_var_hash<'a>(
         .for_each(|m| m.as_ref().hash(s));
     len.hash(s);
     var_name.as_ref().hash(s);
-    s.finish()
+
+    match s.finish() {
+        0 => DEFAULT_HASH,
+        r => r,
+    }
 }
 
-/// Calculate a [`u64`] hash key from a namespace-qualified function name
+/// Calculate a non-zero [`u64`] hash key from a namespace-qualified function name
 /// and the number of parameters, but no parameter types.
 ///
 /// Module names are passed in via `&str` references from an iterator.
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
+///
+/// # Zeros
+///
+/// If the hash happens to be zero, it is mapped to `DEFAULT_HASH`.
 ///
 /// # Note
 ///
@@ -106,22 +128,34 @@ pub fn calc_qualified_fn_hash(
     len.hash(s);
     fn_name.as_ref().hash(s);
     num.hash(s);
-    s.finish()
+
+    match s.finish() {
+        0 => DEFAULT_HASH,
+        r => r,
+    }
 }
 
-/// Calculate a [`u64`] hash key from a non-namespace-qualified function name
+/// Calculate a non-zero [`u64`] hash key from a non-namespace-qualified function name
 /// and the number of parameters, but no parameter types.
 ///
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
+///
+/// # Zeros
+///
+/// If the hash happens to be zero, it is mapped to `DEFAULT_HASH`.
 #[inline(always)]
 #[must_use]
 pub fn calc_fn_hash(fn_name: impl AsRef<str>, num: usize) -> u64 {
     calc_qualified_fn_hash(empty::<&str>(), fn_name, num)
 }
 
-/// Calculate a [`u64`] hash key from a list of parameter types.
+/// Calculate a non-zero [`u64`] hash key from a list of parameter types.
 ///
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
+///
+/// # Zeros
+///
+/// If the hash happens to be zero, it is mapped to `DEFAULT_HASH`.
 #[inline]
 #[must_use]
 pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
@@ -129,12 +163,23 @@ pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
     let mut len = 0;
     params.inspect(|_| len += 1).for_each(|t| t.hash(s));
     len.hash(s);
-    s.finish()
+
+    match s.finish() {
+        0 => DEFAULT_HASH,
+        r => r,
+    }
 }
 
 /// Combine two [`u64`] hashes by taking the XOR of them.
+///
+/// # Zeros
+///
+/// If the hash happens to be zero, it is mapped to `DEFAULT_HASH`.
 #[inline(always)]
 #[must_use]
 pub const fn combine_hashes(a: u64, b: u64) -> u64 {
-    a ^ b
+    match a ^ b {
+        0 => DEFAULT_HASH,
+        r => r,
+    }
 }

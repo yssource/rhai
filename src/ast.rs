@@ -1,6 +1,7 @@
 //! Module defining the AST (abstract syntax tree).
 
 use crate::calc_fn_hash;
+use crate::func::hashing::DEFAULT_HASH;
 use crate::module::NamespaceRef;
 use crate::tokenizer::Token;
 use crate::types::dynamic::Union;
@@ -1801,7 +1802,7 @@ impl OpAssignment<'_> {
 pub struct FnCallHashes {
     /// Pre-calculated hash for a script-defined function ([`None`] if native functions only).
     #[cfg(not(feature = "no_function"))]
-    pub script: Option<u64>,
+    pub script: u64,
     /// Pre-calculated hash for a native Rust function with no parameter types.
     pub native: u64,
 }
@@ -1809,11 +1810,11 @@ pub struct FnCallHashes {
 impl fmt::Debug for FnCallHashes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(not(feature = "no_function"))]
-        if let Some(script) = self.script {
-            return if script == self.native {
+        if self.script != 0 {
+            return if self.script == self.native {
                 fmt::Debug::fmt(&self.native, f)
             } else {
-                write!(f, "({}, {})", script, self.native)
+                write!(f, "({}, {})", self.script, self.native)
             };
         }
 
@@ -1824,9 +1825,11 @@ impl fmt::Debug for FnCallHashes {
 impl From<u64> for FnCallHashes {
     #[inline(always)]
     fn from(hash: u64) -> Self {
+        let hash = if hash == 0 { DEFAULT_HASH } else { hash };
+
         Self {
             #[cfg(not(feature = "no_function"))]
-            script: Some(hash),
+            script: hash,
             native: hash,
         }
     }
@@ -1839,8 +1842,8 @@ impl FnCallHashes {
     pub const fn from_native(hash: u64) -> Self {
         Self {
             #[cfg(not(feature = "no_function"))]
-            script: None,
-            native: hash,
+            script: 0,
+            native: if hash == 0 { DEFAULT_HASH } else { hash },
         }
     }
     /// Create a [`FnCallHashes`] with both native Rust and script function hashes.
@@ -1849,8 +1852,8 @@ impl FnCallHashes {
     pub const fn from_all(#[cfg(not(feature = "no_function"))] script: u64, native: u64) -> Self {
         Self {
             #[cfg(not(feature = "no_function"))]
-            script: Some(script),
-            native,
+            script: if script == 0 { DEFAULT_HASH } else { script },
+            native: if native == 0 { DEFAULT_HASH } else { native },
         }
     }
     /// Is this [`FnCallHashes`] native Rust only?
@@ -1858,7 +1861,7 @@ impl FnCallHashes {
     #[must_use]
     pub const fn is_native_only(&self) -> bool {
         #[cfg(not(feature = "no_function"))]
-        return self.script.is_none();
+        return self.script == 0;
 
         #[cfg(feature = "no_function")]
         return true;

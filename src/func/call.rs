@@ -177,6 +177,10 @@ impl Engine {
         allow_dynamic: bool,
         is_op_assignment: bool,
     ) -> Option<&'s FnResolutionCacheEntry> {
+        if hash_script == 0 {
+            return None;
+        }
+
         let fn_name = fn_name.as_ref();
 
         let mut hash = args.as_ref().map_or(hash_script, |args| {
@@ -562,13 +566,10 @@ impl Engine {
 
         // Scripted function call?
         #[cfg(not(feature = "no_function"))]
-        let hash_script = hashes.script;
-
-        #[cfg(not(feature = "no_function"))]
-        if let Some(FnResolutionCacheEntry { func, source }) = hash_script.and_then(|hash| {
-            self.resolve_fn(mods, state, lib, fn_name, hash, None, false, false)
-                .cloned()
-        }) {
+        if let Some(FnResolutionCacheEntry { func, source }) = self
+            .resolve_fn(mods, state, lib, fn_name, hashes.script, None, false, false)
+            .cloned()
+        {
             // Script function call
             assert!(func.is_script());
 
