@@ -29,15 +29,6 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-#[cfg(not(feature = "no_index"))]
-use crate::{Array, Blob};
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
-#[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
-use crate::ast::FnCallHashes;
-
 pub type Precedence = NonZeroU8;
 
 /// _(internals)_ A stack of imported [modules][Module] plus mutable runtime global states.
@@ -246,7 +237,7 @@ impl Imports {
     /// Get the pre-calculated index getter hash.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[must_use]
-    pub(crate) fn fn_hash_idx_get(&mut self) -> u64 {
+    pub(crate) fn hash_idx_get(&mut self) -> u64 {
         if self.fn_hash_indexing != (0, 0) {
             self.fn_hash_indexing.0
         } else {
@@ -259,7 +250,7 @@ impl Imports {
     /// Get the pre-calculated index setter hash.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     #[must_use]
-    pub(crate) fn fn_hash_idx_set(&mut self) -> u64 {
+    pub(crate) fn hash_idx_set(&mut self) -> u64 {
         if self.fn_hash_indexing != (0, 0) {
             self.fn_hash_indexing.1
         } else {
@@ -559,7 +550,7 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, _) => TypeId::of::<T>() == TypeId::of::<bool>(),
             #[cfg(not(feature = "no_index"))]
-            Self::BlobByte(_, _, _) => TypeId::of::<T>() == TypeId::of::<Blob>(),
+            Self::BlobByte(_, _, _) => TypeId::of::<T>() == TypeId::of::<crate::Blob>(),
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => TypeId::of::<T>() == TypeId::of::<char>(),
         }
@@ -641,7 +632,7 @@ impl<'a> Target<'a> {
                     ))
                 })?;
 
-                let value = &mut *value.write_lock::<Blob>().expect("`Blob`");
+                let value = &mut *value.write_lock::<crate::Blob>().expect("`Blob`");
 
                 let index = *index;
 
@@ -1372,7 +1363,8 @@ impl Engine {
 
                         if let Some(mut new_val) = try_setter {
                             // Try to call index setter if value is changed
-                            let hash_set = FnCallHashes::from_native(mods.fn_hash_idx_set());
+                            let hash_set =
+                                crate::ast::FnCallHashes::from_native(mods.hash_idx_set());
                             let args = &mut [target, &mut idx_val_for_setter, &mut new_val];
 
                             if let Err(err) = self.exec_fn_call(
@@ -1418,7 +1410,8 @@ impl Engine {
 
                         if let Some(mut new_val) = try_setter {
                             // Try to call index setter
-                            let hash_set = FnCallHashes::from_native(mods.fn_hash_idx_set());
+                            let hash_set =
+                                crate::ast::FnCallHashes::from_native(mods.hash_idx_set());
                             let args = &mut [target, &mut idx_val_for_setter, &mut new_val];
 
                             self.exec_fn_call(
@@ -1461,7 +1454,7 @@ impl Engine {
                         unreachable!("function call in dot chain should not be namespace-qualified")
                     }
                     // {xxx:map}.id op= ???
-                    Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
+                    Expr::Property(x) if target.is::<crate::Map>() && new_val.is_some() => {
                         let (name, pos) = &x.2;
                         let ((new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
                         let index = name.into();
@@ -1479,7 +1472,7 @@ impl Engine {
                         Ok((Dynamic::UNIT, true))
                     }
                     // {xxx:map}.id
-                    Expr::Property(x) if target.is::<Map>() => {
+                    Expr::Property(x) if target.is::<crate::Map>() => {
                         let (name, pos) = &x.2;
                         let index = name.into();
                         let val = self.get_indexed_mut(
@@ -1493,7 +1486,7 @@ impl Engine {
                         let ((mut new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
 
                         if op_info.is_some() {
-                            let hash = FnCallHashes::from_native(*hash_get);
+                            let hash = crate::ast::FnCallHashes::from_native(*hash_get);
                             let args = &mut [target.as_mut()];
                             let (mut orig_val, _) = self
                                 .exec_fn_call(
@@ -1537,7 +1530,7 @@ impl Engine {
                             new_val = orig_val;
                         }
 
-                        let hash = FnCallHashes::from_native(*hash_set);
+                        let hash = crate::ast::FnCallHashes::from_native(*hash_set);
                         let args = &mut [target.as_mut(), &mut new_val];
                         self.exec_fn_call(
                             mods, state, lib, setter, hash, args, is_ref_mut, true, *pos, None,
@@ -1547,7 +1540,8 @@ impl Engine {
                             // Try an indexer if property does not exist
                             EvalAltResult::ErrorDotExpr(_, _) => {
                                 let args = &mut [target, &mut name.into(), &mut new_val];
-                                let hash_set = FnCallHashes::from_native(mods.fn_hash_idx_set());
+                                let hash_set =
+                                    crate::ast::FnCallHashes::from_native(mods.hash_idx_set());
                                 let pos = Position::NONE;
 
                                 self.exec_fn_call(
@@ -1567,7 +1561,7 @@ impl Engine {
                     // xxx.id
                     Expr::Property(x) => {
                         let ((getter, hash_get), _, (name, pos)) = x.as_ref();
-                        let hash = FnCallHashes::from_native(*hash_get);
+                        let hash = crate::ast::FnCallHashes::from_native(*hash_get);
                         let args = &mut [target.as_mut()];
                         self.exec_fn_call(
                             mods, state, lib, getter, hash, args, is_ref_mut, true, *pos, None,
@@ -1597,7 +1591,7 @@ impl Engine {
                     }
                     // {xxx:map}.sub_lhs[expr] | {xxx:map}.sub_lhs.expr
                     Expr::Index(x, term, x_pos) | Expr::Dot(x, term, x_pos)
-                        if target.is::<Map>() =>
+                        if target.is::<crate::Map>() =>
                     {
                         let val_target = &mut match x.lhs {
                             Expr::Property(ref p) => {
@@ -1641,8 +1635,8 @@ impl Engine {
                                 let ((getter, hash_get), (setter, hash_set), (name, pos)) =
                                     p.as_ref();
                                 let rhs_chain = match_chaining_type(rhs);
-                                let hash_get = FnCallHashes::from_native(*hash_get);
-                                let hash_set = FnCallHashes::from_native(*hash_set);
+                                let hash_get = crate::ast::FnCallHashes::from_native(*hash_get);
+                                let hash_set = crate::ast::FnCallHashes::from_native(*hash_set);
                                 let mut arg_values = [target.as_mut(), &mut Dynamic::UNIT.clone()];
                                 let args = &mut arg_values[..1];
 
@@ -1705,9 +1699,10 @@ impl Engine {
                                             EvalAltResult::ErrorDotExpr(_, _) => {
                                                 let args =
                                                     &mut [target.as_mut(), &mut name.into(), val];
-                                                let hash_set = FnCallHashes::from_native(
-                                                    mods.fn_hash_idx_set(),
-                                                );
+                                                let hash_set =
+                                                    crate::ast::FnCallHashes::from_native(
+                                                        mods.hash_idx_set(),
+                                                    );
                                                 self.exec_fn_call(
                                                     mods, state, lib, FN_IDX_SET, hash_set, args,
                                                     is_ref_mut, true, *pos, None, level,
@@ -2160,7 +2155,7 @@ impl Engine {
 
             _ if use_indexers => {
                 let args = &mut [target, &mut idx];
-                let hash_get = FnCallHashes::from_native(mods.fn_hash_idx_get());
+                let hash_get = crate::ast::FnCallHashes::from_native(mods.hash_idx_get());
                 let idx_pos = Position::NONE;
 
                 self.exec_fn_call(
@@ -2267,7 +2262,7 @@ impl Engine {
             Expr::Array(x, _) => Ok(x
                 .iter()
                 .try_fold(
-                    Array::with_capacity(x.len()),
+                    crate::Array::with_capacity(x.len()),
                     |mut arr, item| -> Result<_, Box<EvalAltResult>> {
                         arr.push(
                             self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?
@@ -2950,7 +2945,7 @@ impl Engine {
                             }
                             #[cfg(not(feature = "no_object"))]
                             _ => {
-                                let mut err_map = Map::new();
+                                let mut err_map = crate::Map::new();
                                 let err_pos = err.take_position();
 
                                 err_map.insert("message".into(), err.to_string().into());

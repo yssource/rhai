@@ -27,12 +27,6 @@ use std::{
     ops::AddAssign,
 };
 
-#[cfg(not(feature = "no_float"))]
-use crate::{custom_syntax::markers::CUSTOM_SYNTAX_MARKER_FLOAT, FLOAT};
-
-#[cfg(not(feature = "no_function"))]
-use crate::FnAccess;
-
 type PERR = ParseErrorType;
 
 type FunctionsLib = BTreeMap<u64, Shared<ScriptFnDef>>;
@@ -1573,7 +1567,7 @@ fn parse_unary(
                     .map(|i| Expr::IntegerConstant(i, pos))
                     .or_else(|| {
                         #[cfg(not(feature = "no_float"))]
-                        return Some(Expr::FloatConstant((-(num as FLOAT)).into(), pos));
+                        return Some(Expr::FloatConstant((-(num as crate::FLOAT)).into(), pos));
                         #[cfg(feature = "no_float")]
                         return None;
                     })
@@ -2173,19 +2167,23 @@ fn parse_custom_syntax(
                 }
             },
             #[cfg(not(feature = "no_float"))]
-            CUSTOM_SYNTAX_MARKER_FLOAT => match input.next().expect(NEVER_ENDS) {
-                (Token::FloatConstant(f), pos) => {
-                    inputs.push(Expr::FloatConstant(f, pos));
-                    segments.push(f.to_string().into());
-                    tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_FLOAT));
+            crate::custom_syntax::markers::CUSTOM_SYNTAX_MARKER_FLOAT => {
+                match input.next().expect(NEVER_ENDS) {
+                    (Token::FloatConstant(f), pos) => {
+                        inputs.push(Expr::FloatConstant(f, pos));
+                        segments.push(f.to_string().into());
+                        tokens.push(state.get_identifier(
+                            crate::custom_syntax::markers::CUSTOM_SYNTAX_MARKER_FLOAT,
+                        ));
+                    }
+                    (_, pos) => {
+                        return Err(PERR::MissingSymbol(
+                            "Expecting a floating-point number".to_string(),
+                        )
+                        .into_err(pos))
+                    }
                 }
-                (_, pos) => {
-                    return Err(PERR::MissingSymbol(
-                        "Expecting a floating-point number".to_string(),
-                    )
-                    .into_err(pos))
-                }
-            },
+            }
             CUSTOM_SYNTAX_MARKER_STRING => match input.next().expect(NEVER_ENDS) {
                 (Token::StringConstant(s), pos) => {
                     let s: ImmutableString = state.get_identifier(s).into();
@@ -2849,9 +2847,9 @@ fn parse_stmt(
         Token::Fn | Token::Private => {
             let access = if matches!(token, Token::Private) {
                 eat_token(input, Token::Private);
-                FnAccess::Private
+                crate::FnAccess::Private
             } else {
-                FnAccess::Public
+                crate::FnAccess::Public
             };
 
             match input.next().expect(NEVER_ENDS) {
@@ -3055,7 +3053,7 @@ fn parse_fn(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    access: FnAccess,
+    access: crate::FnAccess,
     settings: ParseSettings,
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
@@ -3281,7 +3279,7 @@ fn parse_anon_fn(
     // Define the function
     let script = ScriptFnDef {
         name: fn_name.clone(),
-        access: FnAccess::Public,
+        access: crate::FnAccess::Public,
         params,
         body: body.into(),
         lib: None,

@@ -1,3 +1,5 @@
+#![cfg(feature = "metadata")]
+
 use crate::module::calc_native_fn_hash;
 use crate::{calc_fn_hash, Engine, AST};
 use serde::{Deserialize, Serialize};

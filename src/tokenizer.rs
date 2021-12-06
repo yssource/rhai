@@ -19,15 +19,6 @@ use std::{
     str::{Chars, FromStr},
 };
 
-#[cfg(not(feature = "no_float"))]
-use crate::{ast::FloatWrapper, FLOAT};
-
-#[cfg(feature = "decimal")]
-use rust_decimal::Decimal;
-
-#[cfg(not(feature = "no_function"))]
-use crate::engine::KEYWORD_IS_DEF_FN;
-
 /// _(internals)_ A type containing commands to control the tokenizer.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Copy)]
 pub struct TokenizerControlBlock {
@@ -305,12 +296,12 @@ pub enum Token {
     ///
     /// Reserved under the `no_float` feature.
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(FloatWrapper<FLOAT>),
-    /// A [`Decimal`] constant.
+    FloatConstant(crate::ast::FloatWrapper<crate::FLOAT>),
+    /// A [`Decimal`][rust_decimal::Decimal] constant.
     ///
     /// Requires the `decimal` feature.
     #[cfg(feature = "decimal")]
-    DecimalConstant(Decimal),
+    DecimalConstant(rust_decimal::Decimal),
     /// An identifier.
     Identifier(Box<str>),
     /// A character constant.
@@ -789,7 +780,7 @@ impl Token {
             }
 
             #[cfg(not(feature = "no_function"))]
-            KEYWORD_IS_DEF_FN => Reserved(syntax.into()),
+            crate::engine::KEYWORD_IS_DEF_FN => Reserved(syntax.into()),
 
             _ => return None,
         })
@@ -1534,18 +1525,20 @@ fn get_next_token_inner(
 
                         // If integer parsing is unnecessary, try float instead
                         #[cfg(not(feature = "no_float"))]
-                        let num =
-                            num.or_else(|_| FloatWrapper::from_str(&out).map(Token::FloatConstant));
+                        let num = num.or_else(|_| {
+                            crate::ast::FloatWrapper::from_str(&out).map(Token::FloatConstant)
+                        });
 
                         // Then try decimal
                         #[cfg(feature = "decimal")]
-                        let num =
-                            num.or_else(|_| Decimal::from_str(&out).map(Token::DecimalConstant));
+                        let num = num.or_else(|_| {
+                            rust_decimal::Decimal::from_str(&out).map(Token::DecimalConstant)
+                        });
 
                         // Then try decimal in scientific notation
                         #[cfg(feature = "decimal")]
                         let num = num.or_else(|_| {
-                            Decimal::from_scientific(&out).map(Token::DecimalConstant)
+                            rust_decimal::Decimal::from_scientific(&out).map(Token::DecimalConstant)
                         });
 
                         num.unwrap_or_else(|_| {
@@ -1990,7 +1983,7 @@ pub fn is_keyword_function(name: impl AsRef<str>) -> bool {
         | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_DEF_VAR => true,
 
         #[cfg(not(feature = "no_function"))]
-        KEYWORD_IS_DEF_FN => true,
+        crate::engine::KEYWORD_IS_DEF_FN => true,
 
         _ => false,
     }

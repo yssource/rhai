@@ -23,12 +23,6 @@ use std::{
     ops::{Add, AddAssign, Deref, DerefMut},
 };
 
-#[cfg(not(feature = "no_index"))]
-use crate::Array;
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
 /// A type representing the namespace of a function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum FnNamespace {
@@ -942,7 +936,7 @@ impl Module {
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`] or [`Map`].
+    /// Panics if the type is [`Array`][crate::Array] or [`Map`][crate::Map].
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Function Metadata
@@ -971,11 +965,11 @@ impl Module {
         F: Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     {
         #[cfg(not(feature = "no_index"))]
-        if TypeId::of::<A>() == TypeId::of::<Array>() {
+        if TypeId::of::<A>() == TypeId::of::<crate::Array>() {
             panic!("Cannot register indexer for arrays.");
         }
         #[cfg(not(feature = "no_object"))]
-        if TypeId::of::<A>() == TypeId::of::<Map>() {
+        if TypeId::of::<A>() == TypeId::of::<crate::Map>() {
             panic!("Cannot register indexer for object maps.");
         }
         if TypeId::of::<A>() == TypeId::of::<String>()
@@ -1003,7 +997,7 @@ impl Module {
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`] or [`Map`].
+    /// Panics if the type is [`Array`][crate::Array] or [`Map`][crate::Map].
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Function Metadata
@@ -1032,11 +1026,11 @@ impl Module {
         F: Fn(&mut A, B, C) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     {
         #[cfg(not(feature = "no_index"))]
-        if TypeId::of::<A>() == TypeId::of::<Array>() {
+        if TypeId::of::<A>() == TypeId::of::<crate::Array>() {
             panic!("Cannot register indexer for arrays.");
         }
         #[cfg(not(feature = "no_object"))]
-        if TypeId::of::<A>() == TypeId::of::<Map>() {
+        if TypeId::of::<A>() == TypeId::of::<crate::Map>() {
             panic!("Cannot register indexer for object maps.");
         }
         if TypeId::of::<A>() == TypeId::of::<String>()
@@ -1064,7 +1058,7 @@ impl Module {
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`] or [`Map`].
+    /// Panics if the type is [`Array`][crate::Array] or [`Map`][crate::Map].
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Function Metadata

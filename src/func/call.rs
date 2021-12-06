@@ -23,9 +23,6 @@ use std::{
     mem,
 };
 
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
 /// Arguments to a function call, which is a list of [`&mut Dynamic`][Dynamic].
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
@@ -841,7 +838,7 @@ impl Engine {
 
                 // Check if it is a map method call in OOP style
                 #[cfg(not(feature = "no_object"))]
-                if let Some(map) = target.read_lock::<Map>() {
+                if let Some(map) = target.read_lock::<crate::Map>() {
                     if let Some(val) = map.get(fn_name) {
                         if let Some(fn_ptr) = val.read_lock::<FnPtr>() {
                             // Remap the function name
