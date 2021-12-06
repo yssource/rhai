@@ -1,7 +1,7 @@
 //! Module defining the AST (abstract syntax tree).
 
 use crate::calc_fn_hash;
-use crate::func::hashing::DEFAULT_HASH;
+use crate::func::hashing::ALT_ZERO_HASH;
 use crate::module::NamespaceRef;
 use crate::tokenizer::Token;
 use crate::types::dynamic::Union;
@@ -1800,7 +1800,7 @@ impl OpAssignment<'_> {
 ///   to possible function overloading for different parameter types.
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct FnCallHashes {
-    /// Pre-calculated hash for a script-defined function ([`None`] if native functions only).
+    /// Pre-calculated hash for a script-defined function (zero if native functions only).
     #[cfg(not(feature = "no_function"))]
     pub script: u64,
     /// Pre-calculated hash for a native Rust function with no parameter types.
@@ -1825,7 +1825,7 @@ impl fmt::Debug for FnCallHashes {
 impl From<u64> for FnCallHashes {
     #[inline(always)]
     fn from(hash: u64) -> Self {
-        let hash = if hash == 0 { DEFAULT_HASH } else { hash };
+        let hash = if hash == 0 { ALT_ZERO_HASH } else { hash };
 
         Self {
             #[cfg(not(feature = "no_function"))]
@@ -1843,7 +1843,7 @@ impl FnCallHashes {
         Self {
             #[cfg(not(feature = "no_function"))]
             script: 0,
-            native: if hash == 0 { DEFAULT_HASH } else { hash },
+            native: if hash == 0 { ALT_ZERO_HASH } else { hash },
         }
     }
     /// Create a [`FnCallHashes`] with both native Rust and script function hashes.
@@ -1852,8 +1852,8 @@ impl FnCallHashes {
     pub const fn from_all(#[cfg(not(feature = "no_function"))] script: u64, native: u64) -> Self {
         Self {
             #[cfg(not(feature = "no_function"))]
-            script: if script == 0 { DEFAULT_HASH } else { script },
-            native: if native == 0 { DEFAULT_HASH } else { native },
+            script: if script == 0 { ALT_ZERO_HASH } else { script },
+            native: if native == 0 { ALT_ZERO_HASH } else { native },
         }
     }
     /// Is this [`FnCallHashes`] native Rust only?

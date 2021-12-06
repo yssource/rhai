@@ -96,8 +96,7 @@ impl FuncInfo {
     }
 }
 
-/// _(internals)_ Calculate a [`u64`] hash key from a namespace-qualified function name and
-/// parameter types.
+/// _(internals)_ Calculate a non-zero [`u64`] hash key from a namespace-qualified function name and parameter types.
 /// Exported under the `internals` feature only.
 ///
 /// Module names are passed in via `&str` references from an iterator.
@@ -667,7 +666,7 @@ impl Module {
         type_id
     }
 
-    /// Set a Rust function into the [`Module`], returning a hash key.
+    /// Set a Rust function into the [`Module`], returning a non-zero hash key.
     ///
     /// If there is an existing Rust function of the same hash, it is replaced.
     ///
@@ -729,7 +728,7 @@ impl Module {
 
     /// Set a Rust function taking a reference to the scripting [`Engine`][crate::Engine],
     /// the current set of functions, plus a list of mutable [`Dynamic`] references
-    /// into the [`Module`], returning a hash key.
+    /// into the [`Module`], returning a non-zero hash key.
     ///
     /// Use this to register a built-in function which must reference settings on the scripting
     /// [`Engine`][crate::Engine] (e.g. to prevent growing an array beyond the allowed maximum size),
@@ -822,7 +821,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust function into the [`Module`], returning a hash key.
+    /// Set a Rust function into the [`Module`], returning a non-zero hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
@@ -861,7 +860,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust getter function taking one mutable parameter, returning a hash key.
+    /// Set a Rust getter function taking one mutable parameter, returning a non-zero hash key.
     /// This function is automatically exposed to the global namespace.
     ///
     /// If there is a similar existing Rust getter function, it is replaced.
@@ -898,7 +897,7 @@ impl Module {
     }
 
     /// Set a Rust setter function taking two parameters (the first one mutable) into the [`Module`],
-    /// returning a hash key.
+    /// returning a non-zero hash key.
     /// This function is automatically exposed to the global namespace.
     ///
     /// If there is a similar existing setter Rust function, it is replaced.
@@ -939,7 +938,7 @@ impl Module {
     }
 
     /// Set a Rust index getter taking two parameters (the first one mutable) into the [`Module`],
-    /// returning a hash key.
+    /// returning a non-zero hash key.
     /// This function is automatically exposed to the global namespace.
     ///
     /// If there is a similar existing setter Rust function, it is replaced.
@@ -1000,7 +999,7 @@ impl Module {
     }
 
     /// Set a Rust index setter taking three parameters (the first one mutable) into the [`Module`],
-    /// returning a hash key.
+    /// returning a non-zero hash key.
     /// This function is automatically exposed to the global namespace.
     ///
     /// If there is a similar existing Rust function, it is replaced.
@@ -1060,7 +1059,7 @@ impl Module {
         )
     }
 
-    /// Set a pair of Rust index getter and setter functions, returning both hash keys.
+    /// Set a pair of Rust index getter and setter functions, returning both non-zero hash keys.
     /// This is a short-hand for [`set_indexer_get_fn`][Module::set_indexer_get_fn] and
     /// [`set_indexer_set_fn`][Module::set_indexer_set_fn].
     ///

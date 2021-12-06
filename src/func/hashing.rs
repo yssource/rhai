@@ -8,13 +8,24 @@ use std::{
     iter::empty,
 };
 
-pub const DEFAULT_HASH: u64 = 42;
+/// Dummy hash value to map zeros to. This value can be anything.
+///
+/// # Notes
+///
+/// Hashes are `u64`, and they can be zero (although extremely unlikely).
+/// It is possible to hijack the zero value to indicate non-existence,
+/// like [`None`] in [`Option<u64>`].
+///
+/// When a hash is calculated to be zero, it gets mapped to this alternate hash value.
+/// This has the effect of releasing the zero value at the expense of causing the probability of
+/// this value to double, which has minor impacts.
+pub const ALT_ZERO_HASH: u64 = 42;
 
 /// A hasher that only takes one single [`u64`] and returns it as a non-zero hash key.
 ///
 /// # Zeros
 ///
-/// If the value is zero, then it is mapped to `DEFAULT_HASH`.
+/// If the value is zero, it is mapped to `ALT_ZERO_HASH`.
 ///
 /// # Panics
 ///
@@ -37,7 +48,7 @@ impl Hasher for StraightHasher {
         self.0 = u64::from_ne_bytes(key);
 
         if self.0 == 0 {
-            self.0 = DEFAULT_HASH
+            self.0 = ALT_ZERO_HASH
         }
     }
 }
@@ -51,7 +62,7 @@ impl BuildHasher for StraightHasherBuilder {
 
     #[inline(always)]
     fn build_hasher(&self) -> Self::Hasher {
-        StraightHasher(DEFAULT_HASH)
+        StraightHasher(ALT_ZERO_HASH)
     }
 }
 
@@ -92,7 +103,7 @@ pub fn calc_qualified_var_hash<'a>(
     var_name.as_ref().hash(s);
 
     match s.finish() {
-        0 => DEFAULT_HASH,
+        0 => ALT_ZERO_HASH,
         r => r,
     }
 }
@@ -130,7 +141,7 @@ pub fn calc_qualified_fn_hash(
     num.hash(s);
 
     match s.finish() {
-        0 => DEFAULT_HASH,
+        0 => ALT_ZERO_HASH,
         r => r,
     }
 }
@@ -165,7 +176,7 @@ pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
     len.hash(s);
 
     match s.finish() {
-        0 => DEFAULT_HASH,
+        0 => ALT_ZERO_HASH,
         r => r,
     }
 }
@@ -179,7 +190,7 @@ pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
 #[must_use]
 pub const fn combine_hashes(a: u64, b: u64) -> u64 {
     match a ^ b {
-        0 => DEFAULT_HASH,
+        0 => ALT_ZERO_HASH,
         r => r,
     }
 }
