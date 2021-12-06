@@ -106,7 +106,7 @@ impl FuncInfo {
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline]
-fn calc_native_fn_hash(
+pub fn calc_native_fn_hash(
     modules: impl Iterator<Item = impl AsRef<str>>,
     fn_name: impl AsRef<str>,
     params: &[TypeId],
@@ -179,8 +179,7 @@ impl fmt::Debug for Module {
             d.field(
                 "functions",
                 &self
-                    .functions
-                    .values()
+                    .iter_fn()
                     .map(|f| f.func.to_string())
                     .collect::<BTreeSet<_>>(),
             );
@@ -358,9 +357,8 @@ impl Module {
     #[cfg(feature = "metadata")]
     #[inline]
     pub fn gen_fn_signatures(&self) -> impl Iterator<Item = String> + '_ {
-        self.functions
-            .values()
-            .filter(|f| match f.access {
+        self.iter_fn()
+            .filter(|&f| match f.access {
                 FnAccess::Public => true,
                 FnAccess::Private => false,
             })
@@ -501,8 +499,7 @@ impl Module {
         } else {
             let name = name.as_ref();
 
-            self.functions
-                .values()
+            self.iter_fn()
                 .find(|f| f.params == num_params && f.name == name)
                 .and_then(|f| f.func.get_script_fn_def())
         }
@@ -1232,7 +1229,7 @@ impl Module {
             other
                 .functions
                 .iter()
-                .filter(|(_, f)| {
+                .filter(|&(_, f)| {
                     _filter(
                         f.namespace,
                         f.access,
@@ -1331,18 +1328,15 @@ impl Module {
             &Shared<crate::ast::ScriptFnDef>,
         ),
     > + '_ {
-        self.functions
-            .values()
-            .filter(|f| f.func.is_script())
-            .map(|f| {
-                (
-                    f.namespace,
-                    f.access,
-                    f.name.as_str(),
-                    f.params,
-                    f.func.get_script_fn_def().expect("scripted function"),
-                )
-            })
+        self.iter_fn().filter(|&f| f.func.is_script()).map(|f| {
+            (
+                f.namespace,
+                f.access,
+                f.name.as_str(),
+                f.params,
+                f.func.get_script_fn_def().expect("scripted function"),
+            )
+        })
     }
 
     /// Get an iterator over all script-defined functions in the [`Module`].
@@ -1358,9 +1352,8 @@ impl Module {
     pub fn iter_script_fn_info(
         &self,
     ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize)> {
-        self.functions
-            .values()
-            .filter(|f| f.func.is_script())
+        self.iter_fn()
+            .filter(|&f| f.func.is_script())
             .map(|f| (f.namespace, f.access, f.name.as_str(), f.params))
     }
 
@@ -1461,13 +1454,12 @@ impl Module {
         #[cfg(not(feature = "no_function"))]
         if ast.has_functions() {
             ast.shared_lib()
-                .functions
-                .values()
-                .filter(|f| match f.access {
+                .iter_fn()
+                .filter(|&f| match f.access {
                     FnAccess::Public => true,
                     FnAccess::Private => false,
                 })
-                .filter(|f| f.func.is_script())
+                .filter(|&f| f.func.is_script())
                 .for_each(|f| {
                     // Encapsulate AST environment
                     let mut func = f

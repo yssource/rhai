@@ -31,6 +31,7 @@ Enhancements
 * Added `into_array` and `into_typed_array` for `Dynamic`.
 * Added `FnPtr::call` and `FnPtr::call_within_context` to simplify calling a function pointer.
 * BLob's can now be deserialized (using `from_dynamic`) into `Vec<u8>` via [`serde_bytes`](https://crates.io/crates/serde_bytes).
+* A function's hashes are included in its JSON metadata to assist in debugging. Each function's `hashBase` field in the JSON object should map directly to the pre-calculated hash in the function call.
 
 Deprecated and Gated API's
 --------------------------
