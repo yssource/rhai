@@ -63,6 +63,14 @@ fn test_blobs() -> Result<(), Box<EvalAltResult>> {
         engine.eval_with_scope::<Blob>(&mut orig_scope.clone(), "x + x")?,
         [1, 2, 3, 1, 2, 3]
     );
+    assert_eq!(
+        engine.eval_with_scope::<Blob>(&mut orig_scope.clone(), "x += 999; x")?,
+        [1, 2, 3, 0xe7]
+    );
+    assert_eq!(
+        engine.eval_with_scope::<Blob>(&mut orig_scope.clone(), "x[2] = 999; x")?,
+        [1, 2, 0xe7]
+    );
 
     Ok(())
 }

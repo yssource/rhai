@@ -637,7 +637,7 @@ impl<'a> Target<'a> {
                 let index = *index;
 
                 if index < value.len() {
-                    value[index] = (new_byte & 0x000f) as u8;
+                    value[index] = (new_byte & 0x00ff) as u8;
                 } else {
                     unreachable!("blob index out of bounds: {}", index);
                 }

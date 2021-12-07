@@ -7,16 +7,12 @@ Version 1.3.0
 Compiler requirement
 --------------------
 
-* Minimum compiler version is bumped to 1.51.
-
-Bug fixes
----------
-
-* BLOB's no longer panic when accessed with an out-of-bounds index.
+* Minimum compiler version is now 1.51.
 
 New features
 ------------
 
+* `BLOB` (essentially a byte array) is added as a supported primitive value type parallel to arrays.
 * New options for `Engine` which allows disabling `if`-expressions, `switch`-expressions, statement expressions, anonymous functions and/or looping (i.e. `while`, `loop`, `do` and `for` statements):
   * `Engine::set_allow_if_expression`
   * `Engine::set_allow_switch_expression`
@@ -30,7 +26,6 @@ Enhancements
 
 * Added `into_array` and `into_typed_array` for `Dynamic`.
 * Added `FnPtr::call` and `FnPtr::call_within_context` to simplify calling a function pointer.
-* BLob's can now be deserialized (using `from_dynamic`) into `Vec<u8>` via [`serde_bytes`](https://crates.io/crates/serde_bytes).
 * A function's hashes are included in its JSON metadata to assist in debugging. Each function's `hashBase` field in the JSON object should map directly to the pre-calculated hash in the function call.
 * `Expression` now derefs to `Expr`.
 

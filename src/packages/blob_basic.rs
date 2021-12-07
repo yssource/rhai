@@ -48,7 +48,7 @@ mod blob_functions {
         }
 
         let mut blob = Blob::new();
-        blob.resize(len, (value & 0x000f) as u8);
+        blob.resize(len, (value & 0x00ff) as u8);
         Ok(blob)
     }
     #[rhai_fn(name = "len", get = "len", pure)]
@@ -57,7 +57,7 @@ mod blob_functions {
     }
     #[rhai_fn(name = "push", name = "+=")]
     pub fn push(blob: &mut Blob, item: INT) {
-        let item = (item & 0x000f) as u8;
+        let item = (item & 0x00ff) as u8;
         blob.push(item);
     }
     #[rhai_fn(name = "append", name = "+=")]
@@ -82,7 +82,7 @@ mod blob_functions {
         blob
     }
     pub fn insert(blob: &mut Blob, position: INT, item: INT) {
-        let item = (item & 0x000f) as u8;
+        let item = (item & 0x00ff) as u8;
 
         if blob.is_empty() {
             blob.push(item);
@@ -113,7 +113,7 @@ mod blob_functions {
             return Ok(());
         }
 
-        let item = (item & 0x000f) as u8;
+        let item = (item & 0x00ff) as u8;
         let _ctx = ctx;
 
         // Check if blob will be over max size limit
