@@ -1175,6 +1175,15 @@ pub fn parse_string_literal(
                 result.push(next_char)
             }
 
+            // Double wrapper
+            _ if termination_char == next_char
+                && escape.is_empty()
+                && stream.peek_next().map_or(false, |c| c == termination_char) =>
+            {
+                eat_next(stream, pos);
+                result.push(termination_char)
+            }
+
             // Close wrapper
             _ if termination_char == next_char && escape.is_empty() => {
                 state.is_within_text_terminated_by = None;

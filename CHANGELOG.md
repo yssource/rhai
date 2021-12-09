@@ -24,6 +24,7 @@ New features
 Enhancements
 ------------
 
+* Two double quotes (`""`) in a string literal now maps to `"`; two back-ticks (``` `` ```) in a literal string now maps to `` ` ``.
 * Added `Engine::register_type_with_name_raw` to register a custom type based on a fully-qualified type path.
 * Added `into_array` and `into_typed_array` for `Dynamic`.
 * Added `FnPtr::call` and `FnPtr::call_within_context` to simplify calling a function pointer.
