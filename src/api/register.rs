@@ -4,6 +4,7 @@ use crate::func::{FnCallArgs, RegisterNativeFunction, SendSync};
 use crate::types::dynamic::Variant;
 use crate::{
     Engine, EvalAltResult, FnAccess, FnNamespace, Identifier, Module, NativeCallContext, Shared,
+    SmartString,
 };
 use std::any::{type_name, TypeId};
 #[cfg(feature = "no_std")]
@@ -146,11 +147,12 @@ impl Engine {
     ///
     /// # WARNING - Low Level API
     ///
-    /// This function is very low level.  It takes a list of [`TypeId`][std::any::TypeId]'s indicating the actual types of the parameters.
+    /// This function is very low level.  It takes a list of [`TypeId`][std::any::TypeId]'s
+    /// indicating the actual types of the parameters.
     ///
     /// ## Arguments
     ///
-    /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`][crate::Dynamic],
+    /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`][crate::Dynamic].
     /// The arguments are guaranteed to be of the correct types matching the [`TypeId`][std::any::TypeId]'s.
     ///
     /// To access a primary argument value (i.e. cloning is cheap), use: `args[n].as_xxx().unwrap()`
@@ -263,9 +265,23 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) -> &mut Self {
+        self.register_type_with_name_raw(type_name::<T>(), name)
+    }
+    /// Register a custom type for use with the [`Engine`], with a pretty-print name
+    /// for the `type_of` function. The type must implement [`Clone`].
+    ///
+    /// # WARNING - Low Level API
+    ///
+    /// This function is low level.
+    #[inline(always)]
+    pub fn register_type_with_name_raw(
+        &mut self,
+        fully_qualified_type_path: impl Into<SmartString>,
+        name: impl Into<SmartString>,
+    ) -> &mut Self {
         // Add the pretty-print type name into the map
         self.type_names
-            .insert(type_name::<T>().into(), Box::new(name.into()));
+            .insert(fully_qualified_type_path.into(), name.into());
         self
     }
     /// Register an type iterator for an iterable type with the [`Engine`].

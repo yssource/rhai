@@ -24,6 +24,7 @@ New features
 Enhancements
 ------------
 
+* Added `Engine::register_type_with_name_raw` to register a custom type based on a fully-qualified type path.
 * Added `into_array` and `into_typed_array` for `Dynamic`.
 * Added `FnPtr::call` and `FnPtr::call_within_context` to simplify calling a function pointer.
 * A function's hashes are included in its JSON metadata to assist in debugging. Each function's `hashBase` field in the JSON object should map directly to the pre-calculated hash in the function call.

@@ -936,7 +936,7 @@ pub struct Engine {
     pub(crate) module_resolver: Option<Box<dyn crate::ModuleResolver>>,
 
     /// A map mapping type names to pretty-print names.
-    pub(crate) type_names: BTreeMap<Identifier, Box<Identifier>>,
+    pub(crate) type_names: BTreeMap<Identifier, Identifier>,
 
     /// An empty [`ImmutableString`] for cloning purposes.
     pub(crate) empty_string: ImmutableString,
