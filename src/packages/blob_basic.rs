@@ -7,6 +7,9 @@ use crate::{def_package, Blob, Dynamic, EvalAltResult, NativeCallContext, Positi
 use std::prelude::v1::*;
 use std::{any::TypeId, mem};
 
+#[cfg(not(feature = "no_float"))]
+use crate::FLOAT;
+
 def_package!(crate:BasicBlobPackage:"Basic BLOB utilities.", lib, {
     lib.standard = true;
 
@@ -188,10 +191,10 @@ mod blob_functions {
         }
 
         let start = if start < 0 {
-            let arr_len = blob.len();
+            let blob_len = blob.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
         } else if start as usize >= blob.len() {
             blob.extend(replace.into_iter());
             return;
@@ -215,10 +218,10 @@ mod blob_functions {
         }
 
         let start = if start < 0 {
-            let arr_len = blob.len();
+            let blob_len = blob.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
         } else if start as usize >= blob.len() {
             return Blob::new();
         } else {
@@ -246,10 +249,10 @@ mod blob_functions {
         }
 
         let start = if start < 0 {
-            let arr_len = blob.len();
+            let blob_len = blob.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
         } else if start as usize >= blob.len() {
             return Blob::new();
         } else {
@@ -288,10 +291,10 @@ mod blob_functions {
         }
 
         let start = if start < 0 {
-            let arr_len = blob.len();
+            let blob_len = blob.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
         } else if start as usize >= blob.len() {
             return Blob::new();
         } else {
@@ -314,10 +317,10 @@ mod blob_functions {
         }
 
         let start = if start < 0 {
-            let arr_len = blob.len();
+            let blob_len = blob.len();
             start
                 .checked_abs()
-                .map_or(0, |n| arr_len - (n as usize).min(arr_len))
+                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
         } else if start as usize >= blob.len() {
             return mem::take(blob);
         } else {
@@ -350,5 +353,193 @@ mod blob_functions {
     #[rhai_fn(name = "!=", pure)]
     pub fn not_equals(blob1: &mut Blob, blob2: Blob) -> bool {
         !equals(blob1, blob2)
+    }
+
+    #[inline]
+    fn parse_int(blob: &mut Blob, start: INT, len: INT, is_le: bool) -> INT {
+        if blob.is_empty() || len <= 0 {
+            return 0;
+        }
+        let blob_len = blob.len();
+
+        let start = if start < 0 {
+            start
+                .checked_abs()
+                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
+        } else if start as usize >= blob_len {
+            return 0;
+        } else {
+            start as usize
+        };
+
+        let len = if len as usize > blob_len - start {
+            blob_len - start
+        } else {
+            len as usize
+        };
+
+        const INT_BYTES: usize = mem::size_of::<INT>();
+
+        let len = usize::min(len, INT_BYTES);
+
+        let mut buf = [0_u8; INT_BYTES];
+
+        buf[..len].copy_from_slice(&blob[start..][..len]);
+
+        if is_le {
+            INT::from_le_bytes(buf)
+        } else {
+            INT::from_be_bytes(buf)
+        }
+    }
+
+    pub fn parse_le_int(blob: &mut Blob, start: INT, len: INT) -> INT {
+        parse_int(blob, start, len, true)
+    }
+    pub fn parse_be_int(blob: &mut Blob, start: INT, len: INT) -> INT {
+        parse_int(blob, start, len, false)
+    }
+
+    #[inline]
+    fn write_int(blob: &mut Blob, start: INT, len: INT, value: INT, is_le: bool) {
+        if blob.is_empty() || len <= 0 {
+            return;
+        }
+        let blob_len = blob.len();
+
+        let start = if start < 0 {
+            start
+                .checked_abs()
+                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
+        } else if start as usize >= blob_len {
+            return;
+        } else {
+            start as usize
+        };
+
+        let len = if len as usize > blob_len - start {
+            blob_len - start
+        } else {
+            len as usize
+        };
+
+        const INT_BYTES: usize = mem::size_of::<INT>();
+
+        let len = usize::min(len, INT_BYTES);
+
+        let mut buf = [0_u8; INT_BYTES];
+
+        buf.copy_from_slice(&if is_le {
+            value.to_le_bytes()
+        } else {
+            value.to_be_bytes()
+        });
+
+        blob[start..][..len].copy_from_slice(&buf[..len]);
+    }
+    #[rhai_fn(name = "write_le")]
+    pub fn write_le_int(blob: &mut Blob, start: INT, len: INT, value: INT) {
+        write_int(blob, start, len, value, true)
+    }
+    #[rhai_fn(name = "write_be")]
+    pub fn write_be_int(blob: &mut Blob, start: INT, len: INT, value: INT) {
+        write_int(blob, start, len, value, false)
+    }
+
+    #[cfg(not(feature = "no_float"))]
+    #[inline]
+    fn parse_float(blob: &mut Blob, start: INT, len: INT, is_le: bool) -> FLOAT {
+        if blob.is_empty() || len <= 0 {
+            return 0.0;
+        }
+        let blob_len = blob.len();
+
+        let start = if start < 0 {
+            start
+                .checked_abs()
+                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
+        } else if start as usize >= blob_len {
+            return 0.0;
+        } else {
+            start as usize
+        };
+
+        let len = if len as usize > blob_len - start {
+            blob_len - start
+        } else {
+            len as usize
+        };
+
+        const FLOAT_BYTES: usize = mem::size_of::<FLOAT>();
+
+        let len = usize::min(len, FLOAT_BYTES);
+
+        let mut buf = [0_u8; FLOAT_BYTES];
+
+        buf[..len].copy_from_slice(&blob[start..][..len]);
+
+        if is_le {
+            FLOAT::from_le_bytes(buf)
+        } else {
+            FLOAT::from_be_bytes(buf)
+        }
+    }
+
+    #[cfg(not(feature = "no_float"))]
+    pub fn parse_le_float(blob: &mut Blob, start: INT, len: INT) -> FLOAT {
+        parse_float(blob, start, len, true)
+    }
+    #[cfg(not(feature = "no_float"))]
+    pub fn parse_be_float(blob: &mut Blob, start: INT, len: INT) -> FLOAT {
+        parse_float(blob, start, len, false)
+    }
+
+    #[cfg(not(feature = "no_float"))]
+    #[inline]
+    fn write_float(blob: &mut Blob, start: INT, len: INT, value: FLOAT, is_le: bool) {
+        if blob.is_empty() || len <= 0 {
+            return;
+        }
+        let blob_len = blob.len();
+
+        let start = if start < 0 {
+            start
+                .checked_abs()
+                .map_or(0, |n| blob_len - (n as usize).min(blob_len))
+        } else if start as usize >= blob_len {
+            return;
+        } else {
+            start as usize
+        };
+
+        let len = if len as usize > blob_len - start {
+            blob_len - start
+        } else {
+            len as usize
+        };
+
+        const FLOAT_BYTES: usize = mem::size_of::<FLOAT>();
+
+        let len = usize::min(len, FLOAT_BYTES);
+
+        let mut buf = [0_u8; FLOAT_BYTES];
+
+        buf.copy_from_slice(&if is_le {
+            value.to_le_bytes()
+        } else {
+            value.to_be_bytes()
+        });
+
+        blob[start..][..len].copy_from_slice(&buf[..len]);
+    }
+    #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "write_le")]
+    pub fn write_le_float(blob: &mut Blob, start: INT, len: INT, value: FLOAT) {
+        write_float(blob, start, len, value, true)
+    }
+    #[cfg(not(feature = "no_float"))]
+    #[rhai_fn(name = "write_be")]
+    pub fn write_be_float(blob: &mut Blob, start: INT, len: INT, value: FLOAT) {
+        write_float(blob, start, len, value, false)
     }
 }

@@ -74,3 +74,66 @@ fn test_blobs() -> Result<(), Box<EvalAltResult>> {
 
     Ok(())
 }
+
+#[test]
+fn test_blobs_parse() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } parse_le_int(x,2,0)"
+        )?,
+        0
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } parse_le_int(x,2,9)"
+        )?,
+        0x0908070605040302
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } parse_be_int(x,2,10)"
+        )?,
+        0x0203040506070809
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } parse_le_int(x,-5,99)"
+        )?,
+        0x0f0e0d0c0b
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } parse_le_int(x,-5,2)"
+        )?,
+        0x0c0b
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } parse_le_int(x,-99,99)"
+        )?,
+        0x0706050403020100
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } write_be(x, 3, 3, -98765432); parse_be_int(x, 3, 3)"
+        )?,
+        0xffffff0000000000_u64 as i64
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "let x = blob(16, 0); for n in range(0, 16) { x[n] = n; } write_le(x, 3, 3, -98765432); parse_le_int(x, 3, 3)"
+        )?,
+        0x1cf588
+    );
+
+    Ok(())
+}

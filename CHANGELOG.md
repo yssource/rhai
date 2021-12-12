@@ -4,10 +4,18 @@ Rhai Release Notes
 Version 1.3.0
 =============
 
+This version adds native support for `BLOB`'s (byte arrays), as well as a number of configuration
+settings to fine-tun language features.
+
 Compiler requirement
 --------------------
 
 * Minimum compiler version is now 1.51.
+
+Bug fixes
+---------
+
+* `from_dynamic` now supports deserializing `Option`.
 
 New features
 ------------
@@ -38,15 +46,6 @@ Deprecated and Gated API's
 * `AST::merge_filtered` and `AST::combine_filtered` are no longer exported under `no_function`.
 * `AST::new` and `AST::new_with_source` are moved under `internals`.
 * `FnPtr::call_dynamic` is deprecated in favor of `FnPtr::call_raw`.
-
-
-Version 1.2.2
-=============
-
-Bug fixes
----------
-
-* `from_dynamic` now supports deserializing `Option`.
 
 
 Version 1.2.1
