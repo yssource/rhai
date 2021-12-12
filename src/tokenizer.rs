@@ -2223,10 +2223,9 @@ impl<'a> Iterator for TokenIterator<'a> {
         };
 
         // Run the mapper, if any
-        let token = if let Some(map_func) = self.token_mapper {
-            map_func(token, pos, &self.state)
-        } else {
-            token
+        let token = match self.token_mapper {
+            Some(map_func) => map_func(token, pos, &self.state),
+            None => token,
         };
 
         Some((token, pos))

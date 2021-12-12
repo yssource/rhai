@@ -304,11 +304,9 @@ fn optimize_stmt_block(
                         if reduce_return && !options.contains(AST_OPTION_BREAK_OUT) =>
                     {
                         state.set_dirty();
-                        *statements.last_mut().expect(">= 2 elements") = if let Some(expr) = expr {
-                            Stmt::Expr(mem::take(expr))
-                        } else {
-                            Stmt::Noop(pos)
-                        };
+                        *statements.last_mut().expect(">= 2 elements") = expr
+                            .as_mut()
+                            .map_or_else(|| Stmt::Noop(pos), |e| Stmt::Expr(mem::take(e)));
                     }
                     // { ...; stmt; noop } -> done
                     [.., ref second_last_stmt, Stmt::Noop(_)]

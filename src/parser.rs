@@ -1048,19 +1048,18 @@ fn parse_switch(
         };
 
         let hash = if let Some(expr) = expr {
-            if let Some(value) = expr.get_literal_value() {
-                let hasher = &mut get_hasher();
-                value.hash(hasher);
-                let hash = hasher.finish();
+            let value = expr.get_literal_value().ok_or_else(|| {
+                PERR::ExprExpected("a literal".to_string()).into_err(expr.position())
+            })?;
+            let hasher = &mut get_hasher();
+            value.hash(hasher);
+            let hash = hasher.finish();
 
-                if table.contains_key(&hash) {
-                    return Err(PERR::DuplicatedSwitchCase.into_err(expr.position()));
-                }
-
-                Some(hash)
-            } else {
-                return Err(PERR::ExprExpected("a literal".to_string()).into_err(expr.position()));
+            if table.contains_key(&hash) {
+                return Err(PERR::DuplicatedSwitchCase.into_err(expr.position()));
             }
+
+            Some(hash)
         } else {
             None
         };
@@ -1081,11 +1080,12 @@ fn parse_switch(
 
         let need_comma = !stmt.is_self_terminated();
 
-        def_stmt = if let Some(hash) = hash {
-            table.insert(hash, (condition, stmt.into()).into());
-            None
-        } else {
-            Some(stmt.into())
+        def_stmt = match hash {
+            Some(hash) => {
+                table.insert(hash, (condition, stmt.into()).into());
+                None
+            }
+            None => Some(stmt.into()),
         };
 
         match input.peek().expect(NEVER_ENDS) {
@@ -2461,14 +2461,12 @@ fn parse_for(
 
     let prev_stack_len = state.stack.len();
 
-    let counter_var = if let Some(name) = counter_name {
+    let counter_var = counter_name.map(|name| {
         let name = state.get_identifier(name);
         let pos = counter_pos.expect("`Some`");
         state.stack.push((name.clone(), AccessMode::ReadWrite));
-        Some(Ident { name, pos })
-    } else {
-        None
-    };
+        Ident { name, pos }
+    });
 
     let loop_var = state.get_identifier(name);
     state.stack.push((loop_var.clone(), AccessMode::ReadWrite));
